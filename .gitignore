@@ -1,0 +1,24 @@
+# Temp files
+.DS_Store
+*~
+
+# Compiled files
+__pycache__/
+
+# Distribution / packaging
+/build/
+/dist/
+/*.egg-info/
+
+# Tests and coverage
+/.pytest_cache/
+/.cache/
+/data/
+
+# docs
+/docs/generated/
+/docs/_build/
+
+# IDEs
+/.idea/
+

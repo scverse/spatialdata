@@ -1,0 +1,59 @@
+[build-system]
+build-backend = "flit_core.buildapi"
+requires = [
+    "flit_core >=3.4,<4",
+    "setuptools_scm",
+    "importlib_metadata>=0.7; python_version < '3.8'",
+]
+
+
+[project]
+name = "spatialdata"
+description = "Spatial Data."
+authors = [
+  {name = "Luca Marconato"},
+  {name = "Giovanni Palla"},
+  {name = "Isaac Virshup"},
+]
+maintainers = [
+  {name = "Isaac Virshup", email = "ivirshup@gmail.com"},
+]
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+readme = "README.md"
+dependencies = []
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://spatialdata.readthedocs.io/"
+Source = "https://github.com/scverse/spatialdata"
+Home-page = "https://github.com/scverse/spatialdata"
+
+[project.optional-dependencies]
+dev = [
+    # dev version generation
+    "setuptools_scm",
+]
+doc = [
+    "sphinx",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.coverage.run]
+source = ["spatialdata"]
+omit = [
+	"**/test_*.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+  "tests",
+]
+
+[tool.isort]
+multi_line_output = 3
+profile = "black"
+skip = ""
