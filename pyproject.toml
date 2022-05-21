@@ -2,40 +2,42 @@
 build-backend = "flit_core.buildapi"
 requires = [
     "flit_core >=3.4,<4",
-    "setuptools_scm",
     "importlib_metadata>=0.7; python_version < '3.8'",
 ]
 
 
 [project]
 name = "spatialdata"
-description = "Spatial Data."
+description = "Spatial data format."
 authors = [
-  {name = "Luca Marconato"},
-  {name = "Giovanni Palla"},
-  {name = "Isaac Virshup"},
+    {name = "scverse"},
 ]
 maintainers = [
-  {name = "Isaac Virshup", email = "ivirshup@gmail.com"},
+    {name = "scverse", email = "giov.pll@gmail.com"},
 ]
-requires-python = ">=3.7"
+urls.Documentation = "https://spatialdata.readthedocs.io/"
+urls.Source = "https://github.com/scverse/spatialdata.git"
+urls.Home-page = "https://github.com/scverse/spatialdata.git"
+version = "0.0.1"
+requires-python = ">=3.8"
 license = {file = "LICENSE"}
 readme = "README.md"
-dependencies = []
-dynamic = ["version"]
-
-[project.urls]
-Documentation = "https://spatialdata.readthedocs.io/"
-Source = "https://github.com/scverse/spatialdata"
-Home-page = "https://github.com/scverse/spatialdata"
+dependencies = ["anndata"]
 
 [project.optional-dependencies]
 dev = [
     # dev version generation
-    "setuptools_scm",
+    "bump2version",
 ]
 doc = [
-    "sphinx",
+    "sphinx>=4",
+    "furo",
+    "myst-parser",
+    "sphinxcontrib-bibtex>=1.0.0",
+    "scanpydoc[typehints]>=0.7.4",
+    # For notebooks
+    "nbsphinx",
+    "ipython>=8.3.0"
 ]
 test = [
     "pytest",
@@ -45,15 +47,46 @@ test = [
 [tool.coverage.run]
 source = ["spatialdata"]
 omit = [
-	"**/test_*.py",
+    "**/test_*.py",
 ]
 
 [tool.pytest.ini_options]
-testpaths = [
-  "tests",
+testpaths = ["tests"]
+xfail_strict = true
+addopts = [
+    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
+    "--import-mode=importlib",  # allow using test files with same name
+]
+filterwarnings = [
+    # "ignore:.*U.*mode is deprecated:DeprecationWarning",
 ]
 
 [tool.isort]
+include_trailing_comma = true
 multi_line_output = 3
 profile = "black"
-skip = ""
+skip_glob = ["docs/*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+)
+'''
+
+[tool.jupytext]
+formats = "ipynb,md"
