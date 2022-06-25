@@ -9,7 +9,6 @@ import sys
 from datetime import datetime
 from importlib.metadata import metadata
 from pathlib import Path
-from typing import Any
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
@@ -96,7 +95,7 @@ nitpick_ignore = [  # type: ignore[var-annotated]
 ]
 
 
-def setup(app: Any) -> Any:
+def setup(app):
     """App setup hook."""
     app.add_config_value(
         "recommonmark_config",
