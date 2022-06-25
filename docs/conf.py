@@ -9,6 +9,7 @@ import sys
 from datetime import datetime
 from importlib.metadata import metadata
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
@@ -88,14 +89,14 @@ html_static_path = ["_static"]
 
 pygments_style = "sphinx"
 
-nitpick_ignore = [
+nitpick_ignore = [  # type: ignore[var-annotated]
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
     #     ("py:class", "igraph.Graph"),
 ]
 
 
-def setup(app):
+def setup(app: Any) -> Any:
     """App setup hook."""
     app.add_config_value(
         "recommonmark_config",
