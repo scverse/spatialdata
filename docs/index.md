@@ -3,7 +3,7 @@
 [![Tests][badge-tests]][link-tests]
 [![Documentation][badge-docs]][link-docs]
 
-[badge-tests]: https://img.shields.io/github/workflow/status/giovp/spatialdata/Test/main
+[badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 [badge-docs]: https://img.shields.io/readthedocs/spatialdata
 

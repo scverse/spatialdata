@@ -3,7 +3,7 @@
 [![Tests][badge-tests]][link-tests]
 [![Documentation][badge-docs]][link-docs]
 
-[badge-tests]: https://img.shields.io/github/workflow/status/giovp/spatialdata/Test/main
+[badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 [badge-docs]: https://img.shields.io/readthedocs/spatialdata
 
@@ -33,7 +33,7 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 > t.b.a
 
 [scverse-discourse]: https://discourse.scverse.org/
-[issue-tracker]: https://github.com/giovp/spatialdata/issues
+[issue-tracker]: https://github.com/scverse/spatialdata/issues
 [changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
 [link-docs]: https://spatialdata.readthedocs.io/latest/
 [link-api]: https://spatialdata.readthedocs.io/latest/api.html
