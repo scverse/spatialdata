@@ -40,6 +40,14 @@ pip install git+https://github.com/giovp/spatialdata.git@main
 
 See the [changelog][changelog].
 
+## UML creation
+
+see https://medium.com/@ganesh.alalasundaram/uml-diagram-using-pyreverse-for-python-repository-dd68cdf9e7e1
+
+```
+pyreverse ./spatialdata && dot -Tpng classes.dot > abc.png
+```
+
 ## Contact
 
 For questions and help requests, you can reach out in the [scverse discourse][scverse-discourse].
