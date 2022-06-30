@@ -3,7 +3,7 @@
 [![Tests][badge-tests]][link-tests]
 [![Documentation][badge-docs]][link-docs]
 
-[badge-tests]: https://img.shields.io/github/workflow/status/giovp/spatialdata/Test/main
+[badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 [badge-docs]: https://img.shields.io/readthedocs/spatialdata
 
@@ -17,35 +17,10 @@ Please refer to the [documentation][link-docs]. In particular, the
 
 ## Installation
 
-You need to have Python 3.8 or newer installed on your system. If you don't have
-Python installed, we recommend installing `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`\_.
-
-There are several alternative options to install spatialdata:
-
-<!--
-1) Install the latest release of `spatialdata` from `PyPI <https://pypi.org/project/spatialdata/>`_:
+Check out the docs for more complete installation instructions. For now you can install `spatialdata` with:
 
 ```bash
-pip install spatialdata
-```
--->
-
-1. Install the latest development version:
-
-```bash
-pip install git+https://github.com/giovp/spatialdata.git@main
-```
-
-## Release notes
-
-See the [changelog][changelog].
-
-## UML creation
-
-see https://medium.com/@ganesh.alalasundaram/uml-diagram-using-pyreverse-for-python-repository-dd68cdf9e7e1
-
-```
-pyreverse ./spatialdata && dot -Tpng classes.dot > abc.png
+pip install git+https://github.com/scverse/spatialdata.git@main
 ```
 
 ## Contact
@@ -58,7 +33,7 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 > t.b.a
 
 [scverse-discourse]: https://discourse.scverse.org/
-[issue-tracker]: https://github.com/giovp/spatialdata/issues
+[issue-tracker]: https://github.com/scverse/spatialdata/issues
 [changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
-[link-docs]: https://spatialdata.readthedocs.io
+[link-docs]: https://spatialdata.readthedocs.io/latest/
 [link-api]: https://spatialdata.readthedocs.io/latest/api.html

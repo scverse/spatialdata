@@ -32,7 +32,7 @@ needs_sphinx = "4.0"
 
 html_context = {
     "display_github": True,  # Integrate GitHub
-    "github_user": "giovp",  # Username
+    "github_user": "scverse",  # Username
     "github_repo": project,  # Repo name
     "github_version": "main",  # Version
     "conf_py_path": "/docs/",  # Path in the checkout to the docs root
@@ -88,7 +88,7 @@ html_static_path = ["_static"]
 
 pygments_style = "sphinx"
 
-nitpick_ignore = [
+nitpick_ignore = [  # type: ignore[var-annotated]
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
     #     ("py:class", "igraph.Graph"),

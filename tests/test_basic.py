@@ -1,4 +1,4 @@
-import pytest
+import numpy as np
 
 import spatialdata
 
@@ -7,6 +7,8 @@ def test_package_has_version():
     spatialdata.__version__
 
 
-@pytest.mark.skip(reason="This decorator should be removed when test passes.")
-def test_example():
-    assert 1 == 0  # This test is designed to fail.
+def test_instantiation():
+    from anndata import AnnData
+
+    a = AnnData(np.ones((20, 10)), dtype=np.float64)
+    _ = spatialdata.SpatialData(a)
