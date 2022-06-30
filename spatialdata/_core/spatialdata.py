@@ -1,0 +1,2 @@
+class SpatialData:
+    pass
