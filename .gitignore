@@ -22,3 +22,6 @@ __pycache__/
 # IDEs
 /.idea/
 .vscode
+
+# data
+spatialdata-sandbox

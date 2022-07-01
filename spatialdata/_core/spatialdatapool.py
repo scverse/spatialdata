@@ -1,0 +1,2 @@
+class SpatialDataPool:
+    pass
