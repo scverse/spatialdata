@@ -2,6 +2,10 @@ import json
 
 # import colorama
 # colorama.init(strip=False)
+import tempfile
+import os
+import filecmp
+
 import numpy as np
 import xarray as xr
 import hashlib
@@ -16,6 +20,7 @@ from ome_zarr.reader import Reader
 from spatialdata._core.mixin.io_mixin import IoMixin
 from spatialdata._core.writer import write_spatial_anndata
 from spatialdata._core.transform import Transform, set_transform, get_transform
+from spatialdata.utils import are_directories_identical
 
 
 class SpatialData(IoMixin):
@@ -129,21 +134,30 @@ class SpatialData(IoMixin):
 
     def to_zarr(self, file_path: str):
         """Save to Zarr file."""
-        # simple case for the moment
-        assert len(self.images) == 1
-        assert len(self.regions) == 1
+        if len(self.images) == 0:
+            img = None
+            image_translation = None
+            image_scale_factors = None
+        else:
+            # simple case for the moment
+            assert len(self.images) == 1
+            transform = get_transform(self.images.values().__iter__().__next__())
+            image_translation = transform.translation
+            image_scale_factors = transform.scale_factors
 
-        transform = get_transform(self.images.values().__iter__().__next__())
-        image_translation = transform.translation
-        image_scale_factors = transform.scale_factors
+            img = self.images.values().__iter__().__next__().to_numpy()
 
-        img = self.images.values().__iter__().__next__()
-        regions = self.regions.values().__iter__().__next__()
-        # regions_name = self.regions.keys().__iter__().__next__()
+        if len(self.regions) == 0:
+            regions = None
+        else:
+            # simple case for the moment
+            assert len(self.regions) == 1
+            regions = self.regions.values().__iter__().__next__()
+            # regions_name = self.regions.keys().__iter__().__next__()
 
         write_spatial_anndata(
             file_path=file_path,
-            image=img.to_numpy(),
+            image=img,
             image_axes=["y", "x"],
             image_translation=image_translation,
             image_scale_factors=image_scale_factors,
@@ -211,27 +225,33 @@ class SpatialData(IoMixin):
         return descr
 
     def __eq__(self, other):
-        if not isinstance(other, SpatialData):
-            return False
-
-        def both_none(a, b):
-            return a is None and b is None
-
-        def any_none(a, b):
-            return a is None or b is None
-
-        def check_with_default_none(a, b):
-            if both_none(a, b):
-                return True
-            if any_none(a, b):
-                return False
-            return a == b
-
-        for attr in ["adata", "points"]:
-            if not check_with_default_none(getattr(self, attr), getattr(other, attr)):
-                return False
-
-        for attr in ["regions", "images"]:
-            if not getattr(self, attr) == getattr(other, attr):
-                return False
-        return True
+        # new comparison: dumping everything to zarr and comparing bytewise
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.to_zarr(os.path.join(tmpdir, "self.zarr"))
+            other.to_zarr(os.path.join(tmpdir, "other.zarr"))
+            return are_directories_identical(os.path.join(tmpdir, "self.zarr"), os.path.join(tmpdir, "other.zarr"))
+        # old comparison: comparing piece by piece
+        # if not isinstance(other, SpatialData):
+        #     return False
+        #
+        # def both_none(a, b):
+        #     return a is None and b is None
+        #
+        # def any_none(a, b):
+        #     return a is None or b is None
+        #
+        # def check_with_default_none(a, b):
+        #     if both_none(a, b):
+        #         return True
+        #     if any_none(a, b):
+        #         return False
+        #     return a == b
+        #
+        # for attr in ["adata", "points"]:
+        #     if not check_with_default_none(getattr(self, attr), getattr(other, attr)):
+        #         return False
+        #
+        # for attr in ["regions", "images"]:
+        #     if not getattr(self, attr) == getattr(other, attr):
+        #         return False
+        # return True

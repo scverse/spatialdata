@@ -221,7 +221,9 @@ def write_spatial_anndata(
         from ome_zarr.scale import Scaler
         from ome_zarr.format import CurrentFormat, Format
 
-        scaler = Scaler()
+        downscale = 2
+        max_layer = min(4, min(int(np.log2(image.shape[0])), int(np.log2(image.shape[1]))))
+        scaler = Scaler(downscale=downscale, max_layer=max_layer)
         fmt: Format = CurrentFormat()
         coordinate_transformations = None
         if image_translation is not None or image_scale_factors is not None:

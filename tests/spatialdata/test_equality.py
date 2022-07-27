@@ -29,6 +29,7 @@ def test_single_component_sdata():
         for j, h in enumerate(getters):
             if i > j:
                 continue
+            print(f'comparing {g.__name__} and {h.__name__}')
             if g == h:
                 assert g() == h()
                 if g != get_empty_sdata:
