@@ -46,7 +46,9 @@ class SpatialData(IoMixin):
         self.regions = dict(regions)
         if images_transform is None:
             images_transform = {k: Transform(ndim=2) for k in images}
-        assert set(images.keys()) == set(images_transform.keys())
+        assert set(images.keys()).issuperset(set(images_transform.keys()))
+        for k, v in images.items():
+            images_transform[k] = get_transform(v)
         self.images = {
             k: self.parse_image(image, image_transform)
             for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
@@ -121,10 +123,11 @@ class SpatialData(IoMixin):
         metadata = node.metadata
         # ignoring pyramidal information for the moment
         largest_image = xr.DataArray(data[0]).load()
+        largest_image = largest_image.transpose()
         largest_image_transform = metadata["coordinateTransformations"][0]
         d = {}
         for e in largest_image_transform:
-            d[e["type"]] = e[e["type"]]
+            d[e["type"]] = np.flip(e[e["type"]])
         transform = Transform(translation=d["translation"], scale_factors=d["scale"])
         set_transform(largest_image, transform)
         images["image"] = largest_image
