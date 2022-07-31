@@ -9,6 +9,8 @@
 
 Spatial data format.
 
+current specs [HERE](https://hackmd.io/uY0wPwZhQaG6HJ6OAGm0fw)
+
 ## Getting started
 
 Please refer to the [documentation][link-docs]. In particular, the
