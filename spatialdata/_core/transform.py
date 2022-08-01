@@ -46,18 +46,22 @@ class Transform:
 
 
 @singledispatch
-def set_transform(arg: Any, transform: Transform) -> None:
+def set_transform(arg: Any, transform: Optional[Transform]) -> None:
     raise ValueError(f"Unsupported type: {type(arg)}")
 
 
 @set_transform.register
-def _(arg: xr.DataArray, transform: Transform) -> None:
+def _(arg: xr.DataArray, transform: Optional[Transform]) -> None:
     arg.attrs["transform"] = transform
 
 
 @set_transform.register
-def _(arg: ad.AnnData, transform: Transform) -> None:
-    arg.uns["transform"] = {"translation": transform.translation, "scale_factors": transform.scale_factors}
+def _(arg: ad.AnnData, transform: Optional[Transform]) -> None:
+    if transform is not None:
+        arg.uns["transform"] = {
+            "translation": transform.translation,
+            "scale_factors": transform.scale_factors,
+        }  # TODO: do we save it like this in uns?
 
 
 @singledispatch

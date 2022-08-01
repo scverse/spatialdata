@@ -2,7 +2,7 @@ import hashlib
 import os
 import tempfile
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Mapping, Optional
+from typing import Any, List, Mapping, Optional, Set, Tuple
 
 import numpy as np
 import xarray as xr
@@ -28,17 +28,18 @@ class SpatialData(IoMixin):
     """Spatial data structure."""
 
     tables: Optional[AnnData]
-    labels: Mapping[str, Any]
-    images: Mapping[str, Any]
+    labels: Optional[Mapping[str, Any]]
+    images: Optional[Mapping[str, Any]]
     points: Optional[Mapping[str, AnnData]]
     shapes: Optional[Mapping[str, AnnData]]
+    elems: List[Optional[Set[str]]]
 
     def __init__(
         self,
         tables: Optional[AnnData] = None,
-        labels: Mapping[str, Any] = MappingProxyType({}),
+        labels: Optional[Mapping[str, Any]] = MappingProxyType({}),
         labels_transform: Optional[Mapping[str, Any]] = None,
-        images: Mapping[str, Any] = MappingProxyType({}),
+        images: Optional[Mapping[str, Any]] = MappingProxyType({}),
         images_transform: Optional[Mapping[str, Any]] = None,
         points: Optional[Mapping[str, AnnData]] = None,
         points_transform: Optional[Mapping[str, Any]] = None,
@@ -46,46 +47,37 @@ class SpatialData(IoMixin):
         shapes_transform: Optional[Mapping[str, Any]] = None,
     ) -> None:
 
-        if images_transform is None:
-            images_transform = {k: Transform(ndim=2) for k in images}
-        if labels_transform is None:
-            labels_transform = {k: Transform(ndim=2) for k in labels}
+        elems = []
 
-        assert set(images.keys()).issuperset(set(images_transform.keys()))
-        assert set(labels.keys()).issuperset(set(labels_transform.keys()))
+        images, images_transform, elem_images = _validate_dataset(images, images_transform)
+        labels, labels_transform, elem_labels = _validate_dataset(labels, labels_transform)
+        points, points_transform, elem_points = _validate_dataset(points, points_transform)
+        shapes, shapes_transform, elem_shapes = _validate_dataset(shapes, shapes_transform)
 
-        for k, v in images.items():
-            if TYPE_CHECKING:
-                assert isinstance(images_transform, dict)
-            images_transform[k] = get_transform(v)
-        for k, v in labels.items():
-            if TYPE_CHECKING:
-                assert isinstance(labels_transform, dict)
-            labels_transform[k] = get_transform(v)
+        if images is not None and images_transform is not None:
+            self.images = {
+                k: self.parse_image(image, image_transform)
+                for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
+            }
+            elems.append(elem_images)
 
-        self.images = {
-            k: self.parse_image(image, image_transform)
-            for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
-        }
+        if labels is not None and labels_transform is not None:
+            self.labels = {
+                k: self.parse_image(labels, labels_transform)
+                for k, (labels, labels_transform) in zip(labels.keys(), zip(labels.values(), labels_transform.values()))
+            }
+            elems.append(elem_labels)
 
-        self.labels = {
-            k: self.parse_image(labels, labels_transform)
-            for k, (labels, labels_transform) in zip(labels.keys(), zip(labels.values(), labels_transform.values()))
-        }
+        if points is not None and points_transform is not None:
+            self.points = {k: self.parse_tables(points[k], points_transform[k]) for k in points.keys()}
+            elems.append(elem_points)
 
-        self.points = points
-        if (self.points is not None and isinstance(self.points, dict)) and (
-            points_transform is not None and isinstance(points_transform, dict)
-        ):  # TODO: validate.
-            for t, v in zip(self.points.values(), points_transform.values()):
-                t.uns["metadata"] = v
-        self.shapes = shapes
-        if (self.shapes is not None and isinstance(self.shapes, dict)) and (
-            shapes_transform is not None and isinstance(shapes_transform, dict)
-        ):  # TODO: validate.
-            for t, v in zip(self.shapes.values(), shapes_transform.values()):
-                t.uns["metadata"] = v
+        if shapes is not None and shapes_transform is not None:
+            self.shapes = {k: self.parse_tables(shapes[k], shapes_transform[k]) for k in shapes.keys()}
+            elems.append(elem_shapes)
+
         self.tables = tables
+        self.elems = elems
 
     @classmethod
     def parse_image(cls, image: Any, image_transform: Optional[Transform] = None) -> Any:
@@ -103,17 +95,27 @@ class SpatialData(IoMixin):
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     @classmethod
+    def parse_tables(cls, tables: AnnData, tables_transform: Optional[Transform] = None) -> Any:
+        """Parse AnnData in SpatialData."""
+        if isinstance(tables, AnnData):
+            if tables is not None:
+                set_transform(tables, tables_transform)
+            return tables
+        else:
+            raise ValueError(f"Unsupported tables type: {type(tables)}")
+
+    @classmethod
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
 
-        elems = set(self.images.keys()).union(set(self.labels.keys()), set(self.points.keys()), set(self.shapes.keys()))
+        elems = set().union(*self.elems)  # type:ignore[arg-type]
 
         store = parse_url(file_path, mode="w").store
         root = zarr.group(store=store)
 
         for elem in elems:
             elem_group = root.create_group(name=elem)
-            if elem in self.images.keys():
+            if self.images is not None and elem in self.images.keys():
                 # TODO: get transform
                 write_image(
                     image=self.images[elem].to_zarr_array(),
@@ -121,7 +123,7 @@ class SpatialData(IoMixin):
                     axes=["c", "y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                     scaler=None,
                 )
-            if elem in self.labels.keys():
+            if self.labels is not None and elem in self.labels.keys():
                 # TODO: get transform
                 write_labels(
                     labels=self.labels[elem].to_zarr_array(),
@@ -130,7 +132,7 @@ class SpatialData(IoMixin):
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                     scaler=None,
                 )
-            if elem in self.points.keys():
+            if self.points is not None and elem in self.points.keys():
                 # TODO: get transform
                 write_points(
                     points=self.points[elem],
@@ -138,12 +140,13 @@ class SpatialData(IoMixin):
                     name=elem,
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                 )
-            if elem in self.shapes.keys():
+            if self.shapes is not None and elem in self.shapes.keys():
                 # TODO: get transform
                 write_shapes(
                     shapes=self.shapes[elem],
                     group=elem_group,
                     name=elem,
+                    shapes_parameters=self.shapes[elem].uns["shape_parameters"],
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                 )
 
@@ -153,7 +156,7 @@ class SpatialData(IoMixin):
             tables=self.tables,
             group=tables_group,
             name="tables",
-            region=elems,
+            region=list(elems),
         )
 
         # if len(self.images) == 0:
@@ -326,3 +329,22 @@ class SpatialData(IoMixin):
         #     if not getattr(self, attr) == getattr(other, attr):
         #         return False
         # return True
+
+
+def _validate_dataset(
+    dataset: Optional[Mapping[str, Any]] = None, dataset_transform: Optional[Mapping[str, Any]] = None
+) -> Tuple[Optional[Mapping[str, Any]], Optional[Mapping[str, Any]], Optional[Set[str]]]:
+    if dataset is None:
+        return None, None, None
+    if isinstance(dataset, dict):
+        if dataset_transform is None:
+            dataset_transform = {k: Transform(ndim=2) for k in dataset.keys()}
+        elif isinstance(dataset_transform, dict):
+            dataset_transform = {
+                k: dataset_transform[k] if k in dataset_transform.keys() else Transform(ndim=2) for k in dataset.keys()
+            }
+        assert set(dataset.keys()).issuperset(set(dataset_transform.keys())), "TODO: superset check."
+        for k, v in dataset.items():
+            dataset[k] = get_transform(v)
+        return dataset, dataset_transform, set(dataset.keys())
+    raise ValueError("`dataset` must be a `dict`.")
