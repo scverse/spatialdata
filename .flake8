@@ -38,6 +38,8 @@ ignore =
     E203
     # format string does contain unindexed parameters
     P101
+    RST
+    D
 exclude = .git,__pycache__,build,docs/_build,dist
 per-file-ignores =
     tests/*: D

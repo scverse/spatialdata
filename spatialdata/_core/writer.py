@@ -1,21 +1,25 @@
 # the code in this file originates from the ome-ngff-tables-prototype repo, we will gradually distribute it's content
 # inside the "building block" spatial data classes
 
-from typing import Any, List, Optional
-from typing import Union, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem
+from ome_zarr.format import CurrentFormat, Format
 from ome_zarr.io import parse_url
-from ome_zarr.writer import write_image, write_labels
+from ome_zarr.types import JSONDict
+from ome_zarr.writer import (
+    _get_valid_axes,
+    _validate_datasets,
+    write_image,
+    write_labels,
+)
 
 
-def df_to_anndata(
-    df: pd.DataFrame, dense_columns: List[str], var: Optional[pd.DataFrame] = None
-) -> AnnData:
+def df_to_anndata(df: pd.DataFrame, dense_columns: List[str], var: Optional[pd.DataFrame] = None) -> AnnData:
     """Create the anndata object from the example csv
     Parameters
     ----------
@@ -47,15 +51,52 @@ def df_to_anndata(
 
     return ann_obj
 
-def write_table_points(
+
+def write_points(
     group: zarr.Group,
-    adata: AnnData,
-    table_group_name: str = "points_table",
-    group_type: str = "ngff:points_table",
+    points: AnnData,
+    group_name: str = "points",
+    group_type: str = "ngff:points",
+    fmt: Format = CurrentFormat(),
+    axes: Union[str, List[str], List[Dict[str, str]]] = None,
+    coordinate_transformations: List[List[Dict[str, Any]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
 ):
-    write_elem(group, table_group_name, adata)
-    table_group = group[table_group_name]
+    write_elem(group, group_name, points)
+
+    dims = len(points.shape)
+    axes = _get_valid_axes(dims, axes, fmt)
+
+    datasets: List[dict] = []
+    datasets.append({"path": {"attr": "X", "key": None}})
+
+    if coordinate_transformations is None:
+        shapes = [points.shape]
+        coordinate_transformations = fmt.generate_coordinate_transformations(shapes)
+
+    fmt.validate_coordinate_transformations(dims, 1, coordinate_transformations)
+    if coordinate_transformations is not None:
+        for dataset, transform in zip(datasets, coordinate_transformations):
+            dataset["coordinateTransformations"] = transform
+
+    if axes is not None:
+        axes = _get_valid_axes(axes=axes, fmt=fmt)
+        if axes is not None:
+            ndim = len(axes)
+
+    multiscales = [
+        dict(
+            version=fmt.version,
+            datasets=_validate_datasets(datasets, ndim, fmt),
+            **metadata,
+        )
+    ]
+    if axes is not None:
+        multiscales[0]["axes"] = axes
+
+    table_group = group[group_name]
     table_group.attrs["@type"] = group_type
+    table_group.attrs["multiscales"] = multiscales
 
 
 def write_table_polygons(
@@ -144,9 +185,8 @@ def write_points_dataset(
     if points is not None:
         points_group = root.create_group(points_group_name)
         points_anndata = df_to_anndata(
-            df=points, dense_columns=points_dense_columns, var=points_var
-        )
-        write_table_points(points_group, points_anndata)
+            df=points, dense_columns=points_dense_columns, var=points_var)
+        write_points(points_group, points_anndata)
 
         # add a flag to the group attrs to denote this is points data
         points_group.attrs["@type"] = "ngff:points"
@@ -218,11 +258,12 @@ def write_spatial_anndata(
     root = zarr.group(store=store)
 
     if image is not None:
-        from ome_zarr.scale import Scaler
         from ome_zarr.format import CurrentFormat, Format
+        from ome_zarr.scale import Scaler
 
         downscale = 2
-        max_layer = min(4, min(int(np.log2(image.shape[0])), int(np.log2(image.shape[1]))))
+        max_layer = min(
+            4, min(int(np.log2(image.shape[0])), int(np.log2(image.shape[1]))))
         scaler = Scaler(downscale=downscale, max_layer=max_layer)
         fmt: Format = CurrentFormat()
         coordinate_transformations = None
@@ -242,9 +283,8 @@ def write_spatial_anndata(
 
             mip, axes = _create_mip(image, fmt, scaler, image_axes)
             shapes = [data.shape for data in mip]
-            pyramid_coordinate_transformations = (
-                fmt.generate_coordinate_transformations(shapes)
-            )
+            pyramid_coordinate_transformations = fmt.generate_coordinate_transformations(
+                shapes)
             coordinate_transformations = []
             for p in pyramid_coordinate_transformations:
                 assert p[0]["type"] == "scale"
@@ -256,13 +296,11 @@ def write_spatial_anndata(
                 # see where is the error
                 # hack_factor = 1.55
                 hack_factor = 1
-                new_scale = (
-                    np.array(pyramid_scale) * np.flip(image_scale_factors) * hack_factor
-                ).tolist()
+                new_scale = (np.array(pyramid_scale) *
+                             np.flip(image_scale_factors) * hack_factor).tolist()
                 p[0]["scale"] = new_scale
-                translation = [
-                    {"type": "translation", "translation": translation_values}
-                ]
+                translation = [{"type": "translation",
+                                "translation": translation_values}]
                 transformation_series = p + translation
                 coordinate_transformations.append(transformation_series)
                 image = np.transpose(image)
@@ -306,7 +344,7 @@ def write_spatial_anndata(
         )
     if points_adata is not None:
         points_group = root.create_group(name="points")
-        write_table_points(
+        write_points(
             group=points_group,
             adata=points_adata,
         )
