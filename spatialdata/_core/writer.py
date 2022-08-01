@@ -3,12 +3,17 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
-from anndata.experimental import write_elem
-from ome_zarr.format import Format
+from anndata.experimental import write_elem as write_adata
+from ome_zarr.format import CurrentFormat, Format
+from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes, _validate_datasets
+from ome_zarr.writer import write_image as write_image_ngff
 
+from spatialdata._types import ArrayLike
 from spatialdata.format import SpatialDataFormat
+
+__all__ = ["write_points", "write_shapes", "write_tables", "write_image", "write_labels"]
 
 
 def _write_metadata(
@@ -67,7 +72,7 @@ def write_points(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     # TODO: validate
-    write_elem(group, group_name, points)
+    write_adata(group, group_name, points)
     points_group = group[group_name]
     _write_metadata(
         points_group,
@@ -93,7 +98,7 @@ def write_shapes(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     fmt.validate_shapes_parameters(shapes_parameters)
-    write_elem(group, group_name, shapes)
+    write_adata(group, group_name, shapes)
     shapes_group = group[group_name]
     shapes_group.attrs["shapes_parameters"] = shapes_parameters
     _write_metadata(
@@ -119,12 +124,66 @@ def write_tables(
     instance_key: Optional[str] = None,
 ) -> None:
     fmt.validate_tables(tables, region_key, instance_key)
-    write_elem(group, group_name, tables)
+    write_adata(group, group_name, tables)
     tables_group = group[group_name]
     tables_group.attrs["@type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
+
+
+def write_image(
+    image: ArrayLike,
+    group: zarr.Group,
+    scaler: Scaler = Scaler(),
+    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
+    fmt: Format = CurrentFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
+) -> None:
+    # TODO: ergonomics.
+    write_image_ngff(
+        image=image,
+        group=group,
+        scaler=scaler,
+        chunks=chunks,
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        storage_options=storage_options,
+        **metadata,
+    )
+
+
+def write_labels(
+    labels: ArrayLike,
+    group: zarr.Group,
+    name: str,
+    scaler: Scaler = Scaler(),
+    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
+    fmt: Format = CurrentFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+    label_metadata: Optional[JSONDict] = None,
+    **metadata: JSONDict,
+) -> None:
+    # TODO: ergonomics.
+    write_image_ngff(
+        labels=labels,
+        group=group,
+        name=name,
+        scaler=scaler,
+        chunks=chunks,
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        storage_options=storage_options,
+        label_metadata=label_metadata,
+        **metadata,
+    )
 
 
 # def write_spatial_anndata(
@@ -287,6 +346,6 @@ def write_table_polygons(
     table_group_name: str = "polygons_table",
     group_type: str = "ngff:polygons_table",
 ) -> None:
-    write_elem(group, table_group_name, adata)
+    write_adata(group, table_group_name, adata)
     table_group = group[table_group_name]
     table_group.attrs["@type"] = group_type

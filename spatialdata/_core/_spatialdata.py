@@ -1,8 +1,5 @@
 import hashlib
 import os
-
-# import colorama
-# colorama.init(strip=False)
 import tempfile
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Mapping, Optional
@@ -10,9 +7,6 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional
 import numpy as np
 import xarray as xr
 from anndata import AnnData
-from anndata._io import read_zarr
-from ome_zarr.io import parse_url
-from ome_zarr.reader import Reader
 
 from spatialdata._core.mixin.io_mixin import IoMixin
 
@@ -24,36 +18,65 @@ from spatialdata.utils import are_directories_identical
 class SpatialData(IoMixin):
     """Spatial data structure."""
 
-    adata: AnnData
-    regions: Mapping[str, Any]
+    tables: Optional[AnnData]
+    labels: Mapping[str, Any]
     images: Mapping[str, Any]
-    points: Optional[AnnData]
+    points: Optional[Mapping[str, AnnData]]
+    shapes: Optional[Mapping[str, AnnData]]
 
     def __init__(
         self,
-        adata: Optional[AnnData] = None,
-        regions: Mapping[str, Any] = MappingProxyType({}),
+        tables: Optional[AnnData] = None,
+        labels: Mapping[str, Any] = MappingProxyType({}),
+        labels_transform: Optional[Mapping[str, Any]] = None,
         images: Mapping[str, Any] = MappingProxyType({}),
         images_transform: Optional[Mapping[str, Any]] = None,
-        points: Optional[AnnData] = None,
+        points: Optional[Mapping[str, AnnData]] = None,
+        points_transform: Optional[Mapping[str, Any]] = None,
+        shapes: Optional[Mapping[str, AnnData]] = None,
+        shapes_transform: Optional[Mapping[str, Any]] = None,
     ) -> None:
-        # current limitations:
-        # - only 2d data
-        # - only first table, image, regions of the dict are used
-        self.adata = adata
-        self.regions = dict(regions)
+
         if images_transform is None:
             images_transform = {k: Transform(ndim=2) for k in images}
+        if labels_transform is None:
+            labels_transform = {k: Transform(ndim=2) for k in labels}
+
         assert set(images.keys()).issuperset(set(images_transform.keys()))
+        assert set(labels.keys()).issuperset(set(labels_transform.keys()))
+
         for k, v in images.items():
             if TYPE_CHECKING:
                 assert isinstance(images_transform, dict)
             images_transform[k] = get_transform(v)
+        for k, v in labels.items():
+            if TYPE_CHECKING:
+                assert isinstance(labels_transform, dict)
+            labels_transform[k] = get_transform(v)
+
         self.images = {
             k: self.parse_image(image, image_transform)
             for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
         }
+
+        self.labels = {
+            k: self.parse_image(labels, labels_transform)
+            for k, (labels, labels_transform) in zip(labels.keys(), zip(labels.values(), labels_transform.values()))
+        }
+
         self.points = points
+        if (self.points is not None and isinstance(self.points, dict)) and (
+            points_transform is not None and isinstance(points_transform, dict)
+        ):  # TODO: validate.
+            for t, v in zip(self.points.values(), points_transform.values()):
+                t.uns["metadata"] = v
+        self.shapes = shapes
+        if (self.shapes is not None and isinstance(self.shapes, dict)) and (
+            shapes_transform is not None and isinstance(shapes_transform, dict)
+        ):  # TODO: validate.
+            for t, v in zip(self.shapes.values(), shapes_transform.values()):
+                t.uns["metadata"] = v
+        self.tables = tables
 
     @classmethod
     def parse_image(cls, image: Any, image_transform: Optional[Transform] = None) -> Any:
@@ -70,106 +93,111 @@ class SpatialData(IoMixin):
         else:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
-    @classmethod
-    def from_zarr(self, file_path: str) -> "SpatialData":
-        """Load from Zarr file."""
+    # def write(self, file_path: str) -> None:
+    #     """Write to Zarr file."""
 
-        ome_zarr = parse_url(file_path)
-        reader = Reader(ome_zarr)
-        ome_zarr.__dir__()
+    #     elems = set(self.images.keys()).union(set(self.labels.keys()), set(self.points.keys()), set(self.shapes.keys()))
 
-        feature_table = None
-        regions = {}
-        images = {}
-        points = None
+    #     store = parse_url(file_path, mode="w").store
+    #     root = zarr.group(store=store)
 
-        ##
-        import os
+    #     for elem in elems:
+    #         elem_group = root.create_group(name=el)
+    #         if elem in self.images.keys():
+    #             write_image(
+    #                 image=image,
+    #                 group=image_group,
+    #                 axes=["c", "y", "x"],
+    #                 scaler=None,
+    #             )
 
-        groups = os.listdir(ome_zarr.path)
-        if "tables" in groups:
-            tables = os.listdir(os.path.join(ome_zarr.path, "tables"))
-            if len(tables) > 2:
-                raise RuntimeError("Currently it is possible to work with only one feature table")
-            for table in tables:
-                if table == ".zgroup":
-                    continue
-                else:
-                    table_path = os.path.join(ome_zarr.path, "tables", table)
-                    feature_table = read_zarr(table_path)
-        if "circles" in groups:
-            tables = os.listdir(os.path.join(ome_zarr.path, "circles"))
-            for table in tables:
-                if table == ".zgroup":
-                    continue
-                else:
-                    table_path = os.path.join(ome_zarr.path, "circles", table)
-                    adata = read_zarr(table_path)
-                    regions[table] = adata
-        if "points" in groups:
-            tables = os.listdir(os.path.join(ome_zarr.path, "points"))
-            if len(tables) > 2:
-                raise RuntimeError("Currently it is possible to work with only one points table")
-            for table in tables:
-                if table == ".zgroup":
-                    continue
-                else:
-                    table_path = os.path.join(ome_zarr.path, "points", table)
-                    points = read_zarr(table_path)
-        ##
-        content = [node for node in reader()]  # noqa: C416
-        assert len(content) == 1
-        node = content[0]
-        data = node.data
-        metadata = node.metadata
-        # ignoring pyramidal information for the moment
-        largest_image = xr.DataArray(data[0]).load()
-        largest_image = largest_image.transpose()
-        largest_image_transform = metadata["coordinateTransformations"][0]
-        d = {}
-        for e in largest_image_transform:
-            d[e["type"]] = np.flip(e[e["type"]])
-        transform = Transform(translation=d["translation"], scale_factors=d["scale"])
-        set_transform(largest_image, transform)
-        images["image"] = largest_image
-        ##
-        sdata = SpatialData(adata=feature_table, regions=regions, images=images, points=points)
-        return sdata
+    #     for k, v in self.images.items():
+    #         root[k] = v.to_zarr_array()
 
-    def to_zarr(self, file_path: str) -> None:
-        """Save to Zarr file."""
-        if len(self.images) == 0:
-            pass
-        else:
-            # simple case for the moment
-            assert len(self.images) == 1
-            transform = get_transform(self.images.values().__iter__().__next__())
-            transform.translation
-            transform.scale_factors
+    #     if len(self.images) == 0:
+    #         pass
+    #     else:
+    #         # simple case for the moment
+    #         assert len(self.images) == 1
+    #         transform = get_transform(self.images.values().__iter__().__next__())
+    #         transform.translation
+    #         transform.scale_factors
 
-            self.images.values().__iter__().__next__().to_numpy()
+    #         self.images.values().__iter__().__next__().to_numpy()
 
-        if len(self.regions) == 0:
-            pass
-        else:
-            # simple case for the moment
-            assert len(self.regions) == 1
-            self.regions.values().__iter__().__next__()
-            # regions_name = self.regions.keys().__iter__().__next__()
+    #     if len(self.regions) == 0:
+    #         pass
+    #     else:
+    #         # simple case for the moment
+    #         assert len(self.regions) == 1
+    #         self.regions.values().__iter__().__next__()
+    #         # regions_name = self.regions.keys().__iter__().__next__()
 
-        # write_spatial_anndata(
-        #     file_path=file_path,
-        #     image=img,
-        #     image_axes=["y", "x"],
-        #     image_translation=image_translation,
-        #     image_scale_factors=image_scale_factors,
-        #     tables_adata=self.adata,
-        #     tables_region="circles/circles_table",
-        #     # tables_region_key=regions_name,
-        #     # tables_instance_key=None,
-        #     circles_adata=regions,
-        #     points_adata=self.points,
-        # )
+    # @classmethod
+    # def from_zarr(self, file_path: str) -> "SpatialData":
+    #     """Load from Zarr file."""
+
+    #     ome_zarr = parse_url(file_path)
+    #     reader = Reader(ome_zarr)
+    #     ome_zarr.__dir__()
+
+    #     feature_table = None
+    #     regions = {}
+    #     images = {}
+    #     points = None
+
+    #     ##
+    #     import os
+
+    #     groups = os.listdir(ome_zarr.path)
+    #     if "tables" in groups:
+    #         tables = os.listdir(os.path.join(ome_zarr.path, "tables"))
+    #         if len(tables) > 2:
+    #             raise RuntimeError("Currently it is possible to work with only one feature table")
+    #         for table in tables:
+    #             if table == ".zgroup":
+    #                 continue
+    #             else:
+    #                 table_path = os.path.join(ome_zarr.path, "tables", table)
+    #                 feature_table = read_zarr(table_path)
+    #     if "circles" in groups:
+    #         tables = os.listdir(os.path.join(ome_zarr.path, "circles"))
+    #         for table in tables:
+    #             if table == ".zgroup":
+    #                 continue
+    #             else:
+    #                 table_path = os.path.join(ome_zarr.path, "circles", table)
+    #                 adata = read_zarr(table_path)
+    #                 regions[table] = adata
+    #     if "points" in groups:
+    #         tables = os.listdir(os.path.join(ome_zarr.path, "points"))
+    #         if len(tables) > 2:
+    #             raise RuntimeError("Currently it is possible to work with only one points table")
+    #         for table in tables:
+    #             if table == ".zgroup":
+    #                 continue
+    #             else:
+    #                 table_path = os.path.join(ome_zarr.path, "points", table)
+    #                 points = read_zarr(table_path)
+    #     ##
+    #     content = [node for node in reader()]
+    #     assert len(content) == 1
+    #     node = content[0]
+    #     data = node.data
+    #     metadata = node.metadata
+    #     # ignoring pyramidal information for the moment
+    #     largest_image = xr.DataArray(data[0]).load()
+    #     largest_image = largest_image.transpose()
+    #     largest_image_transform = metadata["coordinateTransformations"][0]
+    #     d = {}
+    #     for e in largest_image_transform:
+    #         d[e["type"]] = np.flip(e[e["type"]])
+    #     transform = Transform(translation=d["translation"], scale_factors=d["scale"])
+    #     set_transform(largest_image, transform)
+    #     images["image"] = largest_image
+    #     ##
+    #     sdata = SpatialData(adata=feature_table, regions=regions, images=images, points=points)
+    #     return sdata
 
     def __repr__(self) -> str:
         def repr_regions(regions: Any) -> str:
@@ -182,8 +210,8 @@ class SpatialData(IoMixin):
             return hashlib.md5(repr(s).encode()).hexdigest()
 
         descr = f"SpatialData object with "  # noqa: F541
-        if self.adata is not None:
-            descr += f"n_obs x n_vars = {self.adata.n_obs} x {self.adata.n_vars}"
+        if self.tables is not None:
+            descr += f"n_obs x n_vars = {self.tables.n_obs} x {self.tables.n_vars}"
         else:
             descr += "no feature table"
         n = 0
@@ -204,7 +232,7 @@ class SpatialData(IoMixin):
 
         if self.points is not None:
             n = 1
-            descr += f"\n{h('level0')}points with n_obs x n_vars = {self.points.n_obs} x {self.points.n_vars}"
+            # descr += f"\n{h('level0')}points with n_obs x n_vars = {self.points.n_obs} x {self.points.n_vars}" # TODO: returns error atm.
             descr += f"{h('empty_line') + h('level1.0')}"
 
         def rreplace(s: str, old: str, new: str, occurrence: int) -> str:
