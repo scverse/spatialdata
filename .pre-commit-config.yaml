@@ -25,11 +25,6 @@ repos:
       rev: v1.12.1
       hooks:
           - id: blacken-docs
-    - repo: https://github.com/pre-commit/mirrors-autopep8
-      rev: v1.6.0
-      hooks:
-          - id: autopep8
-            args: [-i]
     - repo: https://github.com/PyCQA/isort
       rev: 5.10.1
       hooks:
