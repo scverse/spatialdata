@@ -12,7 +12,7 @@ repos:
           - id: mypy
             additional_dependencies:
                 [numpy==1.22.0, scipy, pandas, types-requests]
-            exclude: tests/|docs/
+            exclude: tests/|docs/|temp/
     - repo: https://github.com/psf/black
       rev: 22.6.0
       hooks:

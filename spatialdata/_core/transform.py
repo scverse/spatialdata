@@ -1,15 +1,18 @@
-from typing import Optional
-import xarray as xr
 from functools import singledispatch
+from typing import Any, Optional
+
 import anndata as ad
 import numpy as np
+import xarray as xr
+
+from spatialdata._types import ArrayLike
 
 
 class Transform:
     def __init__(
         self,
-        translation: Optional[np.ndarray] = None,
-        scale_factors: Optional[np.ndarray] = None,
+        translation: Optional[ArrayLike] = None,
+        scale_factors: Optional[ArrayLike] = None,
         ndim: Optional[int] = None,
     ):
         """
@@ -43,22 +46,22 @@ class Transform:
 
 
 @singledispatch
-def set_transform(arg, transform: Transform):
+def set_transform(arg: Any, transform: Transform) -> None:
     raise ValueError(f"Unsupported type: {type(arg)}")
 
 
 @set_transform.register
-def _(arg: xr.DataArray, transform: Transform):
+def _(arg: xr.DataArray, transform: Transform) -> None:
     arg.attrs["transform"] = transform
 
 
 @set_transform.register
-def _(arg: ad.AnnData, transform: Transform):
+def _(arg: ad.AnnData, transform: Transform) -> None:
     arg.uns["transform"] = {"translation": transform.translation, "scale_factors": transform.scale_factors}
 
 
 @singledispatch
-def get_transform(arg) -> Transform:
+def get_transform(arg: Any) -> Transform:
     raise ValueError(f"Unsupported type: {type(arg)}")
 
 

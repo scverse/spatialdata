@@ -1,25 +1,23 @@
-import json
+import hashlib
+import os
 
 # import colorama
 # colorama.init(strip=False)
 import tempfile
-import os
-import filecmp
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 import numpy as np
 import xarray as xr
-import hashlib
-from types import MappingProxyType
-from typing import Any, Mapping, Optional
-
 from anndata import AnnData
 from anndata._io import read_zarr
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
 
 from spatialdata._core.mixin.io_mixin import IoMixin
-from spatialdata._core.writer import write_spatial_anndata
-from spatialdata._core.transform import Transform, set_transform, get_transform
+
+# from spatialdata._core.writer import write_spatial_anndata
+from spatialdata._core.transform import Transform, get_transform, set_transform
 from spatialdata.utils import are_directories_identical
 
 
@@ -48,6 +46,8 @@ class SpatialData(IoMixin):
             images_transform = {k: Transform(ndim=2) for k in images}
         assert set(images.keys()).issuperset(set(images_transform.keys()))
         for k, v in images.items():
+            if TYPE_CHECKING:
+                assert isinstance(images_transform, dict)
             images_transform[k] = get_transform(v)
         self.images = {
             k: self.parse_image(image, image_transform)
@@ -64,7 +64,8 @@ class SpatialData(IoMixin):
             return image
         elif isinstance(image, np.ndarray):
             xa = xr.DataArray(image)
-            set_transform(xa, image_transform)
+            if image_transform is not None:
+                set_transform(xa, image_transform)
             return xa
         else:
             raise ValueError(f"Unsupported image type: {type(image)}")
@@ -116,7 +117,7 @@ class SpatialData(IoMixin):
                     table_path = os.path.join(ome_zarr.path, "points", table)
                     points = read_zarr(table_path)
         ##
-        content = [node for node in reader()]
+        content = [node for node in reader()]  # noqa: C416
         assert len(content) == 1
         node = content[0]
         data = node.data
@@ -135,43 +136,40 @@ class SpatialData(IoMixin):
         sdata = SpatialData(adata=feature_table, regions=regions, images=images, points=points)
         return sdata
 
-    def to_zarr(self, file_path: str):
+    def to_zarr(self, file_path: str) -> None:
         """Save to Zarr file."""
         if len(self.images) == 0:
-            img = None
-            image_translation = None
-            image_scale_factors = None
+            pass
         else:
             # simple case for the moment
             assert len(self.images) == 1
             transform = get_transform(self.images.values().__iter__().__next__())
-            image_translation = transform.translation
-            image_scale_factors = transform.scale_factors
+            transform.translation
+            transform.scale_factors
 
-            img = self.images.values().__iter__().__next__().to_numpy()
+            self.images.values().__iter__().__next__().to_numpy()
 
         if len(self.regions) == 0:
-            regions = None
+            pass
         else:
             # simple case for the moment
             assert len(self.regions) == 1
-            regions = self.regions.values().__iter__().__next__()
+            self.regions.values().__iter__().__next__()
             # regions_name = self.regions.keys().__iter__().__next__()
 
-        write_spatial_anndata(
-            file_path=file_path,
-            image=img,
-            image_axes=["y", "x"],
-            image_translation=image_translation,
-            image_scale_factors=image_scale_factors,
-            tables_adata=self.adata,
-            tables_region="circles/circles_table",
-            # tables_region_key=regions_name,
-            # tables_instance_key=None,
-            circles_adata=regions,
-            points_adata=self.points,
-        )
-        pass
+        # write_spatial_anndata(
+        #     file_path=file_path,
+        #     image=img,
+        #     image_axes=["y", "x"],
+        #     image_translation=image_translation,
+        #     image_scale_factors=image_scale_factors,
+        #     tables_adata=self.adata,
+        #     tables_region="circles/circles_table",
+        #     # tables_region_key=regions_name,
+        #     # tables_instance_key=None,
+        #     circles_adata=regions,
+        #     points_adata=self.points,
+        # )
 
     def __repr__(self) -> str:
         def repr_regions(regions: Any) -> str:
@@ -183,9 +181,9 @@ class SpatialData(IoMixin):
         def h(s: str) -> str:
             return hashlib.md5(repr(s).encode()).hexdigest()
 
-        descr = f"SpatialData object with "
+        descr = f"SpatialData object with "  # noqa: F541
         if self.adata is not None:
-            descr += f"n_obs × n_vars = {self.adata.n_obs} × {self.adata.n_vars}"
+            descr += f"n_obs x n_vars = {self.adata.n_obs} x {self.adata.n_vars}"
         else:
             descr += "no feature table"
         n = 0
@@ -209,7 +207,7 @@ class SpatialData(IoMixin):
             descr += f"\n{h('level0')}points with n_obs x n_vars = {self.points.n_obs} x {self.points.n_vars}"
             descr += f"{h('empty_line') + h('level1.0')}"
 
-        def rreplace(s, old, new, occurrence):
+        def rreplace(s: str, old: str, new: str, occurrence: int) -> str:
             li = s.rsplit(old, occurrence)
             return new.join(li)
 
@@ -227,7 +225,7 @@ class SpatialData(IoMixin):
         descr = descr.replace(h("level1.0"), "│   ")
         return descr
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         # new comparison: dumping everything to zarr and comparing bytewise
         with tempfile.TemporaryDirectory() as tmpdir:
             self.to_zarr(os.path.join(tmpdir, "self.zarr"))
