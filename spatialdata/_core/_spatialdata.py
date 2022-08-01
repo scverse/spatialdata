@@ -6,12 +6,21 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 import numpy as np
 import xarray as xr
+import zarr
 from anndata import AnnData
+from ome_zarr.io import parse_url
 
 from spatialdata._core.mixin.io_mixin import IoMixin
 
 # from spatialdata._core.writer import write_spatial_anndata
 from spatialdata._core.transform import Transform, get_transform, set_transform
+from spatialdata._core.writer import (
+    write_image,
+    write_labels,
+    write_points,
+    write_shapes,
+    write_tables,
+)
 from spatialdata.utils import are_directories_identical
 
 
@@ -93,45 +102,78 @@ class SpatialData(IoMixin):
         else:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
-    # def write(self, file_path: str) -> None:
-    #     """Write to Zarr file."""
+    @classmethod
+    def write(self, file_path: str) -> None:
+        """Write to Zarr file."""
 
-    #     elems = set(self.images.keys()).union(set(self.labels.keys()), set(self.points.keys()), set(self.shapes.keys()))
+        elems = set(self.images.keys()).union(set(self.labels.keys()), set(self.points.keys()), set(self.shapes.keys()))
 
-    #     store = parse_url(file_path, mode="w").store
-    #     root = zarr.group(store=store)
+        store = parse_url(file_path, mode="w").store
+        root = zarr.group(store=store)
 
-    #     for elem in elems:
-    #         elem_group = root.create_group(name=el)
-    #         if elem in self.images.keys():
-    #             write_image(
-    #                 image=image,
-    #                 group=image_group,
-    #                 axes=["c", "y", "x"],
-    #                 scaler=None,
-    #             )
+        for elem in elems:
+            elem_group = root.create_group(name=elem)
+            if elem in self.images.keys():
+                # TODO: get transform
+                write_image(
+                    image=self.images[elem].to_zarr_array(),
+                    group=elem_group,
+                    axes=["c", "y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
+                    scaler=None,
+                )
+            if elem in self.labels.keys():
+                # TODO: get transform
+                write_labels(
+                    labels=self.labels[elem].to_zarr_array(),
+                    group=elem_group,
+                    name=elem,
+                    axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
+                    scaler=None,
+                )
+            if elem in self.points.keys():
+                # TODO: get transform
+                write_points(
+                    points=self.points[elem],
+                    group=elem_group,
+                    name=elem,
+                    axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
+                )
+            if elem in self.shapes.keys():
+                # TODO: get transform
+                write_shapes(
+                    shapes=self.shapes[elem],
+                    group=elem_group,
+                    name=elem,
+                    axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
+                )
 
-    #     for k, v in self.images.items():
-    #         root[k] = v.to_zarr_array()
+        tables_group = root.create_group(name="tables")
 
-    #     if len(self.images) == 0:
-    #         pass
-    #     else:
-    #         # simple case for the moment
-    #         assert len(self.images) == 1
-    #         transform = get_transform(self.images.values().__iter__().__next__())
-    #         transform.translation
-    #         transform.scale_factors
+        write_tables(
+            tables=self.tables,
+            group=tables_group,
+            name="tables",
+            region=elems,
+        )
 
-    #         self.images.values().__iter__().__next__().to_numpy()
+        # if len(self.images) == 0:
+        #     pass
+        # else:
+        #     # simple case for the moment
+        #     assert len(self.images) == 1
+        #     transform = get_transform(self.images.values().__iter__().__next__())
+        #     transform.translation
+        #     transform.scale_factors
 
-    #     if len(self.regions) == 0:
-    #         pass
-    #     else:
-    #         # simple case for the moment
-    #         assert len(self.regions) == 1
-    #         self.regions.values().__iter__().__next__()
-    #         # regions_name = self.regions.keys().__iter__().__next__()
+        # self.images.values().__iter__().__next__().to_numpy()
+
+        # if len(self.regions) == 0:
+        #     pass
+        # else:
+        #     # simple case for the moment
+        #     assert len(self.regions) == 1
+        #     self.regions.values().__iter__().__next__()
+        # regions_name = self.regions.keys().__iter__().__next__()
 
     # @classmethod
     # def from_zarr(self, file_path: str) -> "SpatialData":

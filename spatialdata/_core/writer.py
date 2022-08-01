@@ -62,9 +62,9 @@ def _write_metadata(
 
 
 def write_points(
-    group: zarr.Group,
     points: AnnData,
-    group_name: str = "points",
+    group: zarr.Group,
+    name: str,
     group_type: str = "ngff:points",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
@@ -72,8 +72,8 @@ def write_points(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     # TODO: validate
-    write_adata(group, group_name, points)
-    points_group = group[group_name]
+    write_adata(group, name, points)
+    points_group = group[name]
     _write_metadata(
         points_group,
         group_type=group_type,
@@ -87,10 +87,10 @@ def write_points(
 
 
 def write_shapes(
-    group: zarr.Group,
     shapes: AnnData,
+    group: zarr.Group,
+    name: str,
     shapes_parameters: Mapping[str, str],
-    group_name: str = "shapes",
     group_type: str = "ngff:shapes",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
@@ -98,14 +98,14 @@ def write_shapes(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     fmt.validate_shapes_parameters(shapes_parameters)
-    write_adata(group, group_name, shapes)
-    shapes_group = group[group_name]
+    write_adata(group, name, shapes)
+    shapes_group = group[name]
     shapes_group.attrs["shapes_parameters"] = shapes_parameters
     _write_metadata(
         shapes_group,
         group_type=group_type,
         shape=shapes.shape,
-        attr={"attr": "X", "key": None},
+        attr={"attr": "X", "key": None},  # TODO: shall we also allow to pass it?
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,
@@ -114,18 +114,19 @@ def write_shapes(
 
 
 def write_tables(
-    group: zarr.Group,
     tables: AnnData,
-    fmt: Format = SpatialDataFormat(),
-    group_name: str = "regions_table",
+    group: zarr.Group,
+    name: str,
     group_type: str = "ngff:regions_table",
-    region: Union[str, List[str]] = "features",
+    fmt: Format = SpatialDataFormat(),
+    region: Union[str, List[str]] = "features",  # TODO: remove default?
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> None:
     fmt.validate_tables(tables, region_key, instance_key)
-    write_adata(group, group_name, tables)
-    tables_group = group[group_name]
+    # TODO: validate region with tables.obs[region_key]
+    write_adata(group, name, tables)
+    tables_group = group[name]
     tables_group.attrs["@type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
