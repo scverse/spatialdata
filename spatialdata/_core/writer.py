@@ -1,14 +1,14 @@
 # the code in this file originates from the ome-ngff-tables-prototype repo, we will gradually distribute it's content
 # inside the "building block" spatial data classes
-
-from typing import Any, Dict, List, Optional, Tuple, Union
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem
-from ome_zarr.format import CurrentFormat, Format
+from ome_zarr.format import Format
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import (
@@ -18,61 +18,29 @@ from ome_zarr.writer import (
     write_labels,
 )
 
-
-def df_to_anndata(df: pd.DataFrame, dense_columns: List[str], var: Optional[pd.DataFrame] = None) -> AnnData:
-    """Create the anndata object from the example csv
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The table to convert to an AnnData object
-    dense_columns : List[str]
-        The list of column names to remove from the dataframe and
-        store in the dense matrix (X)
-    var : Optional[pd.DataFrame]
-        The annotations for the columns of the dense matrix X that
-        get stored in AnnData.var. Must be ordered to match
-        dense_columns.
-    Returns
-    -------
-    ann_obj : AnnData
-        The converted AnnData object
-    """
-    # get the dense array
-    dense_array = df[dense_columns].to_numpy()
-
-    # drop the dense array from the table
-    obs = df.drop(dense_columns, axis="columns")
-
-    # create the AnnData object
-    ann_data_kwargs = {"X": dense_array, "obs": obs, "dtype": dense_array.dtype}
-    if var is not None:
-        ann_data_kwargs["var"] = var
-    ann_obj = AnnData(**ann_data_kwargs)
-
-    return ann_obj
+from spatialdata.format import SpatialDataFormat
 
 
-def write_points(
+def _write_metadata(
     group: zarr.Group,
-    points: AnnData,
-    group_name: str = "points",
-    group_type: str = "ngff:points",
-    fmt: Format = CurrentFormat(),
+    group_type: str,
+    shape: Tuple[int, ...],
+    attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
+    fmt: Format = SpatialDataFormat(),
     axes: Union[str, List[str], List[Dict[str, str]]] = None,
     coordinate_transformations: List[List[Dict[str, Any]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ):
-    write_elem(group, group_name, points)
-
-    dims = len(points.shape)
+    """Write metdata to a group."""
+    dims = len(shape)
     axes = _get_valid_axes(dims, axes, fmt)
 
     datasets: List[dict] = []
-    datasets.append({"path": {"attr": "X", "key": None}})
+    datasets.append({"path": attr})
 
     if coordinate_transformations is None:
-        shapes = [points.shape]
-        coordinate_transformations = fmt.generate_coordinate_transformations(shapes)
+        shape = [shape]
+        coordinate_transformations = fmt.generate_coordinate_transformations(shape)
 
     fmt.validate_coordinate_transformations(dims, 1, coordinate_transformations)
     if coordinate_transformations is not None:
@@ -94,31 +62,61 @@ def write_points(
     if axes is not None:
         multiscales[0]["axes"] = axes
 
-    table_group = group[group_name]
-    table_group.attrs["@type"] = group_type
-    table_group.attrs["multiscales"] = multiscales
+    group.attrs["@type"] = group_type
+    group.attrs["multiscales"] = multiscales
 
 
-def write_table_polygons(
+def write_points(
     group: zarr.Group,
-    adata: AnnData,
-    table_group_name: str = "polygons_table",
-    group_type: str = "ngff:polygons_table",
+    points: AnnData,
+    group_name: str = "points",
+    group_type: str = "ngff:points",
+    fmt: Format = SpatialDataFormat(),
+    axes: Union[str, List[str], List[Dict[str, str]]] = None,
+    coordinate_transformations: List[List[Dict[str, Any]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
 ):
-    write_elem(group, table_group_name, adata)
-    table_group = group[table_group_name]
-    table_group.attrs["@type"] = group_type
+    # TODO: validate
+    write_elem(group, group_name, points)
+    points_group = group[group_name]
+    _write_metadata(
+        points_group,
+        group_type=group_type,
+        shape=points.shape,
+        attr={"attr": "X", "key": None},
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )
 
 
-def write_table_circles(
+def write_shapes(
     group: zarr.Group,
-    adata: AnnData,
-    table_group_name: str = "circles_table",
-    group_type: str = "ngff:circles_table",
+    shapes: AnnData,
+    shapes_parameters: Mapping[str, str],
+    group_name: str = "shapes",
+    group_type: str = "ngff:shapes",
+    fmt: Format = SpatialDataFormat(),
+    axes: Union[str, List[str], List[Dict[str, str]]] = None,
+    coordinate_transformations: List[List[Dict[str, Any]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
 ):
-    write_elem(group, table_group_name, adata)
-    table_group = group[table_group_name]
-    table_group.attrs["@type"] = group_type
+    # TODO: validate
+    write_elem(group, group_name, shapes)
+    shapes_group = group[group_name]
+    fmt.validate_shapes_parameters(shapes_parameters, coordinate_transformations)
+    shapes_group.attrs["shapes_parameters"] = shapes_parameters
+    _write_metadata(
+        shapes_group,
+        group_type=group_type,
+        shape=shapes.shape,
+        attr={"attr": "X", "key": None},
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )
 
 
 def write_table_regions(
@@ -184,8 +182,7 @@ def write_points_dataset(
 
     if points is not None:
         points_group = root.create_group(points_group_name)
-        points_anndata = df_to_anndata(
-            df=points, dense_columns=points_dense_columns, var=points_var)
+        points_anndata = df_to_anndata(df=points, dense_columns=points_dense_columns, var=points_var)
         write_points(points_group, points_anndata)
 
         # add a flag to the group attrs to denote this is points data
@@ -262,8 +259,7 @@ def write_spatial_anndata(
         from ome_zarr.scale import Scaler
 
         downscale = 2
-        max_layer = min(
-            4, min(int(np.log2(image.shape[0])), int(np.log2(image.shape[1]))))
+        max_layer = min(4, min(int(np.log2(image.shape[0])), int(np.log2(image.shape[1]))))
         scaler = Scaler(downscale=downscale, max_layer=max_layer)
         fmt: Format = CurrentFormat()
         coordinate_transformations = None
@@ -283,8 +279,7 @@ def write_spatial_anndata(
 
             mip, axes = _create_mip(image, fmt, scaler, image_axes)
             shapes = [data.shape for data in mip]
-            pyramid_coordinate_transformations = fmt.generate_coordinate_transformations(
-                shapes)
+            pyramid_coordinate_transformations = fmt.generate_coordinate_transformations(shapes)
             coordinate_transformations = []
             for p in pyramid_coordinate_transformations:
                 assert p[0]["type"] == "scale"
@@ -296,11 +291,9 @@ def write_spatial_anndata(
                 # see where is the error
                 # hack_factor = 1.55
                 hack_factor = 1
-                new_scale = (np.array(pyramid_scale) *
-                             np.flip(image_scale_factors) * hack_factor).tolist()
+                new_scale = (np.array(pyramid_scale) * np.flip(image_scale_factors) * hack_factor).tolist()
                 p[0]["scale"] = new_scale
-                translation = [{"type": "translation",
-                                "translation": translation_values}]
+                translation = [{"type": "translation", "translation": translation_values}]
                 transformation_series = p + translation
                 coordinate_transformations.append(transformation_series)
                 image = np.transpose(image)
@@ -348,3 +341,14 @@ def write_spatial_anndata(
             group=points_group,
             adata=points_adata,
         )
+
+
+def write_table_polygons(
+    group: zarr.Group,
+    adata: AnnData,
+    table_group_name: str = "polygons_table",
+    group_type: str = "ngff:polygons_table",
+):
+    write_elem(group, table_group_name, adata)
+    table_group = group[table_group_name]
+    table_group.attrs["@type"] = group_type
