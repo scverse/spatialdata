@@ -258,8 +258,8 @@ class SpatialData(IoMixin):
     #     return sdata
 
     def __repr__(self) -> str:
-        def repr_regions(regions: Any) -> str:
-            return f"regions with n_obs x n_vars = {regions.n_obs} x {regions.n_vars}"
+        def repr_regions(labels: Any) -> str:
+            return f"regions with n_obs x n_vars = {labels.n_obs} x {labels.n_vars}"
 
         def repr_image(ar: xr.DataArray) -> str:
             return f"image with shape {ar.shape}"
@@ -274,7 +274,7 @@ class SpatialData(IoMixin):
             descr += "no feature table"
         n = 0
         for attr in [
-            "regions",
+            "labels",
             "images",
         ]:
             attribute = getattr(self, attr)
@@ -282,7 +282,7 @@ class SpatialData(IoMixin):
             if len(keys) > 0:
                 n = 0
                 descr += f"\n{h('level0')}{attr}: {str(list(keys))[1:-1]}"
-                repr_function = {"regions": repr_regions, "images": repr_image}[attr]
+                repr_function = {"labels": repr_regions, "images": repr_image}[attr]
                 for key in keys:
                     descr += f"\n{h('level1.0')}{h(attr + 'level1.1')}'{key}': {repr_function(attribute[key])}"
                     n += 1
@@ -303,7 +303,7 @@ class SpatialData(IoMixin):
         descr = rreplace(descr, h("level0"), "└── ", 1)
         descr = descr.replace(h("level0"), "├── ")
 
-        for attr in ["regions", "images"]:
+        for attr in ["labels", "images"]:
             descr = rreplace(descr, h(attr + "level1.1"), "└── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "├── ")
 
