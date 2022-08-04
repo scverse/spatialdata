@@ -14,7 +14,7 @@ from ome_zarr.writer import write_labels as write_labels_ngff
 from spatialdata._core.format import SpatialDataFormat
 from spatialdata._types import ArrayLike
 
-__all__ = ["write_points", "write_shapes", "write_tables", "write_image", "write_labels"]
+__all__ = ["write_points", "write_tables", "write_image", "write_labels"]
 
 
 def _write_metadata(
@@ -66,6 +66,7 @@ def write_points(
     points: AnnData,
     group: zarr.Group,
     name: str,
+    points_parameters: Optional[Mapping[str, Any]] = None,
     group_type: str = "ngff:points",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
@@ -75,38 +76,13 @@ def write_points(
     # TODO: validate
     write_adata(group, name, points)
     points_group = group[name]
+    if points_parameters is not None:
+        points_group.attrs["points_parameters"] = points_parameters
     _write_metadata(
         points_group,
         group_type=group_type,
         shape=points.shape,
         attr={"attr": "X", "key": None},
-        fmt=fmt,
-        axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,
-    )
-
-
-def write_shapes(
-    shapes: AnnData,
-    group: zarr.Group,
-    name: str,
-    shapes_parameters: Mapping[str, str],
-    group_type: str = "ngff:shapes",
-    fmt: Format = SpatialDataFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
-) -> None:
-    fmt.validate_shapes_parameters(shapes_parameters)
-    write_adata(group, name, shapes)
-    shapes_group = group[name]
-    shapes_group.attrs["shapes_parameters"] = shapes_parameters
-    _write_metadata(
-        shapes_group,
-        group_type=group_type,
-        shape=shapes.shape,
-        attr={"attr": "X", "key": None},  # TODO: shall we also allow to pass it?
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,

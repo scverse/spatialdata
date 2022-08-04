@@ -12,7 +12,7 @@ def get_empty_sdata():
 
 
 def get_features_sdata(dim0=20):
-    return SpatialData(tables=AnnData(np.ones((dim0, 10))))
+    return SpatialData(tables={"tables": AnnData(np.ones((dim0, 10)))})
 
 
 def get_regions_sdata(dim0=20):

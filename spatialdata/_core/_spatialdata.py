@@ -18,7 +18,6 @@ from spatialdata._core.writer import (
     write_image,
     write_labels,
     write_points,
-    write_shapes,
     write_tables,
 )
 from spatialdata.utils import are_directories_identical
@@ -27,24 +26,21 @@ from spatialdata.utils import are_directories_identical
 class SpatialData(IoMixin):
     """Spatial data structure."""
 
-    tables: Optional[AnnData]
-    labels: Optional[Mapping[str, Any]]
-    images: Optional[Mapping[str, Any]]
-    points: Optional[Mapping[str, AnnData]]
-    shapes: Optional[Mapping[str, AnnData]]
+    tables: Optional[Mapping[str, AnnData]] = None
+    labels: Optional[Mapping[str, Any]] = None
+    images: Optional[Mapping[str, Any]] = None
+    points: Optional[Mapping[str, AnnData]] = None
     elems: Set[str]
 
     def __init__(
         self,
-        tables: Optional[AnnData] = None,
+        tables: Optional[Mapping[str, AnnData]] = None,
         labels: Optional[Mapping[str, Any]] = MappingProxyType({}),
         labels_transform: Optional[Mapping[str, Any]] = None,
         images: Optional[Mapping[str, Any]] = MappingProxyType({}),
         images_transform: Optional[Mapping[str, Any]] = None,
         points: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
         points_transform: Optional[Mapping[str, Any]] = None,
-        shapes: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
-        shapes_transform: Optional[Mapping[str, Any]] = None,
     ) -> None:
 
         elems = []
@@ -52,13 +48,11 @@ class SpatialData(IoMixin):
         images, images_transform, elem_images = _validate_dataset(images, images_transform)
         labels, labels_transform, elem_labels = _validate_dataset(labels, labels_transform)
         points, points_transform, elem_points = _validate_dataset(points, points_transform)
-        shapes, shapes_transform, elem_shapes = _validate_dataset(shapes, shapes_transform)
 
         if TYPE_CHECKING:
             assert images_transform is not None
             assert labels_transform is not None
             assert points_transform is not None
-            assert shapes_transform is not None
 
         if images is not None:
             self.images = {
@@ -66,8 +60,6 @@ class SpatialData(IoMixin):
                 for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
             }
             elems.append(elem_images)
-        else:
-            self.images = None
 
         if labels is not None:
             self.labels = {
@@ -75,22 +67,15 @@ class SpatialData(IoMixin):
                 for k, (labels, labels_transform) in zip(labels.keys(), zip(labels.values(), labels_transform.values()))
             }
             elems.append(elem_labels)
-        else:
-            self.labels = None
 
         if points is not None:
             self.points = {k: self.parse_tables(points[k], points_transform[k]) for k in points.keys()}
             elems.append(elem_points)
-        else:
-            self.points = None
 
-        if shapes is not None:
-            self.shapes = {k: self.parse_tables(shapes[k], shapes_transform[k]) for k in shapes.keys()}
-            elems.append(elem_shapes)
-        else:
-            self.shapes = None
+        if tables is not None:
+            self.tables = tables  # TODO: consider concatenating adatas?
+            elems.append(set(tables.keys()))
 
-        self.tables = tables
         self.elems = set().union(*elems)  # type: ignore[arg-type]
 
     @classmethod
@@ -152,21 +137,20 @@ class SpatialData(IoMixin):
                     name=elem,
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                 )
-            if self.shapes is not None and elem in self.shapes.keys():
-                # TODO: get transform
-                write_shapes(
-                    shapes=self.shapes[elem],
+
+            if self.tables is not None and elem in self.tables.keys():
+                write_tables(
+                    tables=self.tables[elem],
                     group=elem_group,
-                    name=elem,
-                    shapes_parameters=self.shapes[elem].uns["shape_parameters"],
-                    axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
+                    name="tables",
+                    region=list(self.elems),
                 )
 
-        if self.tables is not None:
+        # TODO: should be able to handle single adata nicer, below attempt not clean
+        if self.tables is not None and not set(self.tables.keys()).intersection(self.elems):
             tables_group = root.create_group(name="tables")
-
             write_tables(
-                tables=self.tables,
+                tables=self.tables.values().__iter__().__next__(),
                 group=tables_group,
                 name="tables",
                 region=list(self.elems),
@@ -268,10 +252,11 @@ class SpatialData(IoMixin):
             return hashlib.md5(repr(s).encode()).hexdigest()
 
         descr = f"SpatialData object with "  # noqa: F541
-        if self.tables is not None:
-            descr += f"n_obs x n_vars = {self.tables.n_obs} x {self.tables.n_vars}"
-        else:
-            descr += "no feature table"
+        # TODO: this part of repr fails if we support multiple tables as Mapping, need to find consensus.
+        # # if self.tables is not None:
+        # #     descr += f"n_obs x n_vars = {self.tables.n_obs} x {self.tables.n_vars}"
+        # else:
+        #     descr += "no feature table"
         n = 0
         for attr in [
             "labels",
