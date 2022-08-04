@@ -1,36 +1,31 @@
 import os
 import random
+import warnings
+from typing import Any, Optional
 
+import dask.array as da
 import matplotlib.cm
 import numpy as np
-from anndata import AnnData
-from anndata._io import read_zarr
-from ome_zarr.io import parse_url
-from ome_zarr.reader import Reader
-import napari
-from napari_ome_zarr._reader import transform
-from napari.types import LayerDataTuple
 import pandas as pd
 import zarr
-from typing import Union, Optional
-import warnings
-import dask.array as da
+from anndata import AnnData
+from anndata._io import read_zarr
+from napari.types import LayerDataTuple
+from napari_ome_zarr._reader import transform
+from ome_zarr.io import parse_url
+from ome_zarr.reader import Reader
 
 
 def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
     return read_zarr(os.path.join(file_path, table_group))
 
 
-def _anndata_to_napari_labels_features(
-    anndata_obj: AnnData, table_instance_key: str
-) -> pd.DataFrame:
+def _anndata_to_napari_labels_features(anndata_obj: AnnData, table_instance_key: str) -> pd.DataFrame:
     df = pd.concat([anndata_obj.to_df(), anndata_obj.obs], axis=1)
 
     # hacky add dummy data to first row to meet the condition for napari features (first row is the background)
     # https://github.com/napari/napari/blob/2648c307168fdfea7b5c03aaad4590972e5dfe2c/napari/layers/labels/labels.py#L72-L74
-    warnings.warn(
-        "background value is arbitrary, this is just for testing purposes and will have to be changed"
-    )
+    warnings.warn("background value is arbitrary, this is just for testing purposes and will have to be changed")
     first_row = df.iloc[0, :].copy()
     first_row[table_instance_key] = 0
     return pd.concat([pd.DataFrame(first_row).T, df])
@@ -51,15 +46,13 @@ def get_napari_image_layer_data(file_path: str) -> LayerDataTuple:
             # if data[0].shape[0] in [3, 4]:
             #     kwargs['rgb'] = True
             # assuming y and x are the two last dimesions
-            image_layer_data.append(
-                ([da.moveaxis(d, -1, -2) for d in data], kwargs, layer_type)
-            )
+            image_layer_data.append(([da.moveaxis(d, -1, -2) for d in data], kwargs, layer_type))
     return image_layer_data
 
 
 def _colorize_regions_for_napari_layer(
-    features_table,
-    kwargs,
+    features_table: Any,
+    kwargs: Any,
     color_key_name: str,
     tables_instance_key: Optional[str] = None,
 ):
@@ -137,9 +130,7 @@ def get_napari_label_layer_data(
         image_ids = set(da.unique(data[0]).compute().tolist())
         display_feature = False
         if tables_instance_key is not None:
-            warnings.warn(
-                "currently ignoring tables_instance_key and matching regions and features just by the order"
-            )
+            warnings.warn("currently ignoring tables_instance_key and matching regions and features just by the order")
             table_ids = set(features_table[tables_instance_key].tolist())
             image_ids.add(0)
             ids_not_in_table = image_ids.difference(table_ids)
@@ -156,16 +147,10 @@ def get_napari_label_layer_data(
                     new_row = features_table.iloc[0, :].copy()
                     new_row[tables_instance_key] = label
                     rows_to_append.append(new_row)
-                features_table = pd.concat(
-                    [features_table, pd.DataFrame(rows_to_append)]
-                )
+                features_table = pd.concat([features_table, pd.DataFrame(rows_to_append)])
             elif len(ids_not_in_image) > 0:
-                warnings.warn(
-                    "some rows from the table do not have a corresponding label in the image, ignoring them"
-                )
-                features_table = features_table[
-                    ~features_table[tables_instance_key].isin(ids_not_in_image), :
-                ]
+                warnings.warn("some rows from the table do not have a corresponding label in the image, ignoring them")
+                features_table = features_table[~features_table[tables_instance_key].isin(ids_not_in_image), :]
             assert len(image_ids) == len(features_table[tables_instance_key])
             features_table.sort_values(by=tables_instance_key, inplace=True)
             display_feature = True
@@ -200,10 +185,7 @@ def get_napari_circles_layer_data(
 ) -> LayerDataTuple:
     ome_zarr = parse_url(file_path)
     circles_group = zarr.group(ome_zarr.store)[circles_group_key]
-    assert (
-        "@type" in circles_group.attrs
-        and circles_group.attrs["@type"] == "ngff:circles_table"
-    )
+    assert "@type" in circles_group.attrs and circles_group.attrs["@type"] == "ngff:circles_table"
     anndata_obj = load_table_to_anndata(file_path, circles_group_key)
     xy = anndata_obj.obsm["spatial"]
     assert len(anndata_obj) == len(xy)
@@ -213,13 +195,8 @@ def get_napari_circles_layer_data(
         radii = anndata_obj.obsm["region_radius"]
 
     except KeyError:
-        scale_factors = (
-            anndata_obj.uns["spatial"].values().__iter__().__next__()["scalefactors"]
-        )
-        radius = (
-            scale_factors["spot_diameter_fullres"]
-            * scale_factors["tissue_hires_scalef"]
-        )
+        scale_factors = anndata_obj.uns["spatial"].values().__iter__().__next__()["scalefactors"]
+        radius = scale_factors["spot_diameter_fullres"] * scale_factors["tissue_hires_scalef"]
         radii = np.array([radius] * len(anndata_obj))
 
     kwargs = {"edge_width": 0.0, "size": radii}
@@ -264,15 +241,11 @@ def get_napari_table_layer_data(file_path: str, table_group_key: str) -> LayerDa
         )
     tables_region_key = table_group.attrs["region_key"]
     if tables_region_key is not None:
-        raise NotImplementedError(
-            'currently only a single "regions" object can be mapped to a feature table'
-        )
+        raise NotImplementedError('currently only a single "regions" object can be mapped to a feature table')
     table_instance_key = table_group.attrs["instance_key"]
     group_type = tables_region.split("/")[0]
     if group_type == "labels":
-        features_table = _anndata_to_napari_labels_features(
-            anndata_obj, table_instance_key=table_instance_key
-        )
+        features_table = _anndata_to_napari_labels_features(anndata_obj, table_instance_key=table_instance_key)
         return get_napari_label_layer_data(
             file_path=file_path,
             labels_group_key=tables_region,
@@ -289,23 +262,16 @@ def get_napari_table_layer_data(file_path: str, table_group_key: str) -> LayerDa
     elif group_type == "polygons":
         raise NotImplementedError()
     else:
-        raise ValueError(
-            'region must specify the zarr path (relative to the root) of a "region" type'
-        )
+        raise ValueError('region must specify the zarr path (relative to the root) of a "region" type')
 
 
-def get_napari_points_layer_data(
-    file_path: str, points_group_key: str
-) -> LayerDataTuple:
+def get_napari_points_layer_data(file_path: str, points_group_key: str) -> LayerDataTuple:
     # load table
     anndata_obj = load_table_to_anndata(file_path, points_group_key)
 
     ome_zarr = parse_url(file_path)
     table_group = zarr.group(ome_zarr.store)[points_group_key]
-    assert (
-        "@type" in table_group.attrs
-        and table_group.attrs["@type"] == "ngff:points_table"
-    )
+    assert "@type" in table_group.attrs and table_group.attrs["@type"] == "ngff:points_table"
 
     # what is layer_properties for? notice that not all the layers set this
     layer_properties = anndata_obj.obs
@@ -317,23 +283,16 @@ def get_napari_points_layer_data(
     return new_layer_data
 
 
-def get_napari_polygons_layer_data(
-    file_path: str, polygons_group_key: str
-) -> LayerDataTuple:
+def get_napari_polygons_layer_data(file_path: str, polygons_group_key: str) -> LayerDataTuple:
     # load table
     anndata_obj = load_table_to_anndata(file_path, polygons_group_key)
 
     ome_zarr = parse_url(file_path)
     table_group = zarr.group(ome_zarr.store)[polygons_group_key]
-    assert (
-        "@type" in table_group.attrs
-        and table_group.attrs["@type"] == "ngff:polygons_table"
-    )
+    assert "@type" in table_group.attrs and table_group.attrs["@type"] == "ngff:polygons_table"
 
     # this is just temporary, it is a security problem. It is converting the string repr of a np.array back to a np.array
-    anndata_obj.obs["vertices"] = anndata_obj.obs["vertices"].apply(
-        lambda x: eval("np." + x)
-    )
+    anndata_obj.obs["vertices"] = anndata_obj.obs["vertices"].apply(lambda x: eval("np." + x))
     list_of_vertices = anndata_obj.obs["vertices"].tolist()
     list_of_vertices = [np.fliplr(v) for v in list_of_vertices]
 
@@ -355,24 +314,14 @@ def _get_layer(file_path: str, group_key: str) -> LayerDataTuple:
     # "points" groups, are the root level of the hierarchy if present
     group_type = group_key.split("/")[0]
     if group_type == "points":
-        return get_napari_points_layer_data(
-            file_path=file_path, points_group_key=group_key
-        )
+        return get_napari_points_layer_data(file_path=file_path, points_group_key=group_key)
     elif group_type == "labels":
-        return get_napari_label_layer_data(
-            file_path=file_path, labels_group_key=group_key
-        )
+        return get_napari_label_layer_data(file_path=file_path, labels_group_key=group_key)
     elif group_type == "tables":
-        return get_napari_table_layer_data(
-            file_path=file_path, table_group_key=group_key
-        )
+        return get_napari_table_layer_data(file_path=file_path, table_group_key=group_key)
     elif group_type == "circles":
-        return get_napari_circles_layer_data(
-            file_path=file_path, circles_group_key=group_key
-        )
+        return get_napari_circles_layer_data(file_path=file_path, circles_group_key=group_key)
     elif group_type == "polygons":
-        return get_napari_polygons_layer_data(
-            file_path=file_path, polygons_group_key=group_key
-        )
+        return get_napari_polygons_layer_data(file_path=file_path, polygons_group_key=group_key)
     else:
         raise ValueError()

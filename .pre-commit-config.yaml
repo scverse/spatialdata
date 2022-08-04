@@ -12,7 +12,7 @@ repos:
           - id: mypy
             additional_dependencies:
                 [numpy==1.22.0, scipy, pandas, types-requests]
-            exclude: tests/|docs/|temp/
+            exclude: tests/|docs/|temp/|spatialdata/_core/reader.py
     - repo: https://github.com/psf/black
       rev: 22.6.0
       hooks:
