@@ -80,7 +80,7 @@ class SpatialDataFormat(CurrentFormat):
             Nothing.
         """
         if tables is None:
-            raise ValueError("`tables` must be provided.")
+            return
         if not isinstance(tables, AnnData):
             raise ValueError("`tables` must be an `anndata.AnnData`.")
         if region_key is not None:

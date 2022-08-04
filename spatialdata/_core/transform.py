@@ -79,15 +79,20 @@ def _(arg: xr.DataArray) -> Transform:
 
 
 @get_transform.register
+def _(arg: np.ndarray) -> Transform:  # type: ignore[type-arg]
+    return Transform(
+        ndim=arg.ndim,
+    )
+
+
+@get_transform.register
 def _(arg: ad.AnnData) -> Transform:
     # check if the AnnData has transform information, otherwise fetches it from default scanpy storage
     if "transform" in arg.uns:
         return Transform(
             translation=arg.uns["transform"]["translation"], scale_factors=arg.uns["transform"]["scale_factors"]
         )
-    else:
-        assert "spatial" in arg.uns
-        assert "spatial" in arg.obsm
+    elif "spatial" in arg.uns and "spatial" in arg.obsm:
         ndim = arg.obsm["spatial"].shape[1]
         libraries = arg.uns["spatial"]
         assert len(libraries) == 1
@@ -96,3 +101,5 @@ def _(arg: ad.AnnData) -> Transform:
         return Transform(
             translation=np.zeros(ndim, dtype=float), scale_factors=np.array([scale_factors] * ndim, dtype=float)
         )
+    else:
+        return Transform(ndim=2)

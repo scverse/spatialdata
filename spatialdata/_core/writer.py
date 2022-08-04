@@ -9,9 +9,10 @@ from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes, _validate_datasets
 from ome_zarr.writer import write_image as write_image_ngff
+from ome_zarr.writer import write_labels as write_labels_ngff
 
+from spatialdata._core.format import SpatialDataFormat
 from spatialdata._types import ArrayLike
-from spatialdata.format import SpatialDataFormat
 
 __all__ = ["write_points", "write_shapes", "write_tables", "write_image", "write_labels"]
 
@@ -172,7 +173,7 @@ def write_labels(
     **metadata: JSONDict,
 ) -> None:
     # TODO: ergonomics.
-    write_image_ngff(
+    write_labels_ngff(
         labels=labels,
         group=group,
         name=name,

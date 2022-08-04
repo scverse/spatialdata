@@ -2,7 +2,7 @@ import hashlib
 import os
 import tempfile
 from types import MappingProxyType
-from typing import Any, List, Mapping, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Set, Tuple
 
 import numpy as np
 import xarray as xr
@@ -32,7 +32,7 @@ class SpatialData(IoMixin):
     images: Optional[Mapping[str, Any]]
     points: Optional[Mapping[str, AnnData]]
     shapes: Optional[Mapping[str, AnnData]]
-    elems: List[Optional[Set[str]]]
+    elems: Set[str]
 
     def __init__(
         self,
@@ -41,9 +41,9 @@ class SpatialData(IoMixin):
         labels_transform: Optional[Mapping[str, Any]] = None,
         images: Optional[Mapping[str, Any]] = MappingProxyType({}),
         images_transform: Optional[Mapping[str, Any]] = None,
-        points: Optional[Mapping[str, AnnData]] = None,
+        points: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
         points_transform: Optional[Mapping[str, Any]] = None,
-        shapes: Optional[Mapping[str, AnnData]] = None,
+        shapes: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
         shapes_transform: Optional[Mapping[str, Any]] = None,
     ) -> None:
 
@@ -54,30 +54,44 @@ class SpatialData(IoMixin):
         points, points_transform, elem_points = _validate_dataset(points, points_transform)
         shapes, shapes_transform, elem_shapes = _validate_dataset(shapes, shapes_transform)
 
-        if images is not None and images_transform is not None:
+        if TYPE_CHECKING:
+            assert images_transform is not None
+            assert labels_transform is not None
+            assert points_transform is not None
+            assert shapes_transform is not None
+
+        if images is not None:
             self.images = {
                 k: self.parse_image(image, image_transform)
                 for k, (image, image_transform) in zip(images.keys(), zip(images.values(), images_transform.values()))
             }
             elems.append(elem_images)
+        else:
+            self.images = None
 
-        if labels is not None and labels_transform is not None:
+        if labels is not None:
             self.labels = {
                 k: self.parse_image(labels, labels_transform)
                 for k, (labels, labels_transform) in zip(labels.keys(), zip(labels.values(), labels_transform.values()))
             }
             elems.append(elem_labels)
+        else:
+            self.labels = None
 
-        if points is not None and points_transform is not None:
+        if points is not None:
             self.points = {k: self.parse_tables(points[k], points_transform[k]) for k in points.keys()}
             elems.append(elem_points)
+        else:
+            self.points = None
 
-        if shapes is not None and shapes_transform is not None:
+        if shapes is not None:
             self.shapes = {k: self.parse_tables(shapes[k], shapes_transform[k]) for k in shapes.keys()}
             elems.append(elem_shapes)
+        else:
+            self.shapes = None
 
         self.tables = tables
-        self.elems = elems
+        self.elems = set().union(*elems)  # type: ignore[arg-type]
 
     @classmethod
     def parse_image(cls, image: Any, image_transform: Optional[Transform] = None) -> Any:
@@ -98,27 +112,25 @@ class SpatialData(IoMixin):
     def parse_tables(cls, tables: AnnData, tables_transform: Optional[Transform] = None) -> Any:
         """Parse AnnData in SpatialData."""
         if isinstance(tables, AnnData):
-            if tables is not None:
+            if tables_transform is not None:
                 set_transform(tables, tables_transform)
             return tables
         else:
             raise ValueError(f"Unsupported tables type: {type(tables)}")
 
-    @classmethod
+    # @classmethod
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
-
-        elems = set().union(*self.elems)  # type:ignore[arg-type]
 
         store = parse_url(file_path, mode="w").store
         root = zarr.group(store=store)
 
-        for elem in elems:
+        for elem in self.elems:
             elem_group = root.create_group(name=elem)
             if self.images is not None and elem in self.images.keys():
                 # TODO: get transform
                 write_image(
-                    image=self.images[elem].to_zarr_array(),
+                    image=self.images[elem].data,
                     group=elem_group,
                     axes=["c", "y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                     scaler=None,
@@ -126,7 +138,7 @@ class SpatialData(IoMixin):
             if self.labels is not None and elem in self.labels.keys():
                 # TODO: get transform
                 write_labels(
-                    labels=self.labels[elem].to_zarr_array(),
+                    labels=self.labels[elem].data,
                     group=elem_group,
                     name=elem,
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
@@ -150,14 +162,15 @@ class SpatialData(IoMixin):
                     axes=["y", "x"],  # TODO: it's not gonna work, need to validate/infer before.
                 )
 
-        tables_group = root.create_group(name="tables")
+        if self.tables is not None:
+            tables_group = root.create_group(name="tables")
 
-        write_tables(
-            tables=self.tables,
-            group=tables_group,
-            name="tables",
-            region=list(elems),
-        )
+            write_tables(
+                tables=self.tables,
+                group=tables_group,
+                name="tables",
+                region=list(self.elems),
+            )
 
         # if len(self.images) == 0:
         #     pass
@@ -301,8 +314,8 @@ class SpatialData(IoMixin):
     def __eq__(self, other: Any) -> bool:
         # new comparison: dumping everything to zarr and comparing bytewise
         with tempfile.TemporaryDirectory() as tmpdir:
-            self.to_zarr(os.path.join(tmpdir, "self.zarr"))
-            other.to_zarr(os.path.join(tmpdir, "other.zarr"))
+            self.write(os.path.join(tmpdir, "self.zarr"))
+            other.write(os.path.join(tmpdir, "other.zarr"))
             return are_directories_identical(os.path.join(tmpdir, "self.zarr"), os.path.join(tmpdir, "other.zarr"))
         # old comparison: comparing piece by piece
         # if not isinstance(other, SpatialData):
@@ -334,17 +347,14 @@ class SpatialData(IoMixin):
 def _validate_dataset(
     dataset: Optional[Mapping[str, Any]] = None, dataset_transform: Optional[Mapping[str, Any]] = None
 ) -> Tuple[Optional[Mapping[str, Any]], Optional[Mapping[str, Any]], Optional[Set[str]]]:
-    if dataset is None:
+    if dataset is None or not len(dataset):
         return None, None, None
     if isinstance(dataset, dict):
         if dataset_transform is None:
             dataset_transform = {k: Transform(ndim=2) for k in dataset.keys()}
-        elif isinstance(dataset_transform, dict):
-            dataset_transform = {
-                k: dataset_transform[k] if k in dataset_transform.keys() else Transform(ndim=2) for k in dataset.keys()
-            }
+        for k, v in dataset.items():  # TODO: this is probably wrong, it should validate keys
+            if k not in dataset_transform:
+                dataset_transform[k] = get_transform(v)  # type: ignore [index]
         assert set(dataset.keys()).issuperset(set(dataset_transform.keys())), "TODO: superset check."
-        for k, v in dataset.items():
-            dataset[k] = get_transform(v)
         return dataset, dataset_transform, set(dataset.keys())
-    raise ValueError("`dataset` must be a `dict`.")
+    raise ValueError(f"`dataset` must be a `dict`, not `{type(dataset)}`.")
