@@ -69,7 +69,7 @@ class SpatialData(IoMixin):
             elems.append(elem_labels)
 
         if points is not None:
-            self.points = {k: self.parse_tables(points[k], points_transform[k]) for k in points.keys()}
+            self.points = {k: self.parse_points(points[k], points_transform[k]) for k in points.keys()}
             elems.append(elem_points)
 
         if tables is not None:
@@ -94,14 +94,14 @@ class SpatialData(IoMixin):
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     @classmethod
-    def parse_tables(cls, tables: AnnData, tables_transform: Optional[Transform] = None) -> Any:
+    def parse_points(cls, points: AnnData, points_transform: Optional[Transform] = None) -> Any:
         """Parse AnnData in SpatialData."""
-        if isinstance(tables, AnnData):
-            if tables_transform is not None:
-                set_transform(tables, tables_transform)
-            return tables
+        if isinstance(points, AnnData):
+            if points_transform is not None:
+                set_transform(points, points_transform)
+            return points
         else:
-            raise ValueError(f"Unsupported tables type: {type(tables)}")
+            raise ValueError(f"Unsupported tables type: {type(points)}")
 
     # @classmethod
     def write(self, file_path: str) -> None:
