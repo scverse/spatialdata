@@ -9,6 +9,7 @@ class cprop:
         return self.f(owner)
 
 
+# TODO: use this class for various properties
 class Key:
     """Class which manages keys in :class:`anndata.AnnData`."""
 
