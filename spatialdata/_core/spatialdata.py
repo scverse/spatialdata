@@ -179,6 +179,9 @@ def parse_dataset(data: Any, transform: Optional[Any] = None) -> Any:
     raise NotImplementedError(f"`parse_dataset` not implemented for {type(data)}")
 
 
+# TODO: ome_zarr reads images/labels as dask arrays
+# given curren behaviour, equality fails (since we don't cast to dask arrays)
+# should we?
 @parse_dataset.register
 def _(data: xr.DataArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
     if transform is not None:
