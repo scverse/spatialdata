@@ -29,7 +29,7 @@ repos:
             additional_dependencies: [numpy==1.22.0, types-requests]
             exclude: tests/|docs/|temp/|spatialdata/_core/reader.py
     - repo: https://github.com/asottile/yesqa
-      rev: v1.3.0
+      rev: v1.4.0
       hooks:
           - id: yesqa
             additional_dependencies:
@@ -59,7 +59,7 @@ repos:
                 - --remove-unused-variable
                 - --ignore-init-module-imports
     - repo: https://github.com/PyCQA/flake8
-      rev: 5.0.1
+      rev: 5.0.4
       hooks:
           - id: flake8
             additional_dependencies:
