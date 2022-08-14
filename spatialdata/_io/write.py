@@ -76,6 +76,7 @@ def write_points(
     sub_group = group.require_group("points")
     write_adata(sub_group, name, points)
     points_group = sub_group[name]
+    # TODO: decide what to do here with additional params for
     if points_parameters is not None:
         points_group.attrs["points_parameters"] = points_parameters
     _write_metadata(

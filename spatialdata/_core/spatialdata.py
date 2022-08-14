@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 import zarr
 from anndata import AnnData
+from dask.array.core import Array as DaskArray
 from ome_zarr.io import parse_url
 
 from spatialdata._core.elements import Image, Labels, Points, Polygons
@@ -112,6 +113,7 @@ class SpatialData:
         store = parse_url(file_path, mode="w").store
         root = zarr.group(store=store)
 
+        # get union of unique ids of all elements
         elems = set().union(*[set(i.keys()) for i in self.__dict__.values()])
 
         for el in elems:
@@ -124,6 +126,7 @@ class SpatialData:
                 self.points[el].to_zarr(elem_group, name=el)
             if self.polygons is not None and el in self.polygons.keys():
                 self.polygons[el].to_zarr(elem_group, name=el)
+            # TODO: shall we write tables?
             # if el in self.tables.keys():
             #     self.tables[el].to_zarr(elem_group, name=el)
 
@@ -164,6 +167,7 @@ class SpatialData:
         if not isinstance(other, SpatialData):
             return False
         # new comparison: dumping everything to zarr and comparing bytewise
+        # TODO: do the same but in memory
         with tempfile.TemporaryDirectory() as tmpdir:
             self.write(os.path.join(tmpdir, "self.zarr"))
             other.write(os.path.join(tmpdir, "other.zarr"))
@@ -184,6 +188,14 @@ def _(data: xr.DataArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray
 
 @parse_dataset.register
 def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:  # type: ignore[type-arg]
+    data = xr.DataArray(data)
+    if transform is not None:
+        transform = get_transform(transform)
+    return data, transform
+
+
+@parse_dataset.register
+def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
     data = xr.DataArray(data)
     if transform is not None:
         transform = get_transform(transform)
