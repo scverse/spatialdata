@@ -35,7 +35,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         nodes = list(reader)
         if len(nodes):
             for node in nodes:
-                print(node.specs)
                 if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
                     if np.any([isinstance(spec, Label) for spec in node.specs]):
                         labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
