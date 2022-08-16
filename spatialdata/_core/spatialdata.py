@@ -1,6 +1,4 @@
 import hashlib
-import os
-import tempfile
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Optional, Tuple
 
@@ -9,7 +7,6 @@ from anndata import AnnData
 from ome_zarr.io import parse_url
 
 from spatialdata._core.elements import Image, Labels, Points, Polygons
-from spatialdata.utils import are_directories_identical
 
 
 class SpatialData:
@@ -127,16 +124,6 @@ class SpatialData:
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
         return descr
-
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, SpatialData):
-            return False
-        # new comparison: dumping everything to zarr and comparing bytewise
-        # TODO: do the same but in memory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.write(os.path.join(tmpdir, "self.zarr"))
-            other.write(os.path.join(tmpdir, "other.zarr"))
-            return are_directories_identical(os.path.join(tmpdir, "self.zarr"), os.path.join(tmpdir, "other.zarr"))
 
 
 def _iter_elems(
