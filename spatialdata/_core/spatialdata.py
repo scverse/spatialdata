@@ -103,20 +103,26 @@ class SpatialData:
             return hashlib.md5(repr(s).encode()).hexdigest()
 
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "tables"]:
+        for attr in ["images", "labels", "points", "polygons", "table"]:
             attribute = getattr(self, attr)
             descr += f"\n{h('level0')}{attr.capitalize()}"
             descr = rreplace(descr, h("level0"), "└── ", 1)
             if attribute is not None:
-                for k, v in attribute.items():
+                if isinstance(attribute, AnnData):
                     descr += f"{h('empty_line')}"
-                    if isinstance(v, AnnData):
-                        descr_class = v.__class__.__name__
-                    else:
-                        descr_class = v.data.__class__.__name__
-                    descr += f"{h('level1.0')}'{k}': {descr_class} {v.shape}"
+                    descr_class = attribute.__class__.__name__
+                    descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
                     descr = rreplace(descr, h("level1.0"), "    └── ", 1)
-            if attr == "tables":
+                else:
+                    for k, v in attribute.items():
+                        descr += f"{h('empty_line')}"
+                        if isinstance(v, AnnData):
+                            descr_class = v.__class__.__name__
+                        else:
+                            descr_class = v.data.__class__.__name__
+                        descr += f"{h('level1.0')}'{k}': {descr_class} {v.shape}"
+                        descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+            if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
