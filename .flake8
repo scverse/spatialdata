@@ -38,7 +38,9 @@ ignore =
     E203
     # format string does contain unindexed parameters
     P101
+    # check if docstring conforms with RST
     RST
+    # general docstrings check
     D
 exclude = .git,__pycache__,build,docs/_build,dist
 per-file-ignores =
