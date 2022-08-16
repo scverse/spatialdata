@@ -67,20 +67,6 @@ class SpatialDataFormat(CurrentFormat):
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
     ) -> None:
-        """
-        Validate the tables.
-
-        Parameters
-        ----------
-        tables
-            Tables.
-
-        Returns
-        -------
-            Nothing.
-        """
-        if tables is None:
-            return
         if not isinstance(tables, AnnData):
             raise ValueError("`tables` must be an `anndata.AnnData`.")
         if region_key is not None:

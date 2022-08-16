@@ -12,18 +12,18 @@ from spatialdata._core.elements import Image, Labels, Points, Polygons
 class SpatialData:
     """Spatial data structure."""
 
-    images: Optional[Mapping[str, Image]] = None
-    labels: Optional[Mapping[str, Labels]] = None
-    points: Optional[Mapping[str, Points]] = None
-    polygons: Optional[Mapping[str, Polygons]] = None
+    images: Mapping[str, Image] = MappingProxyType({})
+    labels: Mapping[str, Labels] = MappingProxyType({})
+    points: Mapping[str, Points] = MappingProxyType({})
+    polygons: Mapping[str, Polygons] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
         self,
-        images: Optional[Mapping[str, Any]] = MappingProxyType({}),
-        labels: Optional[Mapping[str, Any]] = MappingProxyType({}),
-        points: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
-        polygons: Optional[Mapping[str, AnnData]] = MappingProxyType({}),
+        images: Mapping[str, Any] = MappingProxyType({}),
+        labels: Mapping[str, Any] = MappingProxyType({}),
+        points: Mapping[str, Any] = MappingProxyType({}),
+        polygons: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
         images_transform: Optional[Mapping[str, Any]] = None,
         labels_transform: Optional[Mapping[str, Any]] = None,
