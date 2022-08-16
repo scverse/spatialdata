@@ -4,8 +4,6 @@ from anndata import AnnData
 from ome_zarr.format import CurrentFormat
 from pandas.api.types import is_categorical_dtype
 
-from spatialdata._constants._constants import ShapesType
-
 CoordinateTransform_t = List[Dict[str, Any]]
 
 
@@ -36,13 +34,6 @@ class SpatialDataFormat(CurrentFormat):
 
         if "type" not in shapes_parameters:
             raise ValueError("`shapes_parameters` must contain a `type`.")
-        shapes_type = ShapesType(shapes_parameters["type"])
-        if shapes_type == ShapesType.CIRCLES:
-            if "radius" not in shapes_parameters:
-                raise ValueError(f"shapes of type `{shapes_type}` must contain a `radius`.")
-        else:
-            if "edge" not in shapes_parameters:
-                raise ValueError(f"shapes of type `{shapes_type}` must contain a `edge`.")
         # loosely follows coordinateTransform specs from ngff
         if "coordinateTransformations" in shapes_parameters:
             coordinate_transformations = shapes_parameters["coordinateTransformations"]
