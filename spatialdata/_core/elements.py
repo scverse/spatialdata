@@ -3,11 +3,11 @@ from functools import singledispatch
 from typing import Any, Optional, Tuple
 
 import numpy as np
-import xarray as xr
 import zarr
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from ome_zarr.scale import Scaler
+from xarray import DataArray
 
 from spatialdata._core.transform import Transform, get_transform
 from spatialdata._io.write import (
@@ -16,7 +16,6 @@ from spatialdata._io.write import (
     write_points,
     write_polygons,
 )
-from spatialdata._types import ArrayLike
 
 __all__ = ["Image", "Labels", "Points", "Polygons"]
 
@@ -49,8 +48,8 @@ class BaseElement(ABC):
 
 
 class Image(BaseElement):
-    def __init__(self, image: ArrayLike, transform: Transform) -> None:
-        self.data = image
+    def __init__(self, image: DataArray, transform: Transform) -> None:
+        self.data: DataArray = image
         self.transforms = transform
         super().__init__()
 
@@ -85,8 +84,8 @@ class Image(BaseElement):
 
 
 class Labels(BaseElement):
-    def __init__(self, labels: ArrayLike, transform: Transform) -> None:
-        self.data = labels
+    def __init__(self, labels: DataArray, transform: Transform) -> None:
+        self.data: DataArray = labels
         self.transforms = transform
         super().__init__()
 
@@ -123,7 +122,7 @@ class Labels(BaseElement):
 
 class Points(BaseElement):
     def __init__(self, points: AnnData, transform: Transform) -> None:
-        self.data = points
+        self.data: AnnData = points
         self.transforms = transform
         super().__init__()
 
@@ -157,7 +156,7 @@ class Points(BaseElement):
 
 class Polygons(BaseElement):
     def __init__(self, polygons: Any, transform: Transform) -> None:
-        self.data = polygons
+        self.data: Any = polygons
         self.transforms = transform
         super().__init__()
 
@@ -198,23 +197,23 @@ def parse_dataset(data: Any, transform: Optional[Any] = None) -> Any:
 # given curren behaviour, equality fails (since we don't cast to dask arrays)
 # should we?
 @parse_dataset.register
-def _(data: xr.DataArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
+def _(data: DataArray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:
     if transform is not None:
         transform = get_transform(transform)
     return data, transform
 
 
 @parse_dataset.register
-def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:  # type: ignore[type-arg]
-    data = xr.DataArray(data)
+def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:  # type: ignore[type-arg]
+    data = DataArray(data)
     if transform is not None:
         transform = get_transform(transform)
     return data, transform
 
 
 @parse_dataset.register
-def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
-    data = xr.DataArray(data)
+def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:
+    data = DataArray(data)
     if transform is not None:
         transform = get_transform(transform)
     return data, transform
