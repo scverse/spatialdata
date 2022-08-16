@@ -62,5 +62,8 @@ class ErrorFormatterABC(ABC):
         )
 
 
+# TODO: simplify this class
+# https://github.com/napari/napari/blob/9ea0159ad2b690556fe56ce480886d8f0b79ffae/napari/layers/labels/_labels_constants.py#L9-L38
+# https://github.com/napari/napari/blob/9ea0159ad2b690556fe56ce480886d8f0b79ffae/napari/utils/misc.py#L300-L319
 class ModeEnum(str, ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):
     """Enum which prints available values when invalid value has been passed."""
