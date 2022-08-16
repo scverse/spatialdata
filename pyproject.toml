@@ -22,7 +22,7 @@ version = "0.0.1.dev0"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 readme = "README.md"
-dependencies = ["anndata"]
+dependencies = ["anndata","numpy","xarray","zarr","ome_zarr"]
 
 [project.optional-dependencies]
 dev = [
@@ -54,11 +54,12 @@ omit = [
 testpaths = ["tests"]
 xfail_strict = true
 addopts = [
-    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
+#    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name
 ]
+# info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest
 filterwarnings = [
-    # "ignore:.*U.*mode is deprecated:DeprecationWarning",
+    #     "ignore:.*U.*mode is deprecated:DeprecationWarning",
 ]
 
 [tool.isort]
