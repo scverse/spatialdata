@@ -49,7 +49,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 points[k] = read_anndata_zarr(g_elem_store)
 
         if f_elem == "/table":
-            print(f_elem, f_elem_store)
             table = read_anndata_zarr(f_elem_store + f_elem)  # saved under '/table/table', improve group resolution
 
     return SpatialData(images=images, labels=labels, points=points, polygons=polygons, table=table)

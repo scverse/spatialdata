@@ -13,7 +13,7 @@ def test_only_features():
     from anndata import AnnData
 
     a = AnnData(np.ones((20, 10)), dtype=np.float64)
-    _ = SpatialData(tables={"tables": a})
+    _ = SpatialData(table=a)
     # TODO: for now repr removed cause it fails, should be updated and this checked again
     # print(sdata)
 
@@ -60,7 +60,7 @@ def test_multi_layer_object():
         return np.random.rand(n(), n())
 
     _ = SpatialData(
-        tables={"tables": a()},
+        table=a(),
         points={"regions0": a(), "regions1": a(), "regions2": a()},
         images={"image0": b(), "image1": b(), "image2": b()},
     )

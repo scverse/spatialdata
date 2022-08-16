@@ -37,20 +37,7 @@ def get_shapes_sdata(dim0=20):
 @pytest.mark.parametrize(
     "getter2", [get_empty_sdata, get_features_sdata, get_regions_sdata, get_images_sdata, get_points_sdata]
 )
+@pytest.mark.skip(reason="Not implemented")
 def test_single_component_sdata(getter1: Callable, getter2: Callable):
     if getter1 == getter2:
         assert getter1() == getter2()
-
-    # getters = [get_empty_sdata, get_features_sdata, get_regions_sdata, get_images_sdata, get_points_sdata]
-    # for i, g in enumerate(getters):
-    #     print(g)
-    #     for j, h in enumerate(getters):
-    #         if i > j:
-    #             continue
-    #         print(f"comparing {g.__name__} and {h.__name__}")
-    #         if g == h:
-    #             assert g() == h()
-    #             if g != get_empty_sdata:
-    #                 assert g(dim0=21) != h()
-    #         else:
-    #             assert g() != h()
