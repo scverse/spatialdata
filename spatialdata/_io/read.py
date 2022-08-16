@@ -25,7 +25,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     labels = {}
     points = {}
     polygons: Mapping[str, Any] = {}
-    tables = {}
 
     for k in f.keys():
         f_elem = f[k].name
@@ -48,10 +47,12 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
             if g_elem == "/points":
                 points[k] = read_anndata_zarr(g_elem_store)
-            if g_elem == "/table":
-                tables[k] = read_anndata_zarr(g_elem_store)
 
-    return SpatialData(images=images, labels=labels, points=points, polygons=polygons, tables=tables)
+        if f_elem == "/table":
+            print(f_elem, f_elem_store)
+            table = read_anndata_zarr(f_elem_store + f_elem)  # saved under '/table/table', improve group resolution
+
+    return SpatialData(images=images, labels=labels, points=points, polygons=polygons, table=table)
 
 
 def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:

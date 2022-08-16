@@ -102,8 +102,6 @@ class Labels(BaseElement):
             axes=["y", "x"],  # TODO: infer before.
             scaler=scaler,
         )
-        # if self.table is not None:
-        #     write_table(tables=self.table, group=group, name=name)
 
     @classmethod
     def transform_to(cls, new_coordinate_space: str, inplace: bool = False) -> "Labels":

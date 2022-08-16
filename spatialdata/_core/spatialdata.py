@@ -7,6 +7,7 @@ from anndata import AnnData
 from ome_zarr.io import parse_url
 
 from spatialdata._core.elements import Image, Labels, Points, Polygons
+from spatialdata._io.write import write_table
 
 
 class SpatialData:
@@ -59,7 +60,7 @@ class SpatialData:
             }
 
         if table is not None:
-            self.table = table
+            self._table = table
 
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
@@ -68,7 +69,7 @@ class SpatialData:
         root = zarr.group(store=store)
 
         # get union of unique ids of all elements
-        elems = set().union(*[set(i.keys()) for i in self.__dict__.values()])
+        elems = set().union(*[set(i) for i in [self.images, self.labels, self.points, self.polygons]])
 
         for el in elems:
             elem_group = root.create_group(name=el)
@@ -80,17 +81,13 @@ class SpatialData:
                 self.points[el].to_zarr(elem_group, name=el)
             if self.polygons is not None and el in self.polygons.keys():
                 self.polygons[el].to_zarr(elem_group, name=el)
-            # TODO: shall we write tables?
-            # if el in self.tables.keys():
-            #     self.tables[el].to_zarr(elem_group, name=el)
+
+        if self.table is not None:
+            write_table(tables=self.table, group=root, name="table")
 
     @property
     def table(self) -> AnnData:
-        self._table
-
-    @table.setter
-    def table(self, table: AnnData) -> None:
-        self._table = table
+        return self._table
 
     def __repr__(self) -> str:
         return self._gen_repr()
