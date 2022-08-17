@@ -1,6 +1,5 @@
-import hashlib
-import os
-import tempfile
+from __future__ import annotations
+
 from functools import singledispatch
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Optional, Tuple
@@ -14,7 +13,6 @@ from ome_zarr.io import parse_url
 
 from spatialdata._core.elements import Image, Labels, Points, Polygons
 from spatialdata._core.transform import Transform, get_transform
-from spatialdata.utils import are_directories_identical
 
 
 class SpatialData:
@@ -130,6 +128,13 @@ class SpatialData:
             # if el in self.tables.keys():
             #     self.tables[el].to_zarr(elem_group, name=el)
 
+    @classmethod
+    def read(cls, file_path: str) -> SpatialData:
+        from spatialdata._io.read import read_zarr
+
+        sdata = read_zarr(file_path)
+        return sdata
+
     def __repr__(self) -> str:
         return self._gen_repr()
 
@@ -141,37 +146,37 @@ class SpatialData:
             return new.join(li)
 
         def h(s: str) -> str:
-            return hashlib.md5(repr(s).encode()).hexdigest()
+            return s
+            # return hashlib.md5(repr(s).encode()).hexdigest()
 
+        ##
         descr = "SpatialData object with:"
         for attr in ["images", "labels", "points", "polygons", "tables"]:
             attribute = getattr(self, attr)
-            descr += f"\n{h('level0')}{attr.capitalize()}"
-            descr = rreplace(descr, h("level0"), "└── ", 1)
-            if attribute is not None:
+            if len(attribute) > 0:
+                descr += f"\n{h('level0')}{attr.capitalize()}"
+                # descr = rreplace(descr, h("level0"), "└── ", 1)
                 for k, v in attribute.items():
                     descr += f"{h('empty_line')}"
                     if isinstance(v, AnnData):
                         descr_class = v.__class__.__name__
                     else:
                         descr_class = v.data.__class__.__name__
-                    descr += f"{h('level1.0')}'{k}': {descr_class} {v.shape}"
-                    descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+                    descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                    # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             if attr == "tables":
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
-        return descr
 
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, SpatialData):
-            return False
-        # new comparison: dumping everything to zarr and comparing bytewise
-        # TODO: do the same but in memory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.write(os.path.join(tmpdir, "self.zarr"))
-            other.write(os.path.join(tmpdir, "other.zarr"))
-            return are_directories_identical(os.path.join(tmpdir, "self.zarr"), os.path.join(tmpdir, "other.zarr"))
+        descr = rreplace(descr, h("level0"), "└── ", 1)
+        descr = descr.replace(h("level0"), "├── ")
+
+        for attr in ["images", "labels", "points", "polygons", "tables"]:
+            descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
+            descr = descr.replace(h(attr + "level1.1"), "    ├── ")
+        ##
+        return descr
 
 
 @singledispatch
@@ -184,31 +189,31 @@ def parse_dataset(data: Any, transform: Optional[Any] = None) -> Any:
 # should we?
 @parse_dataset.register
 def _(data: xr.DataArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:  # type: ignore[type-arg]
     data = xr.DataArray(data)
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[xr.DataArray, Transform]:
     data = xr.DataArray(data)
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: AnnData, transform: Optional[Any] = None) -> Tuple[AnnData, Transform]:
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 

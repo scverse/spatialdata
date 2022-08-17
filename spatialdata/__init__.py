@@ -2,5 +2,7 @@ from importlib.metadata import version
 
 __version__ = version("spatialdata")
 
-from spatialdata._core.spatialdata import SpatialData
+__all__ = ["SpatialData", "Transform"]
+
+from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.transform import Transform

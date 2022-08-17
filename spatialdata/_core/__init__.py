@@ -1,1 +1,1 @@
-from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core._spatialdata import SpatialData

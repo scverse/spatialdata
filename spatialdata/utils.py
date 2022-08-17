@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 # from https://stackoverflow.com/a/24860799/3343783
 import filecmp
 import os.path
-from typing import Any
+import tempfile
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
@@ -31,3 +37,13 @@ def are_directories_identical(dir1: Any, dir2: Any) -> bool:
         if not are_directories_identical(os.path.join(dir1, subdir), os.path.join(dir2, subdir)):
             return False
     return True
+
+
+def compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
+    if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
+        return False
+    # TODO: if the sdata object is backed on disk, don't create a new zarr file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a.write(os.path.join(tmpdir, "a.zarr"))
+        b.write(os.path.join(tmpdir, "b.zarr"))
+        return are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))

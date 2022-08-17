@@ -1,5 +1,5 @@
 from functools import singledispatch
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 import anndata as ad
 import numpy as np
@@ -39,10 +39,23 @@ class Transform:
                 assert len(translation) == ndim
             if scale_factors is not None:
                 assert len(scale_factors) == ndim
+        else:
+            assert translation is not None and scale_factors is not None
+            assert len(translation) == len(scale_factors)
+            ndim = len(translation)
 
         self.translation = translation
         self.scale_factors = scale_factors
         self.ndim = ndim
+
+    def _to_ngff_transform(self) -> List[List[Dict[str, Any]]]:
+        """
+        Convert to the ngff transform format.
+        """
+        scale = [{"type": "scale", "scale": self.scale_factors.tolist()}]
+        translation = [{"type": "translation", "translation": self.translation.tolist()}]
+        coordinate_transformations = [scale + translation]
+        return coordinate_transformations
 
 
 @singledispatch

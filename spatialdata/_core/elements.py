@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import zarr
 from anndata import AnnData
@@ -53,17 +53,25 @@ class Image(BaseElement):
     def __init__(self, image: ArrayLike, transform: Transform) -> None:
         self.data = image
         self.transforms = transform
+        self.axes = self._infer_axes(image.shape)
         super().__init__()
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        # TODO: write coordinate transforms
         # TODO: allow to write from path
+        assert isinstance(self.transforms, Transform)
+        coordinate_transformations = self.transforms._to_ngff_transform()
         write_image(
             image=self.data.data,
             group=group,
-            axes=["c", "y", "x"],  # TODO: infer before.
+            axes=self.axes,
             scaler=scaler,
+            coordinate_transformations=coordinate_transformations,
         )
+
+    def _infer_axes(self, shape: Tuple[int]) -> List[str]:
+        # TODO: improve (this information can be already present in the data, as for xarrays, and the constructor
+        # should have an argument so that the user can modify this
+        return ["c", "y", "x"][3 - len(shape) :]
 
     @classmethod
     def transform(cls, new_coordinate_space: str, inplace: bool = False) -> "BaseElement":
@@ -88,6 +96,8 @@ class Labels(BaseElement):
         super().__init__()
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        assert isinstance(self.transforms, Transform)
+        self.transforms._to_ngff_transform()
         write_labels(
             labels=self.data.data,
             group=group,
