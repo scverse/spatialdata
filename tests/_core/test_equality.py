@@ -38,6 +38,7 @@ def get_shapes_sdata(dim0=20):
 @pytest.mark.parametrize(
     "getter2", [get_empty_sdata, get_features_sdata, get_regions_sdata, get_images_sdata, get_points_sdata]
 )
+@pytest.mark.skip(reason="Not implemented")
 def test_single_component_sdata(getter1: Callable, getter2: Callable):
     if getter1 == getter2:
         assert compare_sdata_on_disk(getter1(), getter2())

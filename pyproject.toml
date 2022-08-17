@@ -59,7 +59,6 @@ addopts = [
 ]
 # info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest
 filterwarnings = [
-    "ignore::DeprecationWarning"
     #     "ignore:.*U.*mode is deprecated:DeprecationWarning",
 ]
 

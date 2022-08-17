@@ -25,8 +25,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     images = {}
     labels = {}
     points = {}
+    table: Optional[AnnData] = None
     polygons: Mapping[str, Any] = {}
-    tables = {}
     images_transform = {}
     labels_transform = {}
     points_transform = {}
@@ -79,14 +79,14 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
             if g_elem == "/table":
-                tables[k] = read_anndata_zarr(g_elem_store)
+                table = read_anndata_zarr(g_elem_store)
 
     return SpatialData(
         images=images,
         labels=labels,
         points=points,
         polygons=polygons,
-        tables=tables,
+        table=table,
         images_transform=images_transform,
         labels_transform=labels_transform,
         points_transform=points_transform,
