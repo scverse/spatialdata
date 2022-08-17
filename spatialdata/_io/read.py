@@ -79,7 +79,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
             if g_elem == "/table":
-                table = read_anndata_zarr(g_elem_store)
+                table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
 
     return SpatialData(
         images=images,

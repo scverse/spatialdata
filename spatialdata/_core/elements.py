@@ -206,29 +206,29 @@ def parse_dataset(data: Any, transform: Optional[Any] = None) -> Any:
 # should we?
 @parse_dataset.register
 def _(data: DataArray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:  # type: ignore[type-arg]
     data = DataArray(data)
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[DataArray, Transform]:
     data = DataArray(data)
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
 
 
 @parse_dataset.register
 def _(data: AnnData, transform: Optional[Any] = None) -> Tuple[AnnData, Transform]:
-    if transform is not None:
-        transform = get_transform(transform)
+    if transform is None:
+        transform = get_transform(data)
     return data, transform
