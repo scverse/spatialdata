@@ -40,6 +40,8 @@ def are_directories_identical(dir1: Any, dir2: Any) -> bool:
 
 
 def compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
+    from spatialdata import SpatialData
+
     if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
         return False
     # TODO: if the sdata object is backed on disk, don't create a new zarr file

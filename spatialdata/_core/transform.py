@@ -65,11 +65,14 @@ def get_transform(arg: Any) -> Transform:
 
 @get_transform.register
 def _(arg: xr.DataArray) -> Transform:
-    return Transform(
-        translation=arg.attrs["transform"].translation,
-        scale_factors=arg.attrs["transform"].scale_factors,
-        ndim=arg.ndim,
-    )
+    if "transform" not in arg.attrs:
+        return Transform(ndim=arg.ndim)
+    else:
+        return Transform(
+            translation=arg.attrs["transform"].translation,
+            scale_factors=arg.attrs["transform"].scale_factors,
+            ndim=arg.ndim,
+        )
 
 
 @get_transform.register
