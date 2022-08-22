@@ -12,6 +12,7 @@ from ome_zarr.reader import Label, Multiscales, Reader
 from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.transform import Transform
 from spatialdata._io.format import SpatialDataFormat
+from spatialdata._types import ArrayLike
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
@@ -43,10 +44,11 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         coordinate_transformations = datasets[0]["coordinateTransformations"]
         assert len(coordinate_transformations) in [1, 2]
         assert coordinate_transformations[0]["type"] == "scale"
-        scale = coordinate_transformations[0]["scale"]
+        scale: ArrayLike = np.array(coordinate_transformations[0]["scale"])
+        translation: ArrayLike
         if len(coordinate_transformations) == 2:
             assert coordinate_transformations[1]["type"] == "translation"
-            translation = coordinate_transformations[1]["translation"]
+            translation = np.array(coordinate_transformations[1]["translation"])
         else:
             # TODO: assuming ndim=2 for now
             translation = np.array([0, 0])
