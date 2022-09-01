@@ -1,8 +1,6 @@
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
-import dask.array.core
-import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
@@ -84,7 +82,7 @@ def write_points(
     _write_metadata(
         points_group,
         group_type=group_type,
-        shape=points.shape,
+        shape=points.obsm["spatial"].shape,
         attr={"attr": "X", "key": None},
         fmt=fmt,
         axes=axes,
@@ -127,8 +125,8 @@ def write_image(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     # TODO: ineffcient workaround to get around https://github.com/scverse/spatialdata/issues/25
-    if isinstance(image, dask.array.core.Array):
-        image = np.array(image)
+    # if isinstance(image, dask.array.core.Array):
+    #     image = np.array(image)
     write_image_ngff(
         image=image,
         group=group,
@@ -156,8 +154,8 @@ def write_labels(
     **metadata: JSONDict,
 ) -> None:
     # TODO: ineffcient workaround to get around https://github.com/scverse/spatialdata/issues/25
-    if isinstance(labels, dask.array.core.Array):
-        labels = np.array(labels)
+    # if isinstance(labels, dask.array.core.Array):
+    #     labels = np.array(labels)
     write_labels_ngff(
         labels=labels,
         group=group,

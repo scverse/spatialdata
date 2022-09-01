@@ -159,7 +159,7 @@ class Points(BaseElement):
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        return self.data.shape  # type: ignore[no-any-return]
+        return self.data.obsm["spatial"].shape  # type: ignore[no-any-return]
 
 
 class Polygons(BaseElement):

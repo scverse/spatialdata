@@ -126,11 +126,11 @@ class SpatialData:
                     # descr = rreplace(descr, h("level0"), "└── ", 1)
                     for k, v in attribute.items():
                         descr += f"{h('empty_line')}"
-                        if isinstance(v, AnnData):
-                            descr_class = v.__class__.__name__
+                        descr_class = v.data.__class__.__name__
+                        if attr == "points":
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
                         else:
-                            descr_class = v.data.__class__.__name__
-                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
                         # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
