@@ -52,7 +52,7 @@ write_to_zarr(im_read, "debug1.zarr")
 
 ##
 
-# assert are_directories_identical("debug0.zarr", "debug1.zarr", exclude_regexp="[1-9][0-9]*.*")
-assert are_directories_identical("debug0.zarr", "debug1.zarr")
+assert are_directories_identical("debug0.zarr", "debug1.zarr", exclude_regexp="[1-9][0-9]*.*")
+# assert are_directories_identical("debug0.zarr", "debug1.zarr")
 
 ##

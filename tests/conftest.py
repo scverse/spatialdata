@@ -44,7 +44,9 @@ def _get_labels(n: int) -> Mapping[str, Sequence[NDArray]]:
 
 
 def _get_points(n: int) -> Mapping[str, Sequence[NDArray]]:
-    return {f"points_{i}": AnnData(RNG.integers(0, 10, size=(100, 2))) for i in range(n)}
+    return {
+        f"points_{i}": AnnData(shape=(100, 0), obsm={"spatial": RNG.integers(0, 10, size=(100, 2))}) for i in range(n)
+    }
 
 
 def _get_table() -> AnnData:

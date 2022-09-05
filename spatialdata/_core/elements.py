@@ -63,12 +63,15 @@ class Image(BaseElement):
         # TODO: allow to write from path
         assert isinstance(self.transforms, Transform)
         coordinate_transformations = self.transforms._to_ngff_transform()
+        # at the moment we don't use the compressor because of the bug described here (it makes some tests the
+        # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
         write_image(
             image=self.data.data,
             group=group,
             axes=self.axes,
             scaler=scaler,
             coordinate_transformations=coordinate_transformations,
+            storage_options={"compressor": None},
         )
 
     def _infer_axes(self, shape: Tuple[int]) -> List[str]:
@@ -105,12 +108,15 @@ class Labels(BaseElement):
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         assert isinstance(self.transforms, Transform)
         self.transforms._to_ngff_transform()
+        # at the moment we don't use the compressor because of the bug described here (it makes some tests the
+        # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
         write_labels(
             labels=self.data.data,
             group=group,
             name=name,
             axes=["y", "x"],  # TODO: infer before.
             scaler=scaler,
+            storage_options={"compressor": None},
         )
 
     @classmethod

@@ -42,7 +42,9 @@ def are_directories_identical(
     if _root_dir2 is None:
         _root_dir2 = dir2
     if exclude_regexp is not None:
-        if re.match(rf"{_root_dir1}/" + exclude_regexp, dir1) or re.match(rf"{_root_dir2}/" + exclude_regexp, dir2):
+        if re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1)) or re.match(
+            rf"{_root_dir2}/" + exclude_regexp, str(dir2)
+        ):
             return True
         ##
         # loc = ZarrLocation(_root_dir1)
@@ -64,8 +66,8 @@ def are_directories_identical(
     compared = dircmp(dir1, dir2)
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
         return False
-        # # temporary workaround for https://github.com/ome/ome-zarr-py/issues/219
-        # ##
+        # temporary workaround for https://github.com/ome/ome-zarr-py/issues/219
+        ##
         # if compared.diff_files == ['.zarray']:
         #     with open(os.path.join(dir1, '.zarray'), 'r') as f1:
         #         with open(os.path.join(dir2, '.zarray'), 'r') as f2:
@@ -102,7 +104,7 @@ def are_directories_identical(
         #                 return False
         #     else:
         #         return False
-        #     ##
+        #   ##
         # else:
         #     return False
     for subdir in compared.common_dirs:
