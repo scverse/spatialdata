@@ -5,7 +5,6 @@ import shutil
 import dask.array.core
 import numpy as np
 import zarr
-from numcodecs import Blosc
 from ome_zarr.format import CurrentFormat
 from ome_zarr.io import ZarrLocation, parse_url
 from ome_zarr.reader import Multiscales, Reader
@@ -26,8 +25,9 @@ def write_to_zarr(im, f):
     store = parse_url(f, mode="w").store
     group = zarr.group(store=store)
     if isinstance(im, np.ndarray) or isinstance(im, dask.array.core.Array):
-        compressor = Blosc(cname="zstd", clevel=5, shuffle=Blosc.NOSHUFFLE)
-        write_image(im, group, axes=["c", "x", "y"], fmt=fmt, storage_options={"compressor": compressor}.copy())
+        # compressor = Blosc(cname="zstd", clevel=5, shuffle=Blosc.NOSHUFFLE)
+        write_image(im, group, axes=["c", "x", "y"], fmt=fmt, storage_options={"compressor": None})
+        # write_image(im, group, axes=["c", "x", "y"], fmt=fmt, storage_options={"compressor": compressor}.copy())
     # elif isinstance(im, dask.array.core.Array):
     #     slow, we don't want to load data from disk to memory to write it back to disk
     # write_image(np.array(im), group, axes=["c", "x", "y"], fmt=fmt)
@@ -52,6 +52,7 @@ write_to_zarr(im_read, "debug1.zarr")
 
 ##
 
-assert are_directories_identical("debug0.zarr", "debug1.zarr", exclude_regexp="[1-9][0-9]*.*")
+# assert are_directories_identical("debug0.zarr", "debug1.zarr", exclude_regexp="[1-9][0-9]*.*")
+assert are_directories_identical("debug0.zarr", "debug1.zarr")
 
 ##
