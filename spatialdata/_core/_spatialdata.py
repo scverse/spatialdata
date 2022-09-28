@@ -115,7 +115,7 @@ class SpatialData:
         descr = "SpatialData object with:"
         for attr in ["images", "labels", "points", "polygons", "table"]:
             attribute = getattr(self, attr)
-            if len(attribute) > 0:
+            if attribute is not None and len(attribute) > 0:
                 descr += f"\n{h('level0')}{attr.capitalize()}"
                 if isinstance(attribute, AnnData):
                     descr += f"{h('empty_line')}"

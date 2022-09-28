@@ -5,13 +5,18 @@ from spatialdata._core.elements import Image
 from spatialdata.utils import are_directories_identical
 
 
+# either use parametrize here, either use params in the sdata fixture in conftest.py
+# @pytest.mark.parametrize("sdata", "empty_points")
 def test_readwrite_roundtrip(sdata: SpatialData, tmp_path: str):
+    print(sdata)
 
     tmpdir = Path(tmp_path) / "tmp.zarr"
     sdata.write(tmpdir)
     sdata2 = SpatialData.read(tmpdir)
 
-    assert sdata.table.shape == sdata2.table.shape
+    assert are_directories_identical(tmpdir, tmpdir)
+    if sdata.table is not None or sdata2.table is not None:
+        assert sdata.table is None and sdata2.table is None or sdata.table.shape == sdata2.table.shape
     assert sdata.images.keys() == sdata2.images.keys()
     for k in sdata.images.keys():
         assert sdata.images[k].shape == sdata2.images[k].shape

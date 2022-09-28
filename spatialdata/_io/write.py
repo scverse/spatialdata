@@ -1,6 +1,7 @@
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
+import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
@@ -35,6 +36,9 @@ def _write_metadata(
     datasets.append({"path": attr})
 
     if coordinate_transformations is None:
+        # TODO: temporary workaround, report bug to handle empty shapes
+        if shape[0] == 0:
+            shape = (1, *shape[1:])
         shape = [shape]  # type: ignore[assignment]
         coordinate_transformations = fmt.generate_coordinate_transformations(shape)
 
@@ -124,9 +128,6 @@ def write_image(
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
-    # TODO: ineffcient workaround to get around https://github.com/scverse/spatialdata/issues/25
-    # if isinstance(image, dask.array.core.Array):
-    #     image = np.array(image)
     write_image_ngff(
         image=image,
         group=group,
@@ -153,9 +154,10 @@ def write_labels(
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
 ) -> None:
-    # TODO: ineffcient workaround to get around https://github.com/scverse/spatialdata/issues/25
-    # if isinstance(labels, dask.array.core.Array):
-    #     labels = np.array(labels)
+    if np.prod(labels.shape) == 0:
+        # TODO: temporary workaround, report bug to handle empty shapes
+        # TODO: consider the different axes, now assuming a 2D image
+        coordinate_transformations = fmt.generate_coordinate_transformations(shapes=[(1, 1)])
     write_labels_ngff(
         labels=labels,
         group=group,
