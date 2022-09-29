@@ -129,6 +129,12 @@ class SpatialData:
                         descr_class = v.data.__class__.__name__
                         if attr == "points":
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
+                        elif attr == "polygons":
+                            # assuming 2d
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osb.spatial describing "
+                                f"{len(v.data.obs)} 2D polygons"
+                            )
                         else:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
                         # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
@@ -173,3 +179,11 @@ def _validate_dataset(
                 raise ValueError(
                     f"Invalid `dataset_transform` keys not present in `dataset`: `{set(dataset_transform).difference(set(dataset))}`."
                 )
+
+
+if __name__ == "__main__":
+    sdata = SpatialData.read("spatialdata-sandbox/merfish/data.zarr")
+    s = sdata.polygons["anatomical"].data.obs.iloc[0]["spatial"]
+    print(Polygons.string_to_tensor(s))
+    print(sdata)
+    print("ehi")

@@ -174,15 +174,25 @@ def write_labels(
 
 
 def write_polygons(
-    polygons: ArrayLike,
+    polygons: AnnData,
     group: zarr.Group,
     name: str,
-    scaler: Scaler = Scaler(),
-    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    group_type: str = "ngff:polygons",
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
-    **metadata: JSONDict,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
-    raise NotImplementedError("Polygons IO not implemented yet.")
+    sub_group = group.require_group("polygons")
+    write_adata(sub_group, name, polygons)
+    polygons_group = sub_group[name]
+    _write_metadata(
+        polygons_group,
+        group_type=group_type,
+        shape=(1, 2),  # assuming 2d
+        attr={"attr": "X", "key": None},
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )

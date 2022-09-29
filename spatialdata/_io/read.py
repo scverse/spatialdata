@@ -1,7 +1,7 @@
 import os
 import time
 from pathlib import Path
-from typing import Any, Mapping, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import zarr
@@ -28,11 +28,11 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     labels = {}
     points = {}
     table: Optional[AnnData] = None
-    polygons: Mapping[str, Any] = {}
+    polygons = {}
     images_transform = {}
     labels_transform = {}
     points_transform = {}
-    polygons_transform: Optional[Mapping[str, Any]] = {}
+    polygons_transform = {}
 
     def _get_transform_from_group(group: zarr.Group) -> Transform:
         multiscales = group.attrs["multiscales"]
@@ -99,6 +99,10 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             if g_elem == "/points":
                 points[k] = read_anndata_zarr(g_elem_store)
                 points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
+
+            if g_elem == "/polygons":
+                polygons[k] = read_anndata_zarr(g_elem_store)
+                polygons_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")

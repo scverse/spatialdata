@@ -1,8 +1,11 @@
+import json
+import re
 from abc import ABC, abstractmethod, abstractproperty
 from functools import singledispatch
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 import zarr
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
@@ -16,6 +19,7 @@ from spatialdata._io.write import (
     write_points,
     write_polygons,
 )
+from spatialdata._types import ArrayLike
 
 __all__ = ["Image", "Labels", "Points", "Polygons"]
 
@@ -179,6 +183,43 @@ class Polygons(BaseElement):
         data, transform = parse_dataset(data, transform)
         return Polygons(data, transform)
 
+    @staticmethod
+    def tensor_to_string(x: ArrayLike) -> str:
+        s = repr(x).replace("\n", "").replace(" ", "")[len("array(") : -1]
+        # consistenty check
+        y = eval(s)
+        assert np.allclose(x, y)
+        return s
+
+    @staticmethod
+    def string_to_tensor(s: str) -> ArrayLike:
+        pattern = r"^\[(?:\[[0-9]+\.[0-9]+,[0-9]+\.[0-9]+\],?)+\]$"
+        if re.fullmatch(pattern, s) is not None:
+            x: ArrayLike = np.array(eval(s))
+            return x
+
+    @staticmethod
+    def anndata_from_geojson(path: str) -> AnnData:
+        with open(path) as f:
+            j = json.load(f)
+
+        names = []
+        coordinates = []
+        assert "geometries" in j
+        for region in j["geometries"]:
+            if region["type"] == "Polygon":
+                names.append(region["name"])
+                vertices: ArrayLike = np.array(region["coordinates"])
+                vertices = np.squeeze(vertices, 0)
+                assert len(vertices.shape) == 2
+                coordinates.append(vertices)
+            else:
+                print(f'ignoring "{region["type"]}" from geojson')
+
+        string_coordinates = [Polygons.tensor_to_string(c) for c in coordinates]
+        a = AnnData(shape=(len(names), 0), obs=pd.DataFrame({"name": names, "spatial": string_coordinates}))
+        return a
+
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         write_polygons(
             polygons=self.data,
@@ -238,3 +279,9 @@ def _(data: AnnData, transform: Optional[Any] = None) -> Tuple[AnnData, Transfor
     if transform is None:
         transform = get_transform(data)
     return data, transform
+
+
+if __name__ == "__main__":
+    geojson_path = "spatialdata-sandbox/merfish/data/processed/anatomical.geojson"
+    a = Polygons.anndata_from_geojson(path=geojson_path)
+    print(a)
