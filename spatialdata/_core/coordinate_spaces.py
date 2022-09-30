@@ -56,6 +56,9 @@ class CoordSys(BaseCoordSys):
             out["axes"].append({"name": axis, "type": axis_type, "unit": axis_unit})
         return out
 
+    def from_array(self, array: Any) -> None:
+        raise NotImplementedError()
+
     def from_json(self, data: Union[str, bytes]) -> None:
         coord_sys = json.loads(data)
         self.from_dict(coord_sys)
