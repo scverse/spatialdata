@@ -1,7 +1,6 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from functools import singledispatch
 from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
