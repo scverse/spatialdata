@@ -1,7 +1,8 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, List, Optional, Tuple
+from functools import singledispatch
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -198,7 +199,7 @@ class Polygons(BaseElement):
         return s
 
     @staticmethod
-    def string_to_tensor(s: str) -> ArrayLike:
+    def string_to_tensor(s: str) -> Union[ArrayLike, None]:
         pattern = r"^\[(?:\[[0-9]+\.[0-9]+,[0-9]+\.[0-9]+\],?)+\]$"
         if re.fullmatch(pattern, s) is not None:
             x: ArrayLike = np.array(eval(s))
