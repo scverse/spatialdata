@@ -5,11 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
 
 
-class BaseCoordSys(ABC):
-    pass
-
-
-class CoordSys(BaseCoordSys):
+class CoordinateSystem(ABC):
     def __init__(
         self,
         name: Optional[str] = None,
@@ -66,6 +62,11 @@ class CoordSys(BaseCoordSys):
     def to_json(self, **kwargs: Any) -> str:
         out = self.to_dict()
         return json.dumps(out, **kwargs)
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, CoordinateSystem):
+            return False
+        return self.to_dict() == other.to_dict()
 
     @property
     def name(self) -> str:
