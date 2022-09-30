@@ -1,11 +1,10 @@
 import json
-from abc import ABC
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
 
 
-class CoordinateSystem(ABC):
+class CoordinateSystem:
     def __init__(
         self,
         name: Optional[str] = None,
@@ -13,7 +12,7 @@ class CoordinateSystem(ABC):
         types: Optional[List[str]] = None,
         units: Optional[List[str]] = None,
     ):
-        self._name = name if name is not None else ""
+        self._name = name
         self._axes = axes if axes is not None else []
         self._types = types if types is not None else []
         self._units = units if units is not None else []
@@ -36,7 +35,6 @@ class CoordinateSystem(ABC):
                 raise ValueError("Each axis MUST have a type.")
             if "unit" not in axis.keys():
                 raise ValueError("Each axis MUST have a unit.")
-
             self._axes.append(axis["name"])
             self._types.append(axis["type"])
             self._units.append(axis["unit"])
@@ -45,7 +43,7 @@ class CoordinateSystem(ABC):
             raise ValueError("Axes, types, and units MUST be the same length.")
 
     def to_dict(self) -> CoordSystem_t:
-        out: CoordSystem_t = {"name": self.name, "axes": []}
+        out: Dict[str, Any] = {"name": self.name, "axes": []}
         if TYPE_CHECKING:
             assert isinstance(out["axes"], list)
         for axis, axis_type, axis_unit in zip(self.axes, self.types, self.units):
@@ -69,17 +67,17 @@ class CoordinateSystem(ABC):
         return self.to_dict() == other.to_dict()
 
     @property
-    def name(self) -> str:
+    def name(self) -> Optional[str]:
         return self._name
 
     @property
     def axes(self) -> List[str]:
-        self._axes
+        return self._axes
 
     @property
     def types(self) -> List[str]:
-        self._types
+        return self._types
 
     @property
     def units(self) -> List[str]:
-        self._units
+        return self._units
