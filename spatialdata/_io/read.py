@@ -11,7 +11,7 @@ from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Reader
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.transform import Transform
+from spatialdata._core.transform import BaseTransformation
 from spatialdata._io.format import SpatialDataFormat
 from spatialdata._types import ArrayLike
 
@@ -34,7 +34,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     points_transform = {}
     polygons_transform = {}
 
-    def _get_transform_from_group(group: zarr.Group) -> Transform:
+    def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
+        raise NotImplementedError("TODO")
         multiscales = group.attrs["multiscales"]
         # TODO: parse info from multiscales['axes']
         assert (

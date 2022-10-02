@@ -193,7 +193,7 @@ class Polygons(BaseElement):
     @staticmethod
     def tensor_to_string(x: ArrayLike) -> str:
         s = repr(x).replace("\n", "").replace(" ", "")[len("array(") : -1]
-        # consistenty check
+        # consistently check
         y = eval(s)
         assert np.allclose(x, y)
         return s
@@ -256,7 +256,7 @@ class Polygons(BaseElement):
 #
 #
 # # TODO: ome_zarr reads images/labels as dask arrays
-# # given curren behaviour, equality fails (since we don't cast to dask arrays)
+# # given current behavior, equality fails (since we don't cast to dask arrays)
 # # should we?
 # @parse_dataset.register
 # def _(data: DataArray, transform: Optional[Any] = None) -> Tuple[DataArray, BaseTransformation]:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any, Type
 
 import numpy as np
 
@@ -28,24 +28,24 @@ __all__ = [
 
 
 class BaseTransformation(ABC):
+    @property
     @abstractmethod
-    def ndim(self) -> int:
+    def ndim(self) -> Optional[int]:
         pass
 
     @abstractmethod
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         pass
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
 
-    @staticmethod
-    def compose_with(transformation) -> BaseTransformation:
-        pass
+    def compose_with(self, transformation: BaseTransformation) -> BaseTransformation:
+        return BaseTransformation.compose(self, transformation)
 
     @staticmethod
-    def compose(transformation0, transformation1):
-        pass
+    def compose(transformation0: BaseTransformation, transformation1: BaseTransformation) -> BaseTransformation:
+        return Sequence([transformation0, transformation1])
 
     @abstractmethod
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -61,15 +61,19 @@ def get_transformation_from_json(s: str) -> BaseTransformation:
     return get_transformation_from_dict(d)
 
 
-def get_transformation_from_dict(d: Dict) -> BaseTransformation:
-    kw = d["coordinateTransformations"]
+def get_transformation_from_dict(d: Dict[str, Any]) -> BaseTransformation:
+    if "coordinateTransformations" in d:
+        kw = d["coordinateTransformations"]
+    else:
+        kw = d
     type = kw["type"]
+    cls: Type[BaseTransformation]
     if type == "identity":
         cls = Identity
     elif type == "mapIndex":
-        cls = MapIndex
+        cls = MapIndex  # type: ignore
     elif type == "mapAxis":
-        cls = MapAxis
+        cls = MapAxis  # type: ignore
     elif type == "translation":
         cls = Translation
     elif type == "scale":
@@ -81,27 +85,36 @@ def get_transformation_from_dict(d: Dict) -> BaseTransformation:
     elif type == "sequence":
         cls = Sequence
     elif type == "displacements":
-        cls = Displacements
+        cls = Displacements  # type: ignore
     elif type == "coordinates":
-        cls = Coordinates
+        cls = Coordinates  # type: ignore
     elif type == "vectorField":
-        cls = VectorField
+        cls = VectorField  # type: ignore
     elif type == "inverseOf":
         cls = InverseOf
     elif type == "bijection":
         cls = Bijection
     elif type == "byDimension":
-        cls = ByDimension
+        cls = ByDimension  # type: ignore
     else:
         raise ValueError(f"Unknown transformation type: {type}")
     del kw["type"]
-    del kw["input"]
-    del kw["output"]
+    if "input" in kw:
+        del kw["input"]
+    if "output" in kw:
+        del kw["output"]
     return cls(**kw)
 
 
 class Identity(BaseTransformation):
-    def to_dict(self) -> Dict:
+    def __init__(self) -> None:
+        self._ndim = None
+
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "identity",
@@ -116,21 +129,29 @@ class Identity(BaseTransformation):
 
 
 class MapIndex(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 class MapAxis(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 class Translation(BaseTransformation):
     def __init__(
         self,
-        translation: Optional[ArrayLike] = None,
+        translation: Optional[Union[ArrayLike, List[Any]]] = None,
         ndim: Optional[int] = None,
-    ):
+    ) -> None:
         """
         class for storing translation transformations.
         """
@@ -140,17 +161,23 @@ class Translation(BaseTransformation):
 
         if ndim is None:
             assert translation is not None
+            if isinstance(translation, list):
+                translation = np.array(translation)
             ndim = len(translation)
 
         assert len(translation) == ndim
         self.translation = translation
-        self.ndim = ndim
+        self._ndim = ndim
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "translation",
-                "translation": self.translation.tolist(),
+                "translation": self.translation.tolist(),  # type: ignore[union-attr]
             }
         }
 
@@ -158,15 +185,15 @@ class Translation(BaseTransformation):
         return points + self.translation
 
     def inverse(self) -> BaseTransformation:
-        return Translation(translation=-self.translation)
+        return Translation(translation=-self.translation)  # type: ignore[operator]
 
 
 class Scale(BaseTransformation):
     def __init__(
         self,
-        scale: Optional[ArrayLike] = None,
+        scale: Optional[Union[ArrayLike, List[Any]]] = None,
         ndim: Optional[int] = None,
-    ):
+    ) -> None:
         """
         class for storing scale transformations.
         """
@@ -176,17 +203,23 @@ class Scale(BaseTransformation):
 
         if ndim is None:
             assert scale is not None
+            if isinstance(scale, list):
+                scale = np.array(scale)
             ndim = len(scale)
 
         assert len(scale) == ndim
         self.scale = scale
-        self.ndim = ndim
+        self._ndim = ndim
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "scale",
-                "scale": self.scale.tolist(),
+                "scale": self.scale.tolist(),  # type: ignore[union-attr]
             }
         }
 
@@ -195,30 +228,36 @@ class Scale(BaseTransformation):
 
     def inverse(self) -> BaseTransformation:
         new_scale = np.zeros_like(self.scale)
-        new_scale[np.nonzero(self.scale)] = 1 / self.scale[np.nonzero(self.scale)]
+        new_scale[np.nonzero(self.scale)] = 1 / self.scale[np.nonzero(self.scale)]  # type: ignore[call-overload]
         return Scale(scale=new_scale)
 
 
 class Affine(BaseTransformation):
     def __init__(
         self,
-        affine: Optional[ArrayLike] = None,
-    ):
+        affine: Optional[Union[ArrayLike, List[Any]]] = None,
+    ) -> None:
         """
         class for storing scale transformations.
         """
         if affine is None:
             affine = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
         else:
+            if isinstance(affine, list):
+                affine = np.array(affine)
             if len(affine.shape) == 1:
                 assert len(affine) == 6
-            else:
-                assert affine.shape == (3, 3)
+                affine = np.vstack([affine.reshape((2, 3)), np.array([0.0, 0.0, 1.0])])
+            assert affine.shape == (3, 3)
 
         self.affine = affine
-        self.ndim = 2
+        self._ndim = 2
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "scale",
@@ -229,7 +268,7 @@ class Affine(BaseTransformation):
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
-        return q[:2, :].T
+        return q[:2, :].T  # type: ignore[no-any-return]
 
     def inverse(self) -> BaseTransformation:
         # naive check for numerical stability
@@ -247,23 +286,29 @@ class Affine(BaseTransformation):
 class Rotation(BaseTransformation):
     def __init__(
         self,
-        rotation: Optional[ArrayLike] = None,
-    ):
+        rotation: Optional[Union[ArrayLike, List[Any]]] = None,
+    ) -> None:
         """
         class for storing scale transformations.
         """
         if rotation is None:
             rotation = np.array([[1, 0], [0, 1]], dtype=float)
         else:
+            if isinstance(rotation, list):
+                rotation = np.array(rotation)
             if len(rotation.shape) == 1:
                 assert len(rotation) == 4
-            else:
-                assert rotation.shape == (2, 2)
+                rotation = rotation.reshape((2, 2))
+            assert rotation.shape == (2, 2)
 
         self.rotation = rotation
-        self.ndim = 2
+        self._ndim = 2
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "scale",
@@ -279,13 +324,23 @@ class Rotation(BaseTransformation):
 
 
 class Sequence(BaseTransformation):
-    def __init__(self, transformations: Union[List[Dict], List[BaseTransformation]]):
+    def __init__(self, transformations: Union[List[Any], List[BaseTransformation]]) -> None:
         if isinstance(transformations[0], BaseTransformation):
             self.transformations = transformations
         else:
-            self.transformations = [get_transformation_from_dict(t) for t in transformations]
+            self.transformations = [get_transformation_from_dict(t) for t in transformations] # type: ignore[arg-type]
+        ndims = [t.ndim for t in self.transformations if t.ndim is not None]
+        if len(ndims) > 0:
+            assert np.all(ndims)
+            self._ndim = ndims[0]
+        else:
+            self._ndim = None
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "sequence",
@@ -303,29 +358,46 @@ class Sequence(BaseTransformation):
 
 
 class Displacements(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 # this class is not in the ngff transform specification and is a prototype
 class VectorField(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 class Coordinates(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 class InverseOf(BaseTransformation):
-    def __init__(self, transformation: Union[Dict, BaseTransformation]):
+    def __init__(self, transformation: Union[Dict[str, Any], BaseTransformation]) -> None:
         if isinstance(transformation, BaseTransformation):
             self.transformation = transformation
         else:
             self.transformation = get_transformation_from_dict(transformation)
+        self._ndim = self.transformation.ndim
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "inverseOf",
@@ -334,30 +406,38 @@ class InverseOf(BaseTransformation):
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
-        return self.transformation.inverse().transform_points()
+        return self.transformation.inverse().transform_points(points)
 
     def inverse(self) -> BaseTransformation:
         return self.transformation
 
 
 class Bijection(BaseTransformation):
-    def __init__(self, forward: Union[Dict, BaseTransformation], inverse: Union[Dict, BaseTransformation]):
+    def __init__(
+        self, forward: Union[Dict[str, Any], BaseTransformation], inverse: Union[Dict[str, Any], BaseTransformation]
+    ) -> None:
         if isinstance(forward, BaseTransformation):
             self.forward = forward
         else:
             self.forward = get_transformation_from_dict(forward)
 
         if isinstance(inverse, BaseTransformation):
-            self.inverse = inverse
+            self._inverse = inverse
         else:
-            self.inverse = get_transformation_from_dict(inverse)
+            self._inverse = get_transformation_from_dict(inverse)
+        assert self.forward.ndim == self._inverse.ndim
+        self._ndim = self.forward.ndim
 
-    def to_dict(self) -> Dict:
+    @property
+    def ndim(self) -> Optional[int]:
+        return self._ndim
+
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "coordinateTransformations": {
                 "type": "bijection",
                 "forward": self.forward.to_dict(),
-                "inverse": self.inverse.to_dict(),
+                "inverse": self._inverse.to_dict(),
             }
         }
 
@@ -365,12 +445,16 @@ class Bijection(BaseTransformation):
         return self.forward.transform_points(points)
 
     def inverse(self) -> BaseTransformation:
-        return self.inverse
+        return self._inverse
 
 
 class ByDimension(BaseTransformation):
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError()
+
+    # @property
+    # def ndim(self) -> Optional[int]:
+    #     return self._ndim
 
 
 #

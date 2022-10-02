@@ -44,7 +44,7 @@ def test_affine_2d():
 
 def test_rotation_2d():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "rotation", "affine": [0, -1, 1, 0]}}', ndim=2),
+        act('{"coordinateTransformations": {"type": "rotation", "rotation": [0, -1, 1, 0]}}', ndim=2),
         [[-2, 1], [-4, 3], [-6, 5]],
     )
 
@@ -55,7 +55,7 @@ def test_sequence_2d():
         act(
             '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
             '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
-            '"affine": [5, 6, 7, 8, 9, 10]}}',
+            '"affine": [5, 6, 7, 8, 9, 10]}]}}',
             ndim=2,
         ),
         [[133, 202], [211, 322], [289, 442]],
@@ -67,7 +67,7 @@ def test_sequence_3d():
         act(
             '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
             '"translation": [1, 2, 3]}, {"type": "scale", "scale": [4, 5, 6]}, {"type": "translation", '
-            '"translation": [7, 8, 9]}}',
+            '"translation": [7, 8, 9]}]}}',
             ndim=3,
         ),
         [[15, 28, 45], [27, 43, 63], [39, 58, 81], [51, 73, 99]],
@@ -90,7 +90,7 @@ def test_vector_field():
 
 
 @pytest.mark.skip()
-def test_inverse_of_inverse():
+def test_inverse_of_inverse_of():
     raise NotImplementedError()
 
 
