@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, Any, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
 
@@ -328,7 +328,7 @@ class Sequence(BaseTransformation):
         if isinstance(transformations[0], BaseTransformation):
             self.transformations = transformations
         else:
-            self.transformations = [get_transformation_from_dict(t) for t in transformations] # type: ignore[arg-type]
+            self.transformations = [get_transformation_from_dict(t) for t in transformations]  # type: ignore[arg-type]
         ndims = [t.ndim for t in self.transformations if t.ndim is not None]
         if len(ndims) > 0:
             assert np.all(ndims)
