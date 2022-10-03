@@ -54,9 +54,7 @@ class BaseTransformation(ABC):
         pass
 
 
-def compose_transformations(
-    transformation0: BaseTransformation, transformation1: BaseTransformation
-) -> BaseTransformation:
+def compose_transformations(transformation0: BaseTransformation, transformation1: BaseTransformation) -> Sequence:
     return Sequence([transformation0, transformation1])
 
 
@@ -66,10 +64,7 @@ def get_transformation_from_json(s: str) -> BaseTransformation:
 
 
 def get_transformation_from_dict(d: Dict[str, Any]) -> BaseTransformation:
-    if "coordinateTransformations" in d:
-        kw = d["coordinateTransformations"]
-    else:
-        kw = d
+    kw = d.copy()
     type = kw["type"]
     cls: Type[BaseTransformation]
     if type == "identity":
@@ -120,9 +115,7 @@ class Identity(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "identity",
-            }
+            "type": "identity",
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -180,10 +173,8 @@ class Translation(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "translation",
-                "translation": self.translation.tolist(),
-            }
+            "type": "translation",
+            "translation": self.translation.tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -230,10 +221,8 @@ class Scale(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "scale",
-                "scale": self.scale.tolist(),
-            }
+            "type": "scale",
+            "scale": self.scale.tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -277,10 +266,8 @@ class Affine(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "scale",
-                "scale": self.affine[:2, :].ravel().tolist(),
-            }
+            "type": "affine",
+            "affine": self.affine[:2, :].ravel().tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -328,10 +315,8 @@ class Rotation(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "scale",
-                "scale": self.rotation.ravel().tolist(),
-            }
+            "type": "rotation",
+            "rotation": self.rotation.ravel().tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -365,10 +350,8 @@ class Sequence(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "sequence",
-                "transformations": [t.to_dict() for t in self.transformations],
-            }
+            "type": "sequence",
+            "transformations": [t.to_dict() for t in self.transformations],
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -441,10 +424,8 @@ class InverseOf(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "inverseOf",
-                "transformation": self.transformation.to_dict(),
-            }
+            "type": "inverseOf",
+            "transformation": self.transformation.to_dict(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -476,11 +457,9 @@ class Bijection(BaseTransformation):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "coordinateTransformations": {
-                "type": "bijection",
-                "forward": self.forward.to_dict(),
-                "inverse": self._inverse.to_dict(),
-            }
+            "type": "bijection",
+            "forward": self.forward.to_dict(),
+            "inverse": self._inverse.to_dict(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:

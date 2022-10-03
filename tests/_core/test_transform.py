@@ -11,7 +11,7 @@ from spatialdata._core.transform import (
 
 def test_identity():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "identity"}}', ndim=2),
+        act('{"type": "identity"}', ndim=2),
         np.array([[1, 2], [3, 4], [5, 6]], dtype=float),
     )
 
@@ -28,28 +28,28 @@ def test_map_axis():
 
 def test_translation_3d():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "translation", "translation": [1, 2, 3]}}', ndim=3),
+        act('{"type": "translation", "translation": [1, 2, 3]}', ndim=3),
         [[2, 4, 6], [5, 7, 9], [8, 10, 12], [11, 13, 15]],
     )
 
 
 def test_scale_3d():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "scale", "scale": [1, 2, 3]}}', ndim=3),
+        act('{"type": "scale", "scale": [1, 2, 3]}', ndim=3),
         [[1, 4, 9], [4, 10, 18], [7, 16, 27], [10, 22, 36]],
     )
 
 
 def test_affine_2d():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "affine", "affine": [1, 2, 3, 4, 5, 6]}}', ndim=2),
+        act('{"type": "affine", "affine": [1, 2, 3, 4, 5, 6]}', ndim=2),
         [[8, 20], [14, 38], [20, 56]],
     )
 
 
 def test_rotation_2d():
     assert np.allclose(
-        act('{"coordinateTransformations": {"type": "rotation", "rotation": [0, -1, 1, 0]}}', ndim=2),
+        act('{"type": "rotation", "rotation": [0, -1, 1, 0]}', ndim=2),
         [[-2, 1], [-4, 3], [-6, 5]],
     )
 
@@ -58,9 +58,9 @@ def test_rotation_2d():
 def test_sequence_2d():
     assert np.allclose(
         act(
-            '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
+            '{"type": "sequence", "transformations": [{"type": "translation", '
             '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
-            '"affine": [5, 6, 7, 8, 9, 10]}]}}',
+            '"affine": [5, 6, 7, 8, 9, 10]}]}',
             ndim=2,
         ),
         [[133, 202], [211, 322], [289, 442]],
@@ -70,9 +70,9 @@ def test_sequence_2d():
 def test_sequence_3d():
     assert np.allclose(
         act(
-            '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
+            '{"type": "sequence", "transformations": [{"type": "translation", '
             '"translation": [1, 2, 3]}, {"type": "scale", "scale": [4, 5, 6]}, {"type": "translation", '
-            '"translation": [7, 8, 9]}]}}',
+            '"translation": [7, 8, 9]}]}',
             ndim=3,
         ),
         [[15, 28, 45], [27, 43, 63], [39, 58, 81], [51, 73, 99]],
@@ -136,17 +136,15 @@ def test_by_dimension():
 
 def test_to_composition_to_affine():
     composed0 = get_transformation_from_json(
-        '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
+        '{"type": "sequence", "transformations": [{"type": "translation", '
         '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
-        '"affine": [5, 6, 7, 8, 9, 10]}]}}',
+        '"affine": [5, 6, 7, 8, 9, 10]}]}',
     )
     composed1 = Sequence(
         [
             compose_transformations(
-                get_transformation_from_json(
-                    '{"coordinateTransformations": {"type": "translation", "translation": [1, 2]}}'
-                ),
-                get_transformation_from_json('{"coordinateTransformations": {"type": "scale", "scale": [3, 4]}}'),
+                get_transformation_from_json('{"type": "translation", "translation": [1, 2]}'),
+                get_transformation_from_json('{"type": "scale", "scale": [3, 4]}'),
             ),
             Affine(np.array([5, 6, 7, 8, 9, 10])),
         ]

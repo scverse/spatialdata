@@ -11,9 +11,8 @@ from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Reader
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.transform import BaseTransformation
+from spatialdata._core.transform import BaseTransformation, get_transformation_from_dict
 from spatialdata._io.format import SpatialDataFormat
-from spatialdata._types import ArrayLike
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
@@ -35,27 +34,15 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     polygons_transform = {}
 
     def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
-        raise NotImplementedError("TODO")
         multiscales = group.attrs["multiscales"]
         # TODO: parse info from multiscales['axes']
-        assert (
-            len(multiscales) == 1
-        ), "TODO: expecting only one transformation, but found more. Probably one for each pyramid level"
+        assert len(multiscales) == 1, f"TODO: expecting only one multiscale, got {len(multiscales)}"
         datasets = multiscales[0]["datasets"]
         assert len(datasets) == 1, "Expecting only one dataset"
         coordinate_transformations = datasets[0]["coordinateTransformations"]
-        assert len(coordinate_transformations) in [1, 2]
-        assert coordinate_transformations[0]["type"] == "scale"
-        scale: ArrayLike = np.array(coordinate_transformations[0]["scale"])
-        translation: ArrayLike
-        if len(coordinate_transformations) == 2:
-            assert coordinate_transformations[1]["type"] == "translation"
-            translation = np.array(coordinate_transformations[1]["translation"])
-        else:
-            # TODO: assuming ndim=2 for now
-            translation = np.array([0, 0])
-        transform = Transform(translation=translation, scale_factors=scale)
-        return transform
+        transformations = [get_transformation_from_dict(t) for t in coordinate_transformations]
+        assert len(transformations) == 1, "Expecting only one transformation per multiscale"
+        return transformations[0]
 
     for k in f.keys():
         f_elem = f[k].name

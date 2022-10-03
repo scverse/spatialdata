@@ -25,7 +25,7 @@ def _write_metadata(
     attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     """Write metdata to a group."""
@@ -74,7 +74,7 @@ def write_points(
     group_type: str = "ngff:points",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("points")
@@ -124,7 +124,7 @@ def write_image(
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
@@ -149,7 +149,7 @@ def write_labels(
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -180,7 +180,7 @@ def write_polygons(
     group_type: str = "ngff:polygons",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")

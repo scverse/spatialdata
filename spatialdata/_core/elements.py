@@ -3,6 +3,7 @@ import re
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Any, List, Optional, Tuple, Union
 
+import dask.array.core
 import numpy as np
 import pandas as pd
 import zarr
@@ -51,7 +52,14 @@ class BaseElement(ABC):
 
 class Image(BaseElement):
     def __init__(self, image: DataArray, transform: BaseTransformation) -> None:
-        self.data: DataArray = image
+        if isinstance(image, DataArray):
+            self.data = image
+        elif isinstance(image, np.ndarray):
+            self.data = DataArray(image)
+        elif isinstance(image, dask.array.core.Array):
+            self.data = DataArray(image)
+        else:
+            raise TypeError("Image must be a DataArray, numpy array or dask array")
         self.transforms = transform
         self.axes = self._infer_axes(image.shape)
         super().__init__()
@@ -74,7 +82,7 @@ class Image(BaseElement):
             group=group,
             axes=self.axes,
             scaler=scaler,
-            coordinate_transformations=[coordinate_transformations],
+            coordinate_transformations=[[coordinate_transformations]],
             storage_options={"compressor": None},
         )
 
@@ -100,7 +108,14 @@ class Image(BaseElement):
 
 class Labels(BaseElement):
     def __init__(self, labels: DataArray, transform: BaseTransformation) -> None:
-        self.data: DataArray = labels
+        if isinstance(labels, DataArray):
+            self.data = labels
+        elif isinstance(labels, np.ndarray):
+            self.data = DataArray(labels)
+        elif isinstance(labels, dask.array.core.Array):
+            self.data = DataArray(labels)
+        else:
+            raise TypeError("Labels must be a DataArray, numpy array or dask array")
         self.transforms = transform
         super().__init__()
 
@@ -123,7 +138,7 @@ class Labels(BaseElement):
             axes=["y", "x"],  # TODO: infer before.
             scaler=scaler,
             storage_options={"compressor": None},
-            coordinate_transformations=[coordinate_transformations],
+            coordinate_transformations=[[coordinate_transformations]],
         )
 
     @classmethod
@@ -155,11 +170,14 @@ class Points(BaseElement):
         return Points(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        assert isinstance(self.transforms, BaseTransformation)
+        coordinate_transformations = self.transforms.to_dict()
         write_points(
             points=self.data,
             group=group,
             name=name,
             axes=["y", "x"],  # TODO: infer before.
+            coordinate_transformations=[[coordinate_transformations]],
         )
 
     @classmethod
@@ -228,11 +246,14 @@ class Polygons(BaseElement):
         return a
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        assert isinstance(self.transforms, BaseTransformation)
+        coordinate_transformations = self.transforms.to_dict()
         write_polygons(
             polygons=self.data,
             group=group,
             name=name,
             axes=["y", "x"],  # TODO: infer before.
+            coordinate_transformations=[[coordinate_transformations]],
         )
 
     @classmethod
