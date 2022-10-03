@@ -102,10 +102,10 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         points=points,
         polygons=polygons,
         table=table,
-        images_transform=images_transform,
-        labels_transform=labels_transform,
-        points_transform=points_transform,
-        polygons_transform=polygons_transform,
+        images_transforms=images_transform,
+        labels_transforms=labels_transform,
+        points_transforms=points_transform,
+        polygons_transforms=polygons_transform,
     )
 
 

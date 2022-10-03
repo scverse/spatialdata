@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
 
 import zarr
 from anndata import AnnData
@@ -9,6 +9,34 @@ from ome_zarr.io import parse_url
 
 from spatialdata._core.elements import Image, Labels, Points, Polygons
 from spatialdata._io.write import write_table
+
+
+def spatialdata_from_base_elements(
+    images: Optional[Dict[str, Image]] = None,
+    labels: Optional[Dict[str, Labels]] = None,
+    points: Optional[Dict[str, Points]] = None,
+    polygons: Optional[Dict[str, Polygons]] = None,
+    table: Optional[AnnData] = None,
+) -> SpatialData:
+    # transforms
+    images_transforms = {k: t for k, t in images.items()} if images is not None else None
+    labels_transforms = {k: t for k, t in labels.items()} if labels is not None else None
+    points_transforms = {k: t for k, t in points.items()} if points is not None else None
+    polygons_transforms = {k: t for k, t in polygons.items()} if polygons is not None else None
+    # axes information
+    # TODO:
+
+    return SpatialData(
+        images=images if images is not None else {},
+        labels=labels if labels is not None else {},
+        points=points if points is not None else {},
+        polygons=polygons if polygons is not None else {},
+        table=table,
+        images_transforms=images_transforms,
+        labels_transforms=labels_transforms,
+        points_transforms=points_transforms,
+        polygons_transforms=polygons_transforms,
+    )
 
 
 class SpatialData:
@@ -22,42 +50,48 @@ class SpatialData:
 
     def __init__(
         self,
+        # base elements
         images: Mapping[str, Any] = MappingProxyType({}),
         labels: Mapping[str, Any] = MappingProxyType({}),
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        images_transform: Optional[Mapping[str, Any]] = None,
-        labels_transform: Optional[Mapping[str, Any]] = None,
-        points_transform: Optional[Mapping[str, Any]] = None,
-        polygons_transform: Optional[Mapping[str, Any]] = None,
+        # transforms
+        images_transforms: Optional[Mapping[str, Any]] = None,
+        labels_transforms: Optional[Mapping[str, Any]] = None,
+        points_transforms: Optional[Mapping[str, Any]] = None,
+        polygons_transforms: Optional[Mapping[str, Any]] = None,
+        # axes information
+        images_axes: Optional[Mapping[str, Any]] = None,
+        labels_axes: Optional[Mapping[str, Any]] = None,
+        points_axes: Optional[Mapping[str, Any]] = None,
+        polygons_axes: Optional[Mapping[str, Any]] = None,
     ) -> None:
-
-        _validate_dataset(images, images_transform)
-        _validate_dataset(labels, labels_transform)
-        _validate_dataset(points, points_transform)
-        _validate_dataset(polygons, polygons_transform)
+        _validate_dataset(images, images_transforms)
+        _validate_dataset(labels, labels_transforms)
+        _validate_dataset(points, points_transforms)
+        _validate_dataset(polygons, polygons_transforms)
 
         if images is not None:
             self.images = {
-                k: Image.parse_image(data, transform) for (k, data), transform in _iter_elems(images, images_transform)
+                k: Image.parse_image(data, transform) for (k, data), transform in _iter_elems(images, images_transforms)
             }
 
         if labels is not None:
             self.labels = {
                 k: Labels.parse_labels(data, transform)
-                for (k, data), transform in _iter_elems(labels, labels_transform)
+                for (k, data), transform in _iter_elems(labels, labels_transforms)
             }
 
         if points is not None:
             self.points = {
                 k: Points.parse_points(data, transform)
-                for (k, data), transform in _iter_elems(points, points_transform)
+                for (k, data), transform in _iter_elems(points, points_transforms)
             }
         if polygons is not None:
             self.polygons = {
                 k: Polygons.parse_polygons(data, transform)
-                for (k, data), transform in _iter_elems(polygons, polygons_transform)
+                for (k, data), transform in _iter_elems(polygons, polygons_transforms)
             }
 
         if table is not None:
