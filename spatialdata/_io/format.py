@@ -139,9 +139,7 @@ class SpatialDataFormat(CurrentFormat):
                     raise ValueError("Missing scale argument in: %s" % first)
                 translation = transformation["translation"]
                 if len(translation) != ndim:
-                    raise ValueError(
-                        f"'translation' list {translation} must match image dimensions count: {ndim}"
-                    )
+                    raise ValueError(f"'translation' list {translation} must match image dimensions count: {ndim}")
                 for value in translation:
                     if not isinstance(value, (float, int)):
                         raise ValueError(f"'translation' values must all be numbers: {translation}")
