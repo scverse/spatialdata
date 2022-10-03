@@ -287,6 +287,9 @@ class Affine(BaseTransformation):
         closed_form = np.array([[d, -c, 0], [-b, a, 0], [b * n - d * m, c * m - a * n, det]])
         return Affine(affine=closed_form)
 
+    def to_affine(self) -> Affine:
+        return copy.deepcopy(self)
+
 
 class Rotation(BaseTransformation):
     def __init__(
