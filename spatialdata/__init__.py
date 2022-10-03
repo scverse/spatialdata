@@ -18,6 +18,7 @@ __all__ = [
     "InverseOf",
     "Bijection",
     "ByDimension",
+    "compose_transformations",
 ]
 
 from spatialdata._core._spatialdata import SpatialData
@@ -36,4 +37,5 @@ from spatialdata._core.transform import (
     Sequence,
     Translation,
     VectorField,
+    compose_transformations,
 )

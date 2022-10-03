@@ -3,13 +3,14 @@ from __future__ import annotations
 import copy
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union, Any, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
 
 from spatialdata._types import ArrayLike
 
 __all__ = [
+    "BaseTransformation",
     "Identity",
     "MapIndex",
     "MapAxis",
@@ -24,6 +25,7 @@ __all__ = [
     "InverseOf",
     "Bijection",
     "ByDimension",
+    "compose_transformations",
 ]
 
 
@@ -41,11 +43,7 @@ class BaseTransformation(ABC):
         return json.dumps(self.to_dict())
 
     def compose_with(self, transformation: BaseTransformation) -> BaseTransformation:
-        return BaseTransformation.compose(self, transformation)
-
-    @staticmethod
-    def compose(transformation0: BaseTransformation, transformation1: BaseTransformation) -> BaseTransformation:
-        return Sequence([transformation0, transformation1])
+        return compose_transformations(self, transformation)
 
     @abstractmethod
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -54,6 +52,12 @@ class BaseTransformation(ABC):
     @abstractmethod
     def inverse(self) -> BaseTransformation:
         pass
+
+
+def compose_transformations(
+    transformation0: BaseTransformation, transformation1: BaseTransformation
+) -> BaseTransformation:
+    return Sequence([transformation0, transformation1])
 
 
 def get_transformation_from_json(s: str) -> BaseTransformation:
@@ -165,6 +169,7 @@ class Translation(BaseTransformation):
                 translation = np.array(translation)
             ndim = len(translation)
 
+        assert type(translation) == np.ndarray
         assert len(translation) == ndim
         self.translation = translation
         self._ndim = ndim
@@ -177,7 +182,7 @@ class Translation(BaseTransformation):
         return {
             "coordinateTransformations": {
                 "type": "translation",
-                "translation": self.translation.tolist(),  # type: ignore[union-attr]
+                "translation": self.translation.tolist(),
             }
         }
 
@@ -185,7 +190,14 @@ class Translation(BaseTransformation):
         return points + self.translation
 
     def inverse(self) -> BaseTransformation:
-        return Translation(translation=-self.translation)  # type: ignore[operator]
+        return Translation(translation=-self.translation)
+
+    def to_affine(self) -> Affine:
+        assert self.ndim == 2
+        m: ArrayLike = np.vstack(
+            (np.hstack((np.array([[1.0, 0.0], [0.0, 1.0]]), self.translation.reshape(2, 1))), np.array([0.0, 0.0, 1.0]))
+        )
+        return Affine(affine=m)
 
 
 class Scale(BaseTransformation):
@@ -207,6 +219,7 @@ class Scale(BaseTransformation):
                 scale = np.array(scale)
             ndim = len(scale)
 
+        assert type(scale) == np.ndarray
         assert len(scale) == ndim
         self.scale = scale
         self._ndim = ndim
@@ -219,7 +232,7 @@ class Scale(BaseTransformation):
         return {
             "coordinateTransformations": {
                 "type": "scale",
-                "scale": self.scale.tolist(),  # type: ignore[union-attr]
+                "scale": self.scale.tolist(),
             }
         }
 
@@ -228,8 +241,13 @@ class Scale(BaseTransformation):
 
     def inverse(self) -> BaseTransformation:
         new_scale = np.zeros_like(self.scale)
-        new_scale[np.nonzero(self.scale)] = 1 / self.scale[np.nonzero(self.scale)]  # type: ignore[call-overload]
+        new_scale[np.nonzero(self.scale)] = 1 / self.scale[np.nonzero(self.scale)]
         return Scale(scale=new_scale)
+
+    def to_affine(self) -> Affine:
+        assert self.ndim == 2
+        m: ArrayLike = np.vstack((np.hstack((np.diag(self.scale), np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        return Affine(affine=m)
 
 
 class Affine(BaseTransformation):
@@ -322,16 +340,21 @@ class Rotation(BaseTransformation):
     def inverse(self) -> BaseTransformation:
         return Rotation(self.rotation.T)
 
+    def to_affine(self) -> Affine:
+        assert self.ndim == 2
+        m: ArrayLike = np.vstack((np.hstack((self.rotation, np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        return Affine(affine=m)
+
 
 class Sequence(BaseTransformation):
     def __init__(self, transformations: Union[List[Any], List[BaseTransformation]]) -> None:
         if isinstance(transformations[0], BaseTransformation):
             self.transformations = transformations
         else:
-            self.transformations = [get_transformation_from_dict(t) for t in transformations] # type: ignore[arg-type]
+            self.transformations = [get_transformation_from_dict(t) for t in transformations]  # type: ignore[arg-type]
         ndims = [t.ndim for t in self.transformations if t.ndim is not None]
         if len(ndims) > 0:
-            assert np.all(ndims)
+            assert len(set(ndims)) == 1
             self._ndim = ndims[0]
         else:
             self._ndim = None
@@ -355,6 +378,25 @@ class Sequence(BaseTransformation):
 
     def inverse(self) -> BaseTransformation:
         return Sequence([t.inverse() for t in reversed(self.transformations)])
+
+    def to_affine(self) -> Affine:
+        assert self.ndim == 2
+        composed = np.eye(3)
+        for t in self.transformations:
+            a: Affine
+            if isinstance(t, Affine):
+                a = t
+            elif isinstance(t, Translation) or isinstance(t, Scale) or isinstance(t, Rotation):
+                a = t.to_affine()
+            elif isinstance(t, Identity):
+                m: ArrayLike = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+                a = Affine(affine=m)
+            elif isinstance(t, Sequence):
+                a = t.to_affine()
+            else:
+                raise ValueError(f"Cannot convert {t} to affine")
+            composed = a.affine @ composed
+        return Affine(affine=composed)
 
 
 class Displacements(BaseTransformation):

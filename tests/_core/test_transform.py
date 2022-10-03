@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from spatialdata._core.transform import get_transformation_from_json
+from spatialdata._core.transform import (
+    Affine,
+    Sequence,
+    compose_transformations,
+    get_transformation_from_json,
+)
 
 
 def test_identity():
@@ -127,6 +132,29 @@ def test_bijection():
 @pytest.mark.skip()
 def test_by_dimension():
     raise NotImplementedError()
+
+
+def test_to_composition_to_affine():
+    composed0 = get_transformation_from_json(
+        '{"coordinateTransformations": {"type": "sequence", "transformations": [{"type": "translation", '
+        '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
+        '"affine": [5, 6, 7, 8, 9, 10]}]}}',
+    )
+    composed1 = Sequence(
+        [
+            compose_transformations(
+                get_transformation_from_json(
+                    '{"coordinateTransformations": {"type": "translation", "translation": [1, 2]}}'
+                ),
+                get_transformation_from_json('{"coordinateTransformations": {"type": "scale", "scale": [3, 4]}}'),
+            ),
+            Affine(np.array([5, 6, 7, 8, 9, 10])),
+        ]
+    ).to_affine()
+    points = np.array([[1, 2], [3, 4], [5, 6]], dtype=float)
+    expected = np.array([[133, 202], [211, 322], [289, 442]], dtype=float)
+    assert np.allclose(composed0.transform_points(points), expected)
+    assert np.allclose(composed1.transform_points(points), expected)
 
 
 def act(s: str, ndim: int) -> np.array:

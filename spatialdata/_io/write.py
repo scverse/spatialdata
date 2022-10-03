@@ -5,7 +5,7 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
-from ome_zarr.format import CurrentFormat, Format
+from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes, _validate_datasets
@@ -25,7 +25,7 @@ def _write_metadata(
     attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     """Write metdata to a group."""
@@ -74,7 +74,7 @@ def write_points(
     group_type: str = "ngff:points",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("points")
@@ -122,9 +122,9 @@ def write_image(
     group: zarr.Group,
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
@@ -147,9 +147,9 @@ def write_labels(
     name: str,
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -180,7 +180,7 @@ def write_polygons(
     group_type: str = "ngff:polygons",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    coordinate_transformations: Optional[List[Dict[str, Any]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")
