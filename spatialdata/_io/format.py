@@ -107,7 +107,7 @@ class SpatialDataFormat(CurrentFormat):
             raise ValueError("coordinate_transformations must be provided")
         ct_count = len(coordinate_transformations)
         if ct_count != nlevels:
-            raise ValueError("coordinate_transformations count: {} must match datasets {}".format(ct_count, nlevels))
+            raise ValueError(f"coordinate_transformations count: {ct_count} must match datasets {nlevels}")
         for transformations in coordinate_transformations:
             assert isinstance(transformations, list)
             types = [t.get("type", None) for t in transformations]
@@ -124,7 +124,7 @@ class SpatialDataFormat(CurrentFormat):
                 raise ValueError("Missing scale argument in: %s" % first)
             scale = first["scale"]
             if len(scale) != ndim:
-                raise ValueError("'scale' list {} must match number of image dimensions: {}".format(scale, ndim))
+                raise ValueError(f"'scale' list {scale} must match number of image dimensions: {ndim}")
             for value in scale:
                 if not isinstance(value, (float, int)):
                     raise ValueError(f"'scale' values must all be numbers: {scale}")
@@ -140,7 +140,7 @@ class SpatialDataFormat(CurrentFormat):
                 translation = transformation["translation"]
                 if len(translation) != ndim:
                     raise ValueError(
-                        "'translation' list {} must match image dimensions count: {}".format(translation, ndim)
+                        f"'translation' list {translation} must match image dimensions count: {ndim}"
                     )
                 for value in translation:
                     if not isinstance(value, (float, int)):
