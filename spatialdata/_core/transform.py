@@ -53,6 +53,11 @@ class BaseTransformation(ABC):
     def inverse(self) -> BaseTransformation:
         pass
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, BaseTransformation):
+            return False
+        return self.to_dict() == other.to_dict()
+
 
 def compose_transformations(transformation0: BaseTransformation, transformation1: BaseTransformation) -> Sequence:
     return Sequence([transformation0, transformation1])

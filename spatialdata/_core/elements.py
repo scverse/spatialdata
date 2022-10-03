@@ -1,7 +1,7 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union, Dict
 
 import dask.array.core
 import numpy as np
@@ -11,6 +11,7 @@ from anndata import AnnData
 from ome_zarr.scale import Scaler
 from xarray import DataArray
 
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.transform import BaseTransformation, Identity  # , get_transform
 from spatialdata._io.write import (
     write_image,
@@ -28,7 +29,17 @@ class BaseElement(ABC):
     data: Any
 
     # store the transform objects as a dictionary with keys (source_coordinate_space, destination_coordinate_space)
-    transforms: Optional[BaseTransformation] = None
+    transformations: Dict[str, BaseTransformation] = {}
+    coordinate_systems: Dict[str, CoordinateSystem] = {}
+
+    def __int__(self, alignment_info: Dict[CoordinateSystem, BaseTransformation]):
+        assert len(set([cs.name for cs in alignment_info.keys()])) == len(alignment_info)
+        self.coordinate_systems = {
+            cs.name: cs for cs in alignment_info.keys()
+        }
+        self.transformations = {
+            cs.name: transformation for cs, transformation in alignment_info.items()
+        }
 
     @abstractmethod
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
@@ -51,7 +62,8 @@ class BaseElement(ABC):
 
 
 class Image(BaseElement):
-    def __init__(self, image: DataArray, transform: BaseTransformation) -> None:
+    def __init__(self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+        super().__init__(alignment_info=alignment_info)
         if isinstance(image, DataArray):
             self.data = image
         elif isinstance(image, np.ndarray):
@@ -60,18 +72,17 @@ class Image(BaseElement):
             self.data = DataArray(image)
         else:
             raise TypeError("Image must be a DataArray, numpy array or dask array")
-        self.transforms = transform
         self.axes = self._infer_axes(image.shape)
-        super().__init__()
 
-    @staticmethod
-    def parse_image(data: Any, transform: Optional[Any] = None) -> "Image":
-        # data, transform = parse_dataset(data, transform)
-        if transform is None:
-            transform = Identity()
-        return Image(data, transform)
+    # @staticmethod
+    # def parse_image(data: Any, transform: Optional[Any] = None) -> "Image":
+    #     # data, transform = parse_dataset(data, transform)
+    #     if transform is None:
+    #         transform = Identity()
+    #     return Image(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        raise NotImplementedError()
         # TODO: allow to write from path
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
@@ -107,7 +118,8 @@ class Image(BaseElement):
 
 
 class Labels(BaseElement):
-    def __init__(self, labels: DataArray, transform: BaseTransformation) -> None:
+    def __init__(self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+        super().__init__(alignment_info=alignment_info)
         if isinstance(labels, DataArray):
             self.data = labels
         elif isinstance(labels, np.ndarray):
@@ -116,17 +128,17 @@ class Labels(BaseElement):
             self.data = DataArray(labels)
         else:
             raise TypeError("Labels must be a DataArray, numpy array or dask array")
-        self.transforms = transform
-        super().__init__()
 
-    @staticmethod
-    def parse_labels(data: Any, transform: Optional[Any] = None) -> "Labels":
-        # data, transform = parse_dataset(data, transform)
-        if transform is None:
-            transform = Identity()
-        return Labels(data, transform)
+    #
+    # @staticmethod
+    # def parse_labels(data: Any, transform: Optional[Any] = None) -> "Labels":
+    #     # data, transform = parse_dataset(data, transform)
+    #     if transform is None:
+    #         transform = Identity()
+    #     return Labels(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        raise NotImplementedError()
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
@@ -157,19 +169,19 @@ class Labels(BaseElement):
 
 
 class Points(BaseElement):
-    def __init__(self, points: AnnData, transform: BaseTransformation) -> None:
+    def __init__(self, points: AnnData, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+        super().__init__(alignment_info=alignment_info)
         self.data: AnnData = points
-        self.transforms = transform
-        super().__init__()
 
-    @staticmethod
-    def parse_points(data: AnnData, transform: Optional[Any] = None) -> "Points":
-        # data, transform = parse_dataset(data, transform)
-        if transform is None:
-            transform = Identity()
-        return Points(data, transform)
+    # @staticmethod
+    # def parse_points(data: AnnData, transform: Optional[Any] = None) -> "Points":
+    #     # data, transform = parse_dataset(data, transform)
+    #     if transform is None:
+    #         transform = Identity()
+    #     return Points(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        raise NotImplementedError()
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
         write_points(
@@ -196,17 +208,16 @@ class Points(BaseElement):
 
 
 class Polygons(BaseElement):
-    def __init__(self, polygons: Any, transform: BaseTransformation) -> None:
+    def __init__(self, polygons: Any, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+        super().__init__(alignment_info=alignment_info)
         self.data: Any = polygons
-        self.transforms = transform
-        super().__init__()
 
-    @staticmethod
-    def parse_polygons(data: AnnData, transform: Optional[Any] = None) -> "Polygons":
-        # data, transform = parse_dataset(data, transform)
-        if transform is None:
-            transform = Identity()
-        return Polygons(data, transform)
+    # @staticmethod
+    # def parse_polygons(data: AnnData, transform: Optional[Any] = None) -> "Polygons":
+    #     # data, transform = parse_dataset(data, transform)
+    #     if transform is None:
+    #         transform = Identity()
+    #     return Polygons(data, transform)
 
     @staticmethod
     def tensor_to_string(x: ArrayLike) -> str:
@@ -246,6 +257,7 @@ class Polygons(BaseElement):
         return a
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+        raise NotImplementedError()
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
         write_polygons(
