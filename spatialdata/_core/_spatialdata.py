@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import copy
 from types import MappingProxyType
-from typing import Any, Dict, Iterable, Mapping, Optional, Tuple, Union, List
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
 from ome_zarr.io import parse_url
 
+from spatialdata._core.coordinate_system import CoordinateSystem, CoordSystem_t
 from spatialdata._core.elements import Image, Labels, Points, Polygons
-from spatialdata._io.write import write_table
 from spatialdata._core.transform import BaseTransformation, get_transformation_from_dict
-from spatialdata._core.coordinate_system import CoordSystem_t, CoordinateSystem
-
+from spatialdata._io.write import write_table
 
 # def spatialdata_from_base_elements(
 #     images: Optional[Dict[str, Image]] = None,
@@ -75,43 +74,22 @@ class SpatialData:
             raise ValueError("Coordinate systems must be provided.")
         validated_coordinate_systems = _validate_coordinate_systems(coordinate_systems)
 
-        images_transformations = _validate_transformations(images, transformations, validated_coordinate_systems)
-        labels_transformations = _validate_transformations(labels, transformations, validated_coordinate_systems)
-        points_transformations = _validate_transformations(points, transformations, validated_coordinate_systems)
-        polygons_transformations = _validate_transformations(polygons, transformations, validated_coordinate_systems)
-
-        for target, element_class, elements, element_transformations in zip(
-            [self.images, self.labels, self.points, self.polygons],
+        for element_class, elements, prefix in zip(
             [Image, Labels, Points, Polygons],
             [images, labels, points, polygons],
-            [images_transformations, labels_transformations, points_transformations, polygons_transformations],
+            ["images", "labels", "points", "polygons"],
         ):
-            target = {}
+            self.__setattr__(prefix, {})
+            validated_transformations = _validate_transformations(
+                elements, prefix, transformations, validated_coordinate_systems
+            )
             for name, data in elements.items():
-                alignment_info = {validated_coordinate_systems[des]: element_transformations[name][des] for des in element_transformations[name]}
+                alignment_info = {
+                    validated_coordinate_systems[des]: validated_transformations[name][des]
+                    for des in validated_transformations[name]
+                }
                 obj = element_class(data, alignment_info=alignment_info)
-                target[name] = obj
-        # if images is not None:
-        #     self.images = {
-        #         k: Image.parse_image(data, transform) for (k, data), transform in _iter_elems(images, images_transforms)
-        #     }
-        #
-        # if labels is not None:
-        #     self.labels = {
-        #         k: Labels.parse_labels(data, transform)
-        #         for (k, data), transform in _iter_elems(labels, labels_transforms)
-        #     }
-        #
-        # if points is not None:
-        #     self.points = {
-        #         k: Points.parse_points(data, transform)
-        #         for (k, data), transform in _iter_elems(points, points_transforms)
-        #     }
-        # if polygons is not None:
-        #     self.polygons = {
-        #         k: Polygons.parse_polygons(data, transform)
-        #         for (k, data), transform in _iter_elems(polygons, polygons_transforms)
-        #     }
+                self.__getattribute__(prefix)[name] = obj
 
         if table is not None:
             self._table = table
@@ -150,12 +128,28 @@ class SpatialData:
         sdata = read_zarr(file_path)
         return sdata
 
+    def _gen_spatial_elements(self):
+        # notice that this does not return a table, so we assume that the table does not contain spatial information;
+        # this needs to be checked in the future as the specification evolves
+        for k in ['images', 'labels', 'points', 'polygons']:
+            d = getattr(self, k)
+            for name, obj in d.items():
+                yield k, name, obj
+
     @property
-    def coordinate_syestems(self) -> List[CoordinateSystem]:
-        raise NotImplementedError(
-            "get the corodinate systems from the elements and check for consistency (same name "
-            "-> same coordinate system"
-        )
+    def coordinate_systems(self) -> List[CoordinateSystem]:
+        ##
+        all_cs = {}
+        gen = self._gen_spatial_elements()
+        for _, _, obj in gen:
+            for name, cs in obj.coordinate_systems.items():
+                if name in all_cs:
+                    added = all_cs[name]
+                    assert cs == added
+                else:
+                    all_cs[name] = cs
+        ##
+        return list(all_cs.values())
 
     def __repr__(self) -> str:
         return self._gen_repr()
@@ -164,6 +158,7 @@ class SpatialData:
         self,
     ) -> str:
         def rreplace(s: str, old: str, new: str, occurrence: int) -> str:
+            """Reverse replace a up to a certain number of occurences."""
             li = s.rsplit(old, occurrence)
             return new.join(li)
 
@@ -173,10 +168,11 @@ class SpatialData:
 
         ##
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "table"]:
+        attributes = ["images", "labels", "points", "polygons", "table"]
+        for attr in attributes:
             attribute = getattr(self, attr)
             if attribute is not None and len(attribute) > 0:
-                descr += f"\n{h('level0')}{attr.capitalize()}"
+                descr += f"\n{h('level0')}{attr}"
                 if isinstance(attribute, AnnData):
                     descr += f"{h('empty_line')}"
                     descr_class = attribute.__class__.__name__
@@ -198,7 +194,24 @@ class SpatialData:
                         else:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
                         # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
-            if attr == "table":
+            # the following lines go from this
+            #     SpatialData object with:
+            #     ├── Images
+            #     │     └── 'image': DataArray (200, 100)
+            #     └── Points
+            #     │     ├── 'points': AnnData with osbm.spatial (50, 2)
+            #     │     └── 'circles': AnnData with osbm.spatial (56, 2)
+            # to this
+            #     SpatialData object with:
+            #     ├── Images
+            #     │     └── 'image': DataArray (200, 100)
+            #     └── Points
+            #           ├── 'points': AnnData with osbm.spatial (50, 2)
+            #           └── 'circles': AnnData with osbm.spatial (56, 2)
+            latest_attribute_present = [
+                attr for attr in attributes if getattr(self, attr) is not None and getattr(self, attr) != {}
+            ][-1]
+            if attr == latest_attribute_present:
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
@@ -209,6 +222,18 @@ class SpatialData:
         for attr in ["images", "labels", "points", "polygons", "table"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
+        ##
+        descr += ('\nwith coordinate systems:\n')
+        for cs in self.coordinate_systems:
+            descr += f'▸ {cs.name}\n' \
+                     f'    with axes: {", ".join(cs.axes)}\n'
+            gen = self._gen_spatial_elements()
+            elements_in_cs = []
+            for k, name, obj in gen:
+                if cs.name in obj.coordinate_systems:
+                    elements_in_cs.append(f'{k}/{name}')
+            if len(elements_in_cs) > 0:
+                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
         ##
         return descr
 
@@ -231,12 +256,14 @@ def _validate_coordinate_systems(
     for c in coordinate_systems:
         if isinstance(c, CoordinateSystem):
             validated.append(copy.deepcopy(c))
-        elif type(c) == CoordSystem_t:
+        # TODO: add type check, maybe with typeguard: https://stackoverflow.com/questions/51171908/extracting-data-from-typing-types
+        # elif type(c) == CoordSystem_t:
+        else:
             v = CoordinateSystem()
             v.from_dict(c)
             validated.append(v)
-        else:
-            raise TypeError(f"Invalid type for coordinate system: {type(c)}")
+        # else:
+        #     raise TypeError(f"Invalid type for coordinate system: {type(c)}")
     assert len(coordinate_systems) == len(validated)
     assert len(validated) == len(set(validated))
     d = {v.name: v for v in validated}
@@ -266,22 +293,17 @@ def _validate_coordinate_systems(
 
 def _validate_transformations(
     elements: Mapping[str, Any],
+    prefix: str,
     transformations: Mapping[Tuple[str, str], Union[BaseTransformation, Dict[str, Any]]],
     coordinate_systems: Dict[str, CoordinateSystem],
 ) -> Dict[str, Dict[str, BaseTransformation]]:
     validated: Dict[str, Dict[str, BaseTransformation]] = {}
     for name, element in elements.items():
-        if not isinstance(element, (Image, Labels, Points, Polygons)):
-            raise TypeError(f"Invalid type for element: {type(element)}")
         validated[name] = {}
     for (src, des), t in transformations.items():
         assert des in coordinate_systems.keys()
-        element_types = set([type(e) for e in elements.values()])
-        assert len(element_types) == 1
-        element_type = element_types.pop()
-        prefix = {Image: 'image', Labels: 'labels', Points: 'points', Polygons: 'polygons'}[element_type]
         if src.startswith(prefix):
-            src_name = src[len(prefix) + 1:]
+            src_name = src[len(prefix) + 1 :]
             if src_name in elements:
                 if isinstance(t, BaseTransformation):
                     v = copy.deepcopy(t)

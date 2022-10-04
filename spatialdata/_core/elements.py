@@ -1,7 +1,7 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, List, Optional, Tuple, Union, Dict
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.array.core
 import numpy as np
@@ -32,14 +32,10 @@ class BaseElement(ABC):
     transformations: Dict[str, BaseTransformation] = {}
     coordinate_systems: Dict[str, CoordinateSystem] = {}
 
-    def __int__(self, alignment_info: Dict[CoordinateSystem, BaseTransformation]):
-        assert len(set([cs.name for cs in alignment_info.keys()])) == len(alignment_info)
-        self.coordinate_systems = {
-            cs.name: cs for cs in alignment_info.keys()
-        }
-        self.transformations = {
-            cs.name: transformation for cs, transformation in alignment_info.items()
-        }
+    def __init__(self, alignment_info: Dict[CoordinateSystem, BaseTransformation]):
+        assert len({cs.name for cs in alignment_info.keys()}) == len(alignment_info)
+        self.coordinate_systems = {cs.name: cs for cs in alignment_info.keys()}
+        self.transformations = {cs.name: transformation for cs, transformation in alignment_info.items()}
 
     @abstractmethod
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:

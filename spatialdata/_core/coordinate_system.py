@@ -1,6 +1,8 @@
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
+__all__ = ['CoordinateSystem']
+
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
 
 
@@ -81,3 +83,6 @@ class CoordinateSystem:
     @property
     def units(self) -> List[str]:
         return self._units
+
+    def __hash__(self):
+        return hash(frozenset(self.to_dict()))
