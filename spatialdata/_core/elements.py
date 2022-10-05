@@ -1,7 +1,7 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import dask.array.core
 import numpy as np
@@ -58,17 +58,19 @@ class BaseElement(ABC):
 
 
 class Image(BaseElement):
-    def __init__(self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+    def __init__(
+        self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation], axes: Tuple[str, ...]
+    ) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(image, DataArray):
             self.data = image
         elif isinstance(image, np.ndarray):
-            self.data = DataArray(image)
+            self.data = DataArray(image, dims=axes)
         elif isinstance(image, dask.array.core.Array):
-            self.data = DataArray(image)
+            self.data = DataArray(image, dims=axes)
         else:
             raise TypeError("Image must be a DataArray, numpy array or dask array")
-        self.axes = self._infer_axes(image.shape)
+        assert self.data.dims == axes
 
     # @staticmethod
     # def parse_image(data: Any, transform: Optional[Any] = None) -> "Image":
@@ -79,23 +81,18 @@ class Image(BaseElement):
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         # TODO: allow to write from path
-        assert isinstance(self.transforms, BaseTransformation)
-        coordinate_transformations = self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
         # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
         write_image(
             image=self.data.data,
             group=group,
-            axes=self.axes,
+            axes=self.data.dims,
+            coordinate_transformations=self.transformations,
+            coordinate_systems=self.coordinate_systems,
             scaler=scaler,
-            coordinate_transformations=[[coordinate_transformations]],
+            # coordinate_transformations=[[coordinate_transformations]],
             storage_options={"compressor": None},
         )
-
-    def _infer_axes(self, shape: Tuple[int]) -> List[str]:
-        # TODO: improve (this information can be already present in the data, as for xarrays, and the constructor
-        # should have an argument so that the user can modify this
-        return ["c", "y", "x"][3 - len(shape) :]
 
     @classmethod
     def transform_to(cls, new_coordinate_space: str, inplace: bool = False) -> "Image":
@@ -113,16 +110,19 @@ class Image(BaseElement):
 
 
 class Labels(BaseElement):
-    def __init__(self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+    def __init__(
+        self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation], axes: Tuple[str, ...]
+    ) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(labels, DataArray):
             self.data = labels
         elif isinstance(labels, np.ndarray):
-            self.data = DataArray(labels)
+            self.data = DataArray(labels, dims=axes)
         elif isinstance(labels, dask.array.core.Array):
-            self.data = DataArray(labels)
+            self.data = DataArray(labels, dims=axes)
         else:
             raise TypeError("Labels must be a DataArray, numpy array or dask array")
+        assert self.data.dims == axes
 
     #
     # @staticmethod
@@ -133,18 +133,18 @@ class Labels(BaseElement):
     #     return Labels(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        assert isinstance(self.transforms, BaseTransformation)
-        coordinate_transformations = self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
         # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
         write_labels(
             labels=self.data.data,
             group=group,
+            coordinate_transformations=self.transformations,
+            coordinate_systems=self.coordinate_systems,
             name=name,
-            axes=["y", "x"],  # TODO: infer before.
+            axes=self.data.dims,
             scaler=scaler,
             storage_options={"compressor": None},
-            coordinate_transformations=[[coordinate_transformations]],
+            # coordinate_transformations=[[coordinate_transformations]],
         )
 
     @classmethod

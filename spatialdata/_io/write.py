@@ -19,6 +19,23 @@ from spatialdata._types import ArrayLike
 __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
 
 
+def _get_coordinate_transformations_list(
+    coordinate_transformations: Dict[str, BaseTransformation], transformation_input: str
+) -> List[Dict[str, Any]]:
+    ct_formatted = []
+    for target, ct in coordinate_transformations.items():
+        d = ct.to_dict()
+        d["input"] = transformation_input
+        d["output"] = target
+        ct_formatted.append(d)
+    return ct_formatted
+
+
+def _get_coordinate_systems_list(coordinate_systems: Dict[str, CoordinateSystem]) -> List[Dict[str, Any]]:
+    cs_formatted = [cs.to_dict() for cs in coordinate_systems.values()]
+    return cs_formatted
+
+
 def _write_metadata_points_polygons(
     group: zarr.Group,
     group_type: str,
@@ -32,13 +49,18 @@ def _write_metadata_points_polygons(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     """Write metdata to a group."""
-    dims = len(shape)
+    len(shape)
     # axes = _get_valid_axes(dims, axes, fmt)
 
-    cs_formatted = [cs.to_dict() for cs in coordinate_systems.values()]
-    datasets: List[Dict[str, Any]] = []
-    dataset = {"path": attr}
-    datasets.append(dataset)
+    cs_formatted = _get_coordinate_systems_list(coordinate_systems)
+    # luca: datasets are used for multiscale images, and they contain transformations (only scale and translation)
+    # to map the small levels of the pyramid to the larger one. Additional, more general trasformations can be put at
+    # the outer level. So we don't use datasets for points and polygons (so not in this function), only for images and
+    # labels
+
+    # datasets: List[Dict[str, Any]] = []
+    # dataset = {"path": attr}
+    # datasets.append(dataset)
 
     # if coordinate_transformations is None:
     #     # TODO: temporary workaround, report bug to handle empty shapes
@@ -47,16 +69,10 @@ def _write_metadata_points_polygons(
     #     shape = [shape]  # type: ignore[assignment]
     #     coordinate_transformations = fmt.generate_coordinate_transformations(shape)
 
-    ct_formatted = []
-    for target, ct in coordinate_transformations.items():
-        d = ct.to_dict()
-        fmt.validate_coordinate_transformations(dims, 1, [[d]])
-        d["input"] = group.path
-        d["output"] = target
-        ct_formatted.append(d)
+    ct_formatted = _get_coordinate_transformations_list(coordinate_transformations, transformation_input=group.path)
     # for dataset, transform in zip(datasets, ct_formatted):
     #     dataset["coordinateTransformations"] = transform
-    dataset["coordinateTransformations"] = ct_formatted
+    # dataset["coordinateTransformations"] = ct_formatted
 
     # if axes is not None:
     #     axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -72,12 +88,34 @@ def _write_metadata_points_polygons(
     # ]
 
     # TODO: do we need also to add a name?
-    multiscales = [dict(version="0.5-dev", coordinateSystems=cs_formatted, datasets=datasets, **metadata)]
+    multiscales = [
+        dict(version="0.5-dev", coordinateSystems=cs_formatted, coordinateTransformations=ct_formatted, **metadata)
+    ]
     # if axes is not None:
     #     multiscales[0]["axes"] = axes
 
     group.attrs["@type"] = group_type
     group.attrs["multiscales"] = multiscales
+
+
+def _update_metadata_images_labels(
+    group: zarr.Group,
+    coordinate_transformations: Dict[str, BaseTransformation],
+    coordinate_systems: Dict[str, CoordinateSystem],
+    fmt: Format = SpatialDataFormat(),
+) -> None:
+    assert "multiscales" in group.attrs
+    multiscales = group.attrs["multiscales"].copy()
+    assert len(multiscales) == 1
+    del multiscales[0]["axes"]
+    ct_formatted = _get_coordinate_transformations_list(coordinate_transformations, transformation_input=group.path)
+    cs_formatted = _get_coordinate_systems_list(coordinate_systems)
+    multiscales[0]["coordinateTransformations"] = ct_formatted
+    multiscales[0]["coordinateSystems"] = cs_formatted
+    group.attrs["multiscales"] = multiscales
+    dict(group.attrs)
+    # the list of transformations in datasets (that are exclusiely the ones for the pyramid) is kept as the previous
+    # version, because otherwise the reader (ome-zarr-py) would not be able to read the pyramid data
 
 
 def write_table(
@@ -105,14 +143,17 @@ def write_table(
 def write_image(
     image: ArrayLike,
     group: zarr.Group,
+    coordinate_transformations: Dict[str, BaseTransformation],
+    coordinate_systems: Dict[str, CoordinateSystem],
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    # coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
+    ##
     write_image_ngff(
         image=image,
         group=group,
@@ -120,21 +161,25 @@ def write_image(
         chunks=chunks,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=coordinate_transformations,
+        coordinate_transformations=[[]],
         storage_options=storage_options,
         **metadata,
     )
+    _update_metadata_images_labels(group, coordinate_transformations, coordinate_systems)
+    ##
 
 
 def write_labels(
     labels: ArrayLike,
     group: zarr.Group,
     name: str,
+    coordinate_transformations: Dict[str, BaseTransformation],
+    coordinate_systems: Dict[str, CoordinateSystem],
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    # coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -142,6 +187,7 @@ def write_labels(
     if np.prod(labels.shape) == 0:
         # TODO: temporary workaround, report bug to handle empty shapes
         # TODO: consider the different axes, now assuming a 2D image
+        raise NotImplementedError("legacy code not tested, debug")
         coordinate_transformations = fmt.generate_coordinate_transformations(shapes=[(1, 1)])
     write_labels_ngff(
         labels=labels,
@@ -156,6 +202,8 @@ def write_labels(
         label_metadata=label_metadata,
         **metadata,
     )
+    raise NotImplementedError("pass the right group")
+    _update_metadata_images_labels(group, coordinate_transformations, coordinate_systems)
 
 
 def write_points(

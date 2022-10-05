@@ -31,35 +31,45 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     polygons = {}
     transformations: Dict[Tuple[str, str], BaseTransformation] = {}
     coordinate_systems: Dict[str, CoordinateSystem] = {}
-    # images_transform = {}
-    # labels_transform = {}
-    # points_transform = {}
-    # polygons_transform = {}
+    images_axes = {}
+    labels_axes = {}
 
-    def _get_transformations_and_coordinate_systems_from_group(
+    def _get_transformations_and_coordinate_systems_and_axes_from_group(
         group: zarr.Group,
-    ) -> Tuple[Dict[Tuple[str, str], BaseTransformation], Dict[str, CoordinateSystem]]:
+    ) -> Tuple[Dict[Tuple[str, str], BaseTransformation], Dict[str, CoordinateSystem], Tuple[str, ...]]:
         multiscales = group.attrs["multiscales"]
         # TODO: parse info from multiscales['axes']
-        assert len(multiscales) == 1, f"TODO: expecting only one multiscale, got {len(multiscales)}"
-        datasets = multiscales[0]["datasets"]
-        assert len(datasets) == 1, "Expecting only one dataset"
+        assert len(multiscales) == 1, f"expecting only one multiscale, got {len(multiscales)}; TODO: support more"
+
         coordinate_systems = multiscales[0]["coordinateSystems"]
         from spatialdata._core._spatialdata import _validate_coordinate_systems
 
         cs = _validate_coordinate_systems(coordinate_systems)
-        coordinate_transformations = datasets[0]["coordinateTransformations"]
+
+        axes = tuple([d["name"] for d in multiscales[0]["coordinateSystems"][0]["axes"]])
+
         ct = {}
-        for e in coordinate_transformations:
-            # e['input'] has values like 'anatomical/polygons/anatomical', 'cells/points/cells',
-            # 'points8/labels/points8' or 'points8'. The first three cases are for polygons, points and labels and
-            # the string between the two '/' tells the type of the group. The last case is for images.
-            s_input = e["input"].split("/")
-            assert len(s_input) == 3
-            element_type = "/".join(s_input[1:])
-            t = get_transformation_from_dict(e)
-            ct[(element_type, e["output"])] = t
-        return ct, cs
+        if "coordinateTransformations" in multiscales[0]:
+            coordinate_transformations = multiscales[0]["coordinateTransformations"]
+            for e in coordinate_transformations:
+                t = get_transformation_from_dict(e)
+                if "/" in e["input"]:
+                    # e['input'] has values like 'anatomical/polygons/anatomical', 'cells/points/cells',
+                    # 'points8/labels/points8' or 'points8'. The first three cases are for polygons, points and labels and
+                    # the string between the two '/' tells the type of the group. The last case is for images.
+                    s_input = e["input"].split("/")
+                    assert len(s_input) == 3
+                    element_type = "/".join(s_input[1:])
+                else:
+                    element_type = e["input"]
+                ct[(element_type, e["output"])] = t
+
+        if "datasets" in multiscales[0]:
+            datasets = multiscales[0]["datasets"]
+            assert len(datasets) == 1, "Expecting only one dataset"
+            print("TODO: read the transformations related to the multiscale image?")
+
+        return ct, cs, axes
 
     def _update_ct_and_cs(ct: Dict[Tuple[str, str], BaseTransformation], cs: Dict[str, CoordinateSystem]):
         assert not any([k in transformations for k in ct.keys()])
@@ -86,8 +96,11 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                     print(f"action0: {time.time() - start}")
                     start = time.time()
                     images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
-                    ct, cs = _get_transformations_and_coordinate_systems_from_group(zarr.open(node.zarr.path, mode="r"))
+                    ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
+                        zarr.open(node.zarr.path, mode="r")
+                    )
                     _update_ct_and_cs(ct, cs)
+                    images_axes[k] = axes
 
                     print(f"action1: {time.time() - start}")
         # read all images/labels for the level
@@ -104,10 +117,11 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                         print(f"action0: {time.time() - start}")
                         start = time.time()
                         labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
-                        ct, cs = _get_transformations_and_coordinate_systems_from_group(
+                        ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
                             zarr.open(node.zarr.path, mode="r")
                         )
                         _update_ct_and_cs(ct, cs)
+                        labels_axes[k] = axes
                         print(f"action1: {time.time() - start}")
         # now read rest
         start = time.time()
@@ -117,27 +131,21 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
             if g_elem == "/points":
                 points[k] = read_anndata_zarr(g_elem_store)
-                ct, cs = _get_transformations_and_coordinate_systems_from_group(zarr.open(g_elem_store, mode="r"))
+                ct, cs, _ = _get_transformations_and_coordinate_systems_and_axes_from_group(
+                    zarr.open(g_elem_store, mode="r")
+                )
                 _update_ct_and_cs(ct, cs)
 
             if g_elem == "/polygons":
                 polygons[k] = read_anndata_zarr(g_elem_store)
-                ct, cs = _get_transformations_and_coordinate_systems_from_group(zarr.open(g_elem_store, mode="r"))
+                ct, cs, _ = _get_transformations_and_coordinate_systems_and_axes_from_group(
+                    zarr.open(g_elem_store, mode="r")
+                )
                 _update_ct_and_cs(ct, cs)
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
         print(f"rest: {time.time() - start}")
-
-    # transformations = {}
-    # for prefix, t in zip(
-    #     ["images", "labels", "points", "polygons"],
-    #     [images_transform, labels_transform, points_transform, polygons_transform],
-    # ):
-    #     for name, transformation in t.items():
-    #         transformations[f"{prefix}/{name}"] = transformation
-    # merged_transformations = {k: v for d in [images_transform, labels_transform, points_transform, polygons_transform] for k, v in d.items()}
-    # merged_coordinate_systems =
 
     return SpatialData(
         images=images,
@@ -145,6 +153,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         points=points,
         polygons=polygons,
         table=table,
+        images_axes=images_axes,
+        labels_axes=labels_axes,
         transformations=transformations,
         coordinate_systems=list(coordinate_systems.values()) if len(coordinate_systems) > 0 else None,
     )

@@ -64,8 +64,8 @@ class SpatialData:
         # points_transforms: Optional[Mapping[str, Any]] = None,
         # polygons_transforms: Optional[Mapping[str, Any]] = None,
         # axes information
-        images_axes: Optional[Mapping[str, Any]] = None,
-        labels_axes: Optional[Mapping[str, Any]] = None,
+        images_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
+        labels_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
         # transformations and coordinate systems
         transformations: Mapping[(str, str), Union[BaseTransformation, Dict[Any]]] = MappingProxyType({}),
         coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]] = None,
@@ -88,7 +88,13 @@ class SpatialData:
                     validated_coordinate_systems[des]: validated_transformations[name][des]
                     for des in validated_transformations[name]
                 }
-                obj = element_class(data, alignment_info=alignment_info)
+                if prefix == "images":
+                    kw = {"axes": images_axes[name]}
+                elif prefix == "labels":
+                    kw = {"axes": labels_axes[name]}
+                else:
+                    kw = {}
+                obj = element_class(data, alignment_info=alignment_info, **kw)
                 self.__getattribute__(prefix)[name] = obj
 
         if table is not None:

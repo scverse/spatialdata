@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 __all__ = ["CoordinateSystem"]
 
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
+AXIS_ORDER = ["t", "c", "z", "y", "x"]
 
 
 class CoordinateSystem:
@@ -45,11 +46,13 @@ class CoordinateSystem:
             raise ValueError("Axes, types, and units MUST be the same length.")
 
     def to_dict(self) -> CoordSystem_t:
-        out: Dict[str, Any] = {"name": self.name, "axes": []}
-        if TYPE_CHECKING:
-            assert isinstance(out["axes"], list)
+        unsorted_axes = []
         for axis, axis_type, axis_unit in zip(self.axes, self.types, self.units):
-            out["axes"].append({"name": axis, "type": axis_type, "unit": axis_unit})
+            unsorted_axes.append({"name": axis, "type": axis_type, "unit": axis_unit})
+        sorted_axes = sorted(unsorted_axes, key=lambda x: AXIS_ORDER.index(x["name"]))
+        out: Dict[str, Any] = {"name": self.name, "axes": sorted_axes}
+        # if TYPE_CHECKING:
+        #     assert isinstance(out["axes"], list)
         return out
 
     def from_array(self, array: Any) -> None:
