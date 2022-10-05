@@ -1,7 +1,7 @@
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
-__all__ = ['CoordinateSystem']
+__all__ = ["CoordinateSystem"]
 
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
 

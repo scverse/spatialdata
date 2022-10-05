@@ -131,7 +131,7 @@ class SpatialData:
     def _gen_spatial_elements(self):
         # notice that this does not return a table, so we assume that the table does not contain spatial information;
         # this needs to be checked in the future as the specification evolves
-        for k in ['images', 'labels', 'points', 'polygons']:
+        for k in ["images", "labels", "points", "polygons"]:
             d = getattr(self, k)
             for name, obj in d.items():
                 yield k, name, obj
@@ -188,7 +188,7 @@ class SpatialData:
                         elif attr == "polygons":
                             # assuming 2d
                             descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osb.spatial describing "
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with obs.spatial describing "
                                 f"{len(v.data.obs)} 2D polygons"
                             )
                         else:
@@ -209,7 +209,9 @@ class SpatialData:
             #           ├── 'points': AnnData with osbm.spatial (50, 2)
             #           └── 'circles': AnnData with osbm.spatial (56, 2)
             latest_attribute_present = [
-                attr for attr in attributes if getattr(self, attr) is not None and getattr(self, attr) != {}
+                attr
+                for attr in attributes
+                if getattr(self, attr) is not None and (attr == "table" or getattr(self, attr) != {})
             ][-1]
             if attr == latest_attribute_present:
                 descr = descr.replace(h("empty_line"), "\n  ")
@@ -223,15 +225,14 @@ class SpatialData:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         ##
-        descr += ('\nwith coordinate systems:\n')
+        descr += "\nwith coordinate systems:\n"
         for cs in self.coordinate_systems:
-            descr += f'▸ {cs.name}\n' \
-                     f'    with axes: {", ".join(cs.axes)}\n'
+            descr += f"▸ {cs.name}\n" f'    with axes: {", ".join(cs.axes)}\n'
             gen = self._gen_spatial_elements()
             elements_in_cs = []
             for k, name, obj in gen:
                 if cs.name in obj.coordinate_systems:
-                    elements_in_cs.append(f'{k}/{name}')
+                    elements_in_cs.append(f"{k}/{name}")
             if len(elements_in_cs) > 0:
                 descr += f'    with elements: {", ".join(elements_in_cs)}\n'
         ##

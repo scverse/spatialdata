@@ -78,7 +78,6 @@ class Image(BaseElement):
     #     return Image(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        raise NotImplementedError()
         # TODO: allow to write from path
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
@@ -134,7 +133,6 @@ class Labels(BaseElement):
     #     return Labels(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        raise NotImplementedError()
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
@@ -177,15 +175,16 @@ class Points(BaseElement):
     #     return Points(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        raise NotImplementedError()
-        assert isinstance(self.transforms, BaseTransformation)
-        coordinate_transformations = self.transforms.to_dict()
+        ndim = self.data.obsm["spatial"].shape[1]
+        assert ndim in [2, 3]
+        axes = ["x", "y", "z"][:ndim]
         write_points(
             points=self.data,
             group=group,
             name=name,
-            axes=["y", "x"],  # TODO: infer before.
-            coordinate_transformations=[[coordinate_transformations]],
+            coordinate_transformations=self.transformations,
+            coordinate_systems=self.coordinate_systems,
+            axes=axes,
         )
 
     @classmethod
@@ -253,15 +252,16 @@ class Polygons(BaseElement):
         return a
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        raise NotImplementedError()
-        assert isinstance(self.transforms, BaseTransformation)
-        coordinate_transformations = self.transforms.to_dict()
+        ndim = self.string_to_tensor(self.data.obs["spatial"].iloc[0]).shape[1]
+        assert ndim in [2, 3]
+        axes = ["x", "y", "z"][:ndim]
         write_polygons(
             polygons=self.data,
             group=group,
             name=name,
-            axes=["y", "x"],  # TODO: infer before.
-            coordinate_transformations=[[coordinate_transformations]],
+            axes=axes,
+            coordinate_transformations=self.transformations,
+            coordinate_systems=self.coordinate_systems,
         )
 
     @classmethod

@@ -19,10 +19,11 @@ __all__ = [
     "Bijection",
     "ByDimension",
     "compose_transformations",
-    "CoordinateSystem"
+    "CoordinateSystem",
 ]
 
 from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.transform import (
     Affine,
     Bijection,
@@ -40,4 +41,3 @@ from spatialdata._core.transform import (
     VectorField,
     compose_transformations,
 )
-from spatialdata._core.coordinate_system import CoordinateSystem
