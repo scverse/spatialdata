@@ -10,7 +10,11 @@ from ome_zarr.io import parse_url
 
 from spatialdata._core.coordinate_system import CoordinateSystem, CoordSystem_t
 from spatialdata._core.elements import Image, Labels, Points, Polygons
-from spatialdata._core.transform import BaseTransformation, get_transformation_from_dict
+from spatialdata._core.transform import (
+    Affine,
+    BaseTransformation,
+    get_transformation_from_dict,
+)
 from spatialdata._io.write import write_table
 
 # def spatialdata_from_base_elements(
@@ -58,21 +62,39 @@ class SpatialData:
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        # # transforms
-        # images_transforms: Optional[Mapping[str, Any]] = None,
-        # labels_transforms: Optional[Mapping[str, Any]] = None,
-        # points_transforms: Optional[Mapping[str, Any]] = None,
-        # polygons_transforms: Optional[Mapping[str, Any]] = None,
         # axes information
         images_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
         labels_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
         # transformations and coordinate systems
-        transformations: Mapping[(str, str), Union[BaseTransformation, Dict[Any]]] = MappingProxyType({}),
+        transformations: Mapping[(str, str), Optional[Union[BaseTransformation, Dict[Any]]]] = MappingProxyType({}),
         coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]] = None,
     ) -> None:
         if coordinate_systems is None:
             raise ValueError("Coordinate systems must be provided.")
         validated_coordinate_systems = _validate_coordinate_systems(coordinate_systems)
+        for (src, des), transform in transformations.items():
+            if transform is not None:
+                continue
+            else:
+                ss = src.split("/")
+                assert len(ss) == 3
+                assert ss[0] == ""
+                prefix, name = ss[1:]
+                if prefix == "images":
+                    src_axes = images_axes[name]
+                elif prefix == "labels":
+                    src_axes = labels_axes[name]
+                else:
+                    if prefix == "points":
+                        ndim = points[name].obsm["spatial"].shape[1]
+                    elif prefix == "polygons":
+                        ndim = polygons[name].obs["spatial"].shape[1]
+                    else:
+                        raise ValueError(f"Element {element} not supported.")
+                    src_axes = ("x", "y", "z")[:ndim]
+                des_axes = tuple(validated_coordinate_systems[des].axes)
+                affine_matrix = Affine._get_affine_iniection_from_axes(src_axes, tuple(axis.name for axis in des_axes))
+                transformations[(src, des)] = {"type": "affine", "affine": affine_matrix[:-1, :].tolist()}
 
         for element_class, elements, prefix in zip(
             [Image, Labels, Points, Polygons],
@@ -81,12 +103,12 @@ class SpatialData:
         ):
             self.__setattr__(prefix, {})
             validated_transformations = _validate_transformations(
-                elements, prefix, transformations, validated_coordinate_systems
+                list(elements.keys()), prefix, transformations, validated_coordinate_systems
             )
             for name, data in elements.items():
                 alignment_info = {
-                    validated_coordinate_systems[des]: validated_transformations[name][des]
-                    for des in validated_transformations[name]
+                    validated_coordinate_systems[des]: validated_transformations[f"/{prefix}/{name}"][des]
+                    for des in validated_transformations[f"/{prefix}/{name}"]
                 }
                 if prefix == "images":
                     kw = {"axes": images_axes[name]}
@@ -190,15 +212,24 @@ class SpatialData:
                         descr += f"{h('empty_line')}"
                         descr_class = v.data.__class__.__name__
                         if attr == "points":
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
+                            axes = ["x", "y", "z"][: v.ndim]
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}, "
+                                f"with axes {', '.join(axes)}"
+                            )
                         elif attr == "polygons":
                             # assuming 2d
+                            axes = ["x", "y", "z"][: v.ndim]
                             descr += (
                                 f"{h(attr + 'level1.1')}'{k}': {descr_class} with obs.spatial describing "
-                                f"{len(v.data.obs)} 2D polygons"
+                                f"{len(v.data.obs)} polygons, with axes {', '.join(axes)}"
                             )
                         else:
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                            assert attr in ["images", "labels"]
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}, with axes: "
+                                f"{', '.join(v.data.dims)}"
+                            )
                         # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             # the following lines go from this
             #     SpatialData object with:
@@ -233,27 +264,16 @@ class SpatialData:
         ##
         descr += "\nwith coordinate systems:\n"
         for cs in self.coordinate_systems:
-            descr += f"▸ {cs.name}\n" f'    with axes: {", ".join(cs.axes)}\n'
+            descr += f"▸ {cs.name}\n" f'    with axes: {", ".join([axis.name for axis in cs.axes])}\n'
             gen = self._gen_spatial_elements()
             elements_in_cs = []
             for k, name, obj in gen:
                 if cs.name in obj.coordinate_systems:
-                    elements_in_cs.append(f"{k}/{name}")
+                    elements_in_cs.append(f"/{k}/{name}")
             if len(elements_in_cs) > 0:
                 descr += f'    with elements: {", ".join(elements_in_cs)}\n'
         ##
         return descr
-
-
-# def _iter_elems(
-#     data: Mapping[str, Any], transforms: Optional[Mapping[str, Any]] = None
-# ) -> Iterable[Tuple[Tuple[str, Any], Any]]:
-#     # TODO: handle logic for multiple coordinate transforms and elements
-#     # ...
-#     return zip(
-#         data.items(),
-#         [transforms.get(k, None) if transforms is not None else None for k in data.keys()],
-#     )
 
 
 def _validate_coordinate_systems(
@@ -278,47 +298,28 @@ def _validate_coordinate_systems(
     return d
 
 
-# def _validate_dataset(
-#     dataset: Optional[Mapping[str, Any]],
-#     transformations: Mapping[(str, str), Union[BaseTransformation, Dict[Any]]],
-#     coordinate_systems: List[Union[CoordSystem_t, CoordinateSystem]],
-# ) -> Tuple[Dict[(str, str), BaseTransformation], List[CoordinateSystem]]:
-#     validated_transformations = {}
-#     if dataset is None:
-#         return validated_transformations, coordinate_systems
-#     elif isinstance(dataset, Mapping):
-#         for name, element in dataset.items():
-#             _validate_element(element, transformations)
-#         # if tra is not None:
-#         #     if not set(dataset).issuperset(dataset_transform):
-#         #         raise ValueError(
-#         #             f"Invalid `dataset_transform` keys not present in `dataset`: `{set(dataset_transform).difference(set(dataset))}`."
-#         #         )
-#     else:
-#         raise TypeError('invalid type for "dataset"')
-
-
 def _validate_transformations(
-    elements: Mapping[str, Any],
+    elements_keys: List[str],
     prefix: str,
     transformations: Mapping[Tuple[str, str], Union[BaseTransformation, Dict[str, Any]]],
     coordinate_systems: Dict[str, CoordinateSystem],
 ) -> Dict[str, Dict[str, BaseTransformation]]:
     validated: Dict[str, Dict[str, BaseTransformation]] = {}
-    for name, element in elements.items():
-        validated[name] = {}
+    for name in elements_keys:
+        validated[f"/{prefix}/{name}"] = {}
     for (src, des), t in transformations.items():
         assert des in coordinate_systems.keys()
-        if src.startswith(prefix):
-            src_name = src[len(prefix) + 1 :]
-            if src_name in elements:
+        if src.startswith(f"/{prefix}/"):
+            src_name = src[len(f"/{prefix}/") :]
+            if src_name in elements_keys:
                 if isinstance(t, BaseTransformation):
                     v = copy.deepcopy(t)
-                elif type(t) == Dict[str, Any]:
+                elif isinstance(t, dict):
+                    # elif type(t) == Dict[str, Any]:
                     v = get_transformation_from_dict(t)
                 else:
                     raise TypeError(f"Invalid type for transformation: {type(t)}")
-                validated[src_name][des] = v
+                validated[src][des] = v
     return validated
 
 

@@ -32,7 +32,12 @@ __all__ = [
 class BaseTransformation(ABC):
     @property
     @abstractmethod
-    def ndim(self) -> Optional[int]:
+    def src_dim(self) -> Optional[int]:
+        pass
+
+    @property
+    @abstractmethod
+    def des_dim(self) -> Optional[int]:
         pass
 
     @abstractmethod
@@ -112,11 +117,16 @@ def get_transformation_from_dict(d: Dict[str, Any]) -> BaseTransformation:
 
 class Identity(BaseTransformation):
     def __init__(self) -> None:
-        self._ndim = None
+        self._src_dim = None
+        self._des_dim = None
 
     @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
+    def src_dim(self) -> Optional[int]:
+        return self._src_dim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -173,7 +183,15 @@ class Translation(BaseTransformation):
         self._ndim = ndim
 
     @property
-    def ndim(self) -> Optional[int]:
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def ndim(self) -> int:
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -190,9 +208,7 @@ class Translation(BaseTransformation):
 
     def to_affine(self) -> Affine:
         assert self.ndim == 2
-        m: ArrayLike = np.vstack(
-            (np.hstack((np.array([[1.0, 0.0], [0.0, 1.0]]), self.translation.reshape(2, 1))), np.array([0.0, 0.0, 1.0]))
-        )
+        m: ArrayLike = np.hstack((np.array([[1.0, 0.0], [0.0, 1.0]]), self.translation.reshape(2, 1)))
         return Affine(affine=m)
 
 
@@ -221,6 +237,14 @@ class Scale(BaseTransformation):
         self._ndim = ndim
 
     @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
     def ndim(self) -> Optional[int]:
         return self._ndim
 
@@ -240,7 +264,7 @@ class Scale(BaseTransformation):
 
     def to_affine(self) -> Affine:
         assert self.ndim == 2
-        m: ArrayLike = np.vstack((np.hstack((np.diag(self.scale), np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        m: ArrayLike = np.hstack((np.diag(self.scale), np.zeros((2, 1))))
         return Affine(affine=m)
 
 
@@ -248,31 +272,69 @@ class Affine(BaseTransformation):
     def __init__(
         self,
         affine: Optional[Union[ArrayLike, List[Any]]] = None,
+        src_dim: Optional[int] = None,
+        des_dim: Optional[int] = None,
     ) -> None:
         """
         class for storing scale transformations.
         """
         if affine is None:
-            affine = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+            assert src_dim is not None and des_dim is not None
+            affine = self._get_affine_iniection_from_dims(src_dim, des_dim)
         else:
             if isinstance(affine, list):
                 affine = np.array(affine)
             if len(affine.shape) == 1:
-                assert len(affine) == 6
-                affine = np.vstack([affine.reshape((2, 3)), np.array([0.0, 0.0, 1.0])])
-            assert affine.shape == (3, 3)
+                raise ValueError(
+                    "The specification of affine transformations as 1D arrays/lists is not "
+                    "supported. Please be explicit about the dimensions of the transformation."
+                )
+            des_dim = affine.shape[0]
+            src_dim = affine.shape[1] - 1
+            last_row = np.zeros(src_dim + 1, dtype=float).reshape(1, -1)
+            last_row[-1, -1] = 1
+            affine = np.vstack((affine, last_row))
+            assert affine.shape == (des_dim + 1, src_dim + 1)
 
         self.affine = affine
-        self._ndim = 2
+        self._src_dim = src_dim
+        self._des_dim = des_dim
+
+    @staticmethod
+    def _get_affine_iniection_from_dims(src_dim: int, des_dim: int) -> np.ndarray:
+        last_column = np.zeros(des_dim + 1, dtype=float).reshape(-1, 1)
+        last_column[-1, -1] = 1
+        affine = np.hstack(
+            (
+                np.vstack((np.eye(des_dim, src_dim, dtype=float), np.zeros(src_dim).reshape(1, -1))),
+                last_column,
+            )
+        )
+        return affine
+
+    @staticmethod
+    def _get_affine_iniection_from_axes(src_axes: Tuple[str, ...], des_axes: Tuple[str, ...]) -> np.ndarray:
+        # this function could be implemented with a composition of map axis and _get_affine_iniection_from_dims
+        affine = np.zeros((len(des_axes) + 1, len(src_axes) + 1), dtype=float)
+        affine[-1, -1] = 1
+        for i, des_axis in enumerate(des_axes):
+            for j, src_axis in enumerate(src_axes):
+                if des_axis == src_axis:
+                    affine[i, j] = 1
+        return affine
 
     @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
+    def src_dim(self) -> Optional[int]:
+        return self._src_dim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "affine",
-            "affine": self.affine[:2, :].ravel().tolist(),
+            "affine": self.affine[:-1, :].tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -295,30 +357,46 @@ class Affine(BaseTransformation):
     def to_affine(self) -> Affine:
         return copy.deepcopy(self)
 
+    def get_injection_from_axes(self, src_axes: Tuple[str, ...], des_axes: Tuple[str, ...]):
+        pass
+
 
 class Rotation(BaseTransformation):
     def __init__(
         self,
         rotation: Optional[Union[ArrayLike, List[Any]]] = None,
+        ndim: Optional[int] = None,
     ) -> None:
         """
         class for storing scale transformations.
         """
         if rotation is None:
-            rotation = np.array([[1, 0], [0, 1]], dtype=float)
+            assert ndim is not None
+            s = ndim
+            rotation = np.eye(ndim, dtype=float)
         else:
             if isinstance(rotation, list):
                 rotation = np.array(rotation)
+            s = int(np.sqrt(len(rotation)))
             if len(rotation.shape) == 1:
-                assert len(rotation) == 4
-                rotation = rotation.reshape((2, 2))
-            assert rotation.shape == (2, 2)
+                assert s * s == len(rotation)
+                rotation = rotation.reshape((s, s))
+            assert rotation.shape == (s, s)
 
         self.rotation = rotation
-        self._ndim = 2
+        self._ndim = s
+
+    @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
 
     @property
     def ndim(self) -> Optional[int]:
+        # TODO: support mixed ndim and remove this property
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -334,8 +412,7 @@ class Rotation(BaseTransformation):
         return Rotation(self.rotation.T)
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.vstack((np.hstack((self.rotation, np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        m: ArrayLike = np.hstack((self.rotation, np.zeros((ndim, 1))))
         return Affine(affine=m)
 
 
@@ -353,7 +430,16 @@ class Sequence(BaseTransformation):
             self._ndim = None
 
     @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
     def ndim(self) -> Optional[int]:
+        # TODO: support mixed ndim and remove this property
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -427,7 +513,16 @@ class InverseOf(BaseTransformation):
         self._ndim = self.transformation.ndim
 
     @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
     def ndim(self) -> Optional[int]:
+        # support mixed ndim and remove this property
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -458,6 +553,14 @@ class Bijection(BaseTransformation):
             self._inverse = get_transformation_from_dict(inverse)
         assert self.forward.ndim == self._inverse.ndim
         self._ndim = self.forward.ndim
+
+    @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
 
     @property
     def ndim(self) -> Optional[int]:

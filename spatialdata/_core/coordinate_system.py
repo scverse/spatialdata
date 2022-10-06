@@ -7,18 +7,27 @@ CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
 AXIS_ORDER = ["t", "c", "z", "y", "x"]
 
 
+class Axis:
+    name: str
+    type: str
+    unit: Optional[str]
+
+    def __init__(self, name: str, type: str, unit: Optional[str] = None):
+        self.name = name
+        self.type = type
+        self.unit = unit
+
+    def to_dict(self):
+        d = {"name": self.name, "type": self.type}
+        if self.unit is not None:
+            d["unit"] = self.unit
+        return d
+
+
 class CoordinateSystem:
-    def __init__(
-        self,
-        name: Optional[str] = None,
-        axes: Optional[List[str]] = None,
-        types: Optional[List[str]] = None,
-        units: Optional[List[str]] = None,
-    ):
+    def __init__(self, name: Optional[str] = None, axes: Optional[List[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
-        self._types = types if types is not None else []
-        self._units = units if units is not None else []
 
     def from_dict(self, coord_sys: CoordSystem_t) -> None:
         if "name" not in coord_sys.keys():
@@ -31,26 +40,22 @@ class CoordinateSystem:
             assert isinstance(coord_sys["axes"], list)
         self._name = coord_sys["name"]
 
-        for axis in coord_sys["axes"]:
+        sorted_axes = sorted(coord_sys["axes"], key=lambda x: AXIS_ORDER.index(x["name"]))
+        for axis in sorted_axes:
             if "name" not in axis.keys():
                 raise ValueError("Each axis MUST have a name.")
             if "type" not in axis.keys():
                 raise ValueError("Each axis MUST have a type.")
             if "unit" not in axis.keys():
-                raise ValueError("Each axis MUST have a unit.")
-            self._axes.append(axis["name"])
-            self._types.append(axis["type"])
-            self._units.append(axis["unit"])
-
-        if len(self._axes) != len(self._types) != len(self._units):
-            raise ValueError("Axes, types, and units MUST be the same length.")
+                if not axis["type"] in ["channel", "array"]:
+                    raise ValueError("Each axis is either of type channel either MUST have a unit.")
+            kw = {}
+            if "unit" in axis.keys():
+                kw = {"unit": axis["unit"]}
+            self._axes.append(Axis(name=axis["name"], type=axis["type"], **kw))
 
     def to_dict(self) -> CoordSystem_t:
-        unsorted_axes = []
-        for axis, axis_type, axis_unit in zip(self.axes, self.types, self.units):
-            unsorted_axes.append({"name": axis, "type": axis_type, "unit": axis_unit})
-        sorted_axes = sorted(unsorted_axes, key=lambda x: AXIS_ORDER.index(x["name"]))
-        out: Dict[str, Any] = {"name": self.name, "axes": sorted_axes}
+        out: Dict[str, Any] = {"name": self.name, "axes": [axis.to_dict() for axis in self.axes]}
         # if TYPE_CHECKING:
         #     assert isinstance(out["axes"], list)
         return out
@@ -78,14 +83,6 @@ class CoordinateSystem:
     @property
     def axes(self) -> List[str]:
         return self._axes
-
-    @property
-    def types(self) -> List[str]:
-        return self._types
-
-    @property
-    def units(self) -> List[str]:
-        return self._units
 
     def __hash__(self):
         return hash(frozenset(self.to_dict()))

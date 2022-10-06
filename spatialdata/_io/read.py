@@ -1,5 +1,4 @@
 import os
-import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
 
@@ -53,21 +52,23 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             coordinate_transformations = multiscales[0]["coordinateTransformations"]
             for e in coordinate_transformations:
                 t = get_transformation_from_dict(e)
-                if "/" in e["input"]:
-                    # e['input'] has values like 'anatomical/polygons/anatomical', 'cells/points/cells',
-                    # 'points8/labels/points8' or 'points8'. The first three cases are for polygons, points and labels and
-                    # the string between the two '/' tells the type of the group. The last case is for images.
-                    s_input = e["input"].split("/")
-                    assert len(s_input) == 3
-                    element_type = "/".join(s_input[1:])
-                else:
-                    element_type = e["input"]
+                assert "/" in e["input"]
+                ss = e["input"].split("/")
+                # e['input'] has values like '/anatomical/polygons/anatomical', '/cells/points/cells',
+                # '/nuclei/labels/nuclei' or '/image'. The first three cases are for polygons, points and
+                # labels and the string between the second and third '/' tells the type of the group. The last
+                # case is for images.
+                if len(ss) == 4:
+                    element_type = "/" + "/".join(ss[2:])
+                elif len(ss) == 2:
+                    element_type = f"/images/{ss[1]}"
                 ct[(element_type, e["output"])] = t
 
         if "datasets" in multiscales[0]:
             datasets = multiscales[0]["datasets"]
             assert len(datasets) == 1, "Expecting only one dataset"
-            print("TODO: read the transformations related to the multiscale image?")
+            # TODO: multiscale images not supported when reading. Here we would need to read the transformations for
+            #  the levels of the pyramid
 
         return ct, cs, axes
 
@@ -87,14 +88,14 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
         # read multiscale images that are not labels
-        start = time.time()
+        # start = time.time()
         if len(image_nodes):
             for node in image_nodes:
                 if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
                     [not isinstance(spec, Label) for spec in node.specs]
                 ):
-                    print(f"action0: {time.time() - start}")
-                    start = time.time()
+                    # print(f"action0: {time.time() - start}")
+                    # start = time.time()
                     images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                     ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
                         zarr.open(node.zarr.path, mode="r")
@@ -102,29 +103,29 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                     _update_ct_and_cs(ct, cs)
                     images_axes[k] = axes
 
-                    print(f"action1: {time.time() - start}")
+                    # print(f"action1: {time.time() - start}")
         # read all images/labels for the level
         # warnings like "no parent found for <ome_zarr.reader.Label object at 0x1c789f310>: None" are expected,
         # since we don't link the image and the label inside .zattrs['image-label']
         labels_loc = ZarrLocation(f"{f_elem_store}/labels")
-        start = time.time()
+        # start = time.time()
         if labels_loc.exists():
             labels_reader = Reader(labels_loc)()
             labels_nodes = list(labels_reader)
             if len(labels_nodes):
                 for node in labels_nodes:
                     if np.any([isinstance(spec, Label) for spec in node.specs]):
-                        print(f"action0: {time.time() - start}")
-                        start = time.time()
+                        # print(f"action0: {time.time() - start}")
+                        # start = time.time()
                         labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                         ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
                             zarr.open(node.zarr.path, mode="r")
                         )
                         _update_ct_and_cs(ct, cs)
                         labels_axes[k] = axes
-                        print(f"action1: {time.time() - start}")
+                        # print(f"action1: {time.time() - start}")
         # now read rest
-        start = time.time()
+        # start = time.time()
         g = zarr.open(f_elem_store, mode="r")
         for j in g.keys():
             g_elem = g[j].name
@@ -145,7 +146,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
-        print(f"rest: {time.time() - start}")
+        # print(f"rest: {time.time() - start}")
 
     return SpatialData(
         images=images,

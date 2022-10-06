@@ -43,6 +43,7 @@ def _write_metadata_points_polygons(
     coordinate_transformations: Dict[str, BaseTransformation],
     # coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     coordinate_systems: Dict[str, CoordinateSystem],
+    implicit_coordinate_system: CoordinateSystem,
     attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
@@ -52,48 +53,17 @@ def _write_metadata_points_polygons(
     len(shape)
     # axes = _get_valid_axes(dims, axes, fmt)
 
-    cs_formatted = _get_coordinate_systems_list(coordinate_systems)
-    # luca: datasets are used for multiscale images, and they contain transformations (only scale and translation)
-    # to map the small levels of the pyramid to the larger one. Additional, more general trasformations can be put at
-    # the outer level. So we don't use datasets for points and polygons (so not in this function), only for images and
-    # labels
-
-    # datasets: List[Dict[str, Any]] = []
-    # dataset = {"path": attr}
-    # datasets.append(dataset)
-
-    # if coordinate_transformations is None:
-    #     # TODO: temporary workaround, report bug to handle empty shapes
-    #     if shape[0] == 0:
-    #         shape = (1, *shape[1:])
-    #     shape = [shape]  # type: ignore[assignment]
-    #     coordinate_transformations = fmt.generate_coordinate_transformations(shape)
-
-    ct_formatted = _get_coordinate_transformations_list(coordinate_transformations, transformation_input=group.path)
-    # for dataset, transform in zip(datasets, ct_formatted):
-    #     dataset["coordinateTransformations"] = transform
-    # dataset["coordinateTransformations"] = ct_formatted
-
-    # if axes is not None:
-    #     axes = _get_valid_axes(axes=axes, fmt=fmt)
-    #     if axes is not None:
-    #         ndim = len(axes)
-
-    # multiscales = [
-    #     dict(
-    #         version=fmt.version,
-    #         datasets=_validate_datasets(datasets, ndim, fmt),
-    #         **metadata,
-    #     )
-    # ]
-
+    assert implicit_coordinate_system.name not in coordinate_systems
+    cs_formatted = _get_coordinate_systems_list(
+        {implicit_coordinate_system.name: implicit_coordinate_system} | coordinate_systems
+    )
+    ct_formatted = _get_coordinate_transformations_list(
+        coordinate_transformations, transformation_input=f"/{group.path}"
+    )
     # TODO: do we need also to add a name?
     multiscales = [
         dict(version="0.5-dev", coordinateSystems=cs_formatted, coordinateTransformations=ct_formatted, **metadata)
     ]
-    # if axes is not None:
-    #     multiscales[0]["axes"] = axes
-
     group.attrs["@type"] = group_type
     group.attrs["multiscales"] = multiscales
 
@@ -102,16 +72,24 @@ def _update_metadata_images_labels(
     group: zarr.Group,
     coordinate_transformations: Dict[str, BaseTransformation],
     coordinate_systems: Dict[str, CoordinateSystem],
+    implicit_coordinate_system: CoordinateSystem,
     fmt: Format = SpatialDataFormat(),
 ) -> None:
     assert "multiscales" in group.attrs
     multiscales = group.attrs["multiscales"].copy()
     assert len(multiscales) == 1
-    del multiscales[0]["axes"]
-    ct_formatted = _get_coordinate_transformations_list(coordinate_transformations, transformation_input=group.path)
-    cs_formatted = _get_coordinate_systems_list(coordinate_systems)
-    multiscales[0]["coordinateTransformations"] = ct_formatted
+    # this should be deleted as it does not appear in the specs but I am keeping for back compatibility with
+    # ome-zarr-py until it is updated
+    # del multiscales[0]["axes"]
+    assert implicit_coordinate_system.name not in coordinate_systems
+    cs_formatted = _get_coordinate_systems_list(
+        {implicit_coordinate_system.name: implicit_coordinate_system} | coordinate_systems
+    )
+    ct_formatted = _get_coordinate_transformations_list(
+        coordinate_transformations, transformation_input=f"/{group.path}"
+    )
     multiscales[0]["coordinateSystems"] = cs_formatted
+    multiscales[0]["coordinateTransformations"] = ct_formatted
     group.attrs["multiscales"] = multiscales
     dict(group.attrs)
     # the list of transformations in datasets (that are exclusiely the ones for the pyramid) is kept as the previous
@@ -165,7 +143,12 @@ def write_image(
         storage_options=storage_options,
         **metadata,
     )
-    _update_metadata_images_labels(group, coordinate_transformations, coordinate_systems)
+    assert not group.path.startswith("/")
+    implicit_coordinate_system = CoordinateSystem()
+    implicit_coordinate_system.from_dict(
+        {"name": f"/{group.path}", "axes": [{"name": ax, "type": "array"} for ax in axes]}
+    )
+    _update_metadata_images_labels(group, coordinate_transformations, coordinate_systems, implicit_coordinate_system)
     ##
 
 
@@ -197,13 +180,20 @@ def write_labels(
         chunks=chunks,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=coordinate_transformations,
+        coordinate_transformations=[[]],
         storage_options=storage_options,
         label_metadata=label_metadata,
         **metadata,
     )
-    raise NotImplementedError("pass the right group")
-    _update_metadata_images_labels(group, coordinate_transformations, coordinate_systems)
+    sub_group = group.require_group(f"labels/{name}")
+    assert not sub_group.path.startswith("/")
+    implicit_coordinate_system = CoordinateSystem()
+    implicit_coordinate_system.from_dict(
+        {"name": f"/{sub_group.path}", "axes": [{"name": ax, "type": "array"} for ax in axes]}
+    )
+    _update_metadata_images_labels(
+        sub_group, coordinate_transformations, coordinate_systems, implicit_coordinate_system
+    )
 
 
 def write_points(
@@ -225,6 +215,10 @@ def write_points(
     # TODO: decide what to do here with additional params for
     if points_parameters is not None:
         points_group.attrs["points_parameters"] = points_parameters
+    implicit_coordinate_system = CoordinateSystem()
+    implicit_coordinate_system.from_dict(
+        {"name": f"/{points_group.path}", "axes": [{"name": ax, "type": "array"} for ax in axes]}
+    )
     _write_metadata_points_polygons(
         points_group,
         group_type=group_type,
@@ -234,6 +228,7 @@ def write_points(
         axes=axes,
         coordinate_transformations=coordinate_transformations,
         coordinate_systems=coordinate_systems,
+        implicit_coordinate_system=implicit_coordinate_system,
         **metadata,
     )
 
@@ -253,6 +248,10 @@ def write_polygons(
     sub_group = group.require_group("polygons")
     write_adata(sub_group, name, polygons)
     polygons_group = sub_group[name]
+    implicit_coordinate_system = CoordinateSystem()
+    implicit_coordinate_system.from_dict(
+        {"name": f"/{polygons_group.path}", "axes": [{"name": ax, "type": "array"} for ax in axes]}
+    )
     _write_metadata_points_polygons(
         polygons_group,
         group_type=group_type,
@@ -262,5 +261,6 @@ def write_polygons(
         axes=axes,
         coordinate_transformations=coordinate_transformations,
         coordinate_systems=coordinate_systems,
+        implicit_coordinate_system=implicit_coordinate_system,
         **metadata,
     )

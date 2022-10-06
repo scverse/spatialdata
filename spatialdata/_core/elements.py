@@ -56,6 +56,10 @@ class BaseElement(ABC):
     def shape(self) -> Tuple[int, ...]:
         """Return shape of element."""
 
+    @abstractproperty
+    def ndim(self) -> int:
+        """Return number of dimensions of element."""
+
 
 class Image(BaseElement):
     def __init__(
@@ -107,6 +111,10 @@ class Image(BaseElement):
     @property
     def shape(self) -> Tuple[int, ...]:
         return self.data.shape  # type: ignore[no-any-return]
+
+    @property
+    def ndim(self) -> int:
+        return len(self.data.shape)
 
 
 class Labels(BaseElement):
@@ -161,6 +169,10 @@ class Labels(BaseElement):
     def shape(self) -> Tuple[int, ...]:
         return self.data.shape  # type: ignore[no-any-return]
 
+    @property
+    def ndim(self) -> int:
+        return len(self.data.shape)
+
 
 class Points(BaseElement):
     def __init__(self, points: AnnData, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
@@ -175,9 +187,8 @@ class Points(BaseElement):
     #     return Points(data, transform)
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        ndim = self.data.obsm["spatial"].shape[1]
-        assert ndim in [2, 3]
-        axes = ["x", "y", "z"][:ndim]
+        assert self.ndim in [2, 3]
+        axes = ["x", "y", "z"][: self.ndim]
         write_points(
             points=self.data,
             group=group,
@@ -200,6 +211,10 @@ class Points(BaseElement):
     @property
     def shape(self) -> Tuple[int, ...]:
         return self.data.obsm["spatial"].shape  # type: ignore[no-any-return]
+
+    @property
+    def ndim(self) -> int:
+        return self.data.obsm["spatial"].shape[1]
 
 
 class Polygons(BaseElement):
@@ -252,9 +267,8 @@ class Polygons(BaseElement):
         return a
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        ndim = self.string_to_tensor(self.data.obs["spatial"].iloc[0]).shape[1]
-        assert ndim in [2, 3]
-        axes = ["x", "y", "z"][:ndim]
+        assert self.ndim in [2, 3]
+        axes = ["x", "y", "z"][: self.ndim]
         write_polygons(
             polygons=self.data,
             group=group,
@@ -277,6 +291,10 @@ class Polygons(BaseElement):
     @property
     def shape(self) -> Tuple[int, ...]:
         return self.data.shape  # type: ignore[no-any-return]
+
+    @property
+    def ndim(self) -> int:
+        return self.string_to_tensor(self.data.obs["spatial"].iloc[0]).shape[1]
 
 
 # @singledispatch
