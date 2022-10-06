@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import copy
+import shutil
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
@@ -72,6 +74,7 @@ class SpatialData:
     ) -> None:
         if coordinate_systems is None:
             raise ValueError("Coordinate systems must be provided.")
+        self.file_path: Optional[str] = None
 
         # reorders the axes to follow the ngff 0.4 convention (t, c, z, y, x)
         for d_x, d_axes in zip([images, labels], [images_axes, labels_axes]):
@@ -133,6 +136,20 @@ class SpatialData:
         if table is not None:
             self._table = table
 
+    def save_element(self, element_type: str, name: str, overwrite: bool = False):
+        if not self.is_backed():
+            raise ValueError("Data must be backed to save elements.")
+        if element_type not in ["images", "labels", "points", "polygons"]:
+            raise ValueError(f"Element type {element_type} not supported.")
+        store = parse_url(self.file_path, mode="a").store
+        root = zarr.group(store=store)
+        full_path_group = os.path.join(self.file_path, f'{name}/{element_type}/{name}')
+        if overwrite:
+            if os.path.isdir(full_path_group):
+                shutil.rmtree(full_path_group)
+        elem_group = root.require_group(name=name)
+        self.__getattribute__(element_type)[name].to_zarr(elem_group, name=name)
+
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
 
@@ -165,7 +182,11 @@ class SpatialData:
         from spatialdata._io.read import read_zarr
 
         sdata = read_zarr(file_path, coordinate_system_names=coordinate_system_names)
+        sdata.file_path = file_path
         return sdata
+
+    def is_backed(self) -> bool:
+        return self.file_path is not None
 
     def filter_by_coordinate_system(self, coordinate_system_names: Union[str, List[str]]) -> SpatialData:
         """Filter the spatial data by coordinate system names.
