@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 import zarr
 from anndata import AnnData
 from ome_zarr.io import parse_url
+from xarray import DataArray
 
 from spatialdata._core.coordinate_system import CoordinateSystem, CoordSystem_t
 from spatialdata._core.elements import Image, Labels, Points, Polygons
@@ -16,7 +17,6 @@ from spatialdata._core.transform import (
     get_transformation_from_dict,
 )
 from spatialdata._io.write import write_table
-from xarray import DataArray
 
 # def spatialdata_from_base_elements(
 #     images: Optional[Dict[str, Image]] = None,
@@ -161,11 +161,29 @@ class SpatialData:
         return self._table
 
     @classmethod
-    def read(cls, file_path: str) -> SpatialData:
+    def read(cls, file_path: str, coordinate_system_names: Optional[Union[str, List[str]]] = None) -> SpatialData:
         from spatialdata._io.read import read_zarr
 
-        sdata = read_zarr(file_path)
+        sdata = read_zarr(file_path, coordinate_system_names=coordinate_system_names)
         return sdata
+
+    def filter_by_coordinate_system(self, coordinate_system_names: Union[str, List[str]]) -> SpatialData:
+        """Filter the spatial data by coordinate system names.
+
+        Parameters
+        ----------
+        coordinate_system_names
+            The coordinate system names to filter by.
+
+        Returns
+        -------
+        SpatialData
+            The filtered spatial data.
+        """
+        # easy to implement if everything is in memory, but requires more care when some information is in a backed
+        # from a
+        # file/cloud storage
+        raise NotImplementedError("Filtering by coordinate system names is not yet implemented.")
 
     def _gen_spatial_elements(self):
         # notice that this does not return a table, so we assume that the table does not contain spatial information;
@@ -286,6 +304,7 @@ class SpatialData:
         ##
         return descr
 
+
 def _validate_axes(data: ArrayLike, axes: Tuple[str, ...]) -> Tuple[DataArray, Tuple[str, ...]]:
     """Reorder axes of data array.
 
@@ -303,7 +322,7 @@ def _validate_axes(data: ArrayLike, axes: Tuple[str, ...]) -> Tuple[DataArray, T
     ArrayLike
         Data array with reordered axes.
     """
-    axes_order = ('t', 'c', 'z', 'y', 'x')
+    axes_order = ("t", "c", "z", "y", "x")
     sorted_axes = tuple(sorted(axes, key=lambda x: axes_order.index(x)))
     if sorted_axes == axes:
         return data, axes
@@ -311,6 +330,7 @@ def _validate_axes(data: ArrayLike, axes: Tuple[str, ...]) -> Tuple[DataArray, T
     reverse = [new_order.index(a) for a in range(len(new_order))]
     transposed = data.transpose(*reverse)
     return transposed, tuple(sorted_axes)
+
 
 def _validate_coordinate_systems(
     coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]]

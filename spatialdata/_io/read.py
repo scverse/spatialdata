@@ -1,6 +1,5 @@
-import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import zarr
@@ -15,7 +14,9 @@ from spatialdata._core.transform import BaseTransformation, get_transformation_f
 from spatialdata._io.format import SpatialDataFormat
 
 
-def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
+def read_zarr(
+    store: Union[str, Path, zarr.Group], coordinate_system_names: Optional[Union[str, List[str]]] = None
+) -> SpatialData:
 
     if isinstance(store, Path):
         store = str(store)
@@ -96,12 +97,18 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 ):
                     # print(f"action0: {time.time() - start}")
                     # start = time.time()
-                    images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                     ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
                         zarr.open(node.zarr.path, mode="r")
                     )
-                    _update_ct_and_cs(ct, cs)
-                    images_axes[k] = axes
+                    if (
+                        coordinate_system_names is None
+                        or type(coordinate_system_names) == str
+                        and coordinate_system_names in cs.keys()
+                        or any(csn in cs.keys() for csn in coordinate_system_names)
+                    ):
+                        _update_ct_and_cs(ct, cs)
+                        images_axes[k] = axes
+                        images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
 
                     # print(f"action1: {time.time() - start}")
         # read all images/labels for the level
@@ -117,12 +124,18 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                     if np.any([isinstance(spec, Label) for spec in node.specs]):
                         # print(f"action0: {time.time() - start}")
                         # start = time.time()
-                        labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                         ct, cs, axes = _get_transformations_and_coordinate_systems_and_axes_from_group(
                             zarr.open(node.zarr.path, mode="r")
                         )
-                        _update_ct_and_cs(ct, cs)
-                        labels_axes[k] = axes
+                        if (
+                            coordinate_system_names is None
+                            or type(coordinate_system_names) == str
+                            and coordinate_system_names in cs.keys()
+                            or any(csn in cs.keys() for csn in coordinate_system_names)
+                        ):
+                            _update_ct_and_cs(ct, cs)
+                            labels_axes[k] = axes
+                            labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                         # print(f"action1: {time.time() - start}")
         # now read rest
         # start = time.time()
@@ -131,23 +144,37 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             g_elem = g[j].name
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
             if g_elem == "/points":
-                points[k] = read_anndata_zarr(g_elem_store)
                 ct, cs, _ = _get_transformations_and_coordinate_systems_and_axes_from_group(
                     zarr.open(g_elem_store, mode="r")
                 )
-                _update_ct_and_cs(ct, cs)
+                if (
+                    coordinate_system_names is None
+                    or type(coordinate_system_names) == str
+                    and coordinate_system_names in cs.keys()
+                    or any(csn in cs.keys() for csn in coordinate_system_names)
+                ):
+                    _update_ct_and_cs(ct, cs)
+                    points[k] = read_anndata_zarr(g_elem_store)
 
             if g_elem == "/polygons":
-                polygons[k] = read_anndata_zarr(g_elem_store)
                 ct, cs, _ = _get_transformations_and_coordinate_systems_and_axes_from_group(
                     zarr.open(g_elem_store, mode="r")
                 )
-                _update_ct_and_cs(ct, cs)
+                if (
+                    coordinate_system_names is None
+                    or type(coordinate_system_names) == str
+                    and coordinate_system_names in cs.keys()
+                    or any(csn in cs.keys() for csn in coordinate_system_names)
+                ):
+                    _update_ct_and_cs(ct, cs)
+                    polygons[k] = read_anndata_zarr(g_elem_store)
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
         # print(f"rest: {time.time() - start}")
 
+    if coordinate_system_names != None and len(coordinate_systems) == 0:
+        raise ValueError(f"Coordinate system {coordinate_system_names} not found")
     return SpatialData(
         images=images,
         labels=labels,
@@ -161,13 +188,17 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     )
 
 
-def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
-    return read_zarr(os.path.join(file_path, table_group))
-
-
 if __name__ == "__main__":
-    sdata = SpatialData.read("../../spatialdata-sandbox/nanostring_cosmx/data_small.zarr")
+    # TODO: move these things in some tests
+    sdata = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr")
     print(sdata)
+    # sdata2 = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names='global')
+    sdata2 = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names="point16")
+    print(sdata2)
+    sdata3 = SpatialData.read(
+        "../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names=["point16", "point23"]
+    )
+    print(sdata3)
     from napari_spatialdata import Interactive
 
     Interactive(sdata)
