@@ -16,6 +16,7 @@ from spatialdata._core.transform import (
     get_transformation_from_dict,
 )
 from spatialdata._io.write import write_table
+from xarray import DataArray
 
 # def spatialdata_from_base_elements(
 #     images: Optional[Dict[str, Image]] = None,
@@ -71,6 +72,16 @@ class SpatialData:
     ) -> None:
         if coordinate_systems is None:
             raise ValueError("Coordinate systems must be provided.")
+
+        # reorders the axes to follow the ngff 0.4 convention (t, c, z, y, x)
+        for d_x, d_axes in zip([images, labels], [images_axes, labels_axes]):
+            for k in d_x.keys():
+                x = d_x[k]
+                axes = d_axes[k]
+                new_x, new_axes = _validate_axes(x, axes)
+                d_x[k] = new_x
+                d_axes[k] = new_axes
+
         validated_coordinate_systems = _validate_coordinate_systems(coordinate_systems)
         for (src, des), transform in transformations.items():
             if transform is not None:
@@ -275,6 +286,31 @@ class SpatialData:
         ##
         return descr
 
+def _validate_axes(data: ArrayLike, axes: Tuple[str, ...]) -> Tuple[DataArray, Tuple[str, ...]]:
+    """Reorder axes of data array.
+
+    Parameters
+    ----------
+    data : ArrayLike
+        Data array.
+    axes : Tuple[str, ...]
+        Axes of data array.
+    axes_order : Tuple[str, ...]
+        Desired order of axes.
+
+    Returns
+    -------
+    ArrayLike
+        Data array with reordered axes.
+    """
+    axes_order = ('t', 'c', 'z', 'y', 'x')
+    sorted_axes = tuple(sorted(axes, key=lambda x: axes_order.index(x)))
+    if sorted_axes == axes:
+        return data, axes
+    new_order = [sorted_axes.index(axis) for axis in axes]
+    reverse = [new_order.index(a) for a in range(len(new_order))]
+    transposed = data.transpose(*reverse)
+    return transposed, tuple(sorted_axes)
 
 def _validate_coordinate_systems(
     coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]]

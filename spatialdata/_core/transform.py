@@ -207,8 +207,7 @@ class Translation(BaseTransformation):
         return Translation(translation=-self.translation)
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.hstack((np.array([[1.0, 0.0], [0.0, 1.0]]), self.translation.reshape(2, 1)))
+        m: ArrayLike = np.hstack((np.eye(len(self.translation)), self.translation.reshape(len(self.translation), 1)))
         return Affine(affine=m)
 
 
@@ -263,8 +262,7 @@ class Scale(BaseTransformation):
         return Scale(scale=new_scale)
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.hstack((np.diag(self.scale), np.zeros((2, 1))))
+        m: ArrayLike = np.hstack((np.diag(self.scale), np.zeros((len(self.scale), 1))))
         return Affine(affine=m)
 
 
@@ -473,7 +471,7 @@ class Sequence(BaseTransformation):
             else:
                 raise ValueError(f"Cannot convert {t} to affine")
             composed = a.affine @ composed
-        return Affine(affine=composed)
+        return Affine(affine=composed[:-1, :])
 
 
 class Displacements(BaseTransformation):
