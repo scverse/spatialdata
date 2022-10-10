@@ -63,6 +63,10 @@ class BaseTransformation(ABC):
             return False
         return self.to_dict() == other.to_dict()
 
+    @abstractmethod
+    def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+        pass
+
 
 def compose_transformations(transformation0: BaseTransformation, transformation1: BaseTransformation) -> Sequence:
     return Sequence([transformation0, transformation1])
@@ -140,6 +144,11 @@ class Identity(BaseTransformation):
         return copy.deepcopy(self)
 
 
+    # def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+    #     if input_axes is None and output_axes is None:
+    #         raise ValueError("Either input_axes or output_axes must be specified")
+    #     return Affine(np.eye(ndims_output, ndims_input))
+
 class MapIndex(BaseTransformation):
     def __init__(self) -> None:
         raise NotImplementedError()
@@ -206,7 +215,7 @@ class Translation(BaseTransformation):
     def inverse(self) -> BaseTransformation:
         return Translation(translation=-self.translation)
 
-    def to_affine(self) -> Affine:
+    def to_affine(self, ndims_input: Optional[int] = None, ndims_output: Optional[int] = None) -> Affine:
         m: ArrayLike = np.hstack((np.eye(len(self.translation)), self.translation.reshape(len(self.translation), 1)))
         return Affine(affine=m)
 
@@ -354,9 +363,6 @@ class Affine(BaseTransformation):
 
     def to_affine(self) -> Affine:
         return copy.deepcopy(self)
-
-    def get_injection_from_axes(self, src_axes: Tuple[str, ...], des_axes: Tuple[str, ...]):
-        pass
 
 
 class Rotation(BaseTransformation):

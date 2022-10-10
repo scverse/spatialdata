@@ -15,9 +15,26 @@ from spatialdata._io.format import SpatialDataFormat
 
 
 def read_zarr(
-    store: Union[str, Path, zarr.Group], coordinate_system_names: Optional[Union[str, List[str]]] = None
+    store: Union[str, Path, zarr.Group], coordinate_system_names: Optional[Union[str, List[str]]] = None,
+    filter_table: bool = False
 ) -> SpatialData:
+    """
 
+    Parameters
+    ----------
+    store : Union[str, Path, zarr.Group]
+        The path to the zarr store or the zarr group.
+    coordinate_system_names : Optional[Union[str, List[str]]]
+        The names of the coordinate systems to read. If None, all coordinate systems are read.
+    filter_table : bool
+        If True, the table is filtered to only contain rows that are associated to regions in the specified
+        coordinate systems.
+    Returns
+    -------
+    SpatialData
+        The spatial data object.
+
+    """
     if isinstance(store, Path):
         store = str(store)
 
@@ -137,7 +154,7 @@ def read_zarr(
                             labels_axes[k] = axes
                             labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
                         # print(f"action1: {time.time() - start}")
-        # now read rest
+        # now read points and polygons
         # start = time.time()
         g = zarr.open(f_elem_store, mode="r")
         for j in g.keys():
@@ -169,8 +186,31 @@ def read_zarr(
                     _update_ct_and_cs(ct, cs)
                     polygons[k] = read_anndata_zarr(g_elem_store)
 
-            if g_elem == "/table":
-                table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
+
+    # finally read the table, now that all the coordinate systems have been update from the varios elements read before
+    if 'table' in f.keys():
+        # g = zarr.open(f_elem_store, mode="r")
+        table = read_anndata_zarr(f"{store}/table/table")
+        if coordinate_system_names is None:
+            coordinate_system_names = list(coordinate_systems.keys())
+        if filter_table:
+            regions = table.uns['mapping_info']['regions']
+            if isinstance(regions, str):
+                regions = [regions]
+            regions_key = table.uns['mapping_info']['regions_key']
+            # this will have to be changed
+            fixed_path = {k: None for k in regions}
+            for k in regions:
+                empty, prefix, name = k.split('/')
+                assert empty == ''
+                assert prefix in ['labels', 'points', 'polygons']
+                fixed_path[k] = f"/{name}/{prefix}/{name}"
+            regions_in_cs = []
+            for src, des in transformations.keys():
+                if des in coordinate_systems.keys():
+                    regions_in_cs.append(src)
+            to_keep = table.obs[regions_key].isin(regions_in_cs)
+            table = table[to_keep].copy()
         # print(f"rest: {time.time() - start}")
 
     if coordinate_system_names != None and len(coordinate_systems) == 0:
@@ -193,12 +233,13 @@ if __name__ == "__main__":
     sdata = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr")
     print(sdata)
     # sdata2 = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names='global')
-    sdata2 = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names="point16")
-    print(sdata2)
+    # sdata2 = SpatialData.read("../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names="point16")
+    # print(sdata2)
     sdata3 = SpatialData.read(
         "../../spatialdata-sandbox/mibitof/data.zarr", coordinate_system_names=["point16", "point23"]
     )
     print(sdata3)
     from napari_spatialdata import Interactive
 
-    Interactive(sdata)
+    # Interactive(sdata)
+    Interactive(sdata3)

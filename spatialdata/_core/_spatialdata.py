@@ -102,12 +102,13 @@ class SpatialData:
                     if prefix == "points":
                         ndim = points[name].obsm["spatial"].shape[1]
                     elif prefix == "polygons":
-                        ndim = polygons[name].obs["spatial"].shape[1]
+                        ndim = Polygons.string_to_tensor(polygons[name].obs["spatial"][0]).shape[1]
                     else:
                         raise ValueError(f"Element {element} not supported.")
                     src_axes = ("x", "y", "z")[:ndim]
-                des_axes = tuple(validated_coordinate_systems[des].axes)
-                affine_matrix = Affine._get_affine_iniection_from_axes(src_axes, tuple(axis.name for axis in des_axes))
+                des_axes_obj = tuple(validated_coordinate_systems[des].axes)
+                des_axes = tuple(axis.name for axis in des_axes_obj)
+                affine_matrix = Affine._get_affine_iniection_from_axes(src_axes, des_axes)
                 transformations[(src, des)] = {"type": "affine", "affine": affine_matrix[:-1, :].tolist()}
 
         for element_class, elements, prefix in zip(
@@ -136,15 +137,26 @@ class SpatialData:
         if table is not None:
             self._table = table
 
-    def save_element(self, element_type: str, name: str, overwrite: bool = False):
-        if not self.is_backed():
-            raise ValueError("Data must be backed to save elements.")
+    def save_element(
+        self, element_type: str, name: str, overwrite: bool = False, zarr_root: Optional[zarr.Group] = None
+    ):
         if element_type not in ["images", "labels", "points", "polygons"]:
             raise ValueError(f"Element type {element_type} not supported.")
-        store = parse_url(self.file_path, mode="a").store
-        root = zarr.group(store=store)
-        full_path_group = os.path.join(self.file_path, f'{name}/{element_type}/{name}')
+        if zarr_root is None:
+            if not self.is_backed():
+                raise ValueError("No backed storage found")
+            store = parse_url(self.file_path, mode="a").store
+            root = zarr.group(store=store)
+        else:
+            root = zarr_root
         if overwrite:
+            if element_type in "images":
+                raise ValueError(
+                    "Overwriting images is not supported. This is a current limitation of the storage (labels may be "
+                    "be contained in the same zarr group as the images). Please open a GitHue issue and we will "
+                    "address this problem."
+                )
+            full_path_group = os.path.join(root.path, f"{name}/{element_type}/{name}")
             if os.path.isdir(full_path_group):
                 shutil.rmtree(full_path_group)
         elem_group = root.require_group(name=name)
@@ -160,15 +172,9 @@ class SpatialData:
         elems = set().union(*[set(i) for i in [self.images, self.labels, self.points, self.polygons]])
 
         for el in elems:
-            elem_group = root.create_group(name=el)
-            if self.images is not None and el in self.images.keys():
-                self.images[el].to_zarr(elem_group, name=el)
-            if self.labels is not None and el in self.labels.keys():
-                self.labels[el].to_zarr(elem_group, name=el)
-            if self.points is not None and el in self.points.keys():
-                self.points[el].to_zarr(elem_group, name=el)
-            if self.polygons is not None and el in self.polygons.keys():
-                self.polygons[el].to_zarr(elem_group, name=el)
+            for element_type in ["images", "labels", "points", "polygons"]:
+                if el in self.__getattribute__(element_type):
+                    self.save_element(element_type, el, zarr_root=root)
 
         if self.table is not None:
             write_table(tables=self.table, group=root, name="table")
@@ -178,10 +184,30 @@ class SpatialData:
         return self._table
 
     @classmethod
-    def read(cls, file_path: str, coordinate_system_names: Optional[Union[str, List[str]]] = None) -> SpatialData:
+    def read(
+        cls, file_path: str, coordinate_system_names: Optional[Union[str, List[str]]] = None, filter_table: bool = False
+    ) -> SpatialData:
+        """
+
+        Parameters
+        ----------
+        file_path : str
+            The path to the zarr store or the zarr group.
+        coordinate_system_names : Optional[Union[str, List[str]]]
+            The names of the coordinate systems to read. If None, all coordinate systems are read.
+        filter_table : bool
+            If True, the table is filtered to only contain rows that are associated to regions in the specified
+            coordinate systems.
+        Returns
+        -------
+        SpatialData
+            The spatial data object.
+
+        """
+
         from spatialdata._io.read import read_zarr
 
-        sdata = read_zarr(file_path, coordinate_system_names=coordinate_system_names)
+        sdata = read_zarr(file_path, coordinate_system_names=coordinate_system_names, filter_table=filter_table)
         sdata.file_path = file_path
         return sdata
 
