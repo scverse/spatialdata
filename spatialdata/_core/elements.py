@@ -60,6 +60,7 @@ class BaseElement(ABC):
     def ndim(self) -> int:
         """Return number of dimensions of element."""
 
+
 class Image(BaseElement):
     def __init__(
         self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation], axes: Tuple[str, ...]

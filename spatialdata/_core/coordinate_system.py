@@ -42,7 +42,7 @@ class CoordinateSystem:
 
         # sorted_axes = sorted(coord_sys["axes"], key=lambda x: AXIS_ORDER.index(x["name"]))
         for axis in coord_sys["axes"]:
-        # for axis in sorted_axes:
+            # for axis in sorted_axes:
             if "name" not in axis.keys():
                 raise ValueError("Each axis MUST have a name.")
             if "type" not in axis.keys():

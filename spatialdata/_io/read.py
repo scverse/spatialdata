@@ -15,8 +15,9 @@ from spatialdata._io.format import SpatialDataFormat
 
 
 def read_zarr(
-    store: Union[str, Path, zarr.Group], coordinate_system_names: Optional[Union[str, List[str]]] = None,
-    filter_table: bool = False
+    store: Union[str, Path, zarr.Group],
+    coordinate_system_names: Optional[Union[str, List[str]]] = None,
+    filter_table: bool = False,
 ) -> SpatialData:
     """
 
@@ -186,24 +187,23 @@ def read_zarr(
                     _update_ct_and_cs(ct, cs)
                     polygons[k] = read_anndata_zarr(g_elem_store)
 
-
     # finally read the table, now that all the coordinate systems have been update from the varios elements read before
-    if 'table' in f.keys():
+    if "table" in f.keys():
         # g = zarr.open(f_elem_store, mode="r")
         table = read_anndata_zarr(f"{store}/table/table")
         if coordinate_system_names is None:
             coordinate_system_names = list(coordinate_systems.keys())
         if filter_table:
-            regions = table.uns['mapping_info']['regions']
+            regions = table.uns["mapping_info"]["regions"]
             if isinstance(regions, str):
                 regions = [regions]
-            regions_key = table.uns['mapping_info']['regions_key']
+            regions_key = table.uns["mapping_info"]["regions_key"]
             # this will have to be changed
             fixed_path = {k: None for k in regions}
             for k in regions:
-                empty, prefix, name = k.split('/')
-                assert empty == ''
-                assert prefix in ['labels', 'points', 'polygons']
+                empty, prefix, name = k.split("/")
+                assert empty == ""
+                assert prefix in ["labels", "points", "polygons"]
                 fixed_path[k] = f"/{name}/{prefix}/{name}"
             regions_in_cs = []
             for src, des in transformations.keys():
