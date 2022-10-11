@@ -3,7 +3,6 @@ import re
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Any, Dict, Optional, Tuple, Union
 
-import dask.array.core
 import numpy as np
 import pandas as pd
 import zarr
@@ -62,19 +61,15 @@ class BaseElement(ABC):
 
 
 class Image(BaseElement):
-    def __init__(
-        self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation], axes: Tuple[str, ...]
-    ) -> None:
+    def __init__(self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(image, DataArray):
             self.data = image
-        elif isinstance(image, np.ndarray):
-            self.data = DataArray(image, dims=axes)
-        elif isinstance(image, dask.array.core.Array):
-            self.data = DataArray(image, dims=axes)
+        # elif isinstance(image, dask.array.core.Array):
+        #     self.data = DataArray(image, dims=axes)
         else:
             raise TypeError("Image must be a DataArray, numpy array or dask array")
-        assert self.data.dims == axes
+        assert self.data.dims == tuple([ax for ax in ["t", "c", "z", "y", "x"] if ax in self.data.dims])
 
     # @staticmethod
     # def parse_image(data: Any, transform: Optional[Any] = None) -> "Image":
@@ -118,19 +113,13 @@ class Image(BaseElement):
 
 
 class Labels(BaseElement):
-    def __init__(
-        self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation], axes: Tuple[str, ...]
-    ) -> None:
+    def __init__(self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(labels, DataArray):
             self.data = labels
-        elif isinstance(labels, np.ndarray):
-            self.data = DataArray(labels, dims=axes)
-        elif isinstance(labels, dask.array.core.Array):
-            self.data = DataArray(labels, dims=axes)
         else:
             raise TypeError("Labels must be a DataArray, numpy array or dask array")
-        assert self.data.dims == axes
+        assert self.data.dims == tuple([ax for ax in ["t", "c", "z", "y", "x"] if ax in self.data.dims])
 
     #
     # @staticmethod

@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import xarray as xr
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
@@ -49,8 +50,6 @@ def read_zarr(
     polygons = {}
     transformations: Dict[Tuple[str, str], BaseTransformation] = {}
     coordinate_systems: Dict[str, CoordinateSystem] = {}
-    images_axes = {}
-    labels_axes = {}
 
     def _get_transformations_and_coordinate_systems_and_axes_from_group(
         group: zarr.Group,
@@ -60,9 +59,12 @@ def read_zarr(
         assert len(multiscales) == 1, f"expecting only one multiscale, got {len(multiscales)}; TODO: support more"
 
         coordinate_systems = multiscales[0]["coordinateSystems"]
-        from spatialdata._core._spatialdata import _validate_coordinate_systems
 
-        cs = _validate_coordinate_systems(coordinate_systems)
+        cs = {}
+        for d in coordinate_systems:
+            c = CoordinateSystem()
+            c.from_dict(d)
+            cs[c.name] = c
 
         axes = tuple([d["name"] for d in multiscales[0]["coordinateSystems"][0]["axes"]])
 
@@ -125,8 +127,9 @@ def read_zarr(
                         or any(csn in cs.keys() for csn in coordinate_system_names)
                     ):
                         _update_ct_and_cs(ct, cs)
-                        images_axes[k] = axes
-                        images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
+                        images[k] = xr.DataArray(
+                            node.load(Multiscales).array(resolution="0", version=fmt.version), dims=axes
+                        )
 
                     # print(f"action1: {time.time() - start}")
         # read all images/labels for the level
@@ -152,8 +155,9 @@ def read_zarr(
                             or any(csn in cs.keys() for csn in coordinate_system_names)
                         ):
                             _update_ct_and_cs(ct, cs)
-                            labels_axes[k] = axes
-                            labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
+                            labels[k] = xr.DataArray(
+                                node.load(Multiscales).array(resolution="0", version=fmt.version), dims=axes
+                            )
                         # print(f"action1: {time.time() - start}")
         # now read points and polygons
         # start = time.time()
@@ -221,10 +225,8 @@ def read_zarr(
         points=points,
         polygons=polygons,
         table=table,
-        images_axes=images_axes,
-        labels_axes=labels_axes,
         transformations=transformations,
-        coordinate_systems=list(coordinate_systems.values()) if len(coordinate_systems) > 0 else None,
+        _from_disk=True,
     )
 
 

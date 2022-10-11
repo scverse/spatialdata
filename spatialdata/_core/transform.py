@@ -426,25 +426,16 @@ class Sequence(BaseTransformation):
             self.transformations = transformations
         else:
             self.transformations = [get_transformation_from_dict(t) for t in transformations]  # type: ignore[arg-type]
-        ndims = [t.ndim for t in self.transformations if t.ndim is not None]
-        if len(ndims) > 0:
-            assert len(set(ndims)) == 1
-            self._ndim = ndims[0]
-        else:
-            self._ndim = None
+        self._src_dim = self.transformations[0].src_dim
+        self._des_dim = self.transformations[-1].des_dim
 
     @property
     def src_dim(self) -> Optional[int]:
-        return self._ndim
+        return self._src_dim
 
     @property
     def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> Optional[int]:
-        # TODO: support mixed ndim and remove this property
-        return self._ndim
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -461,8 +452,7 @@ class Sequence(BaseTransformation):
         return Sequence([t.inverse() for t in reversed(self.transformations)])
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        composed = np.eye(3)
+        composed = np.eye(self.src_dim + 1)
         for t in self.transformations:
             a: Affine
             if isinstance(t, Affine):

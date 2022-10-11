@@ -6,16 +6,17 @@ import shutil
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
+import numpy as np
 import zarr
 from anndata import AnnData
 from ome_zarr.io import parse_url
-from xarray import DataArray
 
-from spatialdata._core.coordinate_system import CoordinateSystem, CoordSystem_t
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.elements import Image, Labels, Points, Polygons
 from spatialdata._core.transform import (
     Affine,
     BaseTransformation,
+    Sequence,
     get_transformation_from_dict,
 )
 from spatialdata._io.write import write_table
@@ -70,68 +71,51 @@ class SpatialData:
         labels_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
         # transformations and coordinate systems
         transformations: Mapping[(str, str), Optional[Union[BaseTransformation, Dict[Any]]]] = MappingProxyType({}),
-        coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]] = None,
+        _from_disk: bool = False,
     ) -> None:
-        if coordinate_systems is None:
-            raise ValueError("Coordinate systems must be provided.")
         self.file_path: Optional[str] = None
 
         # reorders the axes to follow the ngff 0.4 convention (t, c, z, y, x)
-        for d_x, d_axes in zip([images, labels], [images_axes, labels_axes]):
-            for k in d_x.keys():
-                x = d_x[k]
-                axes = d_axes[k]
-                new_x, new_axes = _validate_axes(x, axes)
-                d_x[k] = new_x
-                d_axes[k] = new_axes
+        for d in [images, labels]:
+            for k, v in d.items():
+                ordered = tuple([d for d in ["t", "c", "z", "y", "x"] if d in v.dims])
+                d[k] = v.transpose(*ordered)
 
-        validated_coordinate_systems = _validate_coordinate_systems(coordinate_systems)
-        for (src, des), transform in transformations.items():
-            if transform is not None:
-                continue
-            else:
-                ss = src.split("/")
-                assert len(ss) == 3
-                assert ss[0] == ""
-                prefix, name = ss[1:]
-                if prefix == "images":
-                    src_axes = images_axes[name]
-                elif prefix == "labels":
-                    src_axes = labels_axes[name]
-                else:
-                    if prefix == "points":
-                        ndim = points[name].obsm["spatial"].shape[1]
-                    elif prefix == "polygons":
-                        ndim = Polygons.string_to_tensor(polygons[name].obs["spatial"][0]).shape[1]
-                    else:
-                        raise ValueError(f"Element {element} not supported.")
-                    src_axes = ("x", "y", "z")[:ndim]
-                des_axes_obj = tuple(validated_coordinate_systems[des].axes)
-                des_axes = tuple(axis.name for axis in des_axes_obj)
-                affine_matrix = Affine._get_affine_iniection_from_axes(src_axes, des_axes)
-                transformations[(src, des)] = {"type": "affine", "affine": affine_matrix[:-1, :].tolist()}
+        def _add_prefix(d: Mapping[str, Any], prefix: str) -> Mapping[str, Any]:
+            return {f"/{prefix}/{k}": v for k, v in d.items()}
 
+        ndims = _get_ndims(
+            _add_prefix(images, "images")
+            | _add_prefix(labels, "labels")
+            | _add_prefix(points, "points")
+            | _add_prefix(polygons, "polygons")
+        )
+        coordinate_systems = _infer_coordinate_systems(transformations, ndims)
+        images_axes = {f"/images/{k}": v.dims for k, v in images.items()}
+        labels_axes = {f"/labels/{k}": v.dims for k, v in labels.items()}
+        if not _from_disk:
+            _validate_transformations(
+                transformations=transformations,
+                coordinate_systems=coordinate_systems,
+                ndims=ndims,
+                images_axes=images_axes,
+                labels_axes=labels_axes,
+            )
         for element_class, elements, prefix in zip(
             [Image, Labels, Points, Polygons],
             [images, labels, points, polygons],
             ["images", "labels", "points", "polygons"],
         ):
             self.__setattr__(prefix, {})
-            validated_transformations = _validate_transformations(
-                list(elements.keys()), prefix, transformations, validated_coordinate_systems
+            expanded_transformations = _expand_transformations(
+                list(elements.keys()), prefix, transformations, coordinate_systems
             )
             for name, data in elements.items():
                 alignment_info = {
-                    validated_coordinate_systems[des]: validated_transformations[f"/{prefix}/{name}"][des]
-                    for des in validated_transformations[f"/{prefix}/{name}"]
+                    coordinate_systems[des]: expanded_transformations[f"/{prefix}/{name}"][des]
+                    for des in expanded_transformations[f"/{prefix}/{name}"]
                 }
-                if prefix == "images":
-                    kw = {"axes": images_axes[name]}
-                elif prefix == "labels":
-                    kw = {"axes": labels_axes[name]}
-                else:
-                    kw = {}
-                obj = element_class(data, alignment_info=alignment_info, **kw)
+                obj = element_class(data, alignment_info=alignment_info)
                 self.__getattribute__(prefix)[name] = obj
 
         if table is not None:
@@ -352,69 +336,132 @@ class SpatialData:
         return descr
 
 
-def _validate_axes(data: ArrayLike, axes: Tuple[str, ...]) -> Tuple[DataArray, Tuple[str, ...]]:
-    """Reorder axes of data array.
-
-    Parameters
-    ----------
-    data : ArrayLike
-        Data array.
-    axes : Tuple[str, ...]
-        Axes of data array.
-    axes_order : Tuple[str, ...]
-        Desired order of axes.
-
-    Returns
-    -------
-    ArrayLike
-        Data array with reordered axes.
-    """
-    axes_order = ("t", "c", "z", "y", "x")
-    sorted_axes = tuple(sorted(axes, key=lambda x: axes_order.index(x)))
-    if sorted_axes == axes:
-        return data, axes
-    new_order = [sorted_axes.index(axis) for axis in axes]
-    reverse = [new_order.index(a) for a in range(len(new_order))]
-    transposed = data.transpose(*reverse)
-    return transposed, tuple(sorted_axes)
-
-
-def _validate_coordinate_systems(
-    coordinate_systems: Optional[List[Union[CoordSystem_t, CoordinateSystem]]]
-) -> Dict[str, CoordinateSystem]:
-    validated = []
-    for c in coordinate_systems:
-        if isinstance(c, CoordinateSystem):
-            validated.append(copy.deepcopy(c))
-        # TODO: add type check, maybe with typeguard: https://stackoverflow.com/questions/51171908/extracting-data-from-typing-types
-        # elif type(c) == CoordSystem_t:
+def _get_ndims(d: Dict[Any, Union[Image, Label, Point, Polygon]]) -> int:
+    if len(d) == 0:
+        return 0
+    ndims = {}
+    for k, v in d.items():
+        if k.startswith("/images") or k.startswith("/labels"):
+            ndims[k] = len(set(v.dims).difference({"c", "t"}))
+        elif k.startswith("/points"):
+            ndims[k] = v.obsm["spatial"].shape[1]
+        elif k.startswith("/polygons"):
+            ndims[k] = Polygons.string_to_tensor(v.obs["spatial"][0]).shape[1]
         else:
-            v = CoordinateSystem()
-            v.from_dict(c)
-            validated.append(v)
-        # else:
-        #     raise TypeError(f"Invalid type for coordinate system: {type(c)}")
-    assert len(coordinate_systems) == len(validated)
-    assert len(validated) == len(set(validated))
-    d = {v.name: v for v in validated}
-    assert len(d) == len(validated)
-    return d
+            raise ValueError(f"Unknown key {k}")
+    return ndims
+
+
+def _infer_coordinate_systems(
+    transformations: Mapping[(str, str), Optional[Union[BaseTransformation, Dict[Any]]]], ndims: Dict[str, int]
+) -> Dict[str, CoordinateSystem]:
+    def _default_coordinate_system(name: str, ndim: int) -> CoordinateSystem:
+        assert ndim in [2, 3]
+        from spatialdata._core.coordinate_system import Axis
+
+        axes = [Axis("c", "channel"), Axis("y", "space", "micrometer"), Axis("x", "space", "micrometer")]
+        if ndim == 3:
+            axes.insert(1, Axis("z", "space", "micrometer"))
+        return CoordinateSystem(name, axes=axes)
+
+    if len(transformations) == 0:
+        return {"global": _default_coordinate_system("global", max(ndims.values()))}
+    targets = set()
+    for _, target in transformations.keys():
+        targets.add(target)
+    coordinate_systems = {}
+    for target in targets:
+        ndim = max([ndims[src] for src, des in transformations.keys() if des == target])
+        coordinate_systems[target] = _default_coordinate_system(target, ndim)
+    return coordinate_systems
 
 
 def _validate_transformations(
-    elements_keys: List[str],
-    prefix: str,
     transformations: Mapping[Tuple[str, str], Union[BaseTransformation, Dict[str, Any]]],
     coordinate_systems: Dict[str, CoordinateSystem],
+    ndims: Dict[str, int],
+    images_axes: Dict[str, List[str]],
+    labels_axes: Dict[str, List[str]],
+) -> None:
+    # We check that each element has at least one transformation. If this doesn't happen, we raise an error,
+    # unless there is only a single coordinate system, in which case we assign each element to the global coordinate system.
+    sources = [src for src, _ in transformations.keys()]
+    for name in ndims.keys():
+        if name not in sources:
+            if len(coordinate_systems) == 1:
+                cs = coordinate_systems.values().__iter__().__next__()
+                transformations[(name, cs.name)] = None
+            else:
+                raise ValueError(
+                    f"Element {name} has no transformation to any other coordinate system. "
+                    f"Please specify a transformation to at least one coordinate system."
+                )
+    # We populate transformations entries like this ('/images/image', 'target_space', None) by replacing None
+    # with the "default" transformations that maps axes to the same axes.
+    # We expect (and we check) that images and labels have axes that are a subset of ['t', 'c', 'z', 'y', 'x'],
+    # in this order, and that points and polygons have axes that are a subset of ['x', 'y', 'z'], in this order.
+    # The correction matrix is to deal with a subtle consequence that the order of the axes of the target coordinate
+    # space (which is expected to be a subset of ['t', 'c', 'z', 'y', 'x'], in this order) does not respect the order
+    # of points and polygons. So the "default" transformation described above would correct for this, while a user
+    # specified transformation, like Scale(), would not.
+    for (src, des), transform in transformations.items():
+        ss = src.split("/")
+        assert len(ss) == 3
+        assert ss[0] == ""
+        prefix, _ = ss[1:]
+        if prefix == "images":
+            src_axes = images_axes[src]
+            correction_matrix = np.eye(len(src_axes))
+        elif prefix == "labels":
+            src_axes = labels_axes[src]
+            correction_matrix = np.eye(len(src_axes))
+        else:
+            if prefix == "points":
+                ndim = ndims[src]
+            elif prefix == "polygons":
+                ndim = ndims[src]
+            else:
+                raise ValueError(f"Element {element} not supported.")
+            src_axes = ("x", "y", "z")[:ndim]
+            correction_matrix = np.fliplr(np.eye(ndim))
+        correction_matrix = np.hstack(
+            [
+                np.vstack([correction_matrix, np.zeros((1, len(correction_matrix)))]),
+                np.zeros((len(correction_matrix) + 1, 1)),
+            ]
+        )
+        correction_matrix[-1, -1] = 1
+        des_axes_obj = tuple(coordinate_systems[des].axes)
+        des_axes = tuple(axis.name for axis in des_axes_obj)
+        affine_matrix = Affine._get_affine_iniection_from_axes(src_axes, des_axes) @ correction_matrix
+        from spatialdata._core.transform import get_transformation_from_dict
+
+        affine = get_transformation_from_dict({"type": "affine", "affine": affine_matrix[:-1, :].tolist()})
+        if transform is None:
+            transformations[(src, des)] = affine
+        else:
+            transformations[(src, des)] = Sequence([transform, affine])
+
+
+# )
+#             expanded_transformations = _expand_transformations(
+#                 list(elements.keys()), prefix, transformations, coordinate_systems
+#             )
+#             for name, data in elements.i
+def _expand_transformations(
+    element_keys: List[str],
+    prefix: str,
+    transformations: Dict[Tuple[str, str], BaseTransformation],
+    coordinate_systems: Dict[str, CoordinateSystem],
 ) -> Dict[str, Dict[str, BaseTransformation]]:
-    validated: Dict[str, Dict[str, BaseTransformation]] = {}
-    for name in elements_keys:
-        validated[f"/{prefix}/{name}"] = {}
+    expanded = {}
+    for name in element_keys:
+        expanded[f"/{prefix}/{name}"] = {}
     for (src, des), t in transformations.items():
         assert des in coordinate_systems.keys()
         if src.startswith(f"/{prefix}/"):
             src_name = src[len(f"/{prefix}/") :]
-            if src_name in elements_keys:
+            if src_name in element_keys:
                 if isinstance(t, BaseTransformation):
                     v = copy.deepcopy(t)
                 elif isinstance(t, dict):
@@ -422,8 +469,8 @@ def _validate_transformations(
                     v = get_transformation_from_dict(t)
                 else:
                     raise TypeError(f"Invalid type for transformation: {type(t)}")
-                validated[src][des] = v
-    return validated
+                expanded[src][des] = v
+    return expanded
 
 
 if __name__ == "__main__":
