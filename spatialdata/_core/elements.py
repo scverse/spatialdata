@@ -233,27 +233,6 @@ class Polygons(BaseElement):
             x: ArrayLike = np.array(eval(s))
             return x
 
-    @staticmethod
-    def anndata_from_geojson(path: str) -> AnnData:
-        with open(path) as f:
-            j = json.load(f)
-
-        names = []
-        coordinates = []
-        assert "geometries" in j
-        for region in j["geometries"]:
-            if region["type"] == "Polygon":
-                names.append(region["name"])
-                vertices: ArrayLike = np.array(region["coordinates"])
-                vertices = np.squeeze(vertices, 0)
-                assert len(vertices.shape) == 2
-                coordinates.append(vertices)
-            else:
-                print(f'ignoring "{region["type"]}" from geojson')
-
-        string_coordinates = [Polygons.tensor_to_string(c) for c in coordinates]
-        a = AnnData(shape=(len(names), 0), obs=pd.DataFrame({"name": names, "spatial": string_coordinates}))
-        return a
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         assert self.ndim in [2, 3]
