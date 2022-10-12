@@ -71,15 +71,19 @@ class SpatialData:
         labels_axes: Optional[Mapping[str, Tuple[str, ...]]] = None,
         # transformations and coordinate systems
         transformations: Mapping[(str, str), Optional[Union[BaseTransformation, Dict[Any]]]] = MappingProxyType({}),
-        _from_disk: bool = False,
+        _validate_transformations: bool = True,
     ) -> None:
         self.file_path: Optional[str] = None
 
         # reorders the axes to follow the ngff 0.4 convention (t, c, z, y, x)
         for d in [images, labels]:
             for k, v in d.items():
-                ordered = tuple([d for d in ["t", "c", "z", "y", "x"] if d in v.dims])
-                d[k] = v.transpose(*ordered)
+                if not isinstance(v, list):
+                    ordered = tuple([d for d in ["t", "c", "z", "y", "x"] if d in v.dims])
+                    d[k] = v.transpose(*ordered)
+                else:
+                    # TODO: multiscale image loaded from disk, check that all is right
+                    pass
 
         def _add_prefix(d: Mapping[str, Any], prefix: str) -> Mapping[str, Any]:
             return {f"/{prefix}/{k}": v for k, v in d.items()}
@@ -91,10 +95,10 @@ class SpatialData:
             | _add_prefix(polygons, "polygons")
         )
         coordinate_systems = _infer_coordinate_systems(transformations, ndims)
-        images_axes = {f"/images/{k}": v.dims for k, v in images.items()}
-        labels_axes = {f"/labels/{k}": v.dims for k, v in labels.items()}
-        if not _from_disk:
-            _validate_transformations(
+        images_axes = {f"/images/{k}": v.dims if not isinstance(v, list) else v[0].dims for k, v in images.items()}
+        labels_axes = {f"/labels/{k}": v.dims if not isinstance(v, list) else v[0].dims for k, v in labels.items()}
+        if _validate_transformations:
+            _infer_and_validate_transformations(
                 transformations=transformations,
                 coordinate_systems=coordinate_systems,
                 ndims=ndims,
@@ -121,18 +125,30 @@ class SpatialData:
         if table is not None:
             self._table = table
 
-    def save_element(
-        self, element_type: str, name: str, overwrite: bool = False, zarr_root: Optional[zarr.Group] = None
+    def _save_element(
+        self,
+        element_type: str,
+        name: str,
+        overwrite: bool = False,
+        zarr_root: Optional[zarr.Group] = None,
+        path: Optional[str] = None,
     ):
         if element_type not in ["images", "labels", "points", "polygons"]:
             raise ValueError(f"Element type {element_type} not supported.")
-        if zarr_root is None:
+        if zarr_root is not None:
+            assert path is None
+            assert not self.is_backed()
+            root = zarr_root
+        elif path is not None:
+            if self.is_backed():
+                assert path == self.file_path
+            store = parse_url(path, mode="a").store
+            root = zarr.group(store=store)
+        else:
             if not self.is_backed():
                 raise ValueError("No backed storage found")
             store = parse_url(self.file_path, mode="a").store
             root = zarr.group(store=store)
-        else:
-            root = zarr_root
         if overwrite:
             if element_type in "images":
                 raise ValueError(
@@ -158,7 +174,7 @@ class SpatialData:
         for el in elems:
             for element_type in ["images", "labels", "points", "polygons"]:
                 if el in self.__getattribute__(element_type):
-                    self.save_element(element_type, el, zarr_root=root)
+                    self._save_element(element_type, el, zarr_root=root)
 
         if self.table is not None:
             write_table(tables=self.table, group=root, name="table")
@@ -211,10 +227,100 @@ class SpatialData:
         SpatialData
             The filtered spatial data.
         """
-        # easy to implement if everything is in memory, but requires more care when some information is in a backed
-        # from a
-        # file/cloud storage
-        raise NotImplementedError("Filtering by coordinate system names is not yet implemented.")
+        if isinstance(coordinate_system_names, str):
+            coordinate_system_names = [coordinate_system_names]
+        transformations = {}
+        filtered_elements = {}
+        for element_type in ["images", "labels", "points", "polygons"]:
+            filtered_elements[element_type] = {
+                k: v.data
+                for k, v in self.__getattribute__(element_type).items()
+                if any([s in coordinate_system_names for s in v.coordinate_systems.keys()])
+            }
+            transformations.update(
+                {
+                    (f"/{element_type}/{name}", cs_name): ct
+                    for name, v in self.__getattribute__(element_type).items()
+                    for cs_name, ct in v.transformations.items()
+                    if cs_name in coordinate_system_names
+                }
+            )
+        if all([len(v) == 0 for v in filtered_elements.values()]):
+            raise ValueError("No elements found in the specified coordinate systems.")
+        regions_key = self.table.uns["mapping_info"]["regions_key"]
+        elements_in_coordinate_systems = [
+            src for src, cs_name in transformations.keys() if cs_name in coordinate_system_names
+        ]
+        table = self.table[self.table.obs[regions_key].isin(elements_in_coordinate_systems)].copy()
+        sdata = SpatialData(
+            images=filtered_elements["images"],
+            labels=filtered_elements["labels"],
+            points=filtered_elements["points"],
+            polygons=filtered_elements["polygons"],
+            transformations=transformations,
+            table=table,
+            _validate_transformations=False,
+        )
+        ##
+        return sdata
+
+    @classmethod
+    def concatenate(self, *sdatas: SpatialData) -> SpatialData:
+        """Concatenate multiple spatial data objects.
+
+        Parameters
+        ----------
+        sdatas
+            The spatial data objects to concatenate.
+
+        Returns
+        -------
+        SpatialData
+            The concatenated spatial data object.
+        """
+        assert type(sdatas) == tuple
+        assert len(sdatas) == 1
+        sdatas_ = sdatas[0]
+        # TODO: check that .uns['mapping_info'] is the same for all tables and if not warn that it will be
+        #  discarded
+        # by AnnData.concatenate
+        list_of_tables = [sdata.table for sdata in sdatas_ if sdata.table is not None]
+        if len(list_of_tables) > 0:
+            merged_table = AnnData.concatenate(*list_of_tables, join="outer", uns_merge="same")
+            if "mapping_info" in merged_table.uns:
+                if (
+                    "regions_key" in merged_table.uns["mapping_info"]
+                    and "instance_key" in merged_table.uns["mapping_info"]
+                ):
+                    merged_regions = []
+                    for sdata in sdatas_:
+                        regions = sdata.table.uns["mapping_info"]["regions"]
+                        if isinstance(regions, str):
+                            merged_regions.append(regions)
+                        else:
+                            merged_regions.extend(regions)
+                    merged_table.uns["mapping_info"]["regions"] = merged_regions
+        else:
+            merged_table = None
+        ##
+        transformations = {}
+        for sdata in sdatas_:
+            for element_type in ["images", "labels", "points", "polygons"]:
+                for name, element in sdata.__getattribute__(element_type).items():
+                    for cs_name, ct in element.transformations.items():
+                        transformations[(f"/{element_type}/{name}", cs_name)] = ct
+        ##
+        sdata = SpatialData(
+            images={**{k: v.data for sdata in sdatas_ for k, v in sdata.images.items()}},
+            labels={**{k: v.data for sdata in sdatas_ for k, v in sdata.labels.items()}},
+            points={**{k: v.data for sdata in sdatas_ for k, v in sdata.points.items()}},
+            polygons={**{k: v.data for sdata in sdatas_ for k, v in sdata.polygons.items()}},
+            transformations=transformations,
+            table=merged_table,
+            _validate_transformations=False,
+        )
+        ##
+        return sdata
 
     def _gen_spatial_elements(self):
         # notice that this does not return a table, so we assume that the table does not contain spatial information;
@@ -225,7 +331,7 @@ class SpatialData:
                 yield k, name, obj
 
     @property
-    def coordinate_systems(self) -> List[CoordinateSystem]:
+    def coordinate_systems(self) -> Dict[CoordinateSystem]:
         ##
         all_cs = {}
         gen = self._gen_spatial_elements()
@@ -237,7 +343,7 @@ class SpatialData:
                 else:
                     all_cs[name] = cs
         ##
-        return list(all_cs.values())
+        return all_cs
 
     def __repr__(self) -> str:
         return self._gen_repr()
@@ -323,7 +429,7 @@ class SpatialData:
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         ##
         descr += "\nwith coordinate systems:\n"
-        for cs in self.coordinate_systems:
+        for cs in self.coordinate_systems.values():
             descr += f"▸ {cs.name}\n" f'    with axes: {", ".join([axis.name for axis in cs.axes])}\n'
             gen = self._gen_spatial_elements()
             elements_in_cs = []
@@ -342,7 +448,11 @@ def _get_ndims(d: Dict[Any, Union[Image, Label, Point, Polygon]]) -> int:
     ndims = {}
     for k, v in d.items():
         if k.startswith("/images") or k.startswith("/labels"):
-            ndims[k] = len(set(v.dims).difference({"c", "t"}))
+            if not isinstance(v, list):
+                w = v
+            else:
+                w = v[0]
+            ndims[k] = len(set(w.dims).difference({"c", "t"}))
         elif k.startswith("/points"):
             ndims[k] = v.obsm["spatial"].shape[1]
         elif k.startswith("/polygons"):
@@ -376,7 +486,7 @@ def _infer_coordinate_systems(
     return coordinate_systems
 
 
-def _validate_transformations(
+def _infer_and_validate_transformations(
     transformations: Mapping[Tuple[str, str], Union[BaseTransformation, Dict[str, Any]]],
     coordinate_systems: Dict[str, CoordinateSystem],
     ndims: Dict[str, int],

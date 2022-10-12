@@ -90,6 +90,8 @@ def _update_metadata_images_labels(
     )
     multiscales[0]["coordinateSystems"] = cs_formatted
     multiscales[0]["coordinateTransformations"] = ct_formatted
+    # this triggers an exception in ome-zarr-py, so for the moment we are still keeping written 0.4
+    # multiscales[0]["version"] = "0.5-dev"
     group.attrs["multiscales"] = multiscales
     dict(group.attrs)
     # the list of transformations in datasets (that are exclusiely the ones for the pyramid) is kept as the previous
@@ -139,7 +141,7 @@ def write_image(
         chunks=chunks,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=[[]],
+        coordinate_transformations=None,
         storage_options=storage_options,
         **metadata,
     )
@@ -180,7 +182,7 @@ def write_labels(
         chunks=chunks,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=[[]],
+        coordinate_transformations=None,
         storage_options=storage_options,
         label_metadata=label_metadata,
         **metadata,

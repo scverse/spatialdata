@@ -143,6 +143,9 @@ class Identity(BaseTransformation):
     def inverse(self) -> BaseTransformation:
         return copy.deepcopy(self)
 
+    def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+        raise NotImplementedError()
+
     # def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
     #     if input_axes is None and output_axes is None:
     #         raise ValueError("Either input_axes or output_axes must be specified")

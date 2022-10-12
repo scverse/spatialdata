@@ -1,12 +1,11 @@
-import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import pandas as pd
 import zarr
 from anndata import AnnData
+from loguru import logger
 from ome_zarr.scale import Scaler
 from xarray import DataArray
 
@@ -25,7 +24,8 @@ __all__ = ["Image", "Labels", "Points", "Polygons"]
 
 class BaseElement(ABC):
     # store the actual data (e.g., array for image, coordinates for points, etc.)
-    data: Any
+    data: DataArray
+    multiscales: Optional[List[DataArray]] = None
 
     # store the transform objects as a dictionary with keys (source_coordinate_space, destination_coordinate_space)
     transformations: Dict[str, BaseTransformation] = {}
@@ -61,15 +61,26 @@ class BaseElement(ABC):
 
 
 class Image(BaseElement):
-    def __init__(self, image: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+    def __init__(
+        self, image: Union[DataArray, List[DataArray]], alignment_info: Dict[CoordinateSystem, BaseTransformation]
+    ) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(image, DataArray):
             self.data = image
+        elif isinstance(image, list):
+            assert all(isinstance(im, DataArray) for im in image)
+            self.data = image[0]
+            self.multiscales = image
         # elif isinstance(image, dask.array.core.Array):
         #     self.data = DataArray(image, dims=axes)
         else:
             raise TypeError("Image must be a DataArray, numpy array or dask array")
         assert self.data.dims == tuple([ax for ax in ["t", "c", "z", "y", "x"] if ax in self.data.dims])
+        if self.data.dtype != np.uint8:
+            logger.warning(
+                f"Image not of dtype np.uint8 but of dtype {self.data.dtype}. This decreases the "
+                f"performance of napari when viewing large images"
+            )
 
     # @staticmethod
     # def parse_image(data: Any, transform: Optional[Any] = None) -> "Image":
@@ -78,7 +89,7 @@ class Image(BaseElement):
     #         transform = Identity()
     #     return Image(data, transform)
 
-    def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+    def to_zarr(self, group: zarr.Group, name: str) -> None:
         # TODO: allow to write from path
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
         # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
@@ -88,7 +99,6 @@ class Image(BaseElement):
             axes=self.data.dims,
             coordinate_transformations=self.transformations,
             coordinate_systems=self.coordinate_systems,
-            scaler=scaler,
             # coordinate_transformations=[[coordinate_transformations]],
             storage_options={"compressor": None},
         )
@@ -113,13 +123,24 @@ class Image(BaseElement):
 
 
 class Labels(BaseElement):
-    def __init__(self, labels: DataArray, alignment_info: Dict[CoordinateSystem, BaseTransformation]) -> None:
+    def __init__(
+        self, labels: Union[DataArray, List[DataArray]], alignment_info: Dict[CoordinateSystem, BaseTransformation]
+    ) -> None:
         super().__init__(alignment_info=alignment_info)
         if isinstance(labels, DataArray):
             self.data = labels
+        elif isinstance(labels, list):
+            assert all(isinstance(im, DataArray) for im in labels)
+            self.data = labels[0]
+            self.multiscales = labels
         else:
             raise TypeError("Labels must be a DataArray, numpy array or dask array")
         assert self.data.dims == tuple([ax for ax in ["t", "c", "z", "y", "x"] if ax in self.data.dims])
+        if self.data.dtype != np.uint8:
+            logger.warning(
+                f"Labels not of dtype np.uint8 but of dtype {self.data.dtype}. This decreases the "
+                f"performance of napari when viewing large images"
+            )
 
     #
     # @staticmethod
@@ -129,7 +150,7 @@ class Labels(BaseElement):
     #         transform = Identity()
     #     return Labels(data, transform)
 
-    def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+    def to_zarr(self, group: zarr.Group, name: str) -> None:
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
         # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
         write_labels(
@@ -139,7 +160,6 @@ class Labels(BaseElement):
             coordinate_systems=self.coordinate_systems,
             name=name,
             axes=self.data.dims,
-            scaler=scaler,
             storage_options={"compressor": None},
             # coordinate_transformations=[[coordinate_transformations]],
         )
@@ -228,11 +248,14 @@ class Polygons(BaseElement):
 
     @staticmethod
     def string_to_tensor(s: str) -> Union[ArrayLike, None]:
-        pattern = r"^\[(?:\[[0-9]+\.[0-9]+,[0-9]+\.[0-9]+\],?)+\]$"
+        # TODO: replace this with something cleaner
+        # pattern = r"^\[(?:\[[0-9]+\.[0-9]+,[0-9]+\.[0-9]+\],?)+\]$"
+        pattern = r"^\[(?:\[[-0-9]+\.[0-9+e]+,[-0-9]+\.[0-9+e]+\],?)+\]$"
         if re.fullmatch(pattern, s) is not None:
             x: ArrayLike = np.array(eval(s))
             return x
-
+        else:
+            raise ValueError(f"String {s} does not match pattern {pattern}")
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         assert self.ndim in [2, 3]

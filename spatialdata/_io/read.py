@@ -86,8 +86,7 @@ def read_zarr(
                 ct[(element_type, e["output"])] = t
 
         if "datasets" in multiscales[0]:
-            datasets = multiscales[0]["datasets"]
-            assert len(datasets) == 1, "Expecting only one dataset"
+            multiscales[0]["datasets"]
             # TODO: multiscale images not supported when reading. Here we would need to read the transformations for
             #  the levels of the pyramid
 
@@ -101,6 +100,18 @@ def read_zarr(
                 assert coordinate_systems[k] == v
             else:
                 coordinate_systems[k] = v
+
+    def _read_multiscale_images(multiscales: Multiscales, axes: Tuple[str, ...]) -> List[xr.DataArray]:
+        multiscale_images = []
+        # TODO: do something cleaner to read the multiscale levels...
+        try:
+            for i in range(1000):
+                x = xr.DataArray(multiscales.array(resolution=str(i), version=fmt.version), dims=axes)
+                multiscale_images.append(x)
+            raise RuntimeError("Multiscale images with more than 1000 levels are not supported.")
+        except zarr.errors.ArrayNotFoundError:
+            pass
+        return multiscale_images
 
     for k in f.keys():
         f_elem = f[k].name
@@ -127,10 +138,7 @@ def read_zarr(
                         or any(csn in cs.keys() for csn in coordinate_system_names)
                     ):
                         _update_ct_and_cs(ct, cs)
-                        images[k] = xr.DataArray(
-                            node.load(Multiscales).array(resolution="0", version=fmt.version), dims=axes
-                        )
-
+                        images[k] = _read_multiscale_images(node.load(Multiscales), axes=axes)
                     # print(f"action1: {time.time() - start}")
         # read all images/labels for the level
         # warnings like "no parent found for <ome_zarr.reader.Label object at 0x1c789f310>: None" are expected,
@@ -155,9 +163,7 @@ def read_zarr(
                             or any(csn in cs.keys() for csn in coordinate_system_names)
                         ):
                             _update_ct_and_cs(ct, cs)
-                            labels[k] = xr.DataArray(
-                                node.load(Multiscales).array(resolution="0", version=fmt.version), dims=axes
-                            )
+                            labels[k] = _read_multiscale_images(node.load(Multiscales), axes=axes)
                         # print(f"action1: {time.time() - start}")
         # now read points and polygons
         # start = time.time()
@@ -226,7 +232,7 @@ def read_zarr(
         polygons=polygons,
         table=table,
         transformations=transformations,
-        _from_disk=True,
+        _validate_transformations=False,
     )
 
 
