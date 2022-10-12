@@ -1,10 +1,11 @@
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
+import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
-from ome_zarr.format import CurrentFormat, Format
+from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes, _validate_datasets
@@ -35,6 +36,9 @@ def _write_metadata(
     datasets.append({"path": attr})
 
     if coordinate_transformations is None:
+        # TODO: temporary workaround, report bug to handle empty shapes
+        if shape[0] == 0:
+            shape = (1, *shape[1:])
         shape = [shape]  # type: ignore[assignment]
         coordinate_transformations = fmt.generate_coordinate_transformations(shape)
 
@@ -82,7 +86,7 @@ def write_points(
     _write_metadata(
         points_group,
         group_type=group_type,
-        shape=points.shape,
+        shape=points.obsm["spatial"].shape,
         attr={"attr": "X", "key": None},
         fmt=fmt,
         axes=axes,
@@ -118,7 +122,7 @@ def write_image(
     group: zarr.Group,
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
@@ -143,13 +147,17 @@ def write_labels(
     name: str,
     scaler: Scaler = Scaler(),
     chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
 ) -> None:
+    if np.prod(labels.shape) == 0:
+        # TODO: temporary workaround, report bug to handle empty shapes
+        # TODO: consider the different axes, now assuming a 2D image
+        coordinate_transformations = fmt.generate_coordinate_transformations(shapes=[(1, 1)])
     write_labels_ngff(
         labels=labels,
         group=group,
@@ -166,15 +174,25 @@ def write_labels(
 
 
 def write_polygons(
-    polygons: ArrayLike,
+    polygons: AnnData,
     group: zarr.Group,
     name: str,
-    scaler: Scaler = Scaler(),
-    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
-    fmt: Format = CurrentFormat(),
+    group_type: str = "ngff:polygons",
+    fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
-    **metadata: JSONDict,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
-    raise NotImplementedError("Polygons IO not implemented yet.")
+    sub_group = group.require_group("polygons")
+    write_adata(sub_group, name, polygons)
+    polygons_group = sub_group[name]
+    _write_metadata(
+        polygons_group,
+        group_type=group_type,
+        shape=(1, 2),  # assuming 2d
+        attr={"attr": "X", "key": None},
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )

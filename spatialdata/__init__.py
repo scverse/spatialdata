@@ -2,5 +2,40 @@ from importlib.metadata import version
 
 __version__ = version("spatialdata")
 
-from spatialdata._core.spatialdata import SpatialData
-from spatialdata._core.transform import Transform
+__all__ = [
+    "SpatialData",
+    "Identity",
+    "MapIndex",
+    "MapAxis",
+    "Translation",
+    "Scale",
+    "Affine",
+    "Rotation",
+    "Sequence",
+    "Displacements",
+    "Coordinates",
+    "VectorField",
+    "InverseOf",
+    "Bijection",
+    "ByDimension",
+    "compose_transformations",
+]
+
+from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.transform import (
+    Affine,
+    Bijection,
+    ByDimension,
+    Coordinates,
+    Displacements,
+    Identity,
+    InverseOf,
+    MapAxis,
+    MapIndex,
+    Rotation,
+    Scale,
+    Sequence,
+    Translation,
+    VectorField,
+    compose_transformations,
+)

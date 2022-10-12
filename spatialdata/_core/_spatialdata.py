@@ -1,4 +1,5 @@
-import hashlib
+from __future__ import annotations
+
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Optional, Tuple
 
@@ -89,6 +90,13 @@ class SpatialData:
     def table(self) -> AnnData:
         return self._table
 
+    @classmethod
+    def read(cls, file_path: str) -> SpatialData:
+        from spatialdata._io.read import read_zarr
+
+        sdata = read_zarr(file_path)
+        return sdata
+
     def __repr__(self) -> str:
         return self._gen_repr()
 
@@ -100,32 +108,48 @@ class SpatialData:
             return new.join(li)
 
         def h(s: str) -> str:
-            return hashlib.md5(repr(s).encode()).hexdigest()
+            return s
+            # return hashlib.md5(repr(s).encode()).hexdigest()
 
+        ##
         descr = "SpatialData object with:"
         for attr in ["images", "labels", "points", "polygons", "table"]:
             attribute = getattr(self, attr)
-            descr += f"\n{h('level0')}{attr.capitalize()}"
-            descr = rreplace(descr, h("level0"), "└── ", 1)
-            if attribute is not None:
+            if attribute is not None and len(attribute) > 0:
+                descr += f"\n{h('level0')}{attr.capitalize()}"
                 if isinstance(attribute, AnnData):
                     descr += f"{h('empty_line')}"
                     descr_class = attribute.__class__.__name__
                     descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
                     descr = rreplace(descr, h("level1.0"), "    └── ", 1)
                 else:
+                    # descr = rreplace(descr, h("level0"), "└── ", 1)
                     for k, v in attribute.items():
                         descr += f"{h('empty_line')}"
-                        if isinstance(v, AnnData):
-                            descr_class = v.__class__.__name__
+                        descr_class = v.data.__class__.__name__
+                        if attr == "points":
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
+                        elif attr == "polygons":
+                            # assuming 2d
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osb.spatial describing "
+                                f"{len(v.data.obs)} 2D polygons"
+                            )
                         else:
-                            descr_class = v.data.__class__.__name__
-                        descr += f"{h('level1.0')}'{k}': {descr_class} {v.shape}"
-                        descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                        # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
+
+        descr = rreplace(descr, h("level0"), "└── ", 1)
+        descr = descr.replace(h("level0"), "├── ")
+
+        for attr in ["images", "labels", "points", "polygons", "table"]:
+            descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
+            descr = descr.replace(h(attr + "level1.1"), "    ├── ")
+        ##
         return descr
 
 
@@ -155,3 +179,11 @@ def _validate_dataset(
                 raise ValueError(
                     f"Invalid `dataset_transform` keys not present in `dataset`: `{set(dataset_transform).difference(set(dataset))}`."
                 )
+
+
+if __name__ == "__main__":
+    sdata = SpatialData.read("spatialdata-sandbox/merfish/data.zarr")
+    s = sdata.polygons["anatomical"].data.obs.iloc[0]["spatial"]
+    print(Polygons.string_to_tensor(s))
+    print(sdata)
+    print("ehi")

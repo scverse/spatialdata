@@ -1,6 +1,7 @@
 import os
+import time
 from pathlib import Path
-from typing import Any, Mapping, Union
+from typing import Optional, Union
 
 import numpy as np
 import zarr
@@ -9,7 +10,8 @@ from anndata._io import read_zarr as read_anndata_zarr
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Reader
 
-from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.transform import BaseTransformation, get_transformation_from_dict
 from spatialdata._io.format import SpatialDataFormat
 
 
@@ -24,35 +26,96 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     images = {}
     labels = {}
     points = {}
-    polygons: Mapping[str, Any] = {}
+    table: Optional[AnnData] = None
+    polygons = {}
+    images_transform = {}
+    labels_transform = {}
+    points_transform = {}
+    polygons_transform = {}
+
+    def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
+        multiscales = group.attrs["multiscales"]
+        # TODO: parse info from multiscales['axes']
+        assert len(multiscales) == 1, f"TODO: expecting only one multiscale, got {len(multiscales)}"
+        datasets = multiscales[0]["datasets"]
+        assert len(datasets) == 1, "Expecting only one dataset"
+        coordinate_transformations = datasets[0]["coordinateTransformations"]
+        transformations = [get_transformation_from_dict(t) for t in coordinate_transformations]
+        assert len(transformations) == 1, "Expecting only one transformation per multiscale"
+        return transformations[0]
 
     for k in f.keys():
         f_elem = f[k].name
         f_elem_store = f"{store}{f_elem}"
-        loc = ZarrLocation(f_elem_store)
-        reader = Reader(loc)()
-        nodes = list(reader)
-        if len(nodes):
-            for node in nodes:
-                if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
-                    if np.any([isinstance(spec, Label) for spec in node.specs]):
-                        labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
-                    else:
-                        images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
+        image_loc = ZarrLocation(f_elem_store)
+        image_reader = Reader(image_loc)()
+        image_nodes = list(image_reader)
+        # read multiscale images that are not labels
+        start = time.time()
+        if len(image_nodes):
+            for node in image_nodes:
+                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
+                    [not isinstance(spec, Label) for spec in node.specs]
+                ):
+                    print(f"action0: {time.time() - start}")
+                    start = time.time()
+                    images[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
+                    images_transform[k] = _get_transform_from_group(zarr.open(node.zarr.path, mode="r"))
+                    print(f"action1: {time.time() - start}")
         # read all images/labels for the level
+        # warnings like "no parent found for <ome_zarr.reader.Label object at 0x1c789f310>: None" are expected,
+        # since we don't link the image and the label inside .zattrs['image-label']
+        labels_loc = ZarrLocation(f"{f_elem_store}/labels")
+        start = time.time()
+        if labels_loc.exists():
+            labels_reader = Reader(labels_loc)()
+            labels_nodes = list(labels_reader)
+            if len(labels_nodes):
+                for node in labels_nodes:
+                    if np.any([isinstance(spec, Label) for spec in node.specs]):
+                        print(f"action0: {time.time() - start}")
+                        start = time.time()
+                        labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
+                        labels_transform[k] = _get_transform_from_group(zarr.open(node.zarr.path, mode="r"))
+                        print(f"action1: {time.time() - start}")
         # now read rest
+        start = time.time()
         g = zarr.open(f_elem_store, mode="r")
         for j in g.keys():
             g_elem = g[j].name
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
             if g_elem == "/points":
                 points[k] = read_anndata_zarr(g_elem_store)
+                points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
-        if f_elem == "/table":
-            table = read_anndata_zarr(f_elem_store + f_elem)  # saved under '/table/table', improve group resolution
+            if g_elem == "/polygons":
+                polygons[k] = read_anndata_zarr(g_elem_store)
+                polygons_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
-    return SpatialData(images=images, labels=labels, points=points, polygons=polygons, table=table)
+            if g_elem == "/table":
+                table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
+        print(f"rest: {time.time() - start}")
+
+    return SpatialData(
+        images=images,
+        labels=labels,
+        points=points,
+        polygons=polygons,
+        table=table,
+        images_transform=images_transform,
+        labels_transform=labels_transform,
+        points_transform=points_transform,
+        polygons_transform=polygons_transform,
+    )
 
 
 def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
     return read_zarr(os.path.join(file_path, table_group))
+
+
+if __name__ == "__main__":
+    sdata = SpatialData.read("../../spatialdata-sandbox/nanostring_cosmx/data_small.zarr")
+    print(sdata)
+    from napari_spatialdata import Interactive
+
+    Interactive(sdata)

@@ -1,5 +1,6 @@
 from typing import Mapping, Sequence
 
+import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
@@ -26,13 +27,44 @@ def points() -> SpatialData:
 
 
 @pytest.fixture()
-def tables() -> SpatialData:
-    return SpatialData(tables=_get_table(3))
+def table() -> SpatialData:
+    return SpatialData(table=_get_table())
 
 
 @pytest.fixture()
-def sdata() -> SpatialData:
-    return SpatialData(images=_get_images(1), labels=_get_labels(1), points=_get_points(2), table=_get_table())
+def empty_images() -> SpatialData:
+    pytest.skip("empty images not supported")
+    return SpatialData(images={"empty": np.zeros((0, 0, 0))})
+
+
+@pytest.fixture()
+def empty_labels() -> SpatialData:
+    pytest.skip("empty labels not supported")
+    return SpatialData(labels={"empty": np.zeros((0, 0), dtype=int)})
+
+
+@pytest.fixture()
+def empty_points() -> SpatialData:
+    return SpatialData(points={"empty": AnnData(shape=(0, 0), obsm={"spatial": np.zeros((0, 2))})})
+
+
+@pytest.fixture()
+def empty_table() -> SpatialData:
+    return SpatialData(table=AnnData(shape=(0, 0)))
+
+
+@pytest.fixture(
+    # params=["labels"]
+    params=["full"]
+    + ["images", "labels", "points", "table"]
+    + ["empty_" + x for x in ["images", "labels", "points", "table"]]
+)
+def sdata(request) -> SpatialData:
+    if request.param == "full":
+        s = SpatialData(images=_get_images(2), labels=_get_labels(2), points=_get_points(2), table=_get_table())
+    else:
+        s = request.getfixturevalue(request.param)
+    return s
 
 
 def _get_images(n: int) -> Mapping[str, Sequence[NDArray]]:
@@ -44,7 +76,9 @@ def _get_labels(n: int) -> Mapping[str, Sequence[NDArray]]:
 
 
 def _get_points(n: int) -> Mapping[str, Sequence[NDArray]]:
-    return {f"points_{i}": AnnData(RNG.integers(0, 10, size=(100, 2))) for i in range(n)}
+    return {
+        f"points_{i}": AnnData(shape=(100, 0), obsm={"spatial": RNG.integers(0, 10, size=(100, 2))}) for i in range(n)
+    }
 
 
 def _get_table() -> AnnData:
