@@ -20,7 +20,7 @@ Labels2D_s = DataArraySchema(dtype=Labels_t, dims=(Y, X))
 Image2D_s = DataArraySchema(dtype=Image_t, dims=(C, Y, X))
 
 Labels3D_s = DataArraySchema(dtype=Labels_t, dims=(Z, Y, X))
-Image3D_s = DataArraySchema(dtype=Image_t, dims=(Z, C, Y, X))
+Image3D_s = DataArraySchema(dtype=Image_t, dims=(C, Z, Y, X))
 
 
 @dataclass
@@ -48,4 +48,4 @@ class Labels3D(AsDataArray):
 class Image3D(AsDataArray):
     """3D Image as DataArray."""
 
-    data: Data[Tuple[Z_t, C_t, Y_t, X_t], Labels_t]
+    data: Data[Tuple[C_t, Z_t, Y_t, X_t], Labels_t]
