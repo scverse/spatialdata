@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
 
 import numpy as np
-import pandera as pa
-from pandera import Field
+from pandera import Field, SchemaModel
 from pandera.typing import Series
 from pandera.typing.geopandas import GeoSeries
 from xarray_dataclasses import AsDataArray, Data
@@ -55,11 +54,20 @@ class Image3D(AsDataArray):
     data: Data[Tuple[C_t, Z_t, Y_t, X_t], Labels_t]
 
 
-class CirclesSchema(pa.SchemaModel):
+# with pandera we can both validate and parse!
+class CirclesSchema(SchemaModel):
     geometry: GeoSeries = Field(coerce=True)
     radius: Series[int] = Field(coerce=True)
 
 
-class SquareSchema(pa.SchemaModel):
+class SquareSchema(SchemaModel):
     geometry: GeoSeries = Field(coerce=True)
     sides: Optional[Series[int]] = Field(coerce=True)
+
+
+class PolygonSchema(SchemaModel):
+    geometry: GeoSeries = Field(coerce=True)
+
+
+# Points (AnnData)?
+# Tables (AnnData)?
