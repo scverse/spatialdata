@@ -1,9 +1,13 @@
 """This file contains models and schema for SpatialData"""
 
 from dataclasses import dataclass
-from typing import Literal, Tuple
+from typing import Literal, Optional, Tuple
 
 import numpy as np
+import pandera as pa
+from pandera import Field
+from pandera.typing import Series
+from pandera.typing.geopandas import GeoSeries
 from xarray_dataclasses import AsDataArray, Data
 from xarray_schema import DataArraySchema
 
@@ -49,3 +53,13 @@ class Image3D(AsDataArray):
     """3D Image as DataArray."""
 
     data: Data[Tuple[C_t, Z_t, Y_t, X_t], Labels_t]
+
+
+class CirclesSchema(pa.SchemaModel):
+    geometry: GeoSeries = Field(coerce=True)
+    radius: Series[int] = Field(coerce=True)
+
+
+class SquareSchema(pa.SchemaModel):
+    geometry: GeoSeries = Field(coerce=True)
+    sides: Optional[Series[int]] = Field(coerce=True)
