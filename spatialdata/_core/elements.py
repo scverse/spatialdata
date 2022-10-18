@@ -67,6 +67,7 @@ class Image(BaseElement):
         super().__init__(alignment_info=alignment_info)
         if isinstance(image, DataArray):
             self.data = image
+            self.multiscales = None
         elif isinstance(image, list):
             assert all(isinstance(im, DataArray) for im in image)
             self.data = image[0]
@@ -129,6 +130,7 @@ class Labels(BaseElement):
         super().__init__(alignment_info=alignment_info)
         if isinstance(labels, DataArray):
             self.data = labels
+            self.multiscales = None
         elif isinstance(labels, list):
             assert all(isinstance(im, DataArray) for im in labels)
             self.data = labels[0]
