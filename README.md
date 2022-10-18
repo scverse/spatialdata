@@ -30,6 +30,8 @@ Check out the docs for more complete installation instructions. For now you can 
 pip install git+https://github.com/scverse/spatialdata.git@main
 ```
 
+<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+
 ## Contact
 
 For questions and help requests, you can reach out in the [scverse discourse][scverse-discourse].
