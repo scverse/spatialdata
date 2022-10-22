@@ -46,4 +46,6 @@ exclude = .git,__pycache__,build,docs/_build,dist
 per-file-ignores =
     tests/*: D
     */__init__.py: F401
+    # TODO: this file is weird, but it's not actually causing a bug and fixing it is
+    # signifigantly harder than ignoring it
     spatialdata/_constants/_enum.py: B024
