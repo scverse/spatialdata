@@ -54,7 +54,6 @@ class Image3D(AsDataArray):
     data: Data[Tuple[C_t, Z_t, Y_t, X_t], Labels_t]
 
 
-# with pandera we can both validate and parse!
 class CirclesSchema(SchemaModel):
     geometry: GeoSeries = Field(coerce=True)
     radius: Series[int] = Field(coerce=True)
