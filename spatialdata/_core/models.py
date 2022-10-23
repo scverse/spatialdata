@@ -88,7 +88,7 @@ def _parse_image(
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
     if not isinstance(data, Array):
         data = from_array(data)
-    image = to_spatial_image(array_like=data, dims=dims, *args, **kwargs)
+    image = to_spatial_image(*args, array_like=data, dims=dims, **kwargs)
 
     if transform is None:
         transform = Identity()
