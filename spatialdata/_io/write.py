@@ -5,12 +5,15 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes, _validate_datasets
 from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
+from ome_zarr.writer import write_multiscale as write_multiscale_ngff
+from spatial_image import SpatialImage
 
 from spatialdata._io.format import SpatialDataFormat
 from spatialdata._types import ArrayLike
@@ -120,25 +123,58 @@ def write_table(
 def write_image(
     image: ArrayLike,
     group: zarr.Group,
+    name: str,
     scaler: Scaler = Scaler(),
-    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
-    write_image_ngff(
-        image=image,
-        group=group,
-        scaler=scaler,
-        chunks=chunks,
-        fmt=fmt,
-        axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        storage_options=storage_options,
-        **metadata,
-    )
+
+    if isinstance(image, SpatialImage):
+        data = image.data
+        coordinate_transformations = [[image.attrs.get("transform").to_dict()]]
+        chunks = image.chunks
+        axes = image.dims
+        if storage_options is not None:
+            if "chunks" not in storage_options and isinstance(storage_options, dict):
+                storage_options["chunks"] = chunks
+        else:
+            storage_options = {"chunks": chunks}
+        write_image_ngff(
+            image=data,
+            group=group,
+            scaler=None,
+            fmt=fmt,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            storage_options=storage_options,
+            **metadata,
+        )
+    elif isinstance(image, MultiscaleSpatialImage):
+        data = _iter_multiscale(image, name, "data")
+        coordinate_transformations = [x.to_dict() for x in _iter_multiscale(image, name, "attrs", "transform")]
+        print(coordinate_transformations)
+        chunks = _iter_multiscale(image, name, "chunks")
+        axes_ = _iter_multiscale(image, name, "dims")
+        # TODO: how should axes be handled with multiscale?
+        axes = _get_valid_axes(ndim=3, axes=axes_[0])
+        if storage_options is not None:
+            if "chunks" not in storage_options and isinstance(storage_options, dict):
+                storage_options["chunks"] = chunks
+        else:
+            storage_options = {"chunks": chunks}
+        write_multiscale_ngff(
+            pyramid=data,
+            group=group,
+            fmt=fmt,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            storage_options=storage_options,
+            name=name,
+            **metadata,
+        )
 
 
 def write_labels(
@@ -196,3 +232,15 @@ def write_polygons(
         coordinate_transformations=coordinate_transformations,
         **metadata,
     )
+
+
+def _iter_multiscale(
+    data: MultiscaleSpatialImage,
+    name: str,
+    attr: str,
+    key: Optional[str] = None,
+) -> List[Any]:
+    if key is None:
+        return [getattr(data[i][name], attr) for i in data.keys()]
+    else:
+        return [getattr(data[i][name], attr).get(key) for i in data.keys()]

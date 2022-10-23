@@ -12,12 +12,7 @@ from ome_zarr.scale import Scaler
 from xarray import DataArray
 
 from spatialdata._core.transform import BaseTransformation, Identity  # , get_transform
-from spatialdata._io.write import (
-    write_image,
-    write_labels,
-    write_points,
-    write_polygons,
-)
+from spatialdata._io.write import write_labels, write_points, write_polygons
 from spatialdata._types import ArrayLike
 
 __all__ = ["Image", "Labels", "Points", "Polygons"]
@@ -74,17 +69,17 @@ class Image(BaseElement):
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         # TODO: allow to write from path
         assert isinstance(self.transforms, BaseTransformation)
-        coordinate_transformations = self.transforms.to_dict()
+        self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
         # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
-        write_image(
-            image=self.data.data,
-            group=group,
-            axes=self.axes,
-            scaler=scaler,
-            coordinate_transformations=[[coordinate_transformations]],
-            storage_options={"compressor": None},
-        )
+        # write_image(
+        #     image=self.data.data,
+        #     group=group,
+        #     axes=self.axes,
+        #     scaler=scaler,
+        #     coordinate_transformations=[[coordinate_transformations]],
+        #     storage_options={"compressor": None},
+        # )
 
     def _infer_axes(self, shape: Tuple[int]) -> List[str]:
         # TODO: improve (this information can be already present in the data, as for xarrays, and the constructor

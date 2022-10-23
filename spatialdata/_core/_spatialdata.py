@@ -1,20 +1,23 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, Optional, Tuple
+from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
+from spatial_image import SpatialImage
 
-from spatialdata._core.elements import Image, Labels, Points, Polygons
-from spatialdata._io.write import write_table
+from spatialdata._core.elements import Labels, Points, Polygons
+from spatialdata._core.models import _parse_image, _validate_image
+from spatialdata._io.write import write_image, write_table
 
 
 class SpatialData:
     """Spatial data structure."""
 
-    images: Mapping[str, Image] = MappingProxyType({})
+    images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Labels] = MappingProxyType({})
     points: Mapping[str, Points] = MappingProxyType({})
     polygons: Mapping[str, Polygons] = MappingProxyType({})
@@ -31,6 +34,8 @@ class SpatialData:
         labels_transform: Optional[Mapping[str, Any]] = None,
         points_transform: Optional[Mapping[str, Any]] = None,
         polygons_transform: Optional[Mapping[str, Any]] = None,
+        multiscale_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        **kwargs: Any,
     ) -> None:
 
         _validate_dataset(images, images_transform)
@@ -39,9 +44,15 @@ class SpatialData:
         _validate_dataset(polygons, polygons_transform)
 
         if images is not None:
-            self.images = {
-                k: Image.parse_image(data, transform) for (k, data), transform in _iter_elems(images, images_transform)
-            }
+            images_ = {}
+            for (name, data), transform in _iter_elems(images, images_transform):
+                if isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage):
+                    # TODO: validate
+                    _validate_image(data)
+                    images_[name] = data
+                else:
+                    images_[name] = _parse_image(data=data, name=name, transform=transform, **multiscale_kwargs)
+            self.images = images_
 
         if labels is not None:
             self.labels = {
@@ -75,7 +86,12 @@ class SpatialData:
         for el in elems:
             elem_group = root.create_group(name=el)
             if self.images is not None and el in self.images.keys():
-                self.images[el].to_zarr(elem_group, name=el)
+                write_image(
+                    image=self.images[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
             if self.labels is not None and el in self.labels.keys():
                 self.labels[el].to_zarr(elem_group, name=el)
             if self.points is not None and el in self.points.keys():
@@ -126,7 +142,7 @@ class SpatialData:
                     # descr = rreplace(descr, h("level0"), "└── ", 1)
                     for k, v in attribute.items():
                         descr += f"{h('empty_line')}"
-                        descr_class = v.data.__class__.__name__
+                        descr_class = v.__class__.__name__
                         if attr == "points":
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
                         elif attr == "polygons":
@@ -136,7 +152,10 @@ class SpatialData:
                                 f"{len(v.data.obs)} 2D polygons"
                             )
                         else:
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                            if isinstance(v, SpatialImage) or isinstance(v, MultiscaleSpatialImage):
+                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}"
+                            else:
+                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
                         # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
