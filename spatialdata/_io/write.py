@@ -133,6 +133,10 @@ def write_image(
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
+    c, y, x
+    3, 60000, 60000
+    chunks = (1, 2500, 2500) if chunks is None else chunks
+
     ##
     write_image_ngff(
         image=image,
@@ -174,6 +178,7 @@ def write_labels(
         # TODO: consider the different axes, now assuming a 2D image
         raise NotImplementedError("legacy code not tested, debug")
         coordinate_transformations = fmt.generate_coordinate_transformations(shapes=[(1, 1)])
+    chunks = (2500, 2500) if chunks is None else chunks
     write_labels_ngff(
         labels=labels,
         group=group,

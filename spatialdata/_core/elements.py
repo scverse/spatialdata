@@ -1,4 +1,3 @@
-import re
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -242,7 +241,14 @@ class Polygons(BaseElement):
 
     @staticmethod
     def tensor_to_string(x: ArrayLike) -> str:
-        s = repr(x).replace("\n", "").replace(" ", "")[len("array(") : -1]
+        import sys
+
+        import numpy
+
+        numpy.set_printoptions(threshold=sys.maxsize)
+        s = repr(x).replace("\n", "").replace(" ", "")
+        if type(x) != list:
+            s = s[len("array(") : -1]
         # consistently check
         y = eval(s)
         assert np.allclose(x, y)
@@ -252,12 +258,12 @@ class Polygons(BaseElement):
     def string_to_tensor(s: str) -> Union[ArrayLike, None]:
         # TODO: replace this with something cleaner
         # pattern = r"^\[(?:\[[0-9]+\.[0-9]+,[0-9]+\.[0-9]+\],?)+\]$"
-        pattern = r"^\[(?:\[[-0-9]+\.[0-9+e]+,[-0-9]+\.[0-9+e]+\],?)+\]$"
-        if re.fullmatch(pattern, s) is not None:
-            x: ArrayLike = np.array(eval(s))
-            return x
-        else:
-            raise ValueError(f"String {s} does not match pattern {pattern}")
+        # pattern = r"^\[(?:\[[-0-9]+\.[0-9+e]+,[-0-9]+\.[0-9+e]+\],?)+\]$"
+        # if re.fullmatch(pattern, s) is not None:
+        x: ArrayLike = np.array(eval(s))
+        return x
+        # else:
+        # raise ValueError(f"String {s} does not match pattern {pattern}")
 
     def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
         assert self.ndim in [2, 3]
