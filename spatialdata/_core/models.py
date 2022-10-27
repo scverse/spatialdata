@@ -4,8 +4,8 @@ from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from dask.array import Array, from_array
 from dask.array.core import Array as DaskArray
+from dask.array.core import from_array
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
@@ -34,22 +34,22 @@ Transform_s = AttrSchema(BaseTransformation, None)
 
 Labels2D_s = DataArraySchema(
     dims=DimsSchema((Y, X)),
-    array_type=ArrayTypeSchema(Array),
+    array_type=ArrayTypeSchema(DaskArray),
     attrs={"transform": Transform_s},
 )
 Image2D_s = DataArraySchema(
     dims=DimsSchema((C, Y, X)),
-    array_type=ArrayTypeSchema(Array),
+    array_type=ArrayTypeSchema(DaskArray),
     attrs={"transform": Transform_s},
 )
 Labels3D_s = DataArraySchema(
     dims=DimsSchema((Z, Y, X)),
-    array_type=ArrayTypeSchema(Array),
+    array_type=ArrayTypeSchema(DaskArray),
     attrs={"transform": Transform_s},
 )
 Image3D_s = DataArraySchema(
     dims=DimsSchema((Z, C, Y, X)),
-    array_type=ArrayTypeSchema(Array),
+    array_type=ArrayTypeSchema(DaskArray),
     attrs={"transform": Transform_s},
 )
 
