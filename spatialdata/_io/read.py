@@ -18,7 +18,7 @@ from spatialdata._core.transform import BaseTransformation, get_transformation_f
 from spatialdata._io.format import SpatialDataFormat
 
 
-def _read_multiscale(node: Node, fmt: SpatialDataFormat) -> Multiscales:
+def _read_multiscale(node: Node, fmt: SpatialDataFormat) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
     transformations = [get_transformation_from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
     axes = [i["name"] for i in node.metadata["axes"]]

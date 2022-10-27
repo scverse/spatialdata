@@ -1,8 +1,11 @@
 """This file contains models and schema for SpatialData"""
 
+from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
+import numpy as np
 from dask.array import Array, from_array
+from dask.array.core import Array as DaskArray
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
@@ -11,9 +14,10 @@ from pandera import Field, SchemaModel
 from pandera.typing import Series
 from pandera.typing.geopandas import GeoSeries
 from spatial_image import SpatialImage, to_spatial_image
+from xarray_schema.components import ArrayTypeSchema, AttrSchema, DimsSchema
 from xarray_schema.dataarray import DataArraySchema
 
-from spatialdata._core.transform import Identity
+from spatialdata._core.transform import BaseTransformation, Identity
 
 # Types
 Chunks_t = Union[
@@ -24,81 +28,136 @@ Chunks_t = Union[
 ]
 ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 
-X, X_t = "x", Literal["x"]
-Y, Y_t = "y", Literal["y"]
-C, C_t = "c", Literal["c"]
-Z, Z_t = "z", Literal["z"]
+Z, C, Y, X = "z", "c", "y", "x"
 
-Labels2D_s = DataArraySchema(dims=(Y, X))
-Image2D_s = DataArraySchema(dims=(C, Y, X))
+Transform_s = AttrSchema(BaseTransformation, None)
 
-Labels3D_s = DataArraySchema(dims=(Z, Y, X))
-Image3D_s = DataArraySchema(dims=(C, Z, Y, X))
+Labels2D_s = DataArraySchema(
+    dims=DimsSchema((Y, X)),
+    array_type=ArrayTypeSchema(Array),
+    attrs={"transform": Transform_s},
+)
+Image2D_s = DataArraySchema(
+    dims=DimsSchema((C, Y, X)),
+    array_type=ArrayTypeSchema(Array),
+    attrs={"transform": Transform_s},
+)
+Labels3D_s = DataArraySchema(
+    dims=DimsSchema((Z, Y, X)),
+    array_type=ArrayTypeSchema(Array),
+    attrs={"transform": Transform_s},
+)
+Image3D_s = DataArraySchema(
+    dims=DimsSchema((Z, C, Y, X)),
+    array_type=ArrayTypeSchema(Array),
+    attrs={"transform": Transform_s},
+)
 
 
-def _validate_image(
-    data: ArrayLike,
-) -> None:
+def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> DataArraySchema:
     if isinstance(data, SpatialImage):
-        if data.ndim == 2:
-            Image2D_s.validate(data)
-        elif data.ndim == 3:
-            Image3D_s.validate(data)
+        if len(data.dims) == 2:
+            return Labels2D_s
+        elif len(data.dims) == 3:
+            if kind == "Image":
+                return Image2D_s
+            elif kind == "Label":
+                return Labels3D_s
+            else:
+                raise ValueError(f"Wrong kind: {kind}")
+        elif len(data.dims) == 3:
+            return Image3D_s
         else:
             raise ValueError(f"Wrong dimensions: {data.dims}D array.")
     elif isinstance(data, MultiscaleSpatialImage):
         for i in data:
-            if len(data[i].dims) == 2:
-                Image2D_s.dims.validate(data[i].dims)
-            elif len(data[i].dims) == 2:
-                Image3D_s.dims.validate(data[i].dims)
-            else:
-                raise ValueError(f"Wrong dimensions: {data[i].dims}D array.")
+            return _get_raster_schema(data[i], kind)
 
 
-def _validate_labels(
-    data: ArrayLike,
-) -> None:
-    if isinstance(data, SpatialImage):
-        if data.ndim == 2:
-            Labels2D_s.validate(data)
-        elif data.ndim == 3:
-            Labels3D_s.validate(data)
-        else:
-            raise ValueError(f"Wrong dimensions: {data.dims}D array.")
-    elif isinstance(data, MultiscaleSpatialImage):
-        for i in data:
-            if len(data[i].dims) == 2:
-                Labels2D_s.dims.validate(data[i].dims)
-            elif len(data[i].dims) == 2:
-                Labels3D_s.dims.validate(data[i].dims)
-            else:
-                raise ValueError(f"Wrong dimensions: {data[i].dims}D array.")
+@singledispatch
+def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    """
+    Validate (or parse) raster data.
+
+    Parameters
+    ----------
+    data
+        Data to validate.
+    kind
+        Kind of data to validate. Can be "Image" or "Label".
+    transform
+        Transformation to apply to the data.
+    scale_factors
+        Scale factors to apply for multiscale.
+    method
+        Method to use for multiscale.
+    chunks
+        Chunks to use for dask array.
+
+    Returns
+    -------
+    SpatialImage or MultiscaleSpatialImage.
+    """
+    raise ValueError(f"Unsupported type: {type(data)}")
 
 
-def _parse_image(
-    data: ArrayLike,
-    dims: Tuple[int, ...],
+@validate_raster.register
+def _(
+    data: Union[np.ndarray, DaskArray],  # type: ignore[type-arg]
+    kind: Literal["Image", "Label"],
     transform: Optional[Any] = None,
     scale_factors: Optional[ScaleFactors_t] = None,
     method: Optional[Methods] = None,
     chunks: Optional[Chunks_t] = None,
-    *args: Any,
     **kwargs: Any,
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    if not isinstance(data, Array):
-        data = from_array(data)
-    image = to_spatial_image(*args, array_like=data, dims=dims, **kwargs)
 
+    data = from_array(data) if isinstance(data, np.ndarray) else data
+    schema = _get_raster_schema(data, kind)
+
+    data = to_spatial_image(array_like=data, dims=schema.dims.dims, **kwargs)
     if transform is None:
         transform = Identity()
-    image.attrs = {"transform": transform}
-
+        data.attrs = {"transform": transform}
     if scale_factors is not None:
-        # TODO: validate multiscale
-        return to_multiscale(image, scale_factors=scale_factors, method=method, chunks=chunks)
-    else:
-        return image
+        data = to_multiscale(
+            data,
+            scale_factors=scale_factors,
+            method=method,
+            chunks=chunks,
+        )
+        # TODO: add transform to multiscale
+    return data
+
+
+@validate_raster.register
+def _(
+    data: SpatialImage,
+    kind: Literal["Image", "Label"],
+    **kwargs: Any,
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+
+    schema = _get_raster_schema(data, kind)
+    schema.validate(data)
+    return data
+
+
+@validate_raster.register
+def _(
+    data: MultiscaleSpatialImage,
+    kind: Literal["Image", "Label"],
+    **kwargs: Any,
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+
+    schema = _get_raster_schema(data, kind)
+    # TODO(giovp): get name from multiscale, consider fix upstream
+    name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+    if len(name) > 1:
+        raise ValueError(f"Wrong name for datatree: {name}.")
+    name = list(name)[0]
+    for k in data.keys():
+        schema.validate(data[k][name])
+    return data
 
 
 class CirclesSchema(SchemaModel):

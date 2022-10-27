@@ -10,7 +10,7 @@ from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Labels, Points, Polygons
-from spatialdata._core.models import _parse_image, _validate_image
+from spatialdata._core.models import validate_raster
 from spatialdata._io.write import write_image, write_table
 
 
@@ -44,15 +44,10 @@ class SpatialData:
         _validate_dataset(polygons, polygons_transform)
 
         if images is not None:
-            images_ = {}
-            for (name, data), transform in _iter_elems(images, images_transform):
-                if isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage):
-                    # TODO: validate
-                    _validate_image(data)
-                    images_[name] = data
-                else:
-                    images_[name] = _parse_image(data=data, name=name, transform=transform, **multiscale_kwargs)
-            self.images = images_
+            self.images = {
+                k: validate_raster(data, kind="image", transform=transform)
+                for (k, data), transform in _iter_elems(labels, labels_transform)
+            }
 
         if labels is not None:
             self.labels = {
