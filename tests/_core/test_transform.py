@@ -1,10 +1,9 @@
 import numpy as np
 import pytest
 
-from spatialdata._core.transform import (
+from spatialdata._core.transformations import (
     Affine,
     Sequence,
-    compose_transformations,
     get_transformation_from_json,
 )
 
@@ -142,9 +141,11 @@ def test_to_composition_to_affine():
     )
     composed1 = Sequence(
         [
-            compose_transformations(
-                get_transformation_from_json('{"type": "translation", "translation": [1, 2]}'),
-                get_transformation_from_json('{"type": "scale", "scale": [3, 4]}'),
+            Sequence(
+                [
+                    get_transformation_from_json('{"type": "translation", "translation": [1, 2]}'),
+                    get_transformation_from_json('{"type": "scale", "scale": [3, 4]}'),
+                ],
             ),
             Affine(np.array([5, 6, 7, 8, 9, 10])),
         ]

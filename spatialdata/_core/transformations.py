@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 
@@ -25,14 +25,18 @@ __all__ = [
     "InverseOf",
     "Bijection",
     "ByDimension",
-    "compose_transformations",
 ]
 
 
 class BaseTransformation(ABC):
     @property
     @abstractmethod
-    def ndim(self) -> Optional[int]:
+    def src_dim(self) -> Optional[int]:
+        pass
+
+    @property
+    @abstractmethod
+    def des_dim(self) -> Optional[int]:
         pass
 
     @abstractmethod
@@ -43,7 +47,7 @@ class BaseTransformation(ABC):
         return json.dumps(self.to_dict())
 
     def compose_with(self, transformation: BaseTransformation) -> BaseTransformation:
-        return compose_transformations(self, transformation)
+        return Sequence([self, transformation])
 
     @abstractmethod
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -53,9 +57,14 @@ class BaseTransformation(ABC):
     def inverse(self) -> BaseTransformation:
         pass
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, BaseTransformation):
+            return False
+        return self.to_dict() == other.to_dict()
 
-def compose_transformations(transformation0: BaseTransformation, transformation1: BaseTransformation) -> Sequence:
-    return Sequence([transformation0, transformation1])
+    @abstractmethod
+    def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+        pass
 
 
 def get_transformation_from_json(s: str) -> BaseTransformation:
@@ -105,13 +114,70 @@ def get_transformation_from_dict(d: Dict[str, Any]) -> BaseTransformation:
     return cls(**kw)
 
 
+# A note on affine transformations and their matrix representation.
+# Some transformations can be interpreted as (n-dimensional) affine transformations; explicitly these transformations
+# are:
+# - identity
+# - mapIndex
+# - mapAxis
+# - translation
+# - scale
+# - affine
+# - rotation
+# - sequence (if the components are of the types described here)
+# - inverseOf (if the components are of the types described here)
+# - bijection (if the components are of the types described here)
+# - byDimension (if the components are of the types described here)
+# In general the conversion between one of these classes to (or from) its matrix form requires the knowledge of the
+# input and output axes.
+#
+# An example.
+# The relationship between the input/ouput axes and the matrix form is shown in the following
+# example, of an affine transformation between the input axes (x, y) and the output axes (c, y, x), which simply maps
+# the input axes to the output axes respecting the axis names, and then translates by the vector (x, y) = (3, 2):
+#   x  y
+# c 0  0 0
+# y 0  1 2
+# x 1  0 3
+#   0  0 1
+# to apply the above affine transformation A to a point, say the point (x, y) = (a, b), you multiply the matrix by the
+# vector (a, b, 1); you always need to add 1 as the last element.
+#   x  y
+# c 0  0 0   *   a
+# y 0  1 2       b
+# x 1  0 3       1
+#   0  0 1
+# Notice that if the input space had been y, x, the point (x, y) = (a, b) would have led to the column vector (b, a, 1)
+#
+# Notice that:
+# - you can think of the input axes as labeling the columns of the matrix
+# - you can think of the output axes as labeling the rows of the matrix
+# - the last rows is always the vector [0, 0, ..., 0, 1]
+# - the last column is always a translation vector, plus the element 1 in the last position
+#
+# A more theoretical note.
+# The matrix representation of an affine transformation has the above form thanks to the fact an affine
+# transformation is a particular case of a projective transformation, and the affine space can be seen as the
+# projective space without the "line at infinity". The vector representation of a point that belongs to the line
+# at the infinity has the last coordinate equal to 0. This is the reason why when applying an affine transformation
+# to a point we set the last element of the point to 1, and in this way the affine transformation leaves the affine
+# space invariant (i.e. it does not map finite points to the line at the infinity).
+# For a primer you can look here: https://en.wikipedia.org/wiki/Affine_space#Relation_to_projective_spaces
+# For more information please consult a linear algebra textbook.
+
+
 class Identity(BaseTransformation):
     def __init__(self) -> None:
-        self._ndim = None
+        self._src_dim = None
+        self._des_dim = None
 
     @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
+    def src_dim(self) -> Optional[int]:
+        return self._src_dim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -123,6 +189,14 @@ class Identity(BaseTransformation):
 
     def inverse(self) -> BaseTransformation:
         return copy.deepcopy(self)
+
+    def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+        raise NotImplementedError()
+
+    # def to_affine(self, input_axes: Optional[Tuple[str]] = None, output_axes: Optional[Tuple[str]] = None) -> Affine:
+    #     if input_axes is None and output_axes is None:
+    #         raise ValueError("Either input_axes or output_axes must be specified")
+    #     return Affine(np.eye(ndims_output, ndims_input))
 
 
 class MapIndex(BaseTransformation):
@@ -168,7 +242,15 @@ class Translation(BaseTransformation):
         self._ndim = ndim
 
     @property
-    def ndim(self) -> Optional[int]:
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def ndim(self) -> int:
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -183,11 +265,8 @@ class Translation(BaseTransformation):
     def inverse(self) -> BaseTransformation:
         return Translation(translation=-self.translation)
 
-    def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.vstack(
-            (np.hstack((np.array([[1.0, 0.0], [0.0, 1.0]]), self.translation.reshape(2, 1))), np.array([0.0, 0.0, 1.0]))
-        )
+    def to_affine(self, ndims_input: Optional[int] = None, ndims_output: Optional[int] = None) -> Affine:
+        m: ArrayLike = np.hstack((np.eye(len(self.translation)), self.translation.reshape(len(self.translation), 1)))
         return Affine(affine=m)
 
 
@@ -216,6 +295,14 @@ class Scale(BaseTransformation):
         self._ndim = ndim
 
     @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
     def ndim(self) -> Optional[int]:
         return self._ndim
 
@@ -234,8 +321,7 @@ class Scale(BaseTransformation):
         return Scale(scale=new_scale)
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.vstack((np.hstack((np.diag(self.scale), np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        m: ArrayLike = np.hstack((np.diag(self.scale), np.zeros((len(self.scale), 1))))
         return Affine(affine=m)
 
 
@@ -243,31 +329,69 @@ class Affine(BaseTransformation):
     def __init__(
         self,
         affine: Optional[Union[ArrayLike, List[Any]]] = None,
+        src_dim: Optional[int] = None,
+        des_dim: Optional[int] = None,
     ) -> None:
         """
         class for storing scale transformations.
         """
         if affine is None:
-            affine = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+            assert src_dim is not None and des_dim is not None
+            affine = self._get_affine_iniection_from_dims(src_dim, des_dim)
         else:
             if isinstance(affine, list):
                 affine = np.array(affine)
             if len(affine.shape) == 1:
-                assert len(affine) == 6
-                affine = np.vstack([affine.reshape((2, 3)), np.array([0.0, 0.0, 1.0])])
-            assert affine.shape == (3, 3)
+                raise ValueError(
+                    "The specification of affine transformations as 1D arrays/lists is not "
+                    "supported. Please be explicit about the dimensions of the transformation."
+                )
+            des_dim = affine.shape[0]
+            src_dim = affine.shape[1] - 1
+            last_row = np.zeros(src_dim + 1, dtype=float).reshape(1, -1)
+            last_row[-1, -1] = 1
+            affine = np.vstack((affine, last_row))
+            assert affine.shape == (des_dim + 1, src_dim + 1)
 
         self.affine = affine
-        self._ndim = 2
+        self._src_dim = src_dim
+        self._des_dim = des_dim
+
+    @staticmethod
+    def _get_affine_iniection_from_dims(src_dim: int, des_dim: int) -> np.ndarray:
+        last_column = np.zeros(des_dim + 1, dtype=float).reshape(-1, 1)
+        last_column[-1, -1] = 1
+        affine = np.hstack(
+            (
+                np.vstack((np.eye(des_dim, src_dim, dtype=float), np.zeros(src_dim).reshape(1, -1))),
+                last_column,
+            )
+        )
+        return affine
+
+    @staticmethod
+    def _get_affine_iniection_from_axes(src_axes: Tuple[str, ...], des_axes: Tuple[str, ...]) -> np.ndarray:
+        # this function could be implemented with a composition of map axis and _get_affine_iniection_from_dims
+        affine = np.zeros((len(des_axes) + 1, len(src_axes) + 1), dtype=float)
+        affine[-1, -1] = 1
+        for i, des_axis in enumerate(des_axes):
+            for j, src_axis in enumerate(src_axes):
+                if des_axis == src_axis:
+                    affine[i, j] = 1
+        return affine
 
     @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
+    def src_dim(self) -> Optional[int]:
+        return self._src_dim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "affine",
-            "affine": self.affine[:2, :].ravel().tolist(),
+            "affine": self.affine[:-1, :].tolist(),
         }
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -295,25 +419,38 @@ class Rotation(BaseTransformation):
     def __init__(
         self,
         rotation: Optional[Union[ArrayLike, List[Any]]] = None,
+        ndim: Optional[int] = None,
     ) -> None:
         """
         class for storing scale transformations.
         """
         if rotation is None:
-            rotation = np.array([[1, 0], [0, 1]], dtype=float)
+            assert ndim is not None
+            s = ndim
+            rotation = np.eye(ndim, dtype=float)
         else:
             if isinstance(rotation, list):
                 rotation = np.array(rotation)
+            s = int(np.sqrt(len(rotation)))
             if len(rotation.shape) == 1:
-                assert len(rotation) == 4
-                rotation = rotation.reshape((2, 2))
-            assert rotation.shape == (2, 2)
+                assert s * s == len(rotation)
+                rotation = rotation.reshape((s, s))
+            assert rotation.shape == (s, s)
 
         self.rotation = rotation
-        self._ndim = 2
+        self._ndim = s
+
+    @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
 
     @property
     def ndim(self) -> Optional[int]:
+        # TODO: support mixed ndim and remove this property
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -329,8 +466,7 @@ class Rotation(BaseTransformation):
         return Rotation(self.rotation.T)
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        m: ArrayLike = np.vstack((np.hstack((self.rotation, np.zeros((2, 1)))), np.array([0.0, 0.0, 1.0])))
+        m: ArrayLike = np.hstack((self.rotation, np.zeros((ndim, 1))))
         return Affine(affine=m)
 
 
@@ -340,16 +476,16 @@ class Sequence(BaseTransformation):
             self.transformations = transformations
         else:
             self.transformations = [get_transformation_from_dict(t) for t in transformations]  # type: ignore[arg-type]
-        ndims = [t.ndim for t in self.transformations if t.ndim is not None]
-        if len(ndims) > 0:
-            assert len(set(ndims)) == 1
-            self._ndim = ndims[0]
-        else:
-            self._ndim = None
+        self._src_dim = self.transformations[0].src_dim
+        self._des_dim = self.transformations[-1].des_dim
 
     @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
+    def src_dim(self) -> Optional[int]:
+        return self._src_dim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -366,8 +502,7 @@ class Sequence(BaseTransformation):
         return Sequence([t.inverse() for t in reversed(self.transformations)])
 
     def to_affine(self) -> Affine:
-        assert self.ndim == 2
-        composed = np.eye(3)
+        composed = np.eye(self.src_dim + 1)
         for t in self.transformations:
             a: Affine
             if isinstance(t, Affine):
@@ -375,6 +510,7 @@ class Sequence(BaseTransformation):
             elif isinstance(t, Translation) or isinstance(t, Scale) or isinstance(t, Rotation):
                 a = t.to_affine()
             elif isinstance(t, Identity):
+                # TODO: this is not the ndim case
                 m: ArrayLike = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
                 a = Affine(affine=m)
             elif isinstance(t, Sequence):
@@ -382,7 +518,7 @@ class Sequence(BaseTransformation):
             else:
                 raise ValueError(f"Cannot convert {t} to affine")
             composed = a.affine @ composed
-        return Affine(affine=composed)
+        return Affine(affine=composed[:-1, :])
 
 
 class Displacements(BaseTransformation):
@@ -422,7 +558,16 @@ class InverseOf(BaseTransformation):
         self._ndim = self.transformation.ndim
 
     @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
     def ndim(self) -> Optional[int]:
+        # support mixed ndim and remove this property
         return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
@@ -453,6 +598,14 @@ class Bijection(BaseTransformation):
             self._inverse = get_transformation_from_dict(inverse)
         assert self.forward.ndim == self._inverse.ndim
         self._ndim = self.forward.ndim
+
+    @property
+    def src_dim(self) -> Optional[int]:
+        return self._ndim
+
+    @property
+    def des_dim(self) -> Optional[int]:
+        return self._ndim
 
     @property
     def ndim(self) -> Optional[int]:
