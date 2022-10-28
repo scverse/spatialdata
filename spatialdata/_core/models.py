@@ -3,7 +3,6 @@
 from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
-import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from multiscale_spatial_image import to_multiscale
@@ -74,6 +73,30 @@ def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> Data
             return _get_raster_schema(data[i], kind)
 
 
+def _to_spatial_image(
+    data: Union[ArrayLike, DaskArray],
+    schema: DataArraySchema,
+    transform: Optional[Any] = None,
+    scale_factors: Optional[ScaleFactors_t] = None,
+    method: Optional[Methods] = None,
+    chunks: Optional[Chunks_t] = None,
+    **kwargs: Any,
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    data = to_spatial_image(array_like=data, dims=schema.dims.dims, **kwargs)
+    if transform is None:
+        transform = Identity()
+        data.attrs = {"transform": transform}
+    if scale_factors is not None:
+        data = to_multiscale(
+            data,
+            scale_factors=scale_factors,
+            method=method,
+            chunks=chunks,
+        )
+        # TODO: add transform to multiscale
+    return data
+
+
 @singledispatch
 def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage, MultiscaleSpatialImage]:
     """
@@ -103,30 +126,28 @@ def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage,
 
 @validate_raster.register
 def _(
-    data: Union[np.ndarray, DaskArray],  # type: ignore[type-arg]
+    data: ArrayLike,
     kind: Literal["Image", "Label"],
-    transform: Optional[Any] = None,
-    scale_factors: Optional[ScaleFactors_t] = None,
-    method: Optional[Methods] = None,
-    chunks: Optional[Chunks_t] = None,
+    *args: Any,
     **kwargs: Any,
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
 
-    data = from_array(data) if isinstance(data, np.ndarray) else data
+    data = from_array(data)
     schema = _get_raster_schema(data, kind)
+    data = _to_spatial_image(data, schema, *args, **kwargs)
+    return data
 
-    data = to_spatial_image(array_like=data, dims=schema.dims.dims, **kwargs)
-    if transform is None:
-        transform = Identity()
-        data.attrs = {"transform": transform}
-    if scale_factors is not None:
-        data = to_multiscale(
-            data,
-            scale_factors=scale_factors,
-            method=method,
-            chunks=chunks,
-        )
-        # TODO: add transform to multiscale
+
+@validate_raster.register
+def _(
+    data: DaskArray,
+    kind: Literal["Image", "Label"],
+    *args: Any,
+    **kwargs: Any,
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+
+    schema = _get_raster_schema(data, kind)
+    data = _to_spatial_image(data, schema, *args, **kwargs)
     return data
 
 

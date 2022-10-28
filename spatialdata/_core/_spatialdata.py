@@ -45,13 +45,23 @@ class SpatialData:
 
         if images is not None:
             self.images = {
-                k: validate_raster(data, kind="image", transform=transform)
+                k: validate_raster(
+                    data,
+                    kind="image",
+                    transform=transform,
+                    multiscale_kwargs=multiscale_kwargs,
+                )
                 for (k, data), transform in _iter_elems(labels, labels_transform)
             }
 
         if labels is not None:
             self.labels = {
-                k: Labels.parse_labels(data, transform)
+                k: validate_raster(
+                    data,
+                    kind="image",
+                    transform=transform,
+                    multiscale_kwargs=multiscale_kwargs,
+                )
                 for (k, data), transform in _iter_elems(labels, labels_transform)
             }
 
