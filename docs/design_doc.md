@@ -105,11 +105,11 @@ Elements are the building blocks of _SpatialData_ datasets. Each element represe
 
 The `SpatialData` object contains a set of Elements to be used for analysis. Elements contained within a `SpatialData` object must be able to share a single Region Table. Future work may extend `SpatialData` to allow multiple tables (see discussion [here](https://github.com/scverse/spatialdata/issues/43)). All Elements within a `SpatialData` object can be queried, selected, and saved via the `SpatialData` objects.
 
-**`NgffStore`**
+**`NGFFStore`**
 
-_Note: previously we used the term `SpatialDataContainer`; the new naming is `NgffStore`._
+_Note: previously we used the term `SpatialDataContainer`; the new naming is `NGFFStore`._
 
-The `NgffStore` is an object representing the on-disk layout of a dataset. The `NgffStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files.
+The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files.
 
 ### Elements
 
