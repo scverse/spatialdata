@@ -9,23 +9,24 @@ from spatialdata._core.coordinate_system import CoordinateSystem
 import numpy as np
 
 from xarray import DataArray
+from spatialdata._types import ArrayLike
 
 __all__ = [
     "BaseTransformation",
     "Identity",
-    "MapIndex",
+    # "MapIndex",
     "MapAxis",
     "Translation",
     "Scale",
     "Affine",
     "Rotation",
     "Sequence",
-    "Displacements",
-    "Coordinates",
-    "VectorField",
-    "InverseOf",
-    "Bijection",
-    "ByDimension",
+    # "Displacements",
+    # "Coordinates",
+    # "VectorField",
+    # "InverseOf",
+    # "Bijection",
+    # "ByDimension",
 ]
 
 # link pointing to the latest specs from John Bogovic (from his fork of the repo)
@@ -52,16 +53,24 @@ class BaseTransformation(ABC):
     # "_input_coordinate_system" the intrinsitc coordinate system of the Image element,
     # and to "_output_coordinate_system" the global coordinate system (cyx) that will be created when calling the
     # SpatialData constructor
-    _input_coordinate_system: Optional[str, CoordinateSystem] = None
-    _output_coordinate_system: Optional[str, CoordinateSystem] = None
+    _input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
+    _output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
 
     @property
     def input_coordinate_system(self) -> Optional[str]:
         return self._input_coordinate_system
 
+    @input_coordinate_system.setter
+    def input_coordinate_system(self, coordinate_system: Optional[Union[str, CoordinateSystem]]) -> None:
+        self._input_coordinate_system = coordinate_system
+
     @property
     def output_coordinate_system(self) -> Optional[str]:
         return self._output_coordinate_system
+
+    @output_coordinate_system.setter
+    def output_coordinate_system(self, coordinate_system: Optional[Union[str, CoordinateSystem]]) -> None:
+        self._output_coordinate_system = coordinate_system
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
@@ -70,8 +79,8 @@ class BaseTransformation(ABC):
         my_class: Type[BaseTransformation]
         if type == "identity":
             my_class = Identity
-        elif type == "mapIndex":
-            my_class = MapIndex  # type: ignore
+        # elif type == "mapIndex":
+        #     my_class = MapIndex  # type: ignore
         elif type == "mapAxis":
             my_class = MapAxis
             kw["map_axis"] = kw["mapAxis"]
@@ -86,18 +95,18 @@ class BaseTransformation(ABC):
             my_class = Rotation
         elif type == "sequence":
             my_class = Sequence
-        elif type == "displacements":
-            my_class = Displacements  # type: ignore
-        elif type == "coordinates":
-            my_class = Coordinates  # type: ignore
-        elif type == "vectorField":
-            my_class = VectorField  # type: ignore
-        elif type == "inverseOf":
-            my_class = InverseOf
-        elif type == "bijection":
-            my_class = Bijection
-        elif type == "byDimension":
-            my_class = ByDimension  # type: ignore
+        # elif type == "displacements":
+        #     my_class = Displacements  # type: ignore
+        # elif type == "coordinates":
+        #     my_class = Coordinates  # type: ignore
+        # elif type == "vectorField":
+        #     my_class = VectorField  # type: ignore
+        # elif type == "inverseOf":
+        #     my_class = InverseOf
+        # elif type == "bijection":
+        #     my_class = Bijection
+        # elif type == "byDimension":
+        #     my_class = ByDimension  # type: ignore
         else:
             raise ValueError(f"Unknown transformation type: {type}")
         del kw["type"]
@@ -110,8 +119,8 @@ class BaseTransformation(ABC):
             output_coordinate_system = kw["output"]
             del kw["output"]
         transformation = my_class(**kw)
-        transformation._input_coordinate_system = input_coordinate_system
-        transformation._output_coordinate_system = output_coordinate_system
+        transformation.input_coordinate_system = input_coordinate_system
+        transformation.output_coordinate_system = output_coordinate_system
         return transformation
 
     @abstractmethod
@@ -127,12 +136,19 @@ class BaseTransformation(ABC):
         pass
 
     @abstractmethod
-    def transform_points(self, points: DataArray) -> DataArray:
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
         pass
 
     @abstractmethod
     def to_affine(self) -> Affine:
         pass
+
+    def _validate_transform_points_shapes(self, input_size: int, points_shape: Tuple[int]):
+        if len(points_shape) != 2 or points_shape[1] != input_size:
+            raise ValueError(
+                f"points must be a tensor of shape (n, d), where n is the number of points and d is the "
+                f"the number of spatial dimensions. Points shape: {points_shape}, input size: {input_size}"
+            )
 
     @classmethod
     def from_json(cls, data: Union[str, bytes]) -> BaseTransformation:
@@ -154,10 +170,10 @@ class BaseTransformation(ABC):
     def _get_axes_from_coordinate_systems(self) -> Tuple[Tuple[str], Tuple[str]]:
         if not isinstance(self._input_coordinate_system, CoordinateSystem):
             raise ValueError(f"Input coordinate system not specified")
-        if not isinstance(self._output_coordinate_system, CoordinateSystem):
+        if not isinstance(self.output_coordinate_system, CoordinateSystem):
             raise ValueError(f"Output coordinate system not specified")
-        input_axes = self._input_coordinate_system.axes_names
-        output_axes = self._output_coordinate_system.axes_names
+        input_axes = self.input_coordinate_system.axes_names
+        output_axes = self.output_coordinate_system.axes_names
         return input_axes, output_axes
 
 
@@ -222,16 +238,16 @@ def get_transformation_from_dict(d: Transformation_t) -> BaseTransformation:
 
 
 class Identity(BaseTransformation):
-    def __init__(self) -> None:
-        pass
-
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "identity",
         }
 
     def inverse(self) -> BaseTransformation:
-        return copy.deepcopy(self)
+        t = Identity()
+        t.input_coordinate_system = self.output_coordinate_system
+        t.output_coordinate_system = self.input_coordinate_system
+        return t
 
     def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
@@ -239,47 +255,55 @@ class Identity(BaseTransformation):
             raise ValueError(f"Input and output axes must be the same")
         return input_axes, output_axes
 
-    def transform_points(self, points: DataArray) -> DataArray:
-        _, _ = self._get_and_validate_axes()
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, _ = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
         return points
 
     def to_affine(self) -> Affine:
         input_axes, _ = self._get_and_validate_axes()
-        return Affine(np.eye(len(input_axes) + 1))
+        affine = Affine(np.eye(len(input_axes) + 1))
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
-# TODO: maybe this transformation will not make it to the final specs, waiting before implementing this
-class MapIndex(BaseTransformation):
-    def __init__(self) -> None:
-        raise NotImplementedError()
+# # maybe this transformation will not make it to the final specs, waiting before implementing this
+# class MapIndex(BaseTransformation):
+#     def __init__(self) -> None:
+#         raise NotImplementedError()
 
 
 class MapAxis(BaseTransformation):
     def __init__(self, map_axis: Dict[str, str]) -> None:
-        self._map_axis = map_axis
+        self.map_axis = map_axis
 
     def to_dict(self) -> Transformation_t:
         return {
             "type": "mapAxis",
-            "mapAxis": self._map_axis,
+            "mapAxis": self.map_axis,
         }
 
     def inverse(self) -> BaseTransformation:
-        if len(self._map_axis.keys()) != len(set(self._map_axis.values())):
+        if len(self.map_axis.keys()) != len(set(self.map_axis.values())):
             raise ValueError("Cannot invert a map axis transformation with different number of input and output axes")
         else:
-            return MapAxis({v: k for k, v in self._map_axis.items()})
+            t = MapAxis({v: k for k, v in self.map_axis.items()})
+            t.input_coordinate_system = self.output_coordinate_system
+            t.output_coordinate_system = self.input_coordinate_system
+            return t
 
     def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
-        if set(input_axes) != set(self._map_axis.keys()):
+        if set(input_axes) != set(self.map_axis.keys()):
             raise ValueError(f"The set of input axes must be the same as the set of keys of mapAxis")
-        if set(output_axes) != set(self._map_axis.values()):
+        if set(output_axes) != set(self.map_axis.values()):
             raise ValueError(f"The set of output axes must be the same as the set of values of mapAxis")
         return input_axes, output_axes
 
-    def transform_points(self, points: DataArray) -> DataArray:
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
         input_axes, output_axes = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
         raise NotImplementedError()
 
     def to_affine(self) -> Affine:
@@ -288,47 +312,20 @@ class MapAxis(BaseTransformation):
         matrix[-1, -1] = 1
         for i, des_axis in enumerate(output_axes):
             for j, src_axis in enumerate(input_axes):
-                if des_axis == self._map_axis[src_axis]:
+                if des_axis == self.map_axis[src_axis]:
                     matrix[i, j] = 1
         affine = Affine(matrix)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
         return affine
 
 
 class Translation(BaseTransformation):
-    def __init__(
-        self,
-        translation: Optional[Union[ArrayLike, List[Any]]] = None,
-        ndim: Optional[int] = None,
-    ) -> None:
+    def __init__(self, translation: ArrayLike) -> None:
         """
         class for storing translation transformations.
         """
-        if translation is None:
-            assert ndim is not None
-            translation = np.ones(ndim, dtype=float)
-
-        if ndim is None:
-            assert translation is not None
-            if isinstance(translation, list):
-                translation = np.array(translation)
-            ndim = len(translation)
-
-        assert type(translation) == np.ndarray
-        assert len(translation) == ndim
         self.translation = translation
-        self._ndim = ndim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> int:
-        return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -336,52 +333,39 @@ class Translation(BaseTransformation):
             "translation": self.translation.tolist(),
         }
 
-    def transform_points(self, points: DataArray) -> DataArray:
+    def inverse(self) -> BaseTransformation:
+        t = Translation(-self.translation)
+        t.input_coordinate_system = self.output_coordinate_system
+        t.output_coordinate_system = self.input_coordinate_system
+        return t
+
+    def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        if input_axes != output_axes:
+            raise ValueError(f"Input and output axes must be the same")
+        return input_axes, output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, _ = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
         return points + self.translation
 
-    def inverse(self) -> BaseTransformation:
-        return Translation(translation=-self.translation)
-
     def to_affine(self, ndims_input: Optional[int] = None, ndims_output: Optional[int] = None) -> Affine:
-        m: ArrayLike = np.hstack((np.eye(len(self.translation)), self.translation.reshape(len(self.translation), 1)))
-        return Affine(affine=m)
+        input_axes, _ = self._get_and_validate_axes()
+        matrix = np.eye(len(input_axes) + 1)
+        matrix[:-1, -1] = self.translation
+        affine = Affine(matrix)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
 class Scale(BaseTransformation):
-    def __init__(
-        self,
-        scale: Optional[Union[ArrayLike, List[Any]]] = None,
-        ndim: Optional[int] = None,
-    ) -> None:
+    def __init__(self, scale: ArrayLike = None) -> None:
         """
         class for storing scale transformations.
         """
-        if scale is None:
-            assert ndim is not None
-            scale = np.ones(ndim, dtype=float)
-
-        if ndim is None:
-            assert scale is not None
-            if isinstance(scale, list):
-                scale = np.array(scale)
-            ndim = len(scale)
-
-        assert type(scale) == np.ndarray
-        assert len(scale) == ndim
         self.scale = scale
-        self._ndim = ndim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -389,58 +373,41 @@ class Scale(BaseTransformation):
             "scale": self.scale.tolist(),
         }
 
-    def transform_points(self, points: DataArray) -> DataArray:
-        return points * self.scale
-
     def inverse(self) -> BaseTransformation:
         new_scale = np.zeros_like(self.scale)
         new_scale[np.nonzero(self.scale)] = 1 / self.scale[np.nonzero(self.scale)]
-        return Scale(scale=new_scale)
+        t = Scale(new_scale)
+        t.input_coordinate_system = self.output_coordinate_system
+        t.output_coordinate_system = self.input_coordinate_system
+        return t
+
+    def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        if input_axes != output_axes:
+            raise ValueError(f"Input and output axes must be the same")
+        return input_axes, output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, _ = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
+        return points * self.scale
 
     def to_affine(self) -> Affine:
-        m: ArrayLike = np.hstack((np.diag(self.scale), np.zeros((len(self.scale), 1))))
-        return Affine(affine=m)
+        input_axes, _ = self._get_and_validate_axes()
+        matrix = np.eye(len(input_axes) + 1)
+        matrix[:-1, :-1] = np.diag(self.scale)
+        affine = Affine(matrix)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
 class Affine(BaseTransformation):
-    def __init__(
-        self,
-        affine: Optional[Union[ArrayLike, List[Any]]] = None,
-        src_dim: Optional[int] = None,
-        des_dim: Optional[int] = None,
-    ) -> None:
+    def __init__(self, affine: ArrayLike) -> None:
         """
         class for storing scale transformations.
         """
-        if affine is None:
-            assert src_dim is not None and des_dim is not None
-            raise NotImplementedError()
-        else:
-            if isinstance(affine, list):
-                affine = np.array(affine)
-            if len(affine.shape) == 1:
-                raise ValueError(
-                    "The specification of affine transformations as 1D arrays/lists is not "
-                    "supported. Please be explicit about the dimensions of the transformation."
-                )
-            des_dim = affine.shape[0]
-            src_dim = affine.shape[1] - 1
-            last_row = np.zeros(src_dim + 1, dtype=float).reshape(1, -1)
-            last_row[-1, -1] = 1
-            affine = np.vstack((affine, last_row))
-            assert affine.shape == (des_dim + 1, src_dim + 1)
-
         self.affine = affine
-        self._src_dim = src_dim
-        self._des_dim = des_dim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._src_dim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._des_dim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -448,64 +415,48 @@ class Affine(BaseTransformation):
             "affine": self.affine[:-1, :].tolist(),
         }
 
-    def transform_points(self, points: DataArray) -> DataArray:
+    def inverse(self) -> BaseTransformation:
+        inv = np.lingalg.inv(self.affine)
+        t = Affine(inv)
+        t.input_coordinate_system = self.output_coordinate_system
+        t.output_coordinate_system = self.input_coordinate_system
+        return t
+
+        # old code, manually inverting a 2d (3x3) affine matrix
+        # a = self.affine[0, 0]
+        # b = self.affine[0, 1]
+        # m = self.affine[0, 2]
+        # c = self.affine[1, 0]
+        # d = self.affine[1, 1]
+        # n = self.affine[1, 2]
+        # det = a * d - b * c
+        # closed_form = np.array([[d, -c, 0], [-b, a, 0], [b * n - d * m, c * m - a * n, det]])
+        # return Affine(affine=closed_form)
+
+    def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        return input_axes, output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, output_axes = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
-        return q[:2, :].T  # type: ignore[no-any-return]
-
-    def inverse(self) -> BaseTransformation:
-        # naive check for numerical stability
-        a = self.affine[0, 0]
-        b = self.affine[0, 1]
-        m = self.affine[0, 2]
-        c = self.affine[1, 0]
-        d = self.affine[1, 1]
-        n = self.affine[1, 2]
-        det = a * d - b * c
-        closed_form = np.array([[d, -c, 0], [-b, a, 0], [b * n - d * m, c * m - a * n, det]])
-        return Affine(affine=closed_form)
+        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
 
     def to_affine(self) -> Affine:
-        return copy.deepcopy(self)
+        affine = Affine(self.affine)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
 class Rotation(BaseTransformation):
-    def __init__(
-        self,
-        rotation: Optional[Union[ArrayLike, List[Any]]] = None,
-        ndim: Optional[int] = None,
-    ) -> None:
+    def __init__(self, rotation: ArrayLike) -> None:
         """
         class for storing scale transformations.
         """
-        if rotation is None:
-            assert ndim is not None
-            s = ndim
-            rotation = np.eye(ndim, dtype=float)
-        else:
-            if isinstance(rotation, list):
-                rotation = np.array(rotation)
-            s = int(np.sqrt(len(rotation)))
-            if len(rotation.shape) == 1:
-                assert s * s == len(rotation)
-                rotation = rotation.reshape((s, s))
-            assert rotation.shape == (s, s)
-
         self.rotation = rotation
-        self._ndim = s
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> Optional[int]:
-        # TODO: support mixed ndim and remove this property
-        return self._ndim
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -513,33 +464,36 @@ class Rotation(BaseTransformation):
             "rotation": self.rotation.ravel().tolist(),
         }
 
-    def transform_points(self, points: DataArray) -> DataArray:
+    def inverse(self) -> BaseTransformation:
+        t = Rotation(self.rotation.T)
+        t.input_coordinate_system = self.output_coordinate_system
+        t.output_coordinate_system = self.input_coordinate_system
+        return t
+
+    def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        if input_axes != output_axes:
+            raise ValueError(f"Input and output axes must be the same")
+        return input_axes, output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, _ = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
         return (self.rotation @ points.T).T
 
-    def inverse(self) -> BaseTransformation:
-        return Rotation(self.rotation.T)
-
     def to_affine(self) -> Affine:
-        m: ArrayLike = np.hstack((self.rotation, np.zeros((ndim, 1))))
-        return Affine(affine=m)
+        m = np.eye(len(self.rotation) + 1)
+        m[:-1, :-1] = self.rotation
+        affine = Affine(m)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
 class Sequence(BaseTransformation):
-    def __init__(self, transformations: Union[List[Any], List[BaseTransformation]]) -> None:
-        if isinstance(transformations[0], BaseTransformation):
-            self.transformations = transformations
-        else:
-            self.transformations = [get_transformation_from_dict(t) for t in transformations]  # type: ignore[arg-type]
-        self._src_dim = self.transformations[0].src_dim
-        self._des_dim = self.transformations[-1].des_dim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._src_dim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._des_dim
+    def __init__(self, transformations: List[BaseTransformation]) -> None:
+        assert len(transformations) > 0
+        self.transformations = transformations
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -547,187 +501,223 @@ class Sequence(BaseTransformation):
             "transformations": [t.to_dict() for t in self.transformations],
         }
 
-    def transform_points(self, points: DataArray) -> DataArray:
+    def inverse(self) -> BaseTransformation:
+        inv = Sequence([t.inverse() for t in reversed(self.transformations)])
+        inv.input_coordinate_system = self.output_coordinate_system
+        inv.output_coordinate_system = self.input_coordinate_system
+        return inv
+
+    def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        return input_axes, output_axes
+
+    @staticmethod
+    def _inferring_cs_infer_output_coordinate_system(t: BaseTransformation) -> Optional[CoordinateSystem]:
+        assert isinstance(t.input_coordinate_system, CoordinateSystem)
+        if isinstance(t, Affine):
+            return None
+        elif isinstance(t, Translation) or isinstance(t, Scale) or isinstance(t, Rotation) or isinstance(t, Identity):
+            return t.input_coordinate_system
+        elif isinstance(t, MapAxis):
+            raise NotImplementedError()
+        elif isinstance(t, Sequence):
+            previous_output = t.input_coordinate_system
+            for t in t.transformations:
+                previous_output, input_cs, output_cs = Sequence._inferring_cs_pre_action(t, previous_output)
+                current_output_axes = Sequence._inferring_cs_post_action(t, input_cs, output_cs)
+            return current_output_axes
+        else:
+            return None
+
+    @staticmethod
+    def _inferring_cs_pre_action(
+        t: BaseTransformation, previous_output: CoordinateSystem
+    ) -> Tuple[CoordinateSystem, Optional[CoordinateSystem], Optional[CoordinateSystem]]:
+        input_cs = t.input_coordinate_system
+        if input_cs is None:
+            t.input_coordinate_system = previous_output
+        elif isinstance(input_cs, str):
+            raise ValueError(
+                f"Input coordinate system for {t} is a string, not a CoordinateSystem. It should be "
+                f"replaced by the CoordinateSystem named after the string before calling this function."
+            )
+        else:
+            assert isinstance(input_cs, CoordinateSystem)
+            assert input_cs == previous_output
+        output_cs = t.output_coordinate_system
+        expected_output_cs = Sequence._inferring_cs_infer_output_coordinate_system(t)
+        if output_cs is None:
+            t.output_coordinate_system = expected_output_cs
+        elif isinstance(output_cs, str):
+            raise ValueError(
+                f"Output coordinate system for {t} is a string, not a CoordinateSystem. It should be "
+                f"replaced by the CoordinateSystem named after the string before calling this function."
+            )
+        else:
+            assert isinstance(output_cs, CoordinateSystem)
+            # if it is not possible to infer the output, like for Affine, we skip this check
+            if expected_output_cs is not None:
+                assert t.output_coordinate_system == expected_output_cs
+        previous_output = t.output_coordinate_system
+        return previous_output, input_cs, output_cs
+
+    @staticmethod
+    def _inferring_cs_post_action(
+        t: BaseTransformation, input_cs: Optional[CoordinateSystem], output_cs: Optional[CoordinateSystem]
+    ) -> Tuple[str]:
+        assert isinstance(t.output_coordinate_system, CoordinateSystem)
+        output_axes = t.output_coordinate_system.axes_names
+        if input_cs is None:
+            t.input_coordinate_system = None
+        if output_cs is None:
+            t.output_coordinate_system = None
+        return output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        # the specs allow to compose transformations without specifying the input and output coordinate systems of
+        # every transformation. Since in order to apply a transformation we need to know the input and output coordinate
+        # systems, we allow for on-the-fly computation by inferring this in real-time. The inferred information is
+        # then removed, so to leave the object as it was found before
+        input_axes, output_axes = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
+        previous_output = input_axes
+        current_output_axes: Optional[Tuple[str]] = None
         for t in self.transformations:
+            previous_output, input_cs, output_cs = Sequence._inferring_cs_pre_action(t, previous_output)
             points = t.transform_points(points)
+            current_output_axes = Sequence._inferring_cs_post_action(t, input_cs, output_cs)
+        # as long as len(self.transformations) > 0, current_output_axes is not None
+        assert current_output_axes is not None
+        assert output_axes == current_output_axes
         return points
 
-    def inverse(self) -> BaseTransformation:
-        return Sequence([t.inverse() for t in reversed(self.transformations)])
-
     def to_affine(self) -> Affine:
-        composed = np.eye(self.src_dim + 1)
+        # the same comment on the coordinate systems of the various transformations, made on the transform_points()
+        # method, applies also here
+        input_axes, output_axes = self._get_and_validate_axes()
+        composed = np.eye(len(input_axes) + 1)
+        previous_output = input_axes
         for t in self.transformations:
-            a: Affine
-            if isinstance(t, Affine):
-                a = t
-            elif isinstance(t, Translation) or isinstance(t, Scale) or isinstance(t, Rotation):
-                a = t.to_affine()
-            elif isinstance(t, Identity):
-                # TODO: this is not the ndim case
-                m: ArrayLike = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
-                a = Affine(affine=m)
-            elif isinstance(t, Sequence):
-                a = t.to_affine()
-            else:
-                raise ValueError(f"Cannot convert {t} to affine")
+            previous_output, input_cs, output_cs = Sequence._inferring_cs_pre_action(t, previous_output)
+            a = t.to_affine()
             composed = a.affine @ composed
-        return Affine(affine=composed[:-1, :])
+            current_output_axes = Sequence._inferring_cs_post_action(t, input_cs, output_cs)
+        assert output_axes == current_output_axes
+        affine = Affine(composed)
+        affine.input_coordinate_system = self.input_coordinate_system
+        affine.output_coordinate_system = self.output_coordinate_system
+        return affine
 
 
-class Displacements(BaseTransformation):
-    def __init__(self) -> None:
-        raise NotImplementedError()
-
-    # @property
-    # def ndim(self) -> Optional[int]:
-    #     return self._ndim
-
-
-# this class is not in the ngff transform specification and is a prototype
-class VectorField(BaseTransformation):
-    def __init__(self) -> None:
-        raise NotImplementedError()
-
-    # @property
-    # def ndim(self) -> Optional[int]:
-    #     return self._ndim
-
-
-class Coordinates(BaseTransformation):
-    def __init__(self) -> None:
-        raise NotImplementedError()
-
-    # @property
-    # def ndim(self) -> Optional[int]:
-    #     return self._ndim
-
-
-class InverseOf(BaseTransformation):
-    def __init__(self, transformation: Union[Dict[str, Any], BaseTransformation]) -> None:
-        if isinstance(transformation, BaseTransformation):
-            self.transformation = transformation
-        else:
-            self.transformation = get_transformation_from_dict(transformation)
-        self._ndim = self.transformation.ndim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> Optional[int]:
-        # support mixed ndim and remove this property
-        return self._ndim
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": "inverseOf",
-            "transformation": self.transformation.to_dict(),
-        }
-
-    def transform_points(self, points: DataArray) -> DataArray:
-        return self.transformation.inverse().transform_points(points)
-
-    def inverse(self) -> BaseTransformation:
-        return self.transformation
-
-
-class Bijection(BaseTransformation):
-    def __init__(
-        self, forward: Union[Dict[str, Any], BaseTransformation], inverse: Union[Dict[str, Any], BaseTransformation]
-    ) -> None:
-        if isinstance(forward, BaseTransformation):
-            self.forward = forward
-        else:
-            self.forward = get_transformation_from_dict(forward)
-
-        if isinstance(inverse, BaseTransformation):
-            self._inverse = inverse
-        else:
-            self._inverse = get_transformation_from_dict(inverse)
-        assert self.forward.ndim == self._inverse.ndim
-        self._ndim = self.forward.ndim
-
-    @property
-    def src_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def des_dim(self) -> Optional[int]:
-        return self._ndim
-
-    @property
-    def ndim(self) -> Optional[int]:
-        return self._ndim
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": "bijection",
-            "forward": self.forward.to_dict(),
-            "inverse": self._inverse.to_dict(),
-        }
-
-    def transform_points(self, points: DataArray) -> DataArray:
-        return self.forward.transform_points(points)
-
-    def inverse(self) -> BaseTransformation:
-        return self._inverse
-
-
-class ByDimension(BaseTransformation):
-    def __init__(self) -> None:
-        raise NotImplementedError()
-
-    # @property
-    # def ndim(self) -> Optional[int]:
-    #     return self._ndim
-
-
+# class Displacements(BaseTransformation):
+#     def __init__(self) -> None:
+#         raise NotImplementedError()
 #
-# @singledispatch
-# def get_transform(arg: Any) -> BaseTransformation:
-#     raise ValueError(f"Unsupported type: {type(arg)}")
+#     # @property
+#     # def ndim(self) -> Optional[int]:
+#     #     return self._ndim
 #
 #
-# @get_transform.register
-# def _(arg: xr.DataArray) -> BaseTransformation:
-#     if "transform" not in arg.attrs:
-#         return BaseTransformation(ndim=arg.ndim)
-#     else:
-#         return BaseTransformation(
-#             translation=arg.attrs["transform"].translation,
-#             scale_factors=arg.attrs["transform"].scale_factors,
-#             ndim=arg.ndim,
-#         )
+# # this class is not in the ngff transform specification and is a prototype
+# class VectorField(BaseTransformation):
+#     def __init__(self) -> None:
+#         raise NotImplementedError()
+#
+#     # @property
+#     # def ndim(self) -> Optional[int]:
+#     #     return self._ndim
 #
 #
-# @get_transform.register
-# def _(arg: np.ndarray) -> BaseTransformation:  # type: ignore[type-arg]
-#     return BaseTransformation(
-#         ndim=arg.ndim,
-#     )
+# class Coordinates(BaseTransformation):
+#     def __init__(self) -> None:
+#         raise NotImplementedError()
+#
+#     # @property
+#     # def ndim(self) -> Optional[int]:
+#     #     return self._ndim
 #
 #
-# @get_transform.register
-# def _(arg: ad.AnnData) -> BaseTransformation:
-#     # check if the AnnData has transform information, otherwise fetches it from default scanpy storage
-#     if "transform" in arg.uns:
-#         return BaseTransformation(
-#             translation=arg.uns["transform"]["translation"], scale_factors=arg.uns["transform"]["scale_factors"]
-#         )
-#     elif "spatial" in arg.uns and "spatial" in arg.obsm:
-#         ndim = arg.obsm["spatial"].shape[1]
-#         libraries = arg.uns["spatial"]
-#         assert len(libraries) == 1
-#         library = libraries.__iter__().__next__()
-#         scale_factors = library["scalefactors"]["tissue_hires_scalef"]
-#         return BaseTransformation(
-#             translation=np.zeros(ndim, dtype=float), scale_factors=np.array([scale_factors] * ndim, dtype=float)
-#         )
-#     else:
-#         return BaseTransformation(ndim=2)
+# class InverseOf(BaseTransformation):
+#     def __init__(self, transformation: Union[Dict[str, Any], BaseTransformation]) -> None:
+#         if isinstance(transformation, BaseTransformation):
+#             self.transformation = transformation
+#         else:
+#             self.transformation = get_transformation_from_dict(transformation)
+#         self._ndim = self.transformation.ndim
+#
+#     @property
+#     def src_dim(self) -> Optional[int]:
+#         return self._ndim
+#
+#     @property
+#     def des_dim(self) -> Optional[int]:
+#         return self._ndim
+#
+#     @property
+#     def ndim(self) -> Optional[int]:
+#         # support mixed ndim and remove this property
+#         return self._ndim
+#
+#     def to_dict(self) -> Dict[str, Any]:
+#         return {
+#             "type": "inverseOf",
+#             "transformation": self.transformation.to_dict(),
+#         }
+#
+#     def transform_points(self, points: ArrayLike) -> ArrayLike:
+#         return self.transformation.inverse().transform_points(points)
+#
+#     def inverse(self) -> BaseTransformation:
+#         return self.transformation
+#
+#
+# class Bijection(BaseTransformation):
+#     def __init__(
+#         self, forward: Union[Dict[str, Any], BaseTransformation], inverse: Union[Dict[str, Any], BaseTransformation]
+#     ) -> None:
+#         if isinstance(forward, BaseTransformation):
+#             self.forward = forward
+#         else:
+#             self.forward = get_transformation_from_dict(forward)
+#
+#         if isinstance(inverse, BaseTransformation):
+#             self._inverse = inverse
+#         else:
+#             self._inverse = get_transformation_from_dict(inverse)
+#         assert self.forward.ndim == self._inverse.ndim
+#         self._ndim = self.forward.ndim
+#
+#     @property
+#     def src_dim(self) -> Optional[int]:
+#         return self._ndim
+#
+#     @property
+#     def des_dim(self) -> Optional[int]:
+#         return self._ndim
+#
+#     @property
+#     def ndim(self) -> Optional[int]:
+#         return self._ndim
+#
+#     def to_dict(self) -> Dict[str, Any]:
+#         return {
+#             "type": "bijection",
+#             "forward": self.forward.to_dict(),
+#             "inverse": self._inverse.to_dict(),
+#         }
+#
+#     def transform_points(self, points: ArrayLike) -> ArrayLike:
+#         return self.forward.transform_points(points)
+#
+#     def inverse(self) -> BaseTransformation:
+#         return self._inverse
+#
+#
+# class ByDimension(BaseTransformation):
+#     def __init__(self) -> None:
+#         raise NotImplementedError()
+#
+#     # @property
+#     # def ndim(self) -> Optional[int]:
+#     #     return self._ndim
+#
