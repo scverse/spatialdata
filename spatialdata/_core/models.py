@@ -3,6 +3,7 @@
 from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
+import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from multiscale_spatial_image import to_multiscale
@@ -55,22 +56,27 @@ Image3D_s = DataArraySchema(
 
 def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> DataArraySchema:
     if isinstance(data, SpatialImage):
-        if len(data.dims) == 2:
-            return Labels2D_s
-        elif len(data.dims) == 3:
-            if kind == "Image":
-                return Image2D_s
-            elif kind == "Label":
-                return Labels3D_s
-            else:
-                raise ValueError(f"Wrong kind: {kind}")
-        elif len(data.dims) == 3:
-            return Image3D_s
-        else:
-            raise ValueError(f"Wrong dimensions: {data.dims}D array.")
+        axes: Tuple[Any, ...] = data.dims
+    elif isinstance(data, DaskArray):
+        axes = data.shape
     elif isinstance(data, MultiscaleSpatialImage):
         for i in data:
             return _get_raster_schema(data[i], kind)
+    else:
+        raise TypeError(f"Unsupported type: {type(data)}")
+    if len(axes) == 2:
+        return Labels2D_s
+    elif len(axes) == 3:
+        if kind == "Image":
+            return Image2D_s
+        elif kind == "Label":
+            return Labels3D_s
+        else:
+            raise ValueError(f"Wrong kind: {kind}")
+    elif len(axes) == 3:
+        return Image3D_s
+    else:
+        raise ValueError(f"Wrong dimensions: {data.dims}D array.")
 
 
 def _to_spatial_image(
@@ -126,7 +132,7 @@ def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage,
 
 @validate_raster.register
 def _(
-    data: ArrayLike,
+    data: np.ndarray,  # type: ignore[type-arg]
     kind: Literal["Image", "Label"],
     *args: Any,
     **kwargs: Any,
