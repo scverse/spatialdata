@@ -4,12 +4,12 @@ import copy
 import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
-from spatialdata._core.coordinate_system import CoordinateSystem
 
 import numpy as np
-
 from xarray import DataArray
 from spatialdata._types import ArrayLike
+
+from spatialdata._core.coordinate_system import CoordinateSystem
 
 __all__ = [
     "BaseTransformation",
