@@ -55,25 +55,28 @@ Image3D_s = DataArraySchema(
 
 
 def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> DataArraySchema:
+    # get type
     if isinstance(data, SpatialImage):
-        axes: Tuple[Any, ...] = data.dims
+        shapes: Tuple[Any, ...] = tuple(data.sizes.values())
     elif isinstance(data, DaskArray):
-        axes = data.shape
+        shapes = data.shape
     elif isinstance(data, MultiscaleSpatialImage):
-        for i in data:
-            return _get_raster_schema(data[i], kind)
+        k = tuple(data.keys())[0]
+        shapes = tuple(data[k].sizes.values())
     else:
         raise TypeError(f"Unsupported type: {type(data)}")
-    if len(axes) == 2:
+
+    # get schema
+    if len(shapes) == 2:
         return Labels2D_s
-    elif len(axes) == 3:
+    elif len(shapes) == 3:
         if kind == "Image":
             return Image2D_s
         elif kind == "Label":
             return Labels3D_s
         else:
             raise ValueError(f"Wrong kind: {kind}")
-    elif len(axes) == 3:
+    elif len(shapes) == 3:
         return Image3D_s
     else:
         raise ValueError(f"Wrong dimensions: {data.dims}D array.")
