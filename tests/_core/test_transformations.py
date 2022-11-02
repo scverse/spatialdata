@@ -1,18 +1,11 @@
 import numpy as np
 import pytest
 
+from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import (
     BaseTransformation,
     Identity,
-    MapAxis,
-    Translation,
-    Scale,
-    Affine,
-    Rotation,
-    Sequence,
-    get_transformation_from_json,
 )
-from spatialdata._core.coordinate_system import CoordinateSystem, Axis
 
 x_axis = Axis(name="x", type="space", unit="micrometer")
 y_axis = Axis(name="y", type="space", unit="micrometer")

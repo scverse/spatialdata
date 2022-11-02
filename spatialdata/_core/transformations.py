@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import copy
 import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
-from xarray import DataArray
-from spatialdata._types import ArrayLike
 
 from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._types import ArrayLike
 
 __all__ = [
     "BaseTransformation",
