@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import copy
 import json
+import math
 from abc import ABC, abstractmethod
+from numbers import Number
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
-from xarray import DataArray
-from spatialdata._types import ArrayLike
 
 from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._types import ArrayLike
 
 __all__ = [
     "BaseTransformation",
@@ -91,7 +91,15 @@ class BaseTransformation(ABC):
             my_class = Scale
         elif type == "affine":
             my_class = Affine
+            last_row = [[0.0] * (len(kw["affine"][0]) - 1) + [1.0]]
+            kw["affine"] = kw["affine"] + last_row
         elif type == "rotation":
+            x = kw["rotation"]
+            n = len(x)
+            r = math.sqrt(n)
+            assert n == int(r * r)
+            m = np.array(x).reshape((int(r), int(r))).tolist()
+            kw["rotation"] = m
             my_class = Rotation
         elif type == "sequence":
             my_class = Sequence
@@ -175,6 +183,14 @@ class BaseTransformation(ABC):
         input_axes = self.input_coordinate_system.axes_names
         output_axes = self.output_coordinate_system.axes_names
         return input_axes, output_axes
+
+    @staticmethod
+    def _parse_list_into_array(array: Union[List[Number], ArrayLike]) -> np.ndarray:
+        if isinstance(array, list):
+            array = np.array(array)
+        if array.dtype != float:
+            array = array.astype(float)
+        return array
 
 
 def get_transformation_from_json(s: str) -> BaseTransformation:
@@ -295,16 +311,24 @@ class MapAxis(BaseTransformation):
 
     def _get_and_validate_axes(self) -> Tuple[Tuple[str], Tuple[str]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
-        if set(input_axes) != set(self.map_axis.keys()):
-            raise ValueError(f"The set of input axes must be the same as the set of keys of mapAxis")
-        if set(output_axes) != set(self.map_axis.values()):
-            raise ValueError(f"The set of output axes must be the same as the set of values of mapAxis")
+        if not set(input_axes).issuperset(set(self.map_axis.values())):
+            raise ValueError(
+                f"Each value of the dict specifying a MapAxis transformation must be an axis of the input "
+                f"coordinate system"
+            )
+        if set(output_axes) != set(self.map_axis.keys()):
+            raise ValueError(
+                f"The set of output axes must be the same as the set of keys the dict specifying a "
+                f"MapAxis transformation"
+            )
         return input_axes, output_axes
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
-        raise NotImplementedError()
+        new_indices = [input_axes.index(self.map_axis[ax]) for ax in output_axes]
+        mapped = points[:, new_indices]
+        return mapped
 
     def to_affine(self) -> Affine:
         input_axes, output_axes = self._get_and_validate_axes()
@@ -312,7 +336,7 @@ class MapAxis(BaseTransformation):
         matrix[-1, -1] = 1
         for i, des_axis in enumerate(output_axes):
             for j, src_axis in enumerate(input_axes):
-                if des_axis == self.map_axis[src_axis]:
+                if src_axis == self.map_axis[des_axis]:
                     matrix[i, j] = 1
         affine = Affine(matrix)
         affine.input_coordinate_system = self.input_coordinate_system
@@ -321,11 +345,11 @@ class MapAxis(BaseTransformation):
 
 
 class Translation(BaseTransformation):
-    def __init__(self, translation: ArrayLike) -> None:
+    def __init__(self, translation: Union[ArrayLike, list[Number]]) -> None:
         """
         class for storing translation transformations.
         """
-        self.translation = translation
+        self.translation = self._parse_list_into_array(translation)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -361,11 +385,11 @@ class Translation(BaseTransformation):
 
 
 class Scale(BaseTransformation):
-    def __init__(self, scale: ArrayLike = None) -> None:
+    def __init__(self, scale: Union[ArrayLike, list[Number]]) -> None:
         """
         class for storing scale transformations.
         """
-        self.scale = scale
+        self.scale = self._parse_list_into_array(scale)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -403,11 +427,11 @@ class Scale(BaseTransformation):
 
 
 class Affine(BaseTransformation):
-    def __init__(self, affine: ArrayLike) -> None:
+    def __init__(self, affine: Union[ArrayLike, list[Number]]) -> None:
         """
-        class for storing scale transformations.
+        class for storing affine transformations.
         """
-        self.affine = affine
+        self.affine = self._parse_list_into_array(affine)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -416,7 +440,7 @@ class Affine(BaseTransformation):
         }
 
     def inverse(self) -> BaseTransformation:
-        inv = np.lingalg.inv(self.affine)
+        inv = np.linalg.inv(self.affine)
         t = Affine(inv)
         t.input_coordinate_system = self.output_coordinate_system
         t.output_coordinate_system = self.input_coordinate_system
@@ -452,11 +476,11 @@ class Affine(BaseTransformation):
 
 
 class Rotation(BaseTransformation):
-    def __init__(self, rotation: ArrayLike) -> None:
+    def __init__(self, rotation: Union[ArrayLike, list[Number]]) -> None:
         """
-        class for storing scale transformations.
+        class for storing rotation transformations.
         """
-        self.rotation = rotation
+        self.rotation = self._parse_list_into_array(rotation)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

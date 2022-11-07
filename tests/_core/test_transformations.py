@@ -1,18 +1,16 @@
 import numpy as np
 import pytest
 
+from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import (
+    Affine,
     BaseTransformation,
     Identity,
     MapAxis,
-    Translation,
-    Scale,
-    Affine,
     Rotation,
-    Sequence,
-    get_transformation_from_json,
+    Scale,
+    Translation,
 )
-from spatialdata._core.coordinate_system import CoordinateSystem, Axis
 
 x_axis = Axis(name="x", type="space", unit="micrometer")
 y_axis = Axis(name="y", type="space", unit="micrometer")
@@ -26,7 +24,7 @@ cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
 
 
-def _test_transform_points(
+def _test_transformation(
     transformation: BaseTransformation,
     original: np.ndarray,
     transformed: np.ndarray,
@@ -47,8 +45,13 @@ def _test_transform_points(
 
     # wrong output coordinate system
     transformation.output_coordinate_system = wrong_output_cs
-    with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original), transformed)
+    try:
+        # if the output coordinate system still allows to compute the transformation, it will give points different
+        # from the one we expect
+        assert not np.allclose(transformation.transform_points(original), transformed)
+    except ValueError:
+        # covers the case in which the tranformation failed because of an incompatible output coordinate system
+        pass
 
     # wrong points shapes
     transformation.output_coordinate_system = output_cs
@@ -64,11 +67,18 @@ def _test_transform_points(
 
     if test_affine:
         affine = transformation.to_affine()
-        assert np.allclose(affine.transform_points(original), original)
+        assert np.allclose(affine.transform_points(original), transformed)
 
     if test_inverse:
         inverse = transformation.inverse()
         assert np.allclose(inverse.transform_points(transformed), original)
+    else:
+        try:
+            transformation.inverse()
+        except ValueError:
+            pass
+        except np.linalg.LinAlgError:
+            pass
 
     # test to_dict roundtrip
     assert transformation.to_dict() == BaseTransformation.from_dict(transformation.to_dict()).to_dict()
@@ -78,63 +88,116 @@ def _test_transform_points(
 
 
 def test_identity():
-    _test_transform_points(
+    _test_transformation(
         transformation=Identity(),
-        original=np.array([[1, 2, 3]]),
-        transformed=np.array([[1, 2, 3]]),
+        original=np.array([[1, 2, 3], [1, 1, 1]]),
+        transformed=np.array([[1, 2, 3], [1, 1, 1]]),
         input_cs=xyz_cs,
         output_cs=xyz_cs,
         wrong_output_cs=zyx_cs,
     )
 
-    # t.output_coordinate_system = xy_cs
 
-    # assert np.allclose(
-    #     act('{"type": "identity"}', ndim=2),
-    #     np.array([[1, 2], [3, 4], [5, 6]], dtype=float),
-    # )
+def test_map_axis():
+    _test_transformation(
+        transformation=MapAxis({"x": "x", "y": "y", "z": "z"}),
+        original=np.array([[1, 2, 3], [2, 3, 4]]),
+        transformed=np.array([[3, 2, 1], [4, 3, 2]]),
+        input_cs=xyz_cs,
+        output_cs=zyx_cs,
+        wrong_output_cs=xyz_cs,
+    )
+    _test_transformation(
+        transformation=MapAxis({"x": "x", "y": "y", "z": "y"}),
+        original=np.array([[1, 2]]),
+        transformed=np.array([[2, 2, 1]]),
+        input_cs=xy_cs,
+        output_cs=zyx_cs,
+        wrong_output_cs=xyz_cs,
+        test_inverse=False,
+    )
+    _test_transformation(
+        transformation=MapAxis({"x": "y", "y": "x", "z": "z"}),
+        original=np.array([[1, 2, 3]]),
+        transformed=np.array([[2, 1, 3]]),
+        input_cs=xyz_cs,
+        output_cs=xyz_cs,
+        wrong_output_cs=zyx_cs,
+    )
 
 
-#
-#
-# @pytest.mark.skip()
-# def test_map_index():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_map_axis():
-#     raise NotImplementedError()
-#
-#
-# def test_translation_3d():
-#     assert np.allclose(
-#         act('{"type": "translation", "translation": [1, 2, 3]}', ndim=3),
-#         [[2, 4, 6], [5, 7, 9], [8, 10, 12], [11, 13, 15]],
-#     )
-#
-#
-# def test_scale_3d():
-#     assert np.allclose(
-#         act('{"type": "scale", "scale": [1, 2, 3]}', ndim=3),
-#         [[1, 4, 9], [4, 10, 18], [7, 16, 27], [10, 22, 36]],
-#     )
-#
-#
-# def test_affine_2d():
-#     assert np.allclose(
-#         act('{"type": "affine", "affine": [1, 2, 3, 4, 5, 6]}', ndim=2),
-#         [[8, 20], [14, 38], [20, 56]],
-#     )
-#
-#
-# def test_rotation_2d():
-#     assert np.allclose(
-#         act('{"type": "rotation", "rotation": [0, -1, 1, 0]}', ndim=2),
-#         [[-2, 1], [-4, 3], [-6, 5]],
-#     )
-#
-#
+def test_translations():
+    _test_transformation(
+        transformation=Translation(np.array([1, 2, 3])),
+        original=np.array([[1, 2, 3], [1, 1, 1]]),
+        transformed=np.array([[2, 4, 6], [2, 3, 4]]),
+        input_cs=xyz_cs,
+        output_cs=xyz_cs,
+        wrong_output_cs=zyx_cs,
+    )
+
+
+def test_scale():
+    _test_transformation(
+        transformation=Scale(np.array([1, 2, 3])),
+        original=np.array([[1, 2, 3], [1, 1, 1]]),
+        transformed=np.array([[1, 4, 9], [1, 2, 3]]),
+        input_cs=xyz_cs,
+        output_cs=xyz_cs,
+        wrong_output_cs=zyx_cs,
+    )
+
+
+def test_affine():
+    _test_transformation(
+        transformation=Affine(np.array([[1, 2, 3], [4, 5, 6], [0, 0, 1]])),
+        original=np.array([[1, 2], [3, 4], [5, 6]]),
+        transformed=np.array([[8, 20], [14, 38], [20, 56]]),
+        input_cs=xy_cs,
+        output_cs=xy_cs,
+        # this would give the same result as above, because affine doesn't check the axes
+        # wrong_output_cs=yx_cs,
+        # instead, this is wrong, since the affine matrix is not compatible with the output coordinate system
+        wrong_output_cs=zyx_cs,
+    )
+
+    # embedding a space into a larger one
+    _test_transformation(
+        transformation=Affine(np.array([[1, 2, 3], [1, 2, 3], [4, 5, 6], [0, 0, 1]])),
+        original=np.array([[1, 2], [3, 4], [5, 6]]),
+        transformed=np.array([[8, 8, 20], [14, 14, 38], [20, 20, 56]]),
+        input_cs=yx_cs,
+        output_cs=cyx_cs,
+        wrong_output_cs=yx_cs,
+        test_inverse=False,
+    )
+
+    # projecting a space into a smaller one
+    _test_transformation(
+        transformation=Affine(np.array([[4, 5, 6], [0, 0, 1]])),
+        original=np.array([[1, 2], [3, 4], [5, 6]]),
+        transformed=np.array([[20], [38], [56]]),
+        input_cs=xy_cs,
+        output_cs=CoordinateSystem(name="y", axes=[y_axis]),
+        wrong_output_cs=xy_cs,
+        test_inverse=False,
+    )
+
+
+def test_rotations():
+    _test_transformation(
+        transformation=Rotation(np.array([[0, -1], [1, 0]])),
+        original=np.array([[1, 2], [3, 4], [5, 6]]),
+        transformed=np.array([[-2, 1], [-4, 3], [-6, 5]]),
+        input_cs=xy_cs,
+        output_cs=xy_cs,
+        # this would give the same result as above, because affine doesn't check the axes
+        # wrong_output_cs=yx_cs,
+        # instead, this is wrong, since the affine matrix is not compatible with the output coordinate system
+        wrong_output_cs=zyx_cs,
+    )
+
+
 # # output from np.matmul(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]), np.vstack([np.transpose((xyz + np.array([1, 2])) * np.array([3, 4])), [1, 1, 1]]))[:-1, :].T
 # def test_sequence_2d():
 #     assert np.allclose(
@@ -160,60 +223,7 @@ def test_identity():
 #     )
 #
 #
-# @pytest.mark.skip()
-# def test_displacements():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_coordinates():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_vector_field():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_inverse_of():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_translation():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_scale():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_affine_2d():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_rotation_2d():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_inverse_of_sequence_2d():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_bijection():
-#     raise NotImplementedError()
-#
-#
-# @pytest.mark.skip()
-# def test_by_dimension():
-#     raise NotImplementedError()
-#
+
 #
 # def test_to_composition_to_affine():
 #     composed0 = get_transformation_from_json(
@@ -247,6 +257,33 @@ def test_identity():
 #         raise ValueError(f"Invalid ndim: {ndim}")
 #     return get_transformation_from_json(s).transform_points(points)
 #
-#
-# # TODO: test that the scale, translation and rotation as above gives the same as the rotation as an affine matrices
-# # TODO: test also affine transformations to embed 2D points in a 3D space
+
+
+@pytest.mark.skip()
+def test_displacements():
+    raise NotImplementedError()
+
+
+@pytest.mark.skip()
+def test_coordinates():
+    raise NotImplementedError()
+
+
+@pytest.mark.skip()
+def test_vector_field():
+    raise NotImplementedError()
+
+
+@pytest.mark.skip()
+def test_inverse_of_inverse_of():
+    raise NotImplementedError()
+
+
+@pytest.mark.skip()
+def test_bijection():
+    raise NotImplementedError()
+
+
+@pytest.mark.skip()
+def test_by_dimension():
+    raise NotImplementedError()
