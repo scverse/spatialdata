@@ -21,19 +21,12 @@ __all__ = [
 ]
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.transformations import (
+from spatialdata._core.transformations import (  # Bijection,; ByDimension,; Coordinates,; Displacements,; InverseOf,; MapIndex,; VectorField,
     Affine,
-    # Bijection,
-    # ByDimension,
-    # Coordinates,
-    # Displacements,
     Identity,
-    # InverseOf,
     MapAxis,
-    # MapIndex,
     Rotation,
     Scale,
     Sequence,
     Translation,
-    # VectorField,
 )
