@@ -6,6 +6,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData
+from spatialdata._core.models import validate_raster
 from spatialdata._types import NDArray
 
 RNG = default_rng()
@@ -14,6 +15,11 @@ RNG = default_rng()
 @pytest.fixture()
 def images() -> SpatialData:
     return SpatialData(images=_get_images(3))
+
+
+@pytest.fixture()
+def images_multiscale() -> SpatialData:
+    return SpatialData(images=_get_images(3, multiscale=True))
 
 
 @pytest.fixture()
@@ -67,8 +73,17 @@ def sdata(request) -> SpatialData:
     return s
 
 
-def _get_images(n: int) -> Mapping[str, Sequence[NDArray]]:
-    return {f"image_{i}": RNG.normal(size=(3, 100, 100)) for i in range(n)}
+def _get_images(n: int, multiscale: bool = False) -> Mapping[str, Sequence[NDArray]]:
+    out = {}
+    for i in range(n):
+        arr = RNG.normal(size=(3, 64, 64))
+        name = f"image_{i}"
+        if multiscale:
+            image = validate_raster(arr, kind="Image", name=name, scale_factors=[2, 4])
+        else:
+            image = validate_raster(arr, kind="Image", name=name)
+        out[name] = image
+    return out
 
 
 def _get_labels(n: int) -> Mapping[str, Sequence[NDArray]]:

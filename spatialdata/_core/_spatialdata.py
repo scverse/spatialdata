@@ -30,7 +30,6 @@ class SpatialData:
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        images_transform: Optional[Mapping[str, Any]] = None,
         labels_transform: Optional[Mapping[str, Any]] = None,
         points_transform: Optional[Mapping[str, Any]] = None,
         polygons_transform: Optional[Mapping[str, Any]] = None,
@@ -38,21 +37,12 @@ class SpatialData:
         **kwargs: Any,
     ) -> None:
 
-        _validate_dataset(images, images_transform)
         _validate_dataset(labels, labels_transform)
         _validate_dataset(points, points_transform)
         _validate_dataset(polygons, polygons_transform)
 
         if images is not None:
-            self.images = {
-                k: validate_raster(
-                    data,
-                    kind="image",
-                    transform=transform,
-                    multiscale_kwargs=multiscale_kwargs,
-                )
-                for (k, data), transform in _iter_elems(labels, labels_transform)
-            }
+            self.images = {k: validate_raster(v, kind="Image") for k, v in images.items()}
 
         if labels is not None:
             self.labels = {

@@ -154,17 +154,13 @@ def write_image(
         )
     elif isinstance(image, MultiscaleSpatialImage):
         data = _iter_multiscale(image, name, "data")
-        coordinate_transformations = [x.to_dict() for x in _iter_multiscale(image, name, "attrs", "transform")]
-        print(coordinate_transformations)
+        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(image, name, "attrs", "transform")]
         chunks = _iter_multiscale(image, name, "chunks")
         axes_ = _iter_multiscale(image, name, "dims")
         # TODO: how should axes be handled with multiscale?
         axes = _get_valid_axes(ndim=3, axes=axes_[0])
-        if storage_options is not None:
-            if "chunks" not in storage_options and isinstance(storage_options, dict):
-                storage_options["chunks"] = chunks
-        else:
-            storage_options = {"chunks": chunks}
+        storage_options = [{"chunks": chunk} for chunk in chunks]
+        print(storage_options)
         write_multiscale_ngff(
             pyramid=data,
             group=group,

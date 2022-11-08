@@ -21,24 +21,30 @@ from spatialdata._io.format import SpatialDataFormat
 def _read_multiscale(node: Node, fmt: SpatialDataFormat) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
     transformations = [get_transformation_from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    name = node.metadata["name"]
     axes = [i["name"] for i in node.metadata["axes"]]
     assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
     if len(datasets) > 1:
         multiscale_image = {}
         for i, (t, d) in enumerate(zip(transformations, datasets)):
+            data = node.load(Multiscales).array(resolution=d, version=fmt.version)
+            coords = {ax: np.arange(s) for ax, s in zip(axes, data.shape)}
             multiscale_image[f"scale{i}"] = DataArray(
-                node.load(Multiscales).array(resolution=d, version=fmt.version),
-                name=node.metadata["name"],
-                dims=axes,
-                attrs={"transformation": t},
+                data,
+                name=name,
+                coords=coords,
+                attrs={"transform": t},
             )
         return MultiscaleSpatialImage.from_dict(multiscale_image)
     else:
+        t = transformations[0]
+        data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
+        coords = {ax: np.arange(s) for ax, s in zip(axes, data.shape)}
         return SpatialImage(
-            node.load(Multiscales).array(resolution=datasets[0], version=fmt.version),
+            data,
             name=node.metadata["name"],
-            dims=axes,
-            attrs={"transformation": t},
+            coords=coords,
+            attrs={"transform": t},
         )
 
 
