@@ -9,6 +9,7 @@ from spatialdata._core.transformations import (
     MapAxis,
     Rotation,
     Scale,
+    Sequence,
     Translation,
 )
 
@@ -198,7 +199,29 @@ def test_rotations():
     )
 
 
-# # output from np.matmul(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]), np.vstack([np.transpose((xyz + np.array([1, 2])) * np.array([3, 4])), [1, 1, 1]]))[:-1, :].T
+def test_sequence():
+    original = np.array([[1, 2], [3, 4], [5, 6]])
+    transformed = np.matmul(
+        np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]),
+        np.vstack([np.transpose((original + np.array([1, 2])) * np.array([3, 4])), [1, 1, 1]]),
+    )[:-1, :].T
+    _test_transformation(
+        transformation=Sequence(
+            [
+                Translation(np.array([1, 2])),
+                Scale(np.array([3, 4])),
+                Affine(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]])),
+            ]
+        ),
+        original=original,
+        transformed=transformed,
+        input_cs=xy_cs,
+        output_cs=xy_cs,
+        wrong_output_cs=yx_cs,
+    )
+
+
+# # output from
 # def test_sequence_2d():
 #     assert np.allclose(
 #         act(
