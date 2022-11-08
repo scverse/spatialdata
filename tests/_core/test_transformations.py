@@ -5,6 +5,7 @@ from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
+    ByDimension,
     Identity,
     MapAxis,
     Rotation,
@@ -17,8 +18,13 @@ x_axis = Axis(name="x", type="space", unit="micrometer")
 y_axis = Axis(name="y", type="space", unit="micrometer")
 z_axis = Axis(name="z", type="space", unit="micrometer")
 c_axis = Axis(name="c", type="channel")
+x_cs = CoordinateSystem(name="x", axes=[x_axis])
+y_cs = CoordinateSystem(name="y", axes=[y_axis])
+z_cs = CoordinateSystem(name="z", axes=[z_axis])
 xy_cs = CoordinateSystem(name="xy", axes=[x_axis, y_axis])
 xyz_cs = CoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
+xyc_cs = CoordinateSystem(name="xyc", axes=[x_axis, y_axis, c_axis])
+xyzc_cs = CoordinateSystem(name="xyzc", axes=[x_axis, y_axis, z_axis, c_axis])
 yx_cs = CoordinateSystem(name="yx", axes=[y_axis, x_axis])
 zyx_cs = CoordinateSystem(name="zyx", axes=[z_axis, y_axis, x_axis])
 cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
@@ -33,6 +39,7 @@ def _test_transformation(
     output_cs: CoordinateSystem,
     wrong_output_cs: CoordinateSystem,
     test_affine: bool = True,
+    test_affine_inverse: bool = True,
     test_inverse: bool = True,
 ):
     # missing input and output coordinate systems
@@ -69,6 +76,9 @@ def _test_transformation(
     if test_affine:
         affine = transformation.to_affine()
         assert np.allclose(affine.transform_points(original), transformed)
+        if test_inverse:
+            affine = transformation.to_affine()
+            assert np.allclose(affine.inverse().transform_points(transformed), original)
 
     if test_inverse:
         inverse = transformation.inverse()
@@ -179,7 +189,7 @@ def test_affine():
         original=np.array([[1, 2], [3, 4], [5, 6]]),
         transformed=np.array([[20], [38], [56]]),
         input_cs=xy_cs,
-        output_cs=CoordinateSystem(name="y", axes=[y_axis]),
+        output_cs=y_cs,
         wrong_output_cs=xy_cs,
         test_inverse=False,
     )
@@ -200,17 +210,40 @@ def test_rotations():
 
 
 def test_sequence():
-    original = np.array([[1, 2], [3, 4], [5, 6]])
+    original = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+    affine = Affine(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]))
     transformed = np.matmul(
         np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]),
-        np.vstack([np.transpose((original + np.array([1, 2])) * np.array([3, 4])), [1, 1, 1]]),
+        np.vstack([np.transpose((original + np.array([1, 2])) * np.array([3, 4])), [1] * len(original)]),
     )[:-1, :].T
+
+    # ambiguous 2d case (no input/output coordinate system specified for the affine transformation composing the
+    # sequence)
+    with pytest.raises(ValueError):
+        _test_transformation(
+            transformation=Sequence(
+                [
+                    Translation(np.array([1, 2])),
+                    Scale(np.array([3, 4])),
+                    affine,
+                ]
+            ),
+            original=original,
+            transformed=transformed,
+            input_cs=xy_cs,
+            output_cs=xy_cs,
+            wrong_output_cs=yx_cs,
+        )
+
+    # 2d case
+    affine.input_coordinate_system = xy_cs
+    affine.output_coordinate_system = xy_cs
     _test_transformation(
         transformation=Sequence(
             [
                 Translation(np.array([1, 2])),
                 Scale(np.array([3, 4])),
-                Affine(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]])),
+                affine,
             ]
         ),
         original=original,
@@ -220,66 +253,50 @@ def test_sequence():
         wrong_output_cs=yx_cs,
     )
 
+    # 3d case
+    _test_transformation(
+        transformation=Sequence(
+            [
+                Translation(np.array([1, 2, 3])),
+                Scale(np.array([4, 5, 6])),
+                Translation(np.array([7, 8, 9])),
+            ]
+        ),
+        original=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
+        transformed=np.array([[15, 28, 45], [27, 43, 63], [39, 58, 81], [51, 73, 99]]),
+        input_cs=xyz_cs,
+        output_cs=xyz_cs,
+        wrong_output_cs=zyx_cs,
+    )
 
-# # output from
-# def test_sequence_2d():
-#     assert np.allclose(
-#         act(
-#             '{"type": "sequence", "transformations": [{"type": "translation", '
-#             '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
-#             '"affine": [5, 6, 7, 8, 9, 10]}]}',
-#             ndim=2,
-#         ),
-#         [[133, 202], [211, 322], [289, 442]],
-#     )
-#
-#
-# def test_sequence_3d():
-#     assert np.allclose(
-#         act(
-#             '{"type": "sequence", "transformations": [{"type": "translation", '
-#             '"translation": [1, 2, 3]}, {"type": "scale", "scale": [4, 5, 6]}, {"type": "translation", '
-#             '"translation": [7, 8, 9]}]}',
-#             ndim=3,
-#         ),
-#         [[15, 28, 45], [27, 43, 63], [39, 58, 81], [51, 73, 99]],
-#     )
-#
-#
+    # 2d case, extending a xy->xy transformation to a cyx->cyx transformation using additional affine transformations
+    cyx_to_xy = Affine(np.array([[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]))
+    cyx_to_xy.input_coordinate_system = cyx_cs
+    cyx_to_xy.output_coordinate_system = xy_cs
+    xy_to_cyx = Affine(np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]]))
+    xy_to_cyx.input_coordinate_system = xy_cs
+    xy_to_cyx.output_coordinate_system = cyx_cs
 
-#
-# def test_to_composition_to_affine():
-#     composed0 = get_transformation_from_json(
-#         '{"type": "sequence", "transformations": [{"type": "translation", '
-#         '"translation": [1, 2]}, {"type": "scale", "scale": [3, 4]}, {"type": "affine", '
-#         '"affine": [5, 6, 7, 8, 9, 10]}]}',
-#     )
-#     composed1 = Sequence(
-#         [
-#             Sequence(
-#                 [
-#                     get_transformation_from_json('{"type": "translation", "translation": [1, 2]}'),
-#                     get_transformation_from_json('{"type": "scale", "scale": [3, 4]}'),
-#                 ],
-#             ),
-#             Affine(np.array([5, 6, 7, 8, 9, 10])),
-#         ]
-#     ).to_affine()
-#     points = np.array([[1, 2], [3, 4], [5, 6]], dtype=float)
-#     expected = np.array([[133, 202], [211, 322], [289, 442]], dtype=float)
-#     assert np.allclose(composed0.transform_points(points), expected)
-#     assert np.allclose(composed1.transform_points(points), expected)
-#
-#
-# def act(s: str, ndim: int) -> np.array:
-#     if ndim == 2:
-#         points = np.array([[1, 2], [3, 4], [5, 6]], dtype=float)
-#     elif ndim == 3:
-#         points = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=float)
-#     else:
-#         raise ValueError(f"Invalid ndim: {ndim}")
-#     return get_transformation_from_json(s).transform_points(points)
-#
+    def _manual_xy_to_cyz(x: np.ndarray) -> np.ndarray:
+        return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
+
+    _test_transformation(
+        transformation=Sequence(
+            [
+                cyx_to_xy,
+                Translation(np.array([1, 2])),
+                Scale(np.array([3, 4])),
+                affine,
+                xy_to_cyx,
+            ]
+        ),
+        original=_manual_xy_to_cyz(original),
+        transformed=_manual_xy_to_cyz(transformed),
+        input_cs=cyx_cs,
+        output_cs=cyx_cs,
+        wrong_output_cs=xyc_cs,
+        test_inverse=False,
+    )
 
 
 @pytest.mark.skip()
@@ -307,6 +324,18 @@ def test_bijection():
     raise NotImplementedError()
 
 
-@pytest.mark.skip()
+#
 def test_by_dimension():
-    raise NotImplementedError()
+    _test_transformation(
+        transformation=ByDimension(
+            [
+                Translation(np.array([1, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+                Scale(np.array([3]), input_coordinate_system=z_cs, output_coordinate_system=z_cs),
+            ]
+        ),
+        original=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
+        transformed=np.array([[2, 4, 9], [5, 7, 18], [8, 10, 27], [11, 13, 36]]),
+        input_cs=xyz_cs,
+        output_cs=xyz_cs,
+        wrong_output_cs=zyx_cs,
+    )
