@@ -19,10 +19,10 @@ def test_coordinate_system_instantiation_and_properties():
     coord_sys = CoordinateSystem.from_dict(input_dict)
     assert coord_sys.name == "volume_micrometers"
     assert [ax.name for ax in coord_sys._axes] == ["x", "y", "z"]
-    assert coord_sys.axes_names == ["x", "y", "z"]
+    assert coord_sys.axes_names == ("x", "y", "z")
 
     assert [ax.type for ax in coord_sys._axes] == ["space", "space", "space"]
-    assert coord_sys.axes_types == ["space", "space", "space"]
+    assert coord_sys.axes_types == ("space", "space", "space")
 
     output_dict = coord_sys.to_dict()
     assert input_dict == output_dict
