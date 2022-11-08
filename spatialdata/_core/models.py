@@ -17,7 +17,7 @@ from spatial_image import SpatialImage, to_spatial_image
 from xarray_schema.components import ArrayTypeSchema, AttrSchema, DimsSchema
 from xarray_schema.dataarray import DataArraySchema
 
-from spatialdata._core.transform import BaseTransformation, Identity
+from spatialdata._core.transformations import BaseTransformation, Identity
 
 # Types
 Chunks_t = Union[
@@ -95,6 +95,8 @@ def _to_spatial_image(
     if transform is None:
         transform = Identity()
         data.attrs = {"transform": transform}
+        # TODO(giovp): don't drop coordinates.
+    data = data.drop(data.coords.keys())
     if scale_factors is not None:
         data = to_multiscale(
             data,

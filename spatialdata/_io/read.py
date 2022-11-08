@@ -31,22 +31,20 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormat) -> Union[SpatialImage, 
         multiscale_image = {}
         for i, (t, d) in enumerate(zip(transformations, datasets)):
             data = node.load(Multiscales).array(resolution=d, version=fmt.version)
-            coords = {ax: np.arange(s) for ax, s in zip(axes, data.shape)}
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
                 name=name,
-                coords=coords,
+                dims=axes,
                 attrs={"transform": t},
             )
         return MultiscaleSpatialImage.from_dict(multiscale_image)
     else:
         t = transformations[0]
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-        coords = {ax: np.arange(s) for ax, s in zip(axes, data.shape)}
         return SpatialImage(
             data,
             name=node.metadata["name"],
-            coords=coords,
+            dims=axes,
             attrs={"transform": t},
         )
 
@@ -99,21 +97,22 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                     start = time.time()
                     images[k] = _read_multiscale(node, fmt)
                     print(f"action1: {time.time() - start}")
-        # read all images/labels for the level
-        # warnings like "no parent found for <ome_zarr.reader.Label object at 0x1c789f310>: None" are expected,
+        # read multiscale labels for the level
+        # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
         # since we don't link the image and the label inside .zattrs['image-label']
         labels_loc = ZarrLocation(f"{f_elem_store}/labels")
-        start = time.time()
         if labels_loc.exists():
             labels_reader = Reader(labels_loc)()
             labels_nodes = list(labels_reader)
+            start = time.time()
             if len(labels_nodes):
                 for node in labels_nodes:
-                    if np.any([isinstance(spec, Label) for spec in node.specs]):
+                    if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
+                        [isinstance(spec, Label) for spec in node.specs]
+                    ):
                         print(f"action0: {time.time() - start}")
                         start = time.time()
-                        labels[k] = node.load(Multiscales).array(resolution="0", version=fmt.version)
-                        labels_transform[k] = _get_transform_from_group(zarr.open(node.zarr.path, mode="r"))
+                        labels[k] = _read_multiscale(node, fmt)
                         print(f"action1: {time.time() - start}")
         # now read rest
         start = time.time()

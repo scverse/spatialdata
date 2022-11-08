@@ -1,7 +1,6 @@
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
-import numpy as np
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
@@ -13,10 +12,10 @@ from ome_zarr.writer import _get_valid_axes, _validate_datasets
 from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
+from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
 from spatial_image import SpatialImage
 
 from spatialdata._io.format import SpatialDataFormat
-from spatialdata._types import ArrayLike
 
 __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
 
@@ -121,7 +120,7 @@ def write_table(
 
 
 def write_image(
-    image: ArrayLike,
+    image: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
     scaler: Scaler = Scaler(),
@@ -158,9 +157,8 @@ def write_image(
         chunks = _iter_multiscale(image, name, "chunks")
         axes_ = _iter_multiscale(image, name, "dims")
         # TODO: how should axes be handled with multiscale?
-        axes = _get_valid_axes(ndim=3, axes=axes_[0])
+        axes = _get_valid_axes(ndim=data[0].ndim, axes=axes_[0])
         storage_options = [{"chunks": chunk} for chunk in chunks]
-        print(storage_options)
         write_multiscale_ngff(
             pyramid=data,
             group=group,
@@ -174,11 +172,10 @@ def write_image(
 
 
 def write_labels(
-    labels: ArrayLike,
+    labels: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
     scaler: Scaler = Scaler(),
-    chunks: Optional[Union[Tuple[Any, ...], int]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
@@ -186,23 +183,47 @@ def write_labels(
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
 ) -> None:
-    if np.prod(labels.shape) == 0:
-        # TODO: temporary workaround, report bug to handle empty shapes
-        # TODO: consider the different axes, now assuming a 2D image
-        coordinate_transformations = fmt.generate_coordinate_transformations(shapes=[(1, 1)])
-    write_labels_ngff(
-        labels=labels,
-        group=group,
-        name=name,
-        scaler=scaler,
-        chunks=chunks,
-        fmt=fmt,
-        axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        storage_options=storage_options,
-        label_metadata=label_metadata,
-        **metadata,
-    )
+    if isinstance(labels, SpatialImage):
+        data = labels.data
+        coordinate_transformations = [[labels.attrs.get("transform").to_dict()]]
+        chunks = labels.chunks
+        axes = labels.dims
+        if storage_options is not None:
+            if "chunks" not in storage_options and isinstance(storage_options, dict):
+                storage_options["chunks"] = chunks
+        else:
+            storage_options = {"chunks": chunks}
+        write_labels_ngff(
+            labels=data,
+            name=name,
+            group=group,
+            scaler=None,
+            fmt=fmt,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            storage_options=storage_options,
+            label_metadata=label_metadata,
+            **metadata,
+        )
+    elif isinstance(labels, MultiscaleSpatialImage):
+        data = _iter_multiscale(labels, name, "data")
+        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(labels, name, "attrs", "transform")]
+        chunks = _iter_multiscale(labels, name, "chunks")
+        axes_ = _iter_multiscale(labels, name, "dims")
+        # TODO: how should axes be handled with multiscale?
+        axes = _get_valid_axes(ndim=data[0].ndim, axes=axes_[0])
+        storage_options = [{"chunks": chunk} for chunk in chunks]
+        write_multiscale_labels_ngff(
+            pyramid=data,
+            group=group,
+            fmt=fmt,
+            axes=axes,
+            coordinate_transformations=coordinate_transformations,
+            storage_options=storage_options,
+            name=name,
+            label_metadata=label_metadata,
+            **metadata,
+        )
 
 
 def write_polygons(

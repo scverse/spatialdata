@@ -9,16 +9,16 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
-from spatialdata._core.elements import Labels, Points, Polygons
+from spatialdata._core.elements import Points, Polygons
 from spatialdata._core.models import validate_raster
-from spatialdata._io.write import write_image, write_table
+from spatialdata._io.write import write_image, write_labels, write_table
 
 
 class SpatialData:
     """Spatial data structure."""
 
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    labels: Mapping[str, Labels] = MappingProxyType({})
+    labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     points: Mapping[str, Points] = MappingProxyType({})
     polygons: Mapping[str, Polygons] = MappingProxyType({})
     _table: Optional[AnnData] = None
@@ -45,15 +45,7 @@ class SpatialData:
             self.images = {k: validate_raster(v, kind="Image") for k, v in images.items()}
 
         if labels is not None:
-            self.labels = {
-                k: validate_raster(
-                    data,
-                    kind="image",
-                    transform=transform,
-                    multiscale_kwargs=multiscale_kwargs,
-                )
-                for (k, data), transform in _iter_elems(labels, labels_transform)
-            }
+            self.labels = {k: validate_raster(v, kind="Label") for k, v in labels.items()}
 
         if points is not None:
             self.points = {
@@ -88,7 +80,12 @@ class SpatialData:
                     storage_options={"compressor": None},
                 )
             if self.labels is not None and el in self.labels.keys():
-                self.labels[el].to_zarr(elem_group, name=el)
+                write_labels(
+                    labels=self.labels[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
             if self.points is not None and el in self.points.keys():
                 self.points[el].to_zarr(elem_group, name=el)
             if self.polygons is not None and el in self.polygons.keys():
