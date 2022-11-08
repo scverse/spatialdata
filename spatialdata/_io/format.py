@@ -77,7 +77,7 @@ class SpatialDataFormat(CurrentFormat):
         for shape in shapes:
             assert len(shape) == len(data_shape)
             scale = [full / level for full, level in zip(data_shape, shape)]
-            from spatialdata._core.transform import Scale
+            from spatialdata._core.transformations import Scale
 
             coordinate_transformations.append([Scale(scale=scale).to_dict()])
         return coordinate_transformations
@@ -110,7 +110,7 @@ class SpatialDataFormat(CurrentFormat):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata._core.transform import get_transformation_from_dict
+            from spatialdata._core.transformations import get_transformation_from_dict
 
             parsed = [get_transformation_from_dict(t) for t in transformations]
             json1 = [p.to_json() for p in parsed]

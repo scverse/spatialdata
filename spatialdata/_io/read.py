@@ -14,7 +14,10 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.transform import BaseTransformation, get_transformation_from_dict
+from spatialdata._core.transformations import (
+    BaseTransformation,
+    get_transformation_from_dict,
+)
 from spatialdata._io.format import SpatialDataFormat
 
 

@@ -46,23 +46,7 @@ def are_directories_identical(
             rf"{_root_dir2}/" + exclude_regexp, str(dir2)
         ):
             return True
-        ##
-        # loc = ZarrLocation(_root_dir1)
-        # reader = Reader(loc)()
-        # nodes = list(reader)
-        # assert len(nodes) == 1
-        # node = nodes[0]
-        # im_read = node.load(Multiscales).array(resolution="1", version=CurrentFormat().version)
-        #
-        # loc = ZarrLocation(_root_dir2)
-        # reader = Reader(loc)()
-        # nodes = list(reader)
-        # assert len(nodes) == 1
-        # node = nodes[0]
-        # im_read2 = node.load(Multiscales).array(resolution="1", version=CurrentFormat().version)
-        # print(im_read[:5, :5, 0].compute())
-        # print(im_read2[:5, :5, 0].compute())
-        ##
+
     compared = dircmp(dir1, dir2)
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
         return False

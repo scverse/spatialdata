@@ -1,18 +1,26 @@
 import json
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import dask.array.core
 import numpy as np
 import pandas as pd
 import zarr
 from anndata import AnnData
+from dask.array.core import Array as DaskArray
 from ome_zarr.scale import Scaler
 from xarray import DataArray
 
-from spatialdata._core.transform import BaseTransformation, Identity  # , get_transform
-from spatialdata._io.write import write_labels, write_points, write_polygons
+from spatialdata._core.transformations import (  # , get_transform
+    BaseTransformation,
+    Identity,
+)
+from spatialdata._io.write import (
+    write_image,
+    write_labels,
+    write_points,
+    write_polygons,
+)
 from spatialdata._types import ArrayLike
 
 __all__ = ["Image", "Labels", "Points", "Polygons"]
@@ -51,7 +59,7 @@ class Image(BaseElement):
             self.data = image
         elif isinstance(image, np.ndarray):
             self.data = DataArray(image)
-        elif isinstance(image, dask.array.core.Array):
+        elif isinstance(image, DaskArray):
             self.data = DataArray(image)
         else:
             raise TypeError("Image must be a DataArray, numpy array or dask array")
@@ -66,20 +74,29 @@ class Image(BaseElement):
             transform = Identity()
         return Image(data, transform)
 
-    def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
-        # TODO: allow to write from path
+    def to_zarr(
+        self,
+        group: zarr.Group,
+        name: str,
+        scaler: Optional[Scaler] = None,
+        storage_options: Optional[Dict[str, Any]] = None,
+        chunks: Optional[Union[Tuple[Any, ...], int]] = None,
+    ) -> None:
+        if storage_options is None:
+            # at the moment we don't use the compressor because of the bug described here (it makes some tests the
+            # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
+            storage_options = {"compressor": None}
         assert isinstance(self.transforms, BaseTransformation)
-        self.transforms.to_dict()
-        # at the moment we don't use the compressor because of the bug described here (it makes some tests the
-        # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
-        # write_image(
-        #     image=self.data.data,
-        #     group=group,
-        #     axes=self.axes,
-        #     scaler=scaler,
-        #     coordinate_transformations=[[coordinate_transformations]],
-        #     storage_options={"compressor": None},
-        # )
+        coordinate_transformations = self.transforms.to_dict()
+        write_image(
+            image=self.data.data,
+            group=group,
+            axes=self.axes,
+            scaler=scaler,
+            coordinate_transformations=[[coordinate_transformations]],
+            storage_options=storage_options,
+            chunks=chunks,
+        )
 
     def _infer_axes(self, shape: Tuple[int]) -> List[str]:
         # TODO: improve (this information can be already present in the data, as for xarrays, and the constructor
@@ -107,7 +124,7 @@ class Labels(BaseElement):
             self.data = labels
         elif isinstance(labels, np.ndarray):
             self.data = DataArray(labels)
-        elif isinstance(labels, dask.array.core.Array):
+        elif isinstance(labels, DaskArray):
             self.data = DataArray(labels)
         else:
             raise TypeError("Labels must be a DataArray, numpy array or dask array")
@@ -121,7 +138,18 @@ class Labels(BaseElement):
             transform = Identity()
         return Labels(data, transform)
 
-    def to_zarr(self, group: zarr.Group, name: str, scaler: Optional[Scaler] = None) -> None:
+    def to_zarr(
+        self,
+        group: zarr.Group,
+        name: str,
+        scaler: Optional[Scaler] = None,
+        storage_options: Optional[Dict[str, Any]] = None,
+        chunks: Optional[Union[Tuple[Any, ...], int]] = None,
+    ) -> None:
+        if storage_options is None:
+            # at the moment we don't use the compressor because of the bug described here (it makes some tests the
+            # test_readwrite_roundtrip fail) https://github.com/ome/ome-zarr-py/issues/219
+            storage_options = {"compressor": None}
         assert isinstance(self.transforms, BaseTransformation)
         coordinate_transformations = self.transforms.to_dict()
         # at the moment we don't use the compressor because of the bug described here (it makes some tests the
@@ -132,8 +160,9 @@ class Labels(BaseElement):
             name=name,
             axes=["y", "x"],  # TODO: infer before.
             scaler=scaler,
-            storage_options={"compressor": None},
             coordinate_transformations=[[coordinate_transformations]],
+            storage_options=storage_options,
+            chunks=chunks,
         )
 
     @classmethod
@@ -264,47 +293,3 @@ class Polygons(BaseElement):
     @property
     def shape(self) -> Tuple[int, ...]:
         return self.data.shape  # type: ignore[no-any-return]
-
-
-# @singledispatch
-# def parse_dataset(data: Any, transform: Optional[Any] = None) -> Any:
-#     raise NotImplementedError(f"`parse_dataset` not implemented for {type(data)}")
-#
-#
-# # TODO: ome_zarr reads images/labels as dask arrays
-# # given current behavior, equality fails (since we don't cast to dask arrays)
-# # should we?
-# @parse_dataset.register
-# def _(data: DataArray, transform: Optional[Any] = None) -> Tuple[DataArray, BaseTransformation]:
-#     if transform is None:
-#         transform = get_transform(data)
-#     return data, transform
-#
-#
-# @parse_dataset.register
-# def _(data: np.ndarray, transform: Optional[Any] = None) -> Tuple[DataArray, BaseTransformation]:  # type: ignore[type-arg]
-#     data = DataArray(data)
-#     if transform is None:
-#         transform = get_transform(data)
-#     return data, transform
-#
-#
-# @parse_dataset.register
-# def _(data: DaskArray, transform: Optional[Any] = None) -> Tuple[DataArray, BaseTransformation]:
-#     data = DataArray(data)
-#     if transform is None:
-#         transform = get_transform(data)
-#     return data, transform
-#
-#
-# @parse_dataset.register
-# def _(data: AnnData, transform: Optional[Any] = None) -> Tuple[AnnData, BaseTransformation]:
-#     if transform is None:
-#         transform = get_transform(data)
-#     return data, transform
-#
-#
-# if __name__ == "__main__":
-#     geojson_path = "spatialdata-sandbox/merfish/data/processed/anatomical.geojson"
-#     a = Polygons.anndata_from_geojson(path=geojson_path)
-#     print(a)
