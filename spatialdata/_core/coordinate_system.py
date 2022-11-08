@@ -87,11 +87,11 @@ class CoordinateSystem:
         return self._name
 
     @property
-    def axes_names(self) -> Tuple[str]:
+    def axes_names(self) -> Tuple[str, ...]:
         return tuple([ax.name for ax in self._axes])
 
     @property
-    def axes_types(self) -> Tuple[str]:
+    def axes_types(self) -> Tuple[str, ...]:
         return tuple([ax.type for ax in self._axes])
 
     def __hash__(self) -> int:
