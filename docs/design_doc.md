@@ -107,7 +107,7 @@ The `SpatialData` object contains a set of Elements to be used for analysis. Ele
 
 **`NGFFStore`**
 
-The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files.
+The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files. A `SpatialData` object can be instantiated from a `NGFFStore`.
 
 ### Elements
 
