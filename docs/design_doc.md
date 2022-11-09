@@ -107,8 +107,6 @@ The `SpatialData` object contains a set of Elements to be used for analysis. Ele
 
 **`NGFFStore`**
 
-_Note: previously we used the term `SpatialDataContainer`; the new naming is `NGFFStore`._
-
 The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files.
 
 ### Elements
@@ -134,7 +132,7 @@ _SpatialData_ closely follows the OME-NGFF specifications and therefore much of 
 -   `Tables` CAN NOT have a _coordinate system_ or _coordinate transforms_.
 -   `Labels` and `Shapes` are both instances of `Regions`.
 -   `Regions` are `Elements` and they MAY be annotated by `Tables`.
--   `Points` MAY be annotated with `Tables`.
+-   `Points` MAY NOT be annotated with `Tables`.
 -   `Tables` CAN NOT be annotated by other `Tables`.
 
 #### Images
@@ -153,7 +151,7 @@ The image object itself builds on prior art in image analysis, in particular the
 
 Images have labelled dimensions, and coordinate transformations. These transformations are used to map between pixel space and physical space, and between different physical spaces.
 
-For computational efficiency, images can have a pyramidal or multiscale format. This is implemented as an [xarray datatree](https://github.com/xarray-contrib/datatree).
+For computational efficiency, images can have a pyramidal or multiscale format. This is implemented as an [xarray datatree](https://github.com/xarray-contrib/datatree). The coordinate system and transformations are stored in `xarray.DataArray.attrs`. We are currently investigating using [`spatial-image`](https://github.com/spatial-image/spatial-image).
 
 #### Regions of interest
 
@@ -188,7 +186,7 @@ For computational efficiency, labels can have a pyramidal or multiscale format. 
 
 A set of (multi-)polygons associated with a set of observations. Each set of polygons is associated with a coordinate system. Polygons can be used to represent a variety of regions of interests, such as clinical annotations and user-defined regions of interest.
 
-The Polygon object is implemented as a geopandas dataframe with [multi-polygons series](https://geopandas.org/en/stable/docs/user_guide/data_structures.html).
+The Polygon object is implemented as a geopandas dataframe with [multi-polygons series](https://geopandas.org/en/stable/docs/user_guide/data_structures.html). The coordinate systems and transforms are stored in `geopandas.DataFrame.attrs`.
 
 ##### Shapes
 
