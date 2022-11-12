@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
@@ -227,7 +228,7 @@ def write_labels(
 
 
 def write_polygons(
-    polygons: AnnData,
+    polygons: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:polygons",

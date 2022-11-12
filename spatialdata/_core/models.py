@@ -226,6 +226,8 @@ def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage
         TODO.
     geometry
         :class:`shapely.geometry.Polygon` or :class:`shapely.geometry.MultiPolygon`.
+    transform
+        Transformation to apply to the data.
 
     Returns
     -------
@@ -239,7 +241,7 @@ def _(
     data: np.ndarray,  # type: ignore[type-arg]
     offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
     geometry: Literal["polygon", "multipolygon"],
-    *args: Any,
+    transform: Optional[Any] = None,
     **kwargs: Any,
 ) -> GeoDataFrame:
 
@@ -251,6 +253,9 @@ def _(
 
     data = from_ragged_array(geometry, data, offsets)
     geo_df = GeoDataFrame({"geometry": data})
+    if transform is None:
+        transform = Identity()
+        geo_df.attrs = {"transform": transform}
     Polygons_s.validate(geo_df)
     return geo_df
 
@@ -258,12 +263,15 @@ def _(
 @validate_polygon.register
 def _(
     data: str,
-    *args: Any,
+    transform: Optional[Any] = None,
     **kwargs: Any,
 ) -> GeoDataFrame:
 
     data = from_geojson(data)
     geo_df = GeoDataFrame({"geometry", data})
+    if transform is None:
+        transform = Identity()
+        geo_df.attrs = {"transform": transform}
     Polygons_s.validate(geo_df)
     return geo_df
 
