@@ -6,7 +6,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData
-from spatialdata._core.models import validate_raster
+from spatialdata._core.models import validate_polygon, validate_raster
 from spatialdata._types import NDArray
 
 RNG = default_rng()
@@ -32,6 +32,11 @@ def labels() -> SpatialData:
 @pytest.fixture()
 def labels_multiscale() -> SpatialData:
     return SpatialData(labels=_get_raster(3, shape=(64, 64), dtype="int", name="label_multiscale", multiscale=True))
+
+
+@pytest.fixture()
+def polygons() -> SpatialData:
+    return SpatialData(polygons=_get_polygons(3, name="polygons"))
 
 
 @pytest.fixture()
@@ -77,6 +82,7 @@ def sdata(request) -> SpatialData:
         s = SpatialData(
             images=_get_raster(3, shape=(3, 64, 64), name="image", dtype="float"),
             labels=_get_raster(3, shape=(64, 64), name="label", dtype="int"),
+            polygons=_get_polygons(3, name="polygons"),
             points=_get_points(2),
             table=_get_table(),
         )
@@ -104,6 +110,29 @@ def _get_raster(
         else:
             image = validate_raster(arr, kind="Image", name=name)
         out[name] = image
+    return out
+
+
+def _get_polygons(n: int, name: str) -> Mapping[str, Sequence[NDArray]]:
+    from geopandas import GeoDataFrame
+    from shapely.geometry import Polygon
+
+    out = {}
+    for i in range(n):
+        name = f"{name}{i}"
+        geo_df = GeoDataFrame(
+            {
+                "geometry": [
+                    Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
+                    Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
+                    Polygon(((0, 0), (0, 1), (1, 10))),
+                    Polygon(((0, 0), (0, 1), (1, 1))),
+                    Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
+                ]
+            }
+        )
+        out[name] = validate_polygon(geo_df)
+
     return out
 
 

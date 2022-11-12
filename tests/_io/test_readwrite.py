@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
@@ -59,17 +60,28 @@ class TestReadWrite:
         images_multiscale: SpatialData,
         labels: SpatialData,
         labels_multiscale: SpatialData,
+        polygons: SpatialData,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         all_images = dict(images.images, **images_multiscale.images)
         all_labels = dict(labels.labels, **labels_multiscale.labels)
 
-        sdata = SpatialData(images=all_images, labels=all_labels)
+        sdata = SpatialData(images=all_images, labels=all_labels, polygons=polygons.polygons)
         sdata.write(tmpdir)
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+
+    def test_polygons(self, tmp_path: str, polygons: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        polygons.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert polygons.polygons.keys() == sdata.polygons.keys()
+        for k1, k2 in zip(polygons.polygons.keys(), sdata.polygons.keys()):
+            assert isinstance(sdata.polygons[k1], GeoDataFrame)
+            assert polygons.polygons[k1].equals(sdata.polygons[k2])
 
 
 @pytest.mark.skip("Consider delete.")

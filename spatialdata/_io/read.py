@@ -1,5 +1,6 @@
 import os
 import time
+from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
@@ -7,9 +8,12 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
+from shapely import GeometryType
+from shapely.io import from_ragged_array
 from spatial_image import SpatialImage
 from xarray import DataArray
 
@@ -64,7 +68,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     polygons = {}
     labels_transform: Dict[str, Any] = {}
     points_transform = {}
-    polygons_transform = {}
 
     def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
         multiscales = group.attrs["multiscales"]
@@ -120,13 +123,13 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         for j in g.keys():
             g_elem = g[j].name
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
+
             if g_elem == "/points":
                 points[k] = read_anndata_zarr(g_elem_store)
                 points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
 
             if g_elem == "/polygons":
-                polygons[k] = read_anndata_zarr(g_elem_store)
-                polygons_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
+                polygons[k] = _read_polygons(g_elem_store)
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
@@ -140,8 +143,29 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         table=table,
         labels_transform=labels_transform,
         points_transform=points_transform,
-        polygons_transform=polygons_transform,
     )
+
+
+def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDataFrame:  # type: ignore[type-arg]
+    """Read polygons from a zarr store."""
+
+    f = zarr.open(store, mode="r")
+
+    coords = np.array(f["coords"])
+    offsets = tuple(x.flatten() for x in np.split(np.array(f["offsets"]), 2))  # type: ignore[var-annotated]
+
+    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
+    typ = GeometryType(attrs["path"]["geos"]["geometry_type"])
+    assert typ.name == attrs["path"]["geos"]["geometry_name"]
+
+    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
+
+    geometry = from_ragged_array(typ, coords, offsets)
+
+    geo_df = GeoDataFrame({"geometry": geometry})
+    geo_df.attrs = {"transform": transforms}
+
+    return geo_df
 
 
 def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:

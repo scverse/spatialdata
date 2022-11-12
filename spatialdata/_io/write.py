@@ -237,24 +237,26 @@ def write_polygons(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")
+    polygons_groups = sub_group.require_group(name)
     coordinate_transformations = [[polygons.attrs.get("transform").to_dict()]]
     print(coordinate_transformations)
 
     # TODO: save everything or just polygons?
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
-    sub_group.create_dataset(name="coords", data=coords)
-    sub_group.create_dataset(name="offsets", data=offsets)
+    polygons_groups.create_dataset(name="coords", data=coords)
+    polygons_groups.create_dataset(name="offsets", data=offsets)
     # polygons_groups = sub_group[name]
-    attr = {"geometry": geometry.name, "offsets": geometry.value}
+    attr = {"geos": {"geometry_name": geometry.name, "geometry_type": geometry.value}}
 
     _write_metadata(
-        sub_group,
+        polygons_groups,
         group_type=group_type,
         shape=coords.shape,
-        attr=attr,
+        attr=attr,  # type: ignore[arg-type]
         fmt=fmt,
         axes=axes,
-        **metadata,  # type: ignore[arg-type]
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
     )
 
 

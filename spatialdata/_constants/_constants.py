@@ -5,11 +5,11 @@ from spatialdata._constants._enum import ModeEnum
 
 @unique
 class Geometry(ModeEnum):
-    POLYGON = "polygon"
-    MULTIPOLYGON = "multipolygon"
+    POLYGON = "POLYGON"
+    MULTIPOLYGON = "MULTIPOLYGON"
 
 
 @unique
 class Raster(ModeEnum):
-    IMAGE = "image"
-    LABELS = "labels"
+    IMAGE = "IMAGE"
+    LABELS = "LABELS"
