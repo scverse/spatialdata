@@ -1,7 +1,7 @@
 import os
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import zarr
@@ -62,7 +62,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     points = {}
     table: Optional[AnnData] = None
     polygons = {}
-    labels_transform = {}
+    labels_transform: Dict[str, Any] = {}
     points_transform = {}
     polygons_transform = {}
 
