@@ -12,7 +12,7 @@ from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Points, Polygons
 from spatialdata._core.models import validate_polygon, validate_raster
-from spatialdata._io.write import write_image, write_labels, write_table
+from spatialdata._io.write import write_image, write_labels, write_polygons, write_table
 
 
 class SpatialData:
@@ -80,10 +80,15 @@ class SpatialData:
                     name=el,
                     storage_options={"compressor": None},
                 )
+            if self.polygons is not None and el in self.polygons.keys():
+                write_polygons(
+                    polygons=self.polygons[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
             if self.points is not None and el in self.points.keys():
                 self.points[el].to_zarr(elem_group, name=el)
-            if self.polygons is not None and el in self.polygons.keys():
-                self.polygons[el].to_zarr(elem_group, name=el)
 
         if self.table is not None:
             write_table(tables=self.table, group=root, name="table")
@@ -133,10 +138,7 @@ class SpatialData:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
                         elif attr == "polygons":
                             # assuming 2d
-                            descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osb.spatial describing "
-                                f"{len(v.data.obs)} 2D polygons"
-                            )
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
                         else:
                             if isinstance(v, SpatialImage) or isinstance(v, MultiscaleSpatialImage):
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}"

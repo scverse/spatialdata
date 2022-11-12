@@ -14,6 +14,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._io.format import SpatialDataFormat
@@ -127,7 +128,6 @@ def write_image(
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
@@ -179,7 +179,6 @@ def write_labels(
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -232,23 +231,30 @@ def write_polygons(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:polygons",
+    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")
-    write_adata(sub_group, name, polygons)
-    polygons_group = sub_group[name]
+    coordinate_transformations = [[polygons.attrs.get("transform").to_dict()]]
+    print(coordinate_transformations)
+
+    # TODO: save everything or just polygons?
+    geometry, coords, offsets = to_ragged_array(polygons.geometry)
+    sub_group.create_dataset(name="coords", data=coords)
+    sub_group.create_dataset(name="offsets", data=offsets)
+    # polygons_groups = sub_group[name]
+    attr = {"geometry": geometry.name, "offsets": geometry.value}
+
     _write_metadata(
-        polygons_group,
+        sub_group,
         group_type=group_type,
-        shape=(1, 2),  # assuming 2d
-        attr={"attr": "X", "key": None},
+        shape=coords.shape,
+        attr=attr,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,
+        **metadata,  # type: ignore[arg-type]
     )
 
 

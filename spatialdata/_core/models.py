@@ -279,11 +279,15 @@ def _(
 @validate_polygon.register
 def _(
     data: GeoDataFrame,
+    transform: Optional[Any] = None,
     *args: Any,
     **kwargs: Any,
 ) -> GeoDataFrame:
 
     Polygons_s.validate(data)
+    if transform is None:
+        transform = Identity()
+        data.attrs = {"transform": transform}
     return data
 
 
