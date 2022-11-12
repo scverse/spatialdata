@@ -22,7 +22,16 @@ version = "0.0.1.dev0"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 readme = "README.md"
-dependencies = ["anndata","numpy","xarray","zarr","ome_zarr", "xarray-dataclasses", "xarray-schema"]
+dependencies = [
+    "anndata",
+    "numpy",
+    "xarray",
+    "zarr",
+    "ome_zarr",
+    "xarray-dataclasses",
+    "xarray-schema",
+    "git+https://github.com/shapely/shapely.git@refs/pull/1559/head --no-binary shapely",
+]
 
 [project.optional-dependencies]
 dev = [

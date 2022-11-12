@@ -6,17 +6,20 @@ from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
+from geopandas import GeoDataFrame
+from geopandas.array import GeometryDtype
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike
-from pandera import Field, SchemaModel
-from pandera.typing import Series
-from pandera.typing.geopandas import GeoSeries
+from pandera import Column, DataFrameSchema
+from shapely import GeometryType
+from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray_schema.components import ArrayTypeSchema, AttrSchema, DimsSchema
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._constants._constants import Geometry
 from spatialdata._core.transformations import BaseTransformation, Identity
 
 # Types
@@ -192,18 +195,88 @@ def _(
     return data
 
 
-class CirclesSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
-    radius: Series[int] = Field(coerce=True)
+# class CirclesSchema(SchemaModel):
+#     geometry: GeoSeries = Field(coerce=True)
+#     radius: Series[int] = Field(coerce=True)
 
 
-class SquareSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
-    sides: Optional[Series[int]] = Field(coerce=True)
+# class SquareSchema(SchemaModel):
+#     geometry: GeoSeries = Field(coerce=True)
+#     sides: Optional[Series[int]] = Field(coerce=True)
 
 
-class PolygonSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
+# TODO: should check for column be strict?
+Polygons_s = DataFrameSchema(
+    {
+        "geometry": Column(GeometryDtype),
+    }
+)
+
+
+@singledispatch
+def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    """
+    Validate (or parse) raster data.
+
+    Parameters
+    ----------
+    data
+        Data to validate.
+    offsets
+        TODO.
+    geometry
+        :class:`shapely.geometry.Polygon` or :class:`shapely.geometry.MultiPolygon`.
+
+    Returns
+    -------
+    :class:`geopandas.geodataframe.GeoDataFrame`.
+    """
+    raise ValueError(f"Unsupported type: {type(data)}")
+
+
+@validate_polygon.register
+def _(
+    data: np.ndarray,  # type: ignore[type-arg]
+    offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
+    geometry: Literal["polygon", "multipolygon"],
+    *args: Any,
+    **kwargs: Any,
+) -> GeoDataFrame:
+
+    geometry = Geometry(geometry)  # type: ignore[assignment]
+    if geometry == Geometry.POLYGON:  # type: ignore[comparison-overlap]
+        geometry = GeometryType.POLYGON
+    elif geometry == Geometry.MULTIPOLYGON:  # type: ignore[comparison-overlap]
+        geometry = GeometryType.MULTIPOLYGON
+
+    data = from_ragged_array(geometry, data, offsets)
+    geo_df = GeoDataFrame({"geometry": data})
+    Polygons_s.validate(geo_df)
+    return geo_df
+
+
+@validate_polygon.register
+def _(
+    data: str,
+    *args: Any,
+    **kwargs: Any,
+) -> GeoDataFrame:
+
+    data = from_geojson(data)
+    geo_df = GeoDataFrame({"geometry", data})
+    Polygons_s.validate(geo_df)
+    return geo_df
+
+
+@validate_polygon.register
+def _(
+    data: GeoDataFrame,
+    *args: Any,
+    **kwargs: Any,
+) -> GeoDataFrame:
+
+    Polygons_s.validate(data)
+    return data
 
 
 # Points (AnnData)?

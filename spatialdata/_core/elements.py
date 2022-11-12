@@ -90,6 +90,7 @@ class Image(BaseElement):
         coordinate_transformations = self.transforms.to_dict()
         write_image(
             image=self.data.data,
+            name=name,
             group=group,
             axes=self.axes,
             scaler=scaler,

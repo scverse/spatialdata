@@ -5,12 +5,13 @@ from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Points, Polygons
-from spatialdata._core.models import validate_raster
+from spatialdata._core.models import validate_polygon, validate_raster
 from spatialdata._io.write import write_image, write_labels, write_table
 
 
@@ -20,7 +21,7 @@ class SpatialData:
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     points: Mapping[str, Points] = MappingProxyType({})
-    polygons: Mapping[str, Polygons] = MappingProxyType({})
+    polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
@@ -30,16 +31,11 @@ class SpatialData:
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        labels_transform: Optional[Mapping[str, Any]] = None,
         points_transform: Optional[Mapping[str, Any]] = None,
         polygons_transform: Optional[Mapping[str, Any]] = None,
         multiscale_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> None:
-
-        _validate_dataset(labels, labels_transform)
-        _validate_dataset(points, points_transform)
-        _validate_dataset(polygons, polygons_transform)
 
         if images is not None:
             self.images = {k: validate_raster(v, kind="Image") for k, v in images.items()}
@@ -47,15 +43,13 @@ class SpatialData:
         if labels is not None:
             self.labels = {k: validate_raster(v, kind="Label") for k, v in labels.items()}
 
+        if polygons is not None:
+            self.polygons = {k: validate_polygon(v) for k, v in polygons.items()}
+
         if points is not None:
             self.points = {
                 k: Points.parse_points(data, transform)
                 for (k, data), transform in _iter_elems(points, points_transform)
-            }
-        if polygons is not None:
-            self.polygons = {
-                k: Polygons.parse_polygons(data, transform)
-                for (k, data), transform in _iter_elems(polygons, polygons_transform)
             }
 
         if table is not None:
