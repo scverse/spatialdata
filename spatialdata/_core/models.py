@@ -19,7 +19,7 @@ from spatial_image import SpatialImage, to_spatial_image
 from xarray_schema.components import ArrayTypeSchema, AttrSchema, DimsSchema
 from xarray_schema.dataarray import DataArraySchema
 
-from spatialdata._constants._constants import Geometry
+from spatialdata._constants._constants import RasterType
 from spatialdata._core.transformations import BaseTransformation, Identity
 
 # Types
@@ -73,9 +73,9 @@ def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> Data
     if len(shapes) == 2:
         return Labels2D_s
     elif len(shapes) == 3:
-        if kind == "Image":
+        if RasterType.IMAGE == RasterType(kind):
             return Image2D_s
-        elif kind == "Label":
+        elif RasterType.LABEL == RasterType(kind):
             return Labels3D_s
         else:
             raise ValueError(f"Wrong kind: {kind}")
@@ -133,7 +133,8 @@ def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage,
 
     Returns
     -------
-    SpatialImage or MultiscaleSpatialImage.
+    :class:`spatial_image.SpatialImage` or
+    :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
     """
     raise ValueError(f"Unsupported type: {type(data)}")
 
@@ -195,17 +196,8 @@ def _(
     return data
 
 
-# class CirclesSchema(SchemaModel):
-#     geometry: GeoSeries = Field(coerce=True)
-#     radius: Series[int] = Field(coerce=True)
-
-
-# class SquareSchema(SchemaModel):
-#     geometry: GeoSeries = Field(coerce=True)
-#     sides: Optional[Series[int]] = Field(coerce=True)
-
-
 # TODO: should check for column be strict?
+# TODO: validate attrs for transform.
 Polygons_s = DataFrameSchema(
     {
         "geometry": Column(GeometryDtype),
@@ -214,7 +206,7 @@ Polygons_s = DataFrameSchema(
 
 
 @singledispatch
-def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> GeoDataFrame:
     """
     Validate (or parse) raster data.
 
@@ -225,7 +217,7 @@ def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage
     offsets
         TODO.
     geometry
-        :class:`shapely.geometry.Polygon` or :class:`shapely.geometry.MultiPolygon`.
+        If 3 is :class:`shapely.geometry.Polygon`, if 6 is :class:`shapely.geometry.MultiPolygon`.
     transform
         Transformation to apply to the data.
 
@@ -240,16 +232,12 @@ def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage
 def _(
     data: np.ndarray,  # type: ignore[type-arg]
     offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
-    geometry: Literal["polygon", "multipolygon"],
+    geometry: Literal[3, 6],
     transform: Optional[Any] = None,
     **kwargs: Any,
 ) -> GeoDataFrame:
 
-    geometry = Geometry(geometry)  # type: ignore[assignment]
-    if geometry == Geometry.POLYGON:  # type: ignore[comparison-overlap]
-        geometry = GeometryType.POLYGON
-    elif geometry == Geometry.MULTIPOLYGON:  # type: ignore[comparison-overlap]
-        geometry = GeometryType.MULTIPOLYGON
+    geometry = GeometryType(geometry)
 
     data = from_ragged_array(geometry, data, offsets)
     geo_df = GeoDataFrame({"geometry": data})
