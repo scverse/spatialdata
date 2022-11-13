@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
+from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -53,26 +55,6 @@ class TestReadWrite:
             assert isinstance(sdata.labels[k1], MultiscaleSpatialImage)
             assert labels.labels[k1].equals(sdata.labels[k2])
 
-    def test_image_labels_roundtrip(
-        self,
-        tmp_path: str,
-        images: SpatialData,
-        images_multiscale: SpatialData,
-        labels: SpatialData,
-        labels_multiscale: SpatialData,
-        polygons: SpatialData,
-    ) -> None:
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        all_images = dict(images.images, **images_multiscale.images)
-        all_labels = dict(labels.labels, **labels_multiscale.labels)
-
-        sdata = SpatialData(images=all_images, labels=all_labels, polygons=polygons.polygons)
-        sdata.write(tmpdir)
-        sdata2 = SpatialData.read(tmpdir)
-        tmpdir2 = Path(tmp_path) / "tmp2.zarr"
-        sdata2.write(tmpdir2)
-        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
-
     def test_polygons(self, tmp_path: str, polygons: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -82,6 +64,44 @@ class TestReadWrite:
         for k1, k2 in zip(polygons.polygons.keys(), sdata.polygons.keys()):
             assert isinstance(sdata.polygons[k1], GeoDataFrame)
             assert polygons.polygons[k1].equals(sdata.polygons[k2])
+
+    def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        shapes.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert shapes.shapes.keys() == sdata.shapes.keys()
+        for k1, k2 in zip(shapes.shapes.keys(), sdata.shapes.keys()):
+            assert isinstance(sdata.shapes[k1], AnnData)
+            np.testing.assert_array_equal(shapes.shapes[k1].obsm["spatial"], sdata.shapes[k2].obsm["spatial"])
+            assert shapes.shapes[k1].uns == sdata.shapes[k2].uns
+
+    # TODO: refactor, add spatialdata build to conftest
+    def test_roundtrip(
+        self,
+        tmp_path: str,
+        images: SpatialData,
+        images_multiscale: SpatialData,
+        labels: SpatialData,
+        labels_multiscale: SpatialData,
+        polygons: SpatialData,
+        shapes: SpatialData,
+    ) -> None:
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        all_images = dict(images.images, **images_multiscale.images)
+        all_labels = dict(labels.labels, **labels_multiscale.labels)
+
+        sdata = SpatialData(
+            images=all_images,
+            labels=all_labels,
+            polygons=polygons.polygons,
+            shapes=shapes.shapes,
+        )
+        sdata.write(tmpdir)
+        sdata2 = SpatialData.read(tmpdir)
+        tmpdir2 = Path(tmp_path) / "tmp2.zarr"
+        sdata2.write(tmpdir2)
+        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
 
 @pytest.mark.skip("Consider delete.")

@@ -316,7 +316,8 @@ def _(
     adata = AnnData(np.empty(shape=data.shape), obsm={"spatial": data})
     if transform is None:
         transform = Identity()
-    adata.uns = {"transform": transform, "spatialdata_attrs": {"type": shape_type, "size": shape_size}}
+    adata.uns["transform"] = transform
+    adata.uns["spatialdata_attrs"] = {"type": shape_type, "size": shape_size}
 
     return adata
 

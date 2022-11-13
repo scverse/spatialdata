@@ -219,9 +219,12 @@ def write_shapes(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("shapes")
-    coordinate_transformations = [[shapes.uns.pop("transform").to_dict()]]
+    coordinate_transformations = [[shapes.uns.get("transform").to_dict()]]
     attr = shapes.uns.get("spatialdata_attrs")
-    write_adata(sub_group, name, shapes)
+    # TODO: do not save copy but pop transform?
+    shapes_copy = shapes.copy()
+    shapes_copy.uns.pop("transform")
+    write_adata(sub_group, name, shapes_copy)
     shapes_group = sub_group[name]
 
     _write_metadata(

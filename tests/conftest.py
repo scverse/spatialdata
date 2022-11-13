@@ -6,7 +6,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData
-from spatialdata._core.models import validate_polygons, validate_raster
+from spatialdata._core.models import validate_polygons, validate_raster, validate_shapes
 from spatialdata._types import NDArray
 
 RNG = default_rng()
@@ -37,6 +37,11 @@ def labels_multiscale() -> SpatialData:
 @pytest.fixture()
 def polygons() -> SpatialData:
     return SpatialData(polygons=_get_polygons(3, name="polygons"))
+
+
+@pytest.fixture()
+def shapes() -> SpatialData:
+    return SpatialData(shapes=_get_shapes(2, name="shapes", shape_type=["Circle", "Square"], shape_size=[1, 2]))
 
 
 @pytest.fixture()
@@ -132,6 +137,21 @@ def _get_polygons(n: int, name: str) -> Mapping[str, Sequence[NDArray]]:
             }
         )
         out[name] = validate_polygons(geo_df)
+
+    return out
+
+
+def _get_shapes(
+    n: int, name: str, shape_type: Sequence[str], shape_size: Sequence[str]
+) -> Mapping[str, Sequence[NDArray]]:
+
+    assert len(shape_type) == len(shape_size) == n
+
+    out = {}
+    for i in range(n):
+        name = f"{name}{i}"
+        arr = RNG.normal(size=(100, 2))
+        out[name] = validate_shapes(arr, shape_type=shape_type, shape_size=shape_size)
 
     return out
 
