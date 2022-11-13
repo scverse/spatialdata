@@ -312,7 +312,8 @@ def _(
     **kwargs: Any,
 ) -> AnnData:
 
-    adata = AnnData(None, obsm={"spatial": data})
+    # TODO: AnnData(obsm={"spatial": data}) doesn't work, shall we change?
+    adata = AnnData(np.empty(shape=data.shape), obsm={"spatial": data})
     if transform is None:
         transform = Identity()
     adata.uns = {"transform": transform, "spatialdata_attrs": {"type": shape_type, "size": shape_size}}

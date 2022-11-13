@@ -71,7 +71,18 @@ class SpatialData:
         root = zarr.group(store=store)
 
         # get union of unique ids of all elements
-        elems = set().union(*[set(i) for i in [self.images, self.labels, self.points, self.polygons]])
+        elems = set().union(
+            *[
+                set(i)
+                for i in [
+                    self.images,
+                    self.labels,
+                    self.points,
+                    self.polygons,
+                    self.shapes,
+                ]
+            ]
+        )
 
         for el in elems:
             elem_group = root.create_group(name=el)
@@ -136,7 +147,7 @@ class SpatialData:
 
         ##
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "table"]:
+        for attr in ["images", "labels", "points", "polygons", "shapes", "table"]:
             attribute = getattr(self, attr)
             if attribute is not None and len(attribute) > 0:
                 descr += f"\n{h('level0')}{attr.capitalize()}"
@@ -172,7 +183,7 @@ class SpatialData:
         descr = rreplace(descr, h("level0"), "└── ", 1)
         descr = descr.replace(h("level0"), "├── ")
 
-        for attr in ["images", "labels", "points", "polygons", "table"]:
+        for attr in ["images", "labels", "points", "polygons", "table", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         ##

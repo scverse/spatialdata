@@ -66,6 +66,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     points = {}
     table: Optional[AnnData] = None
     polygons = {}
+    shapes = {}
     labels_transform: Dict[str, Any] = {}
     points_transform = {}
 
@@ -131,6 +132,9 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             if g_elem == "/polygons":
                 polygons[k] = _read_polygons(g_elem_store)
 
+            if g_elem == "/shapes":
+                shapes[k] = _read_shapes(g_elem_store)
+
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
         print(f"rest: {time.time() - start}")
@@ -140,6 +144,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         labels=labels,
         points=points,
         polygons=polygons,
+        shapes=shapes,
         table=table,
         labels_transform=labels_transform,
         points_transform=points_transform,
@@ -166,6 +171,22 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDa
     geo_df.attrs = {"transform": transforms}
 
     return geo_df
+
+
+def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:  # type: ignore[type-arg]
+    """Read polygons from a zarr store."""
+
+    f = zarr.open(store, mode="r")
+    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
+    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
+    spatialdata_attrs = attrs["path"]
+
+    adata = read_anndata_zarr(store)
+
+    adata.uns["transform"] = transforms
+    adata.uns["spatialdata_attrs"] = spatialdata_attrs
+
+    return adata
 
 
 def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
