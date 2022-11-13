@@ -28,9 +28,10 @@ dependencies = [
     "xarray",
     "zarr",
     "ome_zarr",
-    "xarray-dataclasses",
+    "spatial_image",
+    "multiscale_spatial_image",
     "xarray-schema",
-    "git+https://github.com/shapely/shapely.git@refs/pull/1559/head --no-binary shapely",
+    "shapely>=2.0b2",
 ]
 
 [project.optional-dependencies]
