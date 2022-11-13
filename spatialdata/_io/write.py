@@ -70,57 +70,6 @@ def _write_metadata(
     group.attrs["multiscales"] = multiscales
 
 
-def write_points(
-    points: AnnData,
-    group: zarr.Group,
-    name: str,
-    points_parameters: Optional[Mapping[str, Any]] = None,
-    group_type: str = "ngff:points",
-    fmt: Format = SpatialDataFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
-) -> None:
-    sub_group = group.require_group("points")
-    write_adata(sub_group, name, points)
-    points_group = sub_group[name]
-    # TODO: decide what to do here with additional params for
-    if points_parameters is not None:
-        points_group.attrs["points_parameters"] = points_parameters
-    _write_metadata(
-        points_group,
-        group_type=group_type,
-        shape=points.obsm["spatial"].shape,
-        attr={"attr": "X", "key": None},
-        fmt=fmt,
-        axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,
-    )
-
-
-def write_table(
-    tables: AnnData,
-    group: zarr.Group,
-    name: str,
-    group_type: str = "ngff:regions_table",
-    fmt: Format = SpatialDataFormat(),
-    region: Union[str, List[str]] = "features",  # TODO: remove default?
-    region_key: Optional[str] = None,
-    instance_key: Optional[str] = None,
-) -> None:
-    fmt.validate_tables(tables, region_key, instance_key)
-    # anndata create subgroup from name
-    # ome-ngff doesn't, hence difference
-    sub_group = group.require_group("table")
-    write_adata(sub_group, name, tables)
-    tables_group = sub_group[name]
-    tables_group.attrs["@type"] = group_type
-    tables_group.attrs["region"] = region
-    tables_group.attrs["region_key"] = region_key
-    tables_group.attrs["instance_key"] = instance_key
-
-
 def write_image(
     image: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
@@ -258,6 +207,83 @@ def write_polygons(
         coordinate_transformations=coordinate_transformations,
         **metadata,
     )
+
+
+def write_shapes(
+    shapes: AnnData,
+    group: zarr.Group,
+    name: str,
+    group_type: str = "ngff:shapes",
+    fmt: Format = SpatialDataFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
+) -> None:
+    sub_group = group.require_group("shapes")
+    write_adata(sub_group, name, shapes)
+    shapes_group = sub_group[name]
+    coordinate_transformations = [[shapes.uns.get("transform").to_dict()]]
+    attr = shapes.uns.get("spatialdata_attrs")
+    _write_metadata(
+        shapes_group,
+        group_type=group_type,
+        shape=shapes.obsm["spatial"].shape,
+        attr=attr,
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )
+
+
+def write_points(
+    points: AnnData,
+    group: zarr.Group,
+    name: str,
+    points_parameters: Optional[Mapping[str, Any]] = None,
+    group_type: str = "ngff:points",
+    fmt: Format = SpatialDataFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
+) -> None:
+    sub_group = group.require_group("points")
+    write_adata(sub_group, name, points)
+    points_group = sub_group[name]
+    # TODO: decide what to do here with additional params for
+    if points_parameters is not None:
+        points_group.attrs["points_parameters"] = points_parameters
+    _write_metadata(
+        points_group,
+        group_type=group_type,
+        shape=points.obsm["spatial"].shape,
+        attr={"attr": "X", "key": None},
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )
+
+
+def write_table(
+    tables: AnnData,
+    group: zarr.Group,
+    name: str,
+    group_type: str = "ngff:regions_table",
+    fmt: Format = SpatialDataFormat(),
+    region: Union[str, List[str]] = "features",  # TODO: remove default?
+    region_key: Optional[str] = None,
+    instance_key: Optional[str] = None,
+) -> None:
+    fmt.validate_tables(tables, region_key, instance_key)
+    # anndata create subgroup from name
+    # ome-ngff doesn't, hence difference
+    sub_group = group.require_group("table")
+    write_adata(sub_group, name, tables)
+    tables_group = sub_group[name]
+    tables_group.attrs["@type"] = group_type
+    tables_group.attrs["region"] = region
+    tables_group.attrs["region_key"] = region_key
+    tables_group.attrs["instance_key"] = instance_key
 
 
 def _iter_multiscale(

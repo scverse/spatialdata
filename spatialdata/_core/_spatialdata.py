@@ -11,8 +11,14 @@ from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Points, Polygons
-from spatialdata._core.models import validate_polygon, validate_raster
-from spatialdata._io.write import write_image, write_labels, write_polygons, write_table
+from spatialdata._core.models import validate_polygons, validate_raster, validate_shapes
+from spatialdata._io.write import (
+    write_image,
+    write_labels,
+    write_polygons,
+    write_shapes,
+    write_table,
+)
 
 
 class SpatialData:
@@ -22,6 +28,7 @@ class SpatialData:
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     points: Mapping[str, Points] = MappingProxyType({})
     polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
+    shapes: Mapping[str, AnnData] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
@@ -30,10 +37,9 @@ class SpatialData:
         labels: Mapping[str, Any] = MappingProxyType({}),
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
+        shapes: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
         points_transform: Optional[Mapping[str, Any]] = None,
-        polygons_transform: Optional[Mapping[str, Any]] = None,
-        multiscale_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> None:
 
@@ -44,7 +50,10 @@ class SpatialData:
             self.labels = {k: validate_raster(v, kind="Label") for k, v in labels.items()}
 
         if polygons is not None:
-            self.polygons = {k: validate_polygon(v) for k, v in polygons.items()}
+            self.polygons = {k: validate_polygons(v) for k, v in polygons.items()}
+
+        if shapes is not None:
+            self.shapes = {k: validate_shapes(v) for k, v in shapes.items()}
 
         if points is not None:
             self.points = {
@@ -83,6 +92,13 @@ class SpatialData:
             if self.polygons is not None and el in self.polygons.keys():
                 write_polygons(
                     polygons=self.polygons[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
+            if self.shapes is not None and el in self.shapes.keys():
+                write_shapes(
+                    shapes=self.shapes[el],
                     group=elem_group,
                     name=el,
                     storage_options={"compressor": None},
@@ -137,6 +153,9 @@ class SpatialData:
                         if attr == "points":
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
                         elif attr == "polygons":
+                            # assuming 2d
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
+                        elif attr == "shapes":
                             # assuming 2d
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
                         else:

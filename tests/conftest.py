@@ -6,7 +6,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData
-from spatialdata._core.models import validate_polygon, validate_raster
+from spatialdata._core.models import validate_polygons, validate_raster
 from spatialdata._types import NDArray
 
 RNG = default_rng()
@@ -131,7 +131,7 @@ def _get_polygons(n: int, name: str) -> Mapping[str, Sequence[NDArray]]:
                 ]
             }
         )
-        out[name] = validate_polygon(geo_df)
+        out[name] = validate_polygons(geo_df)
 
     return out
 

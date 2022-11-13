@@ -4,6 +4,7 @@ from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from geopandas import GeoDataFrame
@@ -97,8 +98,9 @@ def _to_spatial_image(
     data = to_spatial_image(array_like=data, dims=schema.dims.dims, **kwargs)
     if transform is None:
         transform = Identity()
-        data.attrs = {"transform": transform}
-        # TODO(giovp): don't drop coordinates.
+    data.attrs = {"transform": transform}
+
+    # TODO(giovp): don't drop coordinates.
     data = data.drop(data.coords.keys())
     if scale_factors is not None:
         data = to_multiscale(
@@ -206,9 +208,9 @@ Polygons_s = DataFrameSchema(
 
 
 @singledispatch
-def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> GeoDataFrame:
+def validate_polygons(data: Any, *args: Any, **kwargs: Any) -> GeoDataFrame:
     """
-    Validate (or parse) raster data.
+    Validate (or parse) polygons data.
 
     Parameters
     ----------
@@ -228,7 +230,7 @@ def validate_polygon(data: Any, *args: Any, **kwargs: Any) -> GeoDataFrame:
     raise ValueError(f"Unsupported type: {type(data)}")
 
 
-@validate_polygon.register
+@validate_polygons.register
 def _(
     data: np.ndarray,  # type: ignore[type-arg]
     offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
@@ -243,12 +245,12 @@ def _(
     geo_df = GeoDataFrame({"geometry": data})
     if transform is None:
         transform = Identity()
-        geo_df.attrs = {"transform": transform}
+    geo_df.attrs = {"transform": transform}
     Polygons_s.validate(geo_df)
     return geo_df
 
 
-@validate_polygon.register
+@validate_polygons.register
 def _(
     data: str,
     transform: Optional[Any] = None,
@@ -259,12 +261,12 @@ def _(
     geo_df = GeoDataFrame({"geometry", data})
     if transform is None:
         transform = Identity()
-        geo_df.attrs = {"transform": transform}
+    geo_df.attrs = {"transform": transform}
     Polygons_s.validate(geo_df)
     return geo_df
 
 
-@validate_polygon.register
+@validate_polygons.register
 def _(
     data: GeoDataFrame,
     transform: Optional[Any] = None,
@@ -275,7 +277,66 @@ def _(
     Polygons_s.validate(data)
     if transform is None:
         transform = Identity()
-        data.attrs = {"transform": transform}
+    data.attrs = {"transform": transform}
+    return data
+
+
+# TODO: add schema for validation.
+@singledispatch
+def validate_shapes(data: Any, *args: Any, **kwargs: Any) -> AnnData:
+    """
+    Parse shapes data.
+
+    Parameters
+    ----------
+    data
+        Data to validate.
+    shape_type
+        Type of shape to validate. Can be "Circle" or "Square".
+    shape_size
+        Size of shape to validate.
+
+    Returns
+    -------
+    :class:`anndata.AnnData`.
+    """
+    raise ValueError(f"Unsupported type: {type(data)}")
+
+
+@validate_shapes.register
+def _(
+    data: np.ndarray,  # type: ignore[type-arg]
+    shape_type: Literal["Circle", "Square"],
+    shape_size: np.float_,
+    transform: Optional[Any] = None,
+    **kwargs: Any,
+) -> AnnData:
+
+    adata = AnnData(None, obsm={"spatial": data})
+    if transform is None:
+        transform = Identity()
+    adata.uns = {"transform": transform, "spatialdata_attrs": {"type": shape_type, "size": shape_size}}
+
+    return adata
+
+
+@validate_shapes.register
+def _(
+    data: AnnData,
+    **kwargs: Any,
+) -> AnnData:
+
+    if "spatial" not in data.obsm:
+        raise ValueError("AnnData does not contain shapes coordinates in `adata.obsm['spatial']`.")
+    if "transform" not in data.uns:
+        raise ValueError("AnnData does not contain `transform`.")
+    if "spatialdata_attrs" not in data.uns:
+        raise ValueError("AnnData does not contain `spatialdata_attrs`.")
+    if "type" not in data.uns["spatialdata_attrs"]:
+        raise ValueError("AnnData does not contain `spatialdata_attrs['type']`.")
+    if "size" not in data.uns["spatialdata_attrs"]:
+        raise ValueError("AnnData does not contain `spatialdata_attrs['size']`.")
+
     return data
 
 

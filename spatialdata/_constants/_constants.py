@@ -7,3 +7,9 @@ from spatialdata._constants._enum import ModeEnum
 class RasterType(ModeEnum):
     IMAGE = "Image"
     LABEL = "Label"
+
+
+@unique
+class ShapeType(ModeEnum):
+    CIRCLE = "Circle"
+    SQUARE = "Square"
