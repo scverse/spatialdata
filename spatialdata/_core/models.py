@@ -366,31 +366,47 @@ def validate_table(data: Any, *args: Any, **kwargs: Any) -> AnnData:
 @validate_table.register
 def _(
     data: AnnData,
-    region: Union[str, Sequence[str]],
+    region: Optional[Union[str, Sequence[str]]] = None,
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
     **kwargs: Any,
 ) -> AnnData:
 
-    if region_key not in data.obs:
-        if not isinstance(region, str):
-            raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+    if "spatialdata_attr" not in data.uns:
+        if region is None:
+            raise ValueError("AnnData does not contain `spatialdata_attr`, initialize with `region`.")
+        else:
+            if region_key is not None and region_key not in data.obs:
+                if not isinstance(region, str):
+                    raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+            else:
+                if region_key is None:
+                    logger.warning("Region key not found.")
 
-    if isinstance(region, Sequence):
-        if region_key not in data.obs:
-            raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
-        if instance_key not in data.obs:
-            raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
-        if not data.obs["region_key"].isin(region).all():
-            raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
-        if not is_categorical_dtype(data.obs["region_key"]):
-            logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
-            data.obs["region_key"] = pd.Categorical(data.obs["region_key"])
+        if isinstance(region, Sequence):
+            if region_key not in data.obs:
+                raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+            if instance_key not in data.obs:
+                raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
+            if not data.obs[region_key].isin(region).all():
+                raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
+            if not is_categorical_dtype(data.obs[region_key]):
+                logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
+                data.obs["region_key"] = pd.Categorical(data.obs[region_key])
 
-    # TODO: is validation enough?
+        # TODO: is there enough validation?
 
-    attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
-    data.uns["spatialdata_attr"] = attr
+        attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
+        data.uns["spatialdata_attr"] = attr
+        return data
+    else:
+        attr = data.uns["spatialdata_attr"]
+        if "region" not in attr:
+            raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
+        if "region_key" not in attr:
+            raise ValueError("`region_key` not found in `adata.uns['spatialdata_attr']`.")
+        if "instance_key" not in attr:
+            raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
     return data
 
 
