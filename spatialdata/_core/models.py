@@ -4,6 +4,7 @@ from functools import singledispatch
 from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import pandas as pd
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
@@ -13,6 +14,7 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike
+from pandas.api.types import is_categorical_dtype
 from pandera import Column, DataFrameSchema
 from shapely import GeometryType
 from shapely.io import from_geojson, from_ragged_array
@@ -22,6 +24,7 @@ from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._constants._constants import RasterType
 from spatialdata._core.transformations import BaseTransformation, Identity
+from spatialdata._logging import logger
 
 # Types
 Chunks_t = Union[
@@ -285,7 +288,7 @@ def _(
 @singledispatch
 def validate_shapes(data: Any, *args: Any, **kwargs: Any) -> AnnData:
     """
-    Parse shapes data.
+    Validate (or parse) shapes data.
 
     Parameters
     ----------
@@ -342,5 +345,49 @@ def _(
     return data
 
 
+# TODO: add schema for validation.
+@singledispatch
+def validate_table(data: Any, *args: Any, **kwargs: Any) -> AnnData:
+    """
+    Validate table data.
+
+    Parameters
+    ----------
+    data
+        Data to validate.
+
+    Returns
+    -------
+    :class:`anndata.AnnData`.
+    """
+    raise ValueError(f"Unsupported type: {type(data)}")
+
+
+@validate_table.register
+def _(
+    data: AnnData,
+    region: Union[str, Sequence[str]],
+    region_key: str,
+    instance_key: str,
+    **kwargs: Any,
+) -> AnnData:
+
+    if region_key not in data.obs:
+        if not isinstance(region, str):
+            raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+
+    if isinstance(region, Sequence):
+        if region_key not in data.obs:
+            raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+        if instance_key not in data.obs:
+            raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
+        if not data.obs["region_key"].isin(region).all():
+            raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
+        if not is_categorical_dtype(data.obs["region_key"]):
+            logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
+            data.obs["region_key"] = pd.Categorical(data.obs["region_key"])
+
+    return data
+
+
 # Points (AnnData)?
-# Tables (AnnData)?
