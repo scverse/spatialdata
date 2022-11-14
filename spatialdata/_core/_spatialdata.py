@@ -123,7 +123,7 @@ class SpatialData:
                 self.points[el].to_zarr(elem_group, name=el)
 
         if self.table is not None:
-            write_table(tables=self.table, group=root, name="table")
+            write_table(table=self.table, group=root, name="table")
 
     @property
     def table(self) -> AnnData:

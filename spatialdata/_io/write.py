@@ -269,20 +269,18 @@ def write_points(
 
 
 def write_table(
-    tables: AnnData,
+    table: AnnData,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
     fmt: Format = SpatialDataFormat(),
-    region: Union[str, List[str]] = "features",  # TODO: remove default?
-    region_key: Optional[str] = None,
-    instance_key: Optional[str] = None,
 ) -> None:
-    fmt.validate_tables(tables, region_key, instance_key)
-    # anndata create subgroup from name
-    # ome-ngff doesn't, hence difference
+    region = table.uns["spatialdata_attr"]["region"]
+    region_key = table.uns["spatialdata_attr"].get("region_key", None)
+    instance_key = table.uns["spatialdata_attr"].get("instance_key", None)
+    fmt.validate_tables(table, region_key, instance_key)
     sub_group = group.require_group("table")
-    write_adata(sub_group, name, tables)
+    write_adata(sub_group, name, table)
     tables_group = sub_group[name]
     tables_group.attrs["@type"] = group_type
     tables_group.attrs["region"] = region

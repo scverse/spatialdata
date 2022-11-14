@@ -367,8 +367,8 @@ def validate_table(data: Any, *args: Any, **kwargs: Any) -> AnnData:
 def _(
     data: AnnData,
     region: Union[str, Sequence[str]],
-    region_key: str,
-    instance_key: str,
+    region_key: Optional[str] = None,
+    instance_key: Optional[str] = None,
     **kwargs: Any,
 ) -> AnnData:
 
@@ -387,6 +387,10 @@ def _(
             logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
             data.obs["region_key"] = pd.Categorical(data.obs["region_key"])
 
+    # TODO: is validation enough?
+
+    attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
+    data.uns["spatialdata_attr"] = attr
     return data
 
 
