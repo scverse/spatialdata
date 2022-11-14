@@ -11,7 +11,12 @@ from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Points, Polygons
-from spatialdata._core.models import validate_polygons, validate_raster, validate_shapes
+from spatialdata._core.models import (
+    validate_polygons,
+    validate_raster,
+    validate_shapes,
+    validate_table,
+)
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -62,7 +67,7 @@ class SpatialData:
             }
 
         if table is not None:
-            self._table = table
+            self._table = validate_table(table)
 
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
