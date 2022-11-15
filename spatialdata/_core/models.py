@@ -371,21 +371,21 @@ def _(
     instance_key: Optional[str] = None,
     **kwargs: Any,
 ) -> AnnData:
-
+    # TODO: is there enough validation?
     if "spatialdata_attr" not in data.uns:
-        if region is None:
-            raise ValueError("AnnData does not contain `spatialdata_attr`, initialize with `region`.")
-        else:
-            if region_key is not None and region_key not in data.obs:
-                if not isinstance(region, str):
-                    raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
-            else:
-                if region_key is None:
-                    logger.warning("Region key not found.")
+        if isinstance(region, str):
+            if region_key is not None or instance_key is not None:
+                logger.warning(
+                    "`region` is of type `str` but `region_key` or `instance_key` found. They will be discarded."
+                )
 
-        if isinstance(region, Sequence):
+        elif isinstance(region, list):
+            if region_key is None:
+                raise ValueError("`region_key` must be provided if `region` is of type `Sequence`.")
             if region_key not in data.obs:
                 raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `Sequence`.")
             if instance_key not in data.obs:
                 raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
             if not data.obs[region_key].isin(region).all():
@@ -393,8 +393,7 @@ def _(
             if not is_categorical_dtype(data.obs[region_key]):
                 logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
                 data.obs["region_key"] = pd.Categorical(data.obs[region_key])
-
-        # TODO: is there enough validation?
+            # TODO: should we check for `instance_key` values?
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         data.uns["spatialdata_attr"] = attr
@@ -403,11 +402,20 @@ def _(
         attr = data.uns["spatialdata_attr"]
         if "region" not in attr:
             raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
-        if "region_key" not in attr:
-            raise ValueError("`region_key` not found in `adata.uns['spatialdata_attr']`.")
-        if "instance_key" not in attr:
-            raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
-    return data
+        if isinstance(attr["region"], list):
+            if "region_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
+                )
+            if "instance_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `instance_key` not found in `adata.uns['spatialdata_attr']`."
+                )
+        elif isinstance(attr["region"], str):
+            attr["region_key"] = None
+            attr["instance_key"] = None
+
+        return data
 
 
 # Points (AnnData)?

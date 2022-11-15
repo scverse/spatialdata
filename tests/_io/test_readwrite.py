@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -76,6 +77,14 @@ class TestReadWrite:
             np.testing.assert_array_equal(shapes.shapes[k1].obsm["spatial"], sdata.shapes[k2].obsm["spatial"])
             assert shapes.shapes[k1].uns == sdata.shapes[k2].uns
 
+    def test_tables(self, tmp_path: str, table: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        table.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        pd.testing.assert_frame_equal(table.table.obs, sdata.table.obs)
+        assert table.table.uns == sdata.table.uns
+
     # TODO: refactor, add spatialdata build to conftest
     def test_roundtrip(
         self,
@@ -86,16 +95,19 @@ class TestReadWrite:
         labels_multiscale: SpatialData,
         polygons: SpatialData,
         shapes: SpatialData,
+        table: SpatialData,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         all_images = dict(images.images, **images_multiscale.images)
         all_labels = dict(labels.labels, **labels_multiscale.labels)
 
+        # TODO: not checking for consistency ATM
         sdata = SpatialData(
             images=all_images,
             labels=all_labels,
             polygons=polygons.polygons,
             shapes=shapes.shapes,
+            table=table.table,
         )
         sdata.write(tmpdir)
         sdata2 = SpatialData.read(tmpdir)

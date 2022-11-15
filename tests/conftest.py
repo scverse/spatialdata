@@ -1,12 +1,18 @@
-from typing import Mapping, Sequence, Tuple
+from typing import Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData
-from spatialdata._core.models import validate_polygons, validate_raster, validate_shapes
+from spatialdata._core.models import (
+    validate_polygons,
+    validate_raster,
+    validate_shapes,
+    validate_table,
+)
 from spatialdata._types import NDArray
 
 RNG = default_rng()
@@ -51,7 +57,7 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table() -> SpatialData:
-    return SpatialData(table=_get_table())
+    return SpatialData(table=_get_table(region="sample1"))
 
 
 @pytest.fixture()
@@ -162,5 +168,13 @@ def _get_points(n: int) -> Mapping[str, Sequence[NDArray]]:
     }
 
 
-def _get_table() -> AnnData:
-    return AnnData(RNG.normal(size=(100, 10)))
+def _get_table(
+    region: Union[str, Sequence[str]], region_key: Optional[str] = None, instance_key: Optional[str] = None
+) -> AnnData:
+    adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    if isinstance(region, str):
+        return validate_table(adata, region)
+    elif isinstance(region, list):
+        adata.obs[region_key] = region
+        adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
+        return validate_table(adata, region, region_key, instance_key)
