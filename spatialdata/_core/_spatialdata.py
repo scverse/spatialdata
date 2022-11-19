@@ -12,8 +12,6 @@ from spatialdata._io.write import write_table
 
 
 class SpatialData:
-    """Spatial data structure."""
-
     images: Mapping[str, Image] = MappingProxyType({})
     labels: Mapping[str, Labels] = MappingProxyType({})
     points: Mapping[str, Points] = MappingProxyType({})

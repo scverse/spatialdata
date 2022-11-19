@@ -501,7 +501,7 @@ class Scale(BaseTransformation):
 class Affine(BaseTransformation):
     def __init__(
         self,
-        affine: Union[ArrayLike, list[Number]],
+        affine: Union[ArrayLike, List[Number]],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -560,7 +560,7 @@ class Affine(BaseTransformation):
 class Rotation(BaseTransformation):
     def __init__(
         self,
-        rotation: Union[ArrayLike, list[Number]],
+        rotation: Union[ArrayLike, List[Number]],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
