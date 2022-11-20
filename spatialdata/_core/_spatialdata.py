@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from functools import singledispatch
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
+import numpy as np
 import zarr
 from anndata import AnnData
+from dask.array.core import Array as DaskArray
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -12,10 +15,14 @@ from spatial_image import SpatialImage
 
 from spatialdata._core.elements import Points, Polygons
 from spatialdata._core.models import (
-    validate_polygons,
-    validate_raster,
-    validate_shapes,
-    validate_table,
+    Image2D,
+    Image3D,
+    Label2D,
+    Label3D,
+    Point,
+    Polygon,
+    Shape,
+    Table,
 )
 from spatialdata._io.write import (
     write_image,
@@ -24,6 +31,15 @@ from spatialdata._io.write import (
     write_shapes,
     write_table,
 )
+
+Label2d_s = Label2D()
+Label3D_s = Label3D()
+Image2D_s = Image2D()
+Image3D_s = Image3D()
+Polygon_s = Polygon()
+Point_s = Point()
+Shape_s = Shape()
+Table_s = Table()
 
 
 class SpatialData:
@@ -49,25 +65,46 @@ class SpatialData:
     ) -> None:
 
         if images is not None:
-            self.images = {k: validate_raster(v, kind="Image") for k, v in images.items()}
+            self.images = {}
+            for k, v in images.items():
+                if ndim(v) == 2:
+                    Image2D_s.validate(v)
+                    self.images[k] = v
+                elif ndim(v) == 3:
+                    Image3D_s.validate(v)
+                    self.images[k] = v
 
         if labels is not None:
-            self.labels = {k: validate_raster(v, kind="Label") for k, v in labels.items()}
+            self.labels = {}
+            for k, v in labels.items():
+                if ndim(v) == 2:
+                    Label2d_s.validate(v)
+                    self.labels[k] = v
+                elif ndim(v) == 3:
+                    Label3D_s.validate(v)
+                    self.labels[k] = v
 
         if polygons is not None:
-            self.polygons = {k: validate_polygons(v) for k, v in polygons.items()}
+            self.polygons = {}
+            for k, v in polygons.items():
+                Polygon_s.validate(v)
+                self.polygons[k] = v
 
         if shapes is not None:
-            self.shapes = {k: validate_shapes(v) for k, v in shapes.items()}
+            self.shapes = {}
+            for k, v in shapes.items():
+                Shape_s.validate(v)
+                self.shapes[k] = v
 
         if points is not None:
-            self.points = {
-                k: Points.parse_points(data, transform)
-                for (k, data), transform in _iter_elems(points, points_transform)
-            }
+            self.points = {}
+            for k, v in points.items():
+                Point_s.validate(v)
+                self.points[k] = v
 
         if table is not None:
-            self._table = validate_table(table)
+            Table_s.validate(table)
+            self._table = table
 
     def write(self, file_path: str) -> None:
         """Write to Zarr file."""
@@ -206,26 +243,34 @@ def _iter_elems(
     )
 
 
-def _validate_dataset(
-    dataset: Optional[Mapping[str, Any]] = None,
-    dataset_transform: Optional[Mapping[str, Any]] = None,
-) -> None:
-    if dataset is None:
-        if dataset_transform is None:
-            return
-        else:
-            raise ValueError("`dataset_transform` is only allowed if dataset is provided.")
-    if isinstance(dataset, Mapping):
-        if dataset_transform is not None:
-            if not set(dataset).issuperset(dataset_transform):
-                raise ValueError(
-                    f"Invalid `dataset_transform` keys not present in `dataset`: `{set(dataset_transform).difference(set(dataset))}`."
-                )
-
-
 if __name__ == "__main__":
     sdata = SpatialData.read("spatialdata-sandbox/merfish/data.zarr")
     s = sdata.polygons["anatomical"].data.obs.iloc[0]["spatial"]
     print(Polygons.string_to_tensor(s))
     print(sdata)
     print("ehi")
+
+
+@singledispatch
+def ndim(arr: Any) -> int:
+    raise TypeError(f"Unsupported type: {type(arr)}")
+
+
+@ndim.register(np.ndarray)
+def _(arr: DaskArray) -> int:
+    return arr.ndim  # type: ignore[no-any-return]
+
+
+@ndim.register(DaskArray)
+def _(arr: DaskArray) -> int:
+    return arr.ndim  # type: ignore[no-any-return]
+
+
+@ndim.register(SpatialImage)
+def _(arr: SpatialImage) -> int:
+    return len(arr.dims)
+
+
+@ndim.register(MultiscaleSpatialImage)
+def _(arr: MultiscaleSpatialImage) -> int:
+    return arr[list(arr.keys())[0]].dims  # type: ignore[no-any-return]
