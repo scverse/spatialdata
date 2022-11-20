@@ -92,8 +92,11 @@ class RasterSchema(DataArraySchema):
         """
         if not isinstance(data, DaskArray):
             data = from_array(data)
-        print(cls.dims.dims)
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        # TODO(giovp): drop coordinates for now until solution with IO.
+        if TYPE_CHECKING:
+            assert isinstance(data, SpatialImage)
+        data = data.drop(data.coords.keys())
         if transform is None:
             transform = Identity()
         if TYPE_CHECKING:
@@ -120,7 +123,7 @@ class RasterSchema(DataArraySchema):
                 super().validate(data[d][name])
 
 
-class Label2D(RasterSchema):
+class Label2DModel(RasterSchema):
     dims = DimsSchema((Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -135,7 +138,7 @@ class Label2D(RasterSchema):
         )
 
 
-class Label3D(RasterSchema):
+class Label3DModel(RasterSchema):
     dims = DimsSchema((Z, Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -150,7 +153,7 @@ class Label3D(RasterSchema):
         )
 
 
-class Image2D(RasterSchema):
+class Image2DModel(RasterSchema):
     dims = DimsSchema((C, Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -165,7 +168,7 @@ class Image2D(RasterSchema):
         )
 
 
-class Image3D(RasterSchema):
+class Image3DModel(RasterSchema):
     dims = DimsSchema((Z, Y, X, C))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -182,7 +185,7 @@ class Image3D(RasterSchema):
 
 # TODO: should check for column be strict?
 # TODO: validate attrs for transform.
-class Polygon(SchemaModel):
+class PolygonModel(SchemaModel):
     geometry: GeoSeries[GeometryDtype]
 
     @singledispatchmethod
@@ -244,7 +247,7 @@ class Polygon(SchemaModel):
         return data
 
 
-class Shape:
+class ShapeModel:
     coords_key = "spatial"
     transform_key = "transform"
     attrs_key = "spatialdata_attrs"
@@ -305,7 +308,7 @@ class Shape:
         return adata
 
 
-class Point:
+class PointModel:
     coords_key = "spatial"
     transform_key = "transform"
 
@@ -337,57 +340,68 @@ class Point:
         return adata
 
 
-class Table:
+class TableModel:
+    attrs_key = "spatialdata_attrs"
+
     def validate(
+        self,
         data: AnnData,
         region: Optional[Union[str, Sequence[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         **kwargs: Any,
     ) -> AnnData:
-        # TODO: is there enough validation?
-        if "spatialdata_attr" not in data.uns:
-            if isinstance(region, str):
-                if region_key is not None or instance_key is not None:
-                    logger.warning(
-                        "`region` is of type `str` but `region_key` or `instance_key` found. They will be discarded."
-                    )
 
-            elif isinstance(region, list):
-                if region_key is None:
-                    raise ValueError("`region_key` must be provided if `region` is of type `Sequence`.")
-                if region_key not in data.obs:
-                    raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
-                if instance_key is None:
-                    raise ValueError("`instance_key` must be provided if `region` is of type `Sequence`.")
-                if instance_key not in data.obs:
-                    raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
-                if not data.obs[region_key].isin(region).all():
-                    raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
-                if not is_categorical_dtype(data.obs[region_key]):
-                    logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
-                    data.obs["region_key"] = pd.Categorical(data.obs[region_key])
-                # TODO: should we check for `instance_key` values?
+        attr = data.uns[self.attrs_key]
+        if "region" not in attr:
+            raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
+        if isinstance(attr["region"], list):
+            if "region_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
+                )
+            if "instance_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `instance_key` not found in `adata.uns['spatialdata_attr']`."
+                )
 
-            attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
-            data.uns["spatialdata_attr"] = attr
-            return data
-        else:
-            attr = data.uns["spatialdata_attr"]
-            if "region" not in attr:
-                raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
-            if isinstance(attr["region"], list):
-                if "region_key" not in attr:
-                    raise ValueError(
-                        "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
-                    )
-                if "instance_key" not in attr:
-                    raise ValueError(
-                        "`region` is of type `list` but `instance_key` not found in `adata.uns['spatialdata_attr']`."
-                    )
+        elif isinstance(attr["region"], str):
+            attr["region_key"] = None
+            attr["instance_key"] = None
 
-            elif isinstance(attr["region"], str):
-                attr["region_key"] = None
-                attr["instance_key"] = None
+        return data
 
-            return data
+    @classmethod
+    def parse(
+        cls,
+        data: AnnData,
+        region: Optional[Union[str, Sequence[str]]] = None,
+        region_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AnnData:
+        if isinstance(region, str):
+            if region_key is not None or instance_key is not None:
+                logger.warning(
+                    "`region` is of type `str` but `region_key` or `instance_key` found. They will be discarded."
+                )
+
+        elif isinstance(region, list):
+            if region_key is None:
+                raise ValueError("`region_key` must be provided if `region` is of type `Sequence`.")
+            if region_key not in data.obs:
+                raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `Sequence`.")
+            if instance_key not in data.obs:
+                raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
+            if not data.obs[region_key].isin(region).all():
+                raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
+            if not is_categorical_dtype(data.obs[region_key]):
+                logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
+                data.obs["region_key"] = pd.Categorical(data.obs[region_key])
+            # TODO: check for `instance_key` values?
+
+        attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
+        data.uns[cls.attrs_key] = attr
+        return data

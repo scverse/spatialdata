@@ -1,4 +1,3 @@
-from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import zarr
@@ -26,7 +25,8 @@ def _write_metadata(
     group: zarr.Group,
     group_type: str,
     shape: Tuple[int, ...],
-    attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
+    name: str,
+    attr: Optional[Mapping[str, Optional[str]]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
@@ -37,7 +37,7 @@ def _write_metadata(
     axes = _get_valid_axes(dims, axes, fmt)
 
     datasets: List[Dict[str, Any]] = []
-    datasets.append({"path": attr})
+    datasets.append({"path": name})
 
     if coordinate_transformations is None:
         # TODO: temporary workaround, report bug to handle empty shapes
@@ -68,6 +68,7 @@ def _write_metadata(
 
     group.attrs["@type"] = group_type
     group.attrs["multiscales"] = multiscales
+    group.attrs["spatialdata_attrs"] = attr
 
 
 def write_image(
@@ -202,6 +203,7 @@ def write_polygons(
         group_type=group_type,
         shape=coords.shape,
         attr=attr,  # type: ignore[arg-type]
+        name=name,
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,
@@ -219,19 +221,19 @@ def write_shapes(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("shapes")
-    coordinate_transformations = [[shapes.uns.get("transform").to_dict()]]
+    transform = shapes.uns.pop("transform")
+    coordinate_transformations = [[transform.to_dict()]]
     attr = shapes.uns.get("spatialdata_attrs")
-    # TODO: do not save copy but pop transform?
-    shapes_copy = shapes.copy()
-    shapes_copy.uns.pop("transform")
-    write_adata(sub_group, name, shapes_copy)
+    write_adata(sub_group, name, shapes)
     shapes_group = sub_group[name]
+    shapes.uns["transform"] = transform
 
     _write_metadata(
         shapes_group,
         group_type=group_type,
         shape=shapes.obsm["spatial"].shape,
         attr=attr,
+        name=name,
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,
@@ -243,7 +245,6 @@ def write_points(
     points: AnnData,
     group: zarr.Group,
     name: str,
-    points_parameters: Optional[Mapping[str, Any]] = None,
     group_type: str = "ngff:points",
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
@@ -251,20 +252,23 @@ def write_points(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("points")
+    transform = points.uns.pop("transform")
+    coordinate_transformations = [[transform.to_dict()]]
+    # attr = points.uns.get("spatialdata_attrs")
     write_adata(sub_group, name, points)
+    points.uns["transform"] = transform
+
     points_group = sub_group[name]
-    # TODO: decide what to do here with additional params for
-    if points_parameters is not None:
-        points_group.attrs["points_parameters"] = points_parameters
     _write_metadata(
-        points_group,
+        group=points_group,
         group_type=group_type,
         shape=points.obsm["spatial"].shape,
-        attr={"attr": "X", "key": None},
+        # attr=attr,
+        name=name,
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,
-        **metadata,
+        **metadata,  # type: ignore[arg-type]
     )
 
 
@@ -275,9 +279,9 @@ def write_table(
     group_type: str = "ngff:regions_table",
     fmt: Format = SpatialDataFormat(),
 ) -> None:
-    region = table.uns["spatialdata_attr"]["region"]
-    region_key = table.uns["spatialdata_attr"].get("region_key", None)
-    instance_key = table.uns["spatialdata_attr"].get("instance_key", None)
+    region = table.uns["spatialdata_attrs"]["region"]
+    region_key = table.uns["spatialdata_attrs"].get("region_key", None)
+    instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
     fmt.validate_tables(table, region_key, instance_key)
     sub_group = group.require_group("table")
     write_adata(sub_group, name, table)

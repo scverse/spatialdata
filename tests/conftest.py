@@ -1,17 +1,22 @@
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from typing import Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from shapely.geometry import MultiPolygon, Polygon
 
 from spatialdata import SpatialData
 from spatialdata._core.models import (
-    validate_polygons,
-    validate_raster,
-    validate_shapes,
-    validate_table,
+    Image2DModel,
+    Label2DModel,
+    Label3DModel,
+    PointModel,
+    PolygonModel,
+    ShapeModel,
+    TableModel,
 )
 from spatialdata._types import NDArray
 
@@ -20,29 +25,17 @@ RNG = default_rng()
 
 @pytest.fixture()
 def images() -> SpatialData:
-    return SpatialData(images=_get_raster(3, shape=(3, 64, 64), name="image", dtype="float"))
-
-
-@pytest.fixture()
-def images_multiscale() -> SpatialData:
-    return SpatialData(
-        images=_get_raster(3, shape=(3, 64, 64), dtype="float", name="image_multiscale", multiscale=True)
-    )
+    return SpatialData(images=_get_images())
 
 
 @pytest.fixture()
 def labels() -> SpatialData:
-    return SpatialData(labels=_get_raster(3, shape=(64, 64), name="label", dtype="int"))
-
-
-@pytest.fixture()
-def labels_multiscale() -> SpatialData:
-    return SpatialData(labels=_get_raster(3, shape=(64, 64), dtype="int", name="label_multiscale", multiscale=True))
+    return SpatialData(labels=_get_labels())
 
 
 @pytest.fixture()
 def polygons() -> SpatialData:
-    return SpatialData(polygons=_get_polygons(3, name="polygons"))
+    return SpatialData(polygons=_get_polygons())
 
 
 @pytest.fixture()
@@ -52,7 +45,7 @@ def shapes() -> SpatialData:
 
 @pytest.fixture()
 def points() -> SpatialData:
-    return SpatialData(points=_get_points(3))
+    return SpatialData(points=_get_points(2, name="points", var_names=[np.arange(3), ["genex", "geney"]]))
 
 
 @pytest.fixture()
@@ -91,8 +84,8 @@ def empty_table() -> SpatialData:
 def sdata(request) -> SpatialData:
     if request.param == "full":
         s = SpatialData(
-            images=_get_raster(3, shape=(3, 64, 64), name="image", dtype="float"),
-            labels=_get_raster(3, shape=(64, 64), name="label", dtype="int"),
+            images=_get_images(),
+            labels=_get_labels(),
             polygons=_get_polygons(3, name="polygons"),
             points=_get_points(2),
             table=_get_table(),
@@ -102,47 +95,70 @@ def sdata(request) -> SpatialData:
     return s
 
 
-def _get_raster(
-    n: int,
-    shape: Tuple[int, ...],
-    dtype: str,
-    name: str,
-    multiscale: bool = False,
-) -> Mapping[str, Sequence[NDArray]]:
+def _get_images() -> Mapping[str, Sequence[NDArray]]:
     out = {}
-    for i in range(n):
-        if dtype == "float":
-            arr = RNG.normal(size=shape)
-        elif dtype == "int":
-            arr = RNG.integers(0, 100, size=shape)
-        name = f"{name}{i}"
-        if multiscale:
-            image = validate_raster(arr, kind="Image", name=name, scale_factors=[2, 4])
-        else:
-            image = validate_raster(arr, kind="Image", name=name)
-        out[name] = image
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d")
+    out["image2d_multiscale"] = Image2DModel.parse(
+        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", scale_factors=[2, 4]
+    )
+    # TODO: not supported atm.
+    # out["image3d"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), name="image3d")
+    # out["image3d_multiscale"] = Image3DModel.parse(
+    #     RNG.normal(size=(2, 64, 64, 3)), name="image3d_multiscale", scale_factors=[2, 4]
+    # )
     return out
 
 
-def _get_polygons(n: int, name: str) -> Mapping[str, Sequence[NDArray]]:
-    from geopandas import GeoDataFrame
-    from shapely.geometry import Polygon
+def _get_labels() -> Mapping[str, Sequence[NDArray]]:
+    out = {}
+    out["labels2d"] = Label2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d")
+    out["labels2d_multiscale"] = Label2DModel.parse(
+        RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4]
+    )
+    out["labels3d"] = Label3DModel.parse(RNG.normal(size=(2, 64, 64)), name="labels3d")
+    out["labels3d_multiscale"] = Label3DModel.parse(
+        RNG.normal(size=(2, 64, 64)), name="labels3d_multiscale", scale_factors=[2, 4]
+    )
+    return out
+
+
+def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
 
     out = {}
-    for i in range(n):
-        name = f"{name}{i}"
-        geo_df = GeoDataFrame(
-            {
-                "geometry": [
-                    Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
-                    Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
-                    Polygon(((0, 0), (0, 1), (1, 10))),
-                    Polygon(((0, 0), (0, 1), (1, 1))),
-                    Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
-                ]
-            }
-        )
-        out[name] = validate_polygons(geo_df)
+    poly = GeoDataFrame(
+        {
+            "geometry": [
+                Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
+                Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
+                Polygon(((0, 0), (0, 1), (1, 10))),
+                Polygon(((0, 0), (0, 1), (1, 1))),
+                Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
+            ]
+        }
+    )
+
+    out["multipoly"] = GeoDataFrame(
+        {
+            "geometry": [
+                MultiPolygon(
+                    [
+                        Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
+                        Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
+                    ]
+                ),
+                MultiPolygon(
+                    [
+                        Polygon(((0, 0), (0, 1), (1, 10))),
+                        Polygon(((0, 0), (0, 1), (1, 1))),
+                        Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
+                    ]
+                ),
+            ]
+        }
+    )
+
+    out["poly"] = PolygonModel.parse(poly, name="poly")
+    out["multipoly"] = PolygonModel.parse(poly, name="multipoly")
 
     return out
 
@@ -154,18 +170,25 @@ def _get_shapes(
     assert len(shape_type) == len(shape_size) == n
 
     out = {}
-    for i in range(n):
-        name = f"{name}{i}"
+    for i, (typ, size) in enumerate(zip(shape_type, shape_size)):
+        name = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
-        out[name] = validate_shapes(arr, shape_type=shape_type, shape_size=shape_size)
+        out[name] = ShapeModel.parse(arr, shape_type=typ, shape_size=size)
 
     return out
 
 
-def _get_points(n: int) -> Mapping[str, Sequence[NDArray]]:
-    return {
-        f"points_{i}": AnnData(shape=(100, 0), obsm={"spatial": RNG.integers(0, 10, size=(100, 2))}) for i in range(n)
-    }
+def _get_points(n: int, name: str, var_names: Sequence[Sequence[str]]) -> Mapping[str, Sequence[NDArray]]:
+
+    assert len(var_names) == n
+
+    out = {}
+    for i, v in enumerate(var_names):
+        name = f"{name}_{i}"
+        arr = RNG.normal(size=(100, 2))
+        out[name] = PointModel.parse(arr, var_names=v)
+
+    return out
 
 
 def _get_table(
@@ -173,8 +196,8 @@ def _get_table(
 ) -> AnnData:
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
     if isinstance(region, str):
-        return validate_table(adata, region)
+        return TableModel.parse(adata, region)
     elif isinstance(region, list):
         adata.obs[region_key] = region
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
-        return validate_table(adata, region, region_key, instance_key)
+        return TableModel.parse(adata, region, region_key, instance_key)

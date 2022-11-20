@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import singledispatch
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, Optional, Tuple, Union
+from typing import Any, Mapping, Optional, Union
 
 import numpy as np
 import zarr
@@ -13,33 +13,34 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
-from spatialdata._core.elements import Points, Polygons
 from spatialdata._core.models import (
-    Image2D,
-    Image3D,
-    Label2D,
-    Label3D,
-    Point,
-    Polygon,
-    Shape,
-    Table,
+    Image2DModel,
+    Image3DModel,
+    Label2DModel,
+    Label3DModel,
+    PointModel,
+    PolygonModel,
+    ShapeModel,
+    TableModel,
 )
 from spatialdata._io.write import (
     write_image,
     write_labels,
+    write_points,
     write_polygons,
     write_shapes,
     write_table,
 )
 
-Label2d_s = Label2D()
-Label3D_s = Label3D()
-Image2D_s = Image2D()
-Image3D_s = Image3D()
-Polygon_s = Polygon()
-Point_s = Point()
-Shape_s = Shape()
-Table_s = Table()
+# schema for elements
+Label2d_s = Label2DModel()
+Label3D_s = Label3DModel()
+Image2D_s = Image2DModel()
+Image3D_s = Image3DModel()
+Polygon_s = PolygonModel
+Point_s = PointModel()
+Shape_s = ShapeModel()
+Table_s = TableModel()
 
 
 class SpatialData:
@@ -47,7 +48,7 @@ class SpatialData:
 
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    points: Mapping[str, Points] = MappingProxyType({})
+    points: Mapping[str, AnnData] = MappingProxyType({})
     polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
     shapes: Mapping[str, AnnData] = MappingProxyType({})
     _table: Optional[AnnData] = None
@@ -60,17 +61,16 @@ class SpatialData:
         polygons: Mapping[str, Any] = MappingProxyType({}),
         shapes: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        points_transform: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
 
         if images is not None:
             self.images = {}
             for k, v in images.items():
-                if ndim(v) == 2:
+                if ndim(v) == 3:
                     Image2D_s.validate(v)
                     self.images[k] = v
-                elif ndim(v) == 3:
+                elif ndim(v) == 4:
                     Image3D_s.validate(v)
                     self.images[k] = v
 
@@ -157,7 +157,12 @@ class SpatialData:
                     storage_options={"compressor": None},
                 )
             if self.points is not None and el in self.points.keys():
-                self.points[el].to_zarr(elem_group, name=el)
+                write_points(
+                    points=self.points[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
 
         if self.table is not None:
             write_table(table=self.table, group=root, name="table")
@@ -230,25 +235,6 @@ class SpatialData:
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         ##
         return descr
-
-
-def _iter_elems(
-    data: Mapping[str, Any], transforms: Optional[Mapping[str, Any]] = None
-) -> Iterable[Tuple[Tuple[str, Any], Any]]:
-    # TODO: handle logic for multiple coordinate transforms and elements
-    # ...
-    return zip(
-        data.items(),
-        [transforms.get(k, None) if transforms is not None else None for k in data.keys()],
-    )
-
-
-if __name__ == "__main__":
-    sdata = SpatialData.read("spatialdata-sandbox/merfish/data.zarr")
-    s = sdata.polygons["anatomical"].data.obs.iloc[0]["spatial"]
-    print(Polygons.string_to_tensor(s))
-    print(sdata)
-    print("ehi")
 
 
 @singledispatch

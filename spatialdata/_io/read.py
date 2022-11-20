@@ -2,7 +2,7 @@ import os
 import time
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import zarr
@@ -67,8 +67,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     table: Optional[AnnData] = None
     polygons = {}
     shapes = {}
-    labels_transform: Dict[str, Any] = {}
-    points_transform = {}
 
     def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
         multiscales = group.attrs["multiscales"]
@@ -126,8 +124,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
 
             if g_elem == "/points":
-                points[k] = read_anndata_zarr(g_elem_store)
-                points_transform[k] = _get_transform_from_group(zarr.open(g_elem_store, mode="r"))
+                points[k] = _read_points(g_elem_store)
 
             if g_elem == "/polygons":
                 polygons[k] = _read_polygons(g_elem_store)
@@ -146,8 +143,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         polygons=polygons,
         shapes=shapes,
         table=table,
-        labels_transform=labels_transform,
-        points_transform=points_transform,
     )
 
 
@@ -159,10 +154,11 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDa
     coords = np.array(f["coords"])
     offsets = tuple(x.flatten() for x in np.split(np.array(f["offsets"]), 2))  # type: ignore[var-annotated]
 
-    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
-    typ = GeometryType(attrs["path"]["geos"]["geometry_type"])
-    assert typ.name == attrs["path"]["geos"]["geometry_name"]
+    spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
+    typ = GeometryType(spatialdata_attrs["geos"]["geometry_type"])
+    assert typ.name == spatialdata_attrs["geos"]["geometry_name"]
 
+    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
     transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
 
     geometry = from_ragged_array(typ, coords, offsets)
@@ -179,12 +175,28 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData
     f = zarr.open(store, mode="r")
     attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
     transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
-    spatialdata_attrs = attrs["path"]
+    spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
 
     adata = read_anndata_zarr(store)
 
     adata.uns["transform"] = transforms
     adata.uns["spatialdata_attrs"] = spatialdata_attrs
+
+    return adata
+
+
+def _read_points(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:  # type: ignore[type-arg]
+    """Read polygons from a zarr store."""
+
+    f = zarr.open(store, mode="r")
+    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
+    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
+    # spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
+
+    adata = read_anndata_zarr(store)
+
+    adata.uns["transform"] = transforms
+    # adata.uns["spatialdata_attrs"] = spatialdata_attrs
 
     return adata
 

@@ -21,19 +21,10 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert images.images.keys() == sdata.images.keys()
         for k1, k2 in zip(images.images.keys(), sdata.images.keys()):
-            assert isinstance(sdata.images[k1], SpatialImage)
-            assert images.images[k1].equals(sdata.images[k2])
-
-    def test_images_multiscale(self, tmp_path: str, images_multiscale: SpatialData) -> None:
-        """Test read/write."""
-        images = images_multiscale
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        images.write(tmpdir)
-        sdata = SpatialData.read(tmpdir)
-        assert images.images.keys() == sdata.images.keys()
-        for k1, k2 in zip(images.images.keys(), sdata.images.keys()):
-            assert isinstance(images.images[k1], MultiscaleSpatialImage)
-            assert images.images[k1].equals(sdata.images[k2])
+            if isinstance(sdata.images[k1], SpatialImage):
+                assert images.images[k1].equals(sdata.images[k2])
+            elif isinstance(images.images[k1], MultiscaleSpatialImage):
+                assert images.images[k1].equals(sdata.images[k2])
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
         """Test read/write."""
@@ -42,19 +33,10 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert labels.labels.keys() == sdata.labels.keys()
         for k1, k2 in zip(labels.labels.keys(), sdata.labels.keys()):
-            assert isinstance(sdata.labels[k1], SpatialImage)
-            assert labels.labels[k1].equals(sdata.labels[k2])
-
-    def test_labels_multiscale(self, tmp_path: str, labels_multiscale: SpatialData) -> None:
-        """Test read/write."""
-        labels = labels_multiscale
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        labels.write(tmpdir)
-        sdata = SpatialData.read(tmpdir)
-        assert labels.labels.keys() == sdata.labels.keys()
-        for k1, k2 in zip(labels.labels.keys(), sdata.labels.keys()):
-            assert isinstance(sdata.labels[k1], MultiscaleSpatialImage)
-            assert labels.labels[k1].equals(sdata.labels[k2])
+            if isinstance(sdata.labels[k1], SpatialImage):
+                assert labels.labels[k1].equals(sdata.labels[k2])
+            elif isinstance(sdata.labels[k1], MultiscaleSpatialImage):
+                assert labels.labels[k1].equals(sdata.labels[k2])
 
     def test_polygons(self, tmp_path: str, polygons: SpatialData) -> None:
         """Test read/write."""
@@ -77,7 +59,18 @@ class TestReadWrite:
             np.testing.assert_array_equal(shapes.shapes[k1].obsm["spatial"], sdata.shapes[k2].obsm["spatial"])
             assert shapes.shapes[k1].uns == sdata.shapes[k2].uns
 
-    def test_tables(self, tmp_path: str, table: SpatialData) -> None:
+    def test_points(self, tmp_path: str, points: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        points.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert points.points.keys() == sdata.points.keys()
+        for k1, k2 in zip(points.points.keys(), sdata.points.keys()):
+            assert isinstance(sdata.points[k1], AnnData)
+            np.testing.assert_array_equal(points.points[k1].obsm["spatial"], sdata.points[k2].obsm["spatial"])
+            assert points.points[k1].uns == sdata.points[k2].uns
+
+    def test_table(self, tmp_path: str, table: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table.write(tmpdir)
@@ -90,23 +83,21 @@ class TestReadWrite:
         self,
         tmp_path: str,
         images: SpatialData,
-        images_multiscale: SpatialData,
         labels: SpatialData,
-        labels_multiscale: SpatialData,
         polygons: SpatialData,
         shapes: SpatialData,
+        points: SpatialData,
         table: SpatialData,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        all_images = dict(images.images, **images_multiscale.images)
-        all_labels = dict(labels.labels, **labels_multiscale.labels)
 
         # TODO: not checking for consistency ATM
         sdata = SpatialData(
-            images=all_images,
-            labels=all_labels,
+            images=images.images,
+            labels=labels.labels,
             polygons=polygons.polygons,
             shapes=shapes.shapes,
+            points=points.points,
             table=table.table,
         )
         sdata.write(tmpdir)
