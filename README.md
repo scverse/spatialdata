@@ -19,9 +19,7 @@ Spatial data format.
 
 ## Getting started
 
-Please refer to the [documentation][link-docs]. In particular, the
-
--   [API documentation][link-api].
+coming soon
 
 ## Installation
 
