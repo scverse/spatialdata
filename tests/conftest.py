@@ -137,7 +137,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
         }
     )
 
-    out["multipoly"] = GeoDataFrame(
+    multipoly = GeoDataFrame(
         {
             "geometry": [
                 MultiPolygon(
@@ -158,7 +158,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
     )
 
     out["poly"] = PolygonModel.parse(poly, name="poly")
-    out["multipoly"] = PolygonModel.parse(poly, name="multipoly")
+    out["multipoly"] = PolygonModel.parse(multipoly, name="multipoly")
 
     return out
 

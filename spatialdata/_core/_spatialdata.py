@@ -259,4 +259,4 @@ def _(arr: SpatialImage) -> int:
 
 @ndim.register(MultiscaleSpatialImage)
 def _(arr: MultiscaleSpatialImage) -> int:
-    return arr[list(arr.keys())[0]].dims  # type: ignore[no-any-return]
+    return len(arr[list(arr.keys())[0]].dims)
