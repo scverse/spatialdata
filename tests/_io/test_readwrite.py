@@ -1,12 +1,78 @@
 from pathlib import Path
 
+import pytest
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
+
 from spatialdata import SpatialData
 from spatialdata._core.elements import Image
 from spatialdata.utils import are_directories_identical
 
 
-# either use parametrize here, either use params in the sdata fixture in conftest.py
-# @pytest.mark.parametrize("sdata", "empty_points")
+class TestReadWrite:
+    def test_images(self, tmp_path: str, images: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        images.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert images.images.keys() == sdata.images.keys()
+        for k1, k2 in zip(images.images.keys(), sdata.images.keys()):
+            assert isinstance(sdata.images[k1], SpatialImage)
+            assert images.images[k1].equals(sdata.images[k2])
+
+    def test_images_multiscale(self, tmp_path: str, images_multiscale: SpatialData) -> None:
+        """Test read/write."""
+        images = images_multiscale
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        images.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert images.images.keys() == sdata.images.keys()
+        for k1, k2 in zip(images.images.keys(), sdata.images.keys()):
+            assert isinstance(images.images[k1], MultiscaleSpatialImage)
+            assert images.images[k1].equals(sdata.images[k2])
+
+    def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
+        """Test read/write."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        labels.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert labels.labels.keys() == sdata.labels.keys()
+        for k1, k2 in zip(labels.labels.keys(), sdata.labels.keys()):
+            assert isinstance(sdata.labels[k1], SpatialImage)
+            assert labels.labels[k1].equals(sdata.labels[k2])
+
+    def test_labels_multiscale(self, tmp_path: str, labels_multiscale: SpatialData) -> None:
+        """Test read/write."""
+        labels = labels_multiscale
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        labels.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        assert labels.labels.keys() == sdata.labels.keys()
+        for k1, k2 in zip(labels.labels.keys(), sdata.labels.keys()):
+            assert isinstance(sdata.labels[k1], MultiscaleSpatialImage)
+            assert labels.labels[k1].equals(sdata.labels[k2])
+
+    def test_image_labels_roundtrip(
+        self,
+        tmp_path: str,
+        images: SpatialData,
+        images_multiscale: SpatialData,
+        labels: SpatialData,
+        labels_multiscale: SpatialData,
+    ) -> None:
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        all_images = dict(images.images, **images_multiscale.images)
+        all_labels = dict(labels.labels, **labels_multiscale.labels)
+
+        sdata = SpatialData(images=all_images, labels=all_labels)
+        sdata.write(tmpdir)
+        sdata2 = SpatialData.read(tmpdir)
+        tmpdir2 = Path(tmp_path) / "tmp2.zarr"
+        sdata2.write(tmpdir2)
+        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+
+
+@pytest.mark.skip("Consider delete.")
 def test_readwrite_roundtrip(sdata: SpatialData, tmp_path: str):
     print(sdata)
 
