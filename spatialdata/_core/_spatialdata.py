@@ -1,17 +1,46 @@
 from __future__ import annotations
 
+from functools import singledispatch
 from types import MappingProxyType
-from typing import Any, Iterable, Mapping, Optional, Tuple, Union
+from typing import Any, Mapping, Optional, Union
 
+import numpy as np
 import zarr
 from anndata import AnnData
+from dask.array.core import Array as DaskArray
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
-from spatialdata._core.elements import Points, Polygons
-from spatialdata._core.models import validate_raster
-from spatialdata._io.write import write_image, write_labels, write_table
+from spatialdata._core.models import (
+    Image2DModel,
+    Image3DModel,
+    Label2DModel,
+    Label3DModel,
+    PointModel,
+    PolygonModel,
+    ShapeModel,
+    TableModel,
+)
+from spatialdata._io.write import (
+    write_image,
+    write_labels,
+    write_points,
+    write_polygons,
+    write_shapes,
+    write_table,
+)
+
+# schema for elements
+Label2d_s = Label2DModel()
+Label3D_s = Label3DModel()
+Image2D_s = Image2DModel()
+Image3D_s = Image3DModel()
+Polygon_s = PolygonModel
+Point_s = PointModel()
+Shape_s = ShapeModel()
+Table_s = TableModel()
 
 
 class SpatialData:
@@ -19,8 +48,9 @@ class SpatialData:
 
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    points: Mapping[str, Points] = MappingProxyType({})
-    polygons: Mapping[str, Polygons] = MappingProxyType({})
+    points: Mapping[str, AnnData] = MappingProxyType({})
+    polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
+    shapes: Mapping[str, AnnData] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
@@ -29,36 +59,51 @@ class SpatialData:
         labels: Mapping[str, Any] = MappingProxyType({}),
         points: Mapping[str, Any] = MappingProxyType({}),
         polygons: Mapping[str, Any] = MappingProxyType({}),
+        shapes: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        labels_transform: Optional[Mapping[str, Any]] = None,
-        points_transform: Optional[Mapping[str, Any]] = None,
-        polygons_transform: Optional[Mapping[str, Any]] = None,
-        multiscale_kwargs: Mapping[str, Any] = MappingProxyType({}),
         **kwargs: Any,
     ) -> None:
 
-        _validate_dataset(labels, labels_transform)
-        _validate_dataset(points, points_transform)
-        _validate_dataset(polygons, polygons_transform)
-
         if images is not None:
-            self.images = {k: validate_raster(v, kind="Image") for k, v in images.items()}
+            self.images = {}
+            for k, v in images.items():
+                if ndim(v) == 3:
+                    Image2D_s.validate(v)
+                    self.images[k] = v
+                elif ndim(v) == 4:
+                    Image3D_s.validate(v)
+                    self.images[k] = v
 
         if labels is not None:
-            self.labels = {k: validate_raster(v, kind="Label") for k, v in labels.items()}
+            self.labels = {}
+            for k, v in labels.items():
+                if ndim(v) == 2:
+                    Label2d_s.validate(v)
+                    self.labels[k] = v
+                elif ndim(v) == 3:
+                    Label3D_s.validate(v)
+                    self.labels[k] = v
+
+        if polygons is not None:
+            self.polygons = {}
+            for k, v in polygons.items():
+                Polygon_s.validate(v)
+                self.polygons[k] = v
+
+        if shapes is not None:
+            self.shapes = {}
+            for k, v in shapes.items():
+                Shape_s.validate(v)
+                self.shapes[k] = v
 
         if points is not None:
-            self.points = {
-                k: Points.parse_points(data, transform)
-                for (k, data), transform in _iter_elems(points, points_transform)
-            }
-        if polygons is not None:
-            self.polygons = {
-                k: Polygons.parse_polygons(data, transform)
-                for (k, data), transform in _iter_elems(polygons, polygons_transform)
-            }
+            self.points = {}
+            for k, v in points.items():
+                Point_s.validate(v)
+                self.points[k] = v
 
         if table is not None:
+            Table_s.validate(table)
             self._table = table
 
     def write(self, file_path: str) -> None:
@@ -68,7 +113,18 @@ class SpatialData:
         root = zarr.group(store=store)
 
         # get union of unique ids of all elements
-        elems = set().union(*[set(i) for i in [self.images, self.labels, self.points, self.polygons]])
+        elems = set().union(
+            *[
+                set(i)
+                for i in [
+                    self.images,
+                    self.labels,
+                    self.points,
+                    self.polygons,
+                    self.shapes,
+                ]
+            ]
+        )
 
         for el in elems:
             elem_group = root.create_group(name=el)
@@ -86,13 +142,30 @@ class SpatialData:
                     name=el,
                     storage_options={"compressor": None},
                 )
-            if self.points is not None and el in self.points.keys():
-                self.points[el].to_zarr(elem_group, name=el)
             if self.polygons is not None and el in self.polygons.keys():
-                self.polygons[el].to_zarr(elem_group, name=el)
+                write_polygons(
+                    polygons=self.polygons[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
+            if self.shapes is not None and el in self.shapes.keys():
+                write_shapes(
+                    shapes=self.shapes[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
+            if self.points is not None and el in self.points.keys():
+                write_points(
+                    points=self.points[el],
+                    group=elem_group,
+                    name=el,
+                    storage_options={"compressor": None},
+                )
 
         if self.table is not None:
-            write_table(tables=self.table, group=root, name="table")
+            write_table(table=self.table, group=root, name="table")
 
     @property
     def table(self) -> AnnData:
@@ -121,7 +194,7 @@ class SpatialData:
 
         ##
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "table"]:
+        for attr in ["images", "labels", "points", "polygons", "shapes", "table"]:
             attribute = getattr(self, attr)
             if attribute is not None and len(attribute) > 0:
                 descr += f"\n{h('level0')}{attr.capitalize()}"
@@ -139,10 +212,10 @@ class SpatialData:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial {v.shape}"
                         elif attr == "polygons":
                             # assuming 2d
-                            descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osb.spatial describing "
-                                f"{len(v.data.obs)} 2D polygons"
-                            )
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
+                        elif attr == "shapes":
+                            # assuming 2d
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
                         else:
                             if isinstance(v, SpatialImage) or isinstance(v, MultiscaleSpatialImage):
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}"
@@ -157,44 +230,33 @@ class SpatialData:
         descr = rreplace(descr, h("level0"), "└── ", 1)
         descr = descr.replace(h("level0"), "├── ")
 
-        for attr in ["images", "labels", "points", "polygons", "table"]:
+        for attr in ["images", "labels", "points", "polygons", "table", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         ##
         return descr
 
 
-def _iter_elems(
-    data: Mapping[str, Any], transforms: Optional[Mapping[str, Any]] = None
-) -> Iterable[Tuple[Tuple[str, Any], Any]]:
-    # TODO: handle logic for multiple coordinate transforms and elements
-    # ...
-    return zip(
-        data.items(),
-        [transforms.get(k, None) if transforms is not None else None for k in data.keys()],
-    )
+@singledispatch
+def ndim(arr: Any) -> int:
+    raise TypeError(f"Unsupported type: {type(arr)}")
 
 
-def _validate_dataset(
-    dataset: Optional[Mapping[str, Any]] = None,
-    dataset_transform: Optional[Mapping[str, Any]] = None,
-) -> None:
-    if dataset is None:
-        if dataset_transform is None:
-            return
-        else:
-            raise ValueError("`dataset_transform` is only allowed if dataset is provided.")
-    if isinstance(dataset, Mapping):
-        if dataset_transform is not None:
-            if not set(dataset).issuperset(dataset_transform):
-                raise ValueError(
-                    f"Invalid `dataset_transform` keys not present in `dataset`: `{set(dataset_transform).difference(set(dataset))}`."
-                )
+@ndim.register(np.ndarray)
+def _(arr: DaskArray) -> int:
+    return arr.ndim  # type: ignore[no-any-return]
 
 
-if __name__ == "__main__":
-    sdata = SpatialData.read("spatialdata-sandbox/merfish/data.zarr")
-    s = sdata.polygons["anatomical"].data.obs.iloc[0]["spatial"]
-    print(Polygons.string_to_tensor(s))
-    print(sdata)
-    print("ehi")
+@ndim.register(DaskArray)
+def _(arr: DaskArray) -> int:
+    return arr.ndim  # type: ignore[no-any-return]
+
+
+@ndim.register(SpatialImage)
+def _(arr: SpatialImage) -> int:
+    return len(arr.dims)
+
+
+@ndim.register(MultiscaleSpatialImage)
+def _(arr: MultiscaleSpatialImage) -> int:
+    return arr[list(arr.keys())[0]].dims  # type: ignore[no-any-return]

@@ -16,7 +16,8 @@
 
 Spatial data format.
 
-current specs [HERE](https://hackmd.io/uY0wPwZhQaG6HJ6OAGm0fw)
+-   up-to-date design doc [here](docs/design_doc.md)
+-   discussion and previous draft of specs [here](https://hackmd.io/uY0wPwZhQaG6HJ6OAGm0fw)
 
 ## Getting started
 

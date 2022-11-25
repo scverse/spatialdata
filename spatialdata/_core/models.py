@@ -1,23 +1,45 @@
 """This file contains models and schema for SpatialData"""
 
-from functools import singledispatch
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple, Union
+from functools import singledispatchmethod
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
+import pandas as pd
+from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
+from geopandas import GeoDataFrame
+from geopandas.array import GeometryDtype
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike
-from pandera import Field, SchemaModel
-from pandera.typing import Series
+from pandas.api.types import is_categorical_dtype
+from pandera import SchemaModel
 from pandera.typing.geopandas import GeoSeries
+from shapely import GeometryType
+from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from xarray_schema.components import ArrayTypeSchema, AttrSchema, DimsSchema
+from xarray_schema.components import (
+    ArrayTypeSchema,
+    AttrSchema,
+    AttrsSchema,
+    DimsSchema,
+)
 from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._core.transformations import BaseTransformation, Identity
+from spatialdata._logging import logger
 
 # Types
 Chunks_t = Union[
@@ -32,179 +54,354 @@ Z, C, Y, X = "z", "c", "y", "x"
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
-Labels2D_s = DataArraySchema(
-    dims=DimsSchema((Y, X)),
-    array_type=ArrayTypeSchema(DaskArray),
-    attrs={"transform": Transform_s},
-)
-Image2D_s = DataArraySchema(
-    dims=DimsSchema((C, Y, X)),
-    array_type=ArrayTypeSchema(DaskArray),
-    attrs={"transform": Transform_s},
-)
-Labels3D_s = DataArraySchema(
-    dims=DimsSchema((Z, Y, X)),
-    array_type=ArrayTypeSchema(DaskArray),
-    attrs={"transform": Transform_s},
-)
-Image3D_s = DataArraySchema(
-    dims=DimsSchema((Z, C, Y, X)),
-    array_type=ArrayTypeSchema(DaskArray),
-    attrs={"transform": Transform_s},
-)
 
+class RasterSchema(DataArraySchema):
+    """Base schema for raster data."""
 
-def _get_raster_schema(data: ArrayLike, kind: Literal["Image", "Label"]) -> DataArraySchema:
-    # get type
-    if isinstance(data, SpatialImage):
-        shapes: Tuple[Any, ...] = tuple(data.sizes.values())
-    elif isinstance(data, DaskArray):
-        shapes = data.shape
-    elif isinstance(data, MultiscaleSpatialImage):
-        k = tuple(data.keys())[0]
-        shapes = tuple(data[k].sizes.values())
-    else:
-        raise TypeError(f"Unsupported type: {type(data)}")
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike,
+        transform: Optional[BaseTransformation] = None,
+        scale_factors: Optional[ScaleFactors_t] = None,
+        method: Optional[Methods] = None,
+        chunks: Optional[Chunks_t] = None,
+        **kwargs: Any,
+    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
+        """
+        Validate (or parse) raster data.
 
-    # get schema
-    if len(shapes) == 2:
-        return Labels2D_s
-    elif len(shapes) == 3:
-        if kind == "Image":
-            return Image2D_s
-        elif kind == "Label":
-            return Labels3D_s
-        else:
-            raise ValueError(f"Wrong kind: {kind}")
-    elif len(shapes) == 3:
-        return Image3D_s
-    else:
-        raise ValueError(f"Wrong dimensions: {data.dims}D array.")
+        Parameters
+        ----------
+        data
+            Data to validate.
+        transform
+            Transformation to apply to the data.
+        scale_factors
+            Scale factors to apply for multiscale.
+            If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+        method
+            Method to use for multiscale.
+        chunks
+            Chunks to use for dask array.
 
-
-def _to_spatial_image(
-    data: Union[ArrayLike, DaskArray],
-    schema: DataArraySchema,
-    transform: Optional[Any] = None,
-    scale_factors: Optional[ScaleFactors_t] = None,
-    method: Optional[Methods] = None,
-    chunks: Optional[Chunks_t] = None,
-    **kwargs: Any,
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    data = to_spatial_image(array_like=data, dims=schema.dims.dims, **kwargs)
-    if transform is None:
-        transform = Identity()
+        Returns
+        -------
+        :class:`spatial_image.SpatialImage` or
+        :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
+        """
+        if not isinstance(data, DaskArray):
+            data = from_array(data)
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        # TODO(giovp): drop coordinates for now until solution with IO.
+        if TYPE_CHECKING:
+            assert isinstance(data, SpatialImage)
+        data = data.drop(data.coords.keys())
+        if transform is None:
+            transform = Identity()
+        if TYPE_CHECKING:
+            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         data.attrs = {"transform": transform}
-        # TODO(giovp): don't drop coordinates.
-    data = data.drop(data.coords.keys())
-    if scale_factors is not None:
-        data = to_multiscale(
-            data,
-            scale_factors=scale_factors,
-            method=method,
-            chunks=chunks,
+        if scale_factors is not None:
+            data = to_multiscale(
+                data,
+                scale_factors=scale_factors,
+                method=method,
+                chunks=chunks,
+            )
+        return data
+
+    def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+        if isinstance(data, SpatialImage):
+            super().validate(data)
+        elif isinstance(data, MultiscaleSpatialImage):
+            name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+            if len(name) > 1:
+                raise ValueError(f"Wrong name for datatree: {name}.")
+            name = list(name)[0]
+            for d in data:
+                super().validate(data[d][name])
+
+
+class Label2DModel(RasterSchema):
+    dims = DimsSchema((Y, X))
+    array_type = ArrayTypeSchema(DaskArray)
+    attrs = AttrsSchema({"transform": Transform_s})
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(
+            dims=self.dims,
+            array_type=self.array_type,
+            attrs=self.attrs,
+            *args,
+            **kwargs,
         )
-        # TODO: add transform to multiscale
-    return data
 
 
-@singledispatch
-def validate_raster(data: Any, *args: Any, **kwargs: Any) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    """
-    Validate (or parse) raster data.
+class Label3DModel(RasterSchema):
+    dims = DimsSchema((Z, Y, X))
+    array_type = ArrayTypeSchema(DaskArray)
+    attrs = AttrsSchema({"transform": Transform_s})
 
-    Parameters
-    ----------
-    data
-        Data to validate.
-    kind
-        Kind of data to validate. Can be "Image" or "Label".
-    transform
-        Transformation to apply to the data.
-    scale_factors
-        Scale factors to apply for multiscale.
-    method
-        Method to use for multiscale.
-    chunks
-        Chunks to use for dask array.
-
-    Returns
-    -------
-    SpatialImage or MultiscaleSpatialImage.
-    """
-    raise ValueError(f"Unsupported type: {type(data)}")
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(
+            dims=self.dims,
+            array_type=self.array_type,
+            attrs=self.attrs,
+            *args,
+            **kwargs,
+        )
 
 
-@validate_raster.register
-def _(
-    data: np.ndarray,  # type: ignore[type-arg]
-    kind: Literal["Image", "Label"],
-    *args: Any,
-    **kwargs: Any,
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+class Image2DModel(RasterSchema):
+    dims = DimsSchema((C, Y, X))
+    array_type = ArrayTypeSchema(DaskArray)
+    attrs = AttrsSchema({"transform": Transform_s})
 
-    data = from_array(data)
-    schema = _get_raster_schema(data, kind)
-    data = _to_spatial_image(data, schema, *args, **kwargs)
-    return data
-
-
-@validate_raster.register
-def _(
-    data: DaskArray,
-    kind: Literal["Image", "Label"],
-    *args: Any,
-    **kwargs: Any,
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
-
-    schema = _get_raster_schema(data, kind)
-    data = _to_spatial_image(data, schema, *args, **kwargs)
-    return data
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(
+            dims=self.dims,
+            array_type=self.array_type,
+            attrs=self.attrs,
+            *args,
+            **kwargs,
+        )
 
 
-@validate_raster.register
-def _(
-    data: SpatialImage,
-    kind: Literal["Image", "Label"],
-    **kwargs: Any,
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+class Image3DModel(RasterSchema):
+    dims = DimsSchema((Z, Y, X, C))
+    array_type = ArrayTypeSchema(DaskArray)
+    attrs = AttrsSchema({"transform": Transform_s})
 
-    schema = _get_raster_schema(data, kind)
-    schema.validate(data)
-    return data
-
-
-@validate_raster.register
-def _(
-    data: MultiscaleSpatialImage,
-    kind: Literal["Image", "Label"],
-    **kwargs: Any,
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
-
-    schema = _get_raster_schema(data, kind)
-    # TODO(giovp): get name from multiscale, consider fix upstream
-    name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
-    if len(name) > 1:
-        raise ValueError(f"Wrong name for datatree: {name}.")
-    name = list(name)[0]
-    for k in data.keys():
-        schema.validate(data[k][name])
-    return data
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(
+            dims=self.dims,
+            array_type=self.array_type,
+            attrs=self.attrs,
+            *args,
+            **kwargs,
+        )
 
 
-class CirclesSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
-    radius: Series[int] = Field(coerce=True)
+# TODO: should check for column be strict?
+# TODO: validate attrs for transform.
+class PolygonModel(SchemaModel):
+    geometry: GeoSeries[GeometryDtype]
+
+    @singledispatchmethod
+    @classmethod
+    def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
+        raise NotImplementedError
+
+    @parse.register
+    @classmethod
+    def _(
+        cls,
+        data: np.ndarray,  # type: ignore[type-arg]
+        offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
+        geometry: Literal[3, 6],
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> GeoDataFrame:
+
+        geometry = GeometryType(geometry)
+
+        data = from_ragged_array(geometry, data, offsets)
+        geo_df = GeoDataFrame({"geometry": data})
+        if transform is None:
+            transform = Identity()
+        geo_df.attrs = {"transform": transform}
+        cls.validate(data)
+        return geo_df
+
+    @parse.register
+    @classmethod
+    def _(
+        cls,
+        data: str,
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> GeoDataFrame:
+
+        data = from_geojson(data)
+        geo_df = GeoDataFrame({"geometry", data})
+        if transform is None:
+            transform = Identity()
+        geo_df.attrs = {"transform": transform}
+        cls.validate(data)
+        return geo_df
+
+    @parse.register
+    @classmethod
+    def _(
+        cls,
+        data: GeoDataFrame,
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> GeoDataFrame:
+
+        if transform is None:
+            transform = Identity()
+        data.attrs = {"transform": transform}
+        cls.validate(data)
+        return data
 
 
-class SquareSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
-    sides: Optional[Series[int]] = Field(coerce=True)
+class ShapeModel:
+    coords_key = "spatial"
+    transform_key = "transform"
+    attrs_key = "spatialdata_attrs"
+
+    def validate(self, data: AnnData) -> None:
+        if self.coords_key not in data.obsm:
+            raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.coords_key}']`.")
+        if self.transform_key not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.transform_key}`.")
+        if self.attrs_key not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.attrs_key}`.")
+        if "type" not in data.uns[self.attrs_key]:
+            raise ValueError(f"AnnData does not contain `{self.attrs_key}['type']`.")
+        if "size" not in data.uns[self.attrs_key]:
+            raise ValueError(f"AnnData does not contain `{self.attrs_key}['size']`.")
+
+    @classmethod
+    def parse(
+        cls,
+        coords: np.ndarray,  # type: ignore[type-arg]
+        shape_type: Literal["Circle", "Square"],
+        shape_size: np.float_,
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> AnnData:
+        """
+        Parse shape data into SpatialData.
+
+        Parameters
+        ----------
+        coords
+            Coordinates of shapes.
+        shape_type
+            Type of shape.
+        shape_size
+            Size of shape.
+        transform
+            Transform of shape.
+        kwargs
+            Additional arguments for shapes.
+
+        Returns
+        -------
+        :class:`anndata.AnnData` formatted for shapes elements.
+        """
+
+        adata = AnnData(
+            None,
+            obs=pd.DataFrame(index=np.arange(coords.shape[0])),
+            var=pd.DataFrame(index=np.arange(1)),
+            **kwargs,
+        )
+        adata.obsm[cls.coords_key] = coords
+        if transform is None:
+            transform = Identity()
+        adata.uns[cls.transform_key] = transform
+        adata.uns[cls.attrs_key] = {"type": shape_type, "size": shape_size}
+        return adata
 
 
-class PolygonSchema(SchemaModel):
-    geometry: GeoSeries = Field(coerce=True)
+class PointModel:
+    coords_key = "spatial"
+    transform_key = "transform"
+
+    def validate(self, data: AnnData) -> None:
+        if self.coords_key not in data.obsm:
+            raise ValueError(f"AnnData does not contain points coordinates in `adata.obsm['{self.coords_key}']`.")
+        if self.transform_key not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.transform_key}`.")
+
+    @classmethod
+    def parse(
+        cls,
+        coords: np.ndarray,  # type: ignore[type-arg]
+        var_names: Sequence[str],
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> AnnData:
+
+        adata = AnnData(
+            None,
+            obs=pd.DataFrame(index=np.arange(coords.shape[0])),
+            var=pd.DataFrame(index=var_names),
+            **kwargs,
+        )
+        adata.obsm[cls.coords_key] = coords
+        if transform is None:
+            transform = Identity()
+        adata.uns[cls.transform_key] = transform
+        return adata
 
 
-# Points (AnnData)?
-# Tables (AnnData)?
+class TableModel:
+    attrs_key = "spatialdata_attrs"
+
+    def validate(
+        self,
+        data: AnnData,
+        region: Optional[Union[str, Sequence[str]]] = None,
+        region_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AnnData:
+
+        attr = data.uns[self.attrs_key]
+        if "region" not in attr:
+            raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
+        if isinstance(attr["region"], list):
+            if "region_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
+                )
+            if "instance_key" not in attr:
+                raise ValueError(
+                    "`region` is of type `list` but `instance_key` not found in `adata.uns['spatialdata_attr']`."
+                )
+
+        elif isinstance(attr["region"], str):
+            attr["region_key"] = None
+            attr["instance_key"] = None
+
+        return data
+
+    @classmethod
+    def parse(
+        cls,
+        data: AnnData,
+        region: Optional[Union[str, Sequence[str]]] = None,
+        region_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> AnnData:
+        if isinstance(region, str):
+            if region_key is not None or instance_key is not None:
+                logger.warning(
+                    "`region` is of type `str` but `region_key` or `instance_key` found. They will be discarded."
+                )
+
+        elif isinstance(region, list):
+            if region_key is None:
+                raise ValueError("`region_key` must be provided if `region` is of type `Sequence`.")
+            if region_key not in data.obs:
+                raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `Sequence`.")
+            if instance_key not in data.obs:
+                raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
+            if not data.obs[region_key].isin(region).all():
+                raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
+            if not is_categorical_dtype(data.obs[region_key]):
+                logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
+                data.obs["region_key"] = pd.Categorical(data.obs[region_key])
+            # TODO: check for `instance_key` values?
+
+        attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
+        data.uns[cls.attrs_key] = attr
+        return data

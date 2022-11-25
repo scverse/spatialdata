@@ -1,9 +1,9 @@
-from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
@@ -13,6 +13,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._io.format import SpatialDataFormat
@@ -24,7 +25,8 @@ def _write_metadata(
     group: zarr.Group,
     group_type: str,
     shape: Tuple[int, ...],
-    attr: Optional[Mapping[str, Optional[str]]] = MappingProxyType({"attr": "X", "key": None}),
+    name: str,
+    attr: Optional[Mapping[str, Optional[str]]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
@@ -35,7 +37,7 @@ def _write_metadata(
     axes = _get_valid_axes(dims, axes, fmt)
 
     datasets: List[Dict[str, Any]] = []
-    datasets.append({"path": attr})
+    datasets.append({"path": name})
 
     if coordinate_transformations is None:
         # TODO: temporary workaround, report bug to handle empty shapes
@@ -66,57 +68,7 @@ def _write_metadata(
 
     group.attrs["@type"] = group_type
     group.attrs["multiscales"] = multiscales
-
-
-def write_points(
-    points: AnnData,
-    group: zarr.Group,
-    name: str,
-    points_parameters: Optional[Mapping[str, Any]] = None,
-    group_type: str = "ngff:points",
-    fmt: Format = SpatialDataFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
-) -> None:
-    sub_group = group.require_group("points")
-    write_adata(sub_group, name, points)
-    points_group = sub_group[name]
-    # TODO: decide what to do here with additional params for
-    if points_parameters is not None:
-        points_group.attrs["points_parameters"] = points_parameters
-    _write_metadata(
-        points_group,
-        group_type=group_type,
-        shape=points.obsm["spatial"].shape,
-        attr={"attr": "X", "key": None},
-        fmt=fmt,
-        axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,
-    )
-
-
-def write_table(
-    tables: AnnData,
-    group: zarr.Group,
-    name: str,
-    group_type: str = "ngff:regions_table",
-    fmt: Format = SpatialDataFormat(),
-    region: Union[str, List[str]] = "features",  # TODO: remove default?
-    region_key: Optional[str] = None,
-    instance_key: Optional[str] = None,
-) -> None:
-    fmt.validate_tables(tables, region_key, instance_key)
-    # anndata create subgroup from name
-    # ome-ngff doesn't, hence difference
-    sub_group = group.require_group("table")
-    write_adata(sub_group, name, tables)
-    tables_group = sub_group[name]
-    tables_group.attrs["@type"] = group_type
-    tables_group.attrs["region"] = region
-    tables_group.attrs["region_key"] = region_key
-    tables_group.attrs["instance_key"] = instance_key
+    group.attrs["spatialdata_attrs"] = attr
 
 
 def write_image(
@@ -126,7 +78,6 @@ def write_image(
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
@@ -178,7 +129,6 @@ def write_labels(
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -227,28 +177,119 @@ def write_labels(
 
 
 def write_polygons(
-    polygons: AnnData,
+    polygons: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:polygons",
+    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
     fmt: Format = SpatialDataFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")
-    write_adata(sub_group, name, polygons)
-    polygons_group = sub_group[name]
+    polygons_groups = sub_group.require_group(name)
+    coordinate_transformations = [[polygons.attrs.get("transform").to_dict()]]
+    print(coordinate_transformations)
+
+    # TODO: save everything or just polygons?
+    geometry, coords, offsets = to_ragged_array(polygons.geometry)
+    polygons_groups.create_dataset(name="coords", data=coords)
+    polygons_groups.create_dataset(name="offsets", data=offsets)
+    # polygons_groups = sub_group[name]
+    attr = {"geos": {"geometry_name": geometry.name, "geometry_type": geometry.value}}
+
     _write_metadata(
-        polygons_group,
+        polygons_groups,
         group_type=group_type,
-        shape=(1, 2),  # assuming 2d
-        attr={"attr": "X", "key": None},
+        shape=coords.shape,
+        attr=attr,  # type: ignore[arg-type]
+        name=name,
         fmt=fmt,
         axes=axes,
         coordinate_transformations=coordinate_transformations,
         **metadata,
     )
+
+
+def write_shapes(
+    shapes: AnnData,
+    group: zarr.Group,
+    name: str,
+    group_type: str = "ngff:shapes",
+    fmt: Format = SpatialDataFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
+) -> None:
+    sub_group = group.require_group("shapes")
+    transform = shapes.uns.pop("transform")
+    coordinate_transformations = [[transform.to_dict()]]
+    attr = shapes.uns.get("spatialdata_attrs")
+    write_adata(sub_group, name, shapes)
+    shapes_group = sub_group[name]
+    shapes.uns["transform"] = transform
+
+    _write_metadata(
+        shapes_group,
+        group_type=group_type,
+        shape=shapes.obsm["spatial"].shape,
+        attr=attr,
+        name=name,
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,
+    )
+
+
+def write_points(
+    points: AnnData,
+    group: zarr.Group,
+    name: str,
+    group_type: str = "ngff:points",
+    fmt: Format = SpatialDataFormat(),
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    **metadata: Union[str, JSONDict, List[JSONDict]],
+) -> None:
+    sub_group = group.require_group("points")
+    transform = points.uns.pop("transform")
+    coordinate_transformations = [[transform.to_dict()]]
+    # attr = points.uns.get("spatialdata_attrs")
+    write_adata(sub_group, name, points)
+    points.uns["transform"] = transform
+
+    points_group = sub_group[name]
+    _write_metadata(
+        group=points_group,
+        group_type=group_type,
+        shape=points.obsm["spatial"].shape,
+        # attr=attr,
+        name=name,
+        fmt=fmt,
+        axes=axes,
+        coordinate_transformations=coordinate_transformations,
+        **metadata,  # type: ignore[arg-type]
+    )
+
+
+def write_table(
+    table: AnnData,
+    group: zarr.Group,
+    name: str,
+    group_type: str = "ngff:regions_table",
+    fmt: Format = SpatialDataFormat(),
+) -> None:
+    region = table.uns["spatialdata_attrs"]["region"]
+    region_key = table.uns["spatialdata_attrs"].get("region_key", None)
+    instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
+    fmt.validate_tables(table, region_key, instance_key)
+    sub_group = group.require_group("table")
+    write_adata(sub_group, name, table)
+    tables_group = sub_group[name]
+    tables_group.attrs["@type"] = group_type
+    tables_group.attrs["region"] = region
+    tables_group.attrs["region_key"] = region_key
+    tables_group.attrs["instance_key"] = instance_key
 
 
 def _iter_multiscale(
