@@ -21,6 +21,7 @@ c_axis = Axis(name="c", type="channel")
 x_cs = CoordinateSystem(name="x", axes=[x_axis])
 y_cs = CoordinateSystem(name="y", axes=[y_axis])
 z_cs = CoordinateSystem(name="z", axes=[z_axis])
+c_cs = CoordinateSystem(name="c", axes=[c_axis])
 xy_cs = CoordinateSystem(name="xy", axes=[x_axis, y_axis])
 xyz_cs = CoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
 xyc_cs = CoordinateSystem(name="xyc", axes=[x_axis, y_axis, c_axis])
@@ -270,12 +271,16 @@ def test_sequence():
     )
 
     # 2d case, extending a xy->xy transformation to a cyx->cyx transformation using additional affine transformations
-    cyx_to_xy = Affine(np.array([[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]))
-    cyx_to_xy.input_coordinate_system = cyx_cs
-    cyx_to_xy.output_coordinate_system = xy_cs
-    xy_to_cyx = Affine(np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]]))
-    xy_to_cyx.input_coordinate_system = xy_cs
-    xy_to_cyx.output_coordinate_system = cyx_cs
+    cyx_to_xy = Affine(
+        np.array([[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]),
+        input_coordinate_system=cyx_cs,
+        output_coordinate_system=xy_cs,
+    )
+    xy_to_cyx = Affine(
+        np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]]),
+        input_coordinate_system=xy_cs,
+        output_coordinate_system=cyx_cs,
+    )
 
     def _manual_xy_to_cyz(x: np.ndarray) -> np.ndarray:
         return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
@@ -284,6 +289,22 @@ def test_sequence():
         transformation=Sequence(
             [
                 cyx_to_xy,
+                # some alternative ways to go back and forth between xy and cyx
+                # xy -> cyx
+                ByDimension(
+                    transformations=[
+                        MapAxis({"x": "x", "y": "y"}, input_coordinate_system=xy_cs, output_coordinate_system=yx_cs),
+                        Affine(
+                            np.array([[0, 0], [0, 1]]),
+                            input_coordinate_system=x_cs,
+                            output_coordinate_system=c_cs,
+                        ),
+                    ],
+                    input_coordinate_system=xy_cs,
+                    output_coordinate_system=cyx_cs,
+                ),
+                # cyx -> xy
+                MapAxis({"x": "x", "y": "y"}, input_coordinate_system=cyx_cs, output_coordinate_system=xy_cs),
                 Translation(np.array([1, 2])),
                 Scale(np.array([3, 4])),
                 affine,
