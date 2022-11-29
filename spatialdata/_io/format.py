@@ -110,8 +110,7 @@ class SpatialDataFormat(CurrentFormat):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata._core.transformations import \
-                get_transformation_from_dict
+            from spatialdata._core.transformations import get_transformation_from_dict
 
             parsed = [get_transformation_from_dict(t) for t in transformations]
             json1 = [p.to_json() for p in parsed]

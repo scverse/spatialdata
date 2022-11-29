@@ -9,8 +9,7 @@ import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import \
-    MultiscaleSpatialImage
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
 from shapely import GeometryType
@@ -19,8 +18,10 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.transformations import (BaseTransformation,
-                                               get_transformation_from_dict)
+from spatialdata._core.transformations import (
+    BaseTransformation,
+    get_transformation_from_dict,
+)
 from spatialdata._io.format import SpatialDataFormat
 
 

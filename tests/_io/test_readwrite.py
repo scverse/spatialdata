@@ -5,8 +5,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import \
-    MultiscaleSpatialImage
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
