@@ -4,7 +4,8 @@ import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from multiscale_spatial_image.multiscale_spatial_image import \
+    MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
@@ -12,7 +13,8 @@ from ome_zarr.writer import _get_valid_axes, _validate_datasets
 from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
-from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from ome_zarr.writer import \
+    write_multiscale_labels as write_multiscale_labels_ngff
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 

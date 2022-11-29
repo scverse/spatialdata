@@ -9,15 +9,9 @@ from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
 
 from spatialdata import SpatialData
-from spatialdata._core.models import (
-    Image2DModel,
-    Label2DModel,
-    Label3DModel,
-    PointModel,
-    PolygonModel,
-    ShapeModel,
-    TableModel,
-)
+from spatialdata._core.models import (Image2DModel, Label2DModel, Label3DModel,
+                                      PointModel, PolygonModel, ShapeModel,
+                                      TableModel)
 from spatialdata._types import NDArray
 
 RNG = default_rng()

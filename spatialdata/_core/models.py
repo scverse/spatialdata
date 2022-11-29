@@ -1,17 +1,8 @@
 """This file contains models and schema for SpatialData"""
 
 from functools import singledispatchmethod
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import (TYPE_CHECKING, Any, Dict, Literal, Mapping, Optional,
+                    Sequence, Tuple, Union)
 
 import numpy as np
 import pandas as pd
@@ -21,7 +12,8 @@ from dask.array.core import from_array
 from geopandas import GeoDataFrame
 from geopandas.array import GeometryDtype
 from multiscale_spatial_image import to_multiscale
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from multiscale_spatial_image.multiscale_spatial_image import \
+    MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike
 from pandas.api.types import is_categorical_dtype
@@ -30,12 +22,8 @@ from pandera.typing.geopandas import GeoSeries
 from shapely import GeometryType
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from xarray_schema.components import (
-    ArrayTypeSchema,
-    AttrSchema,
-    AttrsSchema,
-    DimsSchema,
-)
+from xarray_schema.components import (ArrayTypeSchema, AttrSchema, AttrsSchema,
+                                      DimsSchema)
 from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._core.transformations import BaseTransformation, Identity

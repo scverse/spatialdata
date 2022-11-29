@@ -9,28 +9,16 @@ import zarr
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from multiscale_spatial_image.multiscale_spatial_image import \
+    MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
-from spatialdata._core.models import (
-    Image2DModel,
-    Image3DModel,
-    Label2DModel,
-    Label3DModel,
-    PointModel,
-    PolygonModel,
-    ShapeModel,
-    TableModel,
-)
-from spatialdata._io.write import (
-    write_image,
-    write_labels,
-    write_points,
-    write_polygons,
-    write_shapes,
-    write_table,
-)
+from spatialdata._core.models import (Image2DModel, Image3DModel, Label2DModel,
+                                      Label3DModel, PointModel, PolygonModel,
+                                      ShapeModel, TableModel)
+from spatialdata._io.write import (write_image, write_labels, write_points,
+                                   write_polygons, write_shapes, write_table)
 
 # schema for elements
 Label2d_s = Label2DModel()

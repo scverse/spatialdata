@@ -22,11 +22,4 @@ __all__ = [
 
 from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.transformations import (  # Bijection,; ByDimension,; Coordinates,; Displacements,; InverseOf,; MapIndex,; VectorField,
-    Affine,
-    Identity,
-    MapAxis,
-    Rotation,
-    Scale,
-    Sequence,
-    Translation,
-)
+    Affine, Identity, MapAxis, Rotation, Scale, Sequence, Translation)
