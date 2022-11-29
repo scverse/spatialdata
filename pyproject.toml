@@ -33,7 +33,7 @@ dependencies = [
     "xarray-schema",
     "geopandas",
     "pandera",
-    "git+https://github.com/shapely/shapely.git@main",
+    "shapely @ git+https://github.com/shapely/shapely.git@main",
 ]
 
 [project.optional-dependencies]
