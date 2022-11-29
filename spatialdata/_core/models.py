@@ -1,10 +1,10 @@
 """This file contains models and schema for SpatialData"""
-
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    List,
     Literal,
     Mapping,
     Optional,
@@ -23,11 +23,12 @@ from geopandas.array import GeometryDtype
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from pandas.api.types import is_categorical_dtype
 from pandera import SchemaModel
 from pandera.typing.geopandas import GeoSeries
-from shapely import GeometryType
+from scipy.sparse import csr_matrix
+from shapely._geometry import GeometryType
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray_schema.components import (
@@ -50,7 +51,7 @@ Chunks_t = Union[
 ]
 ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 
-Z, C, Y, X = "z", "c", "y", "x"
+C, Z, Y, X = "c", "z", "y", "x"
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
@@ -138,7 +139,7 @@ class Label2DModel(RasterSchema):
         )
 
 
-class Label3DModel(RasterSchema):
+class Labels3DModel(RasterSchema):
     dims = DimsSchema((Z, Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -169,7 +170,7 @@ class Image2DModel(RasterSchema):
 
 
 class Image3DModel(RasterSchema):
-    dims = DimsSchema((Z, Y, X, C))
+    dims = DimsSchema((C, Z, Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
 
@@ -199,6 +200,7 @@ class PolygonModel(SchemaModel):
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
         offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
+        # these correspond to GeometryType.POLYGON, GeometryType.MULTIPOINT
         geometry: Literal[3, 6],
         transform: Optional[Any] = None,
         **kwargs: Any,
@@ -247,29 +249,29 @@ class PolygonModel(SchemaModel):
         return data
 
 
-class ShapeModel:
-    coords_key = "spatial"
-    transform_key = "transform"
-    attrs_key = "spatialdata_attrs"
+class ShapesModel:
+    COORDS_KEY = "spatial"
+    TRANSFORM_KEY = "transform"
+    ATTRS_KEY = "spatialdata_attrs"
 
     def validate(self, data: AnnData) -> None:
-        if self.coords_key not in data.obsm:
-            raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.coords_key}']`.")
-        if self.transform_key not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.transform_key}`.")
-        if self.attrs_key not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.attrs_key}`.")
-        if "type" not in data.uns[self.attrs_key]:
-            raise ValueError(f"AnnData does not contain `{self.attrs_key}['type']`.")
-        if "size" not in data.uns[self.attrs_key]:
-            raise ValueError(f"AnnData does not contain `{self.attrs_key}['size']`.")
+        if self.COORDS_KEY not in data.obsm:
+            raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
+        if self.TRANSFORM_KEY not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.TRANSFORM_KEY}`.")
+        if self.ATTRS_KEY not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}`.")
+        if "type" not in data.uns[self.ATTRS_KEY]:
+            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}['type']`.")
+        if "size" not in data.uns[self.ATTRS_KEY]:
+            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}['size']`.")
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
         shape_type: Literal["Circle", "Square"],
-        shape_size: np.float_,
+        shape_size: float,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
@@ -300,108 +302,129 @@ class ShapeModel:
             var=pd.DataFrame(index=np.arange(1)),
             **kwargs,
         )
-        adata.obsm[cls.coords_key] = coords
+        adata.obsm[cls.COORDS_KEY] = coords
         if transform is None:
             transform = Identity()
-        adata.uns[cls.transform_key] = transform
-        adata.uns[cls.attrs_key] = {"type": shape_type, "size": shape_size}
+        adata.uns[cls.TRANSFORM_KEY] = transform
+        adata.uns[cls.ATTRS_KEY] = {"type": shape_type, "size": shape_size}
         return adata
 
 
-class PointModel:
-    coords_key = "spatial"
-    transform_key = "transform"
+class PointsModel:
+    COORDS_KEY = "spatial"
+    TRANSFORM_KEY = "transform"
 
     def validate(self, data: AnnData) -> None:
-        if self.coords_key not in data.obsm:
-            raise ValueError(f"AnnData does not contain points coordinates in `adata.obsm['{self.coords_key}']`.")
-        if self.transform_key not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.transform_key}`.")
+        if self.COORDS_KEY not in data.obsm:
+            raise ValueError(f"AnnData does not contain points coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
+        if self.TRANSFORM_KEY not in data.uns:
+            raise ValueError(f"AnnData does not contain `{self.TRANSFORM_KEY}`.")
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
         var_names: Sequence[str],
+        points_assignment: np.ndarray,  # type: ignore[type-arg]
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
-
+        n_obs = coords.shape[0]
+        sparse = _sparse_matrix_from_assignment(n_obs=n_obs, var_names=list(var_names), assignment=points_assignment)
         adata = AnnData(
-            None,
-            obs=pd.DataFrame(index=np.arange(coords.shape[0])),
+            sparse,
+            obs=pd.DataFrame(index=np.arange(n_obs)),
             var=pd.DataFrame(index=var_names),
             **kwargs,
         )
-        adata.obsm[cls.coords_key] = coords
+        adata.obsm[cls.COORDS_KEY] = coords
         if transform is None:
             transform = Identity()
-        adata.uns[cls.transform_key] = transform
+        adata.uns[cls.TRANSFORM_KEY] = transform
         return adata
 
 
 class TableModel:
-    attrs_key = "spatialdata_attrs"
+    ATTRS_KEY = "spatialdata_attrs"
 
     def validate(
         self,
         data: AnnData,
-        region: Optional[Union[str, Sequence[str]]] = None,
-        region_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-        **kwargs: Any,
     ) -> AnnData:
-
-        attr = data.uns[self.attrs_key]
-        if "region" not in attr:
-            raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
-        if isinstance(attr["region"], list):
-            if "region_key" not in attr:
-                raise ValueError(
-                    "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
-                )
-            if "instance_key" not in attr:
-                raise ValueError(
-                    "`region` is of type `list` but `instance_key` not found in `adata.uns['spatialdata_attr']`."
-                )
-
-        elif isinstance(attr["region"], str):
-            attr["region_key"] = None
-            attr["instance_key"] = None
-
+        if self.ATTRS_KEY in data.uns:
+            attr = data.uns[self.ATTRS_KEY]
+            if "region" not in attr:
+                raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
+            if isinstance(attr["region"], list):
+                if "region_key" not in attr:
+                    raise ValueError(
+                        "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
+                    )
+                if "instance_key" not in attr:
+                    raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
+            elif isinstance(attr["region"], str):
+                assert attr["region_key"] is None
+                if "instance_key" not in attr:
+                    raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
         return data
 
     @classmethod
     def parse(
         cls,
         data: AnnData,
-        region: Optional[Union[str, Sequence[str]]] = None,
+        region: Optional[Union[str, List[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
-        **kwargs: Any,
     ) -> AnnData:
-        if isinstance(region, str):
-            if region_key is not None or instance_key is not None:
-                logger.warning(
-                    "`region` is of type `str` but `region_key` or `instance_key` found. They will be discarded."
+        # region, region_key and instance_key should either all live in adata.uns or all be passed in as argument
+        n_args = sum([region is not None, region_key is not None, instance_key is not None])
+        if n_args > 0:
+            if cls.ATTRS_KEY in data.uns:
+                raise ValueError(
+                    f"Either pass `region`, `region_key` and `instance_key` as arguments or have them in `adata.uns['{cls.ATTRS_KEY}']`."
                 )
+        elif cls.ATTRS_KEY in data.uns:
+            attr = data.uns[cls.ATTRS_KEY]
+            region = attr["region"]
+            region_key = attr["region_key"]
+            instance_key = attr["instance_key"]
 
+        if isinstance(region, str):
+            if region_key is not None:
+                raise ValueError("If `region` is of type `str`, `region_key` must be `None` as it is redundant.")
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `str`.")
         elif isinstance(region, list):
             if region_key is None:
-                raise ValueError("`region_key` must be provided if `region` is of type `Sequence`.")
-            if region_key not in data.obs:
-                raise ValueError(f"Region key {region_key} not found in `adata.obs`.")
-            if instance_key is None:
-                raise ValueError("`instance_key` must be provided if `region` is of type `Sequence`.")
-            if instance_key not in data.obs:
-                raise ValueError(f"Instance key {instance_key} not found in `adata.obs`.")
+                raise ValueError("`region_key` must be provided if `region` is of type `List`.")
             if not data.obs[region_key].isin(region).all():
                 raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
             if not is_categorical_dtype(data.obs[region_key]):
                 logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
-                data.obs["region_key"] = pd.Categorical(data.obs[region_key])
-            # TODO: check for `instance_key` values?
-
+                data.obs[region_key] = pd.Categorical(data.obs[region_key])
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
+        else:
+            if region is not None:
+                raise ValueError("`region` must be of type `str` or `List`.")
+        # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
-        data.uns[cls.attrs_key] = attr
+        data.uns[cls.ATTRS_KEY] = attr
         return data
+
+
+def _sparse_matrix_from_assignment(
+    n_obs: int, var_names: Union[List[str], ArrayLike], assignment: np.ndarray  # type: ignore[type-arg]
+) -> csr_matrix:
+    """Create a sparse matrix from an assignment array."""
+    data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)
+    row = np.arange(len(assignment))
+    if type(var_names) == np.ndarray:
+        assert len(var_names.shape) == 1
+        col = np.array([np.where(var_names == p)[0][0] for p in assignment])
+    elif type(var_names) == list:
+        col = np.array([var_names.index(p) for p in assignment])
+    else:
+        raise TypeError(f"var_names must be either np.array or List, but got {type(var_names)}")
+    sparse = csr_matrix((data, (row, col)), shape=(n_obs, len(var_names)))
+    return sparse

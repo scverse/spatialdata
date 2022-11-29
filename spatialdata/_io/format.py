@@ -52,21 +52,21 @@ class SpatialDataFormat(CurrentFormat):
             if len(transforms["scale"]):
                 raise ValueError("`coordinate_transformations` must contain a `scale` of length 0.")
 
-    def validate_tables(
+    def validate_table(
         self,
-        tables: AnnData,
+        table: AnnData,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
     ) -> None:
-        if not isinstance(tables, AnnData):
+        if not isinstance(table, AnnData):
             raise ValueError("`tables` must be an `anndata.AnnData`.")
         if region_key is not None:
-            if not is_categorical_dtype(tables.obs[region_key]):
+            if not is_categorical_dtype(table.obs[region_key]):
                 raise ValueError(
-                    f"`tables.obs[region_key]` must be of type `categorical`, not `{type(tables.obs[region_key])}`."
+                    f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
                 )
         if instance_key is not None:
-            if tables.obs[instance_key].isnull().values.any():
+            if table.obs[instance_key].isnull().values.any():
                 raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
 
     def generate_coordinate_transformations(self, shapes: List[Tuple[Any]]) -> Optional[List[List[Dict[str, Any]]]]:

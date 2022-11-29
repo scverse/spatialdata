@@ -31,7 +31,11 @@ dependencies = [
     "spatial_image",
     "multiscale_spatial_image",
     "xarray-schema",
-    "shapely>=2.0b2",
+    "geopandas",
+    "shapely==2.0rc1",
+    "pandera",
+    "rich",
+    "pytest"
 ]
 
 [project.optional-dependencies]

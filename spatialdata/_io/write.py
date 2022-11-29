@@ -282,7 +282,7 @@ def write_table(
     region = table.uns["spatialdata_attrs"]["region"]
     region_key = table.uns["spatialdata_attrs"].get("region_key", None)
     instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
-    fmt.validate_tables(table, region_key, instance_key)
+    fmt.validate_table(table, region_key, instance_key)
     sub_group = group.require_group("table")
     write_adata(sub_group, name, table)
     tables_group = sub_group[name]

@@ -2,14 +2,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core.elements import Image
 from spatialdata.utils import are_directories_identical
 
 
@@ -70,64 +68,34 @@ class TestReadWrite:
             np.testing.assert_array_equal(points.points[k1].obsm["spatial"], sdata.points[k2].obsm["spatial"])
             assert points.points[k1].uns == sdata.points[k2].uns
 
-    def test_table(self, tmp_path: str, table: SpatialData) -> None:
-        """Test read/write."""
+    def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         pd.testing.assert_frame_equal(table.table.obs, sdata.table.obs)
-        assert table.table.uns == sdata.table.uns
+        try:
+            assert table.table.uns == sdata.table.uns
+        except ValueError as e:
+            raise e
 
-    # TODO: refactor, add spatialdata build to conftest
+    def test_table_single_annotation(self, tmp_path: str, table_single_annotation: SpatialData) -> None:
+        """Test read/write."""
+        self._test_table(tmp_path, table_single_annotation)
+
+    def test_table_multiple_annotations(self, tmp_path: str, table_multiple_annotations: SpatialData) -> None:
+        """Test read/write."""
+        self._test_table(tmp_path, table_multiple_annotations)
+
     def test_roundtrip(
         self,
         tmp_path: str,
-        images: SpatialData,
-        labels: SpatialData,
-        polygons: SpatialData,
-        shapes: SpatialData,
-        points: SpatialData,
-        table: SpatialData,
+        sdata: SpatialData,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
         # TODO: not checking for consistency ATM
-        sdata = SpatialData(
-            images=images.images,
-            labels=labels.labels,
-            polygons=polygons.polygons,
-            shapes=shapes.shapes,
-            points=points.points,
-            table=table.table,
-        )
         sdata.write(tmpdir)
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
-
-
-@pytest.mark.skip("Consider delete.")
-def test_readwrite_roundtrip(sdata: SpatialData, tmp_path: str):
-    print(sdata)
-
-    tmpdir = Path(tmp_path) / "tmp.zarr"
-    sdata.write(tmpdir)
-    sdata2 = SpatialData.read(tmpdir)
-
-    assert are_directories_identical(tmpdir, tmpdir)
-    if sdata.table is not None or sdata2.table is not None:
-        assert sdata.table is None and sdata2.table is None or sdata.table.shape == sdata2.table.shape
-    assert sdata.images.keys() == sdata2.images.keys()
-    for k in sdata.images.keys():
-        assert sdata.images[k].shape == sdata2.images[k].shape
-        assert isinstance(sdata.images[k], Image) == isinstance(sdata2.images[k], Image)
-    assert list(sdata.labels.keys()) == list(sdata2.labels.keys())
-
-    tmpdir2 = Path(tmp_path) / "tmp2.zarr"
-    sdata2.write(tmpdir2)
-    # install ome-zarr-py from https://github.com/LucaMarconato/ome-zarr-py since this merges some branches with
-    # bugfixes (see https://github.com/ome/ome-zarr-py/issues/219#issuecomment-1237263744)
-    # also, we exclude the comparison of images that are not full scale in the pyramid representation, as they are
-    # different due to a bug ( see discussion in the link above)
-    assert are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")

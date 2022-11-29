@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from functools import singledispatch
 from types import MappingProxyType
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Dict, Mapping, Optional, Union
 
-import numpy as np
 import zarr
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
@@ -17,10 +17,10 @@ from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
     Label2DModel,
-    Label3DModel,
-    PointModel,
+    Labels3DModel,
+    PointsModel,
     PolygonModel,
-    ShapeModel,
+    ShapesModel,
     TableModel,
 )
 from spatialdata._io.write import (
@@ -33,18 +33,34 @@ from spatialdata._io.write import (
 )
 
 # schema for elements
-Label2d_s = Label2DModel()
-Label3D_s = Label3DModel()
+Label2D_s = Label2DModel()
+Label3D_s = Labels3DModel()
 Image2D_s = Image2DModel()
 Image3D_s = Image3DModel()
 Polygon_s = PolygonModel
-Point_s = PointModel()
-Shape_s = ShapeModel()
+Point_s = PointsModel()
+Shape_s = ShapesModel()
 Table_s = TableModel()
 
 
 class SpatialData:
-    """Spatial data structure."""
+    """Spatial data structure.
+
+    Parameters
+    ----------
+    images : Mapping[str, Any], optional
+        Mapping of image names to image data
+    labels : Mapping[str, Any], optional
+        Mapping of label names to label data
+    points : Mapping[str, Any], optional
+        Mapping of point names to point data
+    polygons : Mapping[str, Any], optional
+        Mapping of polygon names to polygon data
+    shapes : Mapping[str, Any], optional
+        Mapping of shape names to shape data
+    table : Optional[AnnData], optional
+        Table data, by default None
+    """
 
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
@@ -61,11 +77,10 @@ class SpatialData:
         polygons: Mapping[str, Any] = MappingProxyType({}),
         shapes: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
-        **kwargs: Any,
     ) -> None:
 
         if images is not None:
-            self.images = {}
+            self.images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
                 if ndim(v) == 3:
                     Image2D_s.validate(v)
@@ -75,29 +90,29 @@ class SpatialData:
                     self.images[k] = v
 
         if labels is not None:
-            self.labels = {}
+            self.labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
                 if ndim(v) == 2:
-                    Label2d_s.validate(v)
+                    Label2D_s.validate(v)
                     self.labels[k] = v
                 elif ndim(v) == 3:
                     Label3D_s.validate(v)
                     self.labels[k] = v
 
         if polygons is not None:
-            self.polygons = {}
+            self.polygons: Dict[str, GeoDataFrame] = {}
             for k, v in polygons.items():
                 Polygon_s.validate(v)
                 self.polygons[k] = v
 
         if shapes is not None:
-            self.shapes = {}
+            self.shapes: Dict[str, AnnData] = {}
             for k, v in shapes.items():
                 Shape_s.validate(v)
                 self.shapes[k] = v
 
         if points is not None:
-            self.points = {}
+            self.points: Dict[str, AnnData] = {}
             for k, v in points.items():
                 Point_s.validate(v)
                 self.points[k] = v
@@ -189,10 +204,8 @@ class SpatialData:
             return new.join(li)
 
         def h(s: str) -> str:
-            return s
-            # return hashlib.md5(repr(s).encode()).hexdigest()
+            return hashlib.md5(repr(s).encode()).hexdigest()
 
-        ##
         descr = "SpatialData object with:"
         for attr in ["images", "labels", "points", "polygons", "shapes", "table"]:
             attribute = getattr(self, attr)
@@ -204,7 +217,6 @@ class SpatialData:
                     descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
                     descr = rreplace(descr, h("level1.0"), "    └── ", 1)
                 else:
-                    # descr = rreplace(descr, h("level0"), "└── ", 1)
                     for k, v in attribute.items():
                         descr += f"{h('empty_line')}"
                         descr_class = v.__class__.__name__
@@ -221,7 +233,6 @@ class SpatialData:
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}"
                             else:
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
-                        # descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
@@ -233,18 +244,12 @@ class SpatialData:
         for attr in ["images", "labels", "points", "polygons", "table", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
-        ##
         return descr
 
 
 @singledispatch
 def ndim(arr: Any) -> int:
     raise TypeError(f"Unsupported type: {type(arr)}")
-
-
-@ndim.register(np.ndarray)
-def _(arr: DaskArray) -> int:
-    return arr.ndim  # type: ignore[no-any-return]
 
 
 @ndim.register(DaskArray)

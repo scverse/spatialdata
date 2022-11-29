@@ -18,6 +18,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import (
     BaseTransformation,
     get_transformation_from_dict,
@@ -134,6 +135,19 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
+                # fix wrong way information is stored in uns due to read/write operations
+                if TableModel.ATTRS_KEY in table.uns:
+                    # fill out eventual missing attributes that has been omitted because their value was None
+                    attrs = table.uns[TableModel.ATTRS_KEY]
+                    if "region" not in attrs:
+                        attrs["region"] = None
+                    if "region_key" not in attrs:
+                        attrs["region_key"] = None
+                    if "instance_key" not in attrs:
+                        attrs["instance_key"] = None
+                    # fix type for region
+                    if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                        attrs["region"] = attrs["region"].tolist()
         print(f"rest: {time.time() - start}")
 
     return SpatialData(

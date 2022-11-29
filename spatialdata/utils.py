@@ -50,47 +50,6 @@ def are_directories_identical(
     compared = dircmp(dir1, dir2)
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
         return False
-        # temporary workaround for https://github.com/ome/ome-zarr-py/issues/219
-        ##
-        # if compared.diff_files == ['.zarray']:
-        #     with open(os.path.join(dir1, '.zarray'), 'r') as f1:
-        #         with open(os.path.join(dir2, '.zarray'), 'r') as f2:
-        #             d = difflib.unified_diff(f1.readlines(), f2.readlines())
-        #             diffs = [dd for dd in d]
-        #             # the workaroud permits only diffs that look like this
-        #             # ['--- \n',
-        #             #  '+++ \n',
-        #             #  '@@ -4,13 +4,7 @@\n',
-        #             #  '         100,\n',
-        #             #  '         100\n',
-        #             #  '     ],\n',
-        #             #  '-    "compressor": {\n',
-        #             #  '-        "blocksize": 0,\n',
-        #             #  '-        "clevel": 5,\n',
-        #             #  '-        "cname": "lz4",\n',
-        #             #  '-        "id": "blosc",\n',
-        #             #  '-        "shuffle": 1\n',
-        #             #  '-    },\n',
-        #             #  '+    "compressor": null,\n',
-        #             #  '     "dimension_separator": "/",\n',
-        #             #  '     "dtype": "<f8",\n',
-        #             #  '     "fill_value": 0.0,\n']
-        #     ##
-        #     regexp = r"\['(:?-|\+)+ \\n', '(:?-|\+)+ \\n', '@@ (:?-|\+)[0-9]+,[0-9]+ (:?-|\+)[0-9]+,[0-9]+ @@\\n'," \
-        #              r"[\s\S]*?\"compressor\": {([\s\S]*?)},\\n', '(:?-|\+)\s+\"compressor\"([" \
-        #              r"^-\+]+?)'\s+\"dimension_separator\"[\s\S]*"
-        #     s = str(diffs)
-        #     m = re.search(regexp, s)
-        #     groups = m.groups()
-        #     if len(groups) > 0:
-        #         for g in groups:
-        #             if '{' in g or '}' in g:
-        #                 return False
-        #     else:
-        #         return False
-        #   ##
-        # else:
-        #     return False
     for subdir in compared.common_dirs:
         if not are_directories_identical(
             os.path.join(dir1, subdir),
