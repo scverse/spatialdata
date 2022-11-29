@@ -31,8 +31,8 @@ dependencies = [
     "spatial_image",
     "multiscale_spatial_image",
     "xarray-schema",
-    "geopandas"
-    "pandera"
+    "geopandas",
+    "pandera",
     "shapely==2.0rc1",
 ]
 
