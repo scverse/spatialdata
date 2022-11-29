@@ -34,7 +34,7 @@ dependencies = [
     "geopandas",
     "pandera",
     "pygeos",
-    "shapely @ git+https://github.com/shapely/shapely.git@main --no-binary shapely",
+    "shapely @ git+https://github.com/shapely/shapely.git@main",
 ]
 
 [project.optional-dependencies]
