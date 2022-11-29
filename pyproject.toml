@@ -31,10 +31,9 @@ dependencies = [
     "spatial_image",
     "multiscale_spatial_image",
     "xarray-schema",
-    "geopandas",
-    "pandera",
-    "pygeos",
-    "shapely @ git+https://github.com/shapely/shapely.git@main",
+    "geopandas"
+    "pandera"
+    "shapely==2.0rc1",
 ]
 
 [project.optional-dependencies]
