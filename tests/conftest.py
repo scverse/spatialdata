@@ -115,9 +115,9 @@ def _get_labels() -> Mapping[str, Sequence[NDArray]]:
     out["labels2d_multiscale"] = Label2DModel.parse(
         RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4]
     )
-    out["labels3d"] = Label3DModel.parse(RNG.normal(size=(2, 64, 64)), name="labels3d")
+    out["labels3d"] = Label3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d")
     out["labels3d_multiscale"] = Label3DModel.parse(
-        RNG.normal(size=(2, 64, 64)), name="labels3d_multiscale", scale_factors=[2, 4]
+        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale", scale_factors=[2, 4]
     )
     return out
 
@@ -137,7 +137,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
         }
     )
 
-    out["multipoly"] = GeoDataFrame(
+    multipoly = GeoDataFrame(
         {
             "geometry": [
                 MultiPolygon(
@@ -158,7 +158,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
     )
 
     out["poly"] = PolygonModel.parse(poly, name="poly")
-    out["multipoly"] = PolygonModel.parse(poly, name="multipoly")
+    out["multipoly"] = PolygonModel.parse(multipoly, name="multipoly")
 
     return out
 

@@ -70,11 +70,9 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
     def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
         multiscales = group.attrs["multiscales"]
-        print(multiscales)
         # TODO: parse info from multiscales['axes']
         assert len(multiscales) == 1, f"TODO: expecting only one multiscale, got {len(multiscales)}"
         datasets = multiscales[0]["datasets"]
-        print(datasets)
         assert len(datasets) == 1, "Expecting only one dataset"
         coordinate_transformations = datasets[0]["coordinateTransformations"]
         transformations = [get_transformation_from_dict(t) for t in coordinate_transformations]
@@ -82,23 +80,22 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         return transformations[0]
 
     for k in f.keys():
-        print(k)
         f_elem = f[k].name
         f_elem_store = f"{store}{f_elem}"
         image_loc = ZarrLocation(f_elem_store)
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
         # read multiscale images that are not labels
-        start = time.time()
+        time.time()
         if len(image_nodes):
             for node in image_nodes:
                 if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
                     [not isinstance(spec, Label) for spec in node.specs]
                 ):
-                    print(f"action0: {time.time() - start}")
-                    start = time.time()
+                    # print(f"action0: {time.time() - start}")
+                    time.time()
                     images[k] = _read_multiscale(node, fmt)
-                    print(f"action1: {time.time() - start}")
+                    # print(f"action1: {time.time() - start}")
         # read multiscale labels for the level
         # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
         # since we don't link the image and the label inside .zattrs['image-label']
@@ -106,18 +103,18 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         if labels_loc.exists():
             labels_reader = Reader(labels_loc)()
             labels_nodes = list(labels_reader)
-            start = time.time()
+            time.time()
             if len(labels_nodes):
                 for node in labels_nodes:
                     if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
                         [isinstance(spec, Label) for spec in node.specs]
                     ):
-                        print(f"action0: {time.time() - start}")
-                        start = time.time()
+                        # print(f"action0: {time.time() - start}")
+                        time.time()
                         labels[k] = _read_multiscale(node, fmt)
-                        print(f"action1: {time.time() - start}")
+                        # print(f"action1: {time.time() - start}")
         # now read rest
-        start = time.time()
+        time.time()
         g = zarr.open(f_elem_store, mode="r")
         for j in g.keys():
             g_elem = g[j].name
@@ -134,7 +131,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
             if g_elem == "/table":
                 table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
-        print(f"rest: {time.time() - start}")
+        # print(f"rest: {time.time() - start}")
 
     return SpatialData(
         images=images,
@@ -152,7 +149,8 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDa
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
-    offsets = tuple(x.flatten() for x in np.split(np.array(f["offsets"]), 2))  # type: ignore[var-annotated]
+    offsets_keys = [k for k in f.keys() if k.startswith("offset")]
+    offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
     spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
     typ = GeometryType(spatialdata_attrs["geos"]["geometry_type"])
@@ -207,7 +205,7 @@ def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
 
 if __name__ == "__main__":
     sdata = SpatialData.read("../../spatialdata-sandbox/nanostring_cosmx/data_small.zarr")
-    print(sdata)
+    # print(sdata)
     from napari_spatialdata import Interactive
 
     Interactive(sdata)
