@@ -171,9 +171,9 @@ def _get_shapes(
 
     out = {}
     for i, (typ, size) in enumerate(zip(shape_type, shape_size)):
-        name = f"{name}_{i}"
+        name_ = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
-        out[name] = ShapeModel.parse(arr, shape_type=typ, shape_size=size)
+        out[name_] = ShapeModel.parse(arr, shape_type=typ, shape_size=size)
 
     return out
 
