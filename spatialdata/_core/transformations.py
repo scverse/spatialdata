@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import math
 from abc import ABC, abstractmethod
@@ -83,7 +84,7 @@ class BaseTransformation(ABC):
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
-        kw = d.copy()
+        kw = copy.deepcopy(d)
         type = kw["type"]
         my_class: Type[BaseTransformation]
         if type == "identity":

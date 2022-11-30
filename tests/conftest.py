@@ -174,6 +174,7 @@ def _get_labels() -> Mapping[str, Sequence[NDArray]]:
 
 
 def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
+    # TODO: add polygons from geojson and from ragged arrays since now only the GeoDataFrame initializer is tested.
     out = {}
     poly = GeoDataFrame(
         {

@@ -177,6 +177,9 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDa
     geo_df = GeoDataFrame({"geometry": geometry})
     geo_df.attrs = {"transform": transforms}
 
+    for k, v in dict(f["other_columns"]).items():
+        geo_df[k] = v
+
     return geo_df
 
 

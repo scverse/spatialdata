@@ -191,13 +191,18 @@ def write_polygons(
     coordinate_transformations = [[polygons.attrs.get("transform").to_dict()]]
     print(coordinate_transformations)
 
-    # TODO: save everything or just polygons?
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
     for i, o in enumerate(offsets):
         polygons_groups.create_dataset(name=f"offset{i}", data=o)
     # polygons_groups = sub_group[name]
     attr = {"geos": {"geometry_name": geometry.name, "geometry_type": geometry.value}}
+
+    # saving the other columns
+    other_columns = set(polygons.columns).difference(["geometry"])
+    other_columns_group = polygons_groups.require_group("other_columns")
+    for column in other_columns:
+        other_columns_group.create_dataset(name=column, data=polygons[column].values)
 
     _write_metadata(
         polygons_groups,

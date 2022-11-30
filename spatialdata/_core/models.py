@@ -15,6 +15,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import shapely.geometry.collection
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
@@ -228,6 +229,23 @@ class Image3DModel(RasterSchema):
 class PolygonsModel(SchemaModel):
     geometry: GeoSeries[GeometryDtype]
 
+    @classmethod
+    def _parse_finalize(
+        cls,
+        geo_df: GeoDataFrame,
+        transform: Optional[Any] = None,
+        instance_key: Optional[str] = None,
+        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
+    ) -> None:
+        if transform is None:
+            transform = Identity()
+        geo_df.attrs = {"transform": transform}
+        if instance_key is not None:
+            if instance_values is None:
+                instance_values = np.arange(len(geo_df))
+            geo_df[instance_key] = instance_values
+        cls.validate(geo_df)
+
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
@@ -242,17 +260,17 @@ class PolygonsModel(SchemaModel):
         # these correspond to GeometryType.POLYGON, GeometryType.MULTIPOINT
         geometry: Literal[3, 6],
         transform: Optional[Any] = None,
+        instance_key: Optional[str] = None,
+        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         geometry = GeometryType(geometry)
-
+        # TODO: check the type of data and add it to the typing of _parse_finalize()
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
-        if transform is None:
-            transform = Identity()
-        geo_df.attrs = {"transform": transform}
-        cls.validate(data)
+        cls._parse_finalize(
+            geo_df=geo_df, transform=transform, instance_key=instance_key, instance_values=instance_values
+        )
         return geo_df
 
     @parse.register
@@ -261,15 +279,15 @@ class PolygonsModel(SchemaModel):
         cls,
         data: str,
         transform: Optional[Any] = None,
+        instance_key: Optional[str] = None,
+        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
-
-        data = from_geojson(data)
-        geo_df = GeoDataFrame({"geometry", data})
-        if transform is None:
-            transform = Identity()
-        geo_df.attrs = {"transform": transform}
-        cls.validate(data)
+        gc: shapely.geometry.collection.GeometryCollection = from_geojson(data)
+        geo_df = GeoDataFrame({"geometry": gc.geoms})
+        cls._parse_finalize(
+            geo_df=geo_df, transform=transform, instance_key=instance_key, instance_values=instance_values
+        )
         return geo_df
 
     @parse.register
@@ -278,13 +296,13 @@ class PolygonsModel(SchemaModel):
         cls,
         data: GeoDataFrame,
         transform: Optional[Any] = None,
+        instance_key: Optional[str] = None,
+        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
-
-        if transform is None:
-            transform = Identity()
-        data.attrs = {"transform": transform}
-        cls.validate(data)
+        cls._parse_finalize(
+            geo_df=data, transform=transform, instance_key=instance_key, instance_values=instance_values
+        )
         return data
 
 
@@ -344,8 +362,9 @@ class ShapesModel:
         )
         adata.obsm[cls.COORDS_KEY] = coords
 
-        assert bool(instance_key is None) == bool(instance_values is None)
         if instance_key is not None:
+            if instance_values is None:
+                instance_values = np.arange(len(adata))
             adata.obs[instance_key] = instance_values
 
         if transform is None:
@@ -369,15 +388,25 @@ class PointsModel:
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        var_names: Sequence[str],
-        points_assignment: np.ndarray,  # type: ignore[type-arg]
+        var_names: Optional[Sequence[str]] = None,
+        points_assignment: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
         n_obs = coords.shape[0]
-        sparse = _sparse_matrix_from_assignment(n_obs=n_obs, var_names=list(var_names), assignment=points_assignment)
+        if var_names is None and points_assignment is not None:
+            var_names = sorted(set(points_assignment))
+            logger.warning("`var_names` not provided, using sorted unique values of `points_assignment`.")
+        if var_names is not None:
+            assert points_assignment is not None
+            sparse = _sparse_matrix_from_assignment(
+                n_obs=n_obs, var_names=list(var_names), assignment=points_assignment
+            )
+            kwargs["X"] = sparse
+            kwargs["dtype"] = sparse.dtype
+        else:
+            kwargs["shape"] = (n_obs, 0)
         adata = AnnData(
-            sparse,
             obs=pd.DataFrame(index=np.arange(n_obs)),
             var=pd.DataFrame(index=var_names),
             **kwargs,
@@ -439,6 +468,8 @@ class TableModel:
         if isinstance(region, str):
             if region_key is not None:
                 raise ValueError("If `region` is of type `str`, `region_key` must be `None` as it is redundant.")
+            if region_values is not None:
+                raise ValueError("If `region` is of type `str`, `region_values` must be `None` as it is redundant.")
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `str`.")
         elif isinstance(region, list):
