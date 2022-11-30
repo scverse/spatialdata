@@ -143,35 +143,35 @@ class SpatialData:
 
         for el in elems:
             elem_group = root.create_group(name=el)
-            if self.images is not None and el in self.images.keys():
+            if el in self.images.keys():
                 write_image(
                     image=self.images[el],
                     group=elem_group,
                     name=el,
                     storage_options={"compressor": None},
                 )
-            if self.labels is not None and el in self.labels.keys():
+            if el in self.labels.keys():
                 write_labels(
                     labels=self.labels[el],
                     group=elem_group,
                     name=el,
                     storage_options={"compressor": None},
                 )
-            if self.polygons is not None and el in self.polygons.keys():
+            if el in self.polygons.keys():
                 write_polygons(
                     polygons=self.polygons[el],
                     group=elem_group,
                     name=el,
                     storage_options={"compressor": None},
                 )
-            if self.shapes is not None and el in self.shapes.keys():
+            if el in self.shapes.keys():
                 write_shapes(
                     shapes=self.shapes[el],
                     group=elem_group,
                     name=el,
                     storage_options={"compressor": None},
                 )
-            if self.points is not None and el in self.points.keys():
+            if el in self.points.keys():
                 write_points(
                     points=self.points[el],
                     group=elem_group,
@@ -229,10 +229,26 @@ class SpatialData:
                             # assuming 2d
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
                         else:
-                            if isinstance(v, SpatialImage) or isinstance(v, MultiscaleSpatialImage):
-                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}"
+                            if isinstance(v, SpatialImage):
+                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
+                            elif isinstance(v, MultiscaleSpatialImage):
+                                shapes = []
+                                dims: Optional[str] = None
+                                for pyramid_level in v.keys():
+                                    dataset_names = list(v[pyramid_level].keys())
+                                    assert len(dataset_names) == 1
+                                    dataset_name = dataset_names[0]
+                                    vv = v[pyramid_level][dataset_name]
+                                    shape = vv.shape
+                                    if dims is None:
+                                        dims = "".join(vv.dims)
+                                    shapes.append(shape)
+                                descr += (
+                                    f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] "
+                                    f"{', '.join(map(str, shapes))}"
+                                )
                             else:
-                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} {v.shape}"
+                                raise TypeError(f"Unknown type {type(v)}")
             if attr == "table":
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:

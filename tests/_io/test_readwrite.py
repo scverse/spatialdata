@@ -18,11 +18,11 @@ class TestReadWrite:
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert images.images.keys() == sdata.images.keys()
-        for k1, k2 in zip(images.images.keys(), sdata.images.keys()):
-            if isinstance(sdata.images[k1], SpatialImage):
-                assert images.images[k1].equals(sdata.images[k2])
-            elif isinstance(images.images[k1], MultiscaleSpatialImage):
-                assert images.images[k1].equals(sdata.images[k2])
+        for k in images.images.keys():
+            if isinstance(sdata.images[k], SpatialImage):
+                assert images.images[k].equals(sdata.images[k])
+            elif isinstance(images.images[k], MultiscaleSpatialImage):
+                assert images.images[k].equals(sdata.images[k])
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
         """Test read/write."""
@@ -30,11 +30,11 @@ class TestReadWrite:
         labels.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert labels.labels.keys() == sdata.labels.keys()
-        for k1, k2 in zip(labels.labels.keys(), sdata.labels.keys()):
-            if isinstance(sdata.labels[k1], SpatialImage):
-                assert labels.labels[k1].equals(sdata.labels[k2])
-            elif isinstance(sdata.labels[k1], MultiscaleSpatialImage):
-                assert labels.labels[k1].equals(sdata.labels[k2])
+        for k in labels.labels.keys():
+            if isinstance(sdata.labels[k], SpatialImage):
+                assert labels.labels[k].equals(sdata.labels[k])
+            elif isinstance(sdata.labels[k], MultiscaleSpatialImage):
+                assert labels.labels[k].equals(sdata.labels[k])
 
     def test_polygons(self, tmp_path: str, polygons: SpatialData) -> None:
         """Test read/write."""
@@ -52,10 +52,10 @@ class TestReadWrite:
         shapes.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert shapes.shapes.keys() == sdata.shapes.keys()
-        for k1, k2 in zip(shapes.shapes.keys(), sdata.shapes.keys()):
-            assert isinstance(sdata.shapes[k1], AnnData)
-            np.testing.assert_array_equal(shapes.shapes[k1].obsm["spatial"], sdata.shapes[k2].obsm["spatial"])
-            assert shapes.shapes[k1].uns == sdata.shapes[k2].uns
+        for k in shapes.shapes.keys():
+            assert isinstance(sdata.shapes[k], AnnData)
+            np.testing.assert_array_equal(shapes.shapes[k].obsm["spatial"], sdata.shapes[k].obsm["spatial"])
+            assert shapes.shapes[k].uns == sdata.shapes[k].uns
 
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         """Test read/write."""
@@ -63,10 +63,10 @@ class TestReadWrite:
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
-        for k1, k2 in zip(points.points.keys(), sdata.points.keys()):
-            assert isinstance(sdata.points[k1], AnnData)
-            np.testing.assert_array_equal(points.points[k1].obsm["spatial"], sdata.points[k2].obsm["spatial"])
-            assert points.points[k1].uns == sdata.points[k2].uns
+        for k in points.points.keys():
+            assert isinstance(sdata.points[k], AnnData)
+            np.testing.assert_array_equal(points.points[k].obsm["spatial"], sdata.points[k].obsm["spatial"])
+            assert points.points[k].uns == sdata.points[k].uns
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"

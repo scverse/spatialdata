@@ -31,6 +31,7 @@ from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
+from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
     AttrSchema,
@@ -63,8 +64,9 @@ class RasterSchema(DataArraySchema):
     def parse(
         cls,
         data: ArrayLike,
+        dims: Optional[Sequence[str]] = None,
         transform: Optional[BaseTransformation] = None,
-        scale_factors: Optional[ScaleFactors_t] = None,
+        multiscale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
         **kwargs: Any,
@@ -78,7 +80,7 @@ class RasterSchema(DataArraySchema):
             Data to validate.
         transform
             Transformation to apply to the data.
-        scale_factors
+        multiscale_factors
             Scale factors to apply for multiscale.
             If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method
@@ -91,8 +93,45 @@ class RasterSchema(DataArraySchema):
         :class:`spatial_image.SpatialImage` or
         :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
         """
+        # if dims is specified inside the data, get the value of dims from the data
+        if isinstance(data, DataArray) or isinstance(data, SpatialImage):
+            if dims is not None:
+                raise ValueError(
+                    "Cannot specify dims if data is a DataArray or SpatialImage; dims should be specified inside the "
+                    "data instead."
+                )
+            dims = data.dims
+
+        # check that dims is spcified and has correct values
+        if dims is None:
+            raise ValueError("Cannot interpret data without dims specified.")
+        if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
+            raise ValueError(f"Wrong dimensions: {dims}. Expected {cls.dims.dims} or a permutation of them.")
+
+        # transpose the data if needed
+        if isinstance(data, DataArray) or isinstance(data, SpatialImage):
+            if data.dims != cls.dims.dims:
+                data = data.transpose(*cls.dims.dims)
+                logger.info(f"Transposing DataArray/SpatialImage data to {cls.dims.dims}.")
+        elif isinstance(data, np.ndarray):
+            if dims is None:
+                raise ValueError("If data is a numpy array, dims must be provided.")
+            if dims != cls.dims.dims:
+                data = np.transpose(data, axes=[dims.index(d) for d in cls.dims.dims])
+                logger.info(f"Transposing np.ndarray data to {cls.dims.dims}.")
+        elif isinstance(data, DaskArray):
+            if dims is None:
+                raise ValueError("If data is a dask array, dims must be provided.")
+            if dims != cls.dims.dims:
+                data = data.transpose(*[dims.index(d) for d in cls.dims.dims])
+                logger.info(f"Transposing DaskArray data to {cls.dims.dims}.")
+        else:
+            raise ValueError(f"Unsupported data type: {type(data)}.")
+
+        # convert the data to a dask array
         if not isinstance(data, DaskArray):
             data = from_array(data)
+
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
         # TODO(giovp): drop coordinates for now until solution with IO.
         if TYPE_CHECKING:
@@ -103,10 +142,10 @@ class RasterSchema(DataArraySchema):
         if TYPE_CHECKING:
             assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         data.attrs = {"transform": transform}
-        if scale_factors is not None:
+        if multiscale_factors is not None:
             data = to_multiscale(
                 data,
-                scale_factors=scale_factors,
+                scale_factors=multiscale_factors,
                 method=method,
                 chunks=chunks,
             )
@@ -273,6 +312,8 @@ class ShapesModel:
         shape_type: Literal["Circle", "Square"],
         shape_size: float,
         transform: Optional[Any] = None,
+        instance_key: Optional[str] = None,
+        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> AnnData:
         """
@@ -298,11 +339,15 @@ class ShapesModel:
 
         adata = AnnData(
             None,
-            obs=pd.DataFrame(index=np.arange(coords.shape[0])),
-            var=pd.DataFrame(index=np.arange(1)),
+            obs=pd.DataFrame(index=map(str, np.arange(coords.shape[0]))),
             **kwargs,
         )
         adata.obsm[cls.COORDS_KEY] = coords
+
+        assert bool(instance_key is None) == bool(instance_values is None)
+        if instance_key is not None:
+            adata.obs[instance_key] = instance_values
+
         if transform is None:
             transform = Identity()
         adata.uns[cls.TRANSFORM_KEY] = transform
@@ -371,20 +416,22 @@ class TableModel:
     @classmethod
     def parse(
         cls,
-        data: AnnData,
+        adata: AnnData,
         region: Optional[Union[str, List[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
+        region_values: Optional[Union[str, Sequence[str]]] = None,
+        instance_values: Optional[Sequence[Any]] = None,
     ) -> AnnData:
         # region, region_key and instance_key should either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args > 0:
-            if cls.ATTRS_KEY in data.uns:
+            if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
                     f"Either pass `region`, `region_key` and `instance_key` as arguments or have them in `adata.uns['{cls.ATTRS_KEY}']`."
                 )
-        elif cls.ATTRS_KEY in data.uns:
-            attr = data.uns[cls.ATTRS_KEY]
+        elif cls.ATTRS_KEY in adata.uns:
+            attr = adata.uns[cls.ATTRS_KEY]
             region = attr["region"]
             region_key = attr["region_key"]
             instance_key = attr["instance_key"]
@@ -397,11 +444,11 @@ class TableModel:
         elif isinstance(region, list):
             if region_key is None:
                 raise ValueError("`region_key` must be provided if `region` is of type `List`.")
-            if not data.obs[region_key].isin(region).all():
+            if not adata.obs[region_key].isin(region).all():
                 raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
-            if not is_categorical_dtype(data.obs[region_key]):
+            if not is_categorical_dtype(adata.obs[region_key]):
                 logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
-                data.obs[region_key] = pd.Categorical(data.obs[region_key])
+                adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
         else:
@@ -409,8 +456,19 @@ class TableModel:
                 raise ValueError("`region` must be of type `str` or `List`.")
         # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
-        data.uns[cls.ATTRS_KEY] = attr
-        return data
+        adata.uns[cls.ATTRS_KEY] = attr
+
+        if region_values is not None:
+            if region_key in adata.obs:
+                raise ValueError(f"this annotation table already contains the {region_key} (region_key) column")
+            assert isinstance(region_values, str) or len(adata) == len(region_values)
+            adata.obs[region_key] = region_values
+        if instance_values is not None:
+            if instance_key in adata.obs:
+                raise ValueError(f"this annotation table already contains the {instance_key} (instance_key) column")
+            assert len(adata) == len(instance_values)
+            adata.obs[instance_key] = instance_values
+        return adata
 
 
 def _sparse_matrix_from_assignment(
