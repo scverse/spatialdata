@@ -12,10 +12,7 @@
 [badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 
-Spatial data format.
-
--   up-to-date design doc [here](docs/design_doc.md)
--   discussion and previous draft of specs [here](https://hackmd.io/uY0wPwZhQaG6HJ6OAGm0fw)
+Up-to-date design doc [here](docs/design_doc.md)
 
 ## Getting started
 
