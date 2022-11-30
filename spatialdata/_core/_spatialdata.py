@@ -16,10 +16,10 @@ from spatial_image import SpatialImage
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
-    Label2DModel,
+    Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonModel,
+    PolygonsModel,
     ShapesModel,
     TableModel,
 )
@@ -33,11 +33,11 @@ from spatialdata._io.write import (
 )
 
 # schema for elements
-Label2D_s = Label2DModel()
+Label2D_s = Labels2DModel()
 Label3D_s = Labels3DModel()
 Image2D_s = Image2DModel()
 Image3D_s = Image3DModel()
-Polygon_s = PolygonModel
+Polygon_s = PolygonsModel
 Point_s = PointsModel()
 Shape_s = ShapesModel()
 Table_s = TableModel()
@@ -264,4 +264,4 @@ def _(arr: SpatialImage) -> int:
 
 @ndim.register(MultiscaleSpatialImage)
 def _(arr: MultiscaleSpatialImage) -> int:
-    return arr[list(arr.keys())[0]].dims  # type: ignore[no-any-return]
+    return len(arr[list(arr.keys())[0]].dims)

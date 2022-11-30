@@ -11,10 +11,10 @@ from shapely.geometry import MultiPolygon, Polygon
 from spatialdata import SpatialData
 from spatialdata._core.models import (
     Image2DModel,
-    Label2DModel,
+    Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonModel,
+    PolygonsModel,
     ShapesModel,
     TableModel,
 )
@@ -117,13 +117,13 @@ def _get_images() -> Mapping[str, Sequence[NDArray]]:
 
 def _get_labels() -> Mapping[str, Sequence[NDArray]]:
     out = {}
-    out["labels2d"] = Label2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d")
-    out["labels2d_multiscale"] = Label2DModel.parse(
+    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d")
+    out["labels2d_multiscale"] = Labels2DModel.parse(
         RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4]
     )
-    out["labels3d"] = Labels3DModel.parse(RNG.normal(size=(2, 64, 64)), name="labels3d")
+    out["labels3d"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d")
     out["labels3d_multiscale"] = Labels3DModel.parse(
-        RNG.normal(size=(2, 64, 64)), name="labels3d_multiscale", scale_factors=[2, 4]
+        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale", scale_factors=[2, 4]
     )
     return out
 
@@ -142,7 +142,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
         }
     )
 
-    out["multipoly"] = GeoDataFrame(
+    multipoly = GeoDataFrame(
         {
             "geometry": [
                 MultiPolygon(
@@ -162,8 +162,8 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
         }
     )
 
-    out["poly"] = PolygonModel.parse(poly, name="poly")
-    out["multipoly"] = PolygonModel.parse(poly, name="multipoly")
+    out["poly"] = PolygonsModel.parse(poly, name="poly")
+    out["multipoly"] = PolygonsModel.parse(multipoly, name="multipoly")
 
     return out
 
@@ -177,9 +177,9 @@ def _get_shapes() -> Mapping[str, Sequence[NDArray]]:
 
     out = {}
     for i, (typ, size) in enumerate(zip(shape_type, shape_size)):
-        name = f"{name}_{i}"
+        name_ = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
-        out[name] = ShapesModel.parse(arr, shape_type=typ, shape_size=size)
+        out[name_] = ShapesModel.parse(arr, shape_type=typ, shape_size=size)
 
     return out
 

@@ -124,7 +124,7 @@ class RasterSchema(DataArraySchema):
                 super().validate(data[d][name])
 
 
-class Label2DModel(RasterSchema):
+class Labels2DModel(RasterSchema):
     dims = DimsSchema((Y, X))
     array_type = ArrayTypeSchema(DaskArray)
     attrs = AttrsSchema({"transform": Transform_s})
@@ -186,7 +186,7 @@ class Image3DModel(RasterSchema):
 
 # TODO: should check for column be strict?
 # TODO: validate attrs for transform.
-class PolygonModel(SchemaModel):
+class PolygonsModel(SchemaModel):
     geometry: GeoSeries[GeometryDtype]
 
     @singledispatchmethod

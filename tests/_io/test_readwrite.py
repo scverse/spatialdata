@@ -42,9 +42,9 @@ class TestReadWrite:
         polygons.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert polygons.polygons.keys() == sdata.polygons.keys()
-        for k1, k2 in zip(polygons.polygons.keys(), sdata.polygons.keys()):
-            assert isinstance(sdata.polygons[k1], GeoDataFrame)
-            assert polygons.polygons[k1].equals(sdata.polygons[k2])
+        for k in polygons.polygons.keys():
+            assert isinstance(sdata.polygons[k], GeoDataFrame)
+            assert polygons.polygons[k].equals(sdata.polygons[k])
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         """Test read/write."""

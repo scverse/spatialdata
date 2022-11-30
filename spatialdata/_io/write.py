@@ -194,7 +194,8 @@ def write_polygons(
     # TODO: save everything or just polygons?
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
-    polygons_groups.create_dataset(name="offsets", data=offsets)
+    for i, o in enumerate(offsets):
+        polygons_groups.create_dataset(name=f"offset{i}", data=o)
     # polygons_groups = sub_group[name]
     attr = {"geos": {"geometry_name": geometry.name, "geometry_type": geometry.value}}
 
