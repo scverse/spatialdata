@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 from types import MappingProxyType
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import zarr
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
+from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_dims
@@ -122,7 +123,11 @@ class SpatialData:
             Table_s.validate(table)
             self._table = table
 
-    def write(self, file_path: str) -> None:
+    def write(
+        self,
+        file_path: str,
+        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+    ) -> None:
         """Write to Zarr file."""
 
         store = parse_url(file_path, mode="w").store
@@ -149,35 +154,35 @@ class SpatialData:
                     image=self.images[el],
                     group=elem_group,
                     name=el,
-                    storage_options={"compressor": None},
+                    storage_options=storage_options,
                 )
             if el in self.labels.keys():
                 write_labels(
                     labels=self.labels[el],
                     group=elem_group,
                     name=el,
-                    storage_options={"compressor": None},
+                    storage_options=storage_options,
                 )
             if el in self.polygons.keys():
                 write_polygons(
                     polygons=self.polygons[el],
                     group=elem_group,
                     name=el,
-                    storage_options={"compressor": None},
+                    storage_options=storage_options,
                 )
             if el in self.shapes.keys():
                 write_shapes(
                     shapes=self.shapes[el],
                     group=elem_group,
                     name=el,
-                    storage_options={"compressor": None},
+                    storage_options=storage_options,
                 )
             if el in self.points.keys():
                 write_points(
                     points=self.points[el],
                     group=elem_group,
                     name=el,
-                    storage_options={"compressor": None},
+                    storage_options=storage_options,
                 )
 
         if self.table is not None:
