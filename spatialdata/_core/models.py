@@ -41,6 +41,17 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.core_utils import (
+    TRANSFORM_KEY,
+    C,
+    SpatialElement,
+    X,
+    Y,
+    Z,
+    get_default_coordinate_system,
+    get_dims,
+    set_transform,
+)
 from spatialdata._core.transformations import BaseTransformation, Identity
 from spatialdata._logging import logger
 
@@ -53,9 +64,19 @@ Chunks_t = Union[
 ]
 ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 
-C, Z, Y, X = "c", "z", "y", "x"
-
 Transform_s = AttrSchema(BaseTransformation, None)
+
+
+def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> None:
+    t: BaseTransformation
+    if transform is None:
+        t = Identity()
+    else:
+        t = transform
+    if t.output_coordinate_system is None:
+        dims = get_dims(element)
+        t.output_coordinate_system = get_default_coordinate_system(dims)
+    set_transform(element, t)
 
 
 class RasterSchema(DataArraySchema):
@@ -143,11 +164,9 @@ class RasterSchema(DataArraySchema):
         if TYPE_CHECKING:
             assert isinstance(data, SpatialImage)
         data = data.drop(data.coords.keys())
-        if transform is None:
-            transform = Identity()
         if TYPE_CHECKING:
             assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
-        data.attrs = {"transform": transform}
+        _parse_transform(data, transform)
         if multiscale_factors is not None:
             data = to_multiscale(
                 data,
@@ -242,9 +261,7 @@ class PolygonsModel(SchemaModel):
         instance_key: Optional[str] = None,
         instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
     ) -> None:
-        if transform is None:
-            transform = Identity()
-        geo_df.attrs = {"transform": transform}
+        _parse_transform(geo_df, transform)
         if instance_key is not None:
             if instance_values is None:
                 instance_values = np.arange(len(geo_df))
@@ -313,14 +330,13 @@ class PolygonsModel(SchemaModel):
 
 class ShapesModel:
     COORDS_KEY = "spatial"
-    TRANSFORM_KEY = "transform"
     ATTRS_KEY = "spatialdata_attrs"
 
     def validate(self, data: AnnData) -> None:
         if self.COORDS_KEY not in data.obsm:
             raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
-        if self.TRANSFORM_KEY not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.TRANSFORM_KEY}`.")
+        if TRANSFORM_KEY not in data.uns:
+            raise ValueError(f"AnnData does not contain `{TRANSFORM_KEY}`.")
         if self.ATTRS_KEY not in data.uns:
             raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}`.")
         if "type" not in data.uns[self.ATTRS_KEY]:
@@ -372,22 +388,19 @@ class ShapesModel:
                 instance_values = np.arange(len(adata))
             adata.obs[instance_key] = instance_values
 
-        if transform is None:
-            transform = Identity()
-        adata.uns[cls.TRANSFORM_KEY] = transform
+        _parse_transform(adata, transform)
         adata.uns[cls.ATTRS_KEY] = {"type": shape_type, "size": shape_size}
         return adata
 
 
 class PointsModel:
     COORDS_KEY = "spatial"
-    TRANSFORM_KEY = "transform"
 
     def validate(self, data: AnnData) -> None:
         if self.COORDS_KEY not in data.obsm:
             raise ValueError(f"AnnData does not contain points coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
-        if self.TRANSFORM_KEY not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.TRANSFORM_KEY}`.")
+        if TRANSFORM_KEY not in data.uns:
+            raise ValueError(f"AnnData does not contain `{TRANSFORM_KEY}`.")
 
     @classmethod
     def parse(
@@ -417,9 +430,7 @@ class PointsModel:
             **kwargs,
         )
         adata.obsm[cls.COORDS_KEY] = coords
-        if transform is None:
-            transform = Identity()
-        adata.uns[cls.TRANSFORM_KEY] = transform
+        _parse_transform(adata, transform)
         return adata
 
 

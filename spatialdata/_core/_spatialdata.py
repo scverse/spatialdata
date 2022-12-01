@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import hashlib
-from functools import singledispatch
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Union
 
 import zarr
 from anndata import AnnData
-from dask.array.core import Array as DaskArray
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from spatial_image import SpatialImage
 
+from spatialdata._core.core_utils import get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -82,20 +81,22 @@ class SpatialData:
         if images is not None:
             self.images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
-                if ndim(v) == 3:
+                ndim = len(get_dims(v))
+                if ndim == 3:
                     Image2D_s.validate(v)
                     self.images[k] = v
-                elif ndim(v) == 4:
+                elif ndim == 4:
                     Image3D_s.validate(v)
                     self.images[k] = v
 
         if labels is not None:
             self.labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
-                if ndim(v) == 2:
+                ndim = len(get_dims(v))
+                if ndim == 2:
                     Label2D_s.validate(v)
                     self.labels[k] = v
-                elif ndim(v) == 3:
+                elif ndim == 3:
                     Label3D_s.validate(v)
                     self.labels[k] = v
 
@@ -260,23 +261,3 @@ class SpatialData:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         return descr
-
-
-@singledispatch
-def ndim(arr: Any) -> int:
-    raise TypeError(f"Unsupported type: {type(arr)}")
-
-
-@ndim.register(DaskArray)
-def _(arr: DaskArray) -> int:
-    return arr.ndim  # type: ignore[no-any-return]
-
-
-@ndim.register(SpatialImage)
-def _(arr: SpatialImage) -> int:
-    return len(arr.dims)
-
-
-@ndim.register(MultiscaleSpatialImage)
-def _(arr: MultiscaleSpatialImage) -> int:
-    return len(arr[list(arr.keys())[0]].dims)

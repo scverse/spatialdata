@@ -9,6 +9,7 @@ from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
 
 from spatialdata import SpatialData
+from spatialdata._core.core_utils import TRANSFORM_KEY
 from spatialdata._core.models import (
     Image2DModel,
     Labels2DModel,
@@ -65,7 +66,7 @@ def empty_points() -> SpatialData:
     )
     from spatialdata import Identity
 
-    adata.uns[PointsModel.TRANSFORM_KEY] = Identity()
+    adata.uns[TRANSFORM_KEY] = Identity()
     return SpatialData(points={"empty": adata})
 
 
