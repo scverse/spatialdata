@@ -97,15 +97,20 @@ class RasterSchema(DataArraySchema):
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
             if dims is not None:
-                raise ValueError(
-                    "Cannot specify dims if data is a DataArray or SpatialImage; dims should be specified inside the "
-                    "data instead."
-                )
+                if dims != data.dims:
+                    raise ValueError(
+                        f"dims {dims} does not match data.dims {data.dims}, please specify the dims only once."
+                    )
+                else:
+                    logger.warning(
+                        "dims is specified redundantly: found also inside the data and the two values " "coincide."
+                    )
             dims = data.dims
 
-        # check that dims is spcified and has correct values
+        # check if dims is spcified and if it has correct values
         if dims is None:
-            raise ValueError("Cannot interpret data without dims specified.")
+            dims = cls.dims.dims
+            logger.info("dims is not specified, using default value: %s", dims)
         if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
             raise ValueError(f"Wrong dimensions: {dims}. Expected {cls.dims.dims} or a permutation of them.")
 

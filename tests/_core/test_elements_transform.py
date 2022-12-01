@@ -5,6 +5,7 @@ import pytest
 
 from spatialdata import SpatialData
 from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._core.core_utils import get_transform, set_transform
 from spatialdata._core.transformations import Scale
 from tests._core.conftest import xy_cs
 
@@ -22,10 +23,10 @@ class TestElementsTransform:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         transform.input_coordinate_system = input
         transform.output_coordinate_system = output
-        points.points["points_0"].uns["transform"] = transform
+        set_transform(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert new_sdata.points["points_0"].uns["transform"] == transform
+        assert get_transform(new_sdata.points["points_0"]) == transform
 
     @pytest.mark.parametrize("transform", [Scale(np.array([1, 2, 3])), Scale(np.array([2]))])
     def test_shapes(
@@ -39,7 +40,7 @@ class TestElementsTransform:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         transform.input_coordinate_system = input
         transform.output_coordinate_system = output
-        shapes.shapes["shapes_0"].uns["transform"] = transform
+        set_transform(shapes.shapes["shapes_0"], transform)
         shapes.write(tmpdir)
-        new_sdata = SpatialData.read(tmpdir)
-        assert new_sdata.shapes["shapes_0"].uns["transform"] == transform
+        SpatialData.read(tmpdir)
+        assert get_transform(shapes.shapes["shapes_0"]) == transform

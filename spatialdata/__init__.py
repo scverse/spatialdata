@@ -26,9 +26,13 @@ __all__ = [
     "PolygonsModel",
     "ShapesModel",
     "TableModel",
+    "SpatialElement",
+    "get_transform",
+    "set_transform",
 ]
 
 from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.core_utils import SpatialElement, get_transform, set_transform
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,

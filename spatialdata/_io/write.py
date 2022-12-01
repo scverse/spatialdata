@@ -16,6 +16,7 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
+from spatialdata._core.core_utils import get_transform
 from spatialdata._io.format import SpatialDataFormat
 
 __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
@@ -84,7 +85,7 @@ def write_image(
 
     if isinstance(image, SpatialImage):
         data = image.data
-        coordinate_transformations = [[image.attrs.get("transform").to_dict()]]
+        coordinate_transformations = [[get_transform(image).to_dict()]]
         chunks = image.chunks
         axes = image.dims
         if storage_options is not None:
@@ -135,7 +136,7 @@ def write_labels(
 ) -> None:
     if isinstance(labels, SpatialImage):
         data = labels.data
-        coordinate_transformations = [[labels.attrs.get("transform").to_dict()]]
+        coordinate_transformations = [[get_transform(labels).to_dict()]]
         chunks = labels.chunks
         axes = labels.dims
         if storage_options is not None:
@@ -157,6 +158,7 @@ def write_labels(
         )
     elif isinstance(labels, MultiscaleSpatialImage):
         data = _iter_multiscale(labels, name, "data")
+        # TODO: nitpick, rewrite the next line to use get_transform()
         coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(labels, name, "attrs", "transform")]
         chunks = _iter_multiscale(labels, name, "chunks")
         axes_ = _iter_multiscale(labels, name, "dims")
@@ -188,7 +190,7 @@ def write_polygons(
 ) -> None:
     sub_group = group.require_group("polygons")
     polygons_groups = sub_group.require_group(name)
-    coordinate_transformations = [[polygons.attrs.get("transform").to_dict()]]
+    coordinate_transformations = [[get_transform(polygons).to_dict()]]
     print(coordinate_transformations)
 
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
