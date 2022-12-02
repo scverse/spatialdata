@@ -55,13 +55,8 @@ jobs:
                   DISPLAY: :42
               run: |
                   pytest -v --cov --color=yes
-            # - name: Upload coverage
-            #   uses: codecov/codecov-action@v3
-            #   env:
-            #       CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-            #   run: |
-            #       codecov --required --flags=unittests
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3
+            - name: Upload coverage
               env:
                   CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
+              run: |
+                  codecov --required --flags=unittests
