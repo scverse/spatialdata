@@ -260,6 +260,7 @@ def write_table(
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
+    tables_group.attrs["version"] = fmt.spatialdata_version
 
 
 def _iter_multiscale(
