@@ -95,10 +95,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 labels_reader = Reader(labels_loc)()
                 labels_nodes = list(labels_reader)
                 # time.time()
-                print(labels_nodes)
                 if len(labels_nodes):
                     for node in labels_nodes:
-                        print(node)
                         if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
                             [isinstance(spec, Label) for spec in node.specs]
                         ):
@@ -109,7 +107,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if points_store.exists():
         f = zarr.open(points_store, mode="r")
         for k in f.keys():
-            print(k)
             f_elem = f[k].name
             f_elem_store = f"{points_store}{f_elem}"
             points[k] = _read_points(f_elem_store)
@@ -118,7 +115,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if shapes_store.exists():
         f = zarr.open(shapes_store, mode="r")
         for k in f.keys():
-            print(k)
             f_elem = f[k].name
             f_elem_store = f"{shapes_store}{f_elem}"
             shapes[k] = _read_shapes(f_elem_store)
@@ -127,7 +123,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if polygons_store.exists():
         f = zarr.open(polygons_store, mode="r")
         for k in f.keys():
-            print(k)
             f_elem = f[k].name
             f_elem_store = f"{polygons_store}{f_elem}"
             polygons[k] = _read_polygons(f_elem_store)
@@ -136,7 +131,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if table_store.exists():
         f = zarr.open(table_store, mode="r")
         for k in f.keys():
-            print(k)
             f_elem = f[k].name
             f_elem_store = f"{table_store}{f_elem}"
             table = read_anndata_zarr(f_elem_store)

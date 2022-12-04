@@ -218,8 +218,8 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
 def _get_shapes() -> Mapping[str, Sequence[NDArray]]:
     out = {}
     arr = RNG.normal(size=(100, 2))
-    out["shapes_1"] = ShapesModel.parse(arr, shape_type="square", shape_size=3)
-    out["shapes_2"] = ShapesModel.parse(arr, shape_type="circle", shape_size=np.repeat(1, len(arr)))
+    out["shapes_0"] = ShapesModel.parse(arr, shape_type="square", shape_size=3)
+    out["shapes_1"] = ShapesModel.parse(arr, shape_type="circle", shape_size=np.repeat(1, len(arr)))
 
     return out
 
