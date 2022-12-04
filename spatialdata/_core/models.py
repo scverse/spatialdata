@@ -15,21 +15,19 @@ from typing import (
 
 import numpy as np
 import pandas as pd
-import shapely.geometry.collection
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
-from geopandas import GeoDataFrame
-from geopandas.array import GeometryDtype
+from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike, NDArray
 from pandas.api.types import is_categorical_dtype
-from pandera import SchemaModel
-from pandera.typing.geopandas import GeoSeries
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
+from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
@@ -248,25 +246,29 @@ class Image3DModel(RasterSchema):
         )
 
 
-# TODO: should check for column be strict?
+# TODO: should check for columns be strict?
 # TODO: validate attrs for transform.
-class PolygonsModel(SchemaModel):
-    geometry: GeoSeries[GeometryDtype]
+class PolygonsModel:
+    GEOMETRY_KEY = "geometry"
+    ATTRS_KEY = "spatialdata_attrs"
+    GEOS_KEY = "geos"
+    TYPE_KEY = "type"
+    NAME_KEY = "name"
+    TRANSFORM_KEY = "transform"
 
     @classmethod
-    def _parse_finalize(
-        cls,
-        geo_df: GeoDataFrame,
-        transform: Optional[Any] = None,
-        instance_key: Optional[str] = None,
-        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
-    ) -> None:
-        _parse_transform(geo_df, transform)
-        if instance_key is not None:
-            if instance_values is None:
-                instance_values = np.arange(len(geo_df))
-            geo_df[instance_key] = instance_values
-        cls.validate(geo_df)
+    def validate(cls, data: GeoDataFrame) -> None:
+        if cls.GEOMETRY_KEY not in data:
+            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
+        if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+        if not isinstance(data[cls.GEOMETRY_KEY].values[0], Polygon) and not isinstance(
+            data[cls.GEOMETRY_KEY].values[0], MultiPolygon
+        ):
+            # TODO: should check for all values?
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Polygon or MultiPolygon objects.")
+        if cls.TRANSFORM_KEY not in data.attrs:
+            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
     @singledispatchmethod
     @classmethod
@@ -279,20 +281,18 @@ class PolygonsModel(SchemaModel):
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
         offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
-        # these correspond to GeometryType.POLYGON, GeometryType.MULTIPOINT
-        geometry: Literal[3, 6],
+        geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         transform: Optional[Any] = None,
-        instance_key: Optional[str] = None,
-        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
+
         geometry = GeometryType(geometry)
-        # TODO: check the type of data and add it to the typing of _parse_finalize()
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
-        cls._parse_finalize(
-            geo_df=geo_df, transform=transform, instance_key=instance_key, instance_values=instance_values
-        )
+        if transform is None:
+            transform = Identity()
+        geo_df.attrs = {"transform": transform}
+        cls.validate(data)
         return geo_df
 
     @parse.register
@@ -301,15 +301,15 @@ class PolygonsModel(SchemaModel):
         cls,
         data: str,
         transform: Optional[Any] = None,
-        instance_key: Optional[str] = None,
-        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
-        gc: shapely.geometry.collection.GeometryCollection = from_geojson(data)
+
+        gc: GeometryCollection = from_geojson(data)
         geo_df = GeoDataFrame({"geometry": gc.geoms})
-        cls._parse_finalize(
-            geo_df=geo_df, transform=transform, instance_key=instance_key, instance_values=instance_values
-        )
+        if transform is None:
+            transform = Identity()
+        geo_df.attrs = {"transform": transform}
+        cls.validate(data)
         return geo_df
 
     @parse.register
@@ -318,13 +318,13 @@ class PolygonsModel(SchemaModel):
         cls,
         data: GeoDataFrame,
         transform: Optional[Any] = None,
-        instance_key: Optional[str] = None,
-        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> GeoDataFrame:
-        cls._parse_finalize(
-            geo_df=data, transform=transform, instance_key=instance_key, instance_values=instance_values
-        )
+
+        if transform is None:
+            transform = Identity()
+        data.attrs = {"transform": transform}
+        cls.validate(data)
         return data
 
 
@@ -332,6 +332,7 @@ class ShapesModel:
     COORDS_KEY = "spatial"
     ATTRS_KEY = "spatialdata_attrs"
 
+    @classmethod
     def validate(self, data: AnnData) -> None:
         if self.COORDS_KEY not in data.obsm:
             raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.COORDS_KEY}']`.")

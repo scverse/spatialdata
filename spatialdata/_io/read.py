@@ -11,7 +11,6 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
-from shapely import GeometryType
 from shapely.io import from_ragged_array
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -22,10 +21,10 @@ from spatialdata._core.transformations import (
     BaseTransformation,
     get_transformation_from_dict,
 )
-from spatialdata._io.format import SpatialDataFormat
+from spatialdata._io.format import PolygonsFormat, SpatialDataFormatV01
 
 
-def _read_multiscale(node: Node, fmt: SpatialDataFormat) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
     transformations = [get_transformation_from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
     name = node.metadata["name"]
@@ -58,7 +57,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if isinstance(store, Path):
         store = str(store)
 
-    fmt = SpatialDataFormat()
+    fmt = SpatialDataFormatV01()
 
     f = zarr.open(store, mode="r")
     images = {}
@@ -156,30 +155,24 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     )
 
 
-def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group]) -> GeoDataFrame:  # type: ignore[type-arg]
+def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PolygonsFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read polygons from a zarr store."""
 
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
+    index = np.array(f["Index"])
     offsets_keys = [k for k in f.keys() if k.startswith("offset")]
     offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
-    spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
-    typ = GeometryType(spatialdata_attrs["geos"]["geometry_type"])
-    assert typ.name == spatialdata_attrs["geos"]["geometry_name"]
+    typ = fmt.attrs_from_dict(f.attrs.asdict())
 
-    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
-    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
+    transforms = get_transformation_from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     geometry = from_ragged_array(typ, coords, offsets)
 
-    geo_df = GeoDataFrame({"geometry": geometry})
+    geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     geo_df.attrs = {"transform": transforms}
-
-    for k, v in dict(f["other_columns"]).items():
-        geo_df[k] = v
-
     return geo_df
 
 
