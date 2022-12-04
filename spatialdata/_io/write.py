@@ -17,7 +17,12 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_transform
-from spatialdata._io.format import PolygonsFormat, SpatialDataFormatV01
+from spatialdata._io.format import (
+    PointsFormat,
+    PolygonsFormat,
+    ShapesFormat,
+    SpatialDataFormatV01,
+)
 
 __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
 
@@ -157,7 +162,6 @@ def write_polygons(
     group_type: str = "ngff:polygons",
     fmt: Format = PolygonsFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("polygons")
     polygons_groups = sub_group.require_group(name)
@@ -188,28 +192,27 @@ def write_shapes(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:shapes",
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = ShapesFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("shapes")
     transform = shapes.uns.pop("transform")
-    coordinate_transformations = [[transform.to_dict()]]
-    attr = shapes.uns.get("spatialdata_attrs")
+    coordinate_transformations = [transform.to_dict()]
     write_adata(sub_group, name, shapes)
-    shapes_group = sub_group[name]
     shapes.uns["transform"] = transform
 
+    attrs = fmt.attrs_to_dict(shapes.uns)
+    attrs["version"] = fmt.spatialdata_version
+
+    shapes_group = sub_group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
         shape=shapes.obsm["spatial"].shape,
-        attr=attr,
-        name=name,
+        coordinate_transformations=coordinate_transformations,
+        attrs=attrs,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,
     )
 
 
@@ -218,29 +221,26 @@ def write_points(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = PointsFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
     sub_group = group.require_group("points")
     transform = points.uns.pop("transform")
-    coordinate_transformations = [[transform.to_dict()]]
-    # attr = points.uns.get("spatialdata_attrs")
+    coordinate_transformations = [transform.to_dict()]
     write_adata(sub_group, name, points)
     points.uns["transform"] = transform
+
+    attrs = {"version": fmt.spatialdata_version}
 
     points_group = sub_group[name]
     _write_metadata(
         group=points_group,
         group_type=group_type,
         shape=points.obsm["spatial"].shape,
-        # attr=attr,
-        name=name,
+        coordinate_transformations=coordinate_transformations,
+        attrs=attrs,
         fmt=fmt,
         axes=axes,
-        coordinate_transformations=coordinate_transformations,
-        **metadata,  # type: ignore[arg-type]
     )
 
 

@@ -168,21 +168,18 @@ class SpatialData:
                     polygons=self.polygons[el],
                     group=elem_group,
                     name=el,
-                    storage_options=storage_options,
                 )
             if el in self.shapes.keys():
                 write_shapes(
                     shapes=self.shapes[el],
                     group=elem_group,
                     name=el,
-                    storage_options=storage_options,
                 )
             if el in self.points.keys():
                 write_points(
                     points=self.points[el],
                     group=elem_group,
                     name=el,
-                    storage_options=storage_options,
                 )
 
         if self.table is not None:

@@ -21,7 +21,7 @@ from spatialdata._core.transformations import (
     BaseTransformation,
     get_transformation_from_dict,
 )
-from spatialdata._io.format import PolygonsFormat, SpatialDataFormatV01
+from spatialdata._io.format import PolygonsFormat, ShapesFormat, SpatialDataFormatV01
 
 
 def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
@@ -176,34 +176,29 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spa
     return geo_df
 
 
-def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:  # type: ignore[type-arg]
-    """Read polygons from a zarr store."""
+def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = ShapesFormat()) -> AnnData:  # type: ignore[type-arg]
+    """Read shapes from a zarr store."""
 
     f = zarr.open(store, mode="r")
-    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
-    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
-    spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
+    transforms = get_transformation_from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    attrs = fmt.attrs_from_dict(f.attrs.asdict())
 
     adata = read_anndata_zarr(store)
 
     adata.uns["transform"] = transforms
-    adata.uns["spatialdata_attrs"] = spatialdata_attrs
+    assert adata.uns["spatialdata_attrs"] == attrs
 
     return adata
 
 
 def _read_points(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:  # type: ignore[type-arg]
-    """Read polygons from a zarr store."""
+    """Read points from a zarr store."""
 
     f = zarr.open(store, mode="r")
-    attrs = f.attrs.asdict()["multiscales"][0]["datasets"][0]
-    transforms = get_transformation_from_dict(attrs["coordinateTransformations"][0])
-    # spatialdata_attrs = f.attrs.asdict()["spatialdata_attrs"]
+    transforms = get_transformation_from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     adata = read_anndata_zarr(store)
-
     adata.uns["transform"] = transforms
-    # adata.uns["spatialdata_attrs"] = spatialdata_attrs
 
     return adata
 

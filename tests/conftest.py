@@ -216,17 +216,10 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
 
 
 def _get_shapes() -> Mapping[str, Sequence[NDArray]]:
-    name = "shapes"
-    shape_type = ["Circle", "Square"]
-    shape_size = [1.0, 2.0]
-
-    assert len(shape_type) == len(shape_size)
-
     out = {}
-    for i, (typ, size) in enumerate(zip(shape_type, shape_size)):
-        name_ = f"{name}_{i}"
-        arr = RNG.normal(size=(100, 2))
-        out[name_] = ShapesModel.parse(arr, shape_type=typ, shape_size=size)
+    arr = RNG.normal(size=(100, 2))
+    out["shapes_1"] = ShapesModel.parse(arr, shape_type="square", shape_size=3)
+    out["shapes_2"] = ShapesModel.parse(arr, shape_type="circle", shape_size=np.repeat(1, len(arr)))
 
     return out
 

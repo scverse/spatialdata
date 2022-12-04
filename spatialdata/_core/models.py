@@ -289,9 +289,7 @@ class PolygonsModel:
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
-        if transform is None:
-            transform = Identity()
-        geo_df.attrs = {"transform": transform}
+        _parse_transform(data, transform)
         cls.validate(data)
         return geo_df
 
@@ -306,9 +304,7 @@ class PolygonsModel:
 
         gc: GeometryCollection = from_geojson(data)
         geo_df = GeoDataFrame({"geometry": gc.geoms})
-        if transform is None:
-            transform = Identity()
-        geo_df.attrs = {"transform": transform}
+        _parse_transform(data, transform)
         cls.validate(data)
         return geo_df
 
@@ -321,9 +317,7 @@ class PolygonsModel:
         **kwargs: Any,
     ) -> GeoDataFrame:
 
-        if transform is None:
-            transform = Identity()
-        data.attrs = {"transform": transform}
+        _parse_transform(data, transform)
         cls.validate(data)
         return data
 
@@ -331,29 +325,30 @@ class PolygonsModel:
 class ShapesModel:
     COORDS_KEY = "spatial"
     ATTRS_KEY = "spatialdata_attrs"
+    TYPE_KEY = "type"
+    SIZE_KEY = "size"
+    TRANSFORM_KEY = "transform"
 
     @classmethod
-    def validate(self, data: AnnData) -> None:
-        if self.COORDS_KEY not in data.obsm:
-            raise ValueError(f"AnnData does not contain shapes coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
-        if TRANSFORM_KEY not in data.uns:
-            raise ValueError(f"AnnData does not contain `{TRANSFORM_KEY}`.")
-        if self.ATTRS_KEY not in data.uns:
-            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}`.")
-        if "type" not in data.uns[self.ATTRS_KEY]:
-            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}['type']`.")
-        if "size" not in data.uns[self.ATTRS_KEY]:
-            raise ValueError(f"AnnData does not contain `{self.ATTRS_KEY}['size']`.")
+    def validate(cls, data: AnnData) -> None:
+        if cls.COORDS_KEY not in data.obsm:
+            raise ValueError(f":attr:`anndata.AnnData.obsm` does not contain shapes coordinates `{cls.COORDS_KEY}`.")
+        if cls.TRANSFORM_KEY not in data.uns:
+            raise ValueError(f":attr:`anndata.AnnData.uns` does not contain `{cls.TRANSFORM_KEY}`.")
+        if cls.ATTRS_KEY not in data.uns:
+            raise ValueError(f":attr:`anndata.AnnData.uns` does not contain `{cls.ATTRS_KEY}`.")
+        if cls.TYPE_KEY not in data.uns[cls.ATTRS_KEY]:
+            raise ValueError(f":attr:`anndata.AnnData.uns[`{cls.ATTRS_KEY}`]` does not contain `{cls.TYPE_KEY}`.")
+        if cls.SIZE_KEY not in data.obs:
+            raise ValueError(f":attr:`anndata.AnnData.obs` does not contain `{cls.SIZE_KEY}`.")
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
         shape_type: Literal["Circle", "Square"],
-        shape_size: float,
+        shape_size: Union[float, Sequence[float]],
         transform: Optional[Any] = None,
-        instance_key: Optional[str] = None,
-        instance_values: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         **kwargs: Any,
     ) -> AnnData:
         """
@@ -376,21 +371,19 @@ class ShapesModel:
         -------
         :class:`anndata.AnnData` formatted for shapes elements.
         """
-
+        if isinstance(shape_size, list):
+            if len(shape_size) != len(coords):
+                raise ValueError("Length of `shape_size` must match length of `coords`.")
+        shape_size_ = np.repeat(shape_size, len(coords)) if isinstance(shape_size, float) else shape_size
         adata = AnnData(
             None,
-            obs=pd.DataFrame(index=map(str, np.arange(coords.shape[0]))),
+            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=map(str, np.arange(coords.shape[0]))),
             **kwargs,
         )
         adata.obsm[cls.COORDS_KEY] = coords
 
-        if instance_key is not None:
-            if instance_values is None:
-                instance_values = np.arange(len(adata))
-            adata.obs[instance_key] = instance_values
-
         _parse_transform(adata, transform)
-        adata.uns[cls.ATTRS_KEY] = {"type": shape_type, "size": shape_size}
+        adata.uns[cls.ATTRS_KEY] = {cls.TYPE_KEY: shape_type}
         return adata
 
 

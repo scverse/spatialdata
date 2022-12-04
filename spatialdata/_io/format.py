@@ -5,11 +5,13 @@ from ome_zarr.format import CurrentFormat
 from pandas.api.types import is_categorical_dtype
 from shapely import GeometryType
 
-from spatialdata._core.models import PolygonsModel
+from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
 
 CoordinateTransform_t = List[Dict[str, Any]]
 
 Polygon_s = PolygonsModel()
+Shapes_s = ShapesModel()
+Points_s = PointsModel()
 
 
 class SpatialDataFormatV01(CurrentFormat):
@@ -96,7 +98,6 @@ class PolygonsFormat(SpatialDataFormatV01):
     """Formatter for polygons."""
 
     def attrs_from_dict(self, metadata: Dict[str, Any]) -> GeometryType:
-        print(metadata)
         if Polygon_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Polygon_s.ATTRS_KEY} in polygons metadata.")
         metadata_ = metadata[Polygon_s.ATTRS_KEY]
@@ -113,3 +114,28 @@ class PolygonsFormat(SpatialDataFormatV01):
 
     def attrs_to_dict(self, geometry: GeometryType) -> Dict[str, Union[str, Dict[str, Any]]]:
         return {Polygon_s.GEOS_KEY: {Polygon_s.NAME_KEY: geometry.name, Polygon_s.TYPE_KEY: geometry.value}}
+
+
+class ShapesFormat(SpatialDataFormatV01):
+    """Formatter for shapes."""
+
+    def attrs_from_dict(self, metadata: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        if Shapes_s.ATTRS_KEY not in metadata:
+            raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
+        metadata_ = metadata[Shapes_s.ATTRS_KEY]
+        if Shapes_s.TYPE_KEY not in metadata_:
+            raise KeyError(f"Missing key {Shapes_s.TYPE_KEY} in shapes metadata.")
+        return {Shapes_s.TYPE_KEY: metadata_[Shapes_s.TYPE_KEY]}
+
+    def attrs_to_dict(self, data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        return {Shapes_s.TYPE_KEY: data[Shapes_s.ATTRS_KEY][Shapes_s.TYPE_KEY]}
+
+
+class PointsFormat(SpatialDataFormatV01):
+    """Formatter for points."""
+
+    def attrs_from_dict(self, metadata: Dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    def attrs_to_dict(self, data: Dict[str, Any]) -> None:
+        raise NotImplementedError
