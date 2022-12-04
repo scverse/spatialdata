@@ -60,6 +60,7 @@ def write_image(
     **metadata: Union[str, JSONDict, List[JSONDict]],
 ) -> None:
 
+    subgroup = group.require_group(name)
     if isinstance(image, SpatialImage):
         data = image.data
         coordinate_transformations = [[get_transform(image).to_dict()]]
@@ -72,7 +73,7 @@ def write_image(
             storage_options = {"chunks": chunks}
         write_image_ngff(
             image=data,
-            group=group,
+            group=subgroup,
             scaler=None,
             fmt=fmt,
             axes=axes,
@@ -90,7 +91,7 @@ def write_image(
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_ngff(
             pyramid=data,
-            group=group,
+            group=subgroup,
             fmt=fmt,
             axes=axes,
             coordinate_transformations=coordinate_transformations,
@@ -163,8 +164,7 @@ def write_polygons(
     fmt: Format = PolygonsFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
-    sub_group = group.require_group("polygons")
-    polygons_groups = sub_group.require_group(name)
+    polygons_groups = group.require_group(name)
     coordinate_transformations = [get_transform(polygons).to_dict()]
 
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
@@ -195,16 +195,16 @@ def write_shapes(
     fmt: Format = ShapesFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
-    sub_group = group.require_group("shapes")
+
     transform = shapes.uns.pop("transform")
     coordinate_transformations = [transform.to_dict()]
-    write_adata(sub_group, name, shapes)
+    write_adata(group, name, shapes)  # creates group[name]
     shapes.uns["transform"] = transform
 
     attrs = fmt.attrs_to_dict(shapes.uns)
     attrs["version"] = fmt.spatialdata_version
 
-    shapes_group = sub_group[name]
+    shapes_group = group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
@@ -224,15 +224,14 @@ def write_points(
     fmt: Format = PointsFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
-    sub_group = group.require_group("points")
     transform = points.uns.pop("transform")
     coordinate_transformations = [transform.to_dict()]
-    write_adata(sub_group, name, points)
+    write_adata(group, name, points)  # creates group[name]
     points.uns["transform"] = transform
+    points_group = group[name]
 
     attrs = {"version": fmt.spatialdata_version}
 
-    points_group = sub_group[name]
     _write_metadata(
         group=points_group,
         group_type=group_type,
@@ -255,9 +254,8 @@ def write_table(
     region_key = table.uns["spatialdata_attrs"].get("region_key", None)
     instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
     fmt.validate_table(table, region_key, instance_key)
-    sub_group = group.require_group("table")
-    write_adata(sub_group, name, table)
-    tables_group = sub_group[name]
+    write_adata(group, name, table)  # creates group[name]
+    tables_group = group[name]
     tables_group.attrs["@type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key

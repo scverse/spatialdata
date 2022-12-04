@@ -1,4 +1,3 @@
-import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Optional, Union
@@ -17,10 +16,7 @@ from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.models import TableModel
-from spatialdata._core.transformations import (
-    BaseTransformation,
-    get_transformation_from_dict,
-)
+from spatialdata._core.transformations import get_transformation_from_dict
 from spatialdata._io.format import PolygonsFormat, ShapesFormat, SpatialDataFormatV01
 
 
@@ -54,8 +50,8 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
-    if isinstance(store, Path):
-        store = str(store)
+    if isinstance(store, str):
+        store = Path(store)
 
     fmt = SpatialDataFormatV01()
 
@@ -67,83 +63,95 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     polygons = {}
     shapes = {}
 
-    def _get_transform_from_group(group: zarr.Group) -> BaseTransformation:
-        multiscales = group.attrs["multiscales"]
-        # TODO: parse info from multiscales['axes']
-        assert len(multiscales) == 1, f"TODO: expecting only one multiscale, got {len(multiscales)}"
-        datasets = multiscales[0]["datasets"]
-        assert len(datasets) == 1, "Expecting only one dataset"
-        coordinate_transformations = datasets[0]["coordinateTransformations"]
-        transformations = [get_transformation_from_dict(t) for t in coordinate_transformations]
-        assert len(transformations) == 1, "Expecting only one transformation per multiscale"
-        return transformations[0]
+    # read multiscale images
+    images_store = store / "images"
+    if images_store.exists():
+        f = zarr.open(images_store, mode="r")
+        for k in f.keys():
+            f_elem = f[k].name
+            f_elem_store = f"{images_store}{f_elem}"
+            image_loc = ZarrLocation(f_elem_store)
+            if image_loc.exists():
+                image_reader = Reader(image_loc)()
+                image_nodes = list(image_reader)
+                if len(image_nodes):
+                    for node in image_nodes:
+                        if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
+                            [not isinstance(spec, Label) for spec in node.specs]
+                        ):
+                            images[k] = _read_multiscale(node, fmt)
 
-    for k in f.keys():
-        f_elem = f[k].name
-        f_elem_store = f"{store}{f_elem}"
-        image_loc = ZarrLocation(f_elem_store)
-        image_reader = Reader(image_loc)()
-        image_nodes = list(image_reader)
-        # read multiscale images that are not labels
-        # time.time()
-        if len(image_nodes):
-            for node in image_nodes:
-                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
-                    [not isinstance(spec, Label) for spec in node.specs]
-                ):
-                    # print(f"action0: {time.time() - start}")
-                    # time.time()
-                    images[k] = _read_multiscale(node, fmt)
-                    # print(f"action1: {time.time() - start}")
-        # read multiscale labels for the level
-        # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
-        # since we don't link the image and the label inside .zattrs['image-label']
-        labels_loc = ZarrLocation(f"{f_elem_store}/labels")
-        if labels_loc.exists():
-            labels_reader = Reader(labels_loc)()
-            labels_nodes = list(labels_reader)
-            # time.time()
-            if len(labels_nodes):
-                for node in labels_nodes:
-                    if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
-                        [isinstance(spec, Label) for spec in node.specs]
-                    ):
-                        # print(f"action0: {time.time() - start}")
-                        # time.time()
-                        labels[k] = _read_multiscale(node, fmt)
-                        # print(f"action1: {time.time() - start}")
-        # now read rest
-        # time.time()
-        g = zarr.open(f_elem_store, mode="r")
-        for j in g.keys():
-            g_elem = g[j].name
-            g_elem_store = f"{f_elem_store}{g_elem}{f_elem}"
+    # read multiscale labels
+    # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
+    # since we don't link the image and the label inside .zattrs['image-label']
+    labels_store = store / "labels"
+    if labels_store.exists():
+        f = zarr.open(labels_store, mode="r")
+        for k in f.keys():
+            f_elem = f[k].name
+            f_elem_store = f"{labels_store}{f_elem}"
+            labels_loc = ZarrLocation(f_elem_store)
+            if labels_loc.exists():
+                labels_reader = Reader(labels_loc)()
+                labels_nodes = list(labels_reader)
+                # time.time()
+                print(labels_nodes)
+                if len(labels_nodes):
+                    for node in labels_nodes:
+                        print(node)
+                        if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
+                            [isinstance(spec, Label) for spec in node.specs]
+                        ):
+                            labels[k] = _read_multiscale(node, fmt)
 
-            if g_elem == "/points":
-                points[k] = _read_points(g_elem_store)
+    # now read rest of the data
+    points_store = store / "points"
+    if points_store.exists():
+        f = zarr.open(points_store, mode="r")
+        for k in f.keys():
+            print(k)
+            f_elem = f[k].name
+            f_elem_store = f"{points_store}{f_elem}"
+            points[k] = _read_points(f_elem_store)
 
-            if g_elem == "/polygons":
-                polygons[k] = _read_polygons(g_elem_store)
+    shapes_store = store / "shapes"
+    if shapes_store.exists():
+        f = zarr.open(shapes_store, mode="r")
+        for k in f.keys():
+            print(k)
+            f_elem = f[k].name
+            f_elem_store = f"{shapes_store}{f_elem}"
+            shapes[k] = _read_shapes(f_elem_store)
 
-            if g_elem == "/shapes":
-                shapes[k] = _read_shapes(g_elem_store)
+    polygons_store = store / "polygons"
+    if polygons_store.exists():
+        f = zarr.open(polygons_store, mode="r")
+        for k in f.keys():
+            print(k)
+            f_elem = f[k].name
+            f_elem_store = f"{polygons_store}{f_elem}"
+            polygons[k] = _read_polygons(f_elem_store)
 
-            if g_elem == "/table":
-                table = read_anndata_zarr(f"{f_elem_store}{g_elem}")
-                # fix wrong way information is stored in uns due to read/write operations
-                if TableModel.ATTRS_KEY in table.uns:
-                    # fill out eventual missing attributes that has been omitted because their value was None
-                    attrs = table.uns[TableModel.ATTRS_KEY]
-                    if "region" not in attrs:
-                        attrs["region"] = None
-                    if "region_key" not in attrs:
-                        attrs["region_key"] = None
-                    if "instance_key" not in attrs:
-                        attrs["instance_key"] = None
-                    # fix type for region
-                    if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                        attrs["region"] = attrs["region"].tolist()
-        # print(f"rest: {time.time() - start}")
+    table_store = store / "table"
+    if table_store.exists():
+        f = zarr.open(table_store, mode="r")
+        for k in f.keys():
+            print(k)
+            f_elem = f[k].name
+            f_elem_store = f"{table_store}{f_elem}"
+            table = read_anndata_zarr(f_elem_store)
+            if TableModel.ATTRS_KEY in table.uns:
+                # fill out eventual missing attributes that has been omitted because their value was None
+                attrs = table.uns[TableModel.ATTRS_KEY]
+                if "region" not in attrs:
+                    attrs["region"] = None
+                if "region_key" not in attrs:
+                    attrs["region_key"] = None
+                if "instance_key" not in attrs:
+                    attrs["instance_key"] = None
+                # fix type for region
+                if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                    attrs["region"] = attrs["region"].tolist()
 
     return SpatialData(
         images=images,
@@ -201,15 +209,3 @@ def _read_points(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData
     adata.uns["transform"] = transforms
 
     return adata
-
-
-def load_table_to_anndata(file_path: str, table_group: str) -> AnnData:
-    return read_zarr(os.path.join(file_path, table_group))
-
-
-if __name__ == "__main__":
-    sdata = SpatialData.read("../../spatialdata-sandbox/nanostring_cosmx/data_small.zarr")
-    # print(sdata)
-    from napari_spatialdata import Interactive
-
-    Interactive(sdata)

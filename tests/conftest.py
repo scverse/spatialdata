@@ -106,9 +106,9 @@ def _get_images() -> Mapping[str, Sequence[NDArray]]:
     out = {}
     dims_2d = ("c", "y", "x")
 
-    out["image2d_numpy"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d_numpy", dims=dims_2d)
-    out["image2d_multiscale_numpy"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale_numpy", multiscale_factors=[2, 4], dims=dims_2d
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
+    out["image2d_multiscale"] = Image2DModel.parse(
+        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
     )
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
     # out["image2d_xarray"] = Image2DModel.parse(
@@ -142,9 +142,9 @@ def _get_labels() -> Mapping[str, Sequence[NDArray]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d_numpy"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d_numpy", dims=dims_2d)
-    out["labels2d_multiscale_numpy"] = Labels2DModel.parse(
-        RNG.normal(size=(64, 64)), name="labels2d_multiscale_numpy", multiscale_factors=[2, 4], dims=dims_2d
+    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d", dims=dims_2d)
+    out["labels2d_multiscale"] = Labels2DModel.parse(
+        RNG.normal(size=(64, 64)), name="labels2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
     )
 
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
