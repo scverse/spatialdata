@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from anndata import AnnData
 from ome_zarr.format import CurrentFormat
@@ -23,45 +23,6 @@ class SpatialDataFormatV01(CurrentFormat):
     @property
     def spatialdata_version(self) -> str:
         return "0.1"
-
-    def validate_shapes_parameters(
-        self,
-        shapes_parameters: Dict[str, Union[str, float, Dict[str, CoordinateTransform_t]]],
-    ) -> None:
-        """
-        Validate the shape parameters.
-
-        Parameters
-        ----------
-        shapes_parameters
-            Shape parameters.
-
-        Returns
-        ------
-            Nothing.
-        """
-        if shapes_parameters is None:
-            raise ValueError("`shapes_parameters` must be provided.")
-
-        if "type" not in shapes_parameters:
-            raise ValueError("`shapes_parameters` must contain a `type`.")
-        # loosely follows coordinateTransform specs from ngff
-        if "coordinateTransformations" in shapes_parameters:
-            coordinate_transformations = shapes_parameters["coordinateTransformations"]
-            if TYPE_CHECKING:
-                assert isinstance(coordinate_transformations, list)
-            if len(coordinate_transformations) != 1:
-                raise ValueError("`coordinate_transformations` must be a list of one list.")
-            transforms = coordinate_transformations[0]
-            if "type" not in coordinate_transformations:
-                raise ValueError("`coordinate_transformations` must contain a `type`.")
-
-            if transforms["type"] != "scale":
-                raise ValueError("`coordinate_transformations` must contain a `type` of `scale`.")
-            if "scale" not in transforms:
-                raise ValueError("`coordinate_transformations` must contain a `scale`.")
-            if len(transforms["scale"]):
-                raise ValueError("`coordinate_transformations` must contain a `scale` of length 0.")
 
     def validate_table(
         self,
@@ -92,6 +53,41 @@ class SpatialDataFormatV01(CurrentFormat):
 
             coordinate_transformations.append([Scale(scale=scale).to_dict()])
         return coordinate_transformations
+
+    def validate_coordinate_transformations(
+        self,
+        ndim: int,
+        nlevels: int,
+        coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+    ) -> None:
+        """
+        Validates that a list of dicts contains a 'scale' transformation
+        Raises ValueError if no 'scale' found or doesn't match ndim
+        :param ndim:       Number of image dimensions
+        """
+
+        if coordinate_transformations is None:
+            raise ValueError("coordinate_transformations must be provided")
+        ct_count = len(coordinate_transformations)
+        if ct_count != nlevels:
+            raise ValueError(f"coordinate_transformations count: {ct_count} must match datasets {nlevels}")
+        for transformations in coordinate_transformations:
+            assert isinstance(transformations, list)
+            types = [t.get("type", None) for t in transformations]
+            if any([t is None for t in types]):
+                raise ValueError("Missing type in: %s" % transformations)
+
+            # new validation
+            import json
+
+            json0 = [json.dumps(t) for t in transformations]
+            from spatialdata._core.transformations import get_transformation_from_dict
+
+            parsed = [get_transformation_from_dict(t) for t in transformations]
+            json1 = [p.to_json() for p in parsed]
+            import numpy as np
+
+            assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
 
 
 class PolygonsFormat(SpatialDataFormatV01):
