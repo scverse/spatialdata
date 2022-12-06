@@ -18,12 +18,20 @@ from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import get_transformation_from_dict
 from spatialdata._io.format import PolygonsFormat, ShapesFormat, SpatialDataFormatV01
+from spatialdata._logging import logger
 
 
 def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
     transformations = [get_transformation_from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
     name = node.metadata["name"]
+    if type(name) == list:
+        assert len(name) == 1
+        name = name[0]
+        logger.warning(
+            "omero metadata is not fully supported yet, using a workaround. If you encounter bugs related "
+            "to omero metadata please follow the discussion at https://github.com/scverse/spatialdata/issues/60"
+        )
     axes = [i["name"] for i in node.metadata["axes"]]
     assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
     if len(datasets) > 1:
@@ -42,7 +50,7 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
         return SpatialImage(
             data,
-            name=node.metadata["name"],
+            name=name,
             dims=axes,
             attrs={"transform": t},
         )

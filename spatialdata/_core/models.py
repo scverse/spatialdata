@@ -1,4 +1,5 @@
 """This file contains models and schema for SpatialData"""
+import time
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
@@ -30,6 +31,7 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
+from tqdm import tqdm
 from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
@@ -400,29 +402,31 @@ class PointsModel:
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        var_names: Optional[Sequence[str]] = None,
         points_assignment: Optional[np.ndarray] = None,  # type: ignore[type-arg]
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
         n_obs = coords.shape[0]
-        if var_names is None and points_assignment is not None:
-            var_names = sorted(set(points_assignment))
-            logger.warning("`var_names` not provided, using sorted unique values of `points_assignment`.")
-        if var_names is not None:
-            assert points_assignment is not None
-            sparse = _sparse_matrix_from_assignment(
-                n_obs=n_obs, var_names=list(var_names), assignment=points_assignment
-            )
+        var_index: List[str]
+        if points_assignment is not None:
+            if not is_categorical_dtype(points_assignment):
+                logger.warning(f"Converting `points_assignment: {points_assignment}` to categorical dtype.")
+                points_assignment = pd.Categorical(points_assignment)
+            var_names = points_assignment.cat.categories.tolist()
+            var_index = var_names
+            sparse = _sparse_matrix_from_assignment(n_obs=n_obs, var_names=var_names, assignment=points_assignment)
             kwargs["X"] = sparse
             kwargs["dtype"] = sparse.dtype
         else:
             kwargs["shape"] = (n_obs, 0)
+            var_index = []
+        start = time.time()
         adata = AnnData(
             obs=pd.DataFrame(index=np.arange(n_obs)),
-            var=pd.DataFrame(index=var_names),
+            var=pd.DataFrame(index=var_index),
             **kwargs,
         )
+        print(f"creating anndata: {time.time() - start}")
         adata.obsm[cls.COORDS_KEY] = coords
         _parse_transform(adata, transform)
         return adata
@@ -518,11 +522,22 @@ def _sparse_matrix_from_assignment(
     """Create a sparse matrix from an assignment array."""
     data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)
     row = np.arange(len(assignment))
-    if type(var_names) == np.ndarray:
-        assert len(var_names.shape) == 1
-        col = np.array([np.where(var_names == p)[0][0] for p in assignment])
-    elif type(var_names) == list:
-        col = np.array([var_names.index(p) for p in assignment])
+    # if type(var_names) == np.ndarray:
+    #     assert len(var_names.shape) == 1
+    #     col = np.array([np.where(var_names == p)[0][0] for p in assignment])
+    if type(var_names) == list:
+        # naive way, slow
+        # values = []
+        # for p in tqdm(assignment, desc='creating sparse matrix'):
+        #     values.append(var_names.index(p))
+        # col = np.array(values)
+
+        # better way, ~10 times faster
+        col = np.full((len(assignment),), np.nan)
+        for cat in tqdm(assignment.cat.categories, desc="creating sparse matrix"):
+            value = var_names.index(cat)
+            col[assignment == cat] = value
+        assert np.sum(np.isnan(col)) == 0
     else:
         raise TypeError(f"var_names must be either np.array or List, but got {type(var_names)}")
     sparse = csr_matrix((data, (row, col)), shape=(n_obs, len(var_names)))

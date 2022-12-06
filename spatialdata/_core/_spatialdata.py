@@ -89,6 +89,8 @@ class SpatialData:
                 elif ndim == 4:
                     Image3D_s.validate(v)
                     self.images[k] = v
+                else:
+                    raise ValueError("Only czyx and cyx images supported")
 
         if labels is not None:
             self.labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
@@ -100,6 +102,8 @@ class SpatialData:
                 elif ndim == 3:
                     Label3D_s.validate(v)
                     self.labels[k] = v
+                else:
+                    raise ValueError(f"Invalid label dimensions: {ndim}")
 
         if polygons is not None:
             self.polygons: Dict[str, GeoDataFrame] = {}
