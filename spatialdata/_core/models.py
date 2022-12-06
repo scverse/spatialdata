@@ -402,7 +402,7 @@ class PointsModel:
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        points_assignment: Optional[np.ndarray] = None,  # type: ignore[type-arg]
+        points_assignment: Optional[Union[np.ndarray, pd.Series]] = None,  # type: ignore[type-arg]
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
@@ -411,7 +411,10 @@ class PointsModel:
         if points_assignment is not None:
             if not is_categorical_dtype(points_assignment):
                 logger.warning(f"Converting `points_assignment: {points_assignment}` to categorical dtype.")
-                points_assignment = pd.Categorical(points_assignment)
+                points_assignment = pd.Series(pd.Categorical(points_assignment))
+            if isinstance(points_assignment, np.ndarray):
+                points_assignment = pd.Series(points_assignment)
+            assert isinstance(points_assignment, pd.Series)
             var_names = points_assignment.cat.categories.tolist()
             var_index = var_names
             sparse = _sparse_matrix_from_assignment(n_obs=n_obs, var_names=var_names, assignment=points_assignment)
@@ -517,7 +520,7 @@ class TableModel:
 
 
 def _sparse_matrix_from_assignment(
-    n_obs: int, var_names: Union[List[str], ArrayLike], assignment: np.ndarray  # type: ignore[type-arg]
+    n_obs: int, var_names: Union[List[str], ArrayLike], assignment: pd.Series
 ) -> csr_matrix:
     """Create a sparse matrix from an assignment array."""
     data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)

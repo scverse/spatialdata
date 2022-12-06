@@ -233,8 +233,8 @@ def _get_points() -> Mapping[str, Sequence[NDArray]]:
         name = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
         # randomly assign some values from v to the points
-        points_assignment = RNG.choice(v, size=arr.shape[0])
-        out[name] = PointsModel.parse(coords=arr, var_names=v, points_assignment=points_assignment)
+        points_assignment = pd.Series(RNG.choice(v, size=arr.shape[0]))
+        out[name] = PointsModel.parse(coords=arr, points_assignment=points_assignment)
     return out
 
 
