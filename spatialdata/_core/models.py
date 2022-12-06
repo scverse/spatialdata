@@ -537,6 +537,7 @@ def _sparse_matrix_from_assignment(
 
         # better way, ~10 times faster
         col = np.full((len(assignment),), np.nan)
+        # tqdm not needed as a dependency if this function is removed
         for cat in tqdm(assignment.cat.categories, desc="creating sparse matrix"):
             value = var_names.index(cat)
             col[assignment == cat] = value
