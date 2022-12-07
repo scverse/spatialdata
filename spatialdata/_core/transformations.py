@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
@@ -189,14 +188,6 @@ class BaseTransformation(ABC):
                 f"the number of spatial dimensions. Points shape: {points_shape}, input size: {input_size}"
             )
 
-    @classmethod
-    def from_json(cls, data: Union[str, bytes]) -> BaseTransformation:
-        d = json.loads(data)
-        return get_transformation_from_dict(d)
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
     # order of the composition: self is applied first, then the transformation passed as argument
     def compose_with(self, transformation: BaseTransformation) -> BaseTransformation:
         return Sequence([self, transformation])
@@ -222,14 +213,6 @@ class BaseTransformation(ABC):
         if array.dtype != float:
             array = array.astype(float)
         return array
-
-
-def get_transformation_from_json(s: str) -> BaseTransformation:
-    return BaseTransformation.from_json(s)
-
-
-def get_transformation_from_dict(d: Transformation_t) -> BaseTransformation:
-    return BaseTransformation.from_dict(d)
 
 
 # A note on affine transformations and their matrix representation.
@@ -788,7 +771,7 @@ class Sequence(BaseTransformation):
 #         if isinstance(transformation, BaseTransformation):
 #             self.transformation = transformation
 #         else:
-#             self.transformation = get_transformation_from_dict(transformation)
+#             self.transformation = BaseTransformation.from_dict(transformation)
 #         self._ndim = self.transformation.ndim
 #
 #     @property
@@ -824,12 +807,12 @@ class Sequence(BaseTransformation):
 #         if isinstance(forward, BaseTransformation):
 #             self.forward = forward
 #         else:
-#             self.forward = get_transformation_from_dict(forward)
+#             self.forward = BaseTransformation.from_dict(forward)
 #
 #         if isinstance(inverse, BaseTransformation):
 #             self._inverse = inverse
 #         else:
-#             self._inverse = get_transformation_from_dict(inverse)
+#             self._inverse = BaseTransformation.from_dict(inverse)
 #         assert self.forward.ndim == self._inverse.ndim
 #         self._ndim = self.forward.ndim
 #

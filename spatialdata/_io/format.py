@@ -81,10 +81,10 @@ class SpatialDataFormatV01(CurrentFormat):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata._core.transformations import get_transformation_from_dict
+            from spatialdata._core.transformations import BaseTransformation
 
-            parsed = [get_transformation_from_dict(t) for t in transformations]
-            json1 = [p.to_json() for p in parsed]
+            parsed = [BaseTransformation.from_dict(t) for t in transformations]
+            json1 = [json.dumps(p.to_dict()) for p in parsed]
             import numpy as np
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])

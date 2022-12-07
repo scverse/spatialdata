@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 
@@ -91,7 +93,9 @@ def _test_transformation(
     assert transformation.to_dict() == BaseTransformation.from_dict(transformation.to_dict()).to_dict()
 
     # test to_json roundtrip
-    assert transformation.to_json() == BaseTransformation.from_json(transformation.to_json()).to_json()
+    assert json.dumps(transformation.to_dict()) == json.dumps(
+        BaseTransformation.from_dict(json.loads(json.dumps(transformation.to_dict()))).to_dict()
+    )
 
 
 def test_identity():
