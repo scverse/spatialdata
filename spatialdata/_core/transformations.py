@@ -65,7 +65,6 @@ class BaseTransformation(ABC):
         self.input_coordinate_system = input_coordinate_system
         self.output_coordinate_system = output_coordinate_system
 
-
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
         kw = copy.deepcopy(d)
