@@ -65,21 +65,6 @@ class BaseTransformation(ABC):
         self.input_coordinate_system = input_coordinate_system
         self.output_coordinate_system = output_coordinate_system
 
-    @property
-    def input_coordinate_system(self) -> Optional[Union[str, CoordinateSystem]]:
-        return self._input_coordinate_system
-
-    @input_coordinate_system.setter
-    def input_coordinate_system(self, coordinate_system: Optional[Union[str, CoordinateSystem]]) -> None:
-        self._input_coordinate_system = coordinate_system
-
-    @property
-    def output_coordinate_system(self) -> Optional[Union[str, CoordinateSystem]]:
-        return self._output_coordinate_system
-
-    @output_coordinate_system.setter
-    def output_coordinate_system(self, coordinate_system: Optional[Union[str, CoordinateSystem]]) -> None:
-        self._output_coordinate_system = coordinate_system
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
