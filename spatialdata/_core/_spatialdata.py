@@ -183,58 +183,6 @@ class SpatialData:
             elem_group = root.create_group(name="table")
             write_table(table=self.table, group=elem_group, name="table")
 
-        # # get union of unique ids of all elements
-        # elems = set().union(
-        #     *[
-        #         set(i)
-        #         for i in [
-        #             self.images,
-        #             self.labels,
-        #             self.points,
-        #             self.polygons,
-        #             self.shapes,
-        #         ]
-        #     ]
-        # )
-
-        # for el in elems:
-        #     elem_group = root.create_group(name=el)
-        #     if el in self.images.keys():
-        #         write_image(
-        #             image=self.images[el],
-        #             group=elem_group,
-        #             name=el,
-        #             storage_options=storage_options,
-        #         )
-        #     if el in self.labels.keys():
-        #         write_labels(
-        #             labels=self.labels[el],
-        #             group=elem_group,
-        #             name=el,
-        #             storage_options=storage_options,
-        #         )
-        #     if el in self.polygons.keys():
-        #         write_polygons(
-        #             polygons=self.polygons[el],
-        #             group=elem_group,
-        #             name=el,
-        #         )
-        #     if el in self.shapes.keys():
-        #         write_shapes(
-        #             shapes=self.shapes[el],
-        #             group=elem_group,
-        #             name=el,
-        #         )
-        #     if el in self.points.keys():
-        #         write_points(
-        #             points=self.points[el],
-        #             group=elem_group,
-        #             name=el,
-        #         )
-
-        # if self.table is not None:
-        #     write_table(table=self.table, group=root, name="table")
-
     @property
     def table(self) -> AnnData:
         return self._table
