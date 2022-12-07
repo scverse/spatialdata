@@ -54,8 +54,8 @@ class BaseTransformation(ABC):
     # "_input_coordinate_system" the intrinsitc coordinate system of the Image element,
     # and to "_output_coordinate_system" the global coordinate system (cyx) that will be created when calling the
     # SpatialData constructor
-    _input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
-    _output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
+    input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
+    output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
 
     def __init__(
         self,
@@ -64,7 +64,6 @@ class BaseTransformation(ABC):
     ) -> None:
         self.input_coordinate_system = input_coordinate_system
         self.output_coordinate_system = output_coordinate_system
-
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
