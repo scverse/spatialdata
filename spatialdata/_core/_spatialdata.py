@@ -78,6 +78,46 @@ class SpatialData:
         shapes: Mapping[str, Any] = MappingProxyType({}),
         table: Optional[AnnData] = None,
     ) -> None:
+        """
+        The SpatialData object is a modular container for abribtrary combinations of spatial elements. The elements
+        can be accesses separately and are stored as standard types (AnnData, GeoDataFrame, xarray.DataArray).
+
+
+        Parameters
+        ----------
+        images : Mapping[str, Any], optional
+            Mapping of 2D and 3D image elements. The following parsers are available: Image2DModel, Image3DModel.
+        labels : Mapping[str, Any], optional
+            Mapping of 2D and 3D labels elements. Labels are regions, they can't contain annotation but they can be
+            annotated by a table. The following parsers are available: Labels2DModel, Labels3DModel.
+        points : Mapping[str, Any], optional
+            Mapping of points elements. Points can contain annotations. The following parsers is available: PointsModel.
+        polygons : Mapping[str, Any], optional
+            Mapping of 2D polygons elements. Polygons are regions, they can't contain annotation but they can be annotated
+            by a table. The following parsers is available: PolygonsModel.
+        shapes : Mapping[str, Any], optional
+            Mapping of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
+            can be annotated by a table. The following parsers is available: ShapesModel.
+        table : Optional[AnnData], optional
+            AnnData table containing annotations for regions (labels, polygons, shapes). The following parsers is
+            available: TableModel.
+
+        Notes
+        -----
+        The spatial elements are stored with standard types:
+        - images and labels are stored as SpatialImage or MultiscaleSpatialImage objects, which are respectively
+        equivalent to xarray.DataArray and to a DataTree of xarray.DataArray objects;
+        - points and shapes are stored as AnnData objects, with the spatial coordinates stored in the obsm slot;
+        - polygons are stored as GeoDataFrames;
+        - the table are stored as AnnData objects, with the spatial coordinates stored in the obsm slot.
+
+        The table can annotate regions (shapes, polygons or labels) and can be used to store additional information.
+        Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
+        annotation directly.
+
+        The elements need to pass a validation step. To construct valid elements you can use the parsers that we
+        provide (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, PolygonsModel, ShapesModel, TableModel).
+        """
 
         if images is not None:
             self.images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
@@ -187,8 +227,8 @@ class SpatialData:
     def table(self) -> AnnData:
         return self._table
 
-    @classmethod
-    def read(cls, file_path: str) -> SpatialData:
+    @staticmethod
+    def read(file_path: str) -> SpatialData:
         from spatialdata._io.read import read_zarr
 
         sdata = read_zarr(file_path)

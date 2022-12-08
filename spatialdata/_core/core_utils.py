@@ -115,6 +115,19 @@ get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_S
 
 @singledispatch
 def get_dims(e: SpatialElement) -> Tuple[str, ...]:
+    """
+    Get the dimensions of a spatial element
+
+    Parameters
+    ----------
+    e
+        Spatial element
+
+    Returns
+    -------
+    dims
+        Dimensions of the spatial element (e.g. ("z", "y", "x"))
+    """
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
