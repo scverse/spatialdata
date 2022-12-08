@@ -104,3 +104,6 @@ exclude = '''
 
 [tool.jupytext]
 formats = "ipynb,md"
+
+[tool.doc8]
+ignore-path = "/docs/_templates/autosummary/*.rst"

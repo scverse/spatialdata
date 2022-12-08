@@ -31,4 +31,4 @@ spatialdata-sandbox
 temp/
 
 # rst generated from myst
-docs/classes
+docs/generated

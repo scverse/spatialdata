@@ -88,11 +88,11 @@ class SpatialData:
     provide (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, PolygonsModel, ShapesModel, TableModel).
     """
 
-    images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    points: Mapping[str, AnnData] = MappingProxyType({})
-    polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
-    shapes: Mapping[str, AnnData] = MappingProxyType({})
+    _images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
+    _labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
+    _points: Mapping[str, AnnData] = MappingProxyType({})
+    _polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
+    _shapes: Mapping[str, AnnData] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
@@ -106,48 +106,48 @@ class SpatialData:
     ) -> None:
 
         if images is not None:
-            self.images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
                 ndim = len(get_dims(v))
                 if ndim == 3:
                     Image2D_s.validate(v)
-                    self.images[k] = v
+                    self._images[k] = v
                 elif ndim == 4:
                     Image3D_s.validate(v)
-                    self.images[k] = v
+                    self._images[k] = v
                 else:
                     raise ValueError("Only czyx and cyx images supported")
 
         if labels is not None:
-            self.labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
                 ndim = len(get_dims(v))
                 if ndim == 2:
                     Label2D_s.validate(v)
-                    self.labels[k] = v
+                    self._labels[k] = v
                 elif ndim == 3:
                     Label3D_s.validate(v)
-                    self.labels[k] = v
+                    self._labels[k] = v
                 else:
                     raise ValueError(f"Invalid label dimensions: {ndim}")
 
         if polygons is not None:
-            self.polygons: Dict[str, GeoDataFrame] = {}
+            self._polygons: Dict[str, GeoDataFrame] = {}
             for k, v in polygons.items():
                 Polygon_s.validate(v)
-                self.polygons[k] = v
+                self._polygons[k] = v
 
         if shapes is not None:
-            self.shapes: Dict[str, AnnData] = {}
+            self._shapes: Dict[str, AnnData] = {}
             for k, v in shapes.items():
                 Shape_s.validate(v)
-                self.shapes[k] = v
+                self._shapes[k] = v
 
         if points is not None:
-            self.points: Dict[str, AnnData] = {}
+            self._points: Dict[str, AnnData] = {}
             for k, v in points.items():
                 Point_s.validate(v)
-                self.points[k] = v
+                self._points[k] = v
 
         if table is not None:
             Table_s.validate(table)
@@ -219,6 +219,31 @@ class SpatialData:
 
         sdata = read_zarr(file_path)
         return sdata
+
+    @property
+    def images(self) -> Mapping[str, Any]:
+        """Return images as a mapping of name to image data."""
+        return self._images
+
+    @property
+    def labels(self) -> Mapping[str, Any]:
+        """Return labels as a mapping of name to label data."""
+        return self._labels
+
+    @property
+    def points(self) -> Mapping[str, Any]:
+        """Return points as a mapping of name to point data."""
+        return self._points
+
+    @property
+    def polygons(self) -> Mapping[str, Any]:
+        """Return polygons as a mapping of name to polygon data."""
+        return self._polygons
+
+    @property
+    def shapes(self) -> Mapping[str, Any]:
+        """Return shapes as a mapping of name to shape data."""
+        return self._shapes
 
     def __repr__(self) -> str:
         return self._gen_repr()
