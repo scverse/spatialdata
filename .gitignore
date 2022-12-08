@@ -29,3 +29,6 @@ spatialdata-sandbox
 
 # temp files
 temp/
+
+# rst generated from myst
+docs/classes

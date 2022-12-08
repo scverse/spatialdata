@@ -1,11 +1,12 @@
 # API
 
+## SpatialData
+
 ```{eval-rst}
-.. module:: spatialdata
 .. currentmodule:: spatialdata
 
 .. autosummary::
-    :toctree: generated
+    :toctree: classes
 
     SpatialData
 ```

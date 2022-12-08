@@ -1,12 +1,12 @@
-## Abstract
+# Abstract
 
 This documents defines the specifications of SpatialData: a FAIR format for multi-modal spatial omics data. It also describes the initial implementation plan. This is meant to be a living document that can be updated as the project evolves.
 
-## Motivation and Scope
+# Motivation and Scope
 
 Recent advances in molecular profiling technologies allow to measure abundance of RNA and proteins in tissue, at high throughput, multiplexing and resolution. The variety of experimental techniques poses unique challenges in data handling and processing, in particular around data types and size. _SpatialData_ aims at implementing a performant in-memory representation in Python and an on-disk representation based on the Zarr data format and following the OME-NGFF specifications. By maximing interoperability, performant implementations and efficient (cloud-based) IO, _SpatialData_ aims at laying the foundations for new methods and pipelines for the analysis of spatial omics data.
 
-## Goals
+# Goals
 
 The goals define _what_ SpatialData will be able to do (as opposed to _how_). Goals can have the following priority levels:
 
@@ -72,13 +72,13 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
 -   [ ] P1. Points specification
 -   [ ] P1. Polygon specification
 
-### Non-goals
+## Non-goals
 
 -   _SpatialData_ is not an analysis library. Instead, analysis libraries should depend on SpatialData for IO and query.
 -   _SpatialData_ is not a format converter. We should not support converting to/from too many formats and instead use OME-NGFF as the interchange format.
 -   _SpatialData_ is not a new format. Instead, _SpatialData_ builds upon the OME-NGFF. It is anyway possible that until the OME-NGFF format reviews all the new capabilities (e.g. transformations, tables, ...), we need to make further assumption on the data, that we will gradually relax to align in full to the NGFF specs.
 
-### Satellite projects
+## Satellite projects
 
 We strongly encourage collaborations and community supports in all of these projects.
 
@@ -87,9 +87,9 @@ We strongly encourage collaborations and community supports in all of these proj
 -   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage. Deprecate such functionalities in Squidpy.
 -   [ ] P2. _Database_: Some form of update on released datasets with updated specs as development progresses.
 
-## Detailed description
+# Detailed description
 
-### Terminology
+## Terminology
 
 _SpatialData_ is both the name of the Python library as well as of the in-memory python object `SpatialData`. To distinguish between the two, we use the _italics_ formatting for the _SpatialData_ library and the `code` formatting for the `SpatialData` object.
 
@@ -109,7 +109,7 @@ The `SpatialData` object contains a set of Elements to be used for analysis. Ele
 
 The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files. A `SpatialData` object can be instantiated from a `NGFFStore`.
 
-### Elements
+## Elements
 
 We model a spatial dataset as a composition of distinct element types. The elements correspond to:
 
@@ -124,7 +124,7 @@ Each of these elements should be useful by itself, and in combination with other
 
 By decomposing the data model into building blocks (i.e. Elements) we support operations that do not otherwise fit this model. For instance, we may have data where regions have not been defined yet, or are just dealing with images and points.
 
-#### Assumptions
+## Assumptions
 
 _SpatialData_ closely follows the OME-NGFF specifications and therefore much of its assumptions are inherited from it. Extra assumptions will be discussed with the OME-NGFF community and adapted to the community-agreed design. The key assumptions are the following:
 
@@ -135,7 +135,7 @@ _SpatialData_ closely follows the OME-NGFF specifications and therefore much of 
 -   `Points` MAY NOT be annotated with `Tables`.
 -   `Tables` CAN NOT be annotated by other `Tables`.
 
-#### Images
+### Images
 
 Images of a sample. Should conform to the [OME-NGFF concept of an image](https://ngff.openmicroscopy.org/latest/#image-layout).
 
@@ -153,7 +153,7 @@ Images have labelled dimensions, and coordinate transformations. These transform
 
 For computational efficiency, images can have a pyramidal or multiscale format. This is implemented as an [xarray datatree](https://github.com/xarray-contrib/datatree). The coordinate system and transformations are stored in `xarray.DataArray.attrs`. We are currently investigating using [`spatial-image`](https://github.com/spatial-image/spatial-image).
 
-#### Regions of interest
+### Regions of interest
 
 Regions of interest define distict regions of space that can be used to select and aggregate observations. Regions can correspond to
 
@@ -173,7 +173,7 @@ Regions can be used for:
 
 Regions can be defined in multiple ways.
 
-##### Labels (pixel mask)
+#### Labels (pixel mask)
 
 Labels are a pixel mask representation of regions. This is an array of integers where each integer value corresponds to a region of space. This is commonly used along side pixel based imaging techniques, where the label array will share dimensionality with the image array. These may also be hierarchichal.
 Should conform to the [OME-NGFF definition](https://ngff.openmicroscopy.org/latest/#image-layout).
@@ -182,13 +182,13 @@ The label object itself builds on prior art in image analysis, in particular the
 
 For computational efficiency, labels can have a pyramidal or multiscale format. This is implemented as an [xarray datatree](https://github.com/xarray-contrib/datatree).
 
-##### Polygons
+#### Polygons
 
 A set of (multi-)polygons associated with a set of observations. Each set of polygons is associated with a coordinate system. Polygons can be used to represent a variety of regions of interests, such as clinical annotations and user-defined regions of interest.
 
 The Polygon object is implemented as a geopandas dataframe with [multi-polygons series](https://geopandas.org/en/stable/docs/user_guide/data_structures.html). The coordinate systems and transforms are stored in `geopandas.DataFrame.attrs`.
 
-##### Shapes
+#### Shapes
 
 Shapes are regions of interest of "regular" shape, as in ther extension on the coordinate space can be computed from the centroid coordinates and a set of values (e.g. diameter for circles, side for squares etc.). Shapes can be used to represent most of array-based spatial omics technologies such as 10X Genomics Visium, BGI Stereo-seq and DBiT-seq.
 
@@ -211,7 +211,7 @@ The coordinates of the centroids of Shapes are stored in `adata.obsm` with key `
 
 This element is represented in memory as an AnnData object.
 
-#### Region Table (table of annotations for regions)
+### Region Table (table of annotations for regions)
 
 Annotations of regions of interest. Each row in this table corresponds to a single region on the coordinate space. This is represented as an AnnData to allow for complex annotations on the data. This includes:
 
@@ -226,7 +226,7 @@ One region table can refer to multiple sets of Regions. But each row can map to 
     * `region_key: Optional[str]`: Key in obs which says which Regions container this obs exists in ("library_id"). Must be present if `region` is a list.
     * `instance_key: Optional[str]`: Key in obs that says which instance the obs represents. If not present, `.obs_names` is used.
 
-#### Points (representation to be discussed)
+### Points (representation to be discussed)
 
 Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.). However, this depends on whether we will adopt AnnData as the representation.
 
@@ -234,7 +234,7 @@ These are represented as an AnnData object of shape `(n_points, n_features)`, sa
 
 The `AnnData`'s layer `X` will typically be a sparse array with one entry for each row.
 
-#### Graphs (representation to be refined)
+### Graphs (representation to be refined)
 
 Graphs are stored in the annotating table for a Regions element. Graphs represent relationships between observations. Coordinates MAY be stored redundantly in the obsm slot of the annotating table, and are assumed to be in the intrinsic coordinate system of the label image.
 Features on edges would just be separate obsp.
@@ -244,7 +244,7 @@ Features or annotation on nodes coincide with the information stored in the anno
 -   Only problem is graphs for labels:
     -   Solution: graphs are stored in obsp of the associated label table. Coordinates are stored in obsm and are assumed to be in the intrinsic coordinate system of the label image.
 
-#### Summary
+## Summary
 
 -   Image `type: Image`
 -   Regions `type: Union[Labels, Shapes]`
@@ -256,7 +256,7 @@ Features or annotation on nodes coincide with the information stored in the anno
 -   Points `type: Points`
 -   Tables `type: Tables`
 
-##### Open discussions
+### Open discussions
 
 -   Multiple tables [discussion](https://github.com/scverse/spatialdata/issues/43)
 -   Feature annotations and spatial coordinates in the same table [discussion](https://github.com/scverse/spatialdata/issues/45)
