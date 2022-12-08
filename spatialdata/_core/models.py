@@ -100,6 +100,8 @@ class RasterSchema(DataArraySchema):
         ----------
         data
             Data to validate.
+        dims
+            Dimensions of the data.
         transform
             Transformation to apply to the data.
         multiscale_factors
@@ -115,54 +117,48 @@ class RasterSchema(DataArraySchema):
         :class:`spatial_image.SpatialImage` or
         :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
         """
+        # check if dims is specified and if it has correct values
+
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
+            if not isinstance(data.data, DaskArray):  # numpy -> dask
+                data.data = from_array(data.data)
             if dims is not None:
                 if dims != data.dims:
                     raise ValueError(
-                        f"dims {dims} does not match data.dims {data.dims}, please specify the dims only once."
+                        f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
                 else:
-                    logger.warning(
-                        "dims is specified redundantly: found also inside the data and the two values " "coincide."
-                    )
-            dims = data.dims
+                    logger.info("`dims` is specified redundantly: found also inside `data`")
+            else:
+                dims = data.dims
+            _reindex = lambda d: d
 
-        # check if dims is spcified and if it has correct values
-        if dims is None:
-            dims = cls.dims.dims
-            logger.info("dims is not specified, using default value: %s", dims)
-        if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
-            raise ValueError(f"Wrong dimensions: {dims}. Expected {cls.dims.dims} or a permutation of them.")
-
-        # transpose the data if needed
-        if isinstance(data, DataArray) or isinstance(data, SpatialImage):
-            if data.dims != cls.dims.dims:
-                data = data.transpose(*cls.dims.dims)
-                logger.info(f"Transposing DataArray/SpatialImage data to {cls.dims.dims}.")
-        elif isinstance(data, np.ndarray):
+        elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
+            if not isinstance(data, DaskArray):  # numpy -> dask
+                data = from_array(data)
             if dims is None:
-                raise ValueError("If data is a numpy array, dims must be provided.")
-            if dims != cls.dims.dims:
-                data = np.transpose(data, axes=[dims.index(d) for d in cls.dims.dims])
-                logger.info(f"Transposing np.ndarray data to {cls.dims.dims}.")
-        elif isinstance(data, DaskArray):
-            if dims is None:
-                raise ValueError("If data is a dask array, dims must be provided.")
-            if dims != cls.dims.dims:
-                data = data.transpose(*[dims.index(d) for d in cls.dims.dims])
-                logger.info(f"Transposing DaskArray data to {cls.dims.dims}.")
+                dims = cls.dims.dims
+                logger.info(f"`dims` is set to: {dims}")
+            else:
+                if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
+                    raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
+            _reindex = lambda d: dims.index(d)  # type: ignore[union-attr]
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
-        # convert the data to a dask array
-        if not isinstance(data, DaskArray):
-            data = from_array(data)
+        # transpose if possible
+        if dims != cls.dims.dims:
+            try:
+                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
+            except ValueError:
+                raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        # TODO(giovp): drop coordinates for now until solution with IO.
         if TYPE_CHECKING:
             assert isinstance(data, SpatialImage)
+        # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
         if TYPE_CHECKING:
             assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
