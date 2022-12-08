@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from numbers import Number
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
@@ -33,7 +32,7 @@ __all__ = [
 # TODO: update this link when the specs are finalized
 # http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs
 # Transformation_t = Dict[str, Union[str, List[int], List[str], List[Dict[str, Any]]]]
-Transformation_t = Mapping[str, Any]
+Transformation_t = Dict[str, Any]
 TRANSFORMATIONS: Dict[str, Type[BaseTransformation]] = {}
 
 
@@ -71,12 +70,12 @@ class BaseTransformation(ABC):
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> BaseTransformation:
-        from types import MappingProxyType
+        pass
 
-        d = MappingProxyType(d)
+        # d = MappingProxyType(d)
         type = d["type"]
         # MappingProxyType is readonly
-        transformation = TRANSFORMATIONS[type]._from_dict(MappingProxyType(d))
+        transformation = TRANSFORMATIONS[type]._from_dict(d)
         if "input" in d:
             input_coordinate_system = d["input"]
             if isinstance(input_coordinate_system, dict):
@@ -213,8 +212,9 @@ class Identity(BaseTransformation):
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
 
+    # TODO: remove type: ignore[valid-type] when https://github.com/python/mypy/pull/14041 is merged
     @classmethod
-    def _from_dict(cls, _) -> Self:
+    def _from_dict(cls, _: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls()
 
     def to_dict(self) -> Transformation_t:
@@ -265,7 +265,7 @@ class MapAxis(BaseTransformation):
         self.map_axis = map_axis
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls(d["mapAxis"])
 
     def to_dict(self) -> Transformation_t:
@@ -339,7 +339,7 @@ class Translation(BaseTransformation):
         self.translation = self._parse_list_into_array(translation)
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls(d["translation"])
 
     def to_dict(self) -> Transformation_t:
@@ -393,7 +393,7 @@ class Scale(BaseTransformation):
         self.scale = self._parse_list_into_array(scale)
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls(d["scale"])
 
     def to_dict(self) -> Transformation_t:
@@ -449,7 +449,7 @@ class Affine(BaseTransformation):
         self.affine = self._parse_list_into_array(affine)
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         assert isinstance(d["affine"], list)
         last_row = [[0.0] * (len(d["affine"][0]) - 1) + [1.0]]
         return cls(d["affine"] + last_row)
@@ -513,7 +513,7 @@ class Rotation(BaseTransformation):
         self.rotation = self._parse_list_into_array(rotation)
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         x = d["rotation"]
         n = len(x)
         r = math.sqrt(n)
@@ -570,7 +570,7 @@ class Sequence(BaseTransformation):
         self.transformations = transformations
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls([BaseTransformation.from_dict(t) for t in d["transformations"]])
 
     def to_dict(self) -> Transformation_t:
@@ -831,7 +831,7 @@ class ByDimension(BaseTransformation):
         self.transformations = transformations
 
     @classmethod
-    def _from_dict(cls, d) -> Self:
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
         return cls([BaseTransformation.from_dict(t) for t in d["transformations"]])
 
     def to_dict(self) -> Transformation_t:
