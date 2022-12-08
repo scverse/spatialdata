@@ -256,7 +256,7 @@ Features or annotation on nodes coincide with the information stored in the anno
 -   Points `type: Points`
 -   Tables `type: Tables`
 
-#### Open discussions
+### Open discussions
 
 -   Multiple tables [discussion](https://github.com/scverse/spatialdata/issues/43)
 -   Feature annotations and spatial coordinates in the same table [discussion](https://github.com/scverse/spatialdata/issues/45)
