@@ -36,8 +36,7 @@ doc = [
     "sphinxcontrib-bibtex>=1.0.0",
     "sphinx-autodoc-typehints",
     # For notebooks
-    "ipywidgets",
-    "ipykernel",
+    "ipython>=8.3.0",
     "sphinx-copybutton",
 ]
 test = [
