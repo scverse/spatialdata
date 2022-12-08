@@ -217,30 +217,61 @@ def write_shapes(
 
 
 def write_points(
-    points: AnnData,
+    points: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
     fmt: Format = PointsFormat(),
     axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
-    transform = points.uns.pop("transform")
-    coordinate_transformations = [transform.to_dict()]
-    write_adata(group, name, points)  # creates group[name]
-    points.uns["transform"] = transform
-    points_group = group[name]
+    points_groups = group.require_group(name)
+    coordinate_transformations = [get_transform(points).to_dict()]
 
-    attrs = {"version": fmt.spatialdata_version}
+    geometry, coords, offsets = to_ragged_array(points.geometry)
+    assert len(offsets) == 0
+    # passing offsets = None or offsets with len(offsets) == 0 is equivalent
+    points_groups.create_dataset(name="coords", data=coords)
+    # for i, o in enumerate(offsets):
+    #     points_groups.create_dataset(name=f"offset{i}", data=o)
+    points_groups.create_dataset(name="Index", data=points.index.values)
+
+    # write annotation columns
+    annotations_group = points_groups.require_group("annotations")
+    annotations = points.columns.difference(["geometry"])
+    for a in annotations:
+        # to write categorical and object types to zarr
+        write_adata(annotations_group, a, points[a].values)
+
+    attrs = fmt.attrs_to_dict(geometry)
+    attrs["version"] = fmt.spatialdata_version
 
     _write_metadata(
-        group=points_group,
+        points_groups,
         group_type=group_type,
-        shape=points.obsm["spatial"].shape,
+        shape=coords.shape,
         coordinate_transformations=coordinate_transformations,
         attrs=attrs,
         fmt=fmt,
         axes=axes,
     )
+    #
+    # transform = points.uns.pop("transform")
+    # coordinate_transformations = [transform.to_dict()]
+    # write_adata(group, name, points)  # creates group[name]
+    # points.uns["transform"] = transform
+    # points_group = group[name]
+    #
+    # attrs = {"version": fmt.spatialdata_version}
+    #
+    # _write_metadata(
+    #     group=points_group,
+    #     group_type=group_type,
+    #     shape=points.obsm["spatial"].shape,
+    #     coordinate_transformations=coordinate_transformations,
+    #     attrs=attrs,
+    #     fmt=fmt,
+    #     axes=axes,
+    # )
 
 
 def write_table(

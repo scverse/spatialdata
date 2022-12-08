@@ -130,8 +130,20 @@ class ShapesFormat(SpatialDataFormatV01):
 class PointsFormat(SpatialDataFormatV01):
     """Formatter for points."""
 
-    def attrs_from_dict(self, metadata: Dict[str, Any]) -> None:
-        raise NotImplementedError
+    def attrs_from_dict(self, metadata: Dict[str, Any]) -> GeometryType:
+        if Points_s.ATTRS_KEY not in metadata:
+            raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
+        metadata_ = metadata[Points_s.ATTRS_KEY]
+        if Points_s.GEOS_KEY not in metadata_:
+            raise KeyError(f"Missing key {Points_s.GEOS_KEY} in points metadata.")
+        for k in [Polygon_s.TYPE_KEY, Polygon_s.NAME_KEY]:
+            if k not in metadata_[Polygon_s.GEOS_KEY]:
+                raise KeyError(f"Missing key {k} in polygons metadata.")
 
-    def attrs_to_dict(self, data: Dict[str, Any]) -> None:
-        raise NotImplementedError
+        typ = GeometryType(metadata_[Points_s.GEOS_KEY][Points_s.TYPE_KEY])
+        assert typ.name == metadata_[Points_s.GEOS_KEY][Points_s.NAME_KEY]
+        assert self.spatialdata_version == metadata_["version"]
+        return typ
+
+    def attrs_to_dict(self, geometry: GeometryType) -> Dict[str, Union[str, Dict[str, Any]]]:
+        return {Points_s.GEOS_KEY: {Points_s.NAME_KEY: geometry.name, Points_s.TYPE_KEY: geometry.value}}

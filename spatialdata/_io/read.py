@@ -6,6 +6,7 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
+from anndata.experimental import read_elem
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
@@ -15,9 +16,15 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.core_utils import set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation
-from spatialdata._io.format import PolygonsFormat, ShapesFormat, SpatialDataFormatV01
+from spatialdata._io.format import (
+    PointsFormat,
+    PolygonsFormat,
+    ShapesFormat,
+    SpatialDataFormatV01,
+)
 from spatialdata._logging import logger
 
 
@@ -182,7 +189,7 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spa
     geometry = from_ragged_array(typ, coords, offsets)
 
     geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    geo_df.attrs = {"transform": transforms}
+    set_transform(geo_df, transforms)
     return geo_df
 
 
@@ -195,19 +202,41 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
 
     adata = read_anndata_zarr(store)
 
-    adata.uns["transform"] = transforms
+    set_transform(adata, transforms)
     assert adata.uns["spatialdata_attrs"] == attrs
 
     return adata
 
 
-def _read_points(store: Union[str, Path, MutableMapping, zarr.Group]) -> AnnData:  # type: ignore[type-arg]
+def _read_points(
+    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
+) -> GeoDataFrame:
     """Read points from a zarr store."""
-
     f = zarr.open(store, mode="r")
+
+    coords = np.array(f["coords"])
+    index = np.array(f["Index"])
+    # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
+    # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
+
+    typ = fmt.attrs_from_dict(f.attrs.asdict())
+
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
-    adata = read_anndata_zarr(store)
-    adata.uns["transform"] = transforms
+    geometry = from_ragged_array(typ, coords)
 
-    return adata
+    geo_df = GeoDataFrame({"geometry": geometry}, index=index)
+    for c in f["annotations"]:
+        column = read_elem(f["annotations"][c])
+        geo_df[c] = column
+
+    set_transform(geo_df, transforms)
+    return geo_df
+    #
+    # f = zarr.open(store, mode="r")
+    # transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    #
+    # adata = read_anndata_zarr(store)
+    # adata.uns["transform"] = transforms
+    #
+    # return adata

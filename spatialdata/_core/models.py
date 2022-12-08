@@ -1,5 +1,4 @@
 """This file contains models and schema for SpatialData"""
-import time
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
@@ -24,10 +23,10 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike, NDArray
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, is_object_dtype, is_string_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -386,49 +385,57 @@ class ShapesModel:
 
 
 class PointsModel:
-    COORDS_KEY = "spatial"
+    GEOMETRY_KEY = "geometry"
+    ATTRS_KEY = "spatialdata_attrs"
+    GEOS_KEY = "geos"
+    TYPE_KEY = "type"
+    NAME_KEY = "name"
+    TRANSFORM_KEY = "transform"
 
-    def validate(self, data: AnnData) -> None:
-        if self.COORDS_KEY not in data.obsm:
-            raise ValueError(f"AnnData does not contain points coordinates in `adata.obsm['{self.COORDS_KEY}']`.")
-        if TRANSFORM_KEY not in data.uns:
-            raise ValueError(f"AnnData does not contain `{TRANSFORM_KEY}`.")
+    @classmethod
+    def validate(cls, data: GeoDataFrame) -> None:
+        if cls.GEOMETRY_KEY not in data:
+            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
+        if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+        if len(data) > 0 and not isinstance(data[cls.GEOMETRY_KEY].values[0], Point):
+            # TODO: should check for all values?
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Point objects.")
+        if cls.TRANSFORM_KEY not in data.attrs:
+            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        points_assignment: Optional[Union[np.ndarray, pd.Series]] = None,  # type: ignore[type-arg]
+        annotations: Optional[pd.DataFrame] = None,
         transform: Optional[Any] = None,
+        supress_categorical_check: bool = False,
         **kwargs: Any,
     ) -> AnnData:
-        n_obs = coords.shape[0]
-        var_index: List[str]
-        if points_assignment is not None:
-            if not is_categorical_dtype(points_assignment):
-                logger.warning(f"Converting `points_assignment: {points_assignment}` to categorical dtype.")
-                points_assignment = pd.Series(pd.Categorical(points_assignment))
-            if isinstance(points_assignment, np.ndarray):
-                points_assignment = pd.Series(points_assignment)
-            assert isinstance(points_assignment, pd.Series)
-            var_names = points_assignment.cat.categories.tolist()
-            var_index = var_names
-            sparse = _sparse_matrix_from_assignment(n_obs=n_obs, var_names=var_names, assignment=points_assignment)
-            kwargs["X"] = sparse
-            kwargs["dtype"] = sparse.dtype
-        else:
-            kwargs["shape"] = (n_obs, 0)
-            var_index = []
-        start = time.time()
-        adata = AnnData(
-            obs=pd.DataFrame(index=np.arange(n_obs)),
-            var=pd.DataFrame(index=var_index),
-            **kwargs,
-        )
-        print(f"creating anndata: {time.time() - start}")
-        adata.obsm[cls.COORDS_KEY] = coords
-        _parse_transform(adata, transform)
-        return adata
+        coords.shape[0]
+        if annotations is not None:
+            if not supress_categorical_check:
+                assert isinstance(annotations, pd.DataFrame)
+                for column in annotations:
+                    c = annotations[column]
+                    if is_string_dtype(c) or is_object_dtype(c):
+                        logger.warning(
+                            "detected a column with strings, consider converting it to "
+                            "categorical to achieve faster performance. Call parse() with "
+                            "suppress_categorical_check=True to hide this warning"
+                        )
+        geometry = GeometryType(GeometryType.POINT)
+        data = from_ragged_array(geometry, coords)
+        geo_df = GeoDataFrame({"geometry": data})
+        if annotations is not None:
+            for column in annotations:
+                if column in geo_df:
+                    raise RuntimeError("column name from the annotatoins DataFrame already exists in GeoDataFrame")
+                geo_df[column] = annotations[column]
+        _parse_transform(geo_df, transform)
+        cls.validate(geo_df)
+        return geo_df
 
 
 class TableModel:

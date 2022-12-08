@@ -247,13 +247,20 @@ class SpatialData:
                     for k, v in attribute.items():
                         descr += f"{h('empty_line')}"
                         descr_class = v.__class__.__name__
-                        if attr == "points" or attr == "shapes":
+                        if attr == "shapes":
                             descr += (
                                 f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
                                 f"{v.obsm['spatial'].shape}"
                             )
                         elif attr == "polygons":
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}"
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
+                        elif attr == "points":
+                            if len(v) > 0:
+                                n = v.iloc[0].geometry._ndim
+                                dim_string = f"({n}D points)"
+                            else:
+                                dim_string = ""
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}{dim_string}"
                         else:
                             if isinstance(v, SpatialImage):
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"

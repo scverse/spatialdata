@@ -31,10 +31,10 @@ dependencies = [
     "spatial_image",
     "multiscale_spatial_image",
     "xarray-schema",
+    "pygeos",
     "geopandas",
-    "shapely==2.0rc1",
+    "shapely==2.0rc2",
     "rich",
-    "tqdm"
 ]
 
 [project.optional-dependencies]

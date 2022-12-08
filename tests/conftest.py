@@ -9,7 +9,6 @@ from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import TRANSFORM_KEY
 from spatialdata._core.models import (
     Image2DModel,
     Labels2DModel,
@@ -59,15 +58,15 @@ def table_multiple_annotations() -> SpatialData:
     return SpatialData(table=_get_table(region=["sample1", "sample2"]))
 
 
-@pytest.fixture()
-def empty_points() -> SpatialData:
-    adata = AnnData(
-        shape=(0, 3), obsm={PointsModel.COORDS_KEY: np.zeros((0, 2))}, var=pd.DataFrame(index=["a", "b", "c"])
-    )
-    from spatialdata import Identity
-
-    adata.uns[TRANSFORM_KEY] = Identity()
-    return SpatialData(points={"empty": adata})
+# @pytest.fixture()
+# def empty_points() -> SpatialData:
+#     geo_df = GeoDataFrame(
+#         geometry=[],
+#     )
+#     from spatialdata import Identity
+#     set_transform(geo_df, Identity())
+#
+#     return SpatialData(points={"empty": geo_df})
 
 
 @pytest.fixture()
@@ -81,7 +80,7 @@ def empty_table() -> SpatialData:
     # params=["labels"]
     params=["full", "empty"]
     + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
-    + ["empty_" + x for x in ["points", "table"]]
+    + ["empty_" + x for x in ["table"]]
 )
 def sdata(request) -> SpatialData:
     if request.param == "full":
@@ -233,8 +232,14 @@ def _get_points() -> Mapping[str, Sequence[NDArray]]:
         name = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
         # randomly assign some values from v to the points
-        points_assignment = pd.Series(RNG.choice(v, size=arr.shape[0]))
-        out[name] = PointsModel.parse(coords=arr, points_assignment=points_assignment)
+        points_assignment0 = pd.Series(RNG.choice(v, size=arr.shape[0]))
+        points_assignment1 = pd.Series(RNG.choice(v, size=arr.shape[0]))
+        out[name] = PointsModel.parse(
+            coords=arr,
+            annotations=pd.DataFrame(
+                {"points_assignment0": points_assignment0, "points_assignment1": points_assignment1}
+            ),
+        )
     return out
 
 

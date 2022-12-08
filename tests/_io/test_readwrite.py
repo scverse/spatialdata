@@ -64,9 +64,11 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
         for k in points.points.keys():
-            assert isinstance(sdata.points[k], AnnData)
-            np.testing.assert_array_equal(points.points[k].obsm["spatial"], sdata.points[k].obsm["spatial"])
-            assert points.points[k].uns == sdata.points[k].uns
+            assert isinstance(sdata.points[k], GeoDataFrame)
+            pd.testing.assert_series_equal(points.points[k].geometry, sdata.points[k].geometry)
+            annotations = points.points[k].columns.difference(["geometry"])
+            for a in annotations:
+                pd.testing.assert_series_equal(points.points[k][a], sdata.points[k][a])
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
