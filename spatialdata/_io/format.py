@@ -31,7 +31,7 @@ class SpatialDataFormatV01(CurrentFormat):
         instance_key: Optional[str] = None,
     ) -> None:
         if not isinstance(table, AnnData):
-            raise ValueError("`tables` must be an `anndata.AnnData`.")
+            raise TypeError(f"`tables` must be `anndata.AnnData`, was {type(table)}.")
         if region_key is not None:
             if not is_categorical_dtype(table.obs[region_key]):
                 raise ValueError(
