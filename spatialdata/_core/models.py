@@ -287,8 +287,8 @@ class PolygonsModel:
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
-        _parse_transform(data, transform)
-        cls.validate(data)
+        _parse_transform(geo_df, transform)
+        cls.validate(geo_df)
         return geo_df
 
     @parse.register
@@ -302,8 +302,8 @@ class PolygonsModel:
 
         gc: GeometryCollection = from_geojson(data)
         geo_df = GeoDataFrame({"geometry": gc.geoms})
-        _parse_transform(data, transform)
-        cls.validate(data)
+        _parse_transform(geo_df, transform)
+        cls.validate(geo_df)
         return geo_df
 
     @parse.register

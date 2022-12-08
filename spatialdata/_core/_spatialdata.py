@@ -44,24 +44,6 @@ Table_s = TableModel()
 
 
 class SpatialData:
-    """Spatial data structure.
-
-    Parameters
-    ----------
-    images : Mapping[str, Any], optional
-        Mapping of image names to image data
-    labels : Mapping[str, Any], optional
-        Mapping of label names to label data
-    points : Mapping[str, Any], optional
-        Mapping of point names to point data
-    polygons : Mapping[str, Any], optional
-        Mapping of polygon names to polygon data
-    shapes : Mapping[str, Any], optional
-        Mapping of shape names to shape data
-    table : Optional[AnnData], optional
-        Table data, by default None
-    """
-
     images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     points: Mapping[str, AnnData] = MappingProxyType({})
