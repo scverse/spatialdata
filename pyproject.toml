@@ -31,13 +31,13 @@ dev = [
 ]
 doc = [
     "sphinx>=4",
-    "furo",
-    "myst-parser",
+    "sphinx-book-theme>=0.3.3",
+    "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
-    "scanpydoc[typehints]>=0.7.4",
+    "sphinx-autodoc-typehints",
     # For notebooks
-    "nbsphinx",
-    "ipython>=8.3.0"
+    "ipykernel",
+    "sphinx-copybutton",
 ]
 test = [
     "pytest",
