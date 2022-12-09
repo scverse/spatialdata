@@ -181,4 +181,4 @@ def _(e: AnnData) -> Tuple[str, ...]:
 def _(e: pa.Table) -> Tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = [c for c in valid_dims if c in e.column_names]
-    return dims
+    return tuple(dims)

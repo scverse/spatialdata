@@ -131,7 +131,8 @@ class PointsFormat(SpatialDataFormatV01):
     """Formatter for points."""
 
     def attrs_from_dict(self, metadata: Dict[str, Any]) -> GeometryType:
-        pass
+        # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
+        return {}
         # if Points_s.ATTRS_KEY not in metadata:
         #     raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         # metadata_ = metadata[Points_s.ATTRS_KEY]
@@ -147,5 +148,6 @@ class PointsFormat(SpatialDataFormatV01):
         # return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> Dict[str, Union[str, Dict[str, Any]]]:
-        pass
+        # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
+        return {}
         # return {Points_s.GEOS_KEY: {Points_s.NAME_KEY: geometry.name, Points_s.TYPE_KEY: geometry.value}}

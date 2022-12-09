@@ -404,7 +404,7 @@ class PointsModel:
             assert data.schema.metadata is not None
             t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
             BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
-        except e:
+        except Exception as e:  # noqa: B902
             logger.error("cannot parse the transformation from the pyarrow.Table object")
             raise e
 

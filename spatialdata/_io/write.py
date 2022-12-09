@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -33,18 +33,13 @@ __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "wri
 def _write_metadata(
     group: zarr.Group,
     group_type: str,
-    shape: Tuple[int, ...],
     coordinate_transformations: List[Dict[str, Any]],
+    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
     attrs: Optional[Mapping[str, Any]] = None,
     fmt: Format = SpatialDataFormatV01(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
     """Write metdata to a group."""
-    dims = len(shape)
-    axes = _get_valid_axes(dims, axes, fmt)
-
-    if axes is not None:
-        axes = _get_valid_axes(axes=axes, fmt=fmt)
+    axes = _get_valid_axes(axes=axes, fmt=fmt)
 
     group.attrs["@type"] = group_type
     group.attrs["axes"] = axes
@@ -69,6 +64,7 @@ def write_image(
         coordinate_transformations = [[get_transform(image).to_dict()]]
         chunks = image.chunks
         axes = image.dims
+        axes = _get_valid_axes(axes=axes, fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
@@ -90,7 +86,7 @@ def write_image(
         chunks = _iter_multiscale(image, name, "chunks")
         axes_ = _iter_multiscale(image, name, "dims")
         # TODO: how should axes be handled with multiscale?
-        axes = _get_valid_axes(ndim=data[0].ndim, axes=axes_[0])
+        axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_ngff(
             pyramid=data,
@@ -120,6 +116,7 @@ def write_labels(
         coordinate_transformations = [[get_transform(labels).to_dict()]]
         chunks = labels.chunks
         axes = labels.dims
+        axes = _get_valid_axes(axes=axes, fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
@@ -144,7 +141,7 @@ def write_labels(
         chunks = _iter_multiscale(labels, name, "chunks")
         axes_ = _iter_multiscale(labels, name, "dims")
         # TODO: how should axes be handled with multiscale?
-        axes = _get_valid_axes(ndim=data[0].ndim, axes=axes_[0])
+        axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_labels_ngff(
             pyramid=data,
@@ -165,7 +162,6 @@ def write_polygons(
     name: str,
     group_type: str = "ngff:polygons",
     fmt: Format = PolygonsFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
     polygons_groups = group.require_group(name)
     coordinate_transformations = [get_transform(polygons).to_dict()]
@@ -179,14 +175,15 @@ def write_polygons(
     attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
+    axes = list(get_dims(polygons))
+
     _write_metadata(
         polygons_groups,
         group_type=group_type,
-        shape=coords.shape,
         coordinate_transformations=coordinate_transformations,
+        axes=axes,
         attrs=attrs,
         fmt=fmt,
-        axes=axes,
     )
 
 
@@ -196,7 +193,6 @@ def write_shapes(
     name: str,
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
 
     transform = shapes.uns.pop("transform")
@@ -207,15 +203,16 @@ def write_shapes(
     attrs = fmt.attrs_to_dict(shapes.uns)
     attrs["version"] = fmt.spatialdata_version
 
+    axes = list(get_dims(shapes))
+
     shapes_group = group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
-        shape=shapes.obsm["spatial"].shape,
         coordinate_transformations=coordinate_transformations,
+        axes=axes,
         attrs=attrs,
         fmt=fmt,
-        axes=axes,
     )
 
 
@@ -225,60 +222,27 @@ def write_points(
     name: str,
     group_type: str = "ngff:points",
     fmt: Format = PointsFormat(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
 ) -> None:
     points_groups = group.require_group(name)
     coordinate_transformations = [get_transform(points).to_dict()]
 
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
     pq.write_table(points, path)
-    # geometry, coords, offsets = to_ragged_array(points.geometry)
-    # assert len(offsets) == 0
-    # # passing offsets = None or offsets with len(offsets) == 0 is equivalent
-    # points_groups.create_dataset(name="coords", data=coords)
-    # # for i, o in enumerate(offsets):
-    # #     points_groups.create_dataset(name=f"offset{i}", data=o)
-    # points_groups.create_dataset(name="Index", data=points.index.values)
-    #
-    # # write annotation columns
-    # annotations_group = points_groups.require_group("annotations")
-    # annotations = points.columns.difference(["geometry"])
-    # for a in annotations:
-    #     # to write categorical and object types to zarr
-    #     write_adata(annotations_group, a, points[a].values)
 
-    # attrs = fmt.attrs_to_dict(geometry)
+    axes = list(get_dims(points))
+
     attrs = {}
     attrs["version"] = fmt.spatialdata_version
-    coords_shape = (0, get_dims(points))
+    (0, get_dims(points))
 
     _write_metadata(
         points_groups,
         group_type=group_type,
-        shape=coords_shape,
         coordinate_transformations=coordinate_transformations,
+        axes=axes,
         attrs=attrs,
         fmt=fmt,
-        axes=axes,
     )
-    #
-    # transform = points.uns.pop("transform")
-    # coordinate_transformations = [transform.to_dict()]
-    # write_adata(group, name, points)  # creates group[name]
-    # points.uns["transform"] = transform
-    # points_group = group[name]
-    #
-    # attrs = {"version": fmt.spatialdata_version}
-    #
-    # _write_metadata(
-    #     group=points_group,
-    #     group_type=group_type,
-    #     shape=points.obsm["spatial"].shape,
-    #     coordinate_transformations=coordinate_transformations,
-    #     attrs=attrs,
-    #     fmt=fmt,
-    #     axes=axes,
-    # )
 
 
 def write_table(
