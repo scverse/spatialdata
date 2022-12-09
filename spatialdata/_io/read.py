@@ -18,7 +18,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.core_utils import set_transform
+from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io.format import (
@@ -53,7 +53,12 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
                 dims=axes,
                 attrs={"transform": t},
             )
-        return MultiscaleSpatialImage.from_dict(multiscale_image)
+        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        # for some reasons if we put attrs={"transform": t} in the dict above, it does not get copied to
+        # MultiscaleSpatialImage. We put it also above otherwise we get a schema error
+        # TODO: think if we can/want to do something about this
+        set_transform(msi, t)
+        return msi
     else:
         t = transformations[0]
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
@@ -61,7 +66,7 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
             data,
             name=name,
             dims=axes,
-            attrs={"transform": t},
+            attrs={TRANSFORM_KEY: t},
         )
 
 
