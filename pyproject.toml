@@ -35,6 +35,7 @@ dependencies = [
     "geopandas",
     "shapely==2.0rc2",
     "rich",
+    "tqdm",
 ]
 
 [project.optional-dependencies]

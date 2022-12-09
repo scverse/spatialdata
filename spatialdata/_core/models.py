@@ -53,7 +53,14 @@ from spatialdata._core.core_utils import (
     get_dims,
     set_transform,
 )
-from spatialdata._core.transformations import BaseTransformation, Identity
+from spatialdata._core.transformations import (
+    BaseTransformation,
+    Identity,
+    ByDimension,
+    MapAxis,
+    Affine,
+    Sequence as SequenceTransformation,
+)
 from spatialdata._logging import logger
 
 # Types
@@ -69,15 +76,68 @@ Transform_s = AttrSchema(BaseTransformation, None)
 
 
 def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> SpatialElement:
+    # if input and output coordinate systems are not specified by the user, we try to infer them. If it's logically
+    # not possible to infer them, an exception is raised.
     t: BaseTransformation
     if transform is None:
         t = Identity()
     else:
         t = transform
-    if t.output_coordinate_system is None:
+    if t.input_coordinate_system is None:
         dims = get_dims(element)
-        t.output_coordinate_system = get_default_coordinate_system(dims)
-    new_element = set_transform(element, t)
+        t.input_coordinate_system = get_default_coordinate_system(dims)
+    if t.output_coordinate_system is None:
+        t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
+
+    # determine if we are in the 2d case or 3d case and determine the coordinate system we want to map to (basically
+    # we want both the spatial dimensions and c). If the output coordinate system of the transformation t is not
+    # matching, compose the transformation with an appropriate transformation to map to the correct coordinate system
+    if Z in t.output_coordinate_system.axes_names:
+        mapper_output_coordinate_system = get_default_coordinate_system((C, Z, Y, X))
+    else:
+        # if we are in the 3d case but the element does not contain the Z dimension, it's up to the user to specify
+        # the correct coordinate transformation and output coordinate system
+        mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
+    if t.output_coordinate_system != mapper_output_coordinate_system:
+        mapper_input_coordinate_system = t.output_coordinate_system
+        assert C not in mapper_input_coordinate_system.axes_names
+        any_axis_cs = get_default_coordinate_system((t.input_coordinate_system.axes_names[0],))
+        c_cs = get_default_coordinate_system((C,))
+        mapper = ByDimension(
+            transformations=[
+                MapAxis(
+                    {ax: ax for ax in t.input_coordinate_system.axes_names},
+                    input_coordinate_system=t.input_coordinate_system,
+                    output_coordinate_system=t.input_coordinate_system,
+                ),
+                Affine(
+                    np.array([[0, 0], [0, 1]]),
+                    input_coordinate_system=any_axis_cs,
+                    output_coordinate_system=c_cs,
+                ),
+            ],
+            input_coordinate_system=mapper_input_coordinate_system,
+            output_coordinate_system=mapper_output_coordinate_system,
+        )
+        combined = SequenceTransformation(
+            [t, mapper],
+            input_coordinate_system=t.input_coordinate_system,
+            output_coordinate_system=mapper_output_coordinate_system,
+        )
+    else:
+        combined = t
+    # test that all il good by checking that we can compute an affine matrix from this
+    try:
+        _ = combined.to_affine().affine
+    except Exception as e:  # noqa: B902
+        # debug
+        logger.debug(f"Error while trying to compute affine matrix from transformation: ")
+        from pprint import pprint
+        pprint(combined.to_dict())
+        raise e
+
+    # finalize
+    new_element = set_transform(element, combined)
     return new_element
 
 
