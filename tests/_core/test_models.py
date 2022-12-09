@@ -65,6 +65,6 @@ class TestModels:
             assert spatial_image.data.shape == image.shape
             np.testing.assert_array_equal(spatial_image.data, image)
         else:
-            assert set(spatial_image.shape) == set(spatial_image.shape)
+            assert set(spatial_image.shape) == set(image.shape)
             assert set(spatial_image.data.shape) == set(image.shape)
         assert spatial_image.data.dtype == image.dtype
