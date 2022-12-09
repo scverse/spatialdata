@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Union, Generator
+from typing import Any, Dict, Generator, List, Mapping, Optional, Union
 
 import zarr
 from anndata import AnnData
@@ -12,7 +12,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import get_dims, SpatialElement
+from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -322,8 +322,7 @@ class SpatialData:
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         return descr
 
-    def _gen_elements(self) -> Generator[SpatialElement]:
+    def _gen_elements(self) -> Generator[SpatialElement, None, None]:
         for element_type in ["images", "labels", "points", "polygons", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
-            for e in d.values():
-                yield e
+            yield from d.values()

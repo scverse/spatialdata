@@ -42,6 +42,7 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import (
     TRANSFORM_KEY,
     C,
@@ -54,13 +55,13 @@ from spatialdata._core.core_utils import (
     set_transform,
 )
 from spatialdata._core.transformations import (
-    BaseTransformation,
-    Identity,
-    ByDimension,
-    MapAxis,
     Affine,
-    Sequence as SequenceTransformation,
+    BaseTransformation,
+    ByDimension,
+    Identity,
+    MapAxis,
 )
+from spatialdata._core.transformations import Sequence as SequenceTransformation
 from spatialdata._logging import logger
 
 # Types
@@ -89,24 +90,30 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
     if t.output_coordinate_system is None:
         t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
 
+    # this function is to comply with mypy since we could call .axes_names on the wrong type
+    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> Tuple[str, ...]:
+        assert isinstance(cs, CoordinateSystem)
+        return cs.axes_names
+
     # determine if we are in the 2d case or 3d case and determine the coordinate system we want to map to (basically
     # we want both the spatial dimensions and c). If the output coordinate system of the transformation t is not
     # matching, compose the transformation with an appropriate transformation to map to the correct coordinate system
-    if Z in t.output_coordinate_system.axes_names:
+    if Z in _get_axes_names(t.output_coordinate_system):
         mapper_output_coordinate_system = get_default_coordinate_system((C, Z, Y, X))
     else:
         # if we are in the 3d case but the element does not contain the Z dimension, it's up to the user to specify
         # the correct coordinate transformation and output coordinate system
         mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
+    combined: BaseTransformation
     if t.output_coordinate_system != mapper_output_coordinate_system:
         mapper_input_coordinate_system = t.output_coordinate_system
-        assert C not in mapper_input_coordinate_system.axes_names
-        any_axis_cs = get_default_coordinate_system((t.input_coordinate_system.axes_names[0],))
+        assert C not in _get_axes_names(mapper_input_coordinate_system)
+        any_axis_cs = get_default_coordinate_system((_get_axes_names(t.input_coordinate_system)[0],))
         c_cs = get_default_coordinate_system((C,))
         mapper = ByDimension(
             transformations=[
                 MapAxis(
-                    {ax: ax for ax in t.input_coordinate_system.axes_names},
+                    {ax: ax for ax in _get_axes_names(t.input_coordinate_system)},
                     input_coordinate_system=t.input_coordinate_system,
                     output_coordinate_system=t.input_coordinate_system,
                 ),
@@ -131,8 +138,9 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         _ = combined.to_affine().affine
     except Exception as e:  # noqa: B902
         # debug
-        logger.debug(f"Error while trying to compute affine matrix from transformation: ")
+        logger.debug("Error while trying to compute affine matrix from transformation: ")
         from pprint import pprint
+
         pprint(combined.to_dict())
         raise e
 

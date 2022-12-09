@@ -127,10 +127,10 @@ cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
 
 _DEFAULT_COORDINATE_SYSTEM = {
-    (X, ): x_cs,
-    (Y, ): y_cs,
-    (Z, ): z_cs,
-    (C, ): c_cs,
+    (X,): x_cs,
+    (Y,): y_cs,
+    (Z,): z_cs,
+    (C,): c_cs,
     (X, Y): xy_cs,
     (X, Y, Z): xyz_cs,
     (Y, X): yx_cs,
