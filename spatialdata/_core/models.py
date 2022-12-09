@@ -1,4 +1,5 @@
 """This file contains models and schema for SpatialData"""
+import json
 from functools import singledispatchmethod
 from typing import (
     TYPE_CHECKING,
@@ -15,6 +16,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
@@ -23,10 +25,10 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike, NDArray
-from pandas.api.types import is_categorical_dtype, is_object_dtype, is_string_dtype
+from pandas.api.types import is_categorical_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
-from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -66,7 +68,7 @@ ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 Transform_s = AttrSchema(BaseTransformation, None)
 
 
-def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> None:
+def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> SpatialElement:
     t: BaseTransformation
     if transform is None:
         t = Identity()
@@ -75,7 +77,8 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
     if t.output_coordinate_system is None:
         dims = get_dims(element)
         t.output_coordinate_system = get_default_coordinate_system(dims)
-    set_transform(element, t)
+    new_element = set_transform(element, t)
+    return new_element
 
 
 class RasterSchema(DataArraySchema):
@@ -393,49 +396,51 @@ class PointsModel:
     TRANSFORM_KEY = "transform"
 
     @classmethod
-    def validate(cls, data: GeoDataFrame) -> None:
-        if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
-        if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
-        if len(data) > 0 and not isinstance(data[cls.GEOMETRY_KEY].values[0], Point):
-            # TODO: should check for all values?
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Point objects.")
-        if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+    def validate(cls, data: pa.Table) -> None:
+        for ax in [X, Y, Z]:
+            if ax in data.column_names:
+                assert data.schema.field_by_name(ax).type in [pa.float32(), pa.float64()]
+        try:
+            assert data.schema.metadata is not None
+            t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
+            BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+        except e:
+            logger.error("cannot parse the transformation from the pyarrow.Table object")
+            raise e
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        annotations: Optional[pd.DataFrame] = None,
+        annotations: Optional[pa.Table] = None,
         transform: Optional[Any] = None,
         supress_categorical_check: bool = False,
         **kwargs: Any,
     ) -> AnnData:
-        coords.shape[0]
         if annotations is not None:
             if not supress_categorical_check:
-                assert isinstance(annotations, pd.DataFrame)
-                for column in annotations:
-                    c = annotations[column]
-                    if is_string_dtype(c) or is_object_dtype(c):
-                        logger.warning(
-                            "detected a column with strings, consider converting it to "
-                            "categorical to achieve faster performance. Call parse() with "
-                            "suppress_categorical_check=True to hide this warning"
-                        )
-        geometry = GeometryType(GeometryType.POINT)
-        data = from_ragged_array(geometry, coords)
-        geo_df = GeoDataFrame({"geometry": data})
+                assert isinstance(annotations, pa.Table)
+                # TODO: restore this warning and fix
+                # for column in annotations.column_names:
+                #     c = annotations[column]
+                #     if not isinstance(c.dictionary_encode().type, pa.DictionaryType):
+                #         logger.warning(
+                #             "detected columns that are not categorical, consider converting it to categorical with "
+                #             ".dictionary_encode() to achieve faster performance. Call parse() with "
+                #             "suppress_categorical_check=True to hide this warning"
+                #         )
+        assert len(coords.shape) == 2
+        ndim = coords.shape[1]
+        axes = [X, Y, Z][:ndim]
+        table = pa.Table.from_arrays([pa.array(coords[:, i].flatten()) for i in range(coords.shape[1])], names=axes)
         if annotations is not None:
-            for column in annotations:
-                if column in geo_df:
-                    raise RuntimeError("column name from the annotatoins DataFrame already exists in GeoDataFrame")
-                geo_df[column] = annotations[column]
-        _parse_transform(geo_df, transform)
-        cls.validate(geo_df)
-        return geo_df
+            for column in annotations.column_names:
+                if column in [X, Y, Z]:
+                    raise ValueError(f"Column name {column} is reserved for coordinates.")
+                table = table.append_column(column, annotations[column])
+        new_table = _parse_transform(table, transform)
+        cls.validate(new_table)
+        return new_table
 
 
 class TableModel:

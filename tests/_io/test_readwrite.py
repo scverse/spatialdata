@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -64,11 +65,8 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
         for k in points.points.keys():
-            assert isinstance(sdata.points[k], GeoDataFrame)
-            pd.testing.assert_series_equal(points.points[k].geometry, sdata.points[k].geometry)
-            annotations = points.points[k].columns.difference(["geometry"])
-            for a in annotations:
-                pd.testing.assert_series_equal(points.points[k][a], sdata.points[k][a])
+            assert isinstance(sdata.points[k], pa.Table)
+            assert points.points[k].equals(sdata.points[k])
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"

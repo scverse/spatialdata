@@ -281,11 +281,13 @@ class SpatialData:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
                         elif attr == "points":
                             if len(v) > 0:
-                                n = v.iloc[0].geometry._ndim
+                                n = len(get_dims(v))
                                 dim_string = f"({n}D points)"
                             else:
                                 dim_string = ""
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}{dim_string}"
+                            if descr_class == "Table":
+                                descr_class = "pyarrow.Table"
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
                         else:
                             if isinstance(v, SpatialImage):
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"

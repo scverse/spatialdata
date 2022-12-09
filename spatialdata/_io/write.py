@@ -1,5 +1,8 @@
+import os
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
+import pyarrow as pa
+import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
@@ -16,7 +19,7 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import get_transform
+from spatialdata._core.core_utils import get_dims, get_transform
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -217,7 +220,7 @@ def write_shapes(
 
 
 def write_points(
-    points: GeoDataFrame,
+    points: pa.Table,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
@@ -227,28 +230,32 @@ def write_points(
     points_groups = group.require_group(name)
     coordinate_transformations = [get_transform(points).to_dict()]
 
-    geometry, coords, offsets = to_ragged_array(points.geometry)
-    assert len(offsets) == 0
-    # passing offsets = None or offsets with len(offsets) == 0 is equivalent
-    points_groups.create_dataset(name="coords", data=coords)
-    # for i, o in enumerate(offsets):
-    #     points_groups.create_dataset(name=f"offset{i}", data=o)
-    points_groups.create_dataset(name="Index", data=points.index.values)
+    path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
+    pq.write_table(points, path)
+    # geometry, coords, offsets = to_ragged_array(points.geometry)
+    # assert len(offsets) == 0
+    # # passing offsets = None or offsets with len(offsets) == 0 is equivalent
+    # points_groups.create_dataset(name="coords", data=coords)
+    # # for i, o in enumerate(offsets):
+    # #     points_groups.create_dataset(name=f"offset{i}", data=o)
+    # points_groups.create_dataset(name="Index", data=points.index.values)
+    #
+    # # write annotation columns
+    # annotations_group = points_groups.require_group("annotations")
+    # annotations = points.columns.difference(["geometry"])
+    # for a in annotations:
+    #     # to write categorical and object types to zarr
+    #     write_adata(annotations_group, a, points[a].values)
 
-    # write annotation columns
-    annotations_group = points_groups.require_group("annotations")
-    annotations = points.columns.difference(["geometry"])
-    for a in annotations:
-        # to write categorical and object types to zarr
-        write_adata(annotations_group, a, points[a].values)
-
-    attrs = fmt.attrs_to_dict(geometry)
+    # attrs = fmt.attrs_to_dict(geometry)
+    attrs = {}
     attrs["version"] = fmt.spatialdata_version
+    coords_shape = (0, get_dims(points))
 
     _write_metadata(
         points_groups,
         group_type=group_type,
-        shape=coords.shape,
+        shape=coords_shape,
         coordinate_transformations=coordinate_transformations,
         attrs=attrs,
         fmt=fmt,

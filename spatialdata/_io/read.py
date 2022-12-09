@@ -1,12 +1,14 @@
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
@@ -210,28 +212,30 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
 
 def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
-) -> GeoDataFrame:
+) -> pa.Table:
     """Read points from a zarr store."""
     f = zarr.open(store, mode="r")
 
-    coords = np.array(f["coords"])
-    index = np.array(f["Index"])
+    path = os.path.join(f._store.path, f.path, "points.parquet")
+    table = pq.read_table(path)
+    # coords = np.array(f["coords"])
+    # index = np.array(f["Index"])
     # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
     # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
-    typ = fmt.attrs_from_dict(f.attrs.asdict())
+    # typ = fmt.attrs_from_dict(f.attrs.asdict())
 
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
-    geometry = from_ragged_array(typ, coords)
+    # geometry = from_ragged_array(typ, coords)
+    #
+    # geo_df = GeoDataFrame({"geometry": geometry}, index=index)
+    # for c in f["annotations"]:
+    #     column = read_elem(f["annotations"][c])
+    #     geo_df[c] = column
 
-    geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    for c in f["annotations"]:
-        column = read_elem(f["annotations"][c])
-        geo_df[c] = column
-
-    set_transform(geo_df, transforms)
-    return geo_df
+    new_table = set_transform(table, transforms)
+    return new_table
     #
     # f = zarr.open(store, mode="r")
     # transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])

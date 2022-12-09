@@ -1,7 +1,9 @@
 import copy
+import json
 from functools import singledispatch
 from typing import Tuple, Union
 
+import pyarrow as pa
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -10,7 +12,7 @@ from spatial_image import SpatialImage
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
 __all__ = [
     "SpatialElement",
@@ -63,29 +65,48 @@ def _(e: AnnData) -> BaseTransformation:
     return t
 
 
+# we need the return type because pa.Table is immutable
+@get_transform.register(pa.Table)
+def _(e: pa.Table) -> BaseTransformation:
+    t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
+    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+    return t
+
+
 @singledispatch
-def set_transform(e: SpatialElement, t: BaseTransformation) -> None:
+def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: BaseTransformation) -> None:
+def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
+def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame, t: BaseTransformation) -> None:
+def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(AnnData)
-def _(e: AnnData, t: BaseTransformation) -> None:
+def _(e: AnnData, t: BaseTransformation) -> AnnData:
     e.uns[TRANSFORM_KEY] = t
+    return e
+
+
+@set_transform.register(pa.Table)
+def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
+    # in theory this doesn't really copy the data in the table but is referncing to them
+    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
+    return new_e
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
@@ -154,3 +175,10 @@ def _(e: AnnData) -> Tuple[str, ...]:
     dims = (X, Y, Z)
     n = e.obsm["spatial"].shape[1]
     return dims[:n]
+
+
+@get_dims.register(pa.Table)
+def _(e: pa.Table) -> Tuple[str, ...]:
+    valid_dims = (X, Y, Z)
+    dims = [c for c in valid_dims if c in e.column_names]
+    return dims

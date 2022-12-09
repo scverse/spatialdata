@@ -23,7 +23,7 @@ class TestElementsTransform:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         transform.input_coordinate_system = input
         transform.output_coordinate_system = output
-        set_transform(points.points["points_0"], transform)
+        points.points["points_0"] = set_transform(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
         assert get_transform(new_sdata.points["points_0"]) == transform
