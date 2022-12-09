@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import pyarrow as pa
 from anndata import AnnData
@@ -33,43 +33,49 @@ C, Z, Y, X = "c", "z", "y", "x"
 
 
 @singledispatch
-def get_transform(e: SpatialElement) -> BaseTransformation:
+def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> BaseTransformation:
+def _(e: SpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
     return t
 
 
 @get_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> BaseTransformation:
+def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
     return t
 
 
 @get_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> BaseTransformation:
+def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
     return t
 
 
 @get_transform.register(AnnData)
-def _(e: AnnData) -> BaseTransformation:
+def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
-    assert isinstance(t, BaseTransformation)
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
     return t
 
 
 # we need the return type because pa.Table is immutable
 @get_transform.register(pa.Table)
-def _(e: pa.Table) -> BaseTransformation:
+def _(e: pa.Table) -> Optional[BaseTransformation]:
     t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
     t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
     return t
 
 

@@ -76,7 +76,7 @@ ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 Transform_s = AttrSchema(BaseTransformation, None)
 
 
-def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> SpatialElement:
+def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
     # if input and output coordinate systems are not specified by the user, we try to infer them. If it's logically
     # not possible to infer them, an exception is raised.
     t: BaseTransformation
