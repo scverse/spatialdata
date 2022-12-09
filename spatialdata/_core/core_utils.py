@@ -115,6 +115,10 @@ x_axis = Axis(name=X, type="space", unit="unit")
 y_axis = Axis(name=Y, type="space", unit="unit")
 z_axis = Axis(name=Z, type="space", unit="unit")
 c_axis = Axis(name=C, type="channel")
+x_cs = CoordinateSystem(name="x", axes=[x_axis])
+y_cs = CoordinateSystem(name="y", axes=[y_axis])
+z_cs = CoordinateSystem(name="z", axes=[z_axis])
+c_cs = CoordinateSystem(name="c", axes=[c_axis])
 xy_cs = CoordinateSystem(name="xy", axes=[x_axis, y_axis])
 xyz_cs = CoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
 yx_cs = CoordinateSystem(name="yx", axes=[y_axis, x_axis])
@@ -123,6 +127,10 @@ cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
 
 _DEFAULT_COORDINATE_SYSTEM = {
+    (X, ): x_cs,
+    (Y, ): y_cs,
+    (Z, ): z_cs,
+    (C, ): c_cs,
     (X, Y): xy_cs,
     (X, Y, Z): xyz_cs,
     (Y, X): yx_cs,
