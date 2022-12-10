@@ -502,26 +502,29 @@ class TableModel:
             instance_key = attr[cls.INSTANCE_KEY]
 
         if isinstance(region, str):
+            if region_key is not None:
+                raise ValueError(
+                    f"If `{cls.REGION_KEY}` is of type `str`, `{cls.REGION_KEY_KEY}` must be `None` as it is redundant."
+                )
             if region_values is not None:
                 raise ValueError(
                     f"If `{cls.REGION_KEY}` is of type `str`, `region_values` must be `None` as it is redundant."
                 )
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
         elif isinstance(region, list):
             if region_key is None:
                 raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided if `{cls.REGION_KEY}` is of type `List`.")
             if not adata.obs[region_key].isin(region).all():
                 raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
+            if not is_categorical_dtype(adata.obs[region_key]):
+                logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+                adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
+            if instance_key is None:
+                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
         else:
             if region is not None:
                 raise ValueError(f"`{cls.REGION_KEY}` must be of type `str` or `List`.")
-        if instance_key is None:
-            raise ValueError(
-                f"`{cls.INSTANCE_KEY}` must be provided if `{cls.REGION_KEY}` is of type `{type(region)}`."
-            )
-
-        if not is_categorical_dtype(adata.obs[region_key]):
-            logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
-            adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
 
         # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
