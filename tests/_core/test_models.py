@@ -1,6 +1,6 @@
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,7 @@ from spatialdata._core.models import (
     PointsModel,
     PolygonsModel,
     RasterSchema,
+    ShapesModel,
 )
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
 
@@ -109,3 +110,29 @@ class TestModels:
         points = model.parse(coords, annotations)
         assert PointsModel.GEOMETRY_KEY in points
         assert PointsModel.TRANSFORM_KEY in points.attrs
+
+    @pytest.mark.parametrize("model", [ShapesModel])
+    @pytest.mark.parametrize("shape_type", [None, "Circle", "Square"])
+    @pytest.mark.parametrize("shape_size", [None, RNG.normal(size=(10,)), 0.3])
+    def test_shapes_model(
+        self,
+        model: PointsModel,
+        shape_type: Optional[str],
+        shape_size: Optional[Union[int, float, np.ndarray]],
+    ) -> None:
+        coords = RNG.normal(size=(10, 2))
+        shapes = model.parse(coords, shape_type, shape_size)
+        assert ShapesModel.COORDS_KEY in shapes.obsm
+        assert ShapesModel.TRANSFORM_KEY in shapes.uns
+        assert ShapesModel.SIZE_KEY in shapes.obs
+        if shape_size is not None:
+            assert shapes.obs[ShapesModel.SIZE_KEY].dtype == np.float64
+            if isinstance(shape_size, np.ndarray):
+                assert shapes.obs[ShapesModel.SIZE_KEY].shape == shape_size.shape
+            elif isinstance(shape_size, float):
+                assert shapes.obs[ShapesModel.SIZE_KEY].unique() == shape_size
+            else:
+                raise ValueError(f"Unexpected shape_size: {shape_size}")
+        assert ShapesModel.ATTRS_KEY in shapes.uns
+        assert ShapesModel.TYPE_KEY in shapes.uns[ShapesModel.ATTRS_KEY]
+        assert shape_type == shapes.uns[ShapesModel.ATTRS_KEY][ShapesModel.TYPE_KEY]
