@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
+import pandas as pd
 import pytest
 from dask.array.core import from_array
 from numpy.random import default_rng
@@ -14,10 +15,13 @@ from spatialdata._core.models import (
     Image2DModel,
     Labels2DModel,
     Labels3DModel,
+    PointsModel,
     PolygonsModel,
     RasterSchema,
 )
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
+
+RNG = default_rng()
 
 
 class TestModels:
@@ -46,10 +50,9 @@ class TestModels:
         ],
     )
     def test_raster_schema(self, converter: Callable[..., Any], model: RasterSchema, permute: bool) -> None:
-        rng = default_rng()
         dims = np.array(model.dims.dims).tolist()
         if permute:
-            rng.shuffle(dims)
+            RNG.shuffle(dims)
         n_dims = len(dims)
 
         if converter is DataArray:
@@ -86,3 +89,23 @@ class TestModels:
 
         other_poly = model.parse(poly)
         assert poly.equals(other_poly)
+
+    @pytest.mark.parametrize("model", [PointsModel])
+    @pytest.mark.parametrize(
+        "annotations",
+        [
+            None,
+            pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"]),
+        ],
+    )
+    def test_points_model(
+        self,
+        model: PointsModel,
+        annotations: pd.DataFrame,
+    ) -> None:
+        coords = RNG.normal(size=(10, 2))
+        if annotations is not None:
+            annotations["A"] = annotations["A"].astype(str)
+        points = model.parse(coords, annotations)
+        assert PointsModel.GEOMETRY_KEY in points
+        assert PointsModel.TRANSFORM_KEY in points.attrs

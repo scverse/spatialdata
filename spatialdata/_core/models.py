@@ -426,15 +426,15 @@ class PointsModel:
         supress_categorical_check: bool = False,
         **kwargs: Any,
     ) -> AnnData:
-        coords.shape[0]
         if annotations is not None:
             if not supress_categorical_check:
                 assert isinstance(annotations, pd.DataFrame)
                 for column in annotations:
                     c = annotations[column]
+                    # TODO(giovp): consider casting to categorical
                     if is_string_dtype(c) or is_object_dtype(c):
                         logger.warning(
-                            "detected a column with strings, consider converting it to "
+                            "Detected a column with strings, consider converting it to "
                             "categorical to achieve faster performance. Call parse() with "
                             "suppress_categorical_check=True to hide this warning"
                         )
@@ -444,7 +444,7 @@ class PointsModel:
         if annotations is not None:
             for column in annotations:
                 if column in geo_df:
-                    raise RuntimeError("column name from the annotatoins DataFrame already exists in GeoDataFrame")
+                    raise RuntimeError("column name from the annotations DataFrame already exists in GeoDataFrame")
                 geo_df[column] = annotations[column]
         _parse_transform(geo_df, transform)
         cls.validate(geo_df)
