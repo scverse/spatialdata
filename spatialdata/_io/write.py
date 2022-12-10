@@ -20,6 +20,7 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_dims, get_transform
+from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -61,7 +62,9 @@ def write_image(
     subgroup = group.require_group(name)
     if isinstance(image, SpatialImage):
         data = image.data
-        coordinate_transformations = [[get_transform(image).to_dict()]]
+        t = get_transform(image)
+        assert isinstance(t, BaseTransformation)
+        coordinate_transformations = [[t.to_dict()]]
         chunks = image.chunks
         axes = image.dims
         axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -113,7 +116,9 @@ def write_labels(
 ) -> None:
     if isinstance(labels, SpatialImage):
         data = labels.data
-        coordinate_transformations = [[get_transform(labels).to_dict()]]
+        t = get_transform(labels)
+        assert isinstance(t, BaseTransformation)
+        coordinate_transformations = [[t.to_dict()]]
         chunks = labels.chunks
         axes = labels.dims
         axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -164,7 +169,9 @@ def write_polygons(
     fmt: Format = PolygonsFormat(),
 ) -> None:
     polygons_groups = group.require_group(name)
-    coordinate_transformations = [get_transform(polygons).to_dict()]
+    t = get_transform(polygons)
+    assert isinstance(t, BaseTransformation)
+    coordinate_transformations = [t.to_dict()]
 
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
@@ -224,7 +231,9 @@ def write_points(
     fmt: Format = PointsFormat(),
 ) -> None:
     points_groups = group.require_group(name)
-    coordinate_transformations = [get_transform(points).to_dict()]
+    t = get_transform(points)
+    assert isinstance(t, BaseTransformation)
+    coordinate_transformations = [t.to_dict()]
 
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
     pq.write_table(points, path)

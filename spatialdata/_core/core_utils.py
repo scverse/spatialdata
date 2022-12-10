@@ -40,9 +40,12 @@ def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
 @get_transform.register(SpatialImage)
 def _(e: SpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
+    # this double return is to make mypy happy
     if t is not None:
         assert isinstance(t, BaseTransformation)
-    return t
+        return t
+    else:
+        return t
 
 
 @get_transform.register(MultiscaleSpatialImage)
@@ -50,7 +53,9 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
         assert isinstance(t, BaseTransformation)
-    return t
+        return t
+    else:
+        return t
 
 
 @get_transform.register(GeoDataFrame)
@@ -58,7 +63,9 @@ def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
         assert isinstance(t, BaseTransformation)
-    return t
+        return t
+    else:
+        return t
 
 
 @get_transform.register(AnnData)
@@ -66,7 +73,9 @@ def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
     if t is not None:
         assert isinstance(t, BaseTransformation)
-    return t
+        return t
+    else:
+        return t
 
 
 # we need the return type because pa.Table is immutable
@@ -76,7 +85,9 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
     t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
     if t is not None:
         assert isinstance(t, BaseTransformation)
-    return t
+        return t
+    else:
+        return t
 
 
 @singledispatch

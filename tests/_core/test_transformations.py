@@ -62,11 +62,11 @@ def _test_transformation(
     # wrong points shapes
     transformation.output_coordinate_system = output_cs
     with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original.ravel()), transformed.ravel())
+        assert transformation.transform_points(original.ravel())
     with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original.transpose()), transformed.transpose())
+        assert transformation.transform_points(original.transpose())
     with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(np.expand_dims(original, 0)), np.expand_dims(transformed, 0))
+        assert transformation.transform_points(np.expand_dims(original, 0))
 
     # correct
     assert np.allclose(transformation.transform_points(original), transformed)
