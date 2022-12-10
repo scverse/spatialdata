@@ -1,10 +1,12 @@
 from functools import partial
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 import pytest
 from dask.array.core import from_array
 from numpy.random import default_rng
+from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
@@ -12,8 +14,10 @@ from spatialdata._core.models import (
     Image2DModel,
     Labels2DModel,
     Labels3DModel,
+    PolygonsModel,
     RasterSchema,
 )
+from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
 
 
 class TestModels:
@@ -68,3 +72,17 @@ class TestModels:
             assert set(spatial_image.shape) == set(image.shape)
             assert set(spatial_image.data.shape) == set(image.shape)
         assert spatial_image.data.dtype == image.dtype
+
+    @pytest.mark.parametrize("model", [PolygonsModel])
+    @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH])
+    def test_polygons_model(self, model: PolygonsModel, path: Path) -> None:
+        poly = model.parse(path)
+        assert PolygonsModel.GEOMETRY_KEY in poly
+        assert PolygonsModel.TRANSFORM_KEY in poly.attrs
+
+        geometry, data, offsets = to_ragged_array(poly.geometry.values)
+        other_poly = model.parse(data, offsets, geometry)
+        assert poly.equals(other_poly)
+
+        other_poly = model.parse(poly)
+        assert poly.equals(other_poly)

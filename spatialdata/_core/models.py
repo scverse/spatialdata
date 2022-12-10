@@ -1,5 +1,6 @@
 """This file contains models and schema for SpatialData"""
 from functools import singledispatchmethod
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -294,16 +295,28 @@ class PolygonsModel:
     @classmethod
     def _(
         cls,
-        data: str,
+        data: Path,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
 
-        gc: GeometryCollection = from_geojson(data)
+        gc: GeometryCollection = from_geojson(data.read_bytes())
+        if not isinstance(gc, GeometryCollection):
+            raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
         _parse_transform(geo_df, transform)
         cls.validate(geo_df)
         return geo_df
+
+    @parse.register
+    @classmethod
+    def _(
+        cls,
+        data: str,
+        transform: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> GeoDataFrame:
+        return cls.parse(Path(data), transform, **kwargs)
 
     @parse.register
     @classmethod
