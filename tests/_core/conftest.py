@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 
 x_axis = Axis(name="x", type="space", unit="micrometer")
@@ -16,3 +18,7 @@ yx_cs = CoordinateSystem(name="yx", axes=[y_axis, x_axis])
 zyx_cs = CoordinateSystem(name="zyx", axes=[z_axis, y_axis, x_axis])
 cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
+
+
+POLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
+MULTIPOLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
