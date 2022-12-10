@@ -5,8 +5,10 @@ from typing import Any, Callable, Optional, Union
 import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
 from dask.array.core import from_array
 from numpy.random import default_rng
+from pandas.api.types import is_categorical_dtype
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
@@ -19,6 +21,7 @@ from spatialdata._core.models import (
     PolygonsModel,
     RasterSchema,
     ShapesModel,
+    TableModel,
 )
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
 
@@ -26,30 +29,9 @@ RNG = default_rng()
 
 
 class TestModels:
-    @pytest.mark.parametrize(
-        "converter",
-        [
-            lambda _: _,
-            from_array,
-            DataArray,
-            to_spatial_image,
-        ],
-    )
-    @pytest.mark.parametrize(
-        "model",
-        [
-            Image2DModel,
-            Labels2DModel,
-            Labels3DModel,
-        ],  # TODO: Image3DModel once fixed.
-    )
-    @pytest.mark.parametrize(
-        "permute",
-        [
-            True,
-            False,
-        ],
-    )
+    @pytest.mark.parametrize("converter", [lambda _: _, from_array, DataArray, to_spatial_image])
+    @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel])  # TODO: Image3DModel once fixed.
+    @pytest.mark.parametrize("permute", [True, False])
     def test_raster_schema(self, converter: Callable[..., Any], model: RasterSchema, permute: bool) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
@@ -94,10 +76,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize(
         "annotations",
-        [
-            None,
-            pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"]),
-        ],
+        [None, pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])],
     )
     def test_points_model(
         self,
@@ -116,7 +95,7 @@ class TestModels:
     @pytest.mark.parametrize("shape_size", [None, RNG.normal(size=(10,)), 0.3])
     def test_shapes_model(
         self,
-        model: PointsModel,
+        model: ShapesModel,
         shape_type: Optional[str],
         shape_size: Optional[Union[int, float, np.ndarray]],
     ) -> None:
@@ -136,3 +115,25 @@ class TestModels:
         assert ShapesModel.ATTRS_KEY in shapes.uns
         assert ShapesModel.TYPE_KEY in shapes.uns[ShapesModel.ATTRS_KEY]
         assert shape_type == shapes.uns[ShapesModel.ATTRS_KEY][ShapesModel.TYPE_KEY]
+
+    @pytest.mark.parametrize("model", [TableModel])
+    @pytest.mark.parametrize("region", ["sample", RNG.choice([1, 2], size=10).tolist()])
+    def test_table_model(
+        self,
+        model: TableModel,
+        region: Union[str, np.ndarray],
+    ) -> None:
+        region_key = "reg"
+        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs["A"] = obs["A"].astype(str)  # instance_key
+        obs[region_key] = region
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
+        assert region_key in table.obs
+        assert is_categorical_dtype(table.obs[region_key])
+        assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
+        assert TableModel.ATTRS_KEY in table.uns
+        assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
+        assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key

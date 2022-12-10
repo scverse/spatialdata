@@ -453,6 +453,9 @@ class PointsModel:
 
 class TableModel:
     ATTRS_KEY = "spatialdata_attrs"
+    REGION_KEY = "region"
+    REGION_KEY_KEY = "region_key"
+    INSTANCE_KEY = "instance_key"
 
     def validate(
         self,
@@ -485,56 +488,64 @@ class TableModel:
         region_values: Optional[Union[str, Sequence[str]]] = None,
         instance_values: Optional[Sequence[Any]] = None,
     ) -> AnnData:
-        # region, region_key and instance_key should either all live in adata.uns or all be passed in as argument
+        # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args > 0:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
-                    f"Either pass `region`, `region_key` and `instance_key` as arguments or have them in `adata.uns['{cls.ATTRS_KEY}']`."
+                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}` as arguments or have them in `adata.uns['{cls.ATTRS_KEY}']`."
                 )
         elif cls.ATTRS_KEY in adata.uns:
             attr = adata.uns[cls.ATTRS_KEY]
-            region = attr["region"]
-            region_key = attr["region_key"]
-            instance_key = attr["instance_key"]
+            region = attr[cls.REGION_KEY]
+            region_key = attr[cls.REGION_KEY_KEY]
+            instance_key = attr[cls.INSTANCE_KEY]
 
         if isinstance(region, str):
-            if region_key is not None:
-                raise ValueError("If `region` is of type `str`, `region_key` must be `None` as it is redundant.")
             if region_values is not None:
-                raise ValueError("If `region` is of type `str`, `region_values` must be `None` as it is redundant.")
-            if instance_key is None:
-                raise ValueError("`instance_key` must be provided if `region` is of type `str`.")
+                raise ValueError(
+                    f"If `{cls.REGION_KEY}` is of type `str`, `region_values` must be `None` as it is redundant."
+                )
         elif isinstance(region, list):
             if region_key is None:
-                raise ValueError("`region_key` must be provided if `region` is of type `List`.")
+                raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided if `{cls.REGION_KEY}` is of type `List`.")
             if not adata.obs[region_key].isin(region).all():
-                raise ValueError(f"`Region key: {region_key}` values do not match with `region` values.")
-            if not is_categorical_dtype(adata.obs[region_key]):
-                logger.warning(f"Converting `region_key: {region_key}` to categorical dtype.")
-                adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
-            if instance_key is None:
-                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
+                raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
         else:
             if region is not None:
-                raise ValueError("`region` must be of type `str` or `List`.")
+                raise ValueError(f"`{cls.REGION_KEY}` must be of type `str` or `List`.")
+        if instance_key is None:
+            raise ValueError(
+                f"`{cls.INSTANCE_KEY}` must be provided if `{cls.REGION_KEY}` is of type `{type(region)}`."
+            )
+
+        if not is_categorical_dtype(adata.obs[region_key]):
+            logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+            adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
+
         # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
 
+        # TODO(giovp): do we really need to support this?
         if region_values is not None:
             if region_key in adata.obs:
-                raise ValueError(f"this annotation table already contains the {region_key} (region_key) column")
+                raise ValueError(
+                    f"this annotation table already contains the {region_key} ({cls.REGION_KEY_KEY}) column"
+                )
             assert isinstance(region_values, str) or len(adata) == len(region_values)
             adata.obs[region_key] = region_values
         if instance_values is not None:
             if instance_key in adata.obs:
-                raise ValueError(f"this annotation table already contains the {instance_key} (instance_key) column")
+                raise ValueError(
+                    f"this annotation table already contains the {instance_key} ({cls.INSTANCE_KEY}) column"
+                )
             assert len(adata) == len(instance_values)
             adata.obs[instance_key] = instance_values
         return adata
 
 
+# TODO: consider removing if we settle with geodataframe
 def _sparse_matrix_from_assignment(
     n_obs: int, var_names: Union[List[str], ArrayLike], assignment: pd.Series
 ) -> csr_matrix:
