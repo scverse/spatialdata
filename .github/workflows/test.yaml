@@ -54,11 +54,9 @@ jobs:
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  pytest -v --cov --color=yes --cov-report=xml
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3
-              with:
-                  env_vars: OS,PYTHON
-                  files: ./coverage.xml
-                  name: codecov-umbrella
-                  verbose: true
+                  pytest -v --cov --color=yes
+            - name: Upload coverage
+              env:
+                  CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
+              run: |
+                  codecov --required --flags=unittests
