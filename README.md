@@ -13,7 +13,7 @@
 [badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 
-Up-to-date design doc [here](docs/design_doc.md# Abstract)
+Up-to-date design doc [here](docs/design_doc.md#Abstract)
 
 ## Getting started
 
