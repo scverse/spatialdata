@@ -76,6 +76,17 @@ ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
+__all__ = [
+    "Labels2DModel",
+    "Labels3DModel",
+    "Image2DModel",
+    "Image3DModel",
+    "PolygonsModel",
+    "ShapesModel",
+    "PointsModel",
+    "TableModel",
+]
+
 
 def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
     # if input and output coordinate systems are not specified by the user, we try to infer them. If it's logically
