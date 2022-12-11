@@ -55,8 +55,9 @@ jobs:
                   DISPLAY: :42
               run: |
                   pytest -v --cov --color=yes
-            - name: Upload coverage
-              env:
-                  CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
-              run: |
-                  codecov --required --flags=unittests -t ${{ secrets.SECRET_TOKEN }}
+            - name: Upload coverage to Codecov
+              uses: codecov/codecov-action@v3
+              with:
+                token: ${{ secrets.CODECOV_TOKEN }}
+                flags: unittests
+                verbose: true
