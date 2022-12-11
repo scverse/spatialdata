@@ -59,4 +59,4 @@ jobs:
               env:
                   CODECOV_NAME: ${{ matrix.python }}-${{ matrix.os }}
               run: |
-                  codecov --required --flags=unittests -r ${{ secrets.SECRET_TOKEN }}
+                  codecov --required --flags=unittests -t ${{ secrets.SECRET_TOKEN }}
