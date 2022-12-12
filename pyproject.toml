@@ -37,6 +37,7 @@ dependencies = [
     "pyarrow",
     "rich",
     "tqdm",
+    "typing_extensions>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +46,7 @@ dev = [
     "bump2version",
 ]
 doc = [
-    "sphinx>=4",
+    "sphinx>=4.5",
     "sphinx-book-theme>=0.3.3",
     "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
