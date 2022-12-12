@@ -58,4 +58,5 @@ jobs:
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v3.1.1
               with:
+                  name: coverage
                   files: /home/runner/work/spatialdata/spatialdata/coverage.xml
