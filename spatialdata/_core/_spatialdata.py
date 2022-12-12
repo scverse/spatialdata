@@ -48,27 +48,27 @@ class SpatialData:
     The SpatialData object.
 
     The SpatialData object is a modular container for arbitrary combinations of spatial elements. The elements
-    can be accesses separately and are stored as standard types (AnnData, GeoDataFrame, xarray.DataArray).
+    can be accesses separately and are stored as standard types (:class:`anndata.AnnData`, :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
 
     Parameters
     ----------
     images
-        Mapping of 2D and 3D image elements. The following parsers are available: Image2DModel, Image3DModel.
+        Mapping of 2D and 3D image elements. The following parsers are available: :class:`spatialdata.Image2DModel`, :class:`spatialdata.Image3DModel`.
     labels
         Mapping of 2D and 3D labels elements. Labels are regions, they can't contain annotation but they can be
-        annotated by a table. The following parsers are available: Labels2DModel, Labels3DModel.
+        annotated by a table. The following parsers are available: :class:`spatialdata.Labels2DModel`, :class:`spatialdata.Labels3DModel`.
     points
         Mapping of points elements. Points can contain annotations. The following parsers is available: PointsModel.
     polygons
         Mapping of 2D polygons elements. They can't contain annotation but they can be annotated
-        by a table. The following parsers is available: PolygonsModel.
+        by a table. The following parsers is available: :class:`spatialdata.PolygonsModel`.
     shapes
         Mapping of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
-        can be annotated by a table. The following parsers is available: ShapesModel.
+        can be annotated by a table. The following parsers is available: :class:`spatialdata.ShapesModel`.
     table
         AnnData table containing annotations for regions (labels, polygons, shapes). The following parsers is
-        available: TableModel.
+        available: :class:`spatialdata.TableModel`.
 
     Notes
     -----
