@@ -280,6 +280,20 @@ Transforms map Elements between coordinate systems. Each `Transform` object must
 
 Here is a short list of examples of the elements used to represent some spatial omics datasets. Real world will be available as notebooks [in this repository](https://github.com/scverse/spatialdata-notebooks), furthermore, some draft [implementations are available here](https://github.com/giovp/spatialdata-sandbox).
 
+API
+
+```python
+import spatialdata as sd
+from spatialdata import SpatialData
+
+sdata = SpatialData(...)
+points = sd.transform(sdata.points["image1"], tgt="tgt_space")
+sdata = sd.transform(sdata, tgt="tgt_space")
+```
+
+The transfromation object should not have a method to apply itself to an element.
+`SpatialData` can have a `transform` method, that can be applied to either a `SpatialData` object or an element.
+
 #### Layout of a SpatialData object
 
 The layout of some common datasets.

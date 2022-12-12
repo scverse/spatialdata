@@ -89,13 +89,26 @@ source_suffix = {
 intersphinx_mapping = {
     "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
+    "geopandas": ("https://geopandas.org/en/stable/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
 
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    "**.ipynb_checkpoints",
+    "generated/spatialdata.PolygonsModel.rst",
+]
+# Ignore warnings.
+nitpicky = False  # TODO: solve upstream.
+# nitpick_ignore = [
+#     ("py:class", "spatial_image.SpatialImage"),
+#     ("py:class", "multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage"),
+# ]
 
 
 # -- Options for HTML output -------------------------------------------------

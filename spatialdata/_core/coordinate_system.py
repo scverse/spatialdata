@@ -1,7 +1,7 @@
 import json
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-__all__ = ["CoordinateSystem"]
+__all__ = ["CoordinateSystem", "Axis"]
 
 Axis_t = Dict[str, str]
 CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
@@ -87,12 +87,12 @@ class CoordinateSystem:
         return self._name
 
     @property
-    def axes_names(self) -> List[str]:
-        return [ax.name for ax in self._axes]
+    def axes_names(self) -> Tuple[str, ...]:
+        return tuple([ax.name for ax in self._axes])
 
     @property
-    def axes_types(self) -> List[str]:
-        return [ax.type for ax in self._axes]
+    def axes_types(self) -> Tuple[str, ...]:
+        return tuple([ax.type for ax in self._axes])
 
     def __hash__(self) -> int:
         return hash(frozenset(self.to_dict()))

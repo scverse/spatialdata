@@ -22,7 +22,23 @@ version = "0.0.1.dev0"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 readme = "README.md"
-dependencies = ["anndata","numpy","xarray","zarr","ome_zarr", "pyarrow"]
+dependencies = [
+    "anndata",
+    "numpy",
+    "xarray",
+    "zarr",
+    "ome_zarr",
+    "spatial_image",
+    "multiscale_spatial_image",
+    "xarray-schema",
+    "pygeos",
+    "geopandas",
+    "shapely==2.0rc2",
+    "pyarrow",
+    "rich",
+    "tqdm",
+    "typing_extensions>=4.0.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -30,7 +46,7 @@ dev = [
     "bump2version",
 ]
 doc = [
-    "sphinx>=4",
+    "sphinx>=4.5",
     "sphinx-book-theme>=0.3.3",
     "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
@@ -91,3 +107,6 @@ exclude = '''
 
 [tool.jupytext]
 formats = "ipynb,md"
+
+[tool.doc8]
+ignore-path = "/docs/_templates/autosummary/*.rst"
