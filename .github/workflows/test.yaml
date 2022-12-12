@@ -58,5 +58,4 @@ jobs:
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v3.1.1
               with:
-                  flags: unittests
-                  verbose: true
+                  files: /home/runner/work/spatialdata/spatialdata/coverage.xml
