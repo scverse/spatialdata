@@ -97,6 +97,12 @@ def _test_transformation(
         BaseTransformation.from_dict(json.loads(json.dumps(transformation.to_dict()))).to_dict()
     )
 
+    # test repr
+    as_str = repr(transformation)
+    assert repr(transformation.input_coordinate_system) in as_str
+    assert repr(transformation.output_coordinate_system) in as_str
+    assert type(transformation).__name__ in as_str
+
 
 def test_identity():
     _test_transformation(
