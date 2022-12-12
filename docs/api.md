@@ -35,13 +35,6 @@ The elements (building-blocks) that consitute `SpatialData`.
 
 #### Polygons
 
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    PolygonsModel
-```
-
 #### Shapes
 
 ```{eval-rst}
