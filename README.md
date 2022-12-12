@@ -1,4 +1,4 @@
-## Work in progress ⚠
+# Work in progress ⚠
 
 -   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse).
 -   **This repository doesn't contain the latest version of the code**; we aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
@@ -8,11 +8,12 @@
 
 [![Tests][badge-tests]][link-tests]
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
+[![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 
 [badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
 
-Up-to-date design doc [here](docs/design_doc.md)
+Up-to-date design doc [here](https://github.com/scverse/spatialdata/blob/main/docs/design_doc.md)
 
 ## Getting started
 
