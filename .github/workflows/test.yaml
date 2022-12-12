@@ -60,3 +60,4 @@ jobs:
               with:
                   name: coverage
                   verbose: true
+                  file: coverage.xml
