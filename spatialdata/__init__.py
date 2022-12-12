@@ -2,6 +2,13 @@ from importlib.metadata import version
 
 __version__ = version("spatialdata")
 
+# Forcing usage of shapely 2.0 by geopandas
+# https://geopandas.org/en/stable/getting_started/install.html#using-the-optional-pygeos-dependency
+from ._compat import _check_geopandas_using_shapely
+
+_check_geopandas_using_shapely()
+
+
 __all__ = [
     "SpatialData",
     "Identity",
