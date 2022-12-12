@@ -60,5 +60,4 @@ jobs:
               with:
                   name: coverage
                   verbose: true
-                  file: coverage.xml
                   token: c1391523-d72c-411a-b14c-1cbce4325c33
