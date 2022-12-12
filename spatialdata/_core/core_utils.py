@@ -185,7 +185,8 @@ def _(e: SpatialImage) -> Tuple[str, ...]:
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Tuple[str, ...]:
-    return e[list(e.keys())[0]].dims  # type: ignore
+    variables = list(e[list(e.keys())[0]].variables)
+    return e[list(e.keys())[0]][variables[0]].dims  # type: ignore
 
 
 @get_dims.register(GeoDataFrame)

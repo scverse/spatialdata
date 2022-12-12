@@ -242,8 +242,6 @@ class RasterSchema(DataArraySchema):
             assert isinstance(data, SpatialImage)
         # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
-        if TYPE_CHECKING:
-            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         _parse_transform(data, transform)
         if multiscale_factors is not None:
             data = to_multiscale(
@@ -252,6 +250,8 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
+        if TYPE_CHECKING:
+            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
