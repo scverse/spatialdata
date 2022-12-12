@@ -273,7 +273,7 @@ class PolygonsModel:
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
         raise NotImplementedError
 
-    @parse.register
+    @parse.register(np.ndarray)
     @classmethod
     def _(
         cls,
@@ -291,7 +291,7 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register
+    @parse.register(Path)
     @classmethod
     def _(
         cls,
@@ -299,7 +299,6 @@ class PolygonsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         gc: GeometryCollection = from_geojson(data.read_bytes())
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
@@ -308,7 +307,7 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register
+    @parse.register(str)
     @classmethod
     def _(
         cls,
@@ -318,7 +317,7 @@ class PolygonsModel:
     ) -> GeoDataFrame:
         return cls.parse(Path(data), transform, **kwargs)
 
-    @parse.register
+    @parse.register(GeoDataFrame)
     @classmethod
     def _(
         cls,
