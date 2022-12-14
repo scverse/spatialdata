@@ -59,6 +59,18 @@ def table_multiple_annotations() -> SpatialData:
     return SpatialData(table=_get_table(region=["sample1", "sample2"]))
 
 
+@pytest.fixture()
+def full_sdata() -> SpatialData:
+    return SpatialData(
+        images=_get_images(),
+        labels=_get_labels(),
+        polygons=_get_polygons(),
+        shapes=_get_shapes(),
+        points=_get_points(),
+        table=_get_table(),
+    )
+
+
 # @pytest.fixture()
 # def empty_points() -> SpatialData:
 #     geo_df = GeoDataFrame(
