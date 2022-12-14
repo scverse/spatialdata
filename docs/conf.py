@@ -101,8 +101,8 @@ intersphinx_mapping = {
 exclude_patterns = [
     "_build",
     "Thumbs.db",
-    ".DS_Store",
     "**.ipynb_checkpoints",
+    "generated/spatialdata.PolygonsModel.rst",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.
