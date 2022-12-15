@@ -117,6 +117,8 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         # the correct coordinate transformation and output coordinate system
         mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
     combined: BaseTransformation
+    assert isinstance(t.output_coordinate_system, CoordinateSystem)
+    assert isinstance(mapper_output_coordinate_system, CoordinateSystem)
     if t.output_coordinate_system._axes != mapper_output_coordinate_system._axes:
         mapper_input_coordinate_system = t.output_coordinate_system
         assert C not in _get_axes_names(mapper_input_coordinate_system)

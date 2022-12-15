@@ -28,9 +28,14 @@ class Axis:
             d["unit"] = self.unit
         return d
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Axis):
+            return False
+        return self.to_dict() == other.to_dict()
+
 
 class CoordinateSystem:
-    def __init__(self, name: Optional[str] = None, axes: Optional[List[Axis]] = None):
+    def __init__(self, name: str, axes: Optional[List[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
 
@@ -90,7 +95,7 @@ class CoordinateSystem:
         return self.to_dict() == other.to_dict()
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str:
         return self._name
 
     @property
