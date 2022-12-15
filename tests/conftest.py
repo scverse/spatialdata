@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -6,12 +6,10 @@ import pyarrow as pa
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
-from multiscale_spatial_image import MultiscaleSpatialImage
-from geopandas import GeoDataFrame
-import pyarrow as pa
 
 from spatialdata import SpatialData
 from spatialdata._core.models import (
@@ -23,7 +21,6 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata._types import NDArray
 
 RNG = default_rng()
 

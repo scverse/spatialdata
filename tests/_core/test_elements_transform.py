@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from spatialdata import SpatialData
-from spatialdata._core.coordinate_system import CoordinateSystem, Axis
+from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.core_utils import get_transform, set_transform
 from spatialdata._core.transformations import Scale
 from tests._core.conftest import xy_cs
@@ -49,16 +49,17 @@ class TestElementsTransform:
         ct = Scale(np.array([1, 2, 3]))
         ct.input_coordinate_system = xy_cs
         ct.output_coordinate_system = CoordinateSystem(name="test", axes=[Axis(name="c", type="channel")])
-        points.points['points_0_1'] = set_transform(points.points['points_0_1'], ct)
-        assert list(points.coordinate_systems.keys()) == ['cyx', 'test']
+        points.points["points_0_1"] = set_transform(points.points["points_0_1"], ct)
+        assert list(points.coordinate_systems.keys()) == ["cyx", "test"]
 
     def test_physical_units(self, tmp_path: str, points: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         ct = Scale(np.array([1, 2, 3]))
         ct.input_coordinate_system = xy_cs
-        ct.output_coordinate_system = CoordinateSystem(name="test", axes=[Axis(name="x", type="space",
-                                                                               unit='micrometers')])
-        points.points['points_0_1'] = set_transform(points.points['points_0_1'], ct)
+        ct.output_coordinate_system = CoordinateSystem(
+            name="test", axes=[Axis(name="x", type="space", unit="micrometers")]
+        )
+        points.points["points_0_1"] = set_transform(points.points["points_0_1"], ct)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert new_sdata.coordinate_systems['test']._axes[0].unit == 'micrometers'
+        assert new_sdata.coordinate_systems["test"]._axes[0].unit == "micrometers"
