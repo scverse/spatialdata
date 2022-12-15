@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from types import MappingProxyType
-from typing import Dict, Generator, List, Mapping, Optional, Union
+from typing import Dict, Generator, List, Optional, Union
 
 import pyarrow as pa
 import zarr
@@ -32,6 +32,7 @@ from spatialdata._io.write import (
     write_shapes,
     write_table,
 )
+from spatialdata._logging import logger
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -56,20 +57,20 @@ class SpatialData:
     Parameters
     ----------
     images
-        Mapping of 2D and 3D image elements. The following parsers are available: :class:`~spatialdata.Image2DModel`,
+        Dict of 2D and 3D image elements. The following parsers are available: :class:`~spatialdata.Image2DModel`,
         :class:`~spatialdata.Image3DModel`.
     labels
-        Mapping of 2D and 3D labels elements. Labels are regions, they can't contain annotation, but they can be
+        Dict of 2D and 3D labels elements. Labels are regions, they can't contain annotation, but they can be
         annotated by a table. The following parsers are available: :class:`~spatialdata.Labels2DModel`,
         :class:`~spatialdata.Labels3DModel`.
     points
-        Mapping of points elements. Points can contain annotations. The following parsers is available:
+        Dict of points elements. Points can contain annotations. The following parsers is available:
         :class:`~spatialdata.PointsModel`.
     polygons
-        Mapping of 2D polygons elements. They can't contain annotation but they can be annotated
+        Dict of 2D polygons elements. They can't contain annotation but they can be annotated
         by a table. The following parsers is available: :class:`~spatialdata.PolygonsModel`.
     shapes
-        Mapping of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
+        Dict of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
         can be annotated by a table. The following parsers is available: :class:`~spatialdata.ShapesModel`.
     table
         AnnData table containing annotations for regions (labels, polygons, shapes). The following parsers is
@@ -92,123 +93,258 @@ class SpatialData:
     provide (:class:`~spatialdata.Image2DModel`, :class:`~spatialdata.Image3DModel`, :class:`~spatialdata.Labels2DModel`, :class:`~spatialdata.Labels3DModel`, :class:`~spatialdata.PointsModel`, :class:`~spatialdata.PolygonsModel`, :class:`~spatialdata.ShapesModel`, :class:`~spatialdata.TableModel`).
     """
 
-    _images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    _labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    _points: Mapping[str, pa.Table] = MappingProxyType({})
-    _polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
-    _shapes: Mapping[str, AnnData] = MappingProxyType({})
+    _images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
+    _labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
+    _points: Dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
+    _polygons: Dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: Dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
+    path: Optional[str] = None
 
     def __init__(
         self,
-        images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),
-        labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),
-        points: Mapping[str, pa.Table] = MappingProxyType({}),
-        polygons: Mapping[str, GeoDataFrame] = MappingProxyType({}),
-        shapes: Mapping[str, AnnData] = MappingProxyType({}),
+        images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
+        labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
+        points: Dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
+        polygons: Dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: Dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
-
+        self.path = None
         if images is not None:
             self._images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
-                ndim = len(get_dims(v))
-                if ndim == 3:
-                    Image2D_s.validate(v)
-                    self._images[k] = v
-                elif ndim == 4:
-                    Image3D_s.validate(v)
-                    self._images[k] = v
-                else:
-                    raise ValueError("Only czyx and cyx images supported")
+                self._add_image_in_memory(name=k, image=v)
 
         if labels is not None:
             self._labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
-                ndim = len(get_dims(v))
-                if ndim == 2:
-                    Label2D_s.validate(v)
-                    self._labels[k] = v
-                elif ndim == 3:
-                    Label3D_s.validate(v)
-                    self._labels[k] = v
-                else:
-                    raise ValueError(f"Invalid label dimensions: {ndim}")
+                self._add_labels_in_memory(name=k, labels=v)
 
         if polygons is not None:
             self._polygons: Dict[str, GeoDataFrame] = {}
             for k, v in polygons.items():
-                Polygon_s.validate(v)
-                self._polygons[k] = v
+                self._add_polygons_in_memory(name=k, polygons=v)
 
         if shapes is not None:
             self._shapes: Dict[str, AnnData] = {}
             for k, v in shapes.items():
-                Shape_s.validate(v)
-                self._shapes[k] = v
+                self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
             self._points: Dict[str, pa.Table] = {}
             for k, v in points.items():
-                Point_s.validate(v)
-                self._points[k] = v
+                self._add_points_in_memory(name=k, points=v)
 
         if table is not None:
             Table_s.validate(table)
             self._table = table
 
-    def write(
-        self,
-        file_path: str,
-        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
-    ) -> None:
-        """Write to Zarr file."""
+    def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+        ndim = len(get_dims(image))
+        if ndim == 3:
+            Image2D_s.validate(image)
+            self._images[name] = image
+        elif ndim == 4:
+            Image3D_s.validate(image)
+            self._images[name] = image
+        else:
+            raise ValueError("Only czyx and cyx images supported")
 
-        store = parse_url(file_path, mode="w").store
+    def _add_labels_in_memory(self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+        ndim = len(get_dims(labels))
+        if ndim == 2:
+            Label2D_s.validate(labels)
+            self._labels[name] = labels
+        elif ndim == 3:
+            Label3D_s.validate(labels)
+            self._labels[name] = labels
+        else:
+            raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
+
+    def _add_polygons_in_memory(self, name: str, polygons: GeoDataFrame) -> None:
+        Polygon_s.validate(polygons)
+        self._polygons[name] = polygons
+
+    def _add_shapes_in_memory(self, name: str, shapes: AnnData) -> None:
+        Shape_s.validate(shapes)
+        self._shapes[name] = shapes
+
+    def _add_points_in_memory(self, name: str, points: pa.Table) -> None:
+        Point_s.validate(points)
+        self._points[name] = points
+
+    def is_backed(self) -> bool:
+        """Check if the data is backed by a Zarr storage or it is in-memory."""
+        return self.path is not None
+
+    def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
+        if self.path is None:
+            # in the future we can relax this, but this ensures that we don't have objects that are partially backed
+            # and partially in memory
+            raise RuntimeError(
+                "The data is not backed by a Zarr storage. In order to add new elements after "
+                "initializing a SpatialData object you need to call SpatialData.write() first"
+            )
+        store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
+        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        # not need to create the group for labels as it is already handled by ome-zarr-py
+        if element_type != "labels":
+            if element_type not in root:
+                elem_group = root.create_group(name=element_type)
+            else:
+                elem_group = root[element_type]
+        if overwrite:
+            if element_type == "labels":
+                if element_type in root:
+                    elem_group = root[element_type]
+            if name in elem_group:
+                del elem_group[name]
+        else:
+            # bypass is to ensure that elem_group is defined. I don't want to define it as None but either having it
+            # or not having it, so if the code tries to access it and it should not be there, it will raise an error
+            bypass = False
+            if element_type == "labels":
+                if element_type in root:
+                    elem_group = root[element_type]
+                else:
+                    bypass = True
+            if not bypass:
+                if name in elem_group:
+                    raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
+
+        if element_type != "labels":
+            return elem_group
+        else:
+            return root
+
+    def add_image(
+        self,
+        name: str,
+        image: Union[SpatialImage, MultiscaleSpatialImage],
+        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+        overwrite: bool = False,
+    ) -> None:
+        # _init_add_element() needs to be called before _add_image_in_memory(), and same for the other elements
+        # otherwise if a element is added and saved to disk, and another element with the same name but different
+        # content is added, _init_add_element() will raise an exception. If _add_image_in_memory() is called first,
+        # then the memory content will be overwritten, but the disk content will remain the old one
+        elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
+        if name not in self.images:
+            self._add_image_in_memory(name=name, image=image)
+        write_image(
+            image=self.images[name],
+            group=elem_group,
+            name=name,
+            storage_options=storage_options,
+        )
+
+    def add_labels(
+        self,
+        name: str,
+        labels: Union[SpatialImage, MultiscaleSpatialImage],
+        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+        overwrite: bool = False,
+    ) -> None:
+        elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
+        if name not in self.labels:
+            self._add_labels_in_memory(name=name, labels=labels)
+        write_labels(
+            labels=self.labels[name],
+            group=elem_group,
+            name=name,
+            storage_options=storage_options,
+        )
+
+    def add_points(
+        self,
+        name: str,
+        points: pa.Table,
+        overwrite: bool = False,
+    ) -> None:
+        elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
+        if name not in self.points:
+            self._add_points_in_memory(name=name, points=points)
+        write_points(
+            points=self.points[name],
+            group=elem_group,
+            name=name,
+        )
+
+    def add_polygons(
+        self,
+        name: str,
+        polygons: GeoDataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
+        if name not in self.polygons:
+            self._add_polygons_in_memory(name=name, polygons=polygons)
+        write_polygons(
+            polygons=self.polygons[name],
+            group=elem_group,
+            name=name,
+        )
+
+    def add_shapes(
+        self,
+        name: str,
+        shapes: AnnData,
+        overwrite: bool = False,
+    ) -> None:
+        elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
+        if name not in self.shapes:
+            self._add_shapes_in_memory(name=name, shapes=shapes)
+        write_shapes(
+            shapes=self.shapes[name],
+            group=elem_group,
+            name=name,
+        )
+
+    def write(
+        self, file_path: str, storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None, overwrite: bool = False
+    ) -> None:
+        """Write the SpatialData object to Zarr."""
+
+        if self.path == file_path:
+            raise ValueError("Can't overwrite the original file")
+        elif self.path != file_path and self.path is not None:
+            logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
+        self.path = file_path
+
+        if not overwrite and parse_url(self.path, mode="r") is not None:
+            raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
+        else:
+            store = parse_url(self.path, mode="w").store
+            root = zarr.group(store=store)
+            store.close()
 
         if len(self.images):
             elem_group = root.create_group(name="images")
             for el in self.images.keys():
-                write_image(
-                    image=self.images[el],
-                    group=elem_group,
-                    name=el,
-                    storage_options=storage_options,
-                )
+                self.add_image(name=el, image=self.images[el], storage_options=storage_options)
+
         if len(self.labels):
-            # no need to create group handled by ome_zarr
+            elem_group = root.create_group(name="labels")
             for el in self.labels.keys():
-                write_labels(
-                    labels=self.labels[el],
-                    group=root,
-                    name=el,
-                    storage_options=storage_options,
-                )
+                self.add_labels(name=el, labels=self.labels[el], storage_options=storage_options)
+
         if len(self.points):
             elem_group = root.create_group(name="points")
             for el in self.points.keys():
-                write_points(
-                    points=self.points[el],
-                    group=elem_group,
-                    name=el,
-                )
+                self.add_points(name=el, points=self.points[el])
+
         if len(self.polygons):
             elem_group = root.create_group(name="polygons")
             for el in self.polygons.keys():
-                write_polygons(
-                    polygons=self.polygons[el],
-                    group=elem_group,
-                    name=el,
-                )
+                self.add_polygons(name=el, polygons=self.polygons[el])
+
         if len(self.shapes):
             elem_group = root.create_group(name="shapes")
             for el in self.shapes.keys():
-                write_shapes(
-                    shapes=self.shapes[el],
-                    group=elem_group,
-                    name=el,
-                )
+                self.add_shapes(name=el, shapes=self.shapes[el])
+
         if self.table is not None:
             elem_group = root.create_group(name="table")
             write_table(table=self.table, group=elem_group, name="table")
@@ -225,28 +361,28 @@ class SpatialData:
         return sdata
 
     @property
-    def images(self) -> Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]]:
-        """Return images as a mapping of name to image data."""
+    def images(self) -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+        """Return images as a Dict of name to image data."""
         return self._images
 
     @property
-    def labels(self) -> Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]]:
-        """Return labels as a mapping of name to label data."""
+    def labels(self) -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+        """Return labels as a Dict of name to label data."""
         return self._labels
 
     @property
-    def points(self) -> Mapping[str, pa.Table]:
-        """Return points as a mapping of name to point data."""
+    def points(self) -> Dict[str, pa.Table]:
+        """Return points as a Dict of name to point data."""
         return self._points
 
     @property
-    def polygons(self) -> Mapping[str, GeoDataFrame]:
-        """Return polygons as a mapping of name to polygon data."""
+    def polygons(self) -> Dict[str, GeoDataFrame]:
+        """Return polygons as a Dict of name to polygon data."""
         return self._polygons
 
     @property
-    def shapes(self) -> Mapping[str, AnnData]:
-        """Return shapes as a mapping of name to shape data."""
+    def shapes(self) -> Dict[str, AnnData]:
+        """Return shapes as a Dict of name to shape data."""
         return self._shapes
 
     def __repr__(self) -> str:
