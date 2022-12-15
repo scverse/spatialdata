@@ -227,7 +227,6 @@ def _read_points(
     # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
     # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
-
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     new_table = set_transform(table, transforms)
