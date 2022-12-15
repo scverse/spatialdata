@@ -491,7 +491,7 @@ class PointsModel:
     def validate(cls, data: pa.Table) -> None:
         for ax in [X, Y, Z]:
             if ax in data.column_names:
-                assert data.schema.field_by_name(ax).type in [pa.float32(), pa.float64()]
+                assert data.schema.field(ax).type in [pa.float32(), pa.float64()]
         try:
             assert data.schema.metadata is not None
             t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
