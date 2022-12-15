@@ -233,7 +233,6 @@ def _read_points(
 
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
-
     new_table = set_transform(table, transforms)
     return new_table
     #
