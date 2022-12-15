@@ -18,6 +18,10 @@ class Axis:
         self.type = type
         self.unit = unit
 
+    def __repr__(self) -> str:
+        inner = ", ".join(f"'{v}'" for v in self.to_dict().values())
+        return f"Axis({inner})"
+
     def to_dict(self) -> Axis_t:
         d = {"name": self.name, "type": self.type}
         if self.unit is not None:
@@ -29,6 +33,9 @@ class CoordinateSystem:
     def __init__(self, name: Optional[str] = None, axes: Optional[List[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
+
+    def __repr__(self) -> str:
+        return f"CoordinateSystem('{self.name}', {self._axes})"
 
     @staticmethod
     def from_dict(coord_sys: CoordSystem_t) -> "CoordinateSystem":
