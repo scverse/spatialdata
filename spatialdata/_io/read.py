@@ -224,8 +224,6 @@ def _read_points(
 
     path = os.path.join(f._store.path, f.path, "points.parquet")
     table = pq.read_table(path)
-    # coords = np.array(f["coords"])
-    # index = np.array(f["Index"])
     # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
     # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
