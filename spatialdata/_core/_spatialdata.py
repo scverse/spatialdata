@@ -250,6 +250,13 @@ class SpatialData:
         return self._shapes
 
     def _non_empty_elements(self) -> List[str]:
+        """Get the names of the elements that are not empty.
+
+        Returns
+        -------
+        non_empty_elements : List[str]
+            The names of the elements that are not empty.
+        """
         all_elements = ["images", "labels", "points", "polygons", "shapes", "table"]
         return [
             element
