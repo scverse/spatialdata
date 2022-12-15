@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from spatialdata._core.coordinate_system import CoordinateSystem
 import hashlib
 from types import MappingProxyType
 from typing import Dict, Generator, List, Optional, Union
@@ -13,7 +14,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import SpatialElement, get_dims
+from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -384,6 +385,24 @@ class SpatialData:
     def shapes(self) -> Dict[str, AnnData]:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
+
+    @property
+    def coordinate_systems(self) -> Dict[str, CoordinateSystem]:
+        ##
+        all_cs: Dict[str, CoordinateSystem] = {}
+        gen = self._gen_elements()
+        for obj in gen:
+            ct = get_transform(obj)
+            cs = ct.output_coordinate_system
+            if isinstance(cs, CoordinateSystem):
+                name = cs.name
+                if name in all_cs:
+                    added = all_cs[name]
+                    assert cs == added
+                else:
+                    all_cs[name] = cs
+        ##
+        return all_cs
 
     def __repr__(self) -> str:
         return self._gen_repr()
