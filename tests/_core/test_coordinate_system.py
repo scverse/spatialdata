@@ -64,3 +64,18 @@ def test_coordinate_system_roundtrip():
     assert input_json == output_json
     cs2 = CoordinateSystem.from_json(output_json)
     assert cs == cs2
+
+
+def test_repr():
+    cs = CoordinateSystem(
+        "some coordinate system",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+            Axis("T", "time"),
+        ],
+    )
+    expected = """CoordinateSystem('some coordinate system', [Axis('X', 'space', 'micrometers'), Axis('Y', 'space', 'meters'), Axis('T', 'time')])"""
+    as_str = repr(cs)
+
+    assert as_str == expected

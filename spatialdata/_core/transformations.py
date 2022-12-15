@@ -64,6 +64,9 @@ class BaseTransformation(ABC):
         self.input_coordinate_system = input_coordinate_system
         self.output_coordinate_system = output_coordinate_system
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(input={self.input_coordinate_system}, output={self.output_coordinate_system})"
+
     @classmethod
     @abstractmethod
     def _from_dict(cls, d: Transformation_t) -> BaseTransformation:
