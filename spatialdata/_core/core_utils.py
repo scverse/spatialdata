@@ -1,7 +1,9 @@
 import copy
+import json
 from functools import singledispatch
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
+import pyarrow as pa
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -31,61 +33,97 @@ C, Z, Y, X = "c", "z", "y", "x"
 
 
 @singledispatch
-def get_transform(e: SpatialElement) -> BaseTransformation:
+def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> BaseTransformation:
+def _(e: SpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
-    return t
+    # this double return is to make mypy happy
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
+        return t
+    else:
+        return t
 
 
 @get_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> BaseTransformation:
+def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
-    return t
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
+        return t
+    else:
+        return t
 
 
 @get_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> BaseTransformation:
+def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
-    assert isinstance(t, BaseTransformation)
-    return t
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
+        return t
+    else:
+        return t
 
 
 @get_transform.register(AnnData)
-def _(e: AnnData) -> BaseTransformation:
+def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
-    assert isinstance(t, BaseTransformation)
-    return t
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
+        return t
+    else:
+        return t
+
+
+# we need the return type because pa.Table is immutable
+@get_transform.register(pa.Table)
+def _(e: pa.Table) -> Optional[BaseTransformation]:
+    t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
+    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+    if t is not None:
+        assert isinstance(t, BaseTransformation)
+        return t
+    else:
+        return t
 
 
 @singledispatch
-def set_transform(e: SpatialElement, t: BaseTransformation) -> None:
+def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: BaseTransformation) -> None:
+def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
+def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame, t: BaseTransformation) -> None:
+def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
     e.attrs[TRANSFORM_KEY] = t
+    return e
 
 
 @set_transform.register(AnnData)
-def _(e: AnnData, t: BaseTransformation) -> None:
+def _(e: AnnData, t: BaseTransformation) -> AnnData:
     e.uns[TRANSFORM_KEY] = t
+    return e
+
+
+@set_transform.register(pa.Table)
+def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
+    # in theory this doesn't really copy the data in the table but is referncing to them
+    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
+    return new_e
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
@@ -94,6 +132,10 @@ x_axis = Axis(name=X, type="space", unit="unit")
 y_axis = Axis(name=Y, type="space", unit="unit")
 z_axis = Axis(name=Z, type="space", unit="unit")
 c_axis = Axis(name=C, type="channel")
+x_cs = CoordinateSystem(name="x", axes=[x_axis])
+y_cs = CoordinateSystem(name="y", axes=[y_axis])
+z_cs = CoordinateSystem(name="z", axes=[z_axis])
+c_cs = CoordinateSystem(name="c", axes=[c_axis])
 xy_cs = CoordinateSystem(name="xy", axes=[x_axis, y_axis])
 xyz_cs = CoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
 yx_cs = CoordinateSystem(name="yx", axes=[y_axis, x_axis])
@@ -102,6 +144,10 @@ cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
 
 _DEFAULT_COORDINATE_SYSTEM = {
+    (X,): x_cs,
+    (Y,): y_cs,
+    (Z,): z_cs,
+    (C,): c_cs,
     (X, Y): xy_cs,
     (X, Y, Z): xyz_cs,
     (Y, X): yx_cs,
@@ -139,7 +185,8 @@ def _(e: SpatialImage) -> Tuple[str, ...]:
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Tuple[str, ...]:
-    return e[list(e.keys())[0]].dims  # type: ignore
+    variables = list(e[list(e.keys())[0]].variables)
+    return e[list(e.keys())[0]][variables[0]].dims  # type: ignore
 
 
 @get_dims.register(GeoDataFrame)
@@ -154,3 +201,10 @@ def _(e: AnnData) -> Tuple[str, ...]:
     dims = (X, Y, Z)
     n = e.obsm["spatial"].shape[1]
     return dims[:n]
+
+
+@get_dims.register(pa.Table)
+def _(e: pa.Table) -> Tuple[str, ...]:
+    valid_dims = (X, Y, Z)
+    dims = [c for c in valid_dims if c in e.column_names]
+    return tuple(dims)

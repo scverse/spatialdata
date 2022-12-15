@@ -1,4 +1,5 @@
 """This file contains models and schema for SpatialData"""
+import json
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import (
@@ -16,6 +17,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
@@ -24,10 +26,10 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from numpy.typing import ArrayLike, NDArray
-from pandas.api.types import is_categorical_dtype, is_object_dtype, is_string_dtype
+from pandas.api.types import is_categorical_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
-from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -41,6 +43,7 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import (
     TRANSFORM_KEY,
     C,
@@ -52,7 +55,14 @@ from spatialdata._core.core_utils import (
     get_dims,
     set_transform,
 )
-from spatialdata._core.transformations import BaseTransformation, Identity
+from spatialdata._core.transformations import (
+    Affine,
+    BaseTransformation,
+    ByDimension,
+    Identity,
+    MapAxis,
+)
+from spatialdata._core.transformations import Sequence as SequenceTransformation
 from spatialdata._logging import logger
 
 # Types
@@ -66,17 +76,89 @@ ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
+__all__ = [
+    "Labels2DModel",
+    "Labels3DModel",
+    "Image2DModel",
+    "Image3DModel",
+    "PolygonsModel",
+    "ShapesModel",
+    "PointsModel",
+    "TableModel",
+]
 
-def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation]) -> None:
+
+def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
+    # if input and output coordinate systems are not specified by the user, we try to infer them. If it's logically
+    # not possible to infer them, an exception is raised.
     t: BaseTransformation
     if transform is None:
         t = Identity()
     else:
         t = transform
-    if t.output_coordinate_system is None:
+    if t.input_coordinate_system is None:
         dims = get_dims(element)
-        t.output_coordinate_system = get_default_coordinate_system(dims)
-    set_transform(element, t)
+        t.input_coordinate_system = get_default_coordinate_system(dims)
+    if t.output_coordinate_system is None:
+        t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
+
+    # this function is to comply with mypy since we could call .axes_names on the wrong type
+    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> Tuple[str, ...]:
+        assert isinstance(cs, CoordinateSystem)
+        return cs.axes_names
+
+    # determine if we are in the 2d case or 3d case and determine the coordinate system we want to map to (basically
+    # we want both the spatial dimensions and c). If the output coordinate system of the transformation t is not
+    # matching, compose the transformation with an appropriate transformation to map to the correct coordinate system
+    if Z in _get_axes_names(t.output_coordinate_system):
+        mapper_output_coordinate_system = get_default_coordinate_system((C, Z, Y, X))
+    else:
+        # if we are in the 3d case but the element does not contain the Z dimension, it's up to the user to specify
+        # the correct coordinate transformation and output coordinate system
+        mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
+    combined: BaseTransformation
+    if t.output_coordinate_system != mapper_output_coordinate_system:
+        mapper_input_coordinate_system = t.output_coordinate_system
+        assert C not in _get_axes_names(mapper_input_coordinate_system)
+        any_axis_cs = get_default_coordinate_system((_get_axes_names(t.input_coordinate_system)[0],))
+        c_cs = get_default_coordinate_system((C,))
+        mapper = ByDimension(
+            transformations=[
+                MapAxis(
+                    {ax: ax for ax in _get_axes_names(t.input_coordinate_system)},
+                    input_coordinate_system=t.input_coordinate_system,
+                    output_coordinate_system=t.input_coordinate_system,
+                ),
+                Affine(
+                    np.array([[0, 0], [0, 1]]),
+                    input_coordinate_system=any_axis_cs,
+                    output_coordinate_system=c_cs,
+                ),
+            ],
+            input_coordinate_system=mapper_input_coordinate_system,
+            output_coordinate_system=mapper_output_coordinate_system,
+        )
+        combined = SequenceTransformation(
+            [t, mapper],
+            input_coordinate_system=t.input_coordinate_system,
+            output_coordinate_system=mapper_output_coordinate_system,
+        )
+    else:
+        combined = t
+    # test that all il good by checking that we can compute an affine matrix from this
+    try:
+        _ = combined.to_affine().affine
+    except Exception as e:  # noqa: B902
+        # debug
+        logger.debug("Error while trying to compute affine matrix from transformation: ")
+        from pprint import pprint
+
+        pprint(combined.to_dict())
+        raise e
+
+    # finalize
+    new_element = set_transform(element, combined)
+    return new_element
 
 
 class RasterSchema(DataArraySchema):
@@ -160,8 +242,6 @@ class RasterSchema(DataArraySchema):
             assert isinstance(data, SpatialImage)
         # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
-        if TYPE_CHECKING:
-            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         _parse_transform(data, transform)
         if multiscale_factors is not None:
             data = to_multiscale(
@@ -170,6 +250,8 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
+        if TYPE_CHECKING:
+            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
@@ -273,7 +355,7 @@ class PolygonsModel:
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
         raise NotImplementedError
 
-    @parse.register(np.ndarray)
+    @parse.register
     @classmethod
     def _(
         cls,
@@ -291,7 +373,7 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register(Path)
+    @parse.register
     @classmethod
     def _(
         cls,
@@ -299,6 +381,7 @@ class PolygonsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
+
         gc: GeometryCollection = from_geojson(data.read_bytes())
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
@@ -307,7 +390,7 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register(str)
+    @parse.register
     @classmethod
     def _(
         cls,
@@ -317,7 +400,7 @@ class PolygonsModel:
     ) -> GeoDataFrame:
         return cls.parse(Path(data), transform, **kwargs)
 
-    @parse.register(GeoDataFrame)
+    @parse.register
     @classmethod
     def _(
         cls,
@@ -405,49 +488,51 @@ class PointsModel:
     TRANSFORM_KEY = "transform"
 
     @classmethod
-    def validate(cls, data: GeoDataFrame) -> None:
-        if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
-        if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
-        if len(data) > 0 and not isinstance(data[cls.GEOMETRY_KEY].values[0], Point):
-            # TODO: should check for all values?
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Point objects.")
-        if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+    def validate(cls, data: pa.Table) -> None:
+        for ax in [X, Y, Z]:
+            if ax in data.column_names:
+                assert data.schema.field_by_name(ax).type in [pa.float32(), pa.float64()]
+        try:
+            assert data.schema.metadata is not None
+            t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
+            BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+        except Exception as e:  # noqa: B902
+            logger.error("cannot parse the transformation from the pyarrow.Table object")
+            raise e
 
     @classmethod
     def parse(
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
-        annotations: Optional[pd.DataFrame] = None,
+        annotations: Optional[pa.Table] = None,
         transform: Optional[Any] = None,
         supress_categorical_check: bool = False,
         **kwargs: Any,
-    ) -> AnnData:
+    ) -> pa.Table:
         if annotations is not None:
             if not supress_categorical_check:
-                assert isinstance(annotations, pd.DataFrame)
-                for column in annotations:
-                    c = annotations[column]
-                    # TODO(giovp): consider casting to categorical
-                    if is_string_dtype(c) or is_object_dtype(c):
-                        logger.warning(
-                            "Detected a column with strings, consider converting it to "
-                            "categorical to achieve faster performance. Call parse() with "
-                            "suppress_categorical_check=True to hide this warning"
-                        )
-        geometry = GeometryType(GeometryType.POINT)
-        data = from_ragged_array(geometry, coords)
-        geo_df = GeoDataFrame({"geometry": data})
+                assert isinstance(annotations, pa.Table)
+                # TODO: restore this warning and fix, or TODO(giovp): consider casting to categorical
+                # for column in annotations.column_names:
+                #     c = annotations[column]
+                #     if not isinstance(c.dictionary_encode().type, pa.DictionaryType):
+                #         logger.warning(
+                #             "detected columns that are not categorical, consider converting it to categorical with "
+                #             ".dictionary_encode() to achieve faster performance. Call parse() with "
+                #             "suppress_categorical_check=True to hide this warning"
+                #         )
+        assert len(coords.shape) == 2
+        ndim = coords.shape[1]
+        axes = [X, Y, Z][:ndim]
+        table = pa.Table.from_arrays([pa.array(coords[:, i].flatten()) for i in range(coords.shape[1])], names=axes)
         if annotations is not None:
-            for column in annotations:
-                if column in geo_df:
-                    raise RuntimeError("column name from the annotations DataFrame already exists in GeoDataFrame")
-                geo_df[column] = annotations[column]
-        _parse_transform(geo_df, transform)
-        cls.validate(geo_df)
-        return geo_df
+            for column in annotations.column_names:
+                if column in [X, Y, Z]:
+                    raise ValueError(f"Column name {column} is reserved for coordinates.")
+                table = table.append_column(column, annotations[column])
+        new_table = _parse_transform(table, transform)
+        cls.validate(new_table)
+        return new_table
 
 
 class TableModel:

@@ -36,22 +36,23 @@ Transformation_t = Dict[str, Any]
 TRANSFORMATIONS: Dict[str, Type[BaseTransformation]] = {}
 
 
+# TODO(luca): wrote this comment, see if it is still relevant and either add it to the docstring or remove it
+# the general json description of a transformation contains just the name of the input and output space,
+# (coordinate systems are specified outside the transformation), and sometimes the name is even not specified (like
+# for transformation that define a "Sequence" transformation). For this reason the following two variables can be
+# None or strings. Anyway, in order to be able to apply a transformation to a DataArray, we need to know the name of
+# the input and output axes (information contained in the CoordinateSystem object). Therefore, the following
+# variables will be populated with CoordinateSystem objects when both the coordinate_system and the transformation
+# are known.
+# Example: as a user you have an Image (cyx) and a Point (xy) elements, and you want to contruct a SpatialData
+# object containing the two of them. You also want to apply a Scale transformation to the Image. You can simply
+# assign the Scale transformation to the Image element, and the SpatialData object will take care of assiging to
+# "_input_coordinate_system" the intrinsitc coordinate system of the Image element,
+# and to "_output_coordinate_system" the global coordinate system (cyx) that will be created when calling the
+# SpatialData constructor
 class BaseTransformation(ABC):
     """Base class for all transformations."""
 
-    # the general json description of a transformation contains just the name of the input and output space,
-    # (coordinate systems are specified outside the transformation), and sometimes the name is even not specified (like
-    # for transformation that define a "Sequence" transformation). For this reason the following two variables can be
-    # None or strings. Anyway, in order to be able to apply a transformation to a DataArray, we need to know the name of
-    # the input and output axes (information contained in the CoordinateSystem object). Therefore, the following
-    # variables will be populated with CoordinateSystem objects when both the coordinate_system and the transformation
-    # are known.
-    # Example: as a user you have an Image (cyx) and a Point (xy) elements, and you want to contruct a SpatialData
-    # object containing the two of them. You also want to apply a Scale transformation to the Image. You can simply
-    # assign the Scale transformation to the Image element, and the SpatialData object will take care of assiging to
-    # "_input_coordinate_system" the intrinsitc coordinate system of the Image element,
-    # and to "_output_coordinate_system" the global coordinate system (cyx) that will be created when calling the
-    # SpatialData constructor
     input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
     output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
 

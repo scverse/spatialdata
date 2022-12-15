@@ -1,12 +1,14 @@
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
@@ -16,7 +18,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.core_utils import set_transform
+from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io.format import (
@@ -51,7 +53,13 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
                 dims=axes,
                 attrs={"transform": t},
             )
-        return MultiscaleSpatialImage.from_dict(multiscale_image)
+        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        # for some reasons if we put attrs={"transform": t} in the dict above, it does not get copied to
+        # MultiscaleSpatialImage. We put it also above otherwise we get a schema error
+        # TODO: think if we can/want to do something about this
+        t = transformations[0]
+        set_transform(msi, t)
+        return msi
     else:
         t = transformations[0]
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
@@ -59,7 +67,7 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
             data,
             name=name,
             dims=axes,
-            attrs={"transform": t},
+            attrs={TRANSFORM_KEY: t},
         )
 
 
@@ -210,28 +218,19 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
 
 def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
-) -> GeoDataFrame:
+) -> pa.Table:
     """Read points from a zarr store."""
     f = zarr.open(store, mode="r")
 
-    coords = np.array(f["coords"])
-    index = np.array(f["Index"])
+    path = os.path.join(f._store.path, f.path, "points.parquet")
+    table = pq.read_table(path)
     # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
     # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
-    typ = fmt.attrs_from_dict(f.attrs.asdict())
-
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
-    geometry = from_ragged_array(typ, coords)
-
-    geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    for c in f["annotations"]:
-        column = read_elem(f["annotations"][c])
-        geo_df[c] = column
-
-    set_transform(geo_df, transforms)
-    return geo_df
+    new_table = set_transform(table, transforms)
+    return new_table
     #
     # f = zarr.open(store, mode="r")
     # transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])

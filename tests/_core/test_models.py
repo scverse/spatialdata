@@ -4,6 +4,7 @@ from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from anndata import AnnData
 from dask.array.core import from_array
@@ -86,9 +87,8 @@ class TestModels:
         coords = RNG.normal(size=(10, 2))
         if annotations is not None:
             annotations["A"] = annotations["A"].astype(str)
-        points = model.parse(coords, annotations)
-        assert PointsModel.GEOMETRY_KEY in points
-        assert PointsModel.TRANSFORM_KEY in points.attrs
+        points = model.parse(coords, None if annotations is None else pa.Table.from_pandas(annotations))
+        assert PointsModel.TRANSFORM_KEY.encode("utf-8") in points.schema.metadata
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("shape_type", [None, "Circle", "Square"])

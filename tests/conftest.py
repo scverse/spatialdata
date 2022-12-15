@@ -2,6 +2,7 @@ from typing import Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -234,12 +235,10 @@ def _get_points() -> Mapping[str, Sequence[NDArray]]:
         # randomly assign some values from v to the points
         points_assignment0 = pd.Series(RNG.choice(v, size=arr.shape[0]))
         points_assignment1 = pd.Series(RNG.choice(v, size=arr.shape[0]))
-        out[name] = PointsModel.parse(
-            coords=arr,
-            annotations=pd.DataFrame(
-                {"points_assignment0": points_assignment0, "points_assignment1": points_assignment1}
-            ),
+        annotations = pa.table(
+            {"points_assignment0": points_assignment0, "points_assignment1": points_assignment1},
         )
+        out[name] = PointsModel.parse(coords=arr, annotations=annotations)
     return out
 
 

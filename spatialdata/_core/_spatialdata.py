@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Dict, Generator, List, Mapping, Optional, Union
 
+import pyarrow as pa
 import zarr
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -12,7 +13,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import get_dims
+from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -48,60 +49,63 @@ class SpatialData:
     The SpatialData object.
 
     The SpatialData object is a modular container for arbitrary combinations of spatial elements. The elements
-    can be accesses separately and are stored as standard types (:class:`anndata.AnnData`, :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
+    can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
+    :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
 
     Parameters
     ----------
     images
-        Mapping of 2D and 3D image elements. The following parsers are available: :class:`spatialdata.Image2DModel`, :class:`spatialdata.Image3DModel`.
+        Mapping of 2D and 3D image elements. The following parsers are available: :class:`~spatialdata.Image2DModel`,
+        :class:`~spatialdata.Image3DModel`.
     labels
-        Mapping of 2D and 3D labels elements. Labels are regions, they can't contain annotation but they can be
-        annotated by a table. The following parsers are available: :class:`spatialdata.Labels2DModel`, :class:`spatialdata.Labels3DModel`.
+        Mapping of 2D and 3D labels elements. Labels are regions, they can't contain annotation, but they can be
+        annotated by a table. The following parsers are available: :class:`~spatialdata.Labels2DModel`,
+        :class:`~spatialdata.Labels3DModel`.
     points
-        Mapping of points elements. Points can contain annotations. The following parsers is available: PointsModel.
+        Mapping of points elements. Points can contain annotations. The following parsers is available:
+        :class:`~spatialdata.PointsModel`.
     polygons
         Mapping of 2D polygons elements. They can't contain annotation but they can be annotated
-        by a table. The following parsers is available: :class:`spatialdata.PolygonsModel`.
+        by a table. The following parsers is available: :class:`~spatialdata.PolygonsModel`.
     shapes
         Mapping of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
-        can be annotated by a table. The following parsers is available: :class:`spatialdata.ShapesModel`.
+        can be annotated by a table. The following parsers is available: :class:`~spatialdata.ShapesModel`.
     table
         AnnData table containing annotations for regions (labels, polygons, shapes). The following parsers is
-        available: :class:`spatialdata.TableModel`.
+        available: :class:`~spatialdata.TableModel`.
 
     Notes
     -----
     The spatial elements are stored with standard types:
 
-        - images and labels are stored as SpatialImage or MultiscaleSpatialImage objects, which are respectively
-          equivalent to xarray.DataArray and to a DataTree of xarray.DataArray objects.
-        - points and shapes are stored as AnnData objects, with the spatial coordinates stored in the obsm slot.
-        - polygons are stored as GeoDataFrames.
-        - the table are stored as AnnData objects, with the spatial coordinates stored in the obsm slot.
+        - images and labels are stored as :class:`spatial_image.SpatialImage` or :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
+        - points and shapes are stored as :class:`anndata.AnnData` objects, with the spatial coordinates stored in the obsm slot.
+        - polygons are stored as :class:`geopandas.GeoDataFrame`.
+        - the table are stored as :class:`anndata.AnnData` objects, with the spatial coordinates stored in the obsm slot.
 
     The table can annotate regions (shapes, polygons or labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
 
     The elements need to pass a validation step. To construct valid elements you can use the parsers that we
-    provide (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, PolygonsModel, ShapesModel, TableModel).
+    provide (:class:`~spatialdata.Image2DModel`, :class:`~spatialdata.Image3DModel`, :class:`~spatialdata.Labels2DModel`, :class:`~spatialdata.Labels3DModel`, :class:`~spatialdata.PointsModel`, :class:`~spatialdata.PolygonsModel`, :class:`~spatialdata.ShapesModel`, :class:`~spatialdata.TableModel`).
     """
 
     _images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
     _labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})
-    _points: Mapping[str, AnnData] = MappingProxyType({})
+    _points: Mapping[str, pa.Table] = MappingProxyType({})
     _polygons: Mapping[str, GeoDataFrame] = MappingProxyType({})
     _shapes: Mapping[str, AnnData] = MappingProxyType({})
     _table: Optional[AnnData] = None
 
     def __init__(
         self,
-        images: Mapping[str, Any] = MappingProxyType({}),
-        labels: Mapping[str, Any] = MappingProxyType({}),
-        points: Mapping[str, Any] = MappingProxyType({}),
-        polygons: Mapping[str, Any] = MappingProxyType({}),
-        shapes: Mapping[str, Any] = MappingProxyType({}),
+        images: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),
+        labels: Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),
+        points: Mapping[str, pa.Table] = MappingProxyType({}),
+        polygons: Mapping[str, GeoDataFrame] = MappingProxyType({}),
+        shapes: Mapping[str, AnnData] = MappingProxyType({}),
         table: Optional[AnnData] = None,
     ) -> None:
 
@@ -144,7 +148,7 @@ class SpatialData:
                 self._shapes[k] = v
 
         if points is not None:
-            self._points: Dict[str, AnnData] = {}
+            self._points: Dict[str, pa.Table] = {}
             for k, v in points.items():
                 Point_s.validate(v)
                 self._points[k] = v
@@ -221,27 +225,27 @@ class SpatialData:
         return sdata
 
     @property
-    def images(self) -> Mapping[str, Any]:
+    def images(self) -> Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]]:
         """Return images as a mapping of name to image data."""
         return self._images
 
     @property
-    def labels(self) -> Mapping[str, Any]:
+    def labels(self) -> Mapping[str, Union[SpatialImage, MultiscaleSpatialImage]]:
         """Return labels as a mapping of name to label data."""
         return self._labels
 
     @property
-    def points(self) -> Mapping[str, Any]:
+    def points(self) -> Mapping[str, pa.Table]:
         """Return points as a mapping of name to point data."""
         return self._points
 
     @property
-    def polygons(self) -> Mapping[str, Any]:
+    def polygons(self) -> Mapping[str, GeoDataFrame]:
         """Return polygons as a mapping of name to polygon data."""
         return self._polygons
 
     @property
-    def shapes(self) -> Mapping[str, Any]:
+    def shapes(self) -> Mapping[str, AnnData]:
         """Return shapes as a mapping of name to shape data."""
         return self._shapes
 
@@ -281,11 +285,13 @@ class SpatialData:
                             descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
                         elif attr == "points":
                             if len(v) > 0:
-                                n = v.iloc[0].geometry._ndim
+                                n = len(get_dims(v))
                                 dim_string = f"({n}D points)"
                             else:
                                 dim_string = ""
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape}{dim_string}"
+                            if descr_class == "Table":
+                                descr_class = "pyarrow.Table"
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
                         else:
                             if isinstance(v, SpatialImage):
                                 descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
@@ -319,3 +325,8 @@ class SpatialData:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         return descr
+
+    def _gen_elements(self) -> Generator[SpatialElement, None, None]:
+        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+            d = getattr(SpatialData, element_type).fget(self)
+            yield from d.values()
