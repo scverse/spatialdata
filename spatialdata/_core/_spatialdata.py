@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from spatialdata._core.coordinate_system import CoordinateSystem
 import hashlib
 from types import MappingProxyType
 from typing import Dict, Generator, List, Optional, Union
@@ -14,6 +13,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
+from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
 from spatialdata._core.models import (
     Image2DModel,
