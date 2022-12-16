@@ -249,6 +249,21 @@ class SpatialData:
         """Return shapes as a mapping of name to shape data."""
         return self._shapes
 
+    def _non_empty_elements(self) -> List[str]:
+        """Get the names of the elements that are not empty.
+
+        Returns
+        -------
+        non_empty_elements : List[str]
+            The names of the elements that are not empty.
+        """
+        all_elements = ["images", "labels", "points", "polygons", "shapes", "table"]
+        return [
+            element
+            for element in all_elements
+            if (getattr(self, element) is not None) and (len(getattr(self, element)) > 0)
+        ]
+
     def __repr__(self) -> str:
         return self._gen_repr()
 
@@ -263,57 +278,60 @@ class SpatialData:
             return hashlib.md5(repr(s).encode()).hexdigest()
 
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "shapes", "table"]:
+
+        non_empty_elements = self._non_empty_elements()
+        last_element_index = len(non_empty_elements) - 1
+        for attr_index, attr in enumerate(non_empty_elements):
+            last_attr = True if (attr_index == last_element_index) else False
             attribute = getattr(self, attr)
-            if attribute is not None and len(attribute) > 0:
-                descr += f"\n{h('level0')}{attr.capitalize()}"
-                if isinstance(attribute, AnnData):
+
+            descr += f"\n{h('level0')}{attr.capitalize()}"
+            if isinstance(attribute, AnnData):
+                descr += f"{h('empty_line')}"
+                descr_class = attribute.__class__.__name__
+                descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
+                descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+            else:
+                for k, v in attribute.items():
                     descr += f"{h('empty_line')}"
-                    descr_class = attribute.__class__.__name__
-                    descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
-                    descr = rreplace(descr, h("level1.0"), "    └── ", 1)
-                else:
-                    for k, v in attribute.items():
-                        descr += f"{h('empty_line')}"
-                        descr_class = v.__class__.__name__
-                        if attr == "shapes":
-                            descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
-                                f"{v.obsm['spatial'].shape}"
-                            )
-                        elif attr == "polygons":
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
-                        elif attr == "points":
-                            if len(v) > 0:
-                                n = len(get_dims(v))
-                                dim_string = f"({n}D points)"
-                            else:
-                                dim_string = ""
-                            if descr_class == "Table":
-                                descr_class = "pyarrow.Table"
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
+                    descr_class = v.__class__.__name__
+                    if attr == "shapes":
+                        descr += (
+                            f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
+                            f"{v.obsm['spatial'].shape}"
+                        )
+                    elif attr == "polygons":
+                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
+                    elif attr == "points":
+                        if len(v) > 0:
+                            n = len(get_dims(v))
+                            dim_string = f"({n}D points)"
                         else:
-                            if isinstance(v, SpatialImage):
-                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
-                            elif isinstance(v, MultiscaleSpatialImage):
-                                shapes = []
-                                dims: Optional[str] = None
-                                for pyramid_level in v.keys():
-                                    dataset_names = list(v[pyramid_level].keys())
-                                    assert len(dataset_names) == 1
-                                    dataset_name = dataset_names[0]
-                                    vv = v[pyramid_level][dataset_name]
-                                    shape = vv.shape
-                                    if dims is None:
-                                        dims = "".join(vv.dims)
-                                    shapes.append(shape)
-                                descr += (
-                                    f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] "
-                                    f"{', '.join(map(str, shapes))}"
-                                )
-                            else:
-                                raise TypeError(f"Unknown type {type(v)}")
-            if attr == "table":
+                            dim_string = ""
+                        if descr_class == "Table":
+                            descr_class = "pyarrow.Table"
+                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
+                    else:
+                        if isinstance(v, SpatialImage):
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
+                        elif isinstance(v, MultiscaleSpatialImage):
+                            shapes = []
+                            dims: Optional[str] = None
+                            for pyramid_level in v.keys():
+                                dataset_names = list(v[pyramid_level].keys())
+                                assert len(dataset_names) == 1
+                                dataset_name = dataset_names[0]
+                                vv = v[pyramid_level][dataset_name]
+                                shape = vv.shape
+                                if dims is None:
+                                    dims = "".join(vv.dims)
+                                shapes.append(shape)
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                            )
+                        else:
+                            raise TypeError(f"Unknown type {type(v)}")
+            if last_attr is True:
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")
