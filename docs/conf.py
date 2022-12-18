@@ -102,7 +102,6 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     "**.ipynb_checkpoints",
-    "generated/spatialdata.PolygonsModel.rst",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.
