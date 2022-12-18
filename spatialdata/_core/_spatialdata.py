@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Generator, Mapping
 from types import MappingProxyType
-from typing import Dict, Generator, List, Mapping, Optional, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 import zarr
@@ -110,7 +111,7 @@ class SpatialData:
     ) -> None:
 
         if images is not None:
-            self._images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
                 ndim = len(get_dims(v))
                 if ndim == 3:
@@ -123,7 +124,7 @@ class SpatialData:
                     raise ValueError("Only czyx and cyx images supported")
 
         if labels is not None:
-            self._labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
                 ndim = len(get_dims(v))
                 if ndim == 2:
@@ -136,19 +137,19 @@ class SpatialData:
                     raise ValueError(f"Invalid label dimensions: {ndim}")
 
         if polygons is not None:
-            self._polygons: Dict[str, GeoDataFrame] = {}
+            self._polygons: dict[str, GeoDataFrame] = {}
             for k, v in polygons.items():
                 Polygon_s.validate(v)
                 self._polygons[k] = v
 
         if shapes is not None:
-            self._shapes: Dict[str, AnnData] = {}
+            self._shapes: dict[str, AnnData] = {}
             for k, v in shapes.items():
                 Shape_s.validate(v)
                 self._shapes[k] = v
 
         if points is not None:
-            self._points: Dict[str, pa.Table] = {}
+            self._points: dict[str, pa.Table] = {}
             for k, v in points.items():
                 Point_s.validate(v)
                 self._points[k] = v
@@ -160,7 +161,7 @@ class SpatialData:
     def write(
         self,
         file_path: str,
-        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     ) -> None:
         """Write to Zarr file."""
 
@@ -249,7 +250,7 @@ class SpatialData:
         """Return shapes as a mapping of name to shape data."""
         return self._shapes
 
-    def _non_empty_elements(self) -> List[str]:
+    def _non_empty_elements(self) -> list[str]:
         """Get the names of the elements that are not empty.
 
         Returns
