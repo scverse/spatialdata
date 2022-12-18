@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-from types import MappingProxyType
-from typing import Dict, List, Optional, Union
 from collections.abc import Generator, Mapping
+from types import MappingProxyType
+from typing import Optional, Union
 
 import pyarrow as pa
 import zarr

@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 from anndata import AnnData

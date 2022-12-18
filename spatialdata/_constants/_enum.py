@@ -1,7 +1,7 @@
 from abc import ABC, ABCMeta
 from enum import Enum, EnumMeta
 from functools import wraps
-from typing import Any, Callable, Dict, Tuple, Type
+from typing import Any, Callable
 
 
 class PrettyEnum(Enum):

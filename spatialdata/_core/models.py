@@ -1,18 +1,9 @@
 """This file contains models and schema for SpatialData"""
 import json
+from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    Tuple,
-    Union,
-)
-from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
