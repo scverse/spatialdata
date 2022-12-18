@@ -1,4 +1,5 @@
-from typing import Mapping, Optional, Sequence, Union
+from typing import Optional, Union
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pandas as pd

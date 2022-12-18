@@ -7,7 +7,7 @@ from shapely import GeometryType
 
 from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
 
-CoordinateTransform_t = List[Dict[str, Any]]
+CoordinateTransform_t = list[dict[str, Any]]
 
 Polygon_s = PolygonsModel()
 Shapes_s = ShapesModel()
@@ -41,10 +41,10 @@ class SpatialDataFormatV01(CurrentFormat):
             if table.obs[instance_key].isnull().values.any():
                 raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
 
-    def generate_coordinate_transformations(self, shapes: List[Tuple[Any]]) -> Optional[List[List[Dict[str, Any]]]]:
+    def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> Optional[list[list[dict[str, Any]]]]:
 
         data_shape = shapes[0]
-        coordinate_transformations: List[List[Dict[str, Any]]] = []
+        coordinate_transformations: list[list[dict[str, Any]]] = []
         # calculate minimal 'scale' transform based on pyramid dims
         for shape in shapes:
             assert len(shape) == len(data_shape)
@@ -58,7 +58,7 @@ class SpatialDataFormatV01(CurrentFormat):
         self,
         ndim: int,
         nlevels: int,
-        coordinate_transformations: Optional[List[List[Dict[str, Any]]]] = None,
+        coordinate_transformations: Optional[list[list[dict[str, Any]]]] = None,
     ) -> None:
         """
         Validates that a list of dicts contains a 'scale' transformation
@@ -93,7 +93,7 @@ class SpatialDataFormatV01(CurrentFormat):
 class PolygonsFormat(SpatialDataFormatV01):
     """Formatter for polygons."""
 
-    def attrs_from_dict(self, metadata: Dict[str, Any]) -> GeometryType:
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
         if Polygon_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Polygon_s.ATTRS_KEY} in polygons metadata.")
         metadata_ = metadata[Polygon_s.ATTRS_KEY]
@@ -108,14 +108,14 @@ class PolygonsFormat(SpatialDataFormatV01):
         assert self.spatialdata_version == metadata_["version"]
         return typ
 
-    def attrs_to_dict(self, geometry: GeometryType) -> Dict[str, Union[str, Dict[str, Any]]]:
+    def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
         return {Polygon_s.GEOS_KEY: {Polygon_s.NAME_KEY: geometry.name, Polygon_s.TYPE_KEY: geometry.value}}
 
 
 class ShapesFormat(SpatialDataFormatV01):
     """Formatter for shapes."""
 
-    def attrs_from_dict(self, metadata: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if Shapes_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
         metadata_ = metadata[Shapes_s.ATTRS_KEY]
@@ -123,14 +123,14 @@ class ShapesFormat(SpatialDataFormatV01):
             raise KeyError(f"Missing key {Shapes_s.TYPE_KEY} in shapes metadata.")
         return {Shapes_s.TYPE_KEY: metadata_[Shapes_s.TYPE_KEY]}
 
-    def attrs_to_dict(self, data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         return {Shapes_s.TYPE_KEY: data[Shapes_s.ATTRS_KEY][Shapes_s.TYPE_KEY]}
 
 
 class PointsFormat(SpatialDataFormatV01):
     """Formatter for points."""
 
-    def attrs_from_dict(self, metadata: Dict[str, Any]) -> GeometryType:
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
         # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
         return {}
         # if Points_s.ATTRS_KEY not in metadata:
@@ -147,7 +147,7 @@ class PointsFormat(SpatialDataFormatV01):
         # assert self.spatialdata_version == metadata_["version"]
         # return typ
 
-    def attrs_to_dict(self, geometry: GeometryType) -> Dict[str, Union[str, Dict[str, Any]]]:
+    def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
         # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
         return {}
         # return {Points_s.GEOS_KEY: {Points_s.NAME_KEY: geometry.name, Points_s.TYPE_KEY: geometry.value}}

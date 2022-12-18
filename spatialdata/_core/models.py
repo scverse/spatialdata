@@ -8,12 +8,11 @@ from typing import (
     Dict,
     List,
     Literal,
-    Mapping,
     Optional,
-    Sequence,
     Tuple,
     Union,
 )
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -68,11 +67,11 @@ from spatialdata._logging import logger
 # Types
 Chunks_t = Union[
     int,
-    Tuple[int, ...],
-    Tuple[Tuple[int, ...], ...],
-    Mapping[Any, Union[None, int, Tuple[int, ...]]],
+    tuple[int, ...],
+    tuple[tuple[int, ...], ...],
+    Mapping[Any, Union[None, int, tuple[int, ...]]],
 ]
-ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
+ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
@@ -103,7 +102,7 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
 
     # this function is to comply with mypy since we could call .axes_names on the wrong type
-    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> Tuple[str, ...]:
+    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> tuple[str, ...]:
         assert isinstance(cs, CoordinateSystem)
         return cs.axes_names
 
@@ -360,7 +359,7 @@ class PolygonsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
+        offsets: tuple[np.ndarray, ...],  # type: ignore[type-arg]
         geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         transform: Optional[Any] = None,
         **kwargs: Any,
@@ -566,7 +565,7 @@ class TableModel:
     def parse(
         cls,
         adata: AnnData,
-        region: Optional[Union[str, List[str]]] = None,
+        region: Optional[Union[str, list[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         region_values: Optional[Union[str, Sequence[str]]] = None,
@@ -634,7 +633,7 @@ class TableModel:
 
 # TODO: consider removing if we settle with geodataframe
 def _sparse_matrix_from_assignment(
-    n_obs: int, var_names: Union[List[str], ArrayLike], assignment: pd.Series
+    n_obs: int, var_names: Union[list[str], ArrayLike], assignment: pd.Series
 ) -> csr_matrix:
     """Create a sparse matrix from an assignment array."""
     data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)

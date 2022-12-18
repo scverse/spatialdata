@@ -19,7 +19,7 @@ class PrettyEnum(Enum):
         return f"{self.value!s}"
 
 
-def _pretty_raise_enum(cls: Type["ErrorFormatterABC"], func: Callable[..., Any]) -> Callable[..., Any]:
+def _pretty_raise_enum(cls: type["ErrorFormatterABC"], func: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> "ErrorFormatterABC":
         try:
@@ -44,7 +44,7 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
             raise TypeError(f"Can't instantiate class `{cls.__name__}` " f"without `__error_format__` class attribute.")
         return super().__call__(*args, **kwargs)
 
-    def __new__(cls, clsname: str, superclasses: Tuple[type], attributedict: Dict[str, Any]) -> "ABCEnumMeta":
+    def __new__(cls, clsname: str, superclasses: tuple[type], attributedict: dict[str, Any]) -> "ABCEnumMeta":
         res = super().__new__(cls, clsname, superclasses, attributedict)  # type: ignore[arg-type]
         res.__new__ = _pretty_raise_enum(res, res.__new__)  # type: ignore[assignment,arg-type]
         return res
