@@ -77,7 +77,7 @@ class SpatialQueryManager:
 
 def _get_spatial_axes(
     coordinate_system: CoordinateSystem,
-) -> List[str]:
+) -> list[str]:
     """Get the names of the spatial axes in a coordinate system.
 
     Parameters
