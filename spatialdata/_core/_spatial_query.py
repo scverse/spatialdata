@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pyarrow as pa
@@ -17,6 +17,12 @@ class BaseSpatialRequest:
     """Base class for spatial queries."""
 
     coordinate_system: CoordinateSystem
+
+    def __post_init__(self) -> None:
+        # validate the coordinate system
+        spatial_axes = _get_spatial_axes(self.coordinate_system)
+        if len(spatial_axes) == 0:
+            raise ValueError("No spatial axes in the requested coordinate system")
 
 
 @dataclass(frozen=True)
@@ -109,9 +115,6 @@ def _bounding_box_query_points(points: pa.Table, request: BoundingBoxRequest) ->
         The points contained within the specified bounding box.
     """
     spatial_axes = _get_spatial_axes(request.coordinate_system)
-
-    if len(spatial_axes) == 0:
-        raise ValueError("No spatial axes in the requested coordinate system")
 
     for axis_index, axis_name in enumerate(spatial_axes):
         # filter by lower bound

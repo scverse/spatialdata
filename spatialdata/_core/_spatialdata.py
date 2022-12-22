@@ -13,6 +13,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
+from spatialdata._core._spatial_query import SpatialQueryManager
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -156,6 +157,12 @@ class SpatialData:
         if table is not None:
             Table_s.validate(table)
             self._table = table
+
+        self._spatial_query = SpatialQueryManager(self)
+
+    @property
+    def spatial(self) -> SpatialQueryManager:
+        return self._spatial_query
 
     def write(
         self,
