@@ -9,7 +9,7 @@ import pyarrow as pa
 from spatialdata._core.coordinate_system import CoordinateSystem
 
 if TYPE_CHECKING:
-    from spatialdata import SpatialData
+    pass
 
 
 @dataclass(frozen=True)
@@ -43,42 +43,6 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
     min_coordinate: np.ndarray  # type: ignore[type-arg]
     max_coordinate: np.ndarray  # type: ignore[type-arg]
-
-
-class SpatialQueryManager:
-    """Perform spatial queries on SpatialData objects"""
-
-    def __init__(self, sdata: SpatialData):
-        self._sdata = sdata
-
-    def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
-        """Perform a bounding box query on the SpatialData object.
-
-        Parameters
-        ----------
-        request : BoundingBoxRequest
-            The bounding box request.
-
-        Returns
-        -------
-        requested_sdata : SpatialData
-            The SpatialData object containing the requested data.
-            Elements with no valid data are omitted.
-        """
-        requested_points = {}
-        for points_name, points_data in self._sdata.points.items():
-            points = _bounding_box_query_points(points_data, request)
-            if len(points) > 0:
-                # do not include elements with no data
-                requested_points[points_name] = points
-
-        return SpatialData(points=requested_points)
-
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
-        if isinstance(request, BoundingBoxRequest):
-            return self.bounding_box(request)
-        else:
-            raise TypeError("unknown request type")
 
 
 def _get_spatial_axes(

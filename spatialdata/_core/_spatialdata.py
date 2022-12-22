@@ -13,7 +13,11 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core._spatial_query import SpatialQueryManager
+from spatialdata._core._spatial_query import (
+    BaseSpatialRequest,
+    BoundingBoxRequest,
+    _bounding_box_query_points,
+)
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -355,3 +359,39 @@ class SpatialData:
         for element_type in ["images", "labels", "points", "polygons", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
+
+
+class SpatialQueryManager:
+    """Perform spatial queries on SpatialData objects"""
+
+    def __init__(self, sdata: SpatialData):
+        self._sdata = sdata
+
+    def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
+        """Perform a bounding box query on the SpatialData object.
+
+        Parameters
+        ----------
+        request : BoundingBoxRequest
+            The bounding box request.
+
+        Returns
+        -------
+        requested_sdata : SpatialData
+            The SpatialData object containing the requested data.
+            Elements with no valid data are omitted.
+        """
+        requested_points = {}
+        for points_name, points_data in self._sdata.points.items():
+            points = _bounding_box_query_points(points_data, request)
+            if len(points) > 0:
+                # do not include elements with no data
+                requested_points[points_name] = points
+
+        return SpatialData(points=requested_points)
+
+    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+        if isinstance(request, BoundingBoxRequest):
+            return self.bounding_box(request)
+        else:
+            raise TypeError("unknown request type")
