@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -115,7 +115,7 @@ def sdata(request) -> SpatialData:
     return s
 
 
-def _get_images() -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
 
@@ -150,7 +150,7 @@ def _get_images() -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     return out
 
 
-def _get_labels() -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
@@ -187,7 +187,7 @@ def _get_labels() -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     return out
 
 
-def _get_polygons() -> Dict[str, GeoDataFrame]:
+def _get_polygons() -> dict[str, GeoDataFrame]:
     # TODO: add polygons from geojson and from ragged arrays since now only the GeoDataFrame initializer is tested.
     out = {}
     poly = GeoDataFrame(
@@ -228,7 +228,7 @@ def _get_polygons() -> Dict[str, GeoDataFrame]:
     return out
 
 
-def _get_shapes() -> Dict[str, AnnData]:
+def _get_shapes() -> dict[str, AnnData]:
     out = {}
     arr = RNG.normal(size=(100, 2))
     out["shapes_0"] = ShapesModel.parse(arr, shape_type="Square", shape_size=3)
@@ -237,7 +237,7 @@ def _get_shapes() -> Dict[str, AnnData]:
     return out
 
 
-def _get_points() -> Dict[str, pa.Table]:
+def _get_points() -> dict[str, pa.Table]:
     name = "points"
     var_names = [np.arange(3), ["genex", "geney"]]
 
