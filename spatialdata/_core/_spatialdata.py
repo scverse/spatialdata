@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Generator
 from types import MappingProxyType
-from typing import Dict, Generator, List, Optional, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 import zarr
@@ -93,46 +94,46 @@ class SpatialData:
     provide (:class:`~spatialdata.Image2DModel`, :class:`~spatialdata.Image3DModel`, :class:`~spatialdata.Labels2DModel`, :class:`~spatialdata.Labels3DModel`, :class:`~spatialdata.PointsModel`, :class:`~spatialdata.PolygonsModel`, :class:`~spatialdata.ShapesModel`, :class:`~spatialdata.TableModel`).
     """
 
-    _images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
-    _labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
-    _points: Dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
-    _polygons: Dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: Dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
+    _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
+    _points: dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
+    _polygons: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
 
     def __init__(
         self,
-        images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
-        labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
-        points: Dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
-        polygons: Dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: Dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
+        labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
+        points: dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
+        polygons: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
         self.path = None
         if images is not None:
-            self._images: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
                 self._add_image_in_memory(name=k, image=v)
 
         if labels is not None:
-            self._labels: Dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
                 self._add_labels_in_memory(name=k, labels=v)
 
         if polygons is not None:
-            self._polygons: Dict[str, GeoDataFrame] = {}
+            self._polygons: dict[str, GeoDataFrame] = {}
             for k, v in polygons.items():
                 self._add_polygons_in_memory(name=k, polygons=v)
 
         if shapes is not None:
-            self._shapes: Dict[str, AnnData] = {}
+            self._shapes: dict[str, AnnData] = {}
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
-            self._points: Dict[str, pa.Table] = {}
+            self._points: dict[str, pa.Table] = {}
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
@@ -223,7 +224,7 @@ class SpatialData:
         self,
         name: str,
         image: Union[SpatialImage, MultiscaleSpatialImage],
-        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
         # _init_add_element() needs to be called before _add_image_in_memory(), and same for the other elements
@@ -244,7 +245,7 @@ class SpatialData:
         self,
         name: str,
         labels: Union[SpatialImage, MultiscaleSpatialImage],
-        storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
         elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
@@ -303,7 +304,7 @@ class SpatialData:
         )
 
     def write(
-        self, file_path: str, storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None, overwrite: bool = False
+        self, file_path: str, storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None, overwrite: bool = False
     ) -> None:
         """Write the SpatialData object to Zarr."""
 
@@ -361,29 +362,44 @@ class SpatialData:
         return sdata
 
     @property
-    def images(self) -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+    def images(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
         """Return images as a Dict of name to image data."""
         return self._images
 
     @property
-    def labels(self) -> Dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+    def labels(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
         """Return labels as a Dict of name to label data."""
         return self._labels
 
     @property
-    def points(self) -> Dict[str, pa.Table]:
+    def points(self) -> dict[str, pa.Table]:
         """Return points as a Dict of name to point data."""
         return self._points
 
     @property
-    def polygons(self) -> Dict[str, GeoDataFrame]:
+    def polygons(self) -> dict[str, GeoDataFrame]:
         """Return polygons as a Dict of name to polygon data."""
         return self._polygons
 
     @property
-    def shapes(self) -> Dict[str, AnnData]:
+    def shapes(self) -> dict[str, AnnData]:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
+
+    def _non_empty_elements(self) -> list[str]:
+        """Get the names of the elements that are not empty.
+
+        Returns
+        -------
+        non_empty_elements
+            The names of the elements that are not empty.
+        """
+        all_elements = ["images", "labels", "points", "polygons", "shapes", "table"]
+        return [
+            element
+            for element in all_elements
+            if (getattr(self, element) is not None) and (len(getattr(self, element)) > 0)
+        ]
 
     def __repr__(self) -> str:
         return self._gen_repr()
@@ -399,57 +415,60 @@ class SpatialData:
             return hashlib.md5(repr(s).encode()).hexdigest()
 
         descr = "SpatialData object with:"
-        for attr in ["images", "labels", "points", "polygons", "shapes", "table"]:
+
+        non_empty_elements = self._non_empty_elements()
+        last_element_index = len(non_empty_elements) - 1
+        for attr_index, attr in enumerate(non_empty_elements):
+            last_attr = True if (attr_index == last_element_index) else False
             attribute = getattr(self, attr)
-            if attribute is not None and len(attribute) > 0:
-                descr += f"\n{h('level0')}{attr.capitalize()}"
-                if isinstance(attribute, AnnData):
+
+            descr += f"\n{h('level0')}{attr.capitalize()}"
+            if isinstance(attribute, AnnData):
+                descr += f"{h('empty_line')}"
+                descr_class = attribute.__class__.__name__
+                descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
+                descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+            else:
+                for k, v in attribute.items():
                     descr += f"{h('empty_line')}"
-                    descr_class = attribute.__class__.__name__
-                    descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
-                    descr = rreplace(descr, h("level1.0"), "    └── ", 1)
-                else:
-                    for k, v in attribute.items():
-                        descr += f"{h('empty_line')}"
-                        descr_class = v.__class__.__name__
-                        if attr == "shapes":
-                            descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
-                                f"{v.obsm['spatial'].shape}"
-                            )
-                        elif attr == "polygons":
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
-                        elif attr == "points":
-                            if len(v) > 0:
-                                n = len(get_dims(v))
-                                dim_string = f"({n}D points)"
-                            else:
-                                dim_string = ""
-                            if descr_class == "Table":
-                                descr_class = "pyarrow.Table"
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
+                    descr_class = v.__class__.__name__
+                    if attr == "shapes":
+                        descr += (
+                            f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
+                            f"{v.obsm['spatial'].shape}"
+                        )
+                    elif attr == "polygons":
+                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
+                    elif attr == "points":
+                        if len(v) > 0:
+                            n = len(get_dims(v))
+                            dim_string = f"({n}D points)"
                         else:
-                            if isinstance(v, SpatialImage):
-                                descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
-                            elif isinstance(v, MultiscaleSpatialImage):
-                                shapes = []
-                                dims: Optional[str] = None
-                                for pyramid_level in v.keys():
-                                    dataset_names = list(v[pyramid_level].keys())
-                                    assert len(dataset_names) == 1
-                                    dataset_name = dataset_names[0]
-                                    vv = v[pyramid_level][dataset_name]
-                                    shape = vv.shape
-                                    if dims is None:
-                                        dims = "".join(vv.dims)
-                                    shapes.append(shape)
-                                descr += (
-                                    f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] "
-                                    f"{', '.join(map(str, shapes))}"
-                                )
-                            else:
-                                raise TypeError(f"Unknown type {type(v)}")
-            if attr == "table":
+                            dim_string = ""
+                        if descr_class == "Table":
+                            descr_class = "pyarrow.Table"
+                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
+                    else:
+                        if isinstance(v, SpatialImage):
+                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
+                        elif isinstance(v, MultiscaleSpatialImage):
+                            shapes = []
+                            dims: Optional[str] = None
+                            for pyramid_level in v.keys():
+                                dataset_names = list(v[pyramid_level].keys())
+                                assert len(dataset_names) == 1
+                                dataset_name = dataset_names[0]
+                                vv = v[pyramid_level][dataset_name]
+                                shape = vv.shape
+                                if dims is None:
+                                    dims = "".join(vv.dims)
+                                shapes.append(shape)
+                            descr += (
+                                f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                            )
+                        else:
+                            raise TypeError(f"Unknown type {type(v)}")
+            if last_attr is True:
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
                 descr = descr.replace(h("empty_line"), "\n│ ")

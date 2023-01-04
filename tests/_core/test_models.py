@@ -88,7 +88,6 @@ class TestModels:
         if annotations is not None:
             annotations["A"] = annotations["A"].astype(str)
         points = model.parse(coords, None if annotations is None else pa.Table.from_pandas(annotations))
-        # assert PointsModel.GEOMETRY_KEY in points
         assert PointsModel.TRANSFORM_KEY.encode("utf-8") in points.schema.metadata
 
     @pytest.mark.parametrize("model", [ShapesModel])

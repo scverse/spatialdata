@@ -1,10 +1,10 @@
 import json
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 __all__ = ["CoordinateSystem", "Axis"]
 
-Axis_t = Dict[str, str]
-CoordSystem_t = Dict[str, Union[str, List[Dict[str, str]]]]
+Axis_t = dict[str, str]
+CoordSystem_t = dict[str, Union[str, list[dict[str, str]]]]
 AXIS_ORDER = ["t", "c", "z", "y", "x"]
 
 
@@ -18,6 +18,10 @@ class Axis:
         self.type = type
         self.unit = unit
 
+    def __repr__(self) -> str:
+        inner = ", ".join(f"'{v}'" for v in self.to_dict().values())
+        return f"Axis({inner})"
+
     def to_dict(self) -> Axis_t:
         d = {"name": self.name, "type": self.type}
         if self.unit is not None:
@@ -26,9 +30,12 @@ class Axis:
 
 
 class CoordinateSystem:
-    def __init__(self, name: Optional[str] = None, axes: Optional[List[Axis]] = None):
+    def __init__(self, name: Optional[str] = None, axes: Optional[list[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
+
+    def __repr__(self) -> str:
+        return f"CoordinateSystem('{self.name}', {self._axes})"
 
     @staticmethod
     def from_dict(coord_sys: CoordSystem_t) -> "CoordinateSystem":
@@ -60,7 +67,7 @@ class CoordinateSystem:
         return CoordinateSystem(name=name, axes=axes)
 
     def to_dict(self) -> CoordSystem_t:
-        out: Dict[str, Any] = {"name": self.name, "axes": [axis.to_dict() for axis in self._axes]}
+        out: dict[str, Any] = {"name": self.name, "axes": [axis.to_dict() for axis in self._axes]}
         # if TYPE_CHECKING:
         #     assert isinstance(out["axes"], list)
         return out
@@ -87,11 +94,11 @@ class CoordinateSystem:
         return self._name
 
     @property
-    def axes_names(self) -> Tuple[str, ...]:
+    def axes_names(self) -> tuple[str, ...]:
         return tuple([ax.name for ax in self._axes])
 
     @property
-    def axes_types(self) -> Tuple[str, ...]:
+    def axes_types(self) -> tuple[str, ...]:
         return tuple([ax.type for ax in self._axes])
 
     def __hash__(self) -> int:

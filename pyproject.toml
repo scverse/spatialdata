@@ -1,9 +1,6 @@
 [build-system]
-build-backend = "flit_core.buildapi"
-requires = [
-    "flit_core >=3.4,<4",
-    "importlib_metadata>=0.7; python_version < '3.8'",
-]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 
 [project]
@@ -19,7 +16,7 @@ urls.Documentation = "https://spatialdata.readthedocs.io/"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
 version = "0.0.1.dev0"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
@@ -86,7 +83,7 @@ skip_glob = ["docs/*"]
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py39']
 include = '\.pyi?$'
 exclude = '''
 (
@@ -108,5 +105,5 @@ exclude = '''
 [tool.jupytext]
 formats = "ipynb,md"
 
-[tool.doc8]
-ignore-path = "/docs/_templates/autosummary/*.rst"
+[tool.hatch.metadata]
+allow-direct-references = true

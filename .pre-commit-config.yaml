@@ -7,7 +7,7 @@ default_stages:
 minimum_pre_commit_version: 2.16.0
 repos:
     - repo: https://github.com/psf/black
-      rev: 22.10.0
+      rev: 22.12.0
       hooks:
           - id: black
     - repo: https://github.com/pre-commit/mirrors-prettier
@@ -71,10 +71,10 @@ repos:
                 - flake8-bugbear
                 - flake8-blind-except
     - repo: https://github.com/asottile/pyupgrade
-      rev: v3.2.2
+      rev: v3.3.1
       hooks:
           - id: pyupgrade
-            args: [--py3-plus, --py38-plus, --keep-runtime-typing]
+            args: [--py3-plus, --py39-plus, --keep-runtime-typing]
     - repo: https://github.com/pre-commit/pygrep-hooks
       rev: v1.9.0
       hooks:
