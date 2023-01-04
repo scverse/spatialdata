@@ -227,6 +227,25 @@ class SpatialData:
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
+        """
+        Add an image to the SpatialData object.
+
+        Parameters
+        ----------
+        name
+            Key to the element inside the SpatialData object.
+        image
+            The image to add, the object needs to pass validation (see :class:`~spatialdata.Image2DModel` and :class:`~spatialdata.Image3DModel`).
+        storage_options
+            Storage options for the Zarr storage.
+            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
+        overwrite
+            If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
+        """
         # _init_add_element() needs to be called before _add_image_in_memory(), and same for the other elements
         # otherwise if a element is added and saved to disk, and another element with the same name but different
         # content is added, _init_add_element() will raise an exception. If _add_image_in_memory() is called first,
@@ -248,6 +267,25 @@ class SpatialData:
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
+        """
+        Add labels to the SpatialData object.
+
+        Parameters
+        ----------
+        name
+            Key to the element inside the SpatialData object.
+        labels
+            The labels (masks) to add, the object needs to pass validation (see :class:`~spatialdata.Labels2DModel` and :class:`~spatialdata.Labels3DModel`).
+        storage_options
+            Storage options for the Zarr storage.
+            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
+        overwrite
+            If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
+        """
         elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
         if name not in self.labels:
             self._add_labels_in_memory(name=name, labels=labels)
@@ -264,6 +302,25 @@ class SpatialData:
         points: pa.Table,
         overwrite: bool = False,
     ) -> None:
+        """
+        Add points to the SpatialData object.
+
+        Parameters
+        ----------
+        name
+            Key to the element inside the SpatialData object.
+        points
+            The points to add, the object needs to pass validation (see :class:`~spatialdata.PointsModel`).
+        storage_options
+            Storage options for the Zarr storage.
+            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
+        overwrite
+            If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
+        """
         elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
         if name not in self.points:
             self._add_points_in_memory(name=name, points=points)
@@ -279,6 +336,25 @@ class SpatialData:
         polygons: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
+        """
+        Add polygons to the SpatialData object.
+
+        Parameters
+        ----------
+        name
+            Key to the element inside the SpatialData object.
+        polygons
+            The polygons to add, the object needs to pass validation (see :class:`~spatialdata.PolygonsModel`).
+        storage_options
+            Storage options for the Zarr storage.
+            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
+        overwrite
+            If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
+        """
         elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
         if name not in self.polygons:
             self._add_polygons_in_memory(name=name, polygons=polygons)
@@ -294,6 +370,25 @@ class SpatialData:
         shapes: AnnData,
         overwrite: bool = False,
     ) -> None:
+        """
+        Add shapes to the SpatialData object.
+
+        Parameters
+        ----------
+        name
+            Key to the element inside the SpatialData object.
+        shapes
+            The shapes to add, the object needs to pass validation (see :class:`~spatialdata.ShapesModel`).
+        storage_options
+            Storage options for the Zarr storage.
+            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
+        overwrite
+            If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
+        """
         elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
         if name not in self.shapes:
             self._add_shapes_in_memory(name=name, shapes=shapes)
