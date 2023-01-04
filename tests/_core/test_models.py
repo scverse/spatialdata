@@ -77,7 +77,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize(
         "annotations",
-        [None, pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])],
+        [None, pd.DataFrame(RNG.integers(0, 101, size=(10, 3)), columns=["A", "B", "C"])],
     )
     def test_points_model(
         self,

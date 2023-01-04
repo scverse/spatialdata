@@ -10,7 +10,9 @@ _check_geopandas_using_shapely()
 
 
 __all__ = [
+    # --- from spaitaldata._core._spatialdata ---
     "SpatialData",
+    # --- from spatialdata._core.transformations ---
     "Identity",
     # "MapIndex",
     "MapAxis",
@@ -25,6 +27,7 @@ __all__ = [
     # "InverseOf",
     # "Bijection",
     # "ByDimension",
+    # --- from spatialdata._core.models ---
     "Image3DModel",
     "Image2DModel",
     "Labels2DModel",
@@ -33,10 +36,13 @@ __all__ = [
     "PolygonsModel",
     "ShapesModel",
     "TableModel",
+    # --- from spatialdata._core.core_utils ---
     "SpatialElement",
     "get_transform",
     "set_transform",
     "get_dims",
+    # --- from spatialdata._io ---
+    "read_zarr",
 ]
 
 from spatialdata._core._spatialdata import SpatialData
@@ -65,3 +71,4 @@ from spatialdata._core.transformations import (  # Bijection,; ByDimension,; Coo
     Sequence,
     Translation,
 )
+from spatialdata._io.read import read_zarr

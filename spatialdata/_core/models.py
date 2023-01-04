@@ -240,8 +240,6 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
-        if TYPE_CHECKING:
-            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
