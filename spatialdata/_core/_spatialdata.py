@@ -142,6 +142,8 @@ class SpatialData:
             self._table = table
 
     def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+        if name in self._images:
+            raise ValueError(f"Image {name} already exists in the dataset.")
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -153,6 +155,8 @@ class SpatialData:
             raise ValueError("Only czyx and cyx images supported")
 
     def _add_labels_in_memory(self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+        if name in self._labels:
+            raise ValueError(f"Labels {name} already exists in the dataset.")
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -164,14 +168,20 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_polygons_in_memory(self, name: str, polygons: GeoDataFrame) -> None:
+        if name in self._polygons:
+            raise ValueError(f"Polygons {name} already exists in the dataset.")
         Polygon_s.validate(polygons)
         self._polygons[name] = polygons
 
     def _add_shapes_in_memory(self, name: str, shapes: AnnData) -> None:
+        if name in self._shapes:
+            raise ValueError(f"Shapes {name} already exists in the dataset.")
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: pa.Table) -> None:
+        if name in self._points:
+            raise ValueError(f"Points {name} already exists in the dataset.")
         Point_s.validate(points)
         self._points[name] = points
 
@@ -227,19 +237,16 @@ class SpatialData:
         storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
-        # _init_add_element() needs to be called before _add_image_in_memory(), and same for the other elements
-        # otherwise if a element is added and saved to disk, and another element with the same name but different
-        # content is added, _init_add_element() will raise an exception. If _add_image_in_memory() is called first,
-        # then the memory content will be overwritten, but the disk content will remain the old one
-        elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
         if name not in self.images:
             self._add_image_in_memory(name=name, image=image)
-        write_image(
-            image=self.images[name],
-            group=elem_group,
-            name=name,
-            storage_options=storage_options,
-        )
+        if self.is_backed():
+            elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
+            write_image(
+                image=self.images[name],
+                group=elem_group,
+                name=name,
+                storage_options=storage_options,
+            )
 
     def add_labels(
         self,
@@ -248,15 +255,16 @@ class SpatialData:
         storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
         overwrite: bool = False,
     ) -> None:
-        elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
         if name not in self.labels:
             self._add_labels_in_memory(name=name, labels=labels)
-        write_labels(
-            labels=self.labels[name],
-            group=elem_group,
-            name=name,
-            storage_options=storage_options,
-        )
+        if self.is_backed():
+            elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
+            write_labels(
+                labels=self.labels[name],
+                group=elem_group,
+                name=name,
+                storage_options=storage_options,
+            )
 
     def add_points(
         self,
@@ -264,14 +272,15 @@ class SpatialData:
         points: pa.Table,
         overwrite: bool = False,
     ) -> None:
-        elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
         if name not in self.points:
             self._add_points_in_memory(name=name, points=points)
-        write_points(
-            points=self.points[name],
-            group=elem_group,
-            name=name,
-        )
+        if self.is_backed():
+            elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
+            write_points(
+                points=self.points[name],
+                group=elem_group,
+                name=name,
+            )
 
     def add_polygons(
         self,
@@ -279,14 +288,15 @@ class SpatialData:
         polygons: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
-        elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
         if name not in self.polygons:
             self._add_polygons_in_memory(name=name, polygons=polygons)
-        write_polygons(
-            polygons=self.polygons[name],
-            group=elem_group,
-            name=name,
-        )
+        if self.is_backed():
+            elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
+            write_polygons(
+                polygons=self.polygons[name],
+                group=elem_group,
+                name=name,
+            )
 
     def add_shapes(
         self,
@@ -294,61 +304,67 @@ class SpatialData:
         shapes: AnnData,
         overwrite: bool = False,
     ) -> None:
-        elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
         if name not in self.shapes:
             self._add_shapes_in_memory(name=name, shapes=shapes)
-        write_shapes(
-            shapes=self.shapes[name],
-            group=elem_group,
-            name=name,
-        )
+        if self.is_backed():
+            elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
+            write_shapes(
+                shapes=self.shapes[name],
+                group=elem_group,
+                name=name,
+            )
 
     def write(
         self, file_path: str, storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None, overwrite: bool = False
     ) -> None:
         """Write the SpatialData object to Zarr."""
 
-        if self.path == file_path:
-            raise ValueError("Can't overwrite the original file")
-        elif self.path != file_path and self.path is not None:
-            logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
-        self.path = file_path
+        if self.is_backed():
+            if self.path == file_path:
+                raise ValueError("Can't overwrite the original file")
+            elif self.path != file_path and self.path is not None:
+                logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
 
-        if not overwrite and parse_url(self.path, mode="r") is not None:
+        if not overwrite and parse_url(file_path, mode="r") is not None:
             raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
         else:
-            store = parse_url(self.path, mode="w").store
+            store = parse_url(file_path, mode="w").store
             root = zarr.group(store=store)
             store.close()
 
-        if len(self.images):
-            elem_group = root.create_group(name="images")
-            for el in self.images.keys():
-                self.add_image(name=el, image=self.images[el], storage_options=storage_options)
+        self.path = file_path
+        try:
+            if len(self.images):
+                elem_group = root.create_group(name="images")
+                for el in self.images.keys():
+                    self.add_image(name=el, image=self.images[el], storage_options=storage_options)
 
-        if len(self.labels):
-            elem_group = root.create_group(name="labels")
-            for el in self.labels.keys():
-                self.add_labels(name=el, labels=self.labels[el], storage_options=storage_options)
+            if len(self.labels):
+                elem_group = root.create_group(name="labels")
+                for el in self.labels.keys():
+                    self.add_labels(name=el, labels=self.labels[el], storage_options=storage_options)
 
-        if len(self.points):
-            elem_group = root.create_group(name="points")
-            for el in self.points.keys():
-                self.add_points(name=el, points=self.points[el])
+            if len(self.points):
+                elem_group = root.create_group(name="points")
+                for el in self.points.keys():
+                    self.add_points(name=el, points=self.points[el])
 
-        if len(self.polygons):
-            elem_group = root.create_group(name="polygons")
-            for el in self.polygons.keys():
-                self.add_polygons(name=el, polygons=self.polygons[el])
+            if len(self.polygons):
+                elem_group = root.create_group(name="polygons")
+                for el in self.polygons.keys():
+                    self.add_polygons(name=el, polygons=self.polygons[el])
 
-        if len(self.shapes):
-            elem_group = root.create_group(name="shapes")
-            for el in self.shapes.keys():
-                self.add_shapes(name=el, shapes=self.shapes[el])
+            if len(self.shapes):
+                elem_group = root.create_group(name="shapes")
+                for el in self.shapes.keys():
+                    self.add_shapes(name=el, shapes=self.shapes[el])
 
-        if self.table is not None:
-            elem_group = root.create_group(name="table")
-            write_table(table=self.table, group=elem_group, name="table")
+            if self.table is not None:
+                elem_group = root.create_group(name="table")
+                write_table(table=self.table, group=elem_group, name="table")
+        except Exception as e:  # noqa: B902
+            self.path = None
+            raise e
 
     @property
     def table(self) -> AnnData:
