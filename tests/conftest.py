@@ -1,4 +1,3 @@
-from collections.abc import Mapping, Sequence
 from typing import Optional, Union
 
 import numpy as np
@@ -7,8 +6,10 @@ import pyarrow as pa
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
+from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core.models import (
@@ -20,7 +21,6 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata._types import NDArray
 
 RNG = default_rng()
 
@@ -115,7 +115,7 @@ def sdata(request) -> SpatialData:
     return s
 
 
-def _get_images() -> Mapping[str, Sequence[NDArray]]:
+def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
 
@@ -150,7 +150,7 @@ def _get_images() -> Mapping[str, Sequence[NDArray]]:
     return out
 
 
-def _get_labels() -> Mapping[str, Sequence[NDArray]]:
+def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
@@ -187,7 +187,7 @@ def _get_labels() -> Mapping[str, Sequence[NDArray]]:
     return out
 
 
-def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
+def _get_polygons() -> dict[str, GeoDataFrame]:
     # TODO: add polygons from geojson and from ragged arrays since now only the GeoDataFrame initializer is tested.
     out = {}
     poly = GeoDataFrame(
@@ -228,7 +228,7 @@ def _get_polygons() -> Mapping[str, Sequence[NDArray]]:
     return out
 
 
-def _get_shapes() -> Mapping[str, Sequence[NDArray]]:
+def _get_shapes() -> dict[str, AnnData]:
     out = {}
     arr = RNG.normal(size=(100, 2))
     out["shapes_0"] = ShapesModel.parse(arr, shape_type="Square", shape_size=3)
@@ -237,7 +237,7 @@ def _get_shapes() -> Mapping[str, Sequence[NDArray]]:
     return out
 
 
-def _get_points() -> Mapping[str, Sequence[NDArray]]:
+def _get_points() -> dict[str, pa.Table]:
     name = "points"
     var_names = [np.arange(3), ["genex", "geney"]]
 
@@ -256,7 +256,7 @@ def _get_points() -> Mapping[str, Sequence[NDArray]]:
 
 
 def _get_table(
-    region: Optional[Union[str, Sequence[str]]] = None,
+    region: Optional[AnnData] = None,
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> AnnData:

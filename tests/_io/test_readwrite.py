@@ -116,8 +116,7 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
 
-        with pytest.raises(RuntimeError):
-            sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
+        sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
         sdata.write(tmpdir)
 
         for k, v in _get_images().items():

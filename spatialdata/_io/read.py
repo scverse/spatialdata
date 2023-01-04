@@ -170,7 +170,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 if "region" in attrs and isinstance(attrs["region"], np.ndarray):
                     attrs["region"] = attrs["region"].tolist()
 
-    return SpatialData(
+    sdata = SpatialData(
         images=images,
         labels=labels,
         points=points,
@@ -178,6 +178,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         shapes=shapes,
         table=table,
     )
+    sdata.path = str(store)
+    return sdata
 
 
 def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PolygonsFormat()) -> GeoDataFrame:  # type: ignore[type-arg]

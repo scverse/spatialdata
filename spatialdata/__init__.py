@@ -26,7 +26,7 @@ __all__ = [
     # "VectorField",
     # "InverseOf",
     # "Bijection",
-    # "ByDimension",
+    "ByDimension",
     # --- from spatialdata._core.models ---
     "Image3DModel",
     "Image2DModel",
@@ -64,6 +64,7 @@ from spatialdata._core.models import (
 )
 from spatialdata._core.transformations import (  # Bijection,; ByDimension,; Coordinates,; Displacements,; InverseOf,; MapIndex,; VectorField,
     Affine,
+    ByDimension,
     Identity,
     MapAxis,
     Rotation,

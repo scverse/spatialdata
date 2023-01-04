@@ -1,4 +1,5 @@
 """This file contains models and schema for SpatialData"""
+import copy
 import json
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
@@ -107,7 +108,17 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         # the correct coordinate transformation and output coordinate system
         mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
     combined: BaseTransformation
-    if t.output_coordinate_system != mapper_output_coordinate_system:
+    assert isinstance(t.output_coordinate_system, CoordinateSystem)
+    assert isinstance(mapper_output_coordinate_system, CoordinateSystem)
+
+    # patch to be removed when this function is refactored to address https://github.com/scverse/spatialdata/issues/39
+    cs1 = copy.deepcopy(t.output_coordinate_system)
+    cs2 = copy.deepcopy(mapper_output_coordinate_system)
+    for ax1, ax2 in zip(cs1._axes, cs2._axes):
+        ax1.unit = None
+        ax2.unit = None
+
+    if cs1._axes != cs2._axes:
         mapper_input_coordinate_system = t.output_coordinate_system
         assert C not in _get_axes_names(mapper_input_coordinate_system)
         any_axis_cs = get_default_coordinate_system((_get_axes_names(t.input_coordinate_system)[0],))
@@ -240,6 +251,7 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
+            _parse_transform(data, transform)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
@@ -341,7 +353,7 @@ class PolygonsModel:
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @parse.register(np.ndarray)
     @classmethod
