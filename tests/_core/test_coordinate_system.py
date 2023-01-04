@@ -43,13 +43,13 @@ def test_coordinate_system_instantiation_and_properties():
 def test_coordinate_system_exceptions():
     input_dict1 = copy.deepcopy(input_dict)
     input_dict1["axes"][0].pop("name")
-    coord_sys = CoordinateSystem()
+    coord_sys = CoordinateSystem(name="test")
     with pytest.raises(ValueError):
         coord_sys.from_dict(input_dict1)
 
     input_dict2 = copy.deepcopy(input_dict)
     input_dict2["axes"][0].pop("type")
-    coord_sys = CoordinateSystem()
+    coord_sys = CoordinateSystem(name="test")
     with pytest.raises(ValueError):
         coord_sys.from_dict(input_dict2)
 

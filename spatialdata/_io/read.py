@@ -170,7 +170,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
                 if "region" in attrs and isinstance(attrs["region"], np.ndarray):
                     attrs["region"] = attrs["region"].tolist()
 
-    return SpatialData(
+    sdata = SpatialData(
         images=images,
         labels=labels,
         points=points,
@@ -178,6 +178,8 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         shapes=shapes,
         table=table,
     )
+    sdata.path = str(store)
+    return sdata
 
 
 def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PolygonsFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
@@ -224,18 +226,8 @@ def _read_points(
 
     path = os.path.join(f._store.path, f.path, "points.parquet")
     table = pq.read_table(path)
-    # offsets_keys = [k for k in f.keys() if k.startswith("offset")]
-    # offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
     transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     new_table = set_transform(table, transforms)
     return new_table
-    #
-    # f = zarr.open(store, mode="r")
-    # transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
-    #
-    # adata = read_anndata_zarr(store)
-    # adata.uns["transform"] = transforms
-    #
-    # return adata

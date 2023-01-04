@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -10,6 +11,13 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata.utils import are_directories_identical
+from tests.conftest import (
+    _get_images,
+    _get_labels,
+    _get_points,
+    _get_polygons,
+    _get_shapes,
+)
 
 
 class TestReadWrite:
@@ -99,3 +107,65 @@ class TestReadWrite:
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+
+    def test_incremental_io(
+        self,
+        tmp_path: str,
+        full_sdata: SpatialData,
+    ) -> None:
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        sdata = full_sdata
+
+        sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
+        sdata.write(tmpdir)
+
+        for k, v in _get_images().items():
+            if isinstance(v, SpatialImage):
+                v.name = f"incremental_{k}"
+            elif isinstance(v, MultiscaleSpatialImage):
+                for scale in v:
+                    names = list(v[scale].keys())
+                    assert len(names) == 1
+                    name = names[0]
+                    v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
+            sdata.add_image(name=f"incremental_{k}", image=v)
+            with pytest.raises(ValueError):
+                sdata.add_image(name=f"incremental_{k}", image=v)
+            sdata.add_image(name=f"incremental_{k}", image=v, overwrite=True)
+
+        for k, v in _get_labels().items():
+            if isinstance(v, SpatialImage):
+                v.name = f"incremental_{k}"
+            elif isinstance(v, MultiscaleSpatialImage):
+                for scale in v:
+                    names = list(v[scale].keys())
+                    assert len(names) == 1
+                    name = names[0]
+                    v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
+            sdata.add_labels(name=f"incremental_{k}", labels=v)
+            with pytest.raises(ValueError):
+                sdata.add_labels(name=f"incremental_{k}", labels=v)
+            sdata.add_labels(name=f"incremental_{k}", labels=v, overwrite=True)
+
+        for k, v in _get_polygons().items():
+            sdata.add_polygons(name=f"incremental_{k}", polygons=v)
+            with pytest.raises(ValueError):
+                sdata.add_polygons(name=f"incremental_{k}", polygons=v)
+            sdata.add_polygons(name=f"incremental_{k}", polygons=v, overwrite=True)
+            # only one element to save time to do the test. We have this for the other types too, but not for images
+            # and labels beacuse we want to test both the Multiscale and the non-Multiscale case
+            break
+
+        for k, v in _get_shapes().items():
+            sdata.add_shapes(name=f"incremental_{k}", shapes=v)
+            with pytest.raises(ValueError):
+                sdata.add_shapes(name=f"incremental_{k}", shapes=v)
+            sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
+            break
+
+        for k, v in _get_points().items():
+            sdata.add_points(name=f"incremental_{k}", points=v)
+            with pytest.raises(ValueError):
+                sdata.add_points(name=f"incremental_{k}", points=v)
+            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+            break
