@@ -17,7 +17,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
-    _bounding_box_query_points,
+    _bounding_box_query_points_dict,
 )
 from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
@@ -651,12 +651,7 @@ class QueryManager:
             The SpatialData object containing the requested data.
             Elements with no valid data are omitted.
         """
-        requested_points = {}
-        for points_name, points_data in self._sdata.points.items():
-            points = _bounding_box_query_points(points_data, request)
-            if len(points) > 0:
-                # do not include elements with no data
-                requested_points[points_name] = points
+        requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
 
         return SpatialData(points=requested_points)
 

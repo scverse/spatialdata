@@ -72,3 +72,16 @@ def _bounding_box_query_points(points: pa.Table, request: BoundingBoxRequest) ->
         points = points.filter(pa.compute.less(points[axis_name], max_value))
 
     return points
+
+
+def _bounding_box_query_points_dict(
+    points_dict: dict[str, pa.Table], request: BoundingBoxRequest
+) -> dict[str, pa.Table]:
+    requested_points = {}
+    for points_name, points_data in points_dict.items():
+        points = _bounding_box_query_points(points_data, request)
+        if len(points) > 0:
+            # do not include elements with no data
+            requested_points[points_name] = points
+
+    return requested_points
