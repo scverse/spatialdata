@@ -493,7 +493,7 @@ class Affine(BaseTransformation):
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
-        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
+        return q[: len(output_axes), :].T # type: ignore[[no-any-return]]
 
     def to_affine(self) -> Affine:
         return Affine(

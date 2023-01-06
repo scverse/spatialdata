@@ -567,7 +567,7 @@ class SpatialData:
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
                         descr += (
-                            f"{h(attr + 'level1.1')}'{k}': {descr_class} with osbm.spatial "
+                            f"{h(attr + 'level1.1')}'{k}': {descr_class} with `.obsm['spatial']`"
                             f"{v.obsm['spatial'].shape}"
                         )
                     elif attr == "polygons":
