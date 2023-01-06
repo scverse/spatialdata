@@ -1,19 +1,10 @@
 """This file contains models and schema for SpatialData"""
+import copy
 import json
+from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -68,11 +59,11 @@ from spatialdata._logging import logger
 # Types
 Chunks_t = Union[
     int,
-    Tuple[int, ...],
-    Tuple[Tuple[int, ...], ...],
-    Mapping[Any, Union[None, int, Tuple[int, ...]]],
+    tuple[int, ...],
+    tuple[tuple[int, ...], ...],
+    Mapping[Any, Union[None, int, tuple[int, ...]]],
 ]
-ScaleFactors_t = Sequence[Union[Dict[str, int], int]]
+ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 
@@ -103,7 +94,7 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
 
     # this function is to comply with mypy since we could call .axes_names on the wrong type
-    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> Tuple[str, ...]:
+    def _get_axes_names(cs: Optional[Union[str, CoordinateSystem]]) -> tuple[str, ...]:
         assert isinstance(cs, CoordinateSystem)
         return cs.axes_names
 
@@ -117,7 +108,17 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         # the correct coordinate transformation and output coordinate system
         mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
     combined: BaseTransformation
-    if t.output_coordinate_system != mapper_output_coordinate_system:
+    assert isinstance(t.output_coordinate_system, CoordinateSystem)
+    assert isinstance(mapper_output_coordinate_system, CoordinateSystem)
+
+    # patch to be removed when this function is refactored to address https://github.com/scverse/spatialdata/issues/39
+    cs1 = copy.deepcopy(t.output_coordinate_system)
+    cs2 = copy.deepcopy(mapper_output_coordinate_system)
+    for ax1, ax2 in zip(cs1._axes, cs2._axes):
+        ax1.unit = None
+        ax2.unit = None
+
+    if cs1._axes != cs2._axes:
         mapper_input_coordinate_system = t.output_coordinate_system
         assert C not in _get_axes_names(mapper_input_coordinate_system)
         any_axis_cs = get_default_coordinate_system((_get_axes_names(t.input_coordinate_system)[0],))
@@ -250,8 +251,7 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
-        if TYPE_CHECKING:
-            assert isinstance(data, SpatialImage) or isinstance(data, MultiscaleSpatialImage)
+            _parse_transform(data, transform)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
@@ -353,14 +353,14 @@ class PolygonsModel:
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    @parse.register
+    @parse.register(np.ndarray)
     @classmethod
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        offsets: Tuple[np.ndarray, ...],  # type: ignore[type-arg]
+        offsets: tuple[np.ndarray, ...],  # type: ignore[type-arg]
         geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         transform: Optional[Any] = None,
         **kwargs: Any,
@@ -373,14 +373,18 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register
+    @parse.register(str)
+    @parse.register(Path)
     @classmethod
     def _(
         cls,
-        data: Path,
+        data: str,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
+        data = Path(data) if isinstance(data, str) else data  # type: ignore[assignment]
+        if TYPE_CHECKING:
+            assert isinstance(data, Path)
 
         gc: GeometryCollection = from_geojson(data.read_bytes())
         if not isinstance(gc, GeometryCollection):
@@ -390,17 +394,7 @@ class PolygonsModel:
         cls.validate(geo_df)
         return geo_df
 
-    @parse.register
-    @classmethod
-    def _(
-        cls,
-        data: str,
-        transform: Optional[Any] = None,
-        **kwargs: Any,
-    ) -> GeoDataFrame:
-        return cls.parse(Path(data), transform, **kwargs)
-
-    @parse.register
+    @parse.register(GeoDataFrame)
     @classmethod
     def _(
         cls,
@@ -491,7 +485,7 @@ class PointsModel:
     def validate(cls, data: pa.Table) -> None:
         for ax in [X, Y, Z]:
             if ax in data.column_names:
-                assert data.schema.field(ax).type in [pa.float32(), pa.float64()]
+                assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
         try:
             assert data.schema.metadata is not None
             t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
@@ -566,7 +560,7 @@ class TableModel:
     def parse(
         cls,
         adata: AnnData,
-        region: Optional[Union[str, List[str]]] = None,
+        region: Optional[Union[str, list[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         region_values: Optional[Union[str, Sequence[str]]] = None,
@@ -634,7 +628,7 @@ class TableModel:
 
 # TODO: consider removing if we settle with geodataframe
 def _sparse_matrix_from_assignment(
-    n_obs: int, var_names: Union[List[str], ArrayLike], assignment: pd.Series
+    n_obs: int, var_names: Union[list[str], ArrayLike], assignment: pd.Series
 ) -> csr_matrix:
     """Create a sparse matrix from an assignment array."""
     data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)

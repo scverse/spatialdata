@@ -1,5 +1,6 @@
 import os
-from typing import Any, Dict, List, Mapping, Optional, Union
+from collections.abc import Mapping
+from typing import Any, Optional, Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -34,8 +35,8 @@ __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "wri
 def _write_metadata(
     group: zarr.Group,
     group_type: str,
-    coordinate_transformations: List[Dict[str, Any]],
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
+    coordinate_transformations: list[dict[str, Any]],
+    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
     attrs: Optional[Mapping[str, Any]] = None,
     fmt: Format = SpatialDataFormatV01(),
 ) -> None:
@@ -54,9 +55,9 @@ def write_image(
     name: str,
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormatV01(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
-    **metadata: Union[str, JSONDict, List[JSONDict]],
+    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
+    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
+    **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
 
     subgroup = group.require_group(name)
@@ -84,10 +85,10 @@ def write_image(
             **metadata,
         )
     elif isinstance(image, MultiscaleSpatialImage):
-        data = _iter_multiscale(image, name, "data")
-        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(image, name, "attrs", "transform")]
-        chunks = _iter_multiscale(image, name, "chunks")
-        axes_ = _iter_multiscale(image, name, "dims")
+        data = _iter_multiscale(image, "data")
+        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(image, "attrs", "transform")]
+        chunks = _iter_multiscale(image, "chunks")
+        axes_ = _iter_multiscale(image, "dims")
         # TODO: how should axes be handled with multiscale?
         axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
@@ -109,8 +110,8 @@ def write_labels(
     name: str,
     scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormatV01(),
-    axes: Optional[Union[str, List[str], List[Dict[str, str]]]] = None,
-    storage_options: Optional[Union[JSONDict, List[JSONDict]]] = None,
+    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
+    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
 ) -> None:
@@ -140,11 +141,11 @@ def write_labels(
             **metadata,
         )
     elif isinstance(labels, MultiscaleSpatialImage):
-        data = _iter_multiscale(labels, name, "data")
+        data = _iter_multiscale(labels, "data")
         # TODO: nitpick, rewrite the next line to use get_transform()
-        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(labels, name, "attrs", "transform")]
-        chunks = _iter_multiscale(labels, name, "chunks")
-        axes_ = _iter_multiscale(labels, name, "dims")
+        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(labels, "attrs", "transform")]
+        chunks = _iter_multiscale(labels, "chunks")
+        axes_ = _iter_multiscale(labels, "dims")
         # TODO: how should axes be handled with multiscale?
         axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
@@ -276,10 +277,19 @@ def write_table(
 
 def _iter_multiscale(
     data: MultiscaleSpatialImage,
-    name: str,
     attr: str,
     key: Optional[str] = None,
-) -> List[Any]:
+) -> list[Any]:
+    # TODO: put this check also in the validator for raster multiscales
+    name = None
+    for i in data.keys():
+        variables = list(data[i].variables)
+        if len(variables) != 1:
+            raise ValueError("MultiscaleSpatialImage must have exactly one variable (the variable name is arbitrary)")
+        if name is not None:
+            if name != variables[0]:
+                raise ValueError("MultiscaleSpatialImage must have the same variable name across all levels")
+        name = variables[0]
     if key is None:
         return [getattr(data[i][name], attr) for i in data.keys()]
     else:

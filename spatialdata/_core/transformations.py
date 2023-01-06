@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
-from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from typing_extensions import Self
@@ -32,8 +32,8 @@ __all__ = [
 # TODO: update this link when the specs are finalized
 # http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs
 # Transformation_t = Dict[str, Union[str, List[int], List[str], List[Dict[str, Any]]]]
-Transformation_t = Dict[str, Any]
-TRANSFORMATIONS: Dict[str, Type[BaseTransformation]] = {}
+Transformation_t = dict[str, Any]
+TRANSFORMATIONS: dict[str, type[BaseTransformation]] = {}
 
 
 # TODO(luca): wrote this comment, see if it is still relevant and either add it to the docstring or remove it
@@ -111,7 +111,7 @@ class BaseTransformation(ABC):
         pass
 
     @abstractmethod
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         pass
 
     @abstractmethod
@@ -122,7 +122,7 @@ class BaseTransformation(ABC):
     def to_affine(self) -> Affine:
         pass
 
-    def _validate_transform_points_shapes(self, input_size: int, points_shape: Tuple[int, ...]) -> None:
+    def _validate_transform_points_shapes(self, input_size: int, points_shape: tuple[int, ...]) -> None:
         if len(points_shape) != 2 or points_shape[1] != input_size:
             raise ValueError(
                 f"points must be a tensor of shape (n, d), where n is the number of points and d is the "
@@ -140,7 +140,7 @@ class BaseTransformation(ABC):
 
     def _get_axes_from_coordinate_systems(
         self,
-    ) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
         if not isinstance(self.input_coordinate_system, CoordinateSystem):
             raise ValueError("Input coordinate system not specified")
         if not isinstance(self.output_coordinate_system, CoordinateSystem):
@@ -150,7 +150,7 @@ class BaseTransformation(ABC):
         return input_axes, output_axes
 
     @staticmethod
-    def _parse_list_into_array(array: Union[List[Number], ArrayLike]) -> ArrayLike:
+    def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
         if isinstance(array, list):
             array = np.array(array)
         if array.dtype != float:
@@ -234,7 +234,7 @@ class Identity(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         if input_axes != output_axes:
             raise ValueError("Input and output axes must be the same")
@@ -261,7 +261,7 @@ class Identity(BaseTransformation):
 class MapAxis(BaseTransformation):
     def __init__(
         self,
-        map_axis: Dict[str, str],
+        map_axis: dict[str, str],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -290,7 +290,7 @@ class MapAxis(BaseTransformation):
                 output_coordinate_system=self.input_coordinate_system,
             )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         if not set(input_axes).issuperset(set(self.map_axis.values())):
             raise ValueError(
@@ -361,7 +361,7 @@ class Translation(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         if input_axes != output_axes:
             raise ValueError("Input and output axes must be the same")
@@ -417,7 +417,7 @@ class Scale(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         if input_axes != output_axes:
             raise ValueError("Input and output axes must be the same")
@@ -442,7 +442,7 @@ class Scale(BaseTransformation):
 class Affine(BaseTransformation):
     def __init__(
         self,
-        affine: Union[ArrayLike, List[Number]],
+        affine: Union[ArrayLike, list[Number]],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -484,7 +484,7 @@ class Affine(BaseTransformation):
         # closed_form = np.array([[d, -c, 0], [-b, a, 0], [b * n - d * m, c * m - a * n, det]])
         # return Affine(affine=closed_form)
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         return input_axes, output_axes
 
@@ -506,7 +506,7 @@ class Affine(BaseTransformation):
 class Rotation(BaseTransformation):
     def __init__(
         self,
-        rotation: Union[ArrayLike, List[Number]],
+        rotation: Union[ArrayLike, list[Number]],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -540,7 +540,7 @@ class Rotation(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         if input_axes != output_axes:
             raise ValueError("Input and output axes must be the same")
@@ -564,7 +564,7 @@ class Rotation(BaseTransformation):
 class Sequence(BaseTransformation):
     def __init__(
         self,
-        transformations: List[BaseTransformation],
+        transformations: list[BaseTransformation],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -592,7 +592,7 @@ class Sequence(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         return input_axes, output_axes
 
@@ -623,7 +623,7 @@ class Sequence(BaseTransformation):
     @staticmethod
     def _inferring_cs_pre_action(
         t: BaseTransformation, latest_output_cs: CoordinateSystem
-    ) -> Tuple[CoordinateSystem, Optional[CoordinateSystem], Optional[CoordinateSystem]]:
+    ) -> tuple[CoordinateSystem, Optional[CoordinateSystem], Optional[CoordinateSystem]]:
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
@@ -826,7 +826,7 @@ class Sequence(BaseTransformation):
 class ByDimension(BaseTransformation):
     def __init__(
         self,
-        transformations: List[BaseTransformation],
+        transformations: list[BaseTransformation],
         input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
@@ -854,13 +854,13 @@ class ByDimension(BaseTransformation):
             output_coordinate_system=self.input_coordinate_system,
         )
 
-    def _get_and_validate_axes(self) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         # we check that:
         # 1. each input from each transformation in self.transformation must appear in the set of input axes
         # 2. each output from each transformation in self.transformation must appear at most once in the set of output
         # axes
-        defined_output_axes: Set[str] = set()
+        defined_output_axes: set[str] = set()
         for t in self.transformations:
             assert isinstance(t.input_coordinate_system, CoordinateSystem)
             assert isinstance(t.output_coordinate_system, CoordinateSystem)
@@ -875,7 +875,7 @@ class ByDimension(BaseTransformation):
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
-        output_columns: Dict[str, ArrayLike] = {}
+        output_columns: dict[str, ArrayLike] = {}
         for t in self.transformations:
             assert isinstance(t.input_coordinate_system, CoordinateSystem)
             assert isinstance(t.output_coordinate_system, CoordinateSystem)

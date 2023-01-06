@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 from anndata import AnnData
@@ -12,7 +12,7 @@ from spatial_image import SpatialImage
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
 __all__ = [
     "SpatialElement",
@@ -160,7 +160,7 @@ get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_S
 
 
 @singledispatch
-def get_dims(e: SpatialElement) -> Tuple[str, ...]:
+def get_dims(e: SpatialElement) -> tuple[str, ...]:
     """
     Get the dimensions of a spatial element
 
@@ -178,33 +178,33 @@ def get_dims(e: SpatialElement) -> Tuple[str, ...]:
 
 
 @get_dims.register(SpatialImage)
-def _(e: SpatialImage) -> Tuple[str, ...]:
+def _(e: SpatialImage) -> tuple[str, ...]:
     dims = e.dims
     return dims  # type: ignore
 
 
 @get_dims.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Tuple[str, ...]:
+def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     variables = list(e[list(e.keys())[0]].variables)
     return e[list(e.keys())[0]][variables[0]].dims  # type: ignore
 
 
 @get_dims.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Tuple[str, ...]:
+def _(e: GeoDataFrame) -> tuple[str, ...]:
     dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
     return dims[:n]
 
 
 @get_dims.register(AnnData)
-def _(e: AnnData) -> Tuple[str, ...]:
+def _(e: AnnData) -> tuple[str, ...]:
     dims = (X, Y, Z)
     n = e.obsm["spatial"].shape[1]
     return dims[:n]
 
 
 @get_dims.register(pa.Table)
-def _(e: pa.Table) -> Tuple[str, ...]:
+def _(e: pa.Table) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = [c for c in valid_dims if c in e.column_names]
     return tuple(dims)

@@ -19,7 +19,7 @@ repos:
       hooks:
           - id: blacken-docs
     - repo: https://github.com/PyCQA/isort
-      rev: 5.10.1
+      rev: 5.11.4
       hooks:
           - id: isort
     - repo: https://github.com/pre-commit/mirrors-mypy
@@ -74,7 +74,7 @@ repos:
       rev: v3.3.1
       hooks:
           - id: pyupgrade
-            args: [--py3-plus, --py38-plus, --keep-runtime-typing]
+            args: [--py3-plus, --py39-plus, --keep-runtime-typing]
     - repo: https://github.com/pre-commit/pygrep-hooks
       rev: v1.9.0
       hooks:
@@ -85,6 +85,6 @@ repos:
           - id: rst-directive-colons
           - id: rst-inline-touching-normal
     - repo: https://github.com/PyCQA/doc8
-      rev: v1.0.0
+      rev: v1.1.1
       hooks:
           - id: doc8
