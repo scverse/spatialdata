@@ -147,11 +147,11 @@ class SpatialData:
             Table_s.validate(table)
             self._table = table
 
-        self._spatial_query = SpatialQueryManager(self)
+        self._query = QueryManager(self)
 
     @property
-    def spatial(self) -> SpatialQueryManager:
-        return self._spatial_query
+    def query(self) -> QueryManager:
+        return self._query
 
     def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
         if name in self._images:
@@ -631,8 +631,8 @@ class SpatialData:
             yield from d.values()
 
 
-class SpatialQueryManager:
-    """Perform spatial queries on SpatialData objects"""
+class QueryManager:
+    """Perform queries on SpatialData objects"""
 
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pyarrow as pa
 
-from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._core.coordinate_system import CoordinateSystem, _get_spatial_axes
 
 if TYPE_CHECKING:
     pass
@@ -43,24 +43,6 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
     min_coordinate: np.ndarray  # type: ignore[type-arg]
     max_coordinate: np.ndarray  # type: ignore[type-arg]
-
-
-def _get_spatial_axes(
-    coordinate_system: CoordinateSystem,
-) -> list[str]:
-    """Get the names of the spatial axes in a coordinate system.
-
-    Parameters
-    ----------
-    coordinate_system : CoordinateSystem
-        The coordinate system to get the spatial axes from.
-
-    Returns
-    -------
-    spatial_axis_names : List[str]
-        The names of the spatial axes.
-    """
-    return [axis.name for axis in coordinate_system._axes if axis.type == "space"]
 
 
 def _bounding_box_query_points(points: pa.Table, request: BoundingBoxRequest) -> pa.Table:

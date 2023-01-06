@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -43,7 +45,7 @@ class CoordinateSystem:
         return f"CoordinateSystem('{self.name}', {self._axes})"
 
     @staticmethod
-    def from_dict(coord_sys: CoordSystem_t) -> "CoordinateSystem":
+    def from_dict(coord_sys: CoordSystem_t) -> CoordinateSystem:
         if "name" not in coord_sys.keys():
             raise ValueError("`coordinate_system` MUST have a name.")
         if "axes" not in coord_sys.keys():
@@ -81,7 +83,7 @@ class CoordinateSystem:
         raise NotImplementedError()
 
     @staticmethod
-    def from_json(data: Union[str, bytes]) -> "CoordinateSystem":
+    def from_json(data: Union[str, bytes]) -> CoordinateSystem:
         coord_sys = json.loads(data)
         return CoordinateSystem.from_dict(coord_sys)
 
@@ -108,3 +110,21 @@ class CoordinateSystem:
 
     def __hash__(self) -> int:
         return hash(frozenset(self.to_dict()))
+
+
+def _get_spatial_axes(
+    coordinate_system: CoordinateSystem,
+) -> list[str]:
+    """Get the names of the spatial axes in a coordinate system.
+
+    Parameters
+    ----------
+    coordinate_system : CoordinateSystem
+        The coordinate system to get the spatial axes from.
+
+    Returns
+    -------
+    spatial_axis_names : List[str]
+        The names of the spatial axes.
+    """
+    return [axis.name for axis in coordinate_system._axes if axis.type == "space"]
