@@ -36,7 +36,7 @@ class BoundingBoxRequest(BaseSpatialRequest):
     min_coordinate : np.ndarray
         The coordinate of the lower left hand corner (i.e., minimum values)
         of the bounding box.
-    max_coordiate : np.ndarray
+    max_coordinate : np.ndarray
         The coordinate of the upper right hand corner (i.e., maximum values)
         of the bounding box
     """
