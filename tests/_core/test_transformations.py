@@ -40,14 +40,20 @@ def _test_transformation(
     test_affine_inverse: bool = True,
     test_inverse: bool = True,
 ):
-    # missing input and output coordinate systems
-    with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original), transformed)
+    # missing input and output coordinate systems.
+    # If the transformation is a Sequence, it can have the input_coordinate system specified (inherited from the
+    # first component). In this case the test is skipped
+    if transformation.input_coordinate_system is None:
+        with pytest.raises(ValueError):
+            assert np.allclose(transformation.transform_points(original), transformed)
 
     # missing output coordinate system
+    # If the transformation is a Sequence, it can have the output_coordinate system specified (inherited from the
+    # last component). In this case the test is skipped
     transformation.input_coordinate_system = input_cs
-    with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original), transformed)
+    if transformation.output_coordinate_system is None:
+        with pytest.raises(ValueError):
+            assert np.allclose(transformation.transform_points(original), transformed)
 
     # wrong output coordinate system
     transformation.output_coordinate_system = wrong_output_cs
@@ -287,7 +293,7 @@ def test_sequence():
         output_coordinate_system=cyx_cs,
     )
 
-    def _manual_xy_to_cyz(x: np.ndarray) -> np.ndarray:
+    def _manual_xy_to_cyx(x: np.ndarray) -> np.ndarray:
         return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
 
     _test_transformation(
@@ -316,12 +322,37 @@ def test_sequence():
                 xy_to_cyx,
             ]
         ),
-        original=_manual_xy_to_cyz(original),
-        transformed=_manual_xy_to_cyz(transformed),
+        original=_manual_xy_to_cyx(original),
+        transformed=_manual_xy_to_cyx(transformed),
         input_cs=cyx_cs,
         output_cs=cyx_cs,
         wrong_output_cs=xyc_cs,
         test_inverse=False,
+    )
+
+    # test sequence inside sequence, with full inference of the intermediate coordinate systems
+    # two nested should be enought, let's test even three!
+
+    _test_transformation(
+        transformation=Sequence(
+            [
+                Scale(np.array([2, 3])),
+                Sequence(
+                    [
+                        Scale(np.array([4, 5])),
+                        Sequence(
+                            [Scale(np.array([6, 7]))],
+                        ),
+                    ],
+                ),
+            ]
+        ),
+        original=original,
+        transformed=original * np.array([2 * 4 * 6, 3 * 5 * 7]),
+        input_cs=yx_cs,
+        output_cs=yx_cs,
+        wrong_output_cs=xy_cs,
+        test_inverse=True,
     )
 
 
@@ -365,3 +396,30 @@ def test_by_dimension():
         output_cs=xyz_cs,
         wrong_output_cs=zyx_cs,
     )
+
+
+def test_get_affine_form_input_output_coordinate_systems():
+    from spatialdata._core.core_utils import C, X, Y, Z, get_default_coordinate_system
+
+    data = {
+        X: 1.0,
+        Y: 2.0,
+        Z: 3.0,
+        C: 4.0,
+    }
+    input_css = [
+        get_default_coordinate_system(t) for t in [(X, Y), (Y, X), (C, Y, X), (X, Y, Z), (Z, Y, X), (C, Z, Y, X)]
+    ]
+    output_css = input_css.copy()
+    for input_cs in input_css:
+        for output_cs in output_css:
+            a = Affine.from_input_output_coordinate_systems(input_cs, output_cs)
+
+            input_axes = input_cs.axes_names
+            output_axes = output_cs.axes_names
+            input_data = np.atleast_2d([data[a] for a in input_axes])
+            output_data = np.atleast_2d([data[a] if a in input_axes else 0.0 for a in output_axes])
+
+            transformed_data = a.transform_points(input_data)
+            assert np.allclose(transformed_data, output_data)
+            print(a.affine)

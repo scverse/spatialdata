@@ -473,16 +473,6 @@ class Affine(BaseTransformation):
             input_coordinate_system=self.output_coordinate_system,
             output_coordinate_system=self.input_coordinate_system,
         )
-        # old code, manually inverting a 2d (3x3) affine matrix
-        # a = self.affine[0, 0]
-        # b = self.affine[0, 1]
-        # m = self.affine[0, 2]
-        # c = self.affine[1, 0]
-        # d = self.affine[1, 1]
-        # n = self.affine[1, 2]
-        # det = a * d - b * c
-        # closed_form = np.array([[d, -c, 0], [-b, a, 0], [b * n - d * m, c * m - a * n, det]])
-        # return Affine(affine=closed_form)
 
     def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
@@ -500,6 +490,33 @@ class Affine(BaseTransformation):
             self.affine,
             input_coordinate_system=self.input_coordinate_system,
             output_coordinate_system=self.output_coordinate_system,
+        )
+
+    @classmethod
+    def _affine_matrix_from_input_and_output_axes(cls, input_axes: tuple[str], output_axes: tuple[str]) -> ArrayLike:
+        from spatialdata._core.core_utils import C, X, Y, Z
+
+        assert all([ax in (X, Y, Z, C) for ax in input_axes])
+        assert all([ax in (X, Y, Z, C) for ax in output_axes])
+        m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
+        for output_ax in output_axes:
+            for input_ax in input_axes:
+                if output_ax == input_ax:
+                    m[output_axes.index(output_ax), input_axes.index(input_ax)] = 1
+        m[-1, -1] = 1
+        return m
+
+    @classmethod
+    def from_input_output_coordinate_systems(
+        cls,
+        input_coordinate_system: Optional[Union[str, CoordinateSystem]],
+        output_coordinate_system: Optional[Union[str, CoordinateSystem]],
+    ) -> Affine:
+        input_axes = input_coordinate_system.axes_names
+        output_axes = output_coordinate_system.axes_names
+        m = cls._affine_matrix_from_input_and_output_axes(input_axes, output_axes)
+        return cls(
+            affine=m, input_coordinate_system=input_coordinate_system, output_coordinate_system=output_coordinate_system
         )
 
 
@@ -569,9 +586,19 @@ class Sequence(BaseTransformation):
         output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
-        # we can treat this as an Identity if we need to
+        # we can decide to treat an empty sequence as an Identity if we need to
         assert len(transformations) > 0
         self.transformations = transformations
+        if (cs := self.transformations[0].input_coordinate_system) is not None:
+            if self.input_coordinate_system is not None:
+                assert cs == self.input_coordinate_system
+            else:
+                self.input_coordinate_system = cs
+        if (cs := self.transformations[-1].output_coordinate_system) is not None:
+            if self.output_coordinate_system is not None:
+                assert cs == self.output_coordinate_system
+            else:
+                self.output_coordinate_system = cs
 
     @classmethod
     def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
@@ -633,7 +660,7 @@ class Sequence(BaseTransformation):
                 f"replaced by the CoordinateSystem named after the string before calling this function."
             )
         else:
-            assert isinstance(input_cs, CoordinateSystem)
+            assert isinstance(input_cs, CoordinateSystem), input_cs
             assert input_cs == latest_output_cs
         output_cs = t.output_coordinate_system
         expected_output_cs = Sequence._inferring_cs_infer_output_coordinate_system(t)
