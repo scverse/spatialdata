@@ -36,30 +36,16 @@ Transformation_t = dict[str, Any]
 TRANSFORMATIONS: dict[str, type[BaseTransformation]] = {}
 
 
-# TODO(luca): wrote this comment, see if it is still relevant and either add it to the docstring or remove it
-# the general json description of a transformation contains just the name of the input and output space,
-# (coordinate systems are specified outside the transformation), and sometimes the name is even not specified (like
-# for transformation that define a "Sequence" transformation). For this reason the following two variables can be
-# None or strings. Anyway, in order to be able to apply a transformation to a DataArray, we need to know the name of
-# the input and output axes (information contained in the CoordinateSystem object). Therefore, the following
-# variables will be populated with CoordinateSystem objects when both the coordinate_system and the transformation
-# are known.
-# Example: as a user you have an Image (cyx) and a Point (xy) elements, and you want to contruct a SpatialData
-# object containing the two of them. You also want to apply a Scale transformation to the Image. You can simply
-# assign the Scale transformation to the Image element, and the SpatialData object will take care of assiging to
-# "_input_coordinate_system" the intrinsitc coordinate system of the Image element,
-# and to "_output_coordinate_system" the global coordinate system (cyx) that will be created when calling the
-# SpatialData constructor
 class BaseTransformation(ABC):
     """Base class for all transformations."""
 
-    input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
-    output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None
+    input_coordinate_system: Optional[CoordinateSystem] = None
+    output_coordinate_system: Optional[CoordinateSystem] = None
 
     def __init__(
         self,
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         self.input_coordinate_system = input_coordinate_system
         self.output_coordinate_system = output_coordinate_system
@@ -211,8 +197,8 @@ class BaseTransformation(ABC):
 class Identity(BaseTransformation):
     def __init__(
         self,
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
 
@@ -262,8 +248,8 @@ class MapAxis(BaseTransformation):
     def __init__(
         self,
         map_axis: dict[str, str],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.map_axis = map_axis
@@ -333,8 +319,8 @@ class Translation(BaseTransformation):
     def __init__(
         self,
         translation: Union[ArrayLike, list[Number]],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         """
         class for storing translation transformations.
@@ -387,8 +373,8 @@ class Scale(BaseTransformation):
     def __init__(
         self,
         scale: Union[ArrayLike, list[Number]],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         """
         class for storing scale transformations.
@@ -443,8 +429,8 @@ class Affine(BaseTransformation):
     def __init__(
         self,
         affine: Union[ArrayLike, list[Number]],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         """
         class for storing affine transformations.
@@ -493,7 +479,9 @@ class Affine(BaseTransformation):
         )
 
     @classmethod
-    def _affine_matrix_from_input_and_output_axes(cls, input_axes: tuple[str], output_axes: tuple[str]) -> ArrayLike:
+    def _affine_matrix_from_input_and_output_axes(
+        cls, input_axes: tuple[str, ...], output_axes: tuple[str, ...]
+    ) -> ArrayLike:
         from spatialdata._core.core_utils import C, X, Y, Z
 
         assert all([ax in (X, Y, Z, C) for ax in input_axes])
@@ -509,8 +497,8 @@ class Affine(BaseTransformation):
     @classmethod
     def from_input_output_coordinate_systems(
         cls,
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]],
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]],
+        input_coordinate_system: CoordinateSystem,
+        output_coordinate_system: CoordinateSystem,
     ) -> Affine:
         input_axes = input_coordinate_system.axes_names
         output_axes = output_coordinate_system.axes_names
@@ -524,8 +512,8 @@ class Rotation(BaseTransformation):
     def __init__(
         self,
         rotation: Union[ArrayLike, list[Number]],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         """
         class for storing rotation transformations.
@@ -582,8 +570,8 @@ class Sequence(BaseTransformation):
     def __init__(
         self,
         transformations: list[BaseTransformation],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
         # we can decide to treat an empty sequence as an Identity if we need to
@@ -854,8 +842,8 @@ class ByDimension(BaseTransformation):
     def __init__(
         self,
         transformations: list[BaseTransformation],
-        input_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
-        output_coordinate_system: Optional[Union[str, CoordinateSystem]] = None,
+        input_coordinate_system: Optional[CoordinateSystem] = None,
+        output_coordinate_system: Optional[CoordinateSystem] = None,
     ) -> None:
         super().__init__(input_coordinate_system, output_coordinate_system)
         assert len(transformations) > 0
