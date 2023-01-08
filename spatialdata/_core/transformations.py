@@ -577,6 +577,7 @@ class Sequence(BaseTransformation):
         # we can decide to treat an empty sequence as an Identity if we need to
         assert len(transformations) > 0
         self.transformations = transformations
+
         if (cs := self.transformations[0].input_coordinate_system) is not None:
             if self.input_coordinate_system is not None:
                 assert cs == self.input_coordinate_system
@@ -623,33 +624,20 @@ class Sequence(BaseTransformation):
         elif isinstance(t, MapAxis):
             return None
         elif isinstance(t, Sequence):
-            latest_output_cs = t.input_coordinate_system
-            for tt in t.transformations:
-                (
-                    latest_output_cs,
-                    input_cs,
-                    output_cs,
-                ) = Sequence._inferring_cs_pre_action(tt, latest_output_cs)
-                Sequence._inferring_cs_post_action(tt, input_cs, output_cs)
-            return latest_output_cs
+            t.check_and_infer_coordinate_systems()
+            return t.output_coordinate_system
         else:
             return None
 
     @staticmethod
-    def _inferring_cs_pre_action(
-        t: BaseTransformation, latest_output_cs: CoordinateSystem
-    ) -> tuple[CoordinateSystem, Optional[CoordinateSystem], Optional[CoordinateSystem]]:
+    def _inferring_cs_pre_action(t: BaseTransformation, latest_output_cs: CoordinateSystem) -> None:
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
-        elif isinstance(input_cs, str):
-            raise ValueError(
-                f"Input coordinate system for {t} is a string, not a CoordinateSystem. It should be "
-                f"replaced by the CoordinateSystem named after the string before calling this function."
-            )
         else:
             assert isinstance(input_cs, CoordinateSystem), input_cs
-            assert input_cs == latest_output_cs
+            if input_cs != latest_output_cs:
+                raise ValueError(f"Coordinate system mismatch: {input_cs} != {latest_output_cs} in {t}")
         output_cs = t.output_coordinate_system
         expected_output_cs = Sequence._inferring_cs_infer_output_coordinate_system(t)
         if output_cs is None:
@@ -661,11 +649,6 @@ class Sequence(BaseTransformation):
                     f"transformation."
                 )
             t.output_coordinate_system = expected_output_cs
-        elif isinstance(output_cs, str):
-            raise ValueError(
-                f"Output coordinate system for {t} is a string, not a CoordinateSystem. It should be "
-                f"replaced by the CoordinateSystem named after the string before calling this function."
-            )
         else:
             assert isinstance(output_cs, CoordinateSystem)
             # if it is not possible to infer the output, like for Affine, we skip this check
@@ -673,20 +656,38 @@ class Sequence(BaseTransformation):
                 assert t.output_coordinate_system == expected_output_cs
         new_latest_output_cs = t.output_coordinate_system
         assert type(new_latest_output_cs) == CoordinateSystem
-        return new_latest_output_cs, input_cs, output_cs
 
-    @staticmethod
-    def _inferring_cs_post_action(
-        t: BaseTransformation,
-        input_cs: Optional[CoordinateSystem],
-        output_cs: Optional[CoordinateSystem],
-    ) -> None:
-        # if the transformation t was passed without input or output coordinate systems (and so we had to infer
-        # them), we now restore the original state of the transformation
-        if input_cs is None:
-            t.input_coordinate_system = None
-        if output_cs is None:
-            t.output_coordinate_system = None
+    def check_and_infer_coordinate_systems(self) -> None:
+        """
+        Check that the coordinate systems of the components are consistent or infer them when possible.
+
+        Notes
+        -----
+        The NGFF specs allow for Sequence transformations to be specified even without making all the coordinate
+        systems of their component explicit. This reduces verbosity but can create some inconsistencies. This method
+        infers missing coordinate systems when possible and throws an error otherwise. Furthermore, we allow the
+        composition of transformations with different coordinate systems up to a reordering of the axes, by inserting
+        opportune Affine transformations.
+
+        This method is called automatically when a transformation:
+        - is applied (transform_points())
+        - is inverted (inverse())
+        - needs to be saved/converted (to_dict(), to_affine())
+        """
+        assert type(self.input_coordinate_system) == CoordinateSystem
+        latest_output_cs: CoordinateSystem = self.input_coordinate_system
+        for t in self.transformations:
+            Sequence._inferring_cs_pre_action(t, latest_output_cs)
+            assert t.output_coordinate_system is not None
+            latest_output_cs = t.output_coordinate_system
+        if self.output_coordinate_system is not None:
+            if self.output_coordinate_system != latest_output_cs:
+                raise ValueError(
+                    "The output coordinate system of the Sequence transformation is not consistent with the "
+                    "output coordinate system of the last component transformation."
+                )
+        else:
+            self.output_coordinate_system = self.transformations[-1].output_coordinate_system
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         # the specs allow to compose transformations without specifying the input and output coordinate systems of
@@ -700,16 +701,9 @@ class Sequence(BaseTransformation):
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         assert type(self.input_coordinate_system) == CoordinateSystem
-        latest_output_cs: CoordinateSystem = self.input_coordinate_system
+        self.check_and_infer_coordinate_systems()
         for t in self.transformations:
-            latest_output_cs, input_cs, output_cs = Sequence._inferring_cs_pre_action(t, latest_output_cs)
             points = t.transform_points(points)
-            Sequence._inferring_cs_post_action(t, input_cs, output_cs)
-        if output_axes != latest_output_cs.axes_names:
-            raise ValueError(
-                "Inferred output axes of the sequence of transformations do not match the expected output "
-                "coordinate system."
-            )
         return points
 
     def to_affine(self) -> Affine:
@@ -717,18 +711,10 @@ class Sequence(BaseTransformation):
         # method, applies also here
         input_axes, output_axes = self._get_and_validate_axes()
         composed = np.eye(len(input_axes) + 1)
-        assert type(self.input_coordinate_system) == CoordinateSystem
-        latest_output_cs: CoordinateSystem = self.input_coordinate_system
+        self.check_and_infer_coordinate_systems()
         for t in self.transformations:
-            latest_output_cs, input_cs, output_cs = Sequence._inferring_cs_pre_action(t, latest_output_cs)
             a = t.to_affine()
             composed = a.affine @ composed
-            Sequence._inferring_cs_post_action(t, input_cs, output_cs)
-        if output_axes != latest_output_cs.axes_names:
-            raise ValueError(
-                "Inferred output axes of the sequence of transformations do not match the expected output "
-                "coordinate system."
-            )
         return Affine(
             composed,
             input_coordinate_system=self.input_coordinate_system,
