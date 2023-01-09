@@ -15,6 +15,7 @@ from spatialdata._core.transformations import (
     Sequence,
     Translation,
 )
+from spatialdata._types import ArrayLike
 from tests._core.conftest import (
     c_cs,
     cyx_cs,
@@ -171,7 +172,7 @@ def test_scale():
     )
 
 
-def test_affine():
+def test_affine_2d():
     _test_transformation(
         transformation=Affine(np.array([[1, 2, 3], [4, 5, 6], [0, 0, 1]])),
         original=np.array([[1, 2], [3, 4], [5, 6]]),
@@ -184,6 +185,8 @@ def test_affine():
         wrong_output_cs=zyx_cs,
     )
 
+
+def test_affine_2d_to_3d():
     # embedding a space into a larger one
     _test_transformation(
         transformation=Affine(np.array([[1, 2, 3], [1, 2, 3], [4, 5, 6], [0, 0, 1]])),
@@ -195,6 +198,8 @@ def test_affine():
         test_inverse=False,
     )
 
+
+def test_affine_3d_to_2d():
     # projecting a space into a smaller one
     _test_transformation(
         transformation=Affine(np.array([[4, 5, 6], [0, 0, 1]])),
@@ -221,14 +226,18 @@ def test_rotations():
     )
 
 
-def test_sequence():
+def _test_sequence_helper() -> tuple[ArrayLike, Affine, ArrayLike]:
     original = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
     affine = Affine(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]))
     transformed = np.matmul(
         np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]),
         np.vstack([np.transpose((original + np.array([1, 2])) * np.array([3, 4])), [1] * len(original)]),
     )[:-1, :].T
+    return original, affine, transformed
 
+
+def test_sequence_ambiguous_coordinate_systems():
+    original, affine, transformed = _test_sequence_helper()
     # ambiguous 2d case (no input/output coordinate system specified for the affine transformation composing the
     # sequence)
     with pytest.raises(ValueError):
@@ -247,6 +256,9 @@ def test_sequence():
             wrong_output_cs=yx_cs,
         )
 
+
+def test_sequence_2d():
+    original, affine, transformed = _test_sequence_helper()
     # 2d case
     affine.input_coordinate_system = xy_cs
     affine.output_coordinate_system = xy_cs
@@ -265,6 +277,9 @@ def test_sequence():
         wrong_output_cs=yx_cs,
     )
 
+
+def test_sequence_3d():
+    original, affine, transformed = _test_sequence_helper()
     # 3d case
     _test_transformation(
         transformation=Sequence(
@@ -281,6 +296,11 @@ def test_sequence():
         wrong_output_cs=zyx_cs,
     )
 
+
+def test_sequence_2d_to_2d_with_c():
+    original, affine, transformed = _test_sequence_helper()
+    affine.input_coordinate_system = xy_cs
+    affine.output_coordinate_system = xy_cs
     # 2d case, extending a xy->xy transformation to a cyx->cyx transformation using additional affine transformations
     cyx_to_xy = Affine(
         np.array([[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]),
@@ -330,9 +350,11 @@ def test_sequence():
         test_inverse=False,
     )
 
+
+def test_sequence_nested():
+    original, affine, transformed = _test_sequence_helper()
     # test sequence inside sequence, with full inference of the intermediate coordinate systems
     # two nested should be enought, let's test even three!
-
     _test_transformation(
         transformation=Sequence(
             [
@@ -349,6 +371,24 @@ def test_sequence():
         ),
         original=original,
         transformed=original * np.array([2 * 4 * 6, 3 * 5 * 7]),
+        input_cs=yx_cs,
+        output_cs=yx_cs,
+        wrong_output_cs=xy_cs,
+        test_inverse=True,
+    )
+
+
+def test_sequence_mismatching_cs_inference():
+    original, affine, transformed = _test_sequence_helper()
+    _test_transformation(
+        transformation=Sequence(
+            [
+                Scale(np.array([2, 3]), input_coordinate_system=yx_cs, output_coordinate_system=yx_cs),
+                Scale(np.array([4, 5]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+            ]
+        ),
+        original=original,
+        transformed=original * np.array([2 * 5, 3 * 4]),
         input_cs=yx_cs,
         output_cs=yx_cs,
         wrong_output_cs=xy_cs,
