@@ -3,7 +3,9 @@ import json
 import numpy as np
 import pytest
 
+from spatialdata import SpatialData, set_transform
 from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._core.core_utils import C, X, Y, Z, get_default_coordinate_system
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -439,8 +441,6 @@ def test_by_dimension():
 
 
 def test_get_affine_form_input_output_coordinate_systems():
-    from spatialdata._core.core_utils import C, X, Y, Z, get_default_coordinate_system
-
     data = {
         X: 1.0,
         Y: 2.0,
@@ -463,3 +463,16 @@ def test_get_affine_form_input_output_coordinate_systems():
             transformed_data = a.transform_points(input_data)
             assert np.allclose(transformed_data, output_data)
             print(a.affine)
+
+
+def test_set_transform_with_mismatching_cs(sdata: SpatialData):
+    input_css = [
+        get_default_coordinate_system(t) for t in [(X, Y), (Y, X), (C, Y, X), (X, Y, Z), (Z, Y, X), (C, Z, Y, X)]
+    ]
+    for element_type in sdata._non_empty_elements():
+        if element_type == "table":
+            continue
+        for v in getattr(sdata, element_type).values():
+            for input_cs in input_css:
+                affine = Affine.from_input_output_coordinate_systems(input_cs, input_cs)
+                set_transform(v, affine)

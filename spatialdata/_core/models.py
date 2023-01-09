@@ -1,6 +1,5 @@
 """This file contains models and schema for SpatialData"""
 import copy
-import json
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
@@ -44,6 +43,7 @@ from spatialdata._core.core_utils import (
     Z,
     get_default_coordinate_system,
     get_dims,
+    get_transform,
     set_transform,
 )
 from spatialdata._core.transformations import (
@@ -488,8 +488,7 @@ class PointsModel:
                 assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
         try:
             assert data.schema.metadata is not None
-            t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-            BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+            _ = get_transform(data)
         except Exception as e:  # noqa: B902
             logger.error("cannot parse the transformation from the pyarrow.Table object")
             raise e

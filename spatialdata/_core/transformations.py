@@ -631,25 +631,17 @@ class Sequence(BaseTransformation):
             return None
 
     @staticmethod
-    def _inferring_cs_pre_action(t: BaseTransformation, latest_output_cs: CoordinateSystem) -> BaseTransformation:
-        wrapper = None
+    def _inferring_cs_pre_action(t: BaseTransformation, latest_output_cs: CoordinateSystem) -> list[BaseTransformation]:
+        transformations = []
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
         else:
             assert isinstance(input_cs, CoordinateSystem), input_cs
-            if input_cs != latest_output_cs:
-                # TODO: edit comment, this now always inserts an affine
-                # if an affine transformations permutes new axes and even maybe add/remove unused ones can make the
-                # input and output coordinate systems match, then we do that, otherwise we raise an error.
-                # mismatched_axes = set(input_cs.axes_names).symmetric_difference(set(latest_output_cs.axes_names))
-                # input_axes = input_cs.axes_names
-                # output_axes = latest_output_cs.axes_names
+            if not input_cs.equal_up_to_the_units(latest_output_cs):
+                # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
                 affine = Affine.from_input_output_coordinate_systems(latest_output_cs, input_cs)
-                wrapper = Sequence([affine, t])
-                # if len(mismatched_axes) > 0:
-                #     raise NotImplementedError()
-                #     raise ValueError(f"Coordinate system mismatch: {input_cs} != {latest_output_cs} in {t}")
+                transformations = [affine, t]
         output_cs = t.output_coordinate_system
         expected_output_cs = Sequence._inferring_cs_infer_output_coordinate_system(t)
         if output_cs is None:
@@ -666,10 +658,10 @@ class Sequence(BaseTransformation):
             # if it is not possible to infer the output, like for Affine, we skip this check
             if expected_output_cs is not None:
                 assert t.output_coordinate_system == expected_output_cs
-        if wrapper is None:
-            return t
+        if len(transformations) == 0:
+            return [t]
         else:
-            return wrapper
+            return transformations
 
     def check_and_infer_coordinate_systems(self) -> None:
         """
@@ -692,14 +684,13 @@ class Sequence(BaseTransformation):
         latest_output_cs: CoordinateSystem = self.input_coordinate_system
         new_transformations = []
         for t in self.transformations:
-            new_t = Sequence._inferring_cs_pre_action(t, latest_output_cs)
-            new_transformations.append(new_t)
-            assert new_t.output_coordinate_system is not None
-            latest_output_cs = new_t.output_coordinate_system
+            transformations = Sequence._inferring_cs_pre_action(t, latest_output_cs)
+            new_transformations.extend(transformations)
+            assert transformations[-1].output_coordinate_system is not None
+            latest_output_cs = transformations[-1].output_coordinate_system
         if self.output_coordinate_system is not None:
-            if self.output_coordinate_system != latest_output_cs:
-                # TODO: edit comment, this now always inserts an affine
-                # same logic as in _inferring_cs_pre_action() for trying to fix mismatched coordinate_systems
+            if not self.output_coordinate_system.equal_up_to_the_units(latest_output_cs):
+                # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
                 affine = Affine.from_input_output_coordinate_systems(latest_output_cs, self.output_coordinate_system)
                 # for mypy so that it doesn't complain in the logger.info() below
                 assert affine.input_coordinate_system is not None

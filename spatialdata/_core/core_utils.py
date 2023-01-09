@@ -10,7 +10,8 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
+from spatialdata._logging import logger
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
@@ -90,6 +91,25 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
         return t
 
 
+def _adjust_transformation_axes(e: SpatialElement, t: BaseTransformation) -> BaseTransformation:
+    element_cs = get_default_coordinate_system(get_dims(e))
+    new_t: BaseTransformation
+    if t.input_coordinate_system is not None and not t.input_coordinate_system.equal_up_to_the_units(element_cs):
+        affine = Affine.from_input_output_coordinate_systems(element_cs, t.input_coordinate_system)
+        # for mypy so that it doesn't complain in the logger.info() below
+        assert affine.input_coordinate_system is not None
+        assert affine.output_coordinate_system is not None
+        logger.info(
+            f"Adding an affine transformation ({affine.input_coordinate_system.axes_names} -> "
+            f"{affine.output_coordinate_system.axes_names}) to adjust for mismatched coordinate systems in the "
+            "Sequence object"
+        )
+        new_t = Sequence([affine, t])
+    else:
+        new_t = t
+    return new_t
+
+
 @singledispatch
 def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
     raise TypeError(f"Unsupported type: {type(e)}")
@@ -97,32 +117,37 @@ def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
 
 @set_transform.register(SpatialImage)
 def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
-    e.attrs[TRANSFORM_KEY] = t
+    new_t = _adjust_transformation_axes(e, t)
+    e.attrs[TRANSFORM_KEY] = new_t
     return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
-    e.attrs[TRANSFORM_KEY] = t
+    new_t = _adjust_transformation_axes(e, t)
+    e.attrs[TRANSFORM_KEY] = new_t
     return e
 
 
 @set_transform.register(GeoDataFrame)
 def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
-    e.attrs[TRANSFORM_KEY] = t
+    new_t = _adjust_transformation_axes(e, t)
+    e.attrs[TRANSFORM_KEY] = new_t
     return e
 
 
 @set_transform.register(AnnData)
 def _(e: AnnData, t: BaseTransformation) -> AnnData:
-    e.uns[TRANSFORM_KEY] = t
+    new_t = _adjust_transformation_axes(e, t)
+    e.uns[TRANSFORM_KEY] = new_t
     return e
 
 
 @set_transform.register(pa.Table)
 def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
     # in theory this doesn't really copy the data in the table but is referncing to them
-    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
+    new_t = _adjust_transformation_axes(e, t)
+    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(new_t.to_dict()).encode("utf-8")})
     return new_e
 
 

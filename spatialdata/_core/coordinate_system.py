@@ -96,6 +96,18 @@ class CoordinateSystem:
             return False
         return self.to_dict() == other.to_dict()
 
+    def equal_up_to_the_units(self, other: CoordinateSystem) -> bool:
+        if self.name != other.name:
+            return False
+        if len(self._axes) != len(other._axes):
+            return False
+        for i, axis in enumerate(self._axes):
+            if axis.name != other._axes[i].name:
+                return False
+            if axis.type != other._axes[i].type:
+                return False
+        return True
+
     @property
     def name(self) -> str:
         return self._name
