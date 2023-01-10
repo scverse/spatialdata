@@ -434,7 +434,7 @@ class ShapesModel:
         coords: np.ndarray,  # type: ignore[type-arg]
         shape_type: Literal["Circle", "Square"],
         shape_size: Union[float, Sequence[float]],
-        index: Optional[Union[ArrayLike, Sequence[Any]]] = None,
+        index: Optional[Sequence[Union[str, float]]] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
@@ -451,6 +451,8 @@ class ShapesModel:
             Type of shape.
         shape_size
             Size of shape.
+        index
+            Index names of the shapes.
         transform
             Transform of shape.
         kwargs
@@ -465,11 +467,13 @@ class ShapesModel:
                 raise ValueError("Length of `shape_size` must match length of `coords`.")
         shape_size_ = np.repeat(shape_size, len(coords)) if isinstance(shape_size, float) else shape_size
         if index is None:
-            index = map(str, np.arange(coords.shape[0]))  # type: ignore[assignment]
+            index_ = map(str, np.arange(coords.shape[0]))
             logger.info("No index provided, using default index `np.arange(coords.shape[0])`.")
+        else:
+            index_ = index  # type: ignore[assignment]
         adata = AnnData(
             None,
-            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=index),
+            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=index_),
             **kwargs,
         )
         adata.obsm[cls.COORDS_KEY] = coords
