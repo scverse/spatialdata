@@ -484,10 +484,7 @@ class ShapesModel:
 
 
 class PointsModel:
-    GEOMETRY_KEY = "geometry"
     ATTRS_KEY = "spatialdata_attrs"
-    GEOS_KEY = "geos"
-    TYPE_KEY = "type"
     NAME_KEY = "name"
     TRANSFORM_KEY = "transform"
 

@@ -86,13 +86,14 @@ We strongly encourage collaborations and community supports in all of these proj
 -   [ ] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @ [spatialdata-io][].
 -   [ ] P1. _Static plotting_: a static plotting library for _SpatialData_.
 -   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage.
-        Once ready, we will deprecate such functionalities in `Squidpy`.
+        Once ready, we will deprecate such functionalities in [squidpy][].
 -   [ ] P2. _Database_: Some form of update on released datasets with updated specs as development progresses.
 
 <!-- Links -->
 
 [napari-spatialdata]: https://github.com/scverse/napari-spatialdata
 [spatialdata-io]: https://github.com/scverse/napari-spatialdata
+[squidpy]: https://github.com/scverse/squidpy
 
 # Detailed description
 
@@ -227,13 +228,12 @@ of slot of the `Table`, yet no coordinates system is defined for them.
 The assumption is that the coordinate system of the centroids corresponds to the implicit coordinates system of the `Labels` image.
 
 Example:
-
 ```{code-block} python
 
 SpatialData
-  - Labels: Label ...
-  - Table: AnnData ...
-    - obsm: "spatial"
+  - Labels: ["Label1", "Label2", ...]
+  - Table: AnnData
+    - obsm: "spatial" # no coordinate system, assumed to be default of implicit of `Labels`
 
 ```
 ````
@@ -255,10 +255,11 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 ### Points (representation to be discussed)
 
-Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.). However, this depends on whether we will adopt AnnData as the representation.
+Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.).
+Current implementation represent points as a parquet file and a `pyarrow.Table` in memory. The only requirement is that the table contains axis name `["x","y","z"]` to represent the axes. It can also contains coordinates transformations in `attrs`.
 
-These are represented as an AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.
-
+If we will adopt AnnData as in-memory representation (and zarr for on-disk storage) it might look like the following:
+AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.
 The `AnnData`'s layer `X` will typically be a sparse array with one entry for each row.
 
 ### Graphs (representation to be refined)

@@ -4,7 +4,7 @@
 -   **This repository doesn't contain the latest version of the code**; we aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
 
-You can take a look at the [design doc][] .
+You can take a look at the [](./design_doc.md).
 
 # spatialdata
 
