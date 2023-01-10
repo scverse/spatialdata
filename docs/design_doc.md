@@ -197,7 +197,7 @@ The Shapes object is implemented as an AnnData object with additional properties
 The shape metadata is stored, with key `"spatialdata_attrs"`:
 
 -   in-memory in `adata.uns`
--   on-disk in `.zattrs` and (redundantly) in the .zarr representation of the `adata`.
+-   on-disk in `.zattrs` and (redundantly) in the .zarr representation of the `adata.uns`.
 
 The keys to specify the type of shapes are:
 
@@ -205,11 +205,28 @@ The keys to specify the type of shapes are:
     -   `"square"`
     -   `"circle"`
 -   `"size"` - `np.float`
-    If it is a `square`, the `size` represent the `side`. If it is a `circle`, the `size` represent the diameter.
+
+```{note}
+If the `type` of the shape is a `square`, the `size` represent the *side*. If the `type` is a `circle`, the `size` represent the *diameter*.
+```
 
 The coordinates of the centroids of Shapes are stored in `adata.obsm` with key `spatial`.
 
 This element is represented in memory as an AnnData object.
+
+````{warning}
+In the case where both a `Labels` image and its centroids coordinates are present, the `Labels` image is used to define the regions of interest,
+whereas the centroids are considered a type of annotation. Therefore, there is no `Shapes` element but the centroids coordinates can still be stored in the `obsm["spatial"]`
+slot of the `Table`, yet no coordinates system is defined for them. The assumption is that the coordinate system corresponds to the implicit coordinates system of the `Labels` image.
+
+Example:
+    ```{python}
+    SpatialData
+      - Labels: label ...
+      - Table: AnnData ...
+        - obsm: "spatial"
+    ```
+````
 
 ### Region Table (table of annotations for regions)
 
