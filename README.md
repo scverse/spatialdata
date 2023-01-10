@@ -4,6 +4,8 @@
 -   **This repository doesn't contain the latest version of the code**; we aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
 
+You can take a look at the [design doc][] .
+
 # spatialdata
 
 [![Tests][badge-tests]][link-tests]
@@ -12,8 +14,6 @@
 
 [badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
 [link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
-
-Up-to-date design doc [here](https://github.com/scverse/spatialdata/blob/main/docs/design_doc.md)
 
 ## Getting started
 
@@ -36,8 +36,11 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 > t.b.a
 
+<!-- Links -->
+
 [scverse-discourse]: https://discourse.scverse.org/
 [issue-tracker]: https://github.com/scverse/spatialdata/issues
 [changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
+[design doc]: https://scverse-spatialdata.readthedocs.io/en/latest/design_doc.html
 
 <img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>

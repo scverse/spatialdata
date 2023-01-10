@@ -1,4 +1,4 @@
-# Abstract
+# Design document for `SpatialData`
 
 This documents defines the specifications of SpatialData: a FAIR format for multi-modal spatial omics data. It also describes the initial implementation plan. This is meant to be a living document that can be updated as the project evolves.
 
@@ -82,10 +82,19 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
 
 We strongly encourage collaborations and community supports in all of these projects.
 
--   [ ] P0. _Visualization_: we are developing a napari plugin for interactive visualization of _SpatialData_ objects @: scverse/napari-spatialdata
--   [ ] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @: scverse/spatialdata-io . The goal is to provide initial readers but we don't plan to perform long-term maintenance, community contribution will be required. We will curate a tabular graphical representation of the initially supported technologies.
--   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage. Deprecate such functionalities in Squidpy.
+-   [ ] P0. _Visualization_: we are developing a napari plugin for interactive visualization of _SpatialData_ objects @ [napari-spatialdata][]
+-   [ ] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @ [spatialdata-io][] .
+        The goal is to provide initial readers but we don't plan to perform long-term maintenance, community contribution will be required.
+        We will curate a tabular graphical representation of the initially supported technologies.
+-   [ ] P1. _Static plotting_: a static plotting library for _SpatialData_.
+-   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage.
+        Once ready, we will deprecate such functionalities in `Squidpy`.
 -   [ ] P2. _Database_: Some form of update on released datasets with updated specs as development progresses.
+
+<!-- Links -->
+
+[napari-spatialdata]: https://github.com/scverse/napari-spatialdata
+[spatialdata-io]: https://github.com/scverse/napari-spatialdata
 
 # Detailed description
 
@@ -215,17 +224,22 @@ The coordinates of the centroids of Shapes are stored in `adata.obsm` with key `
 This element is represented in memory as an AnnData object.
 
 ````{warning}
-In the case where both a `Labels` image and its centroids coordinates are present, the `Labels` image is used to define the regions of interest,
-whereas the centroids are considered a type of annotation. Therefore, there is no `Shapes` element but the centroids coordinates can still be stored in the `obsm["spatial"]`
-slot of the `Table`, yet no coordinates system is defined for them. The assumption is that the coordinate system corresponds to the implicit coordinates system of the `Labels` image.
+
+In the case where both a `Labels` image and its centroids coordinates are present, the centroids are stored as type of annotation.
+Therefore, there is no `Shapes` element and the centroids coordinates can still be stored in `obsm["spatial"]`
+of slot of the `Table`, yet no coordinates system is defined for them.
+The assumption is that the coordinate system of the centroids corresponds to the implicit coordinates system of the `Labels` image.
 
 Example:
-    ```{python}
-    SpatialData
-      - Labels: label ...
-      - Table: AnnData ...
-        - obsm: "spatial"
-    ```
+
+```{code-block} python
+
+SpatialData
+  - Labels: Label ...
+  - Table: AnnData ...
+    - obsm: "spatial"
+
+```
 ````
 
 ### Region Table (table of annotations for regions)
