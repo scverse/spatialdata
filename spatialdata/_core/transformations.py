@@ -10,7 +10,6 @@ import numpy as np
 from typing_extensions import Self
 
 from spatialdata._core.coordinate_system import CoordinateSystem
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 __all__ = [
@@ -56,7 +55,15 @@ class BaseTransformation(ABC):
         return " " * indent * 4
 
     def _repr_transformation_signature(self, indent: int = 0) -> str:
-        return f"{self._indent(indent)}{type(self).__name__} ({', '.join(self.input_coordinate_system.axes_names)} -> {', '.join(self.output_coordinate_system.axes_names)})"
+        if self.input_coordinate_system is not None:
+            domain = ', '.join(self.input_coordinate_system.axes_names)
+        else:
+            domain = ''
+        if self.output_coordinate_system is not None:
+            codomain = ', '.join(self.output_coordinate_system.axes_names)
+        else:
+            codomain = ''
+        return f"{self._indent(indent)}{type(self).__name__} ({domain} -> {codomain})"
 
     @abstractmethod
     def _repr_transformation_description(self, indent: int = 0) -> str:
@@ -290,7 +297,7 @@ class MapAxis(BaseTransformation):
     def _repr_transformation_description(self, indent: int = 0) -> str:
         s = ""
         for k, v in self.map_axis.items():
-            s += f"{self._indent(indent)}{k} -> {v}\n"
+            s += f"{self._indent(indent)}{k} <- {v}\n"
         s = s[:-1]
         return s
 
@@ -1069,17 +1076,19 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
     if len(only_left) == 0 and len(only_right) == 0:
         return t
     else:
+        ##
         # order of axes and units don't matter, this transformation will be bundled in a sequence whose final
         # coordinate system will have the right order and correct units
         cs_only_left = cs_left.subset(list(only_left))
-        cs_common = cs_left.subset(list(common))
+        cs_common_left = cs_left.subset(list(common))
+        cs_common_right = cs_right.subset(list(common))
         cs_only_right = cs_right.subset(list(only_right))
         cs_merged = CoordinateSystem.merge(cs_left, cs_right)
 
         map_axis = MapAxis(
-            {ax: ax for ax in cs_left.axes_names},
-            input_coordinate_system=cs_only_left,
-            output_coordinate_system=cs_only_left,
+            {ax: ax for ax in cs_common_left.axes_names},
+            input_coordinate_system=cs_common_left,
+            output_coordinate_system=cs_common_right,
         )
 
         pass_through_only_left = Identity(cs_only_left, cs_only_left)
@@ -1087,40 +1096,38 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
         m = np.zeros((len(only_right) + 1, 2))
         m[-1, -1] = 1
         if len(common) > 0:
-            any_axis = cs_common._axes[0]
+            any_axis = cs_common_left._axes[0]
         else:
             assert len(only_left) > 0
             any_axis = cs_only_left._axes[0]
-        cs_any_axis = cs_left.subset([any_axis])
+        cs_any_axis = cs_left.subset([any_axis.name])
+        assert len(cs_any_axis.axes_names) == 1
         add_empty_only_right = Affine(
             m,
             input_coordinate_system=cs_any_axis,
             output_coordinate_system=cs_only_right,
         )
-        by_dimension = ByDimension(
-            [map_axis, pass_through_only_left, add_empty_only_right],
-            input_coordinate_system=cs_left,
-            output_coordinate_system=cs_merged,
-        )
         sequence = Sequence(
-            [by_dimension, t],
+            [
+                ByDimension(
+                    [map_axis] + ([add_empty_only_right] if len(only_right) > 0 else []),
+                    input_coordinate_system=cs_right,
+                    output_coordinate_system=cs_right,
+                ),
+                t,
+            ],
+            input_coordinate_system=cs_right,
         )
-        print(sequence)
-        print(sequence)
-        print(sequence)
-        print(sequence.to_affine().affine)
-        return sequence
-
-    # if t.input_coordinate_system is not None and not t.input_coordinate_system.equal_up_to_the_units(element_cs):
-    #     # for mypy so that it doesn't complain in the logger.info() below
-    #     assert adjusted.input_coordinate_system is not None
-    #     assert adjusted.output_coordinate_system is not None
-    #     logger.info(
-    #         f"Adding a transformation ({adjusted.input_coordinate_system.axes_names} -> "
-    #         f"{adjusted.output_coordinate_system.axes_names}) to adjust for mismatched coordinate systems in the "
-    #         "Sequence object"
-    #     )
-    #     new_t = adjusted
-    # else:
-    #     new_t = t
-    # pass
+        adjusted: BaseTransformation
+        if len(only_left) == 0:
+            adjusted = sequence
+        else:
+            adjusted = ByDimension(
+                [pass_through_only_left, sequence],
+                input_coordinate_system=cs_left,
+                output_coordinate_system=cs_merged
+            )
+        print(adjusted)
+        print(adjusted.to_affine().affine)
+        ##
+        return adjusted

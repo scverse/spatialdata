@@ -11,12 +11,9 @@ from spatial_image import SpatialImage
 
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import (
-    Affine,
     BaseTransformation,
-    Sequence,
     _adjust_transformation_between_mismatching_coordinate_systems,
 )
-from spatialdata._logging import logger
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
