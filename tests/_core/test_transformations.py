@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from spatialdata import SpatialData, set_transform, Image2DModel, get_transform
+from spatialdata import Image2DModel, SpatialData, get_transform, set_transform
 from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import C, X, Y, Z, get_default_coordinate_system
 from spatialdata._core.transformations import (
@@ -477,13 +477,15 @@ def test_set_transform_with_mismatching_cs(sdata: SpatialData):
                 affine = Affine.from_input_output_coordinate_systems(input_cs, input_cs)
                 set_transform(v, affine)
 
+
 def test_assign_2d_scale_to_cyx_image():
-    xy_cs = get_default_coordinate_system(('x', 'y'))
-    czyx = get_default_coordinate_system(('c', 'y', 'x'))
+    xy_cs = get_default_coordinate_system(("x", "y"))
+    get_default_coordinate_system(("c", "y", "x"))
     scale = Scale(np.array([2, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
-    image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=('c', 'y', 'x'))
+    image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     set_transform(image, scale)
     t = get_transform(image)
     from pprint import pprint
+
     pprint(t.to_dict())
     print(t.to_affine().affine)

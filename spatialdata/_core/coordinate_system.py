@@ -41,7 +41,7 @@ class CoordinateSystem:
     def __init__(self, name: str, axes: Optional[list[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
-        if len(self._axes) != len(set(axis.name for axis in self._axes)):
+        if len(self._axes) != len({axis.name for axis in self._axes}):
             raise ValueError("Axes names must be unique")
 
     def __repr__(self) -> str:

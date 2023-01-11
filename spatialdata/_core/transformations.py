@@ -10,7 +10,6 @@ import numpy as np
 from typing_extensions import Self
 
 from spatialdata._core.coordinate_system import CoordinateSystem
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 __all__ = [
