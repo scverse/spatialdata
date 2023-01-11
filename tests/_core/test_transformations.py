@@ -1,11 +1,17 @@
-import json
 import copy
+import json
 from pprint import pprint
 
 import numpy as np
 import pytest
 
-from spatialdata import Image2DModel, SpatialData, get_transform, set_transform, PointsModel
+from spatialdata import (
+    Image2DModel,
+    PointsModel,
+    SpatialData,
+    get_transform,
+    set_transform,
+)
 from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import C, X, Y, Z, get_default_coordinate_system
 from spatialdata._core.transformations import (
@@ -489,6 +495,7 @@ def test_assign_xy_scale_to_cyx_image():
     xy_cs = get_default_coordinate_system(("x", "y"))
     scale = Scale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
     image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+
     set_transform(image, scale)
     t = get_transform(image)
     pprint(t.to_dict())
@@ -513,4 +520,3 @@ def test_assign_cyx_scale_to_xyz_points():
     t = get_transform(points)
     pprint(t.to_dict())
     print(t.to_affine().affine)
-
