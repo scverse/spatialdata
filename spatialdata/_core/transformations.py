@@ -56,13 +56,13 @@ class BaseTransformation(ABC):
 
     def _repr_transformation_signature(self, indent: int = 0) -> str:
         if self.input_coordinate_system is not None:
-            domain = ', '.join(self.input_coordinate_system.axes_names)
+            domain = ", ".join(self.input_coordinate_system.axes_names)
         else:
-            domain = ''
+            domain = ""
         if self.output_coordinate_system is not None:
-            codomain = ', '.join(self.output_coordinate_system.axes_names)
+            codomain = ", ".join(self.output_coordinate_system.axes_names)
         else:
-            codomain = ''
+            codomain = ""
         return f"{self._indent(indent)}{type(self).__name__} ({domain} -> {codomain})"
 
     @abstractmethod
@@ -635,12 +635,18 @@ class Sequence(BaseTransformation):
 
         if (cs := self.transformations[0].input_coordinate_system) is not None:
             if self.input_coordinate_system is not None:
-                assert cs == self.input_coordinate_system
+                if cs != input_coordinate_system:
+                    raise ValueError(
+                        "Input coordinate system do not match the input coordinate system of the first transformation"
+                    )
             else:
                 self.input_coordinate_system = cs
         if (cs := self.transformations[-1].output_coordinate_system) is not None:
             if self.output_coordinate_system is not None:
-                assert cs == self.output_coordinate_system
+                if cs != self.output_coordinate_system:
+                    raise ValueError(
+                        "Output coordinate system do not match the output coordinate system of the last transformation"
+                    )
             else:
                 self.output_coordinate_system = cs
 
@@ -722,7 +728,7 @@ class Sequence(BaseTransformation):
         if adjusted is None:
             return t
         else:
-            return adjusted
+            return Sequence([adjusted, t])
 
     def check_and_infer_coordinate_systems(self) -> None:
         """
@@ -771,11 +777,13 @@ class Sequence(BaseTransformation):
         for i in range(len(self.transformations)):
             assert self.transformations[i].output_coordinate_system is not None
             if i < len(self.transformations) - 1:
-                assert (
-                    self.transformations[i].output_coordinate_system
-                    == self.transformations[i + 1].input_coordinate_system
-                )
-        assert self.output_coordinate_system == self.transformations[-1].output_coordinate_system
+                if not self.transformations[i].output_coordinate_system.equal_up_to_the_name(
+                    self.transformations[i + 1].input_coordinate_system
+                ):
+                    raise ValueError(
+                        "The coordinate systems of the components of a Sequence transformation are not consistent."
+                    )
+        assert self.output_coordinate_system.equal_up_to_the_name(self.transformations[-1].output_coordinate_system)
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         # the specs allow to compose transformations without specifying the input and output coordinate systems of
@@ -966,7 +974,7 @@ class ByDimension(BaseTransformation):
             for ax in t.output_coordinate_system.axes_names:
                 assert ax not in defined_output_axes
                 defined_output_axes.add(ax)
-        assert defined_output_axes == set(output_axes)
+        assert defined_output_axes.issuperset(set(output_axes))
         return input_axes, output_axes
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -992,9 +1000,16 @@ class ByDimension(BaseTransformation):
             assert isinstance(t.input_coordinate_system, CoordinateSystem)
             assert isinstance(t.output_coordinate_system, CoordinateSystem)
             t_affine = t.to_affine()
-            target_output_indices = [output_axes.index(ax) for ax in t.output_coordinate_system.axes_names]
+            target_output_indices = [
+                output_axes.index(ax) for ax in t.output_coordinate_system.axes_names if ax in output_axes
+            ]
+            source_output_indices = [
+                t.output_coordinate_system.axes_names.index(ax)
+                for ax in t.output_coordinate_system.axes_names
+                if ax in output_axes
+            ]
             target_input_indices = [input_axes.index(ax) for ax in t.input_coordinate_system.axes_names] + [-1]
-            m[np.ix_(target_output_indices, target_input_indices)] = t_affine.affine[:-1, :]
+            m[np.ix_(target_output_indices, target_input_indices)] = t_affine.affine[source_output_indices, :]
         return Affine(
             m,
             input_coordinate_system=self.input_coordinate_system,
@@ -1070,32 +1085,32 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
     """
     cs_left = copy.deepcopy(input_coordinate_system)
     cs_right = copy.deepcopy(t.input_coordinate_system)
-    common = set(cs_left.axes_names).intersection(set(cs_right.axes_names))
-    only_left = set(cs_left.axes_names).difference(set(cs_right.axes_names))
-    only_right = set(cs_right.axes_names).difference(set(cs_left.axes_names))
+    common_left = [ax for ax in cs_left.axes_names if ax in cs_right.axes_names]
+    common_right = [ax for ax in cs_right.axes_names if ax in cs_left.axes_names]
+    only_left = [ax for ax in cs_left.axes_names if ax not in cs_right.axes_names]
+    only_right = [ax for ax in cs_right.axes_names if ax not in cs_left.axes_names]
+    cs_only_left = cs_left.subset(only_left)
+    cs_common_left = cs_left.subset(common_left)
+    cs_common_right = cs_right.subset(common_right)
+    cs_only_right = cs_right.subset(only_right)
+    cs_merged = CoordinateSystem.merge(cs_left, cs_right)
+    map_axis = MapAxis(
+        {ax: ax for ax in cs_common_left.axes_names},
+        input_coordinate_system=cs_common_left,
+        output_coordinate_system=cs_common_right,
+    )
     if len(only_left) == 0 and len(only_right) == 0:
-        return t
+        if common_left == common_right:
+            return t
+        else:
+            return map_axis
     else:
         ##
-        # order of axes and units don't matter, this transformation will be bundled in a sequence whose final
-        # coordinate system will have the right order and correct units
-        cs_only_left = cs_left.subset(list(only_left))
-        cs_common_left = cs_left.subset(list(common))
-        cs_common_right = cs_right.subset(list(common))
-        cs_only_right = cs_right.subset(list(only_right))
-        cs_merged = CoordinateSystem.merge(cs_left, cs_right)
-
-        map_axis = MapAxis(
-            {ax: ax for ax in cs_common_left.axes_names},
-            input_coordinate_system=cs_common_left,
-            output_coordinate_system=cs_common_right,
-        )
-
         pass_through_only_left = Identity(cs_only_left, cs_only_left)
 
         m = np.zeros((len(only_right) + 1, 2))
         m[-1, -1] = 1
-        if len(common) > 0:
+        if len(common_left) > 0:
             any_axis = cs_common_left._axes[0]
         else:
             assert len(only_left) > 0
@@ -1111,23 +1126,46 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             [
                 ByDimension(
                     [map_axis] + ([add_empty_only_right] if len(only_right) > 0 else []),
-                    input_coordinate_system=cs_right,
+                    input_coordinate_system=cs_common_right,
                     output_coordinate_system=cs_right,
                 ),
                 t,
             ],
-            input_coordinate_system=cs_right,
+            input_coordinate_system=cs_common_right,
         )
         adjusted: BaseTransformation
-        if len(only_left) == 0:
-            adjusted = sequence
-        else:
-            adjusted = ByDimension(
-                [pass_through_only_left, sequence],
-                input_coordinate_system=cs_left,
-                output_coordinate_system=cs_merged
-            )
+        adjusted = ByDimension(
+            [sequence] + ([pass_through_only_left] if len(only_left) > 0 else []),
+            input_coordinate_system=cs_left,
+            output_coordinate_system=cs_merged,
+        )
+        print()
         print(adjusted)
-        print(adjusted.to_affine().affine)
-        ##
-        return adjusted
+        print(adjusted.to_affine())
+        if cs_left._axes == cs_merged._axes:
+            adjusted.output_coordinate_system = cs_left
+            return adjusted
+        else:
+            # The axes output of adjusted could be a set with elements not in cs_left. This can happen in two ways: 1) the transformation t can be diagonalized so that it doesn't mix axes in cs_left and axes that are not in cs_left; 2) the transformation t uses the axes in cs_left to cpute the output in axes non in cs_left.
+            # Examples: case 1. happens for instance when cs_left is xyz and t is scale cyx. This happen when we have a scale transformation for an image and we want to assign it to points. In this case the coordinate c that is added by t is not influenced by xyz
+            # Example: case 2. t is an affine transformation xy -> xyz that embeds a plane in space.
+            # To find out in which case we are, let's proceed empirically
+            indices_only_right = np.array([cs_merged.axes_names.index(ax) for ax in cs_only_right.axes_names])
+            result = adjusted.transform_points(np.atleast_2d(np.random.rand(10, len(cs_left._axes))))[
+                :, indices_only_right
+            ]
+            if np.allclose(result, np.ones_like(result) * result[0, 0]):
+                # case 1
+                final_adjusted = ByDimension(
+                    [sequence] + ([pass_through_only_left] if len(only_left) > 0 else []),
+                    input_coordinate_system=cs_left,
+                    output_coordinate_system=cs_left,
+                )
+            else:
+                # case 2
+                final_adjusted = adjusted
+            print()
+            print(final_adjusted)
+            print(final_adjusted.to_affine())
+            ##
+            return final_adjusted

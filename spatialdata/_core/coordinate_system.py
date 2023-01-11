@@ -111,6 +111,9 @@ class CoordinateSystem:
                 return False
         return True
 
+    def equal_up_to_the_name(self, other: CoordinateSystem) -> bool:
+        return self._axes == other._axes
+
     def subset(self, axes_names: list[str], new_name: Optional[str] = None) -> CoordinateSystem:
         axes = [copy.deepcopy(axis) for axis in self._axes if axis.name in axes_names]
         if new_name is None:
@@ -131,6 +134,12 @@ class CoordinateSystem:
 
     def __hash__(self) -> int:
         return hash(frozenset(self.to_dict()))
+
+    def has_axis(self, name: str) -> bool:
+        for axis in self._axes:
+            if axis.name == name:
+                return True
+        return False
 
     def get_axis(self, name: str) -> Axis:
         for axis in self._axes:
