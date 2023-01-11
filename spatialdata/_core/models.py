@@ -216,7 +216,6 @@ class RasterSchema(DataArraySchema):
             else:
                 dims = data.dims
             _reindex = lambda d: d
-
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
@@ -239,8 +238,8 @@ class RasterSchema(DataArraySchema):
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        if TYPE_CHECKING:
-            assert isinstance(data, SpatialImage)
+        # if TYPE_CHECKING:
+        #     assert isinstance(data, SpatialImage)
         # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
         _parse_transform(data, transform)

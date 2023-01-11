@@ -10,7 +10,12 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
-from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
+from spatialdata._core.transformations import (
+    Affine,
+    BaseTransformation,
+    Sequence,
+    _adjust_transformation_between_mismatching_coordinate_systems,
+)
 from spatialdata._logging import logger
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
@@ -93,21 +98,8 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
 
 def _adjust_transformation_axes(e: SpatialElement, t: BaseTransformation) -> BaseTransformation:
     element_cs = get_default_coordinate_system(get_dims(e))
-    new_t: BaseTransformation
-    if t.input_coordinate_system is not None and not t.input_coordinate_system.equal_up_to_the_units(element_cs):
-        affine = Affine.from_input_output_coordinate_systems(element_cs, t.input_coordinate_system)
-        # for mypy so that it doesn't complain in the logger.info() below
-        assert affine.input_coordinate_system is not None
-        assert affine.output_coordinate_system is not None
-        logger.info(
-            f"Adding an affine transformation ({affine.input_coordinate_system.axes_names} -> "
-            f"{affine.output_coordinate_system.axes_names}) to adjust for mismatched coordinate systems in the "
-            "Sequence object"
-        )
-        new_t = Sequence([affine, t])
-    else:
-        new_t = t
-    return new_t
+    adjusted = _adjust_transformation_between_mismatching_coordinate_systems(t, element_cs)
+    return adjusted
 
 
 @singledispatch

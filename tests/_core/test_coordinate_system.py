@@ -38,6 +38,14 @@ def test_coordinate_system_instantiation_and_properties():
     )
 
     assert coord_manual.to_dict() == coord_sys.to_dict()
+    with pytest.raises(ValueError):
+        CoordinateSystem(
+            name="non unique axes names",
+            axes=[
+                Axis(name="x", type="space", unit="micrometer"),
+                Axis(name="x", type="space", unit="micrometer"),
+            ],
+        )
 
 
 def test_coordinate_system_exceptions():
@@ -79,3 +87,108 @@ def test_repr():
     as_str = repr(cs)
 
     assert as_str == expected
+
+
+def test_equal_up_to_the_units():
+    cs1 = CoordinateSystem(
+        "some coordinate system",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+            Axis("T", "time"),
+        ],
+    )
+    cs2 = CoordinateSystem(
+        "some coordinate systema",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+            Axis("T", "time"),
+        ],
+    )
+    cs3 = CoordinateSystem(
+        "some coordinate system",
+        [
+            Axis("X", "space", "gigameters"),
+            Axis("Y", "space", ""),
+            Axis("T", "time"),
+        ],
+    )
+
+    assert cs1.equal_up_to_the_units(cs1)
+    assert not cs1.equal_up_to_the_units(cs2)
+    assert cs1.equal_up_to_the_units(cs3)
+
+
+def test_subset_coordinate_system():
+    cs = CoordinateSystem(
+        "some coordinate system",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+            Axis("Z", "space", "meters"),
+            Axis("T", "time"),
+        ],
+    )
+    cs0 = cs.subset(["X", "Z"])
+    cs1 = cs.subset(["X", "Y"], new_name="XY")
+    assert cs0 == CoordinateSystem(
+        "some coordinate system_subset ['X', 'Z']",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Z", "space", "meters"),
+        ],
+    )
+    assert cs1 == CoordinateSystem(
+        "XY",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+        ],
+    )
+
+
+def test_merge_coordinate_systems():
+    cs0 = CoordinateSystem(
+        "cs0",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+        ],
+    )
+    cs1 = CoordinateSystem(
+        "cs1",
+        [
+            Axis("X", "space", "micrometers"),
+        ],
+    )
+    cs2 = CoordinateSystem(
+        "cs2",
+        [
+            Axis("X", "space", "meters"),
+            Axis("Y", "space", "meters"),
+        ],
+    )
+    cs3 = CoordinateSystem(
+        "cs3",
+        [
+            Axis("Z", "space", "micrometers"),
+        ],
+    )
+    assert cs0.merge(cs0, cs1) == CoordinateSystem(
+        "cs0_merged_cs1",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+        ],
+    )
+    with pytest.raises(ValueError):
+        CoordinateSystem.merge(cs0, cs2)
+    assert CoordinateSystem.merge(cs0, cs3) == CoordinateSystem(
+        "cs0_merged_cs3",
+        [
+            Axis("X", "space", "micrometers"),
+            Axis("Y", "space", "meters"),
+            Axis("Z", "space", "micrometers"),
+        ],
+    )

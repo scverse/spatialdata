@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -40,6 +41,8 @@ class CoordinateSystem:
     def __init__(self, name: str, axes: Optional[list[Axis]] = None):
         self._name = name
         self._axes = axes if axes is not None else []
+        if len(self._axes) != len(set(axis.name for axis in self._axes)):
+            raise ValueError("Axes names must be unique")
 
     def __repr__(self) -> str:
         return f"CoordinateSystem('{self.name}', {self._axes})"
@@ -108,6 +111,12 @@ class CoordinateSystem:
                 return False
         return True
 
+    def subset(self, axes_names: list[str], new_name: Optional[str] = None) -> CoordinateSystem:
+        axes = [copy.deepcopy(axis) for axis in self._axes if axis.name in axes_names]
+        if new_name is None:
+            new_name = self.name + "_subset " + str(axes_names)
+        return CoordinateSystem(name=new_name, axes=axes)
+
     @property
     def name(self) -> str:
         return self._name
@@ -122,6 +131,29 @@ class CoordinateSystem:
 
     def __hash__(self) -> int:
         return hash(frozenset(self.to_dict()))
+
+    def get_axis(self, name: str) -> Axis:
+        for axis in self._axes:
+            if axis.name == name:
+                return axis
+        raise ValueError(f"Axis {name} not found in {self.name} coordinate system.")
+
+    @staticmethod
+    def merge(
+        coord_sys1: CoordinateSystem, coord_sys2: CoordinateSystem, new_name: Optional[str] = None
+    ) -> CoordinateSystem:
+        # common axes need to be the identical otherwise no merge is made
+        common_axes = set(coord_sys1.axes_names).intersection(coord_sys2.axes_names)
+        for axis_name in common_axes:
+            if coord_sys1.get_axis(axis_name) != coord_sys2.get_axis(axis_name):
+                raise ValueError("Common axes are not identical")
+        axes = copy.deepcopy(coord_sys1._axes)
+        for axis in coord_sys2._axes:
+            if axis.name not in common_axes:
+                axes.append(axis)
+        if new_name is None:
+            new_name = coord_sys1.name + "_merged_" + coord_sys2.name
+        return CoordinateSystem(name=new_name, axes=axes)
 
 
 def _get_spatial_axes(
