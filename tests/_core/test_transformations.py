@@ -4,6 +4,7 @@ from pprint import pprint
 
 import numpy as np
 import pytest
+from spatial_image import SpatialImage
 
 from spatialdata import (
     Image2DModel,
@@ -501,12 +502,24 @@ def test_assign_xy_scale_to_cyx_image():
     pprint(t.to_dict())
     print(t.to_affine().affine)
 
+    set_transform(image, scale.to_affine())
+    t = get_transform(image)
+    pprint(t.to_dict())
+    print(t.to_affine().affine)
+
 
 def test_assign_xyz_scale_to_cyx_image():
     xyz_cs = get_default_coordinate_system(("x", "y", "z"))
     scale = Scale(np.array([2, 3, 4]), input_coordinate_system=xyz_cs, output_coordinate_system=xyz_cs)
     image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+
     set_transform(image, scale)
+    t = get_transform(image)
+    pprint(t.to_dict())
+    print(t.to_affine().affine)
+    pprint(t.to_affine().to_dict())
+
+    set_transform(image, scale.to_affine())
     t = get_transform(image)
     pprint(t.to_dict())
     print(t.to_affine().affine)
@@ -516,7 +529,38 @@ def test_assign_cyx_scale_to_xyz_points():
     cyx_cs = get_default_coordinate_system(("c", "y", "x"))
     scale = Scale(np.array([1, 3, 2]), input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
     points = PointsModel.parse(coords=np.zeros((10, 3)))
+
     set_transform(points, scale)
     t = get_transform(points)
     pprint(t.to_dict())
     print(t.to_affine().affine)
+
+    set_transform(points, scale.to_affine())
+    t = get_transform(points)
+    pprint(t.to_dict())
+    print(t.to_affine().affine)
+
+
+def test_assignment_bug_infinite_recusion():
+    # this code could have lead to problems, let's test it
+    element: SpatialImage = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+    xy_cs = get_default_coordinate_system(("x", "y"))
+    mapper_output_coordinate_system = get_default_coordinate_system(("c", "y", "x"))
+    t = Scale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
+    with pytest.raises(ValueError) as e:
+        set_transform(
+            element,
+            Sequence(
+                [
+                    t,
+                    Identity(
+                        input_coordinate_system=mapper_output_coordinate_system,
+                        output_coordinate_system=mapper_output_coordinate_system,
+                    ),
+                ]
+            ),
+        )
+    assert (
+        e.value.args[0]
+        == "The transformation is not consistent because it introduces axes that; cant be passed through from the input axes."
+    )

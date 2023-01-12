@@ -1,5 +1,4 @@
 """This file contains models and schema for SpatialData"""
-import copy
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
@@ -46,13 +45,7 @@ from spatialdata._core.core_utils import (
     get_transform,
     set_transform,
 )
-from spatialdata._core.transformations import (
-    Affine,
-    BaseTransformation,
-    ByDimension,
-    Identity,
-    MapAxis,
-)
+from spatialdata._core.transformations import Affine, BaseTransformation, Identity
 from spatialdata._core.transformations import Sequence as SequenceTransformation
 from spatialdata._logging import logger
 
@@ -107,58 +100,20 @@ def _parse_transform(element: SpatialElement, transform: Optional[BaseTransforma
         # if we are in the 3d case but the element does not contain the Z dimension, it's up to the user to specify
         # the correct coordinate transformation and output coordinate system
         mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
-    combined: BaseTransformation
     assert isinstance(t.output_coordinate_system, CoordinateSystem)
     assert isinstance(mapper_output_coordinate_system, CoordinateSystem)
 
-    # patch to be removed when this function is refactored to address https://github.com/scverse/spatialdata/issues/39
-    cs1 = copy.deepcopy(t.output_coordinate_system)
-    cs2 = copy.deepcopy(mapper_output_coordinate_system)
-    for ax1, ax2 in zip(cs1._axes, cs2._axes):
-        ax1.unit = None
-        ax2.unit = None
-
-    if cs1._axes != cs2._axes:
-        mapper_input_coordinate_system = t.output_coordinate_system
-        assert C not in _get_axes_names(mapper_input_coordinate_system)
-        any_axis_cs = get_default_coordinate_system((_get_axes_names(t.input_coordinate_system)[0],))
-        c_cs = get_default_coordinate_system((C,))
-        mapper = ByDimension(
-            transformations=[
-                MapAxis(
-                    {ax: ax for ax in _get_axes_names(t.input_coordinate_system)},
-                    input_coordinate_system=t.input_coordinate_system,
-                    output_coordinate_system=t.input_coordinate_system,
+    new_element = set_transform(
+        element,
+        SequenceTransformation(
+            [
+                t,
+                Affine.from_input_output_coordinate_systems(
+                    t.output_coordinate_system, mapper_output_coordinate_system
                 ),
-                Affine(
-                    np.array([[0, 0], [0, 1]]),
-                    input_coordinate_system=any_axis_cs,
-                    output_coordinate_system=c_cs,
-                ),
-            ],
-            input_coordinate_system=mapper_input_coordinate_system,
-            output_coordinate_system=mapper_output_coordinate_system,
-        )
-        combined = SequenceTransformation(
-            [t, mapper],
-            input_coordinate_system=t.input_coordinate_system,
-            output_coordinate_system=mapper_output_coordinate_system,
-        )
-    else:
-        combined = t
-    # test that all il good by checking that we can compute an affine matrix from this
-    try:
-        _ = combined.to_affine().affine
-    except Exception as e:  # noqa: B902
-        # debug
-        logger.debug("Error while trying to compute affine matrix from transformation: ")
-        from pprint import pprint
-
-        pprint(combined.to_dict())
-        raise e
-
-    # finalize
-    new_element = set_transform(element, combined)
+            ]
+        ),
+    )
     return new_element
 
 
@@ -238,8 +193,7 @@ class RasterSchema(DataArraySchema):
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        # if TYPE_CHECKING:
-        #     assert isinstance(data, SpatialImage)
+        assert isinstance(data, SpatialImage)
         # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
         _parse_transform(data, transform)
@@ -251,6 +205,7 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transform(data, transform)
+            assert isinstance(data, MultiscaleSpatialImage)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:

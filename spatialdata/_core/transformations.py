@@ -10,6 +10,7 @@ import numpy as np
 from typing_extensions import Self
 
 from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 __all__ = [
@@ -775,15 +776,25 @@ class Sequence(BaseTransformation):
         self.transformations = new_transformations
         assert self.input_coordinate_system == self.transformations[0].input_coordinate_system
         for i in range(len(self.transformations)):
-            assert self.transformations[i].output_coordinate_system is not None
             if i < len(self.transformations) - 1:
-                if not self.transformations[i].output_coordinate_system.equal_up_to_the_name(
-                    self.transformations[i + 1].input_coordinate_system
-                ):
+                # for mypy
+                cs0 = self.transformations[i].output_coordinate_system
+                cs1 = self.transformations[i + 1].input_coordinate_system
+                assert cs0 is not None
+                assert isinstance(cs0, CoordinateSystem)
+                assert cs1 is not None
+                assert isinstance(cs1, CoordinateSystem)
+
+                if not cs0.equal_up_to_the_name(cs1):
                     raise ValueError(
                         "The coordinate systems of the components of a Sequence transformation are not consistent."
                     )
-        assert self.output_coordinate_system.equal_up_to_the_name(self.transformations[-1].output_coordinate_system)
+        # for mypy
+        assert self.output_coordinate_system is not None
+        cs_last = self.transformations[-1].output_coordinate_system
+        assert cs_last is not None
+        assert isinstance(cs_last, CoordinateSystem)
+        assert self.output_coordinate_system.equal_up_to_the_name(cs_last)
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         # the specs allow to compose transformations without specifying the input and output coordinate systems of
@@ -972,8 +983,11 @@ class ByDimension(BaseTransformation):
             for ax in t.input_coordinate_system.axes_names:
                 assert ax in input_axes
             for ax in t.output_coordinate_system.axes_names:
-                assert ax not in defined_output_axes
-                defined_output_axes.add(ax)
+                # assert ax not in defined_output_axes
+                if ax not in defined_output_axes:
+                    defined_output_axes.add(ax)
+                else:
+                    raise ValueError(f"Output axis {ax} is defined more than once")
         assert defined_output_axes.issuperset(set(output_axes))
         return input_axes, output_axes
 
@@ -1015,32 +1029,6 @@ class ByDimension(BaseTransformation):
             input_coordinate_system=self.input_coordinate_system,
             output_coordinate_system=self.output_coordinate_system,
         )
-
-    # function proposed by isaac, see https://github.com/scverse/spatialdata/issues/39
-    # I started implementing it but I am not sure it's needed since now I use: _adjust_transformation_between_mismatching_coordinate_systems()
-    # def pass_axes_through(self, input_coordinate_system: CoordinateSystem) -> ByDimension:
-    #     """
-    #     Returns a new ByDimension transformation that passes the axes through without transforming them.
-    #     """
-    #     output_transformations = deepcopy(self.transformations)
-    #
-    #     transformed_dims = []
-    #     for sub_t in self.transformations:
-    #         transformed_dims.extend(sub_t.input_coordinate_system.axes_names)
-    #     untransformed = list(set(input_coordinate_system.axes_names).difference(transformed_dims))
-    #     # TODO: is Identify good or do we need to use an affine?
-    #     output_transformations.append(Identity(untransformed, untransformed))
-    #
-    #     # TODO: join the coordinate systems
-    #     # TODO: add tests for joining coordinate systems
-    #     # TODO: add tests for passing axes through
-    #     output_coordinate_system = ...  # compute from ByDimensions
-    #
-    #     return ByDimension(
-    #         input_coordinate_space=input_coordinate_system,
-    #         output_coordinate_space=output_coordinate_system,
-    #         transforms=output_transformations,
-    #     )
 
 
 TRANSFORMATIONS["identity"] = Identity
@@ -1085,6 +1073,8 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
     """
     cs_left = copy.deepcopy(input_coordinate_system)
     cs_right = copy.deepcopy(t.input_coordinate_system)
+    assert cs_left is not None
+    assert cs_right is not None
     common_left = [ax for ax in cs_left.axes_names if ax in cs_right.axes_names]
     common_right = [ax for ax in cs_right.axes_names if ax in cs_left.axes_names]
     only_left = [ax for ax in cs_left.axes_names if ax not in cs_right.axes_names]
@@ -1141,7 +1131,15 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
         )
         print()
         print(adjusted)
-        print(adjusted.to_affine())
+        try:
+            print(adjusted.to_affine())
+        except ValueError as e:
+            if str(e).startswith("Output axis ") and str(e).endswith(" is defined more than once"):
+                logger.error(f"Previous exception: {str(e)}")
+                raise ValueError(
+                    "The transformation is not consistent because it introduces axes that; cant be passed through from the input axes."
+                )
+            raise e
         if cs_left._axes == cs_merged._axes:
             adjusted.output_coordinate_system = cs_left
             return adjusted
@@ -1150,7 +1148,9 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             # Examples: case 1. happens for instance when cs_left is xyz and t is scale cyx. This happen when we have a scale transformation for an image and we want to assign it to points. In this case the coordinate c that is added by t is not influenced by xyz
             # Example: case 2. t is an affine transformation xy -> xyz that embeds a plane in space.
             # To find out in which case we are, let's proceed empirically
-            indices_only_right = np.array([cs_merged.axes_names.index(ax) for ax in cs_only_right.axes_names])
+            indices_only_right: ArrayLike = np.array(
+                [cs_merged.axes_names.index(ax) for ax in cs_only_right.axes_names]
+            )
             result = adjusted.transform_points(np.atleast_2d(np.random.rand(10, len(cs_left._axes))))[
                 :, indices_only_right
             ]

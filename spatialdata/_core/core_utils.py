@@ -97,7 +97,8 @@ def _adjust_transformation_axes(e: SpatialElement, t: BaseTransformation) -> Bas
     element_cs = get_default_coordinate_system(get_dims(e))
     # the unit for the new element is the default one, called "unit". If the transformation has units, let's copy them
     for axis in element_cs._axes:
-        if axis.unit == 'unit':
+        if axis.unit == "unit":
+            assert t.input_coordinate_system is not None
             if t.input_coordinate_system.has_axis(axis.name):
                 axis.unit = t.input_coordinate_system.get_axis(axis.name).unit
     adjusted = _adjust_transformation_between_mismatching_coordinate_systems(t, element_cs)
