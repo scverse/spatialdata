@@ -709,7 +709,10 @@ class Sequence(BaseTransformation):
             if not input_cs.equal_up_to_the_units(latest_output_cs):
                 # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
                 identity = Identity(input_coordinate_system=input_cs, output_coordinate_system=input_cs)
-                adjusted = _adjust_transformation_between_mismatching_coordinate_systems(identity, latest_output_cs)
+                adjusted_explicit = _adjust_transformation_between_mismatching_coordinate_systems(
+                    identity, latest_output_cs, pass_through_only_left_axes=False
+                )
+                adjusted = adjusted_explicit.to_affine()
         output_cs = t.output_coordinate_system
         expected_output_cs = Sequence._inferring_cs_infer_output_coordinate_system(t)
         if output_cs is None:
@@ -759,16 +762,13 @@ class Sequence(BaseTransformation):
         if self.output_coordinate_system is not None:
             if not self.output_coordinate_system.equal_up_to_the_units(latest_output_cs):
                 # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
-                identity = Identity(
-                    input_coordinate_system=self.output_coordinate_system,
-                    output_coordinate_system=self.output_coordinate_system,
-                )
-                adjusted = _adjust_transformation_between_mismatching_coordinate_systems(identity, latest_output_cs)
-                new_transformations.append(adjusted)
-                # raise ValueError(
-                #     "The output coordinate system of the Sequence transformation is not consistent with the "
-                #     "output coordinate system of the last component transformation."
+                # identity = Identity(
+                #     input_coordinate_system=self.output_coordinate_system,
+                #     output_coordinate_system=self.output_coordinate_system,
                 # )
+                # adjusted = _adjust_transformation_between_mismatching_coordinate_systems(identify, latest_output_cs)
+                affine = Affine.from_input_output_coordinate_systems(latest_output_cs, self.output_coordinate_system)
+                new_transformations.append(affine)
         else:
             self.output_coordinate_system = self.transformations[-1].output_coordinate_system
 
@@ -794,7 +794,11 @@ class Sequence(BaseTransformation):
         cs_last = self.transformations[-1].output_coordinate_system
         assert cs_last is not None
         assert isinstance(cs_last, CoordinateSystem)
-        assert self.output_coordinate_system.equal_up_to_the_name(cs_last)
+        if not self.output_coordinate_system.equal_up_to_the_name(cs_last):
+            raise ValueError(
+                "The output coordinate system of the Sequence transformation is not consistent with the "
+                "output coordinate system of the last component transformation."
+            )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         # the specs allow to compose transformations without specifying the input and output coordinate systems of
@@ -1042,7 +1046,7 @@ TRANSFORMATIONS["byDimension"] = ByDimension
 
 
 def _adjust_transformation_between_mismatching_coordinate_systems(
-    t: BaseTransformation, input_coordinate_system: CoordinateSystem
+    t: BaseTransformation, input_coordinate_system: CoordinateSystem, pass_through_only_left_axes: bool = True
 ) -> BaseTransformation:
     """
     Adjusts a transformation (t) whose input coordinate system does not match the on of the one of the element it should be applied to (input_coordinate_system).
@@ -1083,7 +1087,10 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
     cs_common_left = cs_left.subset(common_left)
     cs_common_right = cs_right.subset(common_right)
     cs_only_right = cs_right.subset(only_right)
-    cs_merged = CoordinateSystem.merge(cs_left, cs_right)
+    if pass_through_only_left_axes:
+        cs_merged = CoordinateSystem.merge(cs_left, cs_right)
+    else:
+        cs_merged = cs_right
     map_axis = MapAxis(
         {ax: ax for ax in cs_common_left.axes_names},
         input_coordinate_system=cs_common_left,
@@ -1096,7 +1103,8 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             return map_axis
     else:
         ##
-        pass_through_only_left = Identity(cs_only_left, cs_only_left)
+        if pass_through_only_left_axes:
+            pass_through_only_left = Identity(cs_only_left, cs_only_left)
 
         m = np.zeros((len(only_right) + 1, 2))
         m[-1, -1] = 1
@@ -1125,7 +1133,7 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
         )
         adjusted: BaseTransformation
         adjusted = ByDimension(
-            [sequence] + ([pass_through_only_left] if len(only_left) > 0 else []),
+            [sequence] + ([pass_through_only_left] if len(only_left) > 0 and pass_through_only_left_axes else []),
             input_coordinate_system=cs_left,
             output_coordinate_system=cs_merged,
         )
@@ -1144,6 +1152,10 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             adjusted.output_coordinate_system = cs_left
             return adjusted
         else:
+            if not pass_through_only_left_axes:
+                adjusted.output_coordinate_system = cs_merged
+                return adjusted
+            # TODO: there is also the case in which some axes in cs_right are invariant while others depend on cs_left, I need to simplify this code, it's not maintainable as it is
             # The axes output of adjusted could be a set with elements not in cs_left. This can happen in two ways: 1) the transformation t can be diagonalized so that it doesn't mix axes in cs_left and axes that are not in cs_left; 2) the transformation t uses the axes in cs_left to cpute the output in axes non in cs_left.
             # Examples: case 1. happens for instance when cs_left is xyz and t is scale cyx. This happen when we have a scale transformation for an image and we want to assign it to points. In this case the coordinate c that is added by t is not influenced by xyz
             # Example: case 2. t is an affine transformation xy -> xyz that embeds a plane in space.
@@ -1164,8 +1176,12 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             else:
                 # case 2
                 final_adjusted = adjusted
-            print()
-            print(final_adjusted)
-            print(final_adjusted.to_affine())
-            ##
-            return final_adjusted
+            DEBUGGING = False
+            if DEBUGGING:
+                print()
+                print(final_adjusted)
+                print(final_adjusted.to_affine())
+                return final_adjusted
+            else:
+                # to make the user have a nice matrix in the end
+                return final_adjusted.to_affine()

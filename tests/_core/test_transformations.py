@@ -367,6 +367,31 @@ def test_sequence_2d_to_2d_with_c():
     )
 
 
+def test_sequence_2d_to_2d_with_c_with_mismatching_cs():
+    original, affine, transformed = _test_sequence_helper()
+    affine.input_coordinate_system = xy_cs
+    affine.output_coordinate_system = xy_cs
+
+    def _manual_xy_to_cyx(x: np.ndarray) -> np.ndarray:
+        return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
+
+    _test_transformation(
+        transformation=Sequence(
+            [
+                Translation(np.array([1, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+                Scale(np.array([3, 4]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+                affine,
+            ]
+        ),
+        original=_manual_xy_to_cyx(original),
+        transformed=_manual_xy_to_cyx(transformed),
+        input_cs=cyx_cs,
+        output_cs=cyx_cs,
+        wrong_output_cs=xyc_cs,
+        test_inverse=False,
+    )
+
+
 def test_sequence_nested():
     original, affine, transformed = _test_sequence_helper()
     # test sequence inside sequence, with full inference of the intermediate coordinate systems
@@ -500,12 +525,12 @@ def test_assign_xy_scale_to_cyx_image():
     set_transform(image, scale)
     t = get_transform(image)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
 
     set_transform(image, scale.to_affine())
     t = get_transform(image)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
 
 
 def test_assign_xyz_scale_to_cyx_image():
@@ -516,13 +541,13 @@ def test_assign_xyz_scale_to_cyx_image():
     set_transform(image, scale)
     t = get_transform(image)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
     pprint(t.to_affine().to_dict())
 
     set_transform(image, scale.to_affine())
     t = get_transform(image)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
 
 
 def test_assign_cyx_scale_to_xyz_points():
@@ -533,12 +558,12 @@ def test_assign_cyx_scale_to_xyz_points():
     set_transform(points, scale)
     t = get_transform(points)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
 
     set_transform(points, scale.to_affine())
     t = get_transform(points)
     pprint(t.to_dict())
-    print(t.to_affine().affine)
+    print(t.to_affine())
 
 
 def test_assignment_bug_infinite_recusion():
