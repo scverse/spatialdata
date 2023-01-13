@@ -153,7 +153,9 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
-    def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool=True) -> None:
+    def _add_image_in_memory(
+        self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = True
+    ) -> None:
         if name in self._images:
             if not overwrite:
                 raise ValueError(f"Image {name} already exists in the dataset.")

@@ -590,6 +590,7 @@ def test_assignment_bug_infinite_recusion():
         == "The transformation is not consistent because it introduces axes that; cant be passed through from the input axes."
     )
 
+
 def test_compose_in_xy_and_operate_in_cyx():
     xy_cs = get_default_coordinate_system(("x", "y"))
     cyx_cs = get_default_coordinate_system(("c", "y", "x"))
@@ -610,4 +611,4 @@ def test_compose_in_xy_and_operate_in_cyx():
     sequence = Sequence([rotation, scale], input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
     affine = sequence.to_affine()
     print(affine)
-    assert affine.affine[0, 0] == 1.
+    assert affine.affine[0, 0] == 1.0
