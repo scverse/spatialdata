@@ -636,18 +636,20 @@ class Sequence(BaseTransformation):
 
         if (cs := self.transformations[0].input_coordinate_system) is not None:
             if self.input_coordinate_system is not None:
-                if cs != input_coordinate_system:
-                    raise ValueError(
-                        "Input coordinate system do not match the input coordinate system of the first transformation"
-                    )
+                pass
+                # if cs != input_coordinate_system:
+                #     raise ValueError(
+                #         "Input coordinate system do not match the input coordinate system of the first transformation"
+                #     )
             else:
                 self.input_coordinate_system = cs
         if (cs := self.transformations[-1].output_coordinate_system) is not None:
             if self.output_coordinate_system is not None:
-                if cs != self.output_coordinate_system:
-                    raise ValueError(
-                        "Output coordinate system do not match the output coordinate system of the last transformation"
-                    )
+                pass
+                # if cs != self.output_coordinate_system:
+                #     raise ValueError(
+                #         "Output coordinate system do not match the output coordinate system of the last transformation"
+                #     )
             else:
                 self.output_coordinate_system = cs
 
@@ -1137,10 +1139,10 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             input_coordinate_system=cs_left,
             output_coordinate_system=cs_merged,
         )
-        print()
-        print(adjusted)
+        # print()
+        # print(adjusted)
         try:
-            print(adjusted.to_affine())
+            adjusted.to_affine()
         except ValueError as e:
             if str(e).startswith("Output axis ") and str(e).endswith(" is defined more than once"):
                 logger.error(f"Previous exception: {str(e)}")
@@ -1176,7 +1178,7 @@ def _adjust_transformation_between_mismatching_coordinate_systems(
             else:
                 # case 2
                 final_adjusted = adjusted
-            DEBUGGING = False
+            DEBUGGING = True
             if DEBUGGING:
                 print()
                 print(final_adjusted)

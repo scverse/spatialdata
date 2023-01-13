@@ -153,9 +153,12 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
-    def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+    def _add_image_in_memory(self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool=True) -> None:
         if name in self._images:
-            raise ValueError(f"Image {name} already exists in the dataset.")
+            if not overwrite:
+                raise ValueError(f"Image {name} already exists in the dataset.")
+            else:
+                del self._images[name]
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -268,8 +271,8 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if name not in self.images:
-            self._add_image_in_memory(name=name, image=image)
+        # if name not in self.images:
+        self._add_image_in_memory(name=name, image=image)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
             write_image(
@@ -306,7 +309,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if name not in self.labels:
-            self._add_labels_in_memory(name=name, labels=labels)
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
             write_labels(
