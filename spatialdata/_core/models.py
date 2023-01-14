@@ -570,8 +570,6 @@ class TableModel:
         region: Optional[Union[str, list[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
-        region_values: Optional[Union[str, Sequence[str]]] = None,
-        instance_values: Optional[Sequence[Any]] = None,
     ) -> AnnData:
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
@@ -590,10 +588,6 @@ class TableModel:
             if region_key is not None:
                 raise ValueError(
                     f"If `{cls.REGION_KEY}` is of type `str`, `{cls.REGION_KEY_KEY}` must be `None` as it is redundant."
-                )
-            if region_values is not None:
-                raise ValueError(
-                    f"If `{cls.REGION_KEY}` is of type `str`, `region_values` must be `None` as it is redundant."
                 )
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
@@ -614,22 +608,6 @@ class TableModel:
         # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
-
-        # TODO(giovp): do we really need to support this?
-        if region_values is not None:
-            if region_key in adata.obs:
-                raise ValueError(
-                    f"this annotation table already contains the {region_key} ({cls.REGION_KEY_KEY}) column"
-                )
-            assert isinstance(region_values, str) or len(adata) == len(region_values)
-            adata.obs[region_key] = region_values
-        if instance_values is not None:
-            if instance_key in adata.obs:
-                raise ValueError(
-                    f"this annotation table already contains the {instance_key} ({cls.INSTANCE_KEY}) column"
-                )
-            assert len(adata) == len(instance_values)
-            adata.obs[instance_key] = instance_values
         return adata
 
 
