@@ -1,6 +1,6 @@
 # Work in progress ⚠
 
--   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse).
+-   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/SpatialData.20meetings).
 -   **This repository doesn't contain the latest version of the code**; we aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
 
@@ -12,8 +12,8 @@ You can take a look at the [](./design_doc.md).
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 
-[badge-tests]: https://img.shields.io/github/workflow/status/scverse/spatialdata/Test/main
-[link-tests]: https://github.com/scverse/spatialdata.git/actions/workflows/test.yml
+[badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
+[link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
 
 ## Getting started
 
