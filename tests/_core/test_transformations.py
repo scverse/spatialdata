@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 
 from spatialdata import SpatialData
-from spatialdata._core.transformations import Identity, MapAxis, Scale, Translation
+from spatialdata._core.transformations import (
+    Affine,
+    Identity,
+    MapAxis,
+    Scale,
+    Translation,
+)
 
 
 def test_identity():
@@ -161,6 +167,61 @@ def test_scale():
                 [1 / 3.0, 0, 0],
                 [0, 1 / 2.0, 0],
                 [0, 0, 1],
+            ]
+        ),
+    )
+
+
+def test_affine():
+    with pytest.raises(TypeError):
+        Affine(affine=(1, 2, 3))
+    with pytest.raises(ValueError):
+        # wrong shape
+        Affine([1, 2, 3, 4, 5, 6, 0, 0, 1], input_axes=("x", "y"), output_axes=("x", "y"))
+    t0 = Affine(
+        np.array(
+            [
+                [4, 5, 6],
+                [1, 2, 3],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("y", "x"),
+    )
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    # checking that permuting the axes of an affine matrix and inverting it are operations that commute (the order doesn't matter)
+    inverse0 = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    t1 = Affine(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    inverse1 = t1.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.array_equal(inverse0, inverse1)
+    # check that the inversion works
+    m0 = t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    m0_inverse = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.array_equal(np.dot(m0, m0_inverse), np.eye(3))
+
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")),
+        np.array(
+            [
+                [1, 2, 0, 3],
+                [4, 5, 0, 6],
+                [0, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
             ]
         ),
     )

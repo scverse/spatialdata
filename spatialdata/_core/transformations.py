@@ -205,8 +205,6 @@ class Translation(BaseTransformation):
                     m[i_out, i_in] = 1
                     if ax_out in self.axes:
                         m[i_out, -1] = self.translation[self.axes.index(ax_out)]
-                elif ax_in == ax_out:
-                    m[i_out, i_in] = 1
         return m
 
 
@@ -234,8 +232,6 @@ class Scale(BaseTransformation):
                     else:
                         scale_factor = 1
                     m[i_out, i_in] = scale_factor
-                elif ax_in == ax_out:
-                    m[i_out, i_in] = 1
         return m
 
 
@@ -245,17 +241,37 @@ class Affine(BaseTransformation):
     ) -> None:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
+        self.input_axes = input_axes
+        self.output_axes = output_axes
         self.matrix = self._parse_list_into_array(matrix)
         assert self.matrix.dtype == float
-        assert self.matrix.shape == (len(output_axes) + 1, len(input_axes) + 1)
-        assert np.array_equal(self.matrix[-1, :-1], np.zeros(len(input_axes) - 1))
+        if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
+            raise ValueError("Invalid shape for affine matrix.")
+        if not np.array_equal(self.matrix[-1, :-1], np.zeros(len(input_axes))):
+            raise ValueError("Affine matrix must be homogeneous.")
         assert self.matrix[-1, -1] == 1.0
 
     def inverse(self) -> BaseTransformation:
-        raise NotImplementedError()
+        inv = np.linalg.inv(self.matrix)
+        return Affine(inv, self.output_axes, self.input_axes)
 
     def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
-        raise NotImplementedError()
+        self._validate_axes(input_axes)
+        self._validate_axes(output_axes)
+        if not all([ax in output_axes for ax in input_axes]):
+            raise ValueError("Input axes must be a subset of output axes.")
+        m = self._empty_affine_matrix(input_axes, output_axes)
+        for i_out, ax_out in enumerate(output_axes):
+            for i_in, ax_in in enumerate(input_axes):
+                if ax_out in self.output_axes:
+                    j_out = self.output_axes.index(ax_out)
+                    if ax_in in self.input_axes:
+                        j_in = self.input_axes.index(ax_in)
+                        m[i_out, i_in] = self.matrix[j_out, j_in]
+                    m[i_out, -1] = self.matrix[j_out, -1]
+                elif ax_in == ax_out:
+                    m[i_out, i_in] = 1
+        return m
 
 
 class Sequence(BaseTransformation):
