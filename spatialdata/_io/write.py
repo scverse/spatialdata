@@ -21,7 +21,7 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_dims, get_transform
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -64,7 +64,7 @@ def write_image(
     if isinstance(image, SpatialImage):
         data = image.data
         t = get_transform(image)
-        assert isinstance(t, BaseTransformation)
+        assert isinstance(t, NgffBaseTransformation)
         coordinate_transformations = [[t.to_dict()]]
         chunks = image.chunks
         axes = image.dims
@@ -118,7 +118,7 @@ def write_labels(
     if isinstance(labels, SpatialImage):
         data = labels.data
         t = get_transform(labels)
-        assert isinstance(t, BaseTransformation)
+        assert isinstance(t, NgffBaseTransformation)
         coordinate_transformations = [[t.to_dict()]]
         chunks = labels.chunks
         axes = labels.dims
@@ -171,7 +171,7 @@ def write_polygons(
 ) -> None:
     polygons_groups = group.require_group(name)
     t = get_transform(polygons)
-    assert isinstance(t, BaseTransformation)
+    assert isinstance(t, NgffBaseTransformation)
     coordinate_transformations = [t.to_dict()]
 
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
@@ -233,7 +233,7 @@ def write_points(
 ) -> None:
     points_groups = group.require_group(name)
     t = get_transform(points)
-    assert isinstance(t, BaseTransformation)
+    assert isinstance(t, NgffBaseTransformation)
     coordinate_transformations = [t.to_dict()]
 
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")

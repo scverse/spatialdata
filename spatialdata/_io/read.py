@@ -20,7 +20,7 @@ from xarray import DataArray
 from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
 from spatialdata._core.models import TableModel
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -32,7 +32,7 @@ from spatialdata._logging import logger
 
 def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
-    transformations = [BaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
     name = node.metadata["name"]
     if type(name) == list:
         assert len(name) == 1
@@ -194,7 +194,7 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spa
 
     typ = fmt.attrs_from_dict(f.attrs.asdict())
 
-    transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     geometry = from_ragged_array(typ, coords, offsets)
 
@@ -207,7 +207,7 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
     """Read shapes from a zarr store."""
 
     f = zarr.open(store, mode="r")
-    transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
     attrs = fmt.attrs_from_dict(f.attrs.asdict())
 
     adata = read_anndata_zarr(store)
@@ -227,7 +227,7 @@ def _read_points(
     path = os.path.join(f._store.path, f.path, "points.parquet")
     table = pq.read_table(path)
 
-    transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
 
     new_table = set_transform(table, transforms)
     return new_table

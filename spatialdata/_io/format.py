@@ -49,9 +49,9 @@ class SpatialDataFormatV01(CurrentFormat):
         for shape in shapes:
             assert len(shape) == len(data_shape)
             scale = [full / level for full, level in zip(data_shape, shape)]
-            from spatialdata._core.transformations import Scale
+            from spatialdata._core.ngff.ngff_transformations import NgffScale
 
-            coordinate_transformations.append([Scale(scale=scale).to_dict()])
+            coordinate_transformations.append([NgffScale(scale=scale).to_dict()])
         return coordinate_transformations
 
     def validate_coordinate_transformations(
@@ -81,9 +81,11 @@ class SpatialDataFormatV01(CurrentFormat):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata._core.transformations import BaseTransformation
+            from spatialdata._core.ngff.ngff_transformations import (
+                NgffBaseTransformation,
+            )
 
-            parsed = [BaseTransformation.from_dict(t) for t in transformations]
+            parsed = [NgffBaseTransformation.from_dict(t) for t in transformations]
             json1 = [json.dumps(p.to_dict()) for p in parsed]
             import numpy as np
 

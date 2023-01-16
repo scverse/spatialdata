@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pyarrow as pa
 
-from spatialdata._core.coordinate_system import CoordinateSystem, _get_spatial_axes
+from spatialdata._core.ngff.ngff_coordinate_system import (
+    NgffCoordinateSystem,
+    _get_spatial_axes,
+)
 
 if TYPE_CHECKING:
     pass
@@ -16,7 +19,7 @@ if TYPE_CHECKING:
 class BaseSpatialRequest:
     """Base class for spatial queries."""
 
-    coordinate_system: CoordinateSystem
+    coordinate_system: NgffCoordinateSystem
 
     def __post_init__(self) -> None:
         # validate the coordinate system
@@ -31,7 +34,7 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
     Attributes
     ----------
-    coordinate_system : CoordinateSystem
+    coordinate_system : NgffCoordinateSystem
         The coordinate system the coordinates are expressed in.
     min_coordinate : np.ndarray
         The coordinate of the lower left hand corner (i.e., minimum values)

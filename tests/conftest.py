@@ -77,8 +77,8 @@ def full_sdata() -> SpatialData:
 #     geo_df = GeoDataFrame(
 #         geometry=[],
 #     )
-#     from spatialdata import Identity
-#     set_transform(geo_df, Identity())
+#     from spatialdata import NgffIdentity
+#     set_transform(geo_df, NgffIdentity())
 #
 #     return SpatialData(points={"empty": geo_df})
 

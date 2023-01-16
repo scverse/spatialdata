@@ -19,7 +19,6 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_points_dict,
 )
-from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
 from spatialdata._core.models import (
     Image2DModel,
@@ -31,6 +30,7 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -253,6 +253,7 @@ class SpatialData:
         image: Union[SpatialImage, MultiscaleSpatialImage],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
+        _add_in_memory: bool = True,
     ) -> None:
         """
         Add an image to the SpatialData object.
@@ -274,7 +275,8 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         # if name not in self.images:
-        self._add_image_in_memory(name=name, image=image)
+        if _add_in_memory:
+            self._add_image_in_memory(name=name, image=image)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
             write_image(
@@ -311,7 +313,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if name not in self.labels:
-            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
+            self._add_labels_in_memory(name=name, labels=labels)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
             write_labels(
@@ -449,7 +451,9 @@ class SpatialData:
             if len(self.images):
                 elem_group = root.create_group(name="images")
                 for el in self.images.keys():
-                    self.add_image(name=el, image=self.images[el], storage_options=storage_options)
+                    self.add_image(
+                        name=el, image=self.images[el], storage_options=storage_options, _add_in_memory=False
+                    )
 
             if len(self.labels):
                 elem_group = root.create_group(name="labels")
@@ -515,17 +519,17 @@ class SpatialData:
         return self._shapes
 
     @property
-    def coordinate_systems(self) -> dict[str, CoordinateSystem]:
+    def coordinate_systems(self) -> dict[str, NgffCoordinateSystem]:
         ##
-        all_cs: dict[str, CoordinateSystem] = {}
+        all_cs: dict[str, NgffCoordinateSystem] = {}
         gen = self._gen_elements()
         for obj in gen:
             ct = get_transform(obj)
             if ct is not None:
                 cs = ct.output_coordinate_system
                 if cs is not None:
-                    assert isinstance(cs, CoordinateSystem)
-                    if isinstance(cs, CoordinateSystem):
+                    assert isinstance(cs, NgffCoordinateSystem)
+                    if isinstance(cs, NgffCoordinateSystem):
                         name = cs.name
                         if name in all_cs:
                             added = all_cs[name]
