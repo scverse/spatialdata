@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import pyarrow as pa
 from anndata import AnnData
@@ -33,6 +33,12 @@ __all__ = [
 
 TRANSFORM_KEY = "transform"
 C, Z, Y, X = "c", "z", "y", "x"
+ValidAxis_t = Literal["c", "x", "y", "z"]
+
+
+def validate_axis_name(axis: ValidAxis_t) -> None:
+    if axis not in ["c", "x", "y", "z"]:
+        raise TypeError(f"Invalid axis: {axis}")
 
 
 @singledispatch
