@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
@@ -10,7 +9,6 @@ import numpy as np
 from typing_extensions import Self
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 __all__ = [
@@ -700,28 +698,28 @@ class NgffSequence(NgffBaseTransformation):
         elif isinstance(t, NgffMapAxis):
             return None
         elif isinstance(t, NgffSequence):
-            t.check_and_infer_coordinate_systems()
-            return t.output_coordinate_system
+            latest_output_cs = t.input_coordinate_system
+            for tt in t.transformations:
+                (
+                    latest_output_cs,
+                    input_cs,
+                    output_cs,
+                ) = NgffSequence._inferring_cs_pre_action(tt, latest_output_cs)
+                NgffSequence._inferring_cs_post_action(tt, input_cs, output_cs)
+            return latest_output_cs
         else:
             return None
 
     @staticmethod
     def _inferring_cs_pre_action(
         t: NgffBaseTransformation, latest_output_cs: NgffCoordinateSystem
-    ) -> NgffBaseTransformation:
-        adjusted: Optional[NgffBaseTransformation] = None
+    ) -> tuple[NgffCoordinateSystem, Optional[NgffCoordinateSystem], Optional[NgffCoordinateSystem]]:
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
         else:
-            assert isinstance(input_cs, NgffCoordinateSystem), input_cs
-            if not input_cs.equal_up_to_the_units(latest_output_cs):
-                # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
-                identity = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=input_cs)
-                adjusted_explicit = _adjust_transformation_between_mismatching_coordinate_systems(
-                    identity, latest_output_cs, pass_through_only_left_axes=False
-                )
-                adjusted = adjusted_explicit.to_affine()
+            assert isinstance(input_cs, NgffCoordinateSystem)
+            assert input_cs == latest_output_cs
         output_cs = t.output_coordinate_system
         expected_output_cs = NgffSequence._inferring_cs_infer_output_coordinate_system(t)
         if output_cs is None:
@@ -738,78 +736,22 @@ class NgffSequence(NgffBaseTransformation):
             # if it is not possible to infer the output, like for NgffAffine, we skip this check
             if expected_output_cs is not None:
                 assert t.output_coordinate_system == expected_output_cs
-        if adjusted is None:
-            return t
-        else:
-            return NgffSequence([adjusted, t])
+        new_latest_output_cs = t.output_coordinate_system
+        assert type(new_latest_output_cs) == NgffCoordinateSystem
+        return new_latest_output_cs, input_cs, output_cs
 
-    def check_and_infer_coordinate_systems(self) -> None:
-        """
-        Check that the coordinate systems of the components are consistent or infer them when possible.
-
-        Notes
-        -----
-        The NGFF specs allow for NgffSequence transformations to be specified even without making all the coordinate
-        systems of their component explicit. This reduces verbosity but can create some inconsistencies. This method
-        infers missing coordinate systems when possible and throws an error otherwise. Furthermore, we allow the
-        composition of transformations with different coordinate systems up to a reordering of the axes, by inserting
-        opportune NgffAffine transformations.
-
-        This method is called automatically when a transformation:
-        - is applied (transform_points())
-        - is inverted (inverse())
-        - needs to be saved/converted (to_dict(), to_affine())
-        """
-        assert type(self.input_coordinate_system) == NgffCoordinateSystem
-        latest_output_cs: NgffCoordinateSystem = self.input_coordinate_system
-        new_transformations = []
-        for t in self.transformations:
-            adjusted = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)
-            new_transformations.append(adjusted)
-            assert adjusted.output_coordinate_system is not None
-            latest_output_cs = adjusted.output_coordinate_system
-        if self.output_coordinate_system is not None:
-            if not self.output_coordinate_system.equal_up_to_the_units(latest_output_cs):
-                # fix the mismatched coordinate systems by adding an affine that permutes/add/remove axes
-                # identity = NgffIdentity(
-                #     input_coordinate_system=self.output_coordinate_system,
-                #     output_coordinate_system=self.output_coordinate_system,
-                # )
-                # adjusted = _adjust_transformation_between_mismatching_coordinate_systems(identify, latest_output_cs)
-                affine = NgffAffine.from_input_output_coordinate_systems(
-                    latest_output_cs, self.output_coordinate_system
-                )
-                new_transformations.append(affine)
-        else:
-            self.output_coordinate_system = self.transformations[-1].output_coordinate_system
-
-        # final check
-        self.transformations = new_transformations
-        assert self.input_coordinate_system == self.transformations[0].input_coordinate_system
-        for i in range(len(self.transformations)):
-            if i < len(self.transformations) - 1:
-                # for mypy
-                cs0 = self.transformations[i].output_coordinate_system
-                cs1 = self.transformations[i + 1].input_coordinate_system
-                assert cs0 is not None
-                assert isinstance(cs0, NgffCoordinateSystem)
-                assert cs1 is not None
-                assert isinstance(cs1, NgffCoordinateSystem)
-
-                if not cs0.equal_up_to_the_name(cs1):
-                    raise ValueError(
-                        "The coordinate systems of the components of a NgffSequence transformation are not consistent."
-                    )
-        # for mypy
-        assert self.output_coordinate_system is not None
-        cs_last = self.transformations[-1].output_coordinate_system
-        assert cs_last is not None
-        assert isinstance(cs_last, NgffCoordinateSystem)
-        if not self.output_coordinate_system.equal_up_to_the_name(cs_last):
-            raise ValueError(
-                "The output coordinate system of the NgffSequence transformation is not consistent with the "
-                "output coordinate system of the last component transformation."
-            )
+    @staticmethod
+    def _inferring_cs_post_action(
+        t: NgffBaseTransformation,
+        input_cs: Optional[NgffCoordinateSystem],
+        output_cs: Optional[NgffCoordinateSystem],
+    ) -> None:
+        # if the transformation t was passed without input or output coordinate systems (and so we had to infer
+        # them), we now restore the original state of the transformation
+        if input_cs is None:
+            t.input_coordinate_system = None
+        if output_cs is None:
+            t.output_coordinate_system = None
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         # the specs allow to compose transformations without specifying the input and output coordinate systems of
@@ -823,9 +765,16 @@ class NgffSequence(NgffBaseTransformation):
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         assert type(self.input_coordinate_system) == NgffCoordinateSystem
-        self.check_and_infer_coordinate_systems()
+        latest_output_cs: NgffCoordinateSystem = self.input_coordinate_system
         for t in self.transformations:
+            latest_output_cs, input_cs, output_cs = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)
             points = t.transform_points(points)
+            NgffSequence._inferring_cs_post_action(t, input_cs, output_cs)
+        if output_axes != latest_output_cs.axes_names:
+            raise ValueError(
+                "Inferred output axes of the sequence of transformations do not match the expected output "
+                "coordinate system."
+            )
         return points
 
     def to_affine(self) -> NgffAffine:
@@ -833,10 +782,18 @@ class NgffSequence(NgffBaseTransformation):
         # method, applies also here
         input_axes, output_axes = self._get_and_validate_axes()
         composed = np.eye(len(input_axes) + 1)
-        self.check_and_infer_coordinate_systems()
+        assert type(self.input_coordinate_system) == NgffCoordinateSystem
+        latest_output_cs: NgffCoordinateSystem = self.input_coordinate_system
         for t in self.transformations:
+            latest_output_cs, input_cs, output_cs = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)
             a = t.to_affine()
             composed = a.affine @ composed
+            NgffSequence._inferring_cs_post_action(t, input_cs, output_cs)
+        if output_axes != latest_output_cs.axes_names:
+            raise ValueError(
+                "Inferred output axes of the sequence of transformations do not match the expected output "
+                "coordinate system."
+            )
         return NgffAffine(
             composed,
             input_coordinate_system=self.input_coordinate_system,
@@ -1054,145 +1011,3 @@ NGFF_TRANSFORMATIONS["affine"] = NgffAffine
 NGFF_TRANSFORMATIONS["rotation"] = NgffRotation
 NGFF_TRANSFORMATIONS["sequence"] = NgffSequence
 NGFF_TRANSFORMATIONS["byDimension"] = NgffByDimension
-
-
-def _adjust_transformation_between_mismatching_coordinate_systems(
-    t: NgffBaseTransformation, input_coordinate_system: NgffCoordinateSystem, pass_through_only_left_axes: bool = True
-) -> NgffBaseTransformation:
-    """
-    Adjusts a transformation (t) whose input coordinate system does not match the on of the one of the element it should be applied to (input_coordinate_system).
-
-    Parameters
-    ----------
-    t
-        The transformation to adjust.
-    input_coordinate_system
-        The coordinate system of the element the transformation should be applied to.
-
-    Returns
-    -------
-    The adjusted transformation.
-
-    Notes
-    -----
-    The function behaves as follows:
-    - if input_coordinate_system coincides with t.input_coordinate_system, the function returns t
-    - if input_coordinate_system coincides with t.input_coordinate_system up to a permutation of the axes, the function
-        returns a composition a permutation of the axes and t, and then a permutation back to to the original
-    - if input_coordinate_system is a subset of t.input_coordinate_system, the function returns a new transformation
-    which only transforms the coordinates in input_coordinate_system, eventually permuting the axes, and then permuting them back after the transfomation
-    - if input_coordinate_system is a superset of t.input_coordinate_system, the function returns a new
-    transformation which passes the coordinates in input_coordinate_system - t.input_coordinate_system through
-    without transforming them, and applies the transformation t to the coordinates in t.input_coordinate_system as in. Finally it permutes the axes back to the original order, eventually passing through eventual axes that have been added by the transformation
-    - in input_coordinate_system is neither a subset nor a superset of t.input_coordinate_system, the functions behaves like in the previous two cases on the relevant axes
-    """
-    cs_left = copy.deepcopy(input_coordinate_system)
-    cs_right = copy.deepcopy(t.input_coordinate_system)
-    assert cs_left is not None
-    assert cs_right is not None
-    common_left = [ax for ax in cs_left.axes_names if ax in cs_right.axes_names]
-    common_right = [ax for ax in cs_right.axes_names if ax in cs_left.axes_names]
-    only_left = [ax for ax in cs_left.axes_names if ax not in cs_right.axes_names]
-    only_right = [ax for ax in cs_right.axes_names if ax not in cs_left.axes_names]
-    cs_only_left = cs_left.subset(only_left)
-    cs_common_left = cs_left.subset(common_left)
-    cs_common_right = cs_right.subset(common_right)
-    cs_only_right = cs_right.subset(only_right)
-    if pass_through_only_left_axes:
-        cs_merged = NgffCoordinateSystem.merge(cs_left, cs_right)
-    else:
-        cs_merged = cs_right
-    map_axis = NgffMapAxis(
-        {ax: ax for ax in cs_common_left.axes_names},
-        input_coordinate_system=cs_common_left,
-        output_coordinate_system=cs_common_right,
-    )
-    if len(only_left) == 0 and len(only_right) == 0:
-        if common_left == common_right:
-            return t
-        else:
-            return map_axis
-    else:
-        ##
-        if pass_through_only_left_axes:
-            pass_through_only_left = NgffIdentity(cs_only_left, cs_only_left)
-
-        m = np.zeros((len(only_right) + 1, 2))
-        m[-1, -1] = 1
-        if len(common_left) > 0:
-            any_axis = cs_common_left._axes[0]
-        else:
-            assert len(only_left) > 0
-            any_axis = cs_only_left._axes[0]
-        cs_any_axis = cs_left.subset([any_axis.name])
-        assert len(cs_any_axis.axes_names) == 1
-        add_empty_only_right = NgffAffine(
-            m,
-            input_coordinate_system=cs_any_axis,
-            output_coordinate_system=cs_only_right,
-        )
-        sequence = NgffSequence(
-            [
-                NgffByDimension(
-                    [map_axis] + ([add_empty_only_right] if len(only_right) > 0 else []),
-                    input_coordinate_system=cs_common_right,
-                    output_coordinate_system=cs_right,
-                ),
-                t,
-            ],
-            input_coordinate_system=cs_common_right,
-        )
-        adjusted: NgffBaseTransformation
-        adjusted = NgffByDimension(
-            [sequence] + ([pass_through_only_left] if len(only_left) > 0 and pass_through_only_left_axes else []),
-            input_coordinate_system=cs_left,
-            output_coordinate_system=cs_merged,
-        )
-        # print()
-        # print(adjusted)
-        try:
-            adjusted.to_affine()
-        except ValueError as e:
-            if str(e).startswith("Output axis ") and str(e).endswith(" is defined more than once"):
-                logger.error(f"Previous exception: {str(e)}")
-                raise ValueError(
-                    "The transformation is not consistent because it introduces axes that; cant be passed through from the input axes."
-                )
-            raise e
-        if cs_left._axes == cs_merged._axes:
-            adjusted.output_coordinate_system = cs_left
-            return adjusted
-        else:
-            if not pass_through_only_left_axes:
-                adjusted.output_coordinate_system = cs_merged
-                return adjusted
-            # TODO: there is also the case in which some axes in cs_right are invariant while others depend on cs_left, I need to simplify this code, it's not maintainable as it is
-            # The axes output of adjusted could be a set with elements not in cs_left. This can happen in two ways: 1) the transformation t can be diagonalized so that it doesn't mix axes in cs_left and axes that are not in cs_left; 2) the transformation t uses the axes in cs_left to cpute the output in axes non in cs_left.
-            # Examples: case 1. happens for instance when cs_left is xyz and t is scale cyx. This happen when we have a scale transformation for an image and we want to assign it to points. In this case the coordinate c that is added by t is not influenced by xyz
-            # Example: case 2. t is an affine transformation xy -> xyz that embeds a plane in space.
-            # To find out in which case we are, let's proceed empirically
-            indices_only_right: ArrayLike = np.array(
-                [cs_merged.axes_names.index(ax) for ax in cs_only_right.axes_names]
-            )
-            result = adjusted.transform_points(np.atleast_2d(np.random.rand(10, len(cs_left._axes))))[
-                :, indices_only_right
-            ]
-            if np.allclose(result, np.ones_like(result) * result[0, 0]):
-                # case 1
-                final_adjusted = NgffByDimension(
-                    [sequence] + ([pass_through_only_left] if len(only_left) > 0 else []),
-                    input_coordinate_system=cs_left,
-                    output_coordinate_system=cs_left,
-                )
-            else:
-                # case 2
-                final_adjusted = adjusted
-            DEBUGGING = True
-            if DEBUGGING:
-                print()
-                print(final_adjusted)
-                print(final_adjusted.to_affine())
-                return final_adjusted
-            else:
-                # to make the user have a nice matrix in the end
-                return final_adjusted.to_affine()

@@ -54,6 +54,34 @@ def test_sequence_mismatching_cs_inference():
     # )
 
 
+def test_sequence_2d_to_2d_with_c_with_mismatching_cs():
+    pass
+
+
+#     original, affine, transformed = _test_sequence_helper()
+#     affine.input_coordinate_system = xy_cs
+#     affine.output_coordinate_system = xy_cs
+#
+#     def _manual_xy_to_cyx(x: np.ndarray) -> np.ndarray:
+#         return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
+#
+#     _test_transformation(
+#         transformation=NgffSequence(
+#             [
+#                 NgffTranslation(np.array([1, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+#                 NgffScale(np.array([3, 4]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
+#                 affine,
+#             ]
+#         ),
+#         original=_manual_xy_to_cyx(original),
+#         transformed=_manual_xy_to_cyx(transformed),
+#         input_cs=cyx_cs,
+#         output_cs=cyx_cs,
+#         wrong_output_cs=xyc_cs,
+#         test_inverse=False,
+#     )
+
+
 def test_set_transform_with_mismatching_cs(sdata: SpatialData):
     pass
     # input_css = [
