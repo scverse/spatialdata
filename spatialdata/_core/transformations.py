@@ -38,38 +38,21 @@ class BaseTransformation(ABC):
         m[-1, -1] = 1
         return m
 
-    # def __init__(
-    #     self,
-    # ) -> None:
-    #     pass
-    #
-    # def _indent(self, indent: int) -> str:
-    #     return " " * indent * 4
-    #
-    # def _repr_transformation_signature(self, indent: int = 0) -> str:
-    #     if self.input_coordinate_system is not None:
-    #         domain = ", ".join(self.input_coordinate_system.axes_names)
-    #     else:
-    #         domain = ""
-    #     if self.output_coordinate_system is not None:
-    #         codomain = ", ".join(self.output_coordinate_system.axes_names)
-    #     else:
-    #         codomain = ""
-    #     return f"{self._indent(indent)}{type(self).__name__} ({domain} -> {codomain})"
-    #
-    # @abstractmethod
-    # def _repr_transformation_description(self, indent: int = 0) -> str:
-    #     pass
-    #
-    # def _repr_indent(self, indent: int = 0) -> str:
-    #     if isinstance(self, NgffIdentity):
-    #         return f"{self._repr_transformation_signature(indent)}"
-    #     else:
-    #         return f"{self._repr_transformation_signature(indent)}\n{self._repr_transformation_description(indent + 1)}"
-    #
-    # def __repr__(self) -> str:
-    #     return self._repr_indent(0)
-    #
+    def _indent(self, indent: int) -> str:
+        return " " * indent * 4
+
+    @abstractmethod
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        pass
+
+    def _repr_indent(self, indent: int = 0) -> str:
+        s = f"{self._indent(indent)}{type(self).__name__} "
+        s += f"{self._repr_transformation_description(indent + 1)}"
+        return s
+
+    def __repr__(self) -> str:
+        return self._repr_indent(0)
+
     # @classmethod
     # @abstractmethod
     # def _from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
@@ -148,6 +131,9 @@ class Identity(BaseTransformation):
     def inverse(self) -> BaseTransformation:
         return self
 
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        return ""
+
 
 # Warning on MapAxis vs NgffMapAxis: MapAxis can add new axes that are not present in input. NgffMapAxis can't do
 # this. It can only 1) permute the axis order, 2) eventually assiging the same axis to multiple output axes and 3)
@@ -191,6 +177,13 @@ class MapAxis(BaseTransformation):
                     m[i_out, i_in] = 1
         return m
 
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        s = "\n"
+        for k, v in self.map_axis.items():
+            s += f"{self._indent(indent)}{k} <- {v}\n"
+        s = s[:-1]
+        return s
+
 
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
@@ -215,6 +208,9 @@ class Translation(BaseTransformation):
                     if ax_out in self.axes:
                         m[i_out, -1] = self.translation[self.axes.index(ax_out)]
         return m
+
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.translation}"
 
 
 class Scale(BaseTransformation):
@@ -242,6 +238,9 @@ class Scale(BaseTransformation):
                         scale_factor = 1
                     m[i_out, i_in] = scale_factor
         return m
+
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.scale}"
 
 
 class Affine(BaseTransformation):
@@ -296,6 +295,13 @@ class Affine(BaseTransformation):
                 elif ax_in == ax_out:
                     m[i_out, i_in] = 1
         return m
+
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        s = f"({', '.join(self.input_axes)} -> {', '.join(self.output_axes)})\n"
+        for row in self.matrix:
+            s += f"{self._indent(indent)}{row}\n"
+        s = s[:-1]
+        return s
 
 
 class Sequence(BaseTransformation):
@@ -401,3 +407,10 @@ class Sequence(BaseTransformation):
         matrix, current_output_axes = self._to_affine_matrix_wrapper(input_axes, output_axes)
         assert current_output_axes == output_axes
         return matrix
+
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        s = "\n"
+        for t in self.transformations:
+            s += f"{t._repr_indent(indent=indent)}\n"
+        s = s[:-1]
+        return s

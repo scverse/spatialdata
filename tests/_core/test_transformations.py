@@ -432,6 +432,7 @@ def test_sequence():
             ]
         ),
     )
+    print(sequence0)
 
 
 def test_sequence_mismatching_cs_inference():
