@@ -2,13 +2,14 @@ import numpy as np
 import pytest
 
 from spatialdata import SpatialData
-from spatialdata._core.transformations import Identity
+from spatialdata._core.transformations import Identity, MapAxis
 
 
 def test_identity():
-    Identity()
-    Identity().inverse()
     assert np.array_equal(Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.array_equal(
+        Identity().inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3)
+    )
     assert np.array_equal(
         Identity().to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("y", "x", "z")),
         np.array(
@@ -33,6 +34,86 @@ def test_identity():
     )
     with pytest.raises(ValueError):
         Identity().to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y"))
+
+
+def test_map_axis():
+    # map_axis0 behaves like an identity
+    map_axis0 = MapAxis({"x": "x", "y": "y"})
+    with pytest.raises(ValueError):
+        map_axis0.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y"))
+
+    map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.array_equal(map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+
+    # map_axis1 is an example of invertible MapAxis; here it swaps x and y
+    map_axis1 = MapAxis({"x": "y", "y": "x"})
+    map_axis1_inverse = map_axis1.inverse()
+    assert np.array_equal(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    assert np.array_equal(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        map_axis1_inverse.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.array_equal(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z")),
+        np.array(
+            [
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    assert np.array_equal(
+        map_axis1.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z")),
+        np.array(
+            [
+                [0, 1, 0, 0],
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
+    # map_axis2 is an example of non-invertible MapAxis
+    map_axis2 = MapAxis({"x": "z", "y": "z", "c": "x"})
+    with pytest.raises(ValueError):
+        map_axis2.inverse()
+    with pytest.raises(ValueError):
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "c"))
+    assert np.array_equal(
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "z", "c")),
+        np.array(
+            [
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+    )
+    assert np.array_equal(
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "c", "z")),
+        np.array(
+            [
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+    )
 
 
 def test_sequence_mismatching_cs_inference():

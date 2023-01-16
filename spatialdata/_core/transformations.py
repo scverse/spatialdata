@@ -149,14 +149,38 @@ class Identity(BaseTransformation):
 
 
 class MapAxis(BaseTransformation):
-    def __init__(self, map_axis: dict[str, str]) -> None:
+    def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
+        assert isinstance(map_axis, dict)
+        for des_ax, src_ax in map_axis.items():
+            validate_axis_name(des_ax)
+            validate_axis_name(src_ax)
         self.map_axis = map_axis
 
     def inverse(self) -> BaseTransformation:
-        raise NotImplementedError()
+        if len(self.map_axis.values()) != len(set(self.map_axis.values())):
+            raise ValueError("Cannot invert a MapAxis transformation with non-injective map_axis.")
+        return MapAxis({des_ax: src_ax for src_ax, des_ax in self.map_axis.items()})
 
     def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
-        raise NotImplementedError()
+        self._validate_axes(input_axes)
+        self._validate_axes(output_axes)
+        if not all([ax in output_axes for ax in input_axes]):
+            raise ValueError("Input axes must be a subset of output axes.")
+        for ax in self.map_axis.keys():
+            if ax not in output_axes:
+                raise ValueError(f"Axis {ax} not found in output axes.")
+        for ax in self.map_axis.values():
+            if ax not in input_axes:
+                raise ValueError(f"Axis {ax} not found in input axes.")
+        m = self._empty_affine_matrix(input_axes, output_axes)
+        for i_out, ax_out in enumerate(output_axes):
+            for i_in, ax_in in enumerate(input_axes):
+                if ax_out in self.map_axis:
+                    if self.map_axis[ax_out] == ax_in:
+                        m[i_out, i_in] = 1
+                elif ax_in == ax_out:
+                    m[i_out, i_in] = 1
+        return m
 
 
 class Scale(BaseTransformation):
