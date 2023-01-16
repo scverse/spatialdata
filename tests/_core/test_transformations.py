@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from spatialdata import SpatialData
-from spatialdata._core.transformations import Identity, MapAxis
+from spatialdata._core.transformations import Identity, MapAxis, Scale, Translation
 
 
 def test_identity():
@@ -111,6 +111,56 @@ def test_map_axis():
                 [1, 0, 0, 0, 0],
                 [0, 0, 1, 0, 0],
                 [0, 0, 0, 0, 1],
+            ]
+        ),
+    )
+
+
+def test_translation():
+    with pytest.raises(TypeError):
+        Translation(translation=(1, 2, 3))
+    t0 = Translation([1, 2], axes=("x", "y"))
+    t1 = Translation(np.array([2, 1]), axes=("y", "x"))
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
+        np.array([[0, 1, 0, 2], [1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+    )
+    assert np.array_equal(
+        t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1, 0, -1],
+                [0, 1, -2],
+                [0, 0, 1],
+            ]
+        ),
+    )
+
+
+def test_scale():
+    with pytest.raises(TypeError):
+        Scale(scale=(1, 2, 3))
+    t0 = Scale([3, 2], axes=("x", "y"))
+    t1 = Scale(np.array([2, 3]), axes=("y", "x"))
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.array_equal(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
+        np.array([[0, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+    )
+    assert np.array_equal(
+        t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1 / 3.0, 0, 0],
+                [0, 1 / 2.0, 0],
+                [0, 0, 1],
             ]
         ),
     )

@@ -183,29 +183,60 @@ class MapAxis(BaseTransformation):
         return m
 
 
+class Translation(BaseTransformation):
+    def __init__(self, translation: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
+        self.translation = self._parse_list_into_array(translation)
+        self._validate_axes(axes)
+        self.axes = axes
+        assert len(self.translation) == len(self.axes)
+
+    def inverse(self) -> BaseTransformation:
+        return Translation(-self.translation, self.axes)
+
+    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+        self._validate_axes(input_axes)
+        self._validate_axes(output_axes)
+        if not all([ax in output_axes for ax in input_axes]):
+            raise ValueError("Input axes must be a subset of output axes.")
+        m = self._empty_affine_matrix(input_axes, output_axes)
+        for i_out, ax_out in enumerate(output_axes):
+            for i_in, ax_in in enumerate(input_axes):
+                if ax_in == ax_out:
+                    m[i_out, i_in] = 1
+                    if ax_out in self.axes:
+                        m[i_out, -1] = self.translation[self.axes.index(ax_out)]
+                elif ax_in == ax_out:
+                    m[i_out, i_in] = 1
+        return m
+
+
 class Scale(BaseTransformation):
     def __init__(self, scale: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
         self.scale = self._parse_list_into_array(scale)
         self._validate_axes(axes)
-        assert len(self.scale) == len(axes)
+        self.axes = axes
+        assert len(self.scale) == len(self.axes)
 
     def inverse(self) -> BaseTransformation:
-        raise NotImplementedError()
+        return Scale(1 / self.scale, self.axes)
 
     def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
-        raise NotImplementedError()
-
-
-class Translation(BaseTransformation):
-    def __init__(self, translation: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
-        self.translation = self._parse_list_into_array(translation)
-        assert len(self.translation) == len(axes)
-
-    def inverse(self) -> BaseTransformation:
-        raise NotImplementedError()
-
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
-        raise NotImplementedError()
+        self._validate_axes(input_axes)
+        self._validate_axes(output_axes)
+        if not all([ax in output_axes for ax in input_axes]):
+            raise ValueError("Input axes must be a subset of output axes.")
+        m = self._empty_affine_matrix(input_axes, output_axes)
+        for i_out, ax_out in enumerate(output_axes):
+            for i_in, ax_in in enumerate(input_axes):
+                if ax_in == ax_out:
+                    if ax_out in self.axes:
+                        scale_factor = self.scale[self.axes.index(ax_out)]
+                    else:
+                        scale_factor = 1
+                    m[i_out, i_in] = scale_factor
+                elif ax_in == ax_out:
+                    m[i_out, i_in] = 1
+        return m
 
 
 class Affine(BaseTransformation):
