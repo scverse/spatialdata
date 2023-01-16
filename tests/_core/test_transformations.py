@@ -7,6 +7,7 @@ from spatialdata._core.transformations import (
     Identity,
     MapAxis,
     Scale,
+    Sequence,
     Translation,
 )
 
@@ -45,8 +46,33 @@ def test_identity():
 def test_map_axis():
     # map_axis0 behaves like an identity
     map_axis0 = MapAxis({"x": "x", "y": "y"})
+    # second validation logic
     with pytest.raises(ValueError):
         map_axis0.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y"))
+
+    # first validation logic
+    with pytest.raises(ValueError):
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("z"), output_axes=("z"))
+    assert np.array_equal(
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x")),
+        np.array(
+            [
+                [1, 0],
+                [0, 1],
+            ]
+        ),
+    )
+    # adding new axes with MapAxis (something that the Ngff MapAxis can't do)
+    assert np.array_equal(
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x", "z")),
+        np.array(
+            [
+                [1, 0],
+                [1, 0],
+                [0, 1],
+            ]
+        ),
+    )
 
     map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
     assert np.array_equal(map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
@@ -222,6 +248,187 @@ def test_affine():
                 [0, 0, 0, 0],
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
+            ]
+        ),
+    )
+
+    # adding new axes
+    assert np.array_equal(
+        Affine(
+            np.array(
+                [
+                    [0, 0],
+                    [1, 0],
+                    [0, 1],
+                ]
+            ),
+            input_axes=("x"),
+            output_axes=("x", "y"),
+        ).to_affine_matrix(input_axes=("x"), output_axes=("x", "y")),
+        np.array(
+            [
+                [0, 0],
+                [1, 0],
+                [0, 1],
+            ]
+        ),
+    )
+    # validation logic: adding an axes via the matrix but also having it as input
+    with pytest.raises(ValueError):
+        Affine(
+            np.array(
+                [
+                    [0, 0],
+                    [1, 0],
+                    [0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ).to_affine_matrix(input_axes=("x"), output_axes=("x", "y"))
+
+    # removing axes
+    assert np.array_equal(
+        Affine(
+            np.array(
+                [
+                    [1, 0, 0],
+                    [0, 0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x"),
+        ).to_affine_matrix(input_axes=("x", "y"), output_axes=("x")),
+        np.array(
+            [
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+
+
+def test_sequence():
+    translation = Translation([1, 2], axes=("x", "y"))
+    scale = Scale([3, 2, 1], axes=("y", "x", "z"))
+    affine = Affine(
+        np.array(
+            [
+                [4, 5, 6],
+                [1, 2, 3],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("y", "x"),
+    )
+    sequence = Sequence([translation, scale, affine])
+    manual = (
+        # affine
+        np.array(
+            [
+                [1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        # scale
+        @ np.array(
+            [
+                [2.0, 0.0, 0.0],
+                [0.0, 3.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        # translation
+        @ np.array(
+            [
+                [1.0, 0.0, 1.0],
+                [0.0, 1.0, 2.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+    )
+    computed = sequence.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.array_equal(manual, computed)
+
+    larger_space0 = sequence.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c"))
+    larger_space1 = Affine(manual, input_axes=("x", "y"), output_axes=("x", "y")).to_affine_matrix(
+        input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")
+    )
+    assert np.array_equal(larger_space0, larger_space1)
+    assert np.array_equal(
+        larger_space0,
+        (
+            # affine
+            np.array(
+                [
+                    [1.0, 2.0, 0.0, 3.0],
+                    [4.0, 5.0, 0.0, 6.0],
+                    [0.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+            # scale
+            @ np.array(
+                [
+                    [2.0, 0.0, 0.0, 0.0],
+                    [0.0, 3.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+            # translation
+            @ np.array(
+                [
+                    [1.0, 0.0, 0.0, 1.0],
+                    [0.0, 1.0, 0.0, 2.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+        ),
+    )
+    # test sequence with MapAxis
+    map_axis = MapAxis({"x": "y", "y": "x"})
+    assert np.array_equal(
+        Sequence([map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3)
+    )
+    assert np.array_equal(
+        Sequence([map_axis, map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("y", "x")),
+        np.eye(3),
+    )
+    # test nested sequence
+    affine_2d_to_3d = Affine(
+        [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 2, 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "z"),
+    )
+    # the function _get_current_output_axes() doesn't get called for the last transformation in a sequence,
+    # that's why we add Identity()
+    sequence0 = Sequence([translation, map_axis, affine_2d_to_3d, Identity()])
+    sequence1 = Sequence([Sequence([translation, map_axis]), affine_2d_to_3d, Identity()])
+    sequence2 = Sequence([translation, Sequence([map_axis, affine_2d_to_3d, Identity()]), Identity()])
+    matrix0 = sequence0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    matrix1 = sequence1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    print("test with error:")
+    matrix2 = sequence2.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    assert np.array_equal(matrix0, matrix1)
+    assert np.array_equal(matrix0, matrix2)
+    assert np.array_equal(
+        matrix0,
+        np.array(
+            [
+                [0, 1, 2],
+                [1, 0, 1],
+                [2, 0, 2],
+                [0, 0, 1],
             ]
         ),
     )
