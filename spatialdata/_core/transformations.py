@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from functools import singledispatchmethod
 from numbers import Number
-from typing import Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
+import pyarrow as pa
+import xarray as xr
+from anndata import AnnData
+from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.core_utils import ValidAxis_t, validate_axis_name
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
+
+if TYPE_CHECKING:
+    from core_utils import SpatialElement
 
 __all__ = [
     "BaseTransformation",
@@ -114,6 +125,90 @@ class BaseTransformation(ABC):
             array = array.astype(float)
         return array
 
+    # helper functions to transform coordinates; we use an internal representation based on xarray.DataArray
+    #
+    # warning: the function _transform_coordinates() will always expect points that are x, y or x, y, z and return
+    # points that are x, y or x, y, z (it allows the case in which the number of dimensions changes) the function
+    # to_affine_matrix() is public so it doesn't add this costraint, but this function is used only to transform
+    # spatial elements, where we always have x, y, z
+    @abstractmethod
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        raise NotImplementedError
+
+    # utils for the internal representation of coordinates using xarray
+    @staticmethod
+    def _xarray_coords_get_coords(data: DataArray) -> list[ValidAxis_t]:
+        axes = data.coords["dim"].data.tolist()
+        assert isinstance(axes, list)
+        return axes
+
+    @staticmethod
+    def _xarray_coords_get_column(data: DataArray, axis: ValidAxis_t) -> DataArray:
+        return data[:, data["dim"] == axis]
+
+    @staticmethod
+    def _xarray_coords_validate_axes(data: DataArray) -> None:
+        axes = BaseTransformation._xarray_coords_get_coords(data)
+        if axes not in [["x", "y"], ["x", "y", "z"]]:
+            raise ValueError(f"Invalid axes: {axes}")
+
+    @staticmethod
+    def _xarray_coords_filter_axes(data: DataArray, axes: Optional[list[ValidAxis_t]] = None) -> DataArray:
+        if axes is None:
+            axes = ["x", "y", "z"]
+        return data[:, data["dim"].isin(axes)]
+
+    @staticmethod
+    def _xarray_coords_reorder_axes(data: DataArray) -> DataArray:
+        axes = BaseTransformation._xarray_coords_get_coords(data)
+        if "z" in axes:
+            data = data.sel(dim=["x", "y", "z"])
+        else:
+            data = data.sel(dim=["x", "y"])
+        BaseTransformation._xarray_coords_validate_axes(data)
+        return data
+
+    # methods to transform spatial elements that are based on coordinates: points, polygons and shapes
+
+    @singledispatchmethod
+    def transform(cls, data: SpatialElement) -> SpatialElement:
+        raise NotImplementedError()
+
+    @transform.register(SpatialImage)
+    def _(
+        cls,
+        data: SpatialImage,
+    ) -> SpatialImage:
+        raise NotImplementedError()
+
+    @transform.register(MultiscaleSpatialImage)
+    def _(
+        cls,
+        data: MultiscaleSpatialImage,
+    ) -> MultiscaleSpatialImage:
+        raise NotImplementedError()
+
+    @transform.register(pa.Table)
+    def _(
+        cls,
+        data: pa.Table,
+    ) -> pa.Table:
+        raise NotImplementedError()
+
+    @transform.register(GeoDataFrame)
+    def _(
+        cls,
+        data: GeoDataFrame,
+    ) -> GeoDataFrame:
+        raise NotImplementedError()
+
+    @transform.register(AnnData)
+    def _(
+        cls,
+        data: AnnData,
+    ) -> AnnData:
+        raise NotImplementedError()
+
 
 class Identity(BaseTransformation):
     def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
@@ -133,6 +228,9 @@ class Identity(BaseTransformation):
 
     def _repr_transformation_description(self, indent: int = 0) -> str:
         return ""
+
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        return data
 
 
 # Warning on MapAxis vs NgffMapAxis: MapAxis can add new axes that are not present in input. NgffMapAxis can't do
@@ -184,12 +282,29 @@ class MapAxis(BaseTransformation):
         s = s[:-1]
         return s
 
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        self._xarray_coords_validate_axes(data)
+        data_input_axes = self._xarray_coords_get_coords(data)
+        data_output_axes = _get_current_output_axes(self, data_input_axes)
+
+        transformed = []
+        for ax in data_output_axes:
+            if ax in self.map_axis:
+                column = self._xarray_coords_get_column(data, self.map_axis[ax])
+            else:
+                column = self._xarray_coords_get_column(data, ax)
+            column.coords["dim"] = [ax]
+            transformed.append(column)
+        to_return = xr.concat(transformed, dim="dim")
+        to_return = self._xarray_coords_reorder_axes(to_return)
+        return to_return
+
 
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
         self.translation = self._parse_list_into_array(translation)
         self._validate_axes(axes)
-        self.axes = axes
+        self.axes = list(axes)
         assert len(self.translation) == len(self.axes)
 
     def inverse(self) -> BaseTransformation:
@@ -212,12 +327,19 @@ class Translation(BaseTransformation):
     def _repr_transformation_description(self, indent: int = 0) -> str:
         return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.translation}"
 
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        self._xarray_coords_validate_axes(data)
+        translation = DataArray(self.translation, coords={"dim": self.axes})
+        transformed = data + translation
+        to_return = self._xarray_coords_reorder_axes(transformed)
+        return to_return
+
 
 class Scale(BaseTransformation):
     def __init__(self, scale: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
         self.scale = self._parse_list_into_array(scale)
         self._validate_axes(axes)
-        self.axes = axes
+        self.axes = list(axes)
         assert len(self.scale) == len(self.axes)
 
     def inverse(self) -> BaseTransformation:
@@ -242,6 +364,13 @@ class Scale(BaseTransformation):
     def _repr_transformation_description(self, indent: int = 0) -> str:
         return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.scale}"
 
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        self._xarray_coords_validate_axes(data)
+        scale = DataArray(self.scale, coords={"dim": self.axes})
+        transformed = data * scale
+        to_return = self._xarray_coords_reorder_axes(transformed)
+        return to_return
+
 
 class Affine(BaseTransformation):
     def __init__(
@@ -249,8 +378,8 @@ class Affine(BaseTransformation):
     ) -> None:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
-        self.input_axes = input_axes
-        self.output_axes = output_axes
+        self.input_axes = list(input_axes)
+        self.output_axes = list(output_axes)
         self.matrix = self._parse_list_into_array(matrix)
         assert self.matrix.dtype == float
         if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
@@ -303,6 +432,17 @@ class Affine(BaseTransformation):
         s = s[:-1]
         return s
 
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        self._xarray_coords_validate_axes(data)
+        data_input_axes = self._xarray_coords_get_coords(data)
+        data_output_axes = _get_current_output_axes(self, data_input_axes)
+        matrix = self.to_affine_matrix(data_input_axes, data_output_axes)
+        transformed = (matrix @ np.vstack((data.data.T, np.ones(len(data))))).T[:, :-1]
+        to_return = DataArray(transformed, coords={"points": data.coords["points"], "dim": data_output_axes})
+        self._xarray_coords_filter_axes(to_return)
+        to_return = self._xarray_coords_reorder_axes(to_return)
+        return to_return
+
 
 class Sequence(BaseTransformation):
     def __init__(self, transformations: list[BaseTransformation]) -> None:
@@ -320,53 +460,6 @@ class Sequence(BaseTransformation):
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
             raise ValueError("Input axes must be a subset of output axes.")
-
-        def _get_current_output_axes(
-            transformation: BaseTransformation, input_axes: list[ValidAxis_t]
-        ) -> list[ValidAxis_t]:
-            if (
-                isinstance(transformation, Identity)
-                or isinstance(transformation, Translation)
-                or isinstance(transformation, Scale)
-            ):
-                return input_axes
-            elif isinstance(transformation, MapAxis):
-                map_axis_input_axes = set(transformation.map_axis.values())
-                set(transformation.map_axis.keys())
-                to_return = []
-                for ax in input_axes:
-                    if ax not in map_axis_input_axes:
-                        assert ax not in to_return
-                        to_return.append(ax)
-                    else:
-                        mapped = [ax_out for ax_out, ax_in in transformation.map_axis.items() if ax_in == ax]
-                        assert all([ax_out not in to_return for ax_out in mapped])
-                        to_return.extend(mapped)
-                return to_return
-            elif isinstance(transformation, Affine):
-                to_return = []
-                add_affine_output_axes = False
-                for ax in input_axes:
-                    if ax not in transformation.input_axes:
-                        assert ax not in to_return
-                        to_return.append(ax)
-                    else:
-                        add_affine_output_axes = True
-                if add_affine_output_axes:
-                    for ax in transformation.output_axes:
-                        if ax not in to_return:
-                            to_return.append(ax)
-                        else:
-                            raise ValueError(
-                                f"Trying to query an invalid representation of an affine matrix: the ax {ax} is not "
-                                f"an input axis of the affine matrix but it appears both as output as input of the "
-                                f"matrix representation being queried"
-                            )
-                return to_return
-            elif isinstance(transformation, Sequence):
-                return input_axes
-            else:
-                raise ValueError("Unknown transformation type.")
 
         current_input_axes = input_axes
         current_output_axes = _get_current_output_axes(self.transformations[0], current_input_axes)
@@ -414,3 +507,55 @@ class Sequence(BaseTransformation):
             s += f"{t._repr_indent(indent=indent)}\n"
         s = s[:-1]
         return s
+
+    def _transform_coordinates(self, data: DataArray) -> DataArray:
+        for t in self.transformations:
+            data = t._transform_coordinates(data)
+        self._xarray_coords_validate_axes(data)
+        return data
+
+
+def _get_current_output_axes(transformation: BaseTransformation, input_axes: list[ValidAxis_t]) -> list[ValidAxis_t]:
+    if (
+        isinstance(transformation, Identity)
+        or isinstance(transformation, Translation)
+        or isinstance(transformation, Scale)
+    ):
+        return input_axes
+    elif isinstance(transformation, MapAxis):
+        map_axis_input_axes = set(transformation.map_axis.values())
+        set(transformation.map_axis.keys())
+        to_return = []
+        for ax in input_axes:
+            if ax not in map_axis_input_axes:
+                assert ax not in to_return
+                to_return.append(ax)
+            else:
+                mapped = [ax_out for ax_out, ax_in in transformation.map_axis.items() if ax_in == ax]
+                assert all([ax_out not in to_return for ax_out in mapped])
+                to_return.extend(mapped)
+        return to_return
+    elif isinstance(transformation, Affine):
+        to_return = []
+        add_affine_output_axes = False
+        for ax in input_axes:
+            if ax not in transformation.input_axes:
+                assert ax not in to_return
+                to_return.append(ax)
+            else:
+                add_affine_output_axes = True
+        if add_affine_output_axes:
+            for ax in transformation.output_axes:
+                if ax not in to_return:
+                    to_return.append(ax)
+                else:
+                    raise ValueError(
+                        f"Trying to query an invalid representation of an affine matrix: the ax {ax} is not "
+                        f"an input axis of the affine matrix but it appears both as output as input of the "
+                        f"matrix representation being queried"
+                    )
+        return to_return
+    elif isinstance(transformation, Sequence):
+        return input_axes
+    else:
+        raise ValueError("Unknown transformation type.")

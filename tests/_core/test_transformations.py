@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from xarray import DataArray
 
 from spatialdata import SpatialData
 from spatialdata._core.transformations import (
@@ -433,6 +434,63 @@ def test_sequence():
         ),
     )
     print(sequence0)
+
+
+def test_transform_coordinates():
+    map_axis = MapAxis({"x": "y", "y": "x"})
+    translation = Translation([1, 2, 3], axes=("x", "y", "z"))
+    scale = Scale([2, 3, 4], axes=("x", "y", "z"))
+    affine = Affine(
+        [
+            [1, 2, 3],
+            [4, 5, 6],
+            [0, 0, 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "c"),
+    )
+    transformaions = [
+        Identity(),
+        map_axis,
+        translation,
+        scale,
+        affine,
+        Sequence([translation, scale, affine]),
+    ]
+    affine_matrix_manual = np.array(
+        [
+            [1, 2, 0, 3],
+            [4, 5, 0, 6],
+            [0, 0, 1, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    coords = DataArray([[0, 0, 0], [1, 2, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]})
+    manual0 = (affine_matrix_manual @ np.vstack((coords.data.T, np.ones((1, 2)))))[:-2].T
+    coords_manual = np.array([[2, 6, 12], [4, 12, 24]])
+    manual1 = (affine_matrix_manual @ np.vstack((coords_manual.T, np.ones((1, 2)))))[:-2].T
+    expected = [
+        DataArray([[0, 0, 0], [1, 2, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[0, 0, 0], [2, 1, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[1, 2, 3], [2, 4, 6]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[0, 0, 0], [2, 6, 12]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray(manual0, coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray(manual1, coords={"points": range(2), "dim": ["x", "y", "z"]}),
+    ]
+    for t, e in zip(transformaions, expected):
+        transformed = t._transform_coordinates(coords)
+        # debug
+        if not transformed.equals(e):
+            print("transformation:")
+            print(t)
+            print("transformed:")
+            print(transformed)
+            print("expected:")
+            print(e)
+            print()
+        assert transformed.equals(e)
 
 
 def test_sequence_mismatching_cs_inference():
