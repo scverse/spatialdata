@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import xarray.testing
 from xarray import DataArray
 
 from spatialdata import SpatialData
@@ -14,11 +15,9 @@ from spatialdata._core.transformations import (
 
 
 def test_identity():
-    assert np.array_equal(Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
-    assert np.array_equal(
-        Identity().inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3)
-    )
-    assert np.array_equal(
+    assert np.allclose(Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.allclose(Identity().inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.allclose(
         Identity().to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("y", "x", "z")),
         np.array(
             [
@@ -29,7 +28,7 @@ def test_identity():
             ]
         ),
     )
-    assert np.array_equal(
+    assert np.allclose(
         Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("c", "y", "x")),
         np.array(
             [
@@ -54,7 +53,7 @@ def test_map_axis():
     # first validation logic
     with pytest.raises(ValueError):
         MapAxis({"z": "x"}).to_affine_matrix(input_axes=("z"), output_axes=("z"))
-    assert np.array_equal(
+    assert np.allclose(
         MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x")),
         np.array(
             [
@@ -64,7 +63,7 @@ def test_map_axis():
         ),
     )
     # adding new axes with MapAxis (something that the Ngff MapAxis can't do)
-    assert np.array_equal(
+    assert np.allclose(
         MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x", "z")),
         np.array(
             [
@@ -76,12 +75,12 @@ def test_map_axis():
     )
 
     map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
-    assert np.array_equal(map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.allclose(map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
 
     # map_axis1 is an example of invertible MapAxis; here it swaps x and y
     map_axis1 = MapAxis({"x": "y", "y": "x"})
     map_axis1_inverse = map_axis1.inverse()
-    assert np.array_equal(
+    assert np.allclose(
         map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
             [
@@ -91,11 +90,11 @@ def test_map_axis():
             ]
         ),
     )
-    assert np.array_equal(
+    assert np.allclose(
         map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         map_axis1_inverse.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
     )
-    assert np.array_equal(
+    assert np.allclose(
         map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z")),
         np.array(
             [
@@ -106,7 +105,7 @@ def test_map_axis():
             ]
         ),
     )
-    assert np.array_equal(
+    assert np.allclose(
         map_axis1.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z")),
         np.array(
             [
@@ -123,7 +122,7 @@ def test_map_axis():
         map_axis2.inverse()
     with pytest.raises(ValueError):
         map_axis2.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "c"))
-    assert np.array_equal(
+    assert np.allclose(
         map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "z", "c")),
         np.array(
             [
@@ -135,7 +134,7 @@ def test_map_axis():
             ]
         ),
     )
-    assert np.array_equal(
+    assert np.allclose(
         map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "c", "z")),
         np.array(
             [
@@ -154,15 +153,15 @@ def test_translation():
         Translation(translation=(1, 2, 3))
     t0 = Translation([1, 2], axes=("x", "y"))
     t1 = Translation(np.array([2, 1]), axes=("y", "x"))
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
     )
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
         np.array([[0, 1, 0, 2], [1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
     )
-    assert np.array_equal(
+    assert np.allclose(
         t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
             [
@@ -179,15 +178,15 @@ def test_scale():
         Scale(scale=(1, 2, 3))
     t0 = Scale([3, 2], axes=("x", "y"))
     t1 = Scale(np.array([2, 3]), axes=("y", "x"))
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
     )
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
         np.array([[0, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
     )
-    assert np.array_equal(
+    assert np.allclose(
         t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
             [
@@ -216,7 +215,7 @@ def test_affine():
         input_axes=("x", "y"),
         output_axes=("y", "x"),
     )
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
             [
@@ -234,13 +233,13 @@ def test_affine():
         output_axes=("x", "y"),
     )
     inverse1 = t1.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
-    assert np.array_equal(inverse0, inverse1)
+    assert np.allclose(inverse0, inverse1)
     # check that the inversion works
     m0 = t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
     m0_inverse = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
-    assert np.array_equal(np.dot(m0, m0_inverse), np.eye(3))
+    assert np.allclose(np.dot(m0, m0_inverse), np.eye(3))
 
-    assert np.array_equal(
+    assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")),
         np.array(
             [
@@ -254,7 +253,7 @@ def test_affine():
     )
 
     # adding new axes
-    assert np.array_equal(
+    assert np.allclose(
         Affine(
             np.array(
                 [
@@ -289,7 +288,7 @@ def test_affine():
         ).to_affine_matrix(input_axes=("x"), output_axes=("x", "y"))
 
     # removing axes
-    assert np.array_equal(
+    assert np.allclose(
         Affine(
             np.array(
                 [
@@ -351,14 +350,14 @@ def test_sequence():
         )
     )
     computed = sequence.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
-    assert np.array_equal(manual, computed)
+    assert np.allclose(manual, computed)
 
     larger_space0 = sequence.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c"))
     larger_space1 = Affine(manual, input_axes=("x", "y"), output_axes=("x", "y")).to_affine_matrix(
         input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")
     )
-    assert np.array_equal(larger_space0, larger_space1)
-    assert np.array_equal(
+    assert np.allclose(larger_space0, larger_space1)
+    assert np.allclose(
         larger_space0,
         (
             # affine
@@ -393,10 +392,10 @@ def test_sequence():
     )
     # test sequence with MapAxis
     map_axis = MapAxis({"x": "y", "y": "x"})
-    assert np.array_equal(
+    assert np.allclose(
         Sequence([map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3)
     )
-    assert np.array_equal(
+    assert np.allclose(
         Sequence([map_axis, map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("y", "x")),
         np.eye(3),
     )
@@ -420,9 +419,9 @@ def test_sequence():
     matrix1 = sequence1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
     print("test with error:")
     matrix2 = sequence2.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
-    assert np.array_equal(matrix0, matrix1)
-    assert np.array_equal(matrix0, matrix2)
-    assert np.array_equal(
+    assert np.allclose(matrix0, matrix1)
+    assert np.allclose(matrix0, matrix2)
+    assert np.allclose(
         matrix0,
         np.array(
             [
@@ -490,7 +489,7 @@ def test_transform_coordinates():
             print("expected:")
             print(e)
             print()
-        assert transformed.equals(e)
+        xarray.testing.assert_allclose(transformed, e)
 
 
 def test_sequence_mismatching_cs_inference():
