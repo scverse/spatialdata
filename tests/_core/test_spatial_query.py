@@ -1,14 +1,17 @@
 from dataclasses import FrozenInstanceError
 
+import geopandas as gpd
 import numpy as np
 import pytest
+from shapely import linearrings, polygons
 
-from spatialdata import Image2DModel, Image3DModel, PointsModel
+from spatialdata import Image2DModel, Image3DModel, PointsModel, PolygonsModel
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     _bounding_box_query_image,
     _bounding_box_query_points,
+    _bounding_box_query_polygons,
 )
 from tests._core.conftest import c_cs, cyx_cs, czyx_cs, xy_cs
 
@@ -112,3 +115,39 @@ def test_bounding_box_image_3d(n_channels):
     image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)
+
+
+def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:
+    linear_rings = []
+    for centroid in centroid_coordinates:
+        min_coords = centroid - half_width
+        max_coords = centroid + half_width
+
+        linear_rings.append(
+            linearrings(
+                [
+                    [min_coords[0], min_coords[1]],
+                    [min_coords[0], max_coords[1]],
+                    [max_coords[0], max_coords[1]],
+                    [max_coords[0], min_coords[1]],
+                ]
+            )
+        )
+    return polygons(linear_rings)
+
+
+def test_bounding_box_polygons():
+    centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
+    cell_outline_polygons = _make_squares(centroid_coordinates=centroids, half_width=6)
+
+    polygon_series = gpd.GeoSeries(cell_outline_polygons)
+    cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
+    sd_polygons = PolygonsModel.parse(cell_polygon_table)
+
+    request = BoundingBoxRequest(
+        coordinate_system=cyx_cs, min_coordinate=np.array([40, 40]), max_coordinate=np.array([100, 100])
+    )
+    polygons_result = _bounding_box_query_polygons(sd_polygons, request)
+
+    assert len(polygons_result) == 1
+    assert polygons_result.index[0] == 3

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pyarrow as pa
+from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
@@ -152,3 +153,39 @@ def _bounding_box_query_image(
     query_result.attrs["transformation"] = new_transformation
 
     return query_result
+
+
+def _bounding_box_query_polygons(polygons: GeoDataFrame, request: BoundingBoxRequest) -> GeoDataFrame:
+    """Perform a spatial bounding box query on a polygons element.
+
+    Parameters
+    ----------
+    polygons : GeoDataFrame
+        The polygons element to perform the query on.
+    request : BoundingBoxRequest
+        The request for the query.
+
+    Returns
+    -------
+    query_result : GeoDataFrame
+        The polygons contained within the specified bounding box.
+    """
+    spatial_axes = _get_spatial_axes(request.coordinate_system)
+
+    # get the polygon bounding boxes
+    polygons_min_column_keys = [f"min{axis}" for axis in spatial_axes]
+    polygons_min_coordinates = polygons.bounds[polygons_min_column_keys].values
+
+    polygons_max_column_keys = [f"max{axis}" for axis in spatial_axes]
+    polygons_max_coordinates = polygons.bounds[polygons_max_column_keys].values
+
+    # check that the min coordinates are inside the bounding box
+    min_inside = np.all(request.min_coordinate < polygons_min_coordinates, axis=1)
+
+    # check that the max coordinates are inside the bounding box
+    max_inside = np.all(request.max_coordinate > polygons_max_coordinates, axis=1)
+
+    # polygons inside the bounding box satisfy both
+    polygon_inside = np.logical_and(min_inside, max_inside)
+
+    return polygons.loc[polygon_inside]
