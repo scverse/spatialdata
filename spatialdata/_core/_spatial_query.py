@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import pyarrow as pa
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
 
 from spatialdata._core.coordinate_system import CoordinateSystem, _get_spatial_axes
+from spatialdata._core.transformations import Sequence, Translation
 
 if TYPE_CHECKING:
     pass
@@ -85,3 +88,67 @@ def _bounding_box_query_points_dict(
             requested_points[points_name] = points
 
     return requested_points
+
+
+def _bounding_box_query_image(
+    image: Union[MultiscaleSpatialImage, SpatialImage], request: BoundingBoxRequest
+) -> Union[MultiscaleSpatialImage, SpatialImage]:
+    """Perform a spatial bounding box query on an Image or Labels element.
+
+    Parameters
+    ----------
+    image : Union[MultiscaleSpatialImage, SpatialImage]
+        The image element to perform the query on.
+    request : BoundingBoxRequest
+        The request for the query.
+
+    Returns
+    -------
+    query_result : Union[MultiscaleSpatialImage, SpatialImage]
+        The image contained within the specified bounding box.
+    """
+    spatial_axes = _get_spatial_axes(request.coordinate_system)
+
+    # build the request
+    selection = {}
+    for axis_index, axis_name in enumerate(spatial_axes):
+        # get the min value along the axis
+        min_value = request.min_coordinate[axis_index]
+
+        # get max value, slices are open half interval
+        max_value = request.max_coordinate[axis_index] + 1
+
+        # add the
+        selection[axis_name] = slice(min_value, max_value)
+
+    query_result = image.sel(selection)
+
+    # update the transform
+    # currently, this assumes the existing transforms input coordinate system
+    # is the intrinsic coordinate system
+    # todo: this should be updated when we support multiple transforms
+    initial_transform = query_result.transform
+    n_axes_intrinsic = len(initial_transform.input_coordinate_system.axes_names)
+
+    coordinate_system = initial_transform.input_coordinate_system
+    spatial_indices = [i for i, axis in enumerate(coordinate_system._axes) if axis.type == "space"]
+
+    translation_vector = np.zeros((n_axes_intrinsic,))
+    for spatial_axis_index, coordinate_index in enumerate(spatial_indices):
+        translation_vector[coordinate_index] = request.min_coordinate[spatial_axis_index]
+
+    translation = Translation(
+        translation=translation_vector,
+        input_coordinate_system=coordinate_system,
+        output_coordinate_system=coordinate_system,
+    )
+
+    new_transformation = Sequence(
+        [translation, initial_transform],
+        input_coordinate_system=coordinate_system,
+        output_coordinate_system=initial_transform.output_coordinate_system,
+    )
+
+    query_result.attrs["transformation"] = new_transformation
+
+    return query_result
