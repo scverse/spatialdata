@@ -35,6 +35,7 @@ dependencies = [
     "rich",
     "tqdm",
     "typing_extensions>=4.0.0",
+    "dask-image"
 ]
 
 [project.optional-dependencies]

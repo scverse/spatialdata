@@ -3,8 +3,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from functools import singledispatchmethod
 from numbers import Number
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import Any, Optional, Union
 
+import dask.array
+import dask_image.ndinterp
 import numpy as np
 import pyarrow as pa
 import xarray as xr
@@ -14,16 +16,12 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata import SpatialData
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
-
-if TYPE_CHECKING:
-    pass
-
-from spatialdata import SpatialData
 
 __all__ = [
     "BaseTransformation",
@@ -34,6 +32,8 @@ __all__ = [
     "Affine",
     "Sequence",
 ]
+
+DEBUG_WITH_PLOTS = True
 
 
 class BaseTransformation(ABC):
@@ -197,7 +197,79 @@ class BaseTransformation(ABC):
         self,
         data: SpatialImage,
     ) -> SpatialImage:
-        raise NotImplementedError()
+        # to avoid cyclic import
+        from spatialdata._core.models import Image2DModel, Image3DModel, RasterSchema
+
+        axes = get_dims(data)
+        if axes == ("c", "y", "x"):
+            n_spatial_dims = 2
+        elif axes == ("c", "z", "y", "x"):
+            n_spatial_dims = 3
+        else:
+            raise ValueError(f"Invalid axes: {axes}")
+
+        if n_spatial_dims == 2:
+            x = data.shape[2]
+            y = data.shape[1]
+            v = np.array([[0, 0, 0, 1], [0, 0, x, 1], [0, y, x, 1], [0, y, 0, 1]])
+            matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
+            inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
+            new_v = (matrix @ v.T).T
+            output_shape = (
+                data.shape[0],
+                int(np.max(new_v[:, 1]) - np.min(new_v[:, 1])),
+                int(np.max(new_v[:, 2]) - np.min(new_v[:, 2])),
+            )
+            ##
+            inverse_matrix_adjusted = Sequence(
+                [
+                    Translation(np.array([np.min(new_v[:, 2]), np.min(new_v[:, 1])]), axes=["x", "y"]),
+                    self.inverse(),
+                ]
+            ).to_affine_matrix(input_axes=axes, output_axes=axes)
+            ##
+        else:
+            raise NotImplementedError()
+
+        # fix chunk shape, it should be possible for the user to specify them, and by default we could reuse the chunk shape of the input
+        # output_chunks = data.chunks
+        ##
+        transformed_dask = dask_image.ndinterp.affine_transform(
+            data.data,
+            matrix=inverse_matrix_adjusted,
+            output_shape=output_shape
+            # , output_chunks=output_chunks
+        )
+        ##
+
+        if DEBUG_WITH_PLOTS:
+            if n_spatial_dims == 2:
+                ##
+                import matplotlib.pyplot as plt
+
+                plt.figure()
+                im = data.data
+                new_v_inverse = (inverse_matrix @ v.T).T
+                min_x_inverse = np.min(new_v_inverse[:, 2])
+                min_y_inverse = np.min(new_v_inverse[:, 1])
+
+                plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
+                plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
+                plt.scatter(v[:, 1:-1][:, 1] - 0.5, v[:, 1:-1][:, 0] - 0.5, c="r")
+                plt.scatter(new_v[:, 1:-1][:, 1] - 0.5, new_v[:, 1:-1][:, 0] - 0.5, c="g")
+                plt.scatter(new_v_inverse[:, 1:-1][:, 1] - 0.5, new_v_inverse[:, 1:-1][:, 0] - 0.5, c="k")
+                plt.show()
+                ##
+            else:
+                assert n_spatial_dims == 3
+                raise NotImplementedError()
+
+        schema: RasterSchema = {2: Image2DModel, 3: Image3DModel}[n_spatial_dims]
+        transformed_data = SpatialImage(transformed_dask, dims=axes)
+        schema.parse(transformed_data)
+        # TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation)
+        transformed_data
+        return transformed_data
 
     @transform.register(MultiscaleSpatialImage)
     def _(

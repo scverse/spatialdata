@@ -1,10 +1,16 @@
+import math
+
 import numpy as np
 import pytest
+import scipy.misc
 import xarray.testing
+from multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
 from spatialdata._core.core_utils import get_dims
+from spatialdata._core.models import Image2DModel
 from spatialdata._core.transformations import (
     Affine,
     Identity,
@@ -485,10 +491,11 @@ def test_transform_coordinates():
 
 
 def _get_affine() -> Affine:
+    theta = math.pi / 18
     return Affine(
         [
-            [1, 2, 3],
-            [4, 5, 6],
+            [2 * math.cos(theta), 2 * math.sin(-theta), -1000],
+            [2 * math.sin(theta), 2 * math.cos(theta), 300],
             [0, 0, 1],
         ],
         input_axes=("x", "y"),
@@ -496,7 +503,43 @@ def _get_affine() -> Affine:
     )
 
 
-# TODO: maybe add methods for comparing the coordinates of elements as we are doing below
+# TODO: when the io for 3D images and 3D labels work, add those tests
+def test_transform_image_spatial_image(images: SpatialData):
+    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
+
+    im = scipy.misc.face()
+    im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
+    # TODO: remove this del later on
+    del sdata.images["image2d"]
+    sdata.images["face"] = im_element
+
+    affine = _get_affine()
+    affine.inverse().transform(affine.transform(sdata))
+    raise NotImplementedError("TODO: compare the transformed images with the original ones")
+
+
+def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
+    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
+    affine = _get_affine()
+    affine.inverse().transform(affine.transform(sdata))
+    raise NotImplementedError("TODO: compare the transformed images with the original ones")
+
+
+def test_transform_labels_spatial_image(labels: SpatialData):
+    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
+    affine = _get_affine()
+    affine.inverse().transform(affine.transform(sdata))
+    raise NotImplementedError("TODO: compare the transformed images with the original ones")
+
+
+def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
+    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
+    affine = _get_affine()
+    affine.inverse().transform(affine.transform(sdata))
+    raise NotImplementedError("TODO: compare the transformed images with the original ones")
+
+
+# TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
     new_points = affine.inverse().transform(affine.transform(points))
@@ -538,53 +581,6 @@ def test_transform_shapes(shapes: SpatialData):
         p0 = shapes.shapes[k]
         p1 = new_shapes.shapes[k]
         assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
-
-
-def test_sequence_mismatching_cs_inference():
-    pass
-    # original, affine, transformed = _test_sequence_helper()
-    # _test_transformation(
-    #     transformation=NgffSequence(
-    #         [
-    #             NgffScale(np.array([2, 3]), input_coordinate_system=yx_cs, output_coordinate_system=yx_cs),
-    #             NgffScale(np.array([4, 5]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
-    #         ]
-    #     ),
-    #     original=original,
-    #     transformed=original * np.array([2 * 5, 3 * 4]),
-    #     input_cs=yx_cs,
-    #     output_cs=yx_cs,
-    #     wrong_output_cs=xy_cs,
-    #     test_inverse=True,
-    # )
-
-
-def test_sequence_2d_to_2d_with_c_with_mismatching_cs():
-    pass
-
-
-#     original, affine, transformed = _test_sequence_helper()
-#     affine.input_coordinate_system = xy_cs
-#     affine.output_coordinate_system = xy_cs
-#
-#     def _manual_xy_to_cyx(x: np.ndarray) -> np.ndarray:
-#         return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
-#
-#     _test_transformation(
-#         transformation=NgffSequence(
-#             [
-#                 NgffTranslation(np.array([1, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
-#                 NgffScale(np.array([3, 4]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
-#                 affine,
-#             ]
-#         ),
-#         original=_manual_xy_to_cyx(original),
-#         transformed=_manual_xy_to_cyx(transformed),
-#         input_cs=cyx_cs,
-#         output_cs=cyx_cs,
-#         wrong_output_cs=xyc_cs,
-#         test_inverse=False,
-#     )
 
 
 def test_set_transform_with_mismatching_cs(sdata: SpatialData):
