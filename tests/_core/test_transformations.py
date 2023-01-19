@@ -4,6 +4,7 @@ import xarray.testing
 from xarray import DataArray
 
 from spatialdata import SpatialData
+from spatialdata._core.core_utils import get_dims
 from spatialdata._core.transformations import (
     Affine,
     Identity,
@@ -480,16 +481,63 @@ def test_transform_coordinates():
     ]
     for t, e in zip(transformaions, expected):
         transformed = t._transform_coordinates(coords)
-        # debug
-        if not transformed.equals(e):
-            print("transformation:")
-            print(t)
-            print("transformed:")
-            print(transformed)
-            print("expected:")
-            print(e)
-            print()
         xarray.testing.assert_allclose(transformed, e)
+
+
+def _get_affine() -> Affine:
+    return Affine(
+        [
+            [1, 2, 3],
+            [4, 5, 6],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+
+
+# TODO: maybe add methods for comparing the coordinates of elements as we are doing below
+def test_transform_points(points: SpatialData):
+    affine = _get_affine()
+    new_points = affine.inverse().transform(affine.transform(points))
+    keys0 = list(points.points.keys())
+    keys1 = list(new_points.points.keys())
+    assert keys0 == keys1
+    for k in keys0:
+        p0 = points.points[k]
+        p1 = new_points.points[k]
+        axes0 = get_dims(p0)
+        axes1 = get_dims(p1)
+        assert axes0 == axes1
+        for ax in axes0:
+            x0 = p0[ax].to_numpy()
+            x1 = p1[ax].to_numpy()
+            assert np.allclose(x0, x1)
+
+
+def test_transform_polygons(polygons: SpatialData):
+    affine = _get_affine()
+    new_polygons = affine.inverse().transform(affine.transform(polygons))
+    keys0 = list(polygons.polygons.keys())
+    keys1 = list(new_polygons.polygons.keys())
+    assert keys0 == keys1
+    for k in keys0:
+        p0 = polygons.polygons[k]
+        p1 = new_polygons.polygons[k]
+        for i in range(len(p0.geometry)):
+            assert p0.geometry.iloc[i].almost_equals(p1.geometry.iloc[i])
+
+
+def test_transform_shapes(shapes: SpatialData):
+    affine = _get_affine()
+    new_shapes = affine.inverse().transform(affine.transform(shapes))
+    keys0 = list(shapes.shapes.keys())
+    keys1 = list(new_shapes.shapes.keys())
+    assert keys0 == keys1
+    for k in keys0:
+        p0 = shapes.shapes[k]
+        p1 = new_shapes.shapes[k]
+        assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
 
 
 def test_sequence_mismatching_cs_inference():

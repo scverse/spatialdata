@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from functools import singledispatchmethod
 from numbers import Number
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 import pyarrow as pa
@@ -14,14 +14,16 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.core_utils import ValidAxis_t, validate_axis_name
+from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
-    from core_utils import SpatialElement
+    pass
+
+from spatialdata import SpatialData
 
 __all__ = [
     "BaseTransformation",
@@ -171,43 +173,98 @@ class BaseTransformation(ABC):
     # methods to transform spatial elements that are based on coordinates: points, polygons and shapes
 
     @singledispatchmethod
-    def transform(cls, data: SpatialElement) -> SpatialElement:
+    def transform(self, data: Any) -> Any:
         raise NotImplementedError()
+
+    @transform.register(SpatialData)
+    def _(
+        self,
+        data: SpatialData,
+    ) -> SpatialData:
+        new_elements: dict[str, dict[str, Any]] = {}
+        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+            d = getattr(data, element_type)
+            if len(d) > 0:
+                new_elements[element_type] = {}
+            for k, v in d.items():
+                new_elements[element_type][k] = self.transform(v)
+
+        new_sdata = SpatialData(**new_elements)
+        return new_sdata
 
     @transform.register(SpatialImage)
     def _(
-        cls,
+        self,
         data: SpatialImage,
     ) -> SpatialImage:
         raise NotImplementedError()
 
     @transform.register(MultiscaleSpatialImage)
     def _(
-        cls,
+        self,
         data: MultiscaleSpatialImage,
     ) -> MultiscaleSpatialImage:
         raise NotImplementedError()
 
     @transform.register(pa.Table)
     def _(
-        cls,
+        self,
         data: pa.Table,
     ) -> pa.Table:
-        raise NotImplementedError()
+        axes = get_dims(data)
+        arrays = []
+        for ax in axes:
+            arrays.append(data[ax].to_numpy())
+        xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
+        xtransformed = self._transform_coordinates(xdata)
+        transformed = data.drop(axes)
+        for ax in axes:
+            indices = xtransformed["dim"] == ax
+            new_ax = pa.array(xtransformed[:, indices].data.flatten())
+            transformed = transformed.append_column(ax, new_ax)
+
+        # to avoid cyclic import
+        from spatialdata._core.models import PointsModel
+
+        PointsModel.validate(transformed)
+        return transformed
 
     @transform.register(GeoDataFrame)
     def _(
-        cls,
+        self,
         data: GeoDataFrame,
     ) -> GeoDataFrame:
-        raise NotImplementedError()
+        ##
+        ndim = len(get_dims(data))
+        # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
+        matrix = self.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
+        shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
+        transformed_geometry = data.geometry.affine_transform(shapely_notation)
+        transformed_data = data.copy(deep=True)
+        transformed_data.geometry = transformed_geometry
+
+        # to avoid cyclic import
+        from spatialdata._core.models import PolygonsModel
+
+        PolygonsModel.validate(transformed_data)
+        return transformed_data
 
     @transform.register(AnnData)
     def _(
-        cls,
+        self,
         data: AnnData,
     ) -> AnnData:
-        raise NotImplementedError()
+        ndim = len(get_dims(data))
+        xdata = DataArray(data.obsm["spatial"], coords={"points": range(len(data)), "dim": ["x", "y", "z"][:ndim]})
+        transformed_spatial = self._transform_coordinates(xdata)
+        transformed_adata = data.copy()
+        transformed_adata.obsm["spatial"] = transformed_spatial.data
+
+        # to avoid cyclic import
+        from spatialdata._core.models import ShapesModel
+
+        ShapesModel.validate(transformed_adata)
+        return transformed_adata
 
 
 class Identity(BaseTransformation):
