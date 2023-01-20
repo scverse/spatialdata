@@ -270,3 +270,5 @@ def _get_table(
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
         return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+    else:
+        raise ValueError("region must be a string or a list of strings")

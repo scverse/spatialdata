@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """This file contains models and schema for SpatialData"""
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
@@ -66,6 +68,7 @@ ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 
 Transform_s = AttrSchema(NgffBaseTransformation, None)
 
+
 __all__ = [
     "Labels2DModel",
     "Labels3DModel",
@@ -75,6 +78,7 @@ __all__ = [
     "ShapesModel",
     "PointsModel",
     "TableModel",
+    "get_schema",
 ]
 
 
@@ -613,3 +617,45 @@ def _sparse_matrix_from_assignment(
         raise TypeError(f"var_names must be either np.array or List, but got {type(var_names)}")
     sparse = csr_matrix((data, (row, col)), shape=(n_obs, len(var_names)))
     return sparse
+
+
+Schema_t = Union[
+    Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, PolygonsModel, ShapesModel, TableModel
+]
+
+
+def get_schema(
+    e: SpatialElement,
+) -> Schema_t:
+    def _validate_and_return(
+        schema: Schema_t,
+        e: Union[SpatialElement],
+    ) -> Schema_t:
+        schema().validate(e)
+        return schema
+
+        from spatialdata._core.core_utils import get_dims
+
+    if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
+        axes = get_dims(e)
+        if "c" in axes:
+            if "z" in axes:
+                return _validate_and_return(Image3DModel, e)
+            else:
+                return _validate_and_return(Image2DModel, e)
+        else:
+            if "z" in axes:
+                return _validate_and_return(Labels3DModel, e)
+            else:
+                return _validate_and_return(Labels2DModel, e)
+    elif isinstance(e, GeoDataFrame):
+        return _validate_and_return(PolygonsModel, e)
+    elif isinstance(e, pa.Table):
+        return _validate_and_return(PointsModel, e)
+    elif isinstance(e, AnnData):
+        if "spatial" in e.obsm:
+            return _validate_and_return(ShapesModel, e)
+        else:
+            return _validate_and_return(TableModel, e)
+    else:
+        raise TypeError(f"Unsupported type {type(e)}")

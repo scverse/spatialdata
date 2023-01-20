@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from abc import ABC, abstractmethod
 from functools import singledispatchmethod
 from numbers import Number
@@ -17,6 +18,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
+from spatialdata._core.models import ScaleFactors_t, get_schema
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
 from spatialdata._logging import logger
 
@@ -170,7 +172,76 @@ class BaseTransformation(ABC):
         BaseTransformation._xarray_coords_validate_axes(data)
         return data
 
-    # methods to transform spatial elements that are based on coordinates: points, polygons and shapes
+    def _get_n_spatial_dims(self, axes: tuple[str, ...]) -> int:
+        if axes == ("c", "y", "x"):
+            n_spatial_dims = 2
+        elif axes == ("c", "z", "y", "x"):
+            n_spatial_dims = 3
+        else:
+            raise ValueError(f"Invalid axes: {axes}")
+        return n_spatial_dims
+
+    def _transform_raster(self, data: DataArray, axes: tuple[str, ...]) -> DataArray:
+        dims = {ch: axes.index(ch) for ch in axes}
+        v_list = []
+        n_spatial_dims = self._get_n_spatial_dims(axes)
+        binary = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
+        spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
+        binary *= np.array(spatial_shape)
+        v = np.hstack([np.zeros(len(binary)).reshape((-1, 1)), binary, np.ones(len(binary)).reshape((-1, 1))])
+        matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
+        inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
+        new_v = (matrix @ v.T).T
+        if "c" in axes:
+            c_shape = (data.shape[0],)
+        else:
+            c_shape = tuple()
+        new_spatial_shape = tuple(
+            int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
+        )
+        output_shape = c_shape + new_spatial_shape
+        ##
+        translation_vector = np.min(new_v[:, :-1], axis=0)
+        inverse_matrix_adjusted = Sequence(
+            [
+                Translation(translation_vector, axes=axes),
+                self.inverse(),
+            ]
+        ).to_affine_matrix(input_axes=axes, output_axes=axes)
+
+        # fix chunk shape, it should be possible for the user to specify them, and by default we could reuse the chunk shape of the input
+        # output_chunks = data.chunks
+        ##
+        transformed_dask = dask_image.ndinterp.affine_transform(
+            data,
+            matrix=inverse_matrix_adjusted,
+            output_shape=output_shape
+            # , output_chunks=output_chunks
+        )
+        ##
+
+        if DEBUG_WITH_PLOTS:
+            if n_spatial_dims == 2:
+                ##
+                import matplotlib.pyplot as plt
+
+                plt.figure()
+                im = data
+                new_v_inverse = (inverse_matrix @ v.T).T
+                min_x_inverse = np.min(new_v_inverse[:, 2])
+                min_y_inverse = np.min(new_v_inverse[:, 1])
+
+                plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
+                plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
+                plt.scatter(v[:, 1:-1][:, 1] - 0.5, v[:, 1:-1][:, 0] - 0.5, c="r")
+                plt.scatter(new_v[:, 1:-1][:, 1] - 0.5, new_v[:, 1:-1][:, 0] - 0.5, c="g")
+                plt.scatter(new_v_inverse[:, 1:-1][:, 1] - 0.5, new_v_inverse[:, 1:-1][:, 0] - 0.5, c="k")
+                plt.show()
+                ##
+            else:
+                assert n_spatial_dims == 3
+                raise NotImplementedError()
+        return transformed_dask
 
     @singledispatchmethod
     def transform(self, data: Any) -> Any:
@@ -197,78 +268,12 @@ class BaseTransformation(ABC):
         self,
         data: SpatialImage,
     ) -> SpatialImage:
-        # to avoid cyclic import
-        from spatialdata._core.models import Image2DModel, Image3DModel, RasterSchema
-
         axes = get_dims(data)
-        if axes == ("c", "y", "x"):
-            n_spatial_dims = 2
-        elif axes == ("c", "z", "y", "x"):
-            n_spatial_dims = 3
-        else:
-            raise ValueError(f"Invalid axes: {axes}")
-
-        if n_spatial_dims == 2:
-            x = data.shape[2]
-            y = data.shape[1]
-            v = np.array([[0, 0, 0, 1], [0, 0, x, 1], [0, y, x, 1], [0, y, 0, 1]])
-            matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
-            inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-            new_v = (matrix @ v.T).T
-            output_shape = (
-                data.shape[0],
-                int(np.max(new_v[:, 1]) - np.min(new_v[:, 1])),
-                int(np.max(new_v[:, 2]) - np.min(new_v[:, 2])),
-            )
-            ##
-            inverse_matrix_adjusted = Sequence(
-                [
-                    Translation(np.array([np.min(new_v[:, 2]), np.min(new_v[:, 1])]), axes=["x", "y"]),
-                    self.inverse(),
-                ]
-            ).to_affine_matrix(input_axes=axes, output_axes=axes)
-            ##
-        else:
-            raise NotImplementedError()
-
-        # fix chunk shape, it should be possible for the user to specify them, and by default we could reuse the chunk shape of the input
-        # output_chunks = data.chunks
-        ##
-        transformed_dask = dask_image.ndinterp.affine_transform(
-            data.data,
-            matrix=inverse_matrix_adjusted,
-            output_shape=output_shape
-            # , output_chunks=output_chunks
-        )
-        ##
-
-        if DEBUG_WITH_PLOTS:
-            if n_spatial_dims == 2:
-                ##
-                import matplotlib.pyplot as plt
-
-                plt.figure()
-                im = data.data
-                new_v_inverse = (inverse_matrix @ v.T).T
-                min_x_inverse = np.min(new_v_inverse[:, 2])
-                min_y_inverse = np.min(new_v_inverse[:, 1])
-
-                plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
-                plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
-                plt.scatter(v[:, 1:-1][:, 1] - 0.5, v[:, 1:-1][:, 0] - 0.5, c="r")
-                plt.scatter(new_v[:, 1:-1][:, 1] - 0.5, new_v[:, 1:-1][:, 0] - 0.5, c="g")
-                plt.scatter(new_v_inverse[:, 1:-1][:, 1] - 0.5, new_v_inverse[:, 1:-1][:, 0] - 0.5, c="k")
-                plt.show()
-                ##
-            else:
-                assert n_spatial_dims == 3
-                raise NotImplementedError()
-
-        schema: RasterSchema = {2: Image2DModel, 3: Image3DModel}[n_spatial_dims]
+        transformed_dask = self._transform_raster(data.data, axes=axes)
         transformed_data = SpatialImage(transformed_dask, dims=axes)
+        schema = get_schema(data)
         schema.parse(transformed_data)
-        # TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation)
-        transformed_data
+        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
         return transformed_data
 
     @transform.register(MultiscaleSpatialImage)
@@ -276,7 +281,13 @@ class BaseTransformation(ABC):
         self,
         data: MultiscaleSpatialImage,
     ) -> MultiscaleSpatialImage:
-        raise NotImplementedError()
+        axes = get_dims(data)
+        transformed_dask = self._transform_raster(data.data, axes=axes)
+        transformed_data = MultiscaleSpatialImage(transformed_dask, dims=axes)
+        schema = get_schema(data)
+        schema.parse(transformed_data)
+        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
+        return transformed_data
 
     @transform.register(pa.Table)
     def _(
