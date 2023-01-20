@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -21,6 +22,7 @@ from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation
+from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -107,23 +109,24 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     # read multiscale labels
     # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
     # since we don't link the image and the label inside .zattrs['image-label']
-    labels_store = store / "labels"
-    if labels_store.exists():
-        f = zarr.open(labels_store, mode="r")
-        for k in f.keys():
-            f_elem = f[k].name
-            f_elem_store = f"{labels_store}{f_elem}"
-            labels_loc = ZarrLocation(f_elem_store)
-            if labels_loc.exists():
-                labels_reader = Reader(labels_loc)()
-                labels_nodes = list(labels_reader)
-                # time.time()
-                if len(labels_nodes):
-                    for node in labels_nodes:
-                        if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
-                            [isinstance(spec, Label) for spec in node.specs]
-                        ):
-                            labels[k] = _read_multiscale(node, fmt)
+    with ome_zarr_logger(logging.ERROR):
+        labels_store = store / "labels"
+        if labels_store.exists():
+            f = zarr.open(labels_store, mode="r")
+            for k in f.keys():
+                f_elem = f[k].name
+                f_elem_store = f"{labels_store}{f_elem}"
+                labels_loc = ZarrLocation(f_elem_store)
+                if labels_loc.exists():
+                    labels_reader = Reader(labels_loc)()
+                    labels_nodes = list(labels_reader)
+                    # time.time()
+                    if len(labels_nodes):
+                        for node in labels_nodes:
+                            if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
+                                [isinstance(spec, Label) for spec in node.specs]
+                            ):
+                                labels[k] = _read_multiscale(node, fmt)
 
     # now read rest of the data
     points_store = store / "points"
