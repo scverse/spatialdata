@@ -23,10 +23,17 @@ from spatialdata._core.models import (
     RasterSchema,
     ShapesModel,
     TableModel,
-    get_schema
+    get_schema,
 )
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
-from tests.conftest import _get_points, _get_table, _get_polygons, _get_shapes, _get_labels, _get_images
+from tests.conftest import (
+    _get_images,
+    _get_labels,
+    _get_points,
+    _get_polygons,
+    _get_shapes,
+    _get_table,
+)
 
 RNG = default_rng()
 
@@ -143,26 +150,27 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+
 def test_get_schema():
     images = _get_images()
     labels = _get_labels()
     polygons = _get_polygons()
     points = _get_points()
     shapes = _get_shapes()
-    table = _get_table(region='sample1')
+    table = _get_table(region="sample1")
     for k, v in images.items():
         schema = get_schema(v)
-        if '2d' in k:
+        if "2d" in k:
             assert schema == Image2DModel
-        elif '3d' in k:
+        elif "3d" in k:
             assert schema == Image3DModel
         else:
             raise ValueError(f"Unexpected key: {k}")
     for k, v in labels.items():
         schema = get_schema(v)
-        if '2d' in k:
+        if "2d" in k:
             assert schema == Labels2DModel
-        elif '3d' in k:
+        elif "3d" in k:
             assert schema == Labels3DModel
         else:
             raise ValueError(f"Unexpected key: {k}")

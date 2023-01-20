@@ -634,7 +634,6 @@ def get_schema(
         schema().validate(e)
         return schema
 
-        from spatialdata._core.core_utils import get_dims
 
     if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
         axes = get_dims(e)

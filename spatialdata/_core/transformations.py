@@ -18,8 +18,8 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.models import ScaleFactors_t, get_schema
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
+from spatialdata._core.models import get_schema
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
@@ -183,7 +183,6 @@ class BaseTransformation(ABC):
 
     def _transform_raster(self, data: DataArray, axes: tuple[str, ...]) -> DataArray:
         dims = {ch: axes.index(ch) for ch in axes}
-        v_list = []
         n_spatial_dims = self._get_n_spatial_dims(axes)
         binary = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
         spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
@@ -273,7 +272,9 @@ class BaseTransformation(ABC):
         transformed_data = SpatialImage(transformed_dask, dims=axes)
         schema = get_schema(data)
         schema.parse(transformed_data)
-        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
+        print(
+            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+        )
         return transformed_data
 
     @transform.register(MultiscaleSpatialImage)
@@ -286,7 +287,9 @@ class BaseTransformation(ABC):
         transformed_data = MultiscaleSpatialImage(transformed_dask, dims=axes)
         schema = get_schema(data)
         schema.parse(transformed_data)
-        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
+        print(
+            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+        )
         return transformed_data
 
     @transform.register(pa.Table)
