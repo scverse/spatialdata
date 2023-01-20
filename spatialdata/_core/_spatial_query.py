@@ -150,17 +150,30 @@ def _bounding_box_query_image(
         output_coordinate_system=initial_transform.output_coordinate_system,
     )
 
-    query_result.attrs["transformation"] = new_transformation
+    query_result.attrs["transform"] = new_transformation
 
     return query_result
 
 
-def _bounding_box_query_polygons(polygons: GeoDataFrame, request: BoundingBoxRequest) -> GeoDataFrame:
+def _bounding_box_query_image_dict(
+    image_dict: dict[str, Union[MultiscaleSpatialImage, SpatialImage]], request: BoundingBoxRequest
+) -> dict[str, Union[MultiscaleSpatialImage, SpatialImage]]:
+    requested_images = {}
+    for image_name, image_data in image_dict.items():
+        image = _bounding_box_query_image(image_data, request)
+        if 0 not in image.shape:
+            # do not include elements with no data
+            requested_images[image_name] = image
+
+    return requested_images
+
+
+def _bounding_box_query_polygons(polygons_table: GeoDataFrame, request: BoundingBoxRequest) -> GeoDataFrame:
     """Perform a spatial bounding box query on a polygons element.
 
     Parameters
     ----------
-    polygons : GeoDataFrame
+    polygons_table : GeoDataFrame
         The polygons element to perform the query on.
     request : BoundingBoxRequest
         The request for the query.
@@ -174,10 +187,10 @@ def _bounding_box_query_polygons(polygons: GeoDataFrame, request: BoundingBoxReq
 
     # get the polygon bounding boxes
     polygons_min_column_keys = [f"min{axis}" for axis in spatial_axes]
-    polygons_min_coordinates = polygons.bounds[polygons_min_column_keys].values
+    polygons_min_coordinates = polygons_table.bounds[polygons_min_column_keys].values
 
     polygons_max_column_keys = [f"max{axis}" for axis in spatial_axes]
-    polygons_max_coordinates = polygons.bounds[polygons_max_column_keys].values
+    polygons_max_coordinates = polygons_table.bounds[polygons_max_column_keys].values
 
     # check that the min coordinates are inside the bounding box
     min_inside = np.all(request.min_coordinate < polygons_min_coordinates, axis=1)
@@ -188,4 +201,17 @@ def _bounding_box_query_polygons(polygons: GeoDataFrame, request: BoundingBoxReq
     # polygons inside the bounding box satisfy both
     polygon_inside = np.logical_and(min_inside, max_inside)
 
-    return polygons.loc[polygon_inside]
+    return polygons_table.loc[polygon_inside]
+
+
+def _bounding_box_query_polygons_dict(
+    polygons_dict: dict[str, GeoDataFrame], request: BoundingBoxRequest
+) -> dict[str, GeoDataFrame]:
+    requested_polygons = {}
+    for polygons_name, polygons_data in polygons_dict.items():
+        polygons_table = _bounding_box_query_polygons(polygons_data, request)
+        if len(polygons_table) > 0:
+            # do not include elements with no data
+            requested_polygons[polygons_name] = polygons_table
+
+    return requested_polygons
