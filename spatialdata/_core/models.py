@@ -208,9 +208,21 @@ class RasterSchema(DataArraySchema):
         data = data.drop(data.coords.keys())
         _parse_transform(data, transform)
         if multiscale_factors is not None:
+            # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
+            # of downscaling factors to avoid this
+            adjusted_multiscale_factors = []
+            current_shape = np.array(data.shape, dtype=float)
+            for factor in multiscale_factors:
+                current_shape /= float(factor)
+                if current_shape.min() < 1:
+                    logger.warning(
+                        f"Detected a multiscale factor that would collapse an axis: truncating list of factors from {multiscale_factors} to {adjusted_multiscale_factors}"
+                    )
+                    break
+                adjusted_multiscale_factors.append(factor)
             data = to_multiscale(
                 data,
-                scale_factors=multiscale_factors,
+                scale_factors=adjusted_multiscale_factors,
                 method=method,
                 chunks=chunks,
             )
@@ -634,7 +646,6 @@ def get_schema(
         schema().validate(e)
         return schema
 
-        from spatialdata._core.core_utils import get_dims
 
     if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
         axes = get_dims(e)

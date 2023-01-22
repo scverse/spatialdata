@@ -210,8 +210,15 @@ def _(e: SpatialImage) -> tuple[str, ...]:
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
+    # luca: I prefer this first method
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    dims0 = d.values().__iter__().__next__().dims
+    # still, let's do a runtime check against the other method
     variables = list(e[list(e.keys())[0]].variables)
-    return e[list(e.keys())[0]][variables[0]].dims  # type: ignore
+    dims1 = e[list(e.keys())[0]][variables[0]].dims  # type: ignore
+    assert dims0 == dims1
+    return dims0
 
 
 @get_dims.register(GeoDataFrame)

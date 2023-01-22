@@ -18,8 +18,8 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.models import ScaleFactors_t, get_schema
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
+from spatialdata._core.models import get_schema
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
@@ -173,22 +173,19 @@ class BaseTransformation(ABC):
         return data
 
     def _get_n_spatial_dims(self, axes: tuple[str, ...]) -> int:
-        if axes == ("c", "y", "x"):
-            n_spatial_dims = 2
-        elif axes == ("c", "z", "y", "x"):
-            n_spatial_dims = 3
-        else:
+        valid_axes = {("c", "z", "y", "x"): 3, ("c", "y", "x"): 2, ("z", "y", "x"): 3, ("y", "x"): 2}
+        if axes not in valid_axes:
             raise ValueError(f"Invalid axes: {axes}")
-        return n_spatial_dims
+        return valid_axes[axes]
 
-    def _transform_raster(self, data: DataArray, axes: tuple[str, ...]) -> DataArray:
+    def _transform_raster(self, data: DataArray, axes: tuple[str, ...], **kwargs) -> DataArray:
         dims = {ch: axes.index(ch) for ch in axes}
-        v_list = []
         n_spatial_dims = self._get_n_spatial_dims(axes)
         binary = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
         spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
         binary *= np.array(spatial_shape)
-        v = np.hstack([np.zeros(len(binary)).reshape((-1, 1)), binary, np.ones(len(binary)).reshape((-1, 1))])
+        c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
+        v = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
         matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
         inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
         new_v = (matrix @ v.T).T
@@ -215,7 +212,8 @@ class BaseTransformation(ABC):
         transformed_dask = dask_image.ndinterp.affine_transform(
             data,
             matrix=inverse_matrix_adjusted,
-            output_shape=output_shape
+            output_shape=output_shape,
+            **kwargs,
             # , output_chunks=output_chunks
         )
         ##
@@ -231,16 +229,23 @@ class BaseTransformation(ABC):
                 min_x_inverse = np.min(new_v_inverse[:, 2])
                 min_y_inverse = np.min(new_v_inverse[:, 1])
 
-                plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
-                plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
-                plt.scatter(v[:, 1:-1][:, 1] - 0.5, v[:, 1:-1][:, 0] - 0.5, c="r")
-                plt.scatter(new_v[:, 1:-1][:, 1] - 0.5, new_v[:, 1:-1][:, 0] - 0.5, c="g")
-                plt.scatter(new_v_inverse[:, 1:-1][:, 1] - 0.5, new_v_inverse[:, 1:-1][:, 0] - 0.5, c="k")
+                if "c" in axes:
+                    plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
+                    plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
+                else:
+                    plt.imshow(transformed_dask, origin="lower")
+                    plt.imshow(im, origin="lower")
+                start_index = 1 if "c" in axes else 0
+                plt.scatter(v[:, start_index:-1][:, 1] - 0.5, v[:, start_index:-1][:, 0] - 0.5, c="r")
+                plt.scatter(new_v[:, start_index:-1][:, 1] - 0.5, new_v[:, start_index:-1][:, 0] - 0.5, c="g")
+                plt.scatter(
+                    new_v_inverse[:, start_index:-1][:, 1] - 0.5, new_v_inverse[:, start_index:-1][:, 0] - 0.5, c="k"
+                )
                 plt.show()
                 ##
             else:
                 assert n_spatial_dims == 3
-                raise NotImplementedError()
+                # raise NotImplementedError()
         return transformed_dask
 
     @singledispatchmethod
@@ -268,12 +273,22 @@ class BaseTransformation(ABC):
         self,
         data: SpatialImage,
     ) -> SpatialImage:
-        axes = get_dims(data)
-        transformed_dask = self._transform_raster(data.data, axes=axes)
-        transformed_data = SpatialImage(transformed_dask, dims=axes)
         schema = get_schema(data)
-        schema.parse(transformed_data)
-        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
+        from spatialdata._core.models import Labels2DModel, Labels3DModel
+
+        # labels need to be preserved after the resizing of the image
+        if schema == Labels2DModel or schema == Labels3DModel:
+            # TODO: this should work, test better
+            kwargs = {"prefilter": False}
+        else:
+            kwargs = {}
+
+        axes = get_dims(data)
+        transformed_dask = self._transform_raster(data.data, axes=axes, **kwargs)
+        transformed_data = schema.parse(transformed_dask, dims=axes)
+        print(
+            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+        )
         return transformed_data
 
     @transform.register(MultiscaleSpatialImage)
@@ -281,12 +296,45 @@ class BaseTransformation(ABC):
         self,
         data: MultiscaleSpatialImage,
     ) -> MultiscaleSpatialImage:
-        axes = get_dims(data)
-        transformed_dask = self._transform_raster(data.data, axes=axes)
-        transformed_data = MultiscaleSpatialImage(transformed_dask, dims=axes)
         schema = get_schema(data)
-        schema.parse(transformed_data)
-        print('TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation')
+        from spatialdata._core.models import Labels2DModel, Labels3DModel
+
+        # labels need to be preserved after the resizing of the image
+        if schema == Labels2DModel or schema == Labels3DModel:
+            # TODO: this should work, test better
+            kwargs = {"prefilter": False}
+        else:
+            kwargs = {}
+
+        axes = get_dims(data)
+        scale0 = dict(data["scale0"])
+        assert len(scale0) == 1
+        scale0_data = scale0.values().__iter__().__next__()
+        transformed_dask = self._transform_raster(scale0_data.data, axes=scale0_data.dims, **kwargs)
+
+        # this code is temporary and doens't work in all cases (in particular it breaks when the data is not similar
+        # to a square but has sides of very different lengths). I would remove it an implement (inside the parser)
+        # the logic described in https://github.com/scverse/spatialdata/issues/108)
+        shapes = []
+        for level in range(len(data)):
+            dims = data[f"scale{level}"].dims.values()
+            shape = np.array(list(dict(dims._mapping)[k] for k in axes if k != "c"))
+            shapes.append(shape)
+        multiscale_factors = []
+        shape0 = shapes[0]
+        for shape in shapes[1:]:
+            factors = shape0 / shape
+            factors - min(factors)
+            # assert np.allclose(almost_zero, np.zeros_like(almost_zero), rtol=2.)
+            try:
+                multiscale_factors.append(round(factors[0]))
+            except OverflowError as e:
+                raise e
+
+        transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)
+        print(
+            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+        )
         return transformed_data
 
     @transform.register(pa.Table)

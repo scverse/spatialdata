@@ -68,7 +68,7 @@ def full_sdata() -> SpatialData:
         polygons=_get_polygons(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(),
+        table=_get_table("sample1"),
     )
 
 
@@ -104,7 +104,7 @@ def sdata(request) -> SpatialData:
             polygons=_get_polygons(),
             shapes=_get_shapes(),
             points=_get_points(),
-            table=_get_table(),
+            table=_get_table("sample1"),
         )
     elif request.param == "empty":
         s = SpatialData()
@@ -121,7 +121,7 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
 
     out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
+        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 2], dims=dims_2d
     )
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
     # out["image2d_xarray"] = Image2DModel.parse(
