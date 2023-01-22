@@ -646,7 +646,6 @@ def get_schema(
         schema().validate(e)
         return schema
 
-
     if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
         axes = get_dims(e)
         if "c" in axes:
