@@ -571,7 +571,7 @@ class TableModel:
         if n_args > 0:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
-                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}` as arguments or have them in `adata.uns['{cls.ATTRS_KEY}']`."
+                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}` as arguments or have them in `adata.uns[{cls.ATTRS_KEY!r}]`."
                 )
         elif cls.ATTRS_KEY in adata.uns:
             attr = adata.uns[cls.ATTRS_KEY]

@@ -21,7 +21,7 @@ class Axis:
         self.unit = unit
 
     def __repr__(self) -> str:
-        inner = ", ".join(f"'{v}'" for v in self.to_dict().values())
+        inner = ", ".join(f"{v!r}" for v in self.to_dict().values())
         return f"Axis({inner})"
 
     def to_dict(self) -> Axis_t:
@@ -42,7 +42,7 @@ class CoordinateSystem:
         self._axes = axes if axes is not None else []
 
     def __repr__(self) -> str:
-        return f"CoordinateSystem('{self.name}', {self._axes})"
+        return f"CoordinateSystem({self.name!r}, {self._axes})"
 
     @staticmethod
     def from_dict(coord_sys: CoordSystem_t) -> CoordinateSystem:
