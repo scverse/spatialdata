@@ -530,7 +530,9 @@ class PointsModel:
 
                 - If :np:class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
                 must be provided, as well as the `feature_key` in the `annotation`.
-                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided with key as *valid axes* and value as column names in dataframe. Furthermore, a `feature_key` must be provided.
+                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
+                with key as *valid axes* and value as column names in dataframe.
+                Furthermore, a `feature_key` must be provided.
 
         annotation
             Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
