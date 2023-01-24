@@ -494,6 +494,11 @@ class PointsModel:
                 assert data[ax].dtype in [np.float32, np.float64, np.int64]
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
+        if cls.ATTRS_KEY not in data.attrs:
+            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
+        if "instance_key" in data.attrs[cls.ATTRS_KEY]:
+            if not isinstance(data.attrs[cls.ATTRS_KEY]["instance_key"], str):
+                raise ValueError("`instance_key` must be a string.")
 
     @classmethod
     def parse(
