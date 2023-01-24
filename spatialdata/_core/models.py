@@ -1,6 +1,5 @@
 """This file contains models and schema for SpatialData"""
 import copy
-import json
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
@@ -491,15 +490,10 @@ class PointsModel:
     @classmethod
     def validate(cls, data: pa.Table) -> None:
         for ax in [X, Y, Z]:
-            if ax in data.column_names:
-                assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
-        try:
-            assert data.schema.metadata is not None
-            t_bytes = data.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-            BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
-        except Exception as e:  # noqa: B902
-            logger.error("cannot parse the transformation from the pyarrow.Table object")
-            raise e
+            if ax in data.columns:
+                assert data[ax].dtype in [np.float32, np.float64, np.int64]
+        if cls.TRANSFORM_KEY not in data.attrs:
+            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
 
     @classmethod
     def parse(
