@@ -1,6 +1,7 @@
 # Temp files
 .DS_Store
 *~
+.dmypy.json
 
 # Compiled files
 __pycache__/

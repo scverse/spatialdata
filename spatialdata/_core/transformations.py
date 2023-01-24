@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 from abc import ABC, abstractmethod
 from functools import singledispatchmethod
-from numbers import Number
 from typing import Any, Optional, Union
 
 import dask.array
@@ -12,6 +11,7 @@ import numpy as np
 import pyarrow as pa
 import xarray as xr
 from anndata import AnnData
+from dask.array.core import Array as DaskArray
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -35,20 +35,23 @@ __all__ = [
     "Sequence",
 ]
 
+# I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
+Number = Union[int, float]
+
 DEBUG_WITH_PLOTS = True
 
 
 class BaseTransformation(ABC):
     """Base class for all transformations."""
 
-    def _validate_axes(self, axes: list[ValidAxis_t]) -> None:
+    def _validate_axes(self, axes: tuple[ValidAxis_t, ...]) -> None:
         for ax in axes:
             validate_axis_name(ax)
         if len(axes) != len(set(axes)):
             raise ValueError("Axes must be unique.")
 
     @staticmethod
-    def _empty_affine_matrix(input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def _empty_affine_matrix(input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
         m[-1, -1] = 1
         return m
@@ -106,7 +109,7 @@ class BaseTransformation(ABC):
     #     pass
 
     @abstractmethod
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         pass
 
     # order of the composition: self is applied first, then the transformation passed as argument
@@ -141,10 +144,10 @@ class BaseTransformation(ABC):
 
     # utils for the internal representation of coordinates using xarray
     @staticmethod
-    def _xarray_coords_get_coords(data: DataArray) -> list[ValidAxis_t]:
+    def _xarray_coords_get_coords(data: DataArray) -> tuple[ValidAxis_t, ...]:
         axes = data.coords["dim"].data.tolist()
         assert isinstance(axes, list)
-        return axes
+        return tuple(axes)
 
     @staticmethod
     def _xarray_coords_get_column(data: DataArray, axis: ValidAxis_t) -> DataArray:
@@ -153,13 +156,13 @@ class BaseTransformation(ABC):
     @staticmethod
     def _xarray_coords_validate_axes(data: DataArray) -> None:
         axes = BaseTransformation._xarray_coords_get_coords(data)
-        if axes not in [["x", "y"], ["x", "y", "z"]]:
+        if axes not in [("x", "y"), ("x", "y", "z")]:
             raise ValueError(f"Invalid axes: {axes}")
 
     @staticmethod
-    def _xarray_coords_filter_axes(data: DataArray, axes: Optional[list[ValidAxis_t]] = None) -> DataArray:
+    def _xarray_coords_filter_axes(data: DataArray, axes: Optional[tuple[ValidAxis_t, ...]] = None) -> DataArray:
         if axes is None:
-            axes = ["x", "y", "z"]
+            axes = ("x", "y", "z")
         return data[:, data["dim"].isin(axes)]
 
     @staticmethod
@@ -178,21 +181,22 @@ class BaseTransformation(ABC):
             raise ValueError(f"Invalid axes: {axes}")
         return valid_axes[axes]
 
-    def _transform_raster(self, data: DataArray, axes: tuple[str, ...], **kwargs) -> DataArray:
-        dims = {ch: axes.index(ch) for ch in axes}
+    def _transform_raster(self, data: DaskArray, axes: tuple[str, ...], **kwargs: Any) -> DaskArray:
+        # dims = {ch: axes.index(ch) for ch in axes}
         n_spatial_dims = self._get_n_spatial_dims(axes)
-        binary = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
+        binary: ArrayLike = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
         spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
         binary *= np.array(spatial_shape)
         c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
-        v = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
+        v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
         matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
         inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
         new_v = (matrix @ v.T).T
+        c_shape: tuple[int, ...]
         if "c" in axes:
             c_shape = (data.shape[0],)
         else:
-            c_shape = tuple()
+            c_shape = ()
         new_spatial_shape = tuple(
             int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
         )
@@ -216,6 +220,7 @@ class BaseTransformation(ABC):
             **kwargs,
             # , output_chunks=output_chunks
         )
+        assert isinstance(transformed_dask, DaskArray)
         ##
 
         if DEBUG_WITH_PLOTS:
@@ -226,15 +231,15 @@ class BaseTransformation(ABC):
                 plt.figure()
                 im = data
                 new_v_inverse = (inverse_matrix @ v.T).T
-                min_x_inverse = np.min(new_v_inverse[:, 2])
-                min_y_inverse = np.min(new_v_inverse[:, 1])
+                # min_x_inverse = np.min(new_v_inverse[:, 2])
+                # min_y_inverse = np.min(new_v_inverse[:, 1])
 
                 if "c" in axes:
-                    plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower")
-                    plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower")
+                    plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
+                    plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
                 else:
-                    plt.imshow(transformed_dask, origin="lower")
-                    plt.imshow(im, origin="lower")
+                    plt.imshow(transformed_dask, origin="lower", alpha=0.5)
+                    plt.imshow(im, origin="lower", alpha=0.5)
                 start_index = 1 if "c" in axes else 0
                 plt.scatter(v[:, start_index:-1][:, 1] - 0.5, v[:, start_index:-1][:, 0] - 0.5, c="r")
                 plt.scatter(new_v[:, start_index:-1][:, 1] - 0.5, new_v[:, start_index:-1][:, 0] - 0.5, c="g")
@@ -285,7 +290,8 @@ class BaseTransformation(ABC):
 
         axes = get_dims(data)
         transformed_dask = self._transform_raster(data.data, axes=axes, **kwargs)
-        transformed_data = schema.parse(transformed_dask, dims=axes)
+        # mypy thinks that schema could be ShapesModel, PointsModel, ...
+        transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
         print(
             "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
         )
@@ -318,7 +324,7 @@ class BaseTransformation(ABC):
         shapes = []
         for level in range(len(data)):
             dims = data[f"scale{level}"].dims.values()
-            shape = np.array(list(dict(dims._mapping)[k] for k in axes if k != "c"))
+            shape = np.array([dict(dims._mapping)[k] for k in axes if k != "c"])
             shapes.append(shape)
         multiscale_factors = []
         shape0 = shapes[0]
@@ -330,8 +336,8 @@ class BaseTransformation(ABC):
                 multiscale_factors.append(round(factors[0]))
             except OverflowError as e:
                 raise e
-
-        transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)
+        # mypy thinks that schema could be ShapesModel, PointsModel, ...
+        transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
         print(
             "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
         )
@@ -399,7 +405,7 @@ class BaseTransformation(ABC):
 
 
 class Identity(BaseTransformation):
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
@@ -438,7 +444,7 @@ class MapAxis(BaseTransformation):
             raise ValueError("Cannot invert a MapAxis transformation with non-injective map_axis.")
         return MapAxis({des_ax: src_ax for src_ax, des_ax in self.map_axis.items()})
 
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         # validation logic:
@@ -489,16 +495,16 @@ class MapAxis(BaseTransformation):
 
 
 class Translation(BaseTransformation):
-    def __init__(self, translation: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
+    def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
         self.translation = self._parse_list_into_array(translation)
         self._validate_axes(axes)
-        self.axes = list(axes)
+        self.axes = axes
         assert len(self.translation) == len(self.axes)
 
     def inverse(self) -> BaseTransformation:
         return Translation(-self.translation, self.axes)
 
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
@@ -524,16 +530,16 @@ class Translation(BaseTransformation):
 
 
 class Scale(BaseTransformation):
-    def __init__(self, scale: Union[list[Number], ArrayLike], axes: list[ValidAxis_t]) -> None:
+    def __init__(self, scale: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
         self.scale = self._parse_list_into_array(scale)
         self._validate_axes(axes)
-        self.axes = list(axes)
+        self.axes = axes
         assert len(self.scale) == len(self.axes)
 
     def inverse(self) -> BaseTransformation:
         return Scale(1 / self.scale, self.axes)
 
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
@@ -562,12 +568,15 @@ class Scale(BaseTransformation):
 
 class Affine(BaseTransformation):
     def __init__(
-        self, matrix: Union[list[Number], ArrayLike], input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]
+        self,
+        matrix: Union[list[Number], ArrayLike],
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
     ) -> None:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
-        self.input_axes = list(input_axes)
-        self.output_axes = list(output_axes)
+        self.input_axes = input_axes
+        self.output_axes = output_axes
         self.matrix = self._parse_list_into_array(matrix)
         assert self.matrix.dtype == float
         if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
@@ -580,7 +589,7 @@ class Affine(BaseTransformation):
         inv = np.linalg.inv(self.matrix)
         return Affine(inv, self.output_axes, self.input_axes)
 
-    def to_affine_matrix(self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t]) -> ArrayLike:
+    def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         # validation logic:
@@ -642,8 +651,8 @@ class Sequence(BaseTransformation):
     # this wrapper is used since we want to return just the affine matrix from to_affine_matrix(), but we need to
     # return two values for the recursive logic to work
     def _to_affine_matrix_wrapper(
-        self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t], _nested_sequence: bool = False
-    ) -> tuple[ArrayLike, list[ValidAxis_t]]:
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], _nested_sequence: bool = False
+    ) -> tuple[ArrayLike, tuple[ValidAxis_t, ...]]:
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
@@ -683,7 +692,7 @@ class Sequence(BaseTransformation):
         return m, current_output_axes
 
     def to_affine_matrix(
-        self, input_axes: list[ValidAxis_t], output_axes: list[ValidAxis_t], _nested_sequence: bool = False
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], _nested_sequence: bool = False
     ) -> ArrayLike:
         matrix, current_output_axes = self._to_affine_matrix_wrapper(input_axes, output_axes)
         assert current_output_axes == output_axes
@@ -703,7 +712,9 @@ class Sequence(BaseTransformation):
         return data
 
 
-def _get_current_output_axes(transformation: BaseTransformation, input_axes: list[ValidAxis_t]) -> list[ValidAxis_t]:
+def _get_current_output_axes(
+    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
+) -> tuple[ValidAxis_t, ...]:
     if (
         isinstance(transformation, Identity)
         or isinstance(transformation, Translation)
@@ -722,7 +733,7 @@ def _get_current_output_axes(transformation: BaseTransformation, input_axes: lis
                 mapped = [ax_out for ax_out, ax_in in transformation.map_axis.items() if ax_in == ax]
                 assert all([ax_out not in to_return for ax_out in mapped])
                 to_return.extend(mapped)
-        return to_return
+        return tuple(to_return)
     elif isinstance(transformation, Affine):
         to_return = []
         add_affine_output_axes = False
@@ -742,7 +753,7 @@ def _get_current_output_axes(transformation: BaseTransformation, input_axes: lis
                         f"an input axis of the affine matrix but it appears both as output as input of the "
                         f"matrix representation being queried"
                     )
-        return to_return
+        return tuple(to_return)
     elif isinstance(transformation, Sequence):
         return input_axes
     else:

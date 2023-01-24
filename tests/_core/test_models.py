@@ -16,6 +16,7 @@ from xarray import DataArray
 
 from spatialdata._core.models import (
     Image2DModel,
+    Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,

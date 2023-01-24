@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Literal, Optional, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 from anndata import AnnData
@@ -30,7 +30,8 @@ __all__ = [
 
 TRANSFORM_KEY = "transform"
 C, Z, Y, X = "c", "z", "y", "x"
-ValidAxis_t = Literal["c", "x", "y", "z"]
+ValidAxis_t = str
+# ValidAxis_t = Literal["c", "x", "y", "z"]
 
 
 def validate_axis_name(axis: ValidAxis_t) -> None:
@@ -214,9 +215,10 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     d = dict(e["scale0"])
     assert len(d) == 1
     dims0 = d.values().__iter__().__next__().dims
+    assert type(dims0) == tuple[str, ...]
     # still, let's do a runtime check against the other method
     variables = list(e[list(e.keys())[0]].variables)
-    dims1 = e[list(e.keys())[0]][variables[0]].dims  # type: ignore
+    dims1 = e[list(e.keys())[0]][variables[0]].dims
     assert dims0 == dims1
     return dims0
 

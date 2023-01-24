@@ -1,6 +1,8 @@
 import itertools
 
 import dask_image.ndinterp
+import xarray
+import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -47,5 +49,14 @@ def test_unpad_raster(images, labels) -> None:
             padded = schema.parse(padded, dims=data.dims, multiscale_factors=[2, 2])
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
-        unpad_raster(padded)
-        print("TODO: check that unpadded data is the same as original data")
+        unpadded = unpad_raster(padded)
+        if isinstance(raster, SpatialImage):
+            xarray.testing.assert_equal(raster, unpadded)
+        elif isinstance(raster, MultiscaleSpatialImage):
+            d0 = dict(raster["scale0"])
+            assert len(d0) == 1
+            d1 = dict(unpadded["scale0"])
+            assert len(d1) == 1
+            xarray.testing.assert_equal(d0.values().__iter__().__next__(), d1.values().__iter__().__next__())
+        else:
+            raise ValueError(f"Unknown type: {type(raster)}")

@@ -5,7 +5,7 @@ import filecmp
 import os.path
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import numpy as np
@@ -85,15 +85,15 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     Remove padding from a raster.
     """
     from spatialdata._core.models import get_schema
-    from spatialdata._core.transformations import Translation
 
     def _unpad_axis(data: DataArray, axis: str) -> tuple[DataArray, float]:
         others = list(data.dims)
         others.remove(axis)
-        s = da.isclose(data.sum(dim=others), 0)
+        # mypy (luca's pycharm config) can't see the isclose method of dask array
+        s = da.isclose(data.sum(dim=others), 0)  # type: ignore[attr-defined]
         # TODO: rewrite this to use dask array; can't get it to work with it
         x = s.compute()
-        non_zero = np.where(x == False)[0]
+        non_zero = np.where(x is False)[0]
         left_pad = non_zero[0]
         right_pad = non_zero[-1] + 1
         unpadded = data.isel({axis: slice(left_pad, right_pad)})
@@ -105,16 +105,16 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     if isinstance(raster, SpatialImage):
         unpadded = raster
         translation_axes = []
-        translation_values = []
+        translation_values: list[float] = []
         for ax in axes:
             if ax != "c":
                 unpadded, left_pad = _unpad_axis(unpadded, axis=ax)
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-        translation = Translation(translation_values, axes=translation_axes)
         print(
             "TODO: when the migration from the old transform to the new one is done, uncomment these lines and update the transformation"
         )
+        # translation = Translation(translation_values, axes=tuple(translation_axes))
         # old_transform = get_transform(raster)
         # sequence = Sequence([translation, old_transform])
         return unpadded
@@ -125,7 +125,8 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         xdata = d.values().__iter__().__next__()
         unpadded = unpad_raster(SpatialImage(xdata))
         # TODO: here I am using some arbitrary scalingfactors, I think that we need an automatic initialization of multiscale. See discussion: https://github.com/scverse/spatialdata/issues/108
-        unpadded_multiscale = get_schema(raster).parse(unpadded, multiscale_factors=[2, 2])
+        # mypy thinks that the schema could be a ShapeModel, ... but it's not
+        unpadded_multiscale = get_schema(raster).parse(unpadded, multiscale_factors=[2, 2])  # type: ignore[call-arg]
         return unpadded_multiscale
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")

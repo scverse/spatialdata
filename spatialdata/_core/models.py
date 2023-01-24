@@ -1,6 +1,6 @@
+"""This file contains models and schema for SpatialData"""
 from __future__ import annotations
 
-"""This file contains models and schema for SpatialData"""
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
@@ -16,7 +16,7 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import NDArray
 from pandas.api.types import is_categorical_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
@@ -56,6 +56,7 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffSequence as SequenceTransformation,
 )
 from spatialdata._logging import logger
+from spatialdata._types import ArrayLike
 
 # Types
 Chunks_t = Union[
@@ -179,7 +180,7 @@ class RasterSchema(DataArraySchema):
                 else:
                     logger.info("`dims` is specified redundantly: found also inside `data`")
             else:
-                dims = data.dims
+                dims = data.dims  # type: ignore[assignment]
             _reindex = lambda d: d
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
@@ -195,9 +196,11 @@ class RasterSchema(DataArraySchema):
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
+        assert isinstance(data, DaskArray)
         if dims != cls.dims.dims:
             try:
-                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                # mypy complains that data has no .transpose but I have asserted right above that data is a DaskArray...
+                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])  # type: ignore[attr-defined]
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError:
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
@@ -210,8 +213,12 @@ class RasterSchema(DataArraySchema):
         if multiscale_factors is not None:
             # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
             # of downscaling factors to avoid this
-            adjusted_multiscale_factors = []
-            current_shape = np.array(data.shape, dtype=float)
+            adjusted_multiscale_factors: list[int] = []
+            assert isinstance(data, DataArray)
+            current_shape: ArrayLike = np.array(data.shape, dtype=float)
+            # multiscale_factors could be a dict, we don't support this case here (in the future this code and the
+            # more generla case will be handled by multiscale-spatial-image)
+            assert isinstance(multiscale_factors, list)
             for factor in multiscale_factors:
                 current_shape /= float(factor)
                 if current_shape.min() < 1:
@@ -632,7 +639,14 @@ def _sparse_matrix_from_assignment(
 
 
 Schema_t = Union[
-    Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, PolygonsModel, ShapesModel, TableModel
+    type[Image2DModel],
+    type[Image3DModel],
+    type[Labels2DModel],
+    type[Labels3DModel],
+    type[PointsModel],
+    type[PolygonsModel],
+    type[ShapesModel],
+    type[TableModel],
 ]
 
 

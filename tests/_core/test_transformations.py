@@ -19,6 +19,7 @@ from spatialdata._core.transformations import (
     Sequence,
     Translation,
 )
+from spatialdata.utils import unpad_raster
 
 
 def test_identity():
@@ -59,9 +60,9 @@ def test_map_axis():
 
     # first validation logic
     with pytest.raises(ValueError):
-        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("z"), output_axes=("z"))
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("z",), output_axes=("z",))
     assert np.allclose(
-        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x")),
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x",), output_axes=("x",)),
         np.array(
             [
                 [1, 0],
@@ -71,7 +72,7 @@ def test_map_axis():
     )
     # adding new axes with MapAxis (something that the Ngff MapAxis can't do)
     assert np.allclose(
-        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x"), output_axes=("x", "z")),
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x",), output_axes=("x", "z")),
         np.array(
             [
                 [1, 0],
@@ -504,6 +505,18 @@ def _get_affine(small_translation: bool = True) -> Affine:
     )
 
 
+def _unpad_rasters(sdata: SpatialData) -> SpatialData:
+    new_images = {}
+    new_labels = {}
+    for name, image in sdata.images.items():
+        unpadded = unpad_raster(image)
+        new_images[name] = unpadded
+    for name, label in sdata.labels.items():
+        unpadded = unpad_raster(label)
+        new_labels[name] = unpadded
+    return SpatialData(images=new_images, labels=new_labels)
+
+
 # TODO: when the io for 3D images and 3D labels work, add those tests
 def test_transform_image_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
@@ -511,19 +524,22 @@ def test_transform_image_spatial_image(images: SpatialData):
     im = scipy.misc.face()
     im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
     # TODO: remove this del later on when we are ready to test 3D images
+    # TODO: later use "image2d" instead of "face" to test, since "face" is slow
     del sdata.images["image2d"]
     sdata.images["face"] = im_element
 
     affine = _get_affine(small_translation=False)
-    affine.inverse().transform(affine.transform(sdata))
-    # TODO: unpad the image
+    padded = affine.inverse().transform(affine.transform(sdata))
+    _unpad_rasters(padded)
+    # raise NotImplementedError("TODO: plot the images")
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
 
 def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
     affine = _get_affine()
-    affine.inverse().transform(affine.transform(sdata))
+    padded = affine.inverse().transform(affine.transform(sdata))
+    _unpad_rasters(padded)
     # TODO: unpad the image
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
@@ -531,7 +547,8 @@ def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
 def test_transform_labels_spatial_image(labels: SpatialData):
     sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
     affine = _get_affine()
-    affine.inverse().transform(affine.transform(sdata))
+    padded = affine.inverse().transform(affine.transform(sdata))
+    _unpad_rasters(padded)
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
@@ -539,7 +556,8 @@ def test_transform_labels_spatial_image(labels: SpatialData):
 def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
     sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
     affine = _get_affine()
-    affine.inverse().transform(affine.transform(sdata))
+    padded = affine.inverse().transform(affine.transform(sdata))
+    _unpad_rasters(padded)
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
