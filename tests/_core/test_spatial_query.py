@@ -40,6 +40,7 @@ def test_bounding_box_request_no_spatial_axes():
         _ = BoundingBoxRequest(coordinate_system=c_cs, min_coordinate=np.array([0]), max_coordinate=np.array([10]))
 
 
+@pytest.mark.skip("Waiting for the new points implementation")
 def test_bounding_box_points():
     """test the points bounding box_query"""
     points_element = _make_points_element()
@@ -61,6 +62,7 @@ def test_bounding_box_points():
     np.testing.assert_allclose(points_element["y"], original_y)
 
 
+@pytest.mark.skip("Waiting for the new points implementation")
 def test_bounding_box_points_no_points():
     """Points bounding box query with no points in range should
     return a points element with length 0.

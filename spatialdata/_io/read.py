@@ -21,6 +21,7 @@ from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
+from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -36,7 +37,8 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
         "TODO: fix the transformations in the multiscale. No transformation in the parent level and the "
         "transformation for each level should be working independently."
     )
-    [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
     name = node.metadata["name"]
     if type(name) == list:
         assert len(name) == 1
@@ -46,7 +48,6 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
             "to omero metadata please follow the discussion at https://github.com/scverse/spatialdata/issues/60"
         )
     axes = [i["name"] for i in node.metadata["axes"]]
-    assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
     if len(datasets) > 1:
         multiscale_image = {}
         for i, (t, d) in enumerate(zip(transformations, datasets)):
@@ -58,14 +59,15 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
                 attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
-        # for some reasons if we put attrs={"transform": t} in the dict above, it does not get copied to
-        # MultiscaleSpatialImage. We put it also above otherwise we get a schema error
-        # TODO: think if we can/want to do something about this
-        t = transformations[0]
-        set_transform(msi, t)
+        assert len(transformations) == len(msi)
+        for t, k in zip(transformations, msi.keys()):
+            d = dict(msi[k])
+            assert len(d) == 1
+            xdata = d.values().__iter__().__next__()
+            set_transform(xdata, t)
         return msi
     else:
-        t = transformations[0]
+        t = BaseTransformation.from_ngff(transformations[0])
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
         return SpatialImage(
             data,

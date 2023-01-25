@@ -468,7 +468,7 @@ class NgffScale(NgffBaseTransformation):
 class NgffAffine(NgffBaseTransformation):
     def __init__(
         self,
-        affine: Union[ArrayLike, list[Number]],
+        affine: Union[ArrayLike, list[list[Number]]],
         input_coordinate_system: Optional[NgffCoordinateSystem] = None,
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:

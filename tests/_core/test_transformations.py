@@ -9,10 +9,26 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import get_dims
+from spatialdata._core.core_utils import (
+    ValidAxis_t,
+    get_default_coordinate_system,
+    get_dims,
+)
 from spatialdata._core.models import Image2DModel
+from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
+from spatialdata._core.ngff.ngff_transformations import (
+    NgffAffine,
+    NgffBaseTransformation,
+    NgffByDimension,
+    NgffIdentity,
+    NgffMapAxis,
+    NgffScale,
+    NgffSequence,
+    NgffTranslation,
+)
 from spatialdata._core.transformations import (
     Affine,
+    BaseTransformation,
     Identity,
     MapAxis,
     Scale,
@@ -521,12 +537,12 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
 def test_transform_image_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
 
-    im = scipy.misc.face()
-    im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
-    # TODO: remove this del later on when we are ready to test 3D images
-    # TODO: later use "image2d" instead of "face" to test, since "face" is slow
-    del sdata.images["image2d"]
-    sdata.images["face"] = im_element
+    VISUAL_DEBUG = False
+    if VISUAL_DEBUG:
+        im = scipy.misc.face()
+        im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
+        del sdata.images["image2d"]
+        sdata.images["face"] = im_element
 
     affine = _get_affine(small_translation=False)
     padded = affine.inverse().transform(affine.transform(sdata))
@@ -563,6 +579,7 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
 
 
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
+@pytest.mark.skip("waiting for the new points implementation")
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
     new_points = affine.inverse().transform(affine.transform(points))
@@ -606,7 +623,144 @@ def test_transform_shapes(shapes: SpatialData):
         assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
 
 
-def test_set_transform_with_mismatching_cs(sdata: SpatialData):
+def _make_cs(axes: tuple[ValidAxis_t, ...]) -> NgffCoordinateSystem:
+    cs = get_default_coordinate_system(axes)
+    for ax in axes:
+        cs.get_axis(ax).unit = "micrometer"
+    return cs
+
+
+def _convert_and_compare(t0: NgffBaseTransformation, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem):
+    t1 = BaseTransformation.from_ngff(t0)
+    t2 = t1.to_ngff(input_axes=input_cs.axes_names, output_axes=output_cs.axes_names, unit="micrometer")
+    t3 = BaseTransformation.from_ngff(t2)
+    assert t0 == t2
+    assert t1 == t3
+
+
+# conversion back and forth the NGFF transformations
+def test_ngff_conversion_identity():
+    # matching axes
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
+    _convert_and_compare(t0, input_cs, output_cs)
+
+    # TODO: add tests like this to all the transformations (https://github.com/scverse/spatialdata/issues/114)
+    # # mismatching axes
+    # input_cs, output_cs = _get_input_output_coordinate_systems(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    # t0 = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
+    # _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_map_axis():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffMapAxis(
+        input_coordinate_system=input_cs, output_coordinate_system=output_cs, map_axis={"x": "y", "y": "x", "z": "z"}
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_map_axis_creating_new_axes():
+    # this is a case that is supported by the MapAxis class but not by the NgffMapAxis class, since in NGFF the
+    # MapAxis can't create new axes
+
+    # TODO: the conversion should raise an error in the NgffMapAxis class and should require adjusted input/output when
+    # converting to fix it (see https://github.com/scverse/spatialdata/issues/114)
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffMapAxis(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        map_axis={"x": "y", "y": "x", "z": "z", "c": "x"},
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_translation():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffTranslation(
+        input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=[1.0, 2.0, 3.0]
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_scale():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffScale(input_coordinate_system=input_cs, output_coordinate_system=output_cs, scale=[1.0, 2.0, 3.0])
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_affine():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y"))
+    t0 = NgffAffine(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        affine=[
+            [1.0, 2.0, 3.0, 10.0],
+            [4.0, 5.0, 6.0, 11.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_sequence():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y"))
+    affine0 = NgffAffine(
+        input_coordinate_system=_make_cs(("x", "y", "z")),
+        output_coordinate_system=_make_cs(("x", "y")),
+        affine=[
+            [1.0, 2.0, 3.0, 10.0],
+            [4.0, 5.0, 6.0, 11.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    )
+    affine1 = NgffAffine(
+        input_coordinate_system=_make_cs(("x", "y")),
+        output_coordinate_system=_make_cs(("x", "y", "z")),
+        affine=[
+            [1.0, 2.0, 10.0],
+            [4.0, 5.0, 11.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ],
+    )
+    sequence = NgffSequence(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        transformations=[
+            NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=input_cs),
+            NgffSequence(
+                input_coordinate_system=input_cs,
+                output_coordinate_system=input_cs,
+                transformations=[affine0, affine1],
+            ),
+        ],
+    )
+    _convert_and_compare(sequence, input_cs, output_cs)
+
+
+def test_ngff_conversion_not_supported():
+    # NgffByDimension is not supported in the new transformations classes
+    # we may add converters in the future to create an Affine out of a NgffByDimension class
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffByDimension(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        transformations=[NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)],
+    )
+    with pytest.raises(ValueError):
+        _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_set_transform_with_mismatching_cs():
     pass
     # input_css = [
     #     get_default_coordinate_system(t) for t in [(X, Y), (Y, X), (C, Y, X), (X, Y, Z), (Z, Y, X), (C, Z, Y, X)]

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 import xarray as xr
 from xarray import DataArray
 
+from spatialdata._core.ngff.ngff_coordinate_system import (
+    NgffCoordinateSystem,
+    _get_spatial_axes,
+)
 from spatialdata._core.ngff.ngff_transformations import (
     NgffAffine,
     NgffBaseTransformation,
@@ -17,8 +21,6 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffTranslation,
 )
 from spatialdata._logging import logger
-
-# from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
@@ -36,7 +38,7 @@ __all__ = [
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-TRANSFORMATIONS_MAP: dict[NgffBaseTransformation, type[BaseTransformation]] = {}
+TRANSFORMATIONS_MAP: dict[NgffBaseTransformation, BaseTransformation] = {}
 
 
 class BaseTransformation(ABC):
@@ -74,17 +76,33 @@ class BaseTransformation(ABC):
 
     @classmethod
     @abstractmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
         pass
 
     @classmethod
-    def from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        transformation = TRANSFORMATIONS_MAP[type(d)]._from_ngff(d)
+    def from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        if type(t) not in TRANSFORMATIONS_MAP:
+            raise ValueError(f"Conversion from {type(t)} to BaseTransformation is not supported")
+        transformation = TRANSFORMATIONS_MAP[type(t)]._from_ngff(t)
         return transformation
 
     @abstractmethod
-    def to_ngff(self) -> NgffBaseTransformation:
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
         pass
+
+    def _get_default_coordinate_system(
+        self, axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffCoordinateSystem:
+        from spatialdata._core.core_utils import get_default_coordinate_system
+
+        cs = get_default_coordinate_system(axes)
+        if unit is not None:
+            spatial_axes = _get_spatial_axes(cs)
+            for ax in spatial_axes:
+                cs.get_axis(ax).unit = unit
+        return cs
 
     @abstractmethod
     def inverse(self) -> BaseTransformation:
@@ -173,6 +191,10 @@ class BaseTransformation(ABC):
         transformed = _transform(element, self)
         return transformed
 
+    @abstractmethod
+    def __eq__(self, other: Any) -> bool:
+        pass
+
 
 class Identity(BaseTransformation):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
@@ -197,11 +219,19 @@ class Identity(BaseTransformation):
         return data
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffIdentity) -> BaseTransformation:
+        return Identity()
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        ngff_transformation = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Identity)
 
 
 # Warning on MapAxis vs NgffMapAxis: MapAxis can add new axes that are not present in input. NgffMapAxis can't do
@@ -274,11 +304,21 @@ class MapAxis(BaseTransformation):
         return to_return
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffMapAxis) -> BaseTransformation:
+        return MapAxis(map_axis=t.map_axis)
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        ngff_transformation = NgffMapAxis(
+            input_coordinate_system=input_cs, output_coordinate_system=output_cs, map_axis=self.map_axis
+        )
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, MapAxis) and self.map_axis == other.map_axis
 
 
 class Translation(BaseTransformation):
@@ -305,22 +345,51 @@ class Translation(BaseTransformation):
                         m[i_out, -1] = self.translation[self.axes.index(ax_out)]
         return m
 
+    def to_translation_vector(self, axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
+        self._validate_axes(axes)
+        v = []
+        for ax in axes:
+            if ax not in self.axes:
+                v.append(0.0)
+            else:
+                i = self.axes.index(ax)
+                v.append(self.translation[i])
+        return np.array(v)
+
     def _repr_transformation_description(self, indent: int = 0) -> str:
         return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.translation}"
 
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
-        translation = DataArray(self.translation, coords={"dim": self.axes})
+        translation = DataArray(self.translation, coords={"dim": list(self.axes)})
         transformed = data + translation
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffTranslation) -> BaseTransformation:
+        input_axes = tuple(t.input_coordinate_system.axes_names)
+        output_axes = tuple(t.output_coordinate_system.axes_names)
+        assert input_axes == output_axes
+        return Translation(translation=t.translation, axes=input_axes)
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        new_translation_vector = self.to_translation_vector(axes=input_axes)
+        ngff_transformation = NgffTranslation(
+            input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=new_translation_vector
+        )
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, Translation)
+            and np.allclose(self.translation, other.translation)
+            and self.axes == other.axes
+        )
 
 
 class Scale(BaseTransformation):
@@ -349,22 +418,47 @@ class Scale(BaseTransformation):
                     m[i_out, i_in] = scale_factor
         return m
 
+    def to_scale_vector(self, axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
+        self._validate_axes(axes)
+        v = []
+        for ax in axes:
+            if ax not in self.axes:
+                v.append(1.0)
+            else:
+                i = self.axes.index(ax)
+                v.append(self.scale[i])
+        return np.array(v)
+
     def _repr_transformation_description(self, indent: int = 0) -> str:
         return f"({', '.join(self.axes)})\n{self._indent(indent)}{self.scale}"
 
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
-        scale = DataArray(self.scale, coords={"dim": self.axes})
+        scale = DataArray(self.scale, coords={"dim": list(self.axes)})
         transformed = data * scale
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffScale) -> BaseTransformation:
+        input_axes = tuple(t.input_coordinate_system.axes_names)
+        output_axes = tuple(t.output_coordinate_system.axes_names)
+        assert input_axes == output_axes
+        return Scale(scale=t.scale, axes=input_axes)
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        new_scale_vector = self.to_scale_vector(input_axes)
+        ngff_transformation = NgffScale(
+            input_coordinate_system=input_cs, output_coordinate_system=output_cs, scale=new_scale_vector
+        )
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Scale) and np.allclose(self.scale, other.scale) and self.axes == other.axes
 
 
 class Affine(BaseTransformation):
@@ -436,17 +530,36 @@ class Affine(BaseTransformation):
         data_output_axes = _get_current_output_axes(self, data_input_axes)
         matrix = self.to_affine_matrix(data_input_axes, data_output_axes)
         transformed = (matrix @ np.vstack((data.data.T, np.ones(len(data))))).T[:, :-1]
-        to_return = DataArray(transformed, coords={"points": data.coords["points"], "dim": data_output_axes})
+        to_return = DataArray(transformed, coords={"points": data.coords["points"], "dim": list(data_output_axes)})
         self._xarray_coords_filter_axes(to_return)
         to_return = self._xarray_coords_reorder_axes(to_return)
         return to_return
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffAffine) -> BaseTransformation:
+        input_axes = tuple(t.input_coordinate_system.axes_names)
+        output_axes = tuple(t.output_coordinate_system.axes_names)
+        return Affine(matrix=t.affine, input_axes=input_axes, output_axes=output_axes)
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        new_matrix = self.to_affine_matrix(input_axes, output_axes)
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        ngff_transformation = NgffAffine(
+            input_coordinate_system=input_cs, output_coordinate_system=output_cs, affine=new_matrix
+        )
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Affine):
+            return False
+        return (
+            np.allclose(self.matrix, other.matrix)
+            and self.input_axes == other.input_axes
+            and self.output_axes == other.output_axes
+        )
 
 
 class Sequence(BaseTransformation):
@@ -520,11 +633,33 @@ class Sequence(BaseTransformation):
         return data
 
     @classmethod
-    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
-        pass
+    def _from_ngff(cls, t: NgffSequence) -> BaseTransformation:
+        return Sequence(transformations=[BaseTransformation.from_ngff(t) for t in t.transformations])
 
-    def to_ngff(self) -> NgffBaseTransformation:
-        pass
+    def to_ngff(
+        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+    ) -> NgffBaseTransformation:
+        input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        converted_transformations = []
+        latest_input_axes = input_axes
+        for t in self.transformations:
+            latest_output_axes = _get_current_output_axes(t, latest_input_axes)
+            converted_transformations.append(
+                t.to_ngff(input_axes=latest_input_axes, output_axes=latest_output_axes, unit=unit)
+            )
+            latest_input_axes = latest_output_axes
+        ngff_transformation = NgffSequence(
+            input_coordinate_system=input_cs,
+            output_coordinate_system=output_cs,
+            transformations=converted_transformations,
+        )
+        return ngff_transformation
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Sequence):
+            return False
+        return self.transformations == other.transformations
 
 
 def _get_current_output_axes(
@@ -575,9 +710,9 @@ def _get_current_output_axes(
         raise ValueError("Unknown transformation type.")
 
 
-TRANSFORMATIONS_MAP[type[NgffIdentity]] = Identity
-TRANSFORMATIONS_MAP[type[NgffMapAxis]] = MapAxis
-TRANSFORMATIONS_MAP[type[NgffTranslation]] = Translation
-TRANSFORMATIONS_MAP[type[NgffScale]] = Scale
-TRANSFORMATIONS_MAP[type[NgffAffine]] = Affine
-TRANSFORMATIONS_MAP[type[NgffSequence]] = Sequence
+TRANSFORMATIONS_MAP[NgffIdentity] = Identity
+TRANSFORMATIONS_MAP[NgffMapAxis] = MapAxis
+TRANSFORMATIONS_MAP[NgffTranslation] = Translation
+TRANSFORMATIONS_MAP[NgffScale] = Scale
+TRANSFORMATIONS_MAP[NgffAffine] = Affine
+TRANSFORMATIONS_MAP[NgffSequence] = Sequence

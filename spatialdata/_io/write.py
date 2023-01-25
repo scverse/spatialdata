@@ -10,7 +10,6 @@ from anndata.experimental import write_elem as write_adata
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
-from ome_zarr.scale import Scaler
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes
 from ome_zarr.writer import write_image as write_image_ngff
@@ -21,7 +20,7 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_dims, get_transform
-from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
+from spatialdata._core.transformations import _get_current_output_axes
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -49,13 +48,12 @@ def _write_metadata(
     group.attrs["spatialdata_attrs"] = attrs
 
 
+# TODO: write_image and write_labels are very similar, refactor and simplify
 def write_image(
     image: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormatV01(),
-    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
@@ -64,40 +62,49 @@ def write_image(
     if isinstance(image, SpatialImage):
         data = image.data
         t = get_transform(image)
-        assert isinstance(t, NgffBaseTransformation)
-        ngff_t = t.to_ngff()
+        axes: tuple[str, ...] = tuple(image.dims)
+        output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
+        ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
         coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = image.chunks
-        axes = image.dims
-        axes = _get_valid_axes(axes=axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=axes, fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
         else:
             storage_options = {"chunks": chunks}
+        # scaler needs to be None since we are passing the data already downscaled for the multiscale case
         write_image_ngff(
             image=data,
             group=subgroup,
             scaler=None,
             fmt=fmt,
-            axes=axes,
+            axes=parsed_axes,
             coordinate_transformations=coordinate_transformations,
             storage_options=storage_options,
             **metadata,
         )
     elif isinstance(image, MultiscaleSpatialImage):
         data = _iter_multiscale(image, "data")
-        coordinate_transformations = [[x.to_ngff().to_dict()] for x in _iter_multiscale(image, "attrs", "transform")]
+        input_axes = _iter_multiscale(image, "dims")
+        ngff_transformations = []
+        for k in image.keys():
+            input_axes = image[k].dims
+            d = dict(image[k])
+            assert len(d) == 1
+            xdata = d.values().__iter__().__next__()
+            transformation = get_transform(xdata)
+            output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
+            ngff_transformations.append(transformation.to_ngff(input_axes=input_axes, output_axes=output_axes))
+        coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
         chunks = _iter_multiscale(image, "chunks")
-        axes_ = _iter_multiscale(image, "dims")
-        # TODO: how should axes be handled with multiscale?
-        axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_ngff(
             pyramid=data,
             group=subgroup,
             fmt=fmt,
-            axes=axes,
+            axes=parsed_axes,
             coordinate_transformations=coordinate_transformations,
             storage_options=storage_options,
             name=name,
@@ -109,9 +116,7 @@ def write_labels(
     labels: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    scaler: Scaler = Scaler(),
     fmt: Format = SpatialDataFormatV01(),
-    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -119,24 +124,25 @@ def write_labels(
     if isinstance(labels, SpatialImage):
         data = labels.data
         t = get_transform(labels)
-        assert isinstance(t, NgffBaseTransformation)
-        ngff_t = t.to_ngff()
+        input_axes: tuple[str, ...] = tuple(labels.dims)
+        output_axes = _get_current_output_axes(transformation=t, input_axes=input_axes)
+        ngff_t = t.to_ngff(input_axes=input_axes, output_axes=output_axes)
         coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = labels.chunks
-        axes = labels.dims
-        axes = _get_valid_axes(axes=axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
         else:
             storage_options = {"chunks": chunks}
+        # scaler needs to be None since we are passing the data already downscaled for the multiscale case
         write_labels_ngff(
             labels=data,
             name=name,
             group=group,
             scaler=None,
             fmt=fmt,
-            axes=axes,
+            axes=parsed_axes,
             coordinate_transformations=coordinate_transformations,
             storage_options=storage_options,
             label_metadata=label_metadata,
@@ -144,18 +150,25 @@ def write_labels(
         )
     elif isinstance(labels, MultiscaleSpatialImage):
         data = _iter_multiscale(labels, "data")
-        # TODO: nitpick, rewrite the next line to use get_transform()
-        coordinate_transformations = [[x.to_ngff().to_dict()] for x in _iter_multiscale(labels, "attrs", "transform")]
+        input_axes = _iter_multiscale(labels, "dims")
+        ngff_transformations = []
+        for k in labels.keys():
+            input_axes = labels[k].dims
+            d = dict(labels[k])
+            assert len(d) == 1
+            xdata = d.values().__iter__().__next__()
+            transformation = get_transform(xdata)
+            output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
+            ngff_transformations.append(transformation.to_ngff(input_axes=input_axes, output_axes=output_axes))
+        coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
         chunks = _iter_multiscale(labels, "chunks")
-        axes_ = _iter_multiscale(labels, "dims")
-        # TODO: how should axes be handled with multiscale?
-        axes = _get_valid_axes(axes=axes_[0], fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_labels_ngff(
             pyramid=data,
             group=group,
             fmt=fmt,
-            axes=axes,
+            axes=parsed_axes,
             coordinate_transformations=coordinate_transformations,
             storage_options=storage_options,
             name=name,
@@ -171,11 +184,13 @@ def write_polygons(
     group_type: str = "ngff:polygons",
     fmt: Format = PolygonsFormat(),
 ) -> None:
-    polygons_groups = group.require_group(name)
+    axes = get_dims(polygons)
     t = get_transform(polygons)
-    ngff_t = t.to_ngff()
+    output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
+    ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]
 
+    polygons_groups = group.require_group(name)
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
     for i, o in enumerate(offsets):
@@ -185,13 +200,11 @@ def write_polygons(
     attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
-    axes = list(get_dims(polygons))
-
     _write_metadata(
         polygons_groups,
         group_type=group_type,
         coordinate_transformations=coordinate_transformations,
-        axes=axes,
+        axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
@@ -204,8 +217,10 @@ def write_shapes(
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
+    axes = get_dims(shapes)
     transform = shapes.uns.pop("transform")
-    ngff_t = transform.to_ngff()
+    output_axes = _get_current_output_axes(transformation=transform, input_axes=axes)
+    ngff_t = transform.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]
     write_adata(group, name, shapes)  # creates group[name]
     shapes.uns["transform"] = transform
@@ -213,14 +228,12 @@ def write_shapes(
     attrs = fmt.attrs_to_dict(shapes.uns)
     attrs["version"] = fmt.spatialdata_version
 
-    axes = list(get_dims(shapes))
-
     shapes_group = group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
         coordinate_transformations=coordinate_transformations,
-        axes=axes,
+        axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
@@ -233,16 +246,15 @@ def write_points(
     group_type: str = "ngff:points",
     fmt: Format = PointsFormat(),
 ) -> None:
-    points_groups = group.require_group(name)
+    axes = get_dims(points)
     t = get_transform(points)
-    assert isinstance(t, NgffBaseTransformation)
-    ngff_t = t.to_ngff()
+    output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
+    ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]
 
+    points_groups = group.require_group(name)
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
     pq.write_table(points, path)
-
-    axes = list(get_dims(points))
 
     attrs = {}
     attrs["version"] = fmt.spatialdata_version
@@ -252,7 +264,7 @@ def write_points(
         points_groups,
         group_type=group_type,
         coordinate_transformations=coordinate_transformations,
-        axes=axes,
+        axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )

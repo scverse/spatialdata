@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
-DEBUG_WITH_PLOTS = True
+DEBUG_WITH_PLOTS = False
 
 
 def _transform_raster(
@@ -139,7 +139,7 @@ def _(data: SpatialImage, transformation: BaseTransformation) -> SpatialImage:
         kwargs = {}
 
     axes = get_dims(data)
-    transformed_dask = transformation._transform_raster(data.data, axes=axes, **kwargs)
+    transformed_dask = _transform_raster(data=data.data, axes=axes, transformation=transformation, **kwargs)
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
     print(
@@ -164,7 +164,9 @@ def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> Multi
     scale0 = dict(data["scale0"])
     assert len(scale0) == 1
     scale0_data = scale0.values().__iter__().__next__()
-    transformed_dask = transformation._transform_raster(scale0_data.data, axes=scale0_data.dims, **kwargs)
+    transformed_dask = _transform_raster(
+        data=scale0_data.data, axes=scale0_data.dims, transformation=transformation, **kwargs
+    )
 
     # this code is temporary and doens't work in all cases (in particular it breaks when the data is not similar
     # to a square but has sides of very different lengths). I would remove it an implement (inside the parser)

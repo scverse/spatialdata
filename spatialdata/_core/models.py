@@ -45,7 +45,8 @@ from spatialdata._core.core_utils import (
     get_transform,
     set_transform,
 )
-from spatialdata._core.transformations import BaseTransformation, Identity
+from spatialdata._core.transformations import BaseTransformation, Identity, Scale
+from spatialdata._core.transformations import Sequence as SequenceTransformation
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
@@ -77,10 +78,7 @@ __all__ = [
 def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
     if transform is None:
         transform = Identity()
-    new_element = set_transform(
-        element,
-        transform,
-    )
+    new_element = set_transform(element, transform)
     return new_element
 
 
@@ -183,13 +181,31 @@ class RasterSchema(DataArraySchema):
                     )
                     break
                 adjusted_multiscale_factors.append(factor)
+            parsed_transform = get_transform(data)
+            del data.attrs["transform"]
             data = to_multiscale(
                 data,
                 scale_factors=adjusted_multiscale_factors,
                 method=method,
                 chunks=chunks,
             )
-            _parse_transform(data, transform)
+            i = 0
+            for scale, node in dict(data).items():
+                # this is to be sure that the pyramid levels are listed here in the correct order
+                assert scale == f"scale{i}"
+                assert len(dict(node)) == 1
+                xdata = list(node.values())[0]
+                new_shape = np.array(xdata.shape)
+                if i > 0:
+                    scale_factors = old_shape / new_shape
+                    filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
+                    filtered_axes = [ax for ax in dims if ax != "c"]
+                    scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+                    sequence = SequenceTransformation([scale, parsed_transform])
+                    _parse_transform(xdata, sequence)
+                else:
+                    _parse_transform(xdata, parsed_transform)
+                i += 1
             assert isinstance(data, MultiscaleSpatialImage)
         return data
 
@@ -214,7 +230,8 @@ class Labels2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            attrs=self.attrs,
+            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
+            # attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -229,7 +246,8 @@ class Labels3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            attrs=self.attrs,
+            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
+            # attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -244,7 +262,8 @@ class Image2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            attrs=self.attrs,
+            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
+            # attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -259,7 +278,8 @@ class Image3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            attrs=self.attrs,
+            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
+            # attrs=self.attrs,
             *args,
             **kwargs,
         )

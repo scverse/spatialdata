@@ -8,6 +8,7 @@ from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
@@ -44,8 +45,8 @@ def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[BaseTransformation]:
+@get_transform.register(DataArray)
+def _(e: DataArray) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     # this double return is to make mypy happy
     if t is not None:
@@ -58,6 +59,15 @@ def _(e: SpatialImage) -> Optional[BaseTransformation]:
 @get_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
+    if t is not None:
+        raise NotImplementedError(
+            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
+            "stored in the inner levels."
+        )
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    xdata = d.values().__iter__().__next__()
+    t = get_transform(xdata)
     if t is not None:
         assert isinstance(t, BaseTransformation)
         return t
@@ -103,15 +113,15 @@ def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
+@set_transform.register(DataArray)
+def _(e: SpatialImage, t: BaseTransformation) -> DataArray:
     e.attrs[TRANSFORM_KEY] = t
     return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
-    e.attrs[TRANSFORM_KEY] = t
+    # no transformation is stored in this object, but at each level of the multiscale
     return e
 
 
@@ -136,7 +146,6 @@ def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
-# TODO: when saving, give a warning if the user does not replace it
 x_axis = NgffAxis(name=X, type="space", unit="unit")
 y_axis = NgffAxis(name=Y, type="space", unit="unit")
 z_axis = NgffAxis(name=Z, type="space", unit="unit")

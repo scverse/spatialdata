@@ -84,6 +84,7 @@ class TestModels:
         other_poly = model.parse(poly)
         assert poly.equals(other_poly)
 
+    @pytest.mark.skip("Waiting for the new points implementation")
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize(
         "annotations",
@@ -152,6 +153,7 @@ class TestModels:
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
 
+@pytest.mark.skip("Waiting for the new points implementation")
 def test_get_schema():
     images = _get_images()
     labels = _get_labels()
