@@ -19,8 +19,11 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import get_dims, get_transform
-from spatialdata._core.transformations import _get_current_output_axes
+from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_transform
+from spatialdata._core.transformations import (
+    BaseTransformation,
+    _get_current_output_axes,
+)
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -31,10 +34,42 @@ from spatialdata._io.format import (
 __all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
 
 
+def _overwrite_coordinate_transformations_non_raster(
+    group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformation: BaseTransformation
+) -> None:
+    output_axes = _get_current_output_axes(transformation=transformation, input_axes=axes)
+    ngff_transformation = transformation.to_ngff(input_axes=axes, output_axes=output_axes)
+    coordinate_transformations = [ngff_transformation.to_dict()]
+    group.attrs["coordinateTransformations"] = coordinate_transformations
+
+
+def _overwrite_coordinate_transformations_raster(
+    group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: list[BaseTransformation]
+) -> None:
+    # prepare the transformations in the dict representation
+    ngff_transformations = []
+    for t in transformations:
+        output_axes = _get_current_output_axes(transformation=t, input_axes=tuple(axes))
+        ngff_transformations.append(t.to_ngff(input_axes=tuple(axes), output_axes=tuple(output_axes)))
+    coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
+    # replace the metadata storage
+    multiscales = group.attrs["multiscales"]
+    assert len(multiscales) == 1
+    multiscale = multiscales[0]
+    datasets = multiscale["datasets"]
+    assert len(datasets) == len(transformations)
+    for i in range(len(transformations)):
+        dataset = datasets[i]
+        assert dataset["path"] == str(i)
+        ct = coordinate_transformations[i]
+        dataset["coordinateTransformations"] = ct
+    group.attrs["multiscales"] = multiscales
+
+
 def _write_metadata(
     group: zarr.Group,
     group_type: str,
-    coordinate_transformations: list[dict[str, Any]],
+    # coordinate_transformations: list[dict[str, Any]],
     axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
     attrs: Optional[Mapping[str, Any]] = None,
     fmt: Format = SpatialDataFormatV01(),
@@ -44,7 +79,9 @@ def _write_metadata(
 
     group.attrs["@type"] = group_type
     group.attrs["axes"] = axes
-    group.attrs["coordinateTransformations"] = coordinate_transformations
+    # we write empty coordinateTransformations and then overwrite them with _overwrite_coordinate_transformations_non_raster()
+    group.attrs["coordinateTransformations"] = []
+    # group.attrs["coordinateTransformations"] = coordinate_transformations
     group.attrs["spatialdata_attrs"] = attrs
 
 
@@ -62,12 +99,8 @@ def write_image(
         data = image.data
         t = get_transform(image)
         axes: tuple[str, ...] = tuple(image.dims)
-        assert t is not None
-        output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
-        ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
-        coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = image.chunks
-        parsed_axes = _get_valid_axes(axes=axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(axes), fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
@@ -80,39 +113,43 @@ def write_image(
             scaler=None,
             fmt=fmt,
             axes=parsed_axes,
-            coordinate_transformations=coordinate_transformations,
+            coordinate_transformations=None,
             storage_options=storage_options,
             **metadata,
         )
+        assert t is not None
+        _overwrite_coordinate_transformations_raster(group=subgroup, transformations=[t], axes=axes)
     elif isinstance(image, MultiscaleSpatialImage):
         data = _iter_multiscale(image, "data")
-        input_axes = _iter_multiscale(image, "dims")
-        ngff_transformations = []
+        list_of_input_axes: list[Any] = _iter_multiscale(image, "dims")
+        assert len(set(list_of_input_axes)) == 1
+        input_axes = list_of_input_axes[0]
+        transformations = []
         for k in image.keys():
-            input_axes = image[k].dims
             d = dict(image[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
             transformation = get_transform(xdata)
             assert transformation is not None
-            output_axes = _get_current_output_axes(transformation=transformation, input_axes=tuple(input_axes))
-            ngff_transformations.append(
-                transformation.to_ngff(input_axes=tuple(input_axes), output_axes=tuple(output_axes))
-            )
-        coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
+            transformations.append(transformation)
         chunks = _iter_multiscale(image, "chunks")
-        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_ngff(
             pyramid=data,
             group=subgroup,
             fmt=fmt,
             axes=parsed_axes,
-            coordinate_transformations=coordinate_transformations,
+            coordinate_transformations=None,
             storage_options=storage_options,
             name=name,
             **metadata,
         )
+        _overwrite_coordinate_transformations_raster(
+            group=subgroup, transformations=transformations, axes=tuple(input_axes)
+        )
+    else:
+        raise ValueError("Not a valid image object")
 
 
 def write_labels(
@@ -128,12 +165,8 @@ def write_labels(
         data = labels.data
         t = get_transform(labels)
         input_axes: tuple[str, ...] = tuple(labels.dims)
-        assert t is not None
-        output_axes = _get_current_output_axes(transformation=t, input_axes=input_axes)
-        ngff_t = t.to_ngff(input_axes=input_axes, output_axes=output_axes)
-        coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = labels.chunks
-        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
@@ -147,39 +180,45 @@ def write_labels(
             scaler=None,
             fmt=fmt,
             axes=parsed_axes,
-            coordinate_transformations=coordinate_transformations,
+            coordinate_transformations=None,
             storage_options=storage_options,
             label_metadata=label_metadata,
             **metadata,
         )
+        assert t is not None
+        _overwrite_coordinate_transformations_raster(group=group["labels"][name], transformations=[t], axes=input_axes)
     elif isinstance(labels, MultiscaleSpatialImage):
         data = _iter_multiscale(labels, "data")
-        input_axes = tuple(_iter_multiscale(labels, "dims"))
-        ngff_transformations = []
+        list_of_input_axes: list[Any] = _iter_multiscale(labels, "dims")
+        assert len(set(list_of_input_axes)) == 1
+        input_axes = list_of_input_axes[0]
+        transformations = []
         for k in labels.keys():
-            input_axes = labels[k].dims
             d = dict(labels[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
             transformation = get_transform(xdata)
             assert transformation is not None
-            output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
-            ngff_transformations.append(transformation.to_ngff(input_axes=input_axes, output_axes=output_axes))
-        coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
+            transformations.append(transformation)
         chunks = _iter_multiscale(labels, "chunks")
-        parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multiscale_labels_ngff(
             pyramid=data,
             group=group,
             fmt=fmt,
             axes=parsed_axes,
-            coordinate_transformations=coordinate_transformations,
+            coordinate_transformations=None,
             storage_options=storage_options,
             name=name,
             label_metadata=label_metadata,
             **metadata,
         )
+        _overwrite_coordinate_transformations_raster(
+            group=group["labels"][name], transformations=transformations, axes=tuple(input_axes)
+        )
+    else:
+        raise ValueError("Not a valid labels object")
 
 
 def write_polygons(
@@ -191,11 +230,6 @@ def write_polygons(
 ) -> None:
     axes = get_dims(polygons)
     t = get_transform(polygons)
-    assert t is not None
-    output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
-    ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
-    coordinate_transformations = [ngff_t.to_dict()]
-
     polygons_groups = group.require_group(name)
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
@@ -209,11 +243,13 @@ def write_polygons(
     _write_metadata(
         polygons_groups,
         group_type=group_type,
-        coordinate_transformations=coordinate_transformations,
+        # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
+    assert t is not None
+    _overwrite_coordinate_transformations_non_raster(group=polygons_groups, axes=axes, transformation=t)
 
 
 def write_shapes(
@@ -226,9 +262,6 @@ def write_shapes(
     axes = get_dims(shapes)
     transform = shapes.uns.pop("transform")
     assert transform is not None
-    output_axes = _get_current_output_axes(transformation=transform, input_axes=axes)
-    ngff_t = transform.to_ngff(input_axes=axes, output_axes=output_axes)
-    coordinate_transformations = [ngff_t.to_dict()]
     write_adata(group, name, shapes)  # creates group[name]
     shapes.uns["transform"] = transform
 
@@ -239,11 +272,13 @@ def write_shapes(
     _write_metadata(
         shapes_group,
         group_type=group_type,
-        coordinate_transformations=coordinate_transformations,
+        # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
+    assert transform is not None
+    _overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformation=transform)
 
 
 def write_points(
@@ -255,10 +290,6 @@ def write_points(
 ) -> None:
     axes = get_dims(points)
     t = get_transform(points)
-    assert t is not None
-    output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
-    ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
-    coordinate_transformations = [ngff_t.to_dict()]
 
     points_groups = group.require_group(name)
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
@@ -271,11 +302,13 @@ def write_points(
     _write_metadata(
         points_groups,
         group_type=group_type,
-        coordinate_transformations=coordinate_transformations,
+        # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
+    assert t is not None
+    _overwrite_coordinate_transformations_non_raster(group=points_groups, axes=axes, transformation=t)
 
 
 def write_table(
