@@ -93,11 +93,14 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         s = da.isclose(data.sum(dim=others), 0)  # type: ignore[attr-defined]
         # TODO: rewrite this to use dask array; can't get it to work with it
         x = s.compute()
-        non_zero = np.where(x is False)[0]
-        left_pad = non_zero[0]
-        right_pad = non_zero[-1] + 1
-        unpadded = data.isel({axis: slice(left_pad, right_pad)})
-        return unpadded, left_pad
+        non_zero = np.where(x == 0)[0]
+        if len(non_zero) == 0:
+            return data, 0
+        else:
+            left_pad = non_zero[0]
+            right_pad = non_zero[-1] + 1
+            unpadded = data.isel({axis: slice(left_pad, right_pad)})
+            return unpadded, left_pad
 
     from spatialdata._core.core_utils import get_dims
 

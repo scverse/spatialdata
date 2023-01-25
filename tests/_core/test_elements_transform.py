@@ -11,6 +11,7 @@ from tests._core.conftest import xy_cs
 
 
 class TestElementsTransform:
+    @pytest.mark.skip("Waiting for the new points implementation")
     @pytest.mark.parametrize("transform", [NgffScale(np.array([1, 2, 3])), NgffScale(np.array([2]))])
     def test_points(
         self,

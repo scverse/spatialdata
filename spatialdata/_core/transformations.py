@@ -1,29 +1,28 @@
 from __future__ import annotations
 
-import itertools
 from abc import ABC, abstractmethod
-from functools import singledispatchmethod
-from typing import Any, Optional, Union
+from typing import Optional, TYPE_CHECKING, Union
 
-import dask.array
-import dask_image.ndinterp
 import numpy as np
-import pyarrow as pa
 import xarray as xr
-from anndata import AnnData
-from dask.array.core import Array as DaskArray
-from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData
-from spatialdata._core.core_utils import ValidAxis_t, get_dims, validate_axis_name
-from spatialdata._core.models import get_schema
+from spatialdata._core.ngff.ngff_transformations import (
+    NgffAffine,
+    NgffBaseTransformation,
+    NgffIdentity,
+    NgffMapAxis,
+    NgffScale,
+    NgffSequence,
+    NgffTranslation,
+)
 from spatialdata._logging import logger
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
+
+if TYPE_CHECKING:
+    from spatialdata._core.core_utils import SpatialElement, ValidAxis_t
 
 __all__ = [
     "BaseTransformation",
@@ -37,14 +36,16 @@ __all__ = [
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-
-DEBUG_WITH_PLOTS = True
+TRANSFORMATIONS_MAP: dict[NgffBaseTransformation, type[BaseTransformation]] = {}
 
 
 class BaseTransformation(ABC):
     """Base class for all transformations."""
 
     def _validate_axes(self, axes: tuple[ValidAxis_t, ...]) -> None:
+        # to avoid circular imports
+        from spatialdata._core.core_utils import validate_axis_name
+
         for ax in axes:
             validate_axis_name(ax)
         if len(axes) != len(set(axes)):
@@ -71,34 +72,19 @@ class BaseTransformation(ABC):
     def __repr__(self) -> str:
         return self._repr_indent(0)
 
-    # @classmethod
-    # @abstractmethod
-    # def _from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
-    #     pass
-    #
-    # @classmethod
-    # def from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
-    #     pass
-    #
-    #     # d = MappingProxyType(d)
-    #     type = d["type"]
-    #     # MappingProxyType is readonly
-    #     transformation = NGFF_TRANSFORMATIONS[type]._from_dict(d)
-    #     if "input" in d:
-    #         input_coordinate_system = d["input"]
-    #         if isinstance(input_coordinate_system, dict):
-    #             input_coordinate_system = NgffCoordinateSystem.from_dict(input_coordinate_system)
-    #         transformation.input_coordinate_system = input_coordinate_system
-    #     if "output" in d:
-    #         output_coordinate_system = d["output"]
-    #         if isinstance(output_coordinate_system, dict):
-    #             output_coordinate_system = NgffCoordinateSystem.from_dict(output_coordinate_system)
-    #         transformation.output_coordinate_system = output_coordinate_system
-    #     return transformation
-    #
-    # @abstractmethod
-    # def to_dict(self) -> Transformation_t:
-    #     pass
+    @classmethod
+    @abstractmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    @classmethod
+    def from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        transformation = TRANSFORMATIONS_MAP[type(d)]._from_ngff(d)
+        return transformation
+
+    @abstractmethod
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
 
     @abstractmethod
     def inverse(self) -> BaseTransformation:
@@ -181,227 +167,11 @@ class BaseTransformation(ABC):
             raise ValueError(f"Invalid axes: {axes}")
         return valid_axes[axes]
 
-    def _transform_raster(self, data: DaskArray, axes: tuple[str, ...], **kwargs: Any) -> DaskArray:
-        # dims = {ch: axes.index(ch) for ch in axes}
-        n_spatial_dims = self._get_n_spatial_dims(axes)
-        binary: ArrayLike = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
-        spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
-        binary *= np.array(spatial_shape)
-        c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
-        v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
-        matrix = self.to_affine_matrix(input_axes=axes, output_axes=axes)
-        inverse_matrix = self.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-        new_v = (matrix @ v.T).T
-        c_shape: tuple[int, ...]
-        if "c" in axes:
-            c_shape = (data.shape[0],)
-        else:
-            c_shape = ()
-        new_spatial_shape = tuple(
-            int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
-        )
-        output_shape = c_shape + new_spatial_shape
-        ##
-        translation_vector = np.min(new_v[:, :-1], axis=0)
-        inverse_matrix_adjusted = Sequence(
-            [
-                Translation(translation_vector, axes=axes),
-                self.inverse(),
-            ]
-        ).to_affine_matrix(input_axes=axes, output_axes=axes)
+    def transform(self, element: SpatialElement) -> SpatialElement:
+        from spatialdata._core._transform_elements import _transform
 
-        # fix chunk shape, it should be possible for the user to specify them, and by default we could reuse the chunk shape of the input
-        # output_chunks = data.chunks
-        ##
-        transformed_dask = dask_image.ndinterp.affine_transform(
-            data,
-            matrix=inverse_matrix_adjusted,
-            output_shape=output_shape,
-            **kwargs,
-            # , output_chunks=output_chunks
-        )
-        assert isinstance(transformed_dask, DaskArray)
-        ##
-
-        if DEBUG_WITH_PLOTS:
-            if n_spatial_dims == 2:
-                ##
-                import matplotlib.pyplot as plt
-
-                plt.figure()
-                im = data
-                new_v_inverse = (inverse_matrix @ v.T).T
-                # min_x_inverse = np.min(new_v_inverse[:, 2])
-                # min_y_inverse = np.min(new_v_inverse[:, 1])
-
-                if "c" in axes:
-                    plt.imshow(dask.array.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-                    plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-                else:
-                    plt.imshow(transformed_dask, origin="lower", alpha=0.5)
-                    plt.imshow(im, origin="lower", alpha=0.5)
-                start_index = 1 if "c" in axes else 0
-                plt.scatter(v[:, start_index:-1][:, 1] - 0.5, v[:, start_index:-1][:, 0] - 0.5, c="r")
-                plt.scatter(new_v[:, start_index:-1][:, 1] - 0.5, new_v[:, start_index:-1][:, 0] - 0.5, c="g")
-                plt.scatter(
-                    new_v_inverse[:, start_index:-1][:, 1] - 0.5, new_v_inverse[:, start_index:-1][:, 0] - 0.5, c="k"
-                )
-                plt.show()
-                ##
-            else:
-                assert n_spatial_dims == 3
-                # raise NotImplementedError()
-        return transformed_dask
-
-    @singledispatchmethod
-    def transform(self, data: Any) -> Any:
-        raise NotImplementedError()
-
-    @transform.register(SpatialData)
-    def _(
-        self,
-        data: SpatialData,
-    ) -> SpatialData:
-        new_elements: dict[str, dict[str, Any]] = {}
-        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
-            d = getattr(data, element_type)
-            if len(d) > 0:
-                new_elements[element_type] = {}
-            for k, v in d.items():
-                new_elements[element_type][k] = self.transform(v)
-
-        new_sdata = SpatialData(**new_elements)
-        return new_sdata
-
-    @transform.register(SpatialImage)
-    def _(
-        self,
-        data: SpatialImage,
-    ) -> SpatialImage:
-        schema = get_schema(data)
-        from spatialdata._core.models import Labels2DModel, Labels3DModel
-
-        # labels need to be preserved after the resizing of the image
-        if schema == Labels2DModel or schema == Labels3DModel:
-            # TODO: this should work, test better
-            kwargs = {"prefilter": False}
-        else:
-            kwargs = {}
-
-        axes = get_dims(data)
-        transformed_dask = self._transform_raster(data.data, axes=axes, **kwargs)
-        # mypy thinks that schema could be ShapesModel, PointsModel, ...
-        transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
-        print(
-            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
-        )
-        return transformed_data
-
-    @transform.register(MultiscaleSpatialImage)
-    def _(
-        self,
-        data: MultiscaleSpatialImage,
-    ) -> MultiscaleSpatialImage:
-        schema = get_schema(data)
-        from spatialdata._core.models import Labels2DModel, Labels3DModel
-
-        # labels need to be preserved after the resizing of the image
-        if schema == Labels2DModel or schema == Labels3DModel:
-            # TODO: this should work, test better
-            kwargs = {"prefilter": False}
-        else:
-            kwargs = {}
-
-        axes = get_dims(data)
-        scale0 = dict(data["scale0"])
-        assert len(scale0) == 1
-        scale0_data = scale0.values().__iter__().__next__()
-        transformed_dask = self._transform_raster(scale0_data.data, axes=scale0_data.dims, **kwargs)
-
-        # this code is temporary and doens't work in all cases (in particular it breaks when the data is not similar
-        # to a square but has sides of very different lengths). I would remove it an implement (inside the parser)
-        # the logic described in https://github.com/scverse/spatialdata/issues/108)
-        shapes = []
-        for level in range(len(data)):
-            dims = data[f"scale{level}"].dims.values()
-            shape = np.array([dict(dims._mapping)[k] for k in axes if k != "c"])
-            shapes.append(shape)
-        multiscale_factors = []
-        shape0 = shapes[0]
-        for shape in shapes[1:]:
-            factors = shape0 / shape
-            factors - min(factors)
-            # assert np.allclose(almost_zero, np.zeros_like(almost_zero), rtol=2.)
-            try:
-                multiscale_factors.append(round(factors[0]))
-            except OverflowError as e:
-                raise e
-        # mypy thinks that schema could be ShapesModel, PointsModel, ...
-        transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
-        print(
-            "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
-        )
-        return transformed_data
-
-    @transform.register(pa.Table)
-    def _(
-        self,
-        data: pa.Table,
-    ) -> pa.Table:
-        axes = get_dims(data)
-        arrays = []
-        for ax in axes:
-            arrays.append(data[ax].to_numpy())
-        xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
-        xtransformed = self._transform_coordinates(xdata)
-        transformed = data.drop(axes)
-        for ax in axes:
-            indices = xtransformed["dim"] == ax
-            new_ax = pa.array(xtransformed[:, indices].data.flatten())
-            transformed = transformed.append_column(ax, new_ax)
-
-        # to avoid cyclic import
-        from spatialdata._core.models import PointsModel
-
-        PointsModel.validate(transformed)
+        transformed = _transform(element, self)
         return transformed
-
-    @transform.register(GeoDataFrame)
-    def _(
-        self,
-        data: GeoDataFrame,
-    ) -> GeoDataFrame:
-        ##
-        ndim = len(get_dims(data))
-        # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
-        matrix = self.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
-        shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
-        transformed_geometry = data.geometry.affine_transform(shapely_notation)
-        transformed_data = data.copy(deep=True)
-        transformed_data.geometry = transformed_geometry
-
-        # to avoid cyclic import
-        from spatialdata._core.models import PolygonsModel
-
-        PolygonsModel.validate(transformed_data)
-        return transformed_data
-
-    @transform.register(AnnData)
-    def _(
-        self,
-        data: AnnData,
-    ) -> AnnData:
-        ndim = len(get_dims(data))
-        xdata = DataArray(data.obsm["spatial"], coords={"points": range(len(data)), "dim": ["x", "y", "z"][:ndim]})
-        transformed_spatial = self._transform_coordinates(xdata)
-        transformed_adata = data.copy()
-        transformed_adata.obsm["spatial"] = transformed_spatial.data
-
-        # to avoid cyclic import
-        from spatialdata._core.models import ShapesModel
-
-        ShapesModel.validate(transformed_adata)
-        return transformed_adata
 
 
 class Identity(BaseTransformation):
@@ -426,6 +196,13 @@ class Identity(BaseTransformation):
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         return data
 
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
+
 
 # Warning on MapAxis vs NgffMapAxis: MapAxis can add new axes that are not present in input. NgffMapAxis can't do
 # this. It can only 1) permute the axis order, 2) eventually assiging the same axis to multiple output axes and 3)
@@ -433,6 +210,9 @@ class Identity(BaseTransformation):
 # NgffMapAxis, where the NgffAffine corrects the axes
 class MapAxis(BaseTransformation):
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
+        # to avoid circular imports
+        from spatialdata._core.core_utils import validate_axis_name
+
         assert isinstance(map_axis, dict)
         for des_ax, src_ax in map_axis.items():
             validate_axis_name(des_ax)
@@ -493,6 +273,13 @@ class MapAxis(BaseTransformation):
         to_return = self._xarray_coords_reorder_axes(to_return)
         return to_return
 
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
+
 
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
@@ -527,6 +314,13 @@ class Translation(BaseTransformation):
         transformed = data + translation
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
+
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
 
 
 class Scale(BaseTransformation):
@@ -564,6 +358,13 @@ class Scale(BaseTransformation):
         transformed = data * scale
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
+
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
 
 
 class Affine(BaseTransformation):
@@ -640,6 +441,13 @@ class Affine(BaseTransformation):
         to_return = self._xarray_coords_reorder_axes(to_return)
         return to_return
 
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
+
 
 class Sequence(BaseTransformation):
     def __init__(self, transformations: list[BaseTransformation]) -> None:
@@ -711,6 +519,13 @@ class Sequence(BaseTransformation):
         self._xarray_coords_validate_axes(data)
         return data
 
+    @classmethod
+    def _from_ngff(cls, d: NgffBaseTransformation) -> BaseTransformation:
+        pass
+
+    def to_ngff(self) -> NgffBaseTransformation:
+        pass
+
 
 def _get_current_output_axes(
     transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
@@ -758,3 +573,11 @@ def _get_current_output_axes(
         return input_axes
     else:
         raise ValueError("Unknown transformation type.")
+
+
+TRANSFORMATIONS_MAP[type[NgffIdentity]] = Identity
+TRANSFORMATIONS_MAP[type[NgffMapAxis]] = MapAxis
+TRANSFORMATIONS_MAP[type[NgffTranslation]] = Translation
+TRANSFORMATIONS_MAP[type[NgffScale]] = Scale
+TRANSFORMATIONS_MAP[type[NgffAffine]] = Affine
+TRANSFORMATIONS_MAP[type[NgffSequence]] = Sequence

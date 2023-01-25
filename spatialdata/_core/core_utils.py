@@ -10,7 +10,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
-from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
+from spatialdata._core.transformations import BaseTransformation
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
@@ -40,46 +40,46 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
 
 
 @singledispatch
-def get_transform(e: SpatialElement) -> Optional[NgffBaseTransformation]:
+def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[NgffBaseTransformation]:
+def _(e: SpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     # this double return is to make mypy happy
     if t is not None:
-        assert isinstance(t, NgffBaseTransformation)
+        assert isinstance(t, BaseTransformation)
         return t
     else:
         return t
 
 
 @get_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[NgffBaseTransformation]:
+def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
-        assert isinstance(t, NgffBaseTransformation)
+        assert isinstance(t, BaseTransformation)
         return t
     else:
         return t
 
 
 @get_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Optional[NgffBaseTransformation]:
+def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
-        assert isinstance(t, NgffBaseTransformation)
+        assert isinstance(t, BaseTransformation)
         return t
     else:
         return t
 
 
 @get_transform.register(AnnData)
-def _(e: AnnData) -> Optional[NgffBaseTransformation]:
+def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
     if t is not None:
-        assert isinstance(t, NgffBaseTransformation)
+        assert isinstance(t, BaseTransformation)
         return t
     else:
         return t
@@ -87,68 +87,51 @@ def _(e: AnnData) -> Optional[NgffBaseTransformation]:
 
 # we need the return type because pa.Table is immutable
 @get_transform.register(pa.Table)
-def _(e: pa.Table) -> Optional[NgffBaseTransformation]:
+def _(e: pa.Table) -> Optional[BaseTransformation]:
+    raise NotImplementedError("waiting for the new points implementation")
     t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-    t = NgffBaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
+    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
     if t is not None:
-        assert isinstance(t, NgffBaseTransformation)
+        assert isinstance(t, BaseTransformation)
         return t
     else:
         return t
 
 
-def _adjust_transformation_axes(e: SpatialElement, t: NgffBaseTransformation) -> NgffBaseTransformation:
-    return t
-    # TODO: to be reimplmeented or deleted after the new transformations refactoring
-    # element_cs = get_default_coordinate_system(get_dims(e))
-    # # the unit for the new element is the default one, called "unit". If the transformation has units, let's copy them
-    # for axis in element_cs._axes:
-    #     if axis.unit == "unit":
-    #         assert t.input_coordinate_system is not None
-    #         if t.input_coordinate_system.has_axis(axis.name):
-    #             axis.unit = t.input_coordinate_system.get_axis(axis.name).unit
-    # adjusted = _adjust_transformation_between_mismatching_coordinate_systems(t, element_cs)
-    # return adjusted
-
-
 @singledispatch
-def set_transform(e: SpatialElement, t: NgffBaseTransformation) -> SpatialElement:
+def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: NgffBaseTransformation) -> SpatialImage:
-    new_t = _adjust_transformation_axes(e, t)
-    e.attrs[TRANSFORM_KEY] = new_t
+def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
+    e.attrs[TRANSFORM_KEY] = t
     return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: NgffBaseTransformation) -> MultiscaleSpatialImage:
-    new_t = _adjust_transformation_axes(e, t)
-    e.attrs[TRANSFORM_KEY] = new_t
+def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
+    e.attrs[TRANSFORM_KEY] = t
     return e
 
 
 @set_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame, t: NgffBaseTransformation) -> GeoDataFrame:
-    new_t = _adjust_transformation_axes(e, t)
-    e.attrs[TRANSFORM_KEY] = new_t
+def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
+    e.attrs[TRANSFORM_KEY] = t
     return e
 
 
 @set_transform.register(AnnData)
-def _(e: AnnData, t: NgffBaseTransformation) -> AnnData:
-    new_t = _adjust_transformation_axes(e, t)
-    e.uns[TRANSFORM_KEY] = new_t
+def _(e: AnnData, t: BaseTransformation) -> AnnData:
+    e.uns[TRANSFORM_KEY] = t
     return e
 
 
 @set_transform.register(pa.Table)
-def _(e: pa.Table, t: NgffBaseTransformation) -> pa.Table:
+def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
     # in theory this doesn't really copy the data in the table but is referncing to them
-    new_t = _adjust_transformation_axes(e, t)
-    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(new_t.to_dict()).encode("utf-8")})
+    raise NotImplementedError("waiting for the new points implementation")
+    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
     return new_e
 
 
@@ -215,7 +198,7 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     d = dict(e["scale0"])
     assert len(d) == 1
     dims0 = d.values().__iter__().__next__().dims
-    assert type(dims0) == tuple[str, ...]
+    assert isinstance(dims0, tuple)
     # still, let's do a runtime check against the other method
     variables = list(e[list(e.keys())[0]].variables)
     dims1 = e[list(e.keys())[0]][variables[0]].dims

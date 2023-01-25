@@ -65,7 +65,8 @@ def write_image(
         data = image.data
         t = get_transform(image)
         assert isinstance(t, NgffBaseTransformation)
-        coordinate_transformations = [[t.to_dict()]]
+        ngff_t = t.to_ngff()
+        coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = image.chunks
         axes = image.dims
         axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -86,7 +87,7 @@ def write_image(
         )
     elif isinstance(image, MultiscaleSpatialImage):
         data = _iter_multiscale(image, "data")
-        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(image, "attrs", "transform")]
+        coordinate_transformations = [[x.to_ngff().to_dict()] for x in _iter_multiscale(image, "attrs", "transform")]
         chunks = _iter_multiscale(image, "chunks")
         axes_ = _iter_multiscale(image, "dims")
         # TODO: how should axes be handled with multiscale?
@@ -119,7 +120,8 @@ def write_labels(
         data = labels.data
         t = get_transform(labels)
         assert isinstance(t, NgffBaseTransformation)
-        coordinate_transformations = [[t.to_dict()]]
+        ngff_t = t.to_ngff()
+        coordinate_transformations = [[ngff_t.to_dict()]]
         chunks = labels.chunks
         axes = labels.dims
         axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -143,7 +145,7 @@ def write_labels(
     elif isinstance(labels, MultiscaleSpatialImage):
         data = _iter_multiscale(labels, "data")
         # TODO: nitpick, rewrite the next line to use get_transform()
-        coordinate_transformations = [[x.to_dict()] for x in _iter_multiscale(labels, "attrs", "transform")]
+        coordinate_transformations = [[x.to_ngff().to_dict()] for x in _iter_multiscale(labels, "attrs", "transform")]
         chunks = _iter_multiscale(labels, "chunks")
         axes_ = _iter_multiscale(labels, "dims")
         # TODO: how should axes be handled with multiscale?
@@ -171,8 +173,8 @@ def write_polygons(
 ) -> None:
     polygons_groups = group.require_group(name)
     t = get_transform(polygons)
-    assert isinstance(t, NgffBaseTransformation)
-    coordinate_transformations = [t.to_dict()]
+    ngff_t = t.to_ngff()
+    coordinate_transformations = [ngff_t.to_dict()]
 
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
@@ -202,9 +204,9 @@ def write_shapes(
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
-
     transform = shapes.uns.pop("transform")
-    coordinate_transformations = [transform.to_dict()]
+    ngff_t = transform.to_ngff()
+    coordinate_transformations = [ngff_t.to_dict()]
     write_adata(group, name, shapes)  # creates group[name]
     shapes.uns["transform"] = transform
 
@@ -234,7 +236,8 @@ def write_points(
     points_groups = group.require_group(name)
     t = get_transform(points)
     assert isinstance(t, NgffBaseTransformation)
-    coordinate_transformations = [t.to_dict()]
+    ngff_t = t.to_ngff()
+    coordinate_transformations = [ngff_t.to_dict()]
 
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
     pq.write_table(points, path)

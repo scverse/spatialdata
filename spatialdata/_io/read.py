@@ -32,7 +32,11 @@ from spatialdata._logging import logger
 
 def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
     datasets = node.load(Multiscales).datasets
-    transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    print(
+        "TODO: fix the transformations in the multiscale. No transformation in the parent level and the "
+        "transformation for each level should be working independently."
+    )
+    [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
     name = node.metadata["name"]
     if type(name) == list:
         assert len(name) == 1

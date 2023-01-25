@@ -41,20 +41,11 @@ from spatialdata._core.core_utils import (
     X,
     Y,
     Z,
-    get_default_coordinate_system,
     get_dims,
     get_transform,
     set_transform,
 )
-from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata._core.ngff.ngff_transformations import (
-    NgffAffine,
-    NgffBaseTransformation,
-    NgffIdentity,
-)
-from spatialdata._core.ngff.ngff_transformations import (
-    NgffSequence as SequenceTransformation,
-)
+from spatialdata._core.transformations import BaseTransformation, Identity
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
@@ -67,7 +58,7 @@ Chunks_t = Union[
 ]
 ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 
-Transform_s = AttrSchema(NgffBaseTransformation, None)
+Transform_s = AttrSchema(BaseTransformation, None)
 
 
 __all__ = [
@@ -83,47 +74,12 @@ __all__ = [
 ]
 
 
-def _parse_transform(element: SpatialElement, transform: Optional[NgffBaseTransformation] = None) -> SpatialElement:
-    # if input and output coordinate systems are not specified by the user, we try to infer them. If it's logically
-    # not possible to infer them, an exception is raised.
-    t: NgffBaseTransformation
+def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
     if transform is None:
-        t = NgffIdentity()
-    else:
-        t = transform
-    if t.input_coordinate_system is None:
-        dims = get_dims(element)
-        t.input_coordinate_system = get_default_coordinate_system(dims)
-    if t.output_coordinate_system is None:
-        t.output_coordinate_system = SequenceTransformation._inferring_cs_infer_output_coordinate_system(t)
-
-    # this function is to comply with mypy since we could call .axes_names on the wrong type
-    def _get_axes_names(cs: Optional[Union[str, NgffCoordinateSystem]]) -> tuple[str, ...]:
-        assert isinstance(cs, NgffCoordinateSystem)
-        return cs.axes_names
-
-    # determine if we are in the 2d case or 3d case and determine the coordinate system we want to map to (basically
-    # we want both the spatial dimensions and c). If the output coordinate system of the transformation t is not
-    # matching, compose the transformation with an appropriate transformation to map to the correct coordinate system
-    if Z in _get_axes_names(t.output_coordinate_system):
-        mapper_output_coordinate_system = get_default_coordinate_system((C, Z, Y, X))
-    else:
-        # if we are in the 3d case but the element does not contain the Z dimension, it's up to the user to specify
-        # the correct coordinate transformation and output coordinate system
-        mapper_output_coordinate_system = get_default_coordinate_system((C, Y, X))
-    assert isinstance(t.output_coordinate_system, NgffCoordinateSystem)
-    assert isinstance(mapper_output_coordinate_system, NgffCoordinateSystem)
-
+        transform = Identity()
     new_element = set_transform(
         element,
-        SequenceTransformation(
-            [
-                t,
-                NgffAffine.from_input_output_coordinate_systems(
-                    t.output_coordinate_system, mapper_output_coordinate_system
-                ),
-            ]
-        ),
+        transform,
     )
     return new_element
 
@@ -136,7 +92,7 @@ class RasterSchema(DataArraySchema):
         cls,
         data: ArrayLike,
         dims: Optional[Sequence[str]] = None,
-        transform: Optional[NgffBaseTransformation] = None,
+        transform: Optional[BaseTransformation] = None,
         multiscale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
@@ -154,7 +110,7 @@ class RasterSchema(DataArraySchema):
         transform
             Transformation to apply to the data.
         multiscale_factors
-            NgffScale factors to apply for multiscale.
+            Scale factors to apply for multiscale.
             If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method
             Method to use for multiscale.
@@ -196,9 +152,9 @@ class RasterSchema(DataArraySchema):
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
-        assert isinstance(data, DaskArray)
         if dims != cls.dims.dims:
             try:
+                assert isinstance(data, DaskArray) or isinstance(data, DataArray)
                 # mypy complains that data has no .transpose but I have asserted right above that data is a DaskArray...
                 data = data.transpose(*[_reindex(d) for d in cls.dims.dims])  # type: ignore[attr-defined]
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
