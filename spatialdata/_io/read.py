@@ -37,7 +37,8 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
         "TODO: fix the transformations in the multiscale. No transformation in the parent level and the "
         "transformation for each level should be working independently."
     )
-    transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    ngff_transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
+    transformations = [BaseTransformation.from_ngff(t) for t in ngff_transformations]
     assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
     name = node.metadata["name"]
     if type(name) == list:
@@ -59,15 +60,15 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
                 attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
-        assert len(transformations) == len(msi)
-        for t, k in zip(transformations, msi.keys()):
-            d = dict(msi[k])
-            assert len(d) == 1
-            xdata = d.values().__iter__().__next__()
-            set_transform(xdata, t)
+        # assert len(transformations) == len(msi)
+        # for t, k in zip(transformations, msi.keys()):
+        #     d = dict(msi[k])
+        #     assert len(d) == 1
+        #     xdata = d.values().__iter__().__next__()
+        #     set_transform(xdata, t)
         return msi
     else:
-        t = BaseTransformation.from_ngff(transformations[0])
+        t = transformations[0]
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
         return SpatialImage(
             data,

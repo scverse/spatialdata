@@ -87,8 +87,8 @@ def _transform_raster(
 
             if "c" in axes:
                 plt.imshow(
-                    dask.array.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5
-                )  # type: ignore[attr-defined]
+                    dask.array.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5  # type: ignore[attr-defined]
+                )
                 plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
             else:
                 plt.imshow(transformed_dask, origin="lower", alpha=0.5)

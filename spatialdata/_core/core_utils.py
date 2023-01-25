@@ -13,7 +13,7 @@ from xarray import DataArray
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
+SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
 __all__ = [
     "SpatialElement",
@@ -109,40 +109,37 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
 
 
 @singledispatch
-def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
+def set_transform(e: SpatialElement, t: BaseTransformation) -> None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
 @set_transform.register(DataArray)
-def _(e: SpatialImage, t: BaseTransformation) -> DataArray:
+def _(e: SpatialImage, t: BaseTransformation) -> None:
     e.attrs[TRANSFORM_KEY] = t
-    return e
 
 
 @set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
+def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
     # no transformation is stored in this object, but at each level of the multiscale
-    return e
+    raise NotImplementedError("")
 
 
 @set_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
+def _(e: GeoDataFrame, t: BaseTransformation) -> None:
     e.attrs[TRANSFORM_KEY] = t
-    return e
 
 
 @set_transform.register(AnnData)
-def _(e: AnnData, t: BaseTransformation) -> AnnData:
+def _(e: AnnData, t: BaseTransformation) -> None:
     e.uns[TRANSFORM_KEY] = t
-    return e
 
 
 @set_transform.register(pa.Table)
-def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
+def _(e: pa.Table, t: BaseTransformation) -> None:
     # in theory this doesn't really copy the data in the table but is referncing to them
     raise NotImplementedError("waiting for the new points implementation")
-    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
-    return new_e
+    # new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
+    # return new_e
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving

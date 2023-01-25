@@ -66,7 +66,7 @@ class TestReadWrite:
             np.testing.assert_array_equal(shapes.shapes[k].obsm["spatial"], sdata.shapes[k].obsm["spatial"])
             assert shapes.shapes[k].uns == sdata.shapes[k].uns
 
-    @pytest.mark.skip('waiting for the new points implementation')
+    @pytest.mark.skip("waiting for the new points implementation")
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -95,7 +95,7 @@ class TestReadWrite:
         """Test read/write."""
         self._test_table(tmp_path, table_multiple_annotations)
 
-    @pytest.mark.skip('waiting for the new points implementation')
+    @pytest.mark.skip("waiting for the new points implementation")
     def test_roundtrip(
         self,
         tmp_path: str,
@@ -110,7 +110,7 @@ class TestReadWrite:
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
-    @pytest.mark.skip('waiting for the new points implementation')
+    @pytest.mark.skip("waiting for the new points implementation")
     def test_incremental_io(
         self,
         tmp_path: str,

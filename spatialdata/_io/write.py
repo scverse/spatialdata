@@ -63,6 +63,7 @@ def write_image(
         data = image.data
         t = get_transform(image)
         axes: tuple[str, ...] = tuple(image.dims)
+        assert t is not None
         output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
         ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
         coordinate_transformations = [[ngff_t.to_dict()]]
@@ -94,8 +95,11 @@ def write_image(
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
             transformation = get_transform(xdata)
-            output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
-            ngff_transformations.append(transformation.to_ngff(input_axes=input_axes, output_axes=output_axes))
+            assert transformation is not None
+            output_axes = _get_current_output_axes(transformation=transformation, input_axes=tuple(input_axes))
+            ngff_transformations.append(
+                transformation.to_ngff(input_axes=tuple(input_axes), output_axes=tuple(output_axes))
+            )
         coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
         chunks = _iter_multiscale(image, "chunks")
         parsed_axes = _get_valid_axes(axes=input_axes, fmt=fmt)
@@ -125,6 +129,7 @@ def write_labels(
         data = labels.data
         t = get_transform(labels)
         input_axes: tuple[str, ...] = tuple(labels.dims)
+        assert t is not None
         output_axes = _get_current_output_axes(transformation=t, input_axes=input_axes)
         ngff_t = t.to_ngff(input_axes=input_axes, output_axes=output_axes)
         coordinate_transformations = [[ngff_t.to_dict()]]
@@ -150,7 +155,7 @@ def write_labels(
         )
     elif isinstance(labels, MultiscaleSpatialImage):
         data = _iter_multiscale(labels, "data")
-        input_axes = _iter_multiscale(labels, "dims")
+        input_axes = tuple(_iter_multiscale(labels, "dims"))
         ngff_transformations = []
         for k in labels.keys():
             input_axes = labels[k].dims
@@ -158,6 +163,7 @@ def write_labels(
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
             transformation = get_transform(xdata)
+            assert transformation is not None
             output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
             ngff_transformations.append(transformation.to_ngff(input_axes=input_axes, output_axes=output_axes))
         coordinate_transformations = [[t.to_dict()] for t in ngff_transformations]
@@ -186,6 +192,7 @@ def write_polygons(
 ) -> None:
     axes = get_dims(polygons)
     t = get_transform(polygons)
+    assert t is not None
     output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
     ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]
@@ -219,6 +226,7 @@ def write_shapes(
 ) -> None:
     axes = get_dims(shapes)
     transform = shapes.uns.pop("transform")
+    assert transform is not None
     output_axes = _get_current_output_axes(transformation=transform, input_axes=axes)
     ngff_t = transform.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]
@@ -248,6 +256,7 @@ def write_points(
 ) -> None:
     axes = get_dims(points)
     t = get_transform(points)
+    assert t is not None
     output_axes = _get_current_output_axes(transformation=t, input_axes=axes)
     ngff_t = t.to_ngff(input_axes=axes, output_axes=output_axes)
     coordinate_transformations = [ngff_t.to_dict()]

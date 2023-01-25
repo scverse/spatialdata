@@ -202,6 +202,7 @@ class RasterSchema(DataArraySchema):
                     filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
                     filtered_axes = [ax for ax in dims if ax != "c"]
                     scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+                    assert parsed_transform is not None
                     sequence = SequenceTransformation([scale, parsed_transform])
                     _parse_transform(xdata, sequence)
                 else:

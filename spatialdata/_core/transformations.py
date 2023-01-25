@@ -38,7 +38,7 @@ __all__ = [
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-TRANSFORMATIONS_MAP: dict[NgffBaseTransformation, BaseTransformation] = {}
+TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
 
 class BaseTransformation(ABC):
@@ -219,7 +219,8 @@ class Identity(BaseTransformation):
         return data
 
     @classmethod
-    def _from_ngff(cls, t: NgffIdentity) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffIdentity)
         return Identity()
 
     def to_ngff(
@@ -304,7 +305,8 @@ class MapAxis(BaseTransformation):
         return to_return
 
     @classmethod
-    def _from_ngff(cls, t: NgffMapAxis) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffMapAxis)
         return MapAxis(map_axis=t.map_axis)
 
     def to_ngff(
@@ -367,7 +369,10 @@ class Translation(BaseTransformation):
         return to_return
 
     @classmethod
-    def _from_ngff(cls, t: NgffTranslation) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffTranslation)
+        assert t.input_coordinate_system is not None
+        assert t.output_coordinate_system is not None
         input_axes = tuple(t.input_coordinate_system.axes_names)
         output_axes = tuple(t.output_coordinate_system.axes_names)
         assert input_axes == output_axes
@@ -440,7 +445,10 @@ class Scale(BaseTransformation):
         return to_return
 
     @classmethod
-    def _from_ngff(cls, t: NgffScale) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffScale)
+        assert t.input_coordinate_system is not None
+        assert t.output_coordinate_system is not None
         input_axes = tuple(t.input_coordinate_system.axes_names)
         output_axes = tuple(t.output_coordinate_system.axes_names)
         assert input_axes == output_axes
@@ -536,7 +544,10 @@ class Affine(BaseTransformation):
         return to_return
 
     @classmethod
-    def _from_ngff(cls, t: NgffAffine) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffAffine)
+        assert t.input_coordinate_system is not None
+        assert t.output_coordinate_system is not None
         input_axes = tuple(t.input_coordinate_system.axes_names)
         output_axes = tuple(t.output_coordinate_system.axes_names)
         return Affine(matrix=t.affine, input_axes=input_axes, output_axes=output_axes)
@@ -633,7 +644,8 @@ class Sequence(BaseTransformation):
         return data
 
     @classmethod
-    def _from_ngff(cls, t: NgffSequence) -> BaseTransformation:
+    def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
+        assert isinstance(t, NgffSequence)
         return Sequence(transformations=[BaseTransformation.from_ngff(t) for t in t.transformations])
 
     def to_ngff(

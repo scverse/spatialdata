@@ -19,7 +19,7 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_points_dict,
 )
-from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
+from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -30,7 +30,6 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -518,26 +517,26 @@ class SpatialData:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
 
-    @property
-    def coordinate_systems(self) -> dict[str, NgffCoordinateSystem]:
-        ##
-        all_cs: dict[str, NgffCoordinateSystem] = {}
-        gen = self._gen_elements()
-        for obj in gen:
-            ct = get_transform(obj)
-            if ct is not None:
-                cs = ct.output_coordinate_system
-                if cs is not None:
-                    assert isinstance(cs, NgffCoordinateSystem)
-                    if isinstance(cs, NgffCoordinateSystem):
-                        name = cs.name
-                        if name in all_cs:
-                            added = all_cs[name]
-                            assert cs == added
-                        else:
-                            all_cs[name] = cs
-        ##
-        return all_cs
+    # @property
+    # def coordinate_systems(self) -> dict[str, NgffCoordinateSystem]:
+    #     ##
+    #     all_cs: dict[str, NgffCoordinateSystem] = {}
+    #     gen = self._gen_elements()
+    #     for obj in gen:
+    #         ct = get_transform(obj)
+    #         if ct is not None:
+    #             cs = ct.output_coordinate_system
+    #             if cs is not None:
+    #                 assert isinstance(cs, NgffCoordinateSystem)
+    #                 if isinstance(cs, NgffCoordinateSystem):
+    #                     name = cs.name
+    #                     if name in all_cs:
+    #                         added = all_cs[name]
+    #                         assert cs == added
+    #                     else:
+    #                         all_cs[name] = cs
+    #     ##
+    #     return all_cs
 
     def _non_empty_elements(self) -> list[str]:
         """Get the names of the elements that are not empty.

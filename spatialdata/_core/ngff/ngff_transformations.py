@@ -160,7 +160,7 @@ class NgffBaseTransformation(ABC):
         return input_axes, output_axes
 
     @staticmethod
-    def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+    def _parse_list_into_array(array: Union[list[Number], list[list[Number]], ArrayLike]) -> ArrayLike:
         if isinstance(array, list):
             array = np.array(array)
         if array.dtype != float:
