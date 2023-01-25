@@ -22,7 +22,7 @@ class NgffAxis:
         self.unit = unit
 
     def __repr__(self) -> str:
-        inner = ", ".join(f"'{v}'" for v in self.to_dict().values())
+        inner = ", ".join(f"{v!r}" for v in self.to_dict().values())
         return f"NgffAxis({inner})"
 
     def to_dict(self) -> Axis_t:
@@ -45,7 +45,7 @@ class NgffCoordinateSystem:
             raise ValueError("Axes names must be unique")
 
     def __repr__(self) -> str:
-        return f"NgffCoordinateSystem('{self.name}', {self._axes})"
+        return f"NgffCoordinateSystem({self.name!r}, {self._axes})"
 
     @staticmethod
     def from_dict(coord_sys: CoordSystem_t) -> NgffCoordinateSystem:

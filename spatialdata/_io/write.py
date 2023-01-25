@@ -57,7 +57,6 @@ def write_image(
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
-
     subgroup = group.require_group(name)
     if isinstance(image, SpatialImage):
         data = image.data
