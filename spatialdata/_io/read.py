@@ -200,12 +200,13 @@ def _read_polygons(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spa
 
     typ = fmt.attrs_from_dict(f.attrs.asdict())
 
-    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transform = BaseTransformation.from_ngff(ngff_transform)
 
     geometry = from_ragged_array(typ, coords, offsets)
 
     geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    set_transform(geo_df, transforms)
+    set_transform(geo_df, transform)
     return geo_df
 
 
@@ -213,12 +214,13 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
     """Read shapes from a zarr store."""
 
     f = zarr.open(store, mode="r")
-    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transform = BaseTransformation.from_ngff(ngff_transform)
     attrs = fmt.attrs_from_dict(f.attrs.asdict())
 
     adata = read_anndata_zarr(store)
 
-    set_transform(adata, transforms)
+    set_transform(adata, transform)
     assert adata.uns["spatialdata_attrs"] == attrs
 
     return adata
@@ -233,7 +235,8 @@ def _read_points(
     path = os.path.join(f._store.path, f.path, "points.parquet")
     table = pq.read_table(path)
 
-    transforms = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transform = BaseTransformation.from_ngff(ngff_transform)
 
-    new_table = set_transform(table, transforms)
+    new_table = set_transform(table, transform)
     return new_table

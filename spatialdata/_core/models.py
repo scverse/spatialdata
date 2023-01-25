@@ -196,6 +196,7 @@ class RasterSchema(DataArraySchema):
                 assert len(dict(node)) == 1
                 xdata = list(node.values())[0]
                 new_shape = np.array(xdata.shape)
+                old_shape: ArrayLike
                 if i > 0:
                     scale_factors = old_shape / new_shape
                     filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
@@ -206,6 +207,7 @@ class RasterSchema(DataArraySchema):
                 else:
                     _parse_transform(xdata, parsed_transform)
                 i += 1
+                old_shape = new_shape
             assert isinstance(data, MultiscaleSpatialImage)
         return data
 
