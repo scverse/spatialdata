@@ -19,7 +19,7 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_transform
+from spatialdata._core.core_utils import ValidAxis_t, _get_transform, get_dims
 from spatialdata._core.transformations import (
     BaseTransformation,
     _get_current_output_axes,
@@ -97,7 +97,7 @@ def write_image(
     subgroup = group.require_group(name)
     if isinstance(image, SpatialImage):
         data = image.data
-        t = get_transform(image)
+        t = _get_transform(image)
         axes: tuple[str, ...] = tuple(image.dims)
         chunks = image.chunks
         parsed_axes = _get_valid_axes(axes=list(axes), fmt=fmt)
@@ -129,7 +129,7 @@ def write_image(
             d = dict(image[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
-            transformation = get_transform(xdata)
+            transformation = _get_transform(xdata)
             assert transformation is not None
             transformations.append(transformation)
         chunks = _iter_multiscale(image, "chunks")
@@ -163,7 +163,7 @@ def write_labels(
 ) -> None:
     if isinstance(labels, SpatialImage):
         data = labels.data
-        t = get_transform(labels)
+        t = _get_transform(labels)
         input_axes: tuple[str, ...] = tuple(labels.dims)
         chunks = labels.chunks
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
@@ -197,7 +197,7 @@ def write_labels(
             d = dict(labels[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
-            transformation = get_transform(xdata)
+            transformation = _get_transform(xdata)
             assert transformation is not None
             transformations.append(transformation)
         chunks = _iter_multiscale(labels, "chunks")
@@ -229,7 +229,7 @@ def write_polygons(
     fmt: Format = PolygonsFormat(),
 ) -> None:
     axes = get_dims(polygons)
-    t = get_transform(polygons)
+    t = _get_transform(polygons)
     polygons_groups = group.require_group(name)
     geometry, coords, offsets = to_ragged_array(polygons.geometry)
     polygons_groups.create_dataset(name="coords", data=coords)
@@ -289,7 +289,7 @@ def write_points(
     fmt: Format = PointsFormat(),
 ) -> None:
     axes = get_dims(points)
-    t = get_transform(points)
+    t = _get_transform(points)
 
     points_groups = group.require_group(name)
     path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")

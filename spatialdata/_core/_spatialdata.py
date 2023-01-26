@@ -20,7 +20,7 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_points_dict,
 )
-from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
+from spatialdata._core.core_utils import SpatialElement, _get_transform, get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -318,17 +318,26 @@ class SpatialData:
             raise ValueError("Element found multiple times in the SpatialData object")
 
         if self.path is not None:
+            group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+            axes = get_dims(element)
             if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
-                pass
+                from spatialdata._io.write import (
+                    _overwrite_coordinate_transformations_raster,
+                )
 
-                raise NotImplementedError("TODO")
+                if isinstance(element, SpatialImage):
+                    transformations = [transformation]
+                elif isinstance(element, MultiscaleSpatialImage):
+                    # transformations = element.transformations
+                    raise NotImplementedError("TODO")
+                else:
+                    raise ValueError("Unknown element type")
+                _overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
             elif isinstance(element, pa.Table) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
                 from spatialdata._io.write import (
                     _overwrite_coordinate_transformations_non_raster,
                 )
 
-                group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-                axes = get_dims(element)
                 _overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformation=transformation)
             else:
                 raise ValueError("Unknown element type")
@@ -347,7 +356,7 @@ class SpatialData:
         -------
         The transformation of the element.
         """
-        return get_transform(element)
+        return _get_transform(element)
 
     def add_image(
         self,
@@ -685,7 +694,7 @@ class SpatialData:
     #     all_cs: dict[str, NgffCoordinateSystem] = {}
     #     gen = self._gen_elements()
     #     for obj in gen:
-    #         ct = get_transform(obj)
+    #         ct = _get_transform(obj)
     #         if ct is not None:
     #             cs = ct.output_coordinate_system
     #             if cs is not None:

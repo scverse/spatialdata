@@ -118,7 +118,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
             "TODO: when the migration from the old transform to the new one is done, uncomment these lines and update the transformation"
         )
         # translation = Translation(translation_values, axes=tuple(translation_axes))
-        # old_transform = get_transform(raster)
+        # old_transform = _get_transform(raster)
         # sequence = Sequence([translation, old_transform])
         return unpadded
     elif isinstance(raster, MultiscaleSpatialImage):

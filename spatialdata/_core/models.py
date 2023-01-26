@@ -41,9 +41,9 @@ from spatialdata._core.core_utils import (
     X,
     Y,
     Z,
+    _get_transform,
     _set_transform,
     get_dims,
-    get_transform,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity, Scale
 from spatialdata._core.transformations import Sequence as SequenceTransformation
@@ -181,7 +181,7 @@ class RasterSchema(DataArraySchema):
                     )
                     break
                 adjusted_multiscale_factors.append(factor)
-            parsed_transform = get_transform(data)
+            parsed_transform = _get_transform(data)
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
@@ -450,7 +450,7 @@ class PointsModel:
                 assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
         try:
             assert data.schema.metadata is not None
-            _ = get_transform(data)
+            _ = _get_transform(data)
         except Exception as e:  # noqa: B902
             logger.error("cannot parse the transformation from the pyarrow.Table object")
             raise e

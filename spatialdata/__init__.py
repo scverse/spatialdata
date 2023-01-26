@@ -38,7 +38,7 @@ __all__ = [
     "TableModel",
     # --- from spatialdata._core.core_utils ---
     "SpatialElement",
-    "get_transform",
+    "_get_transform",
     "_set_transform",
     "get_dims",
     # --- from spatialdata._io ---
@@ -48,9 +48,9 @@ __all__ = [
 from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import (
     SpatialElement,
+    _get_transform,
     _set_transform,
     get_dims,
-    get_transform,
 )
 from spatialdata._core.models import (
     Image2DModel,

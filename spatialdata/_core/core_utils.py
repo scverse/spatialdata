@@ -18,7 +18,7 @@ SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, GeoDataF
 __all__ = [
     "SpatialElement",
     "TRANSFORM_KEY",
-    "get_transform",
+    "_get_transform",
     "_set_transform",
     "get_default_coordinate_system",
     "get_dims",
@@ -41,11 +41,11 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
 
 
 @singledispatch
-def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
+def _get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_transform.register(DataArray)
+@_get_transform.register(DataArray)
 def _(e: DataArray) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     # this double return is to make mypy happy
@@ -56,7 +56,7 @@ def _(e: DataArray) -> Optional[BaseTransformation]:
         return t
 
 
-@get_transform.register(MultiscaleSpatialImage)
+@_get_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
@@ -67,7 +67,7 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     d = dict(e["scale0"])
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
-    t = get_transform(xdata)
+    t = _get_transform(xdata)
     if t is not None:
         assert isinstance(t, BaseTransformation)
         return t
@@ -75,7 +75,7 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
         return t
 
 
-@get_transform.register(GeoDataFrame)
+@_get_transform.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     if t is not None:
@@ -85,7 +85,7 @@ def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
         return t
 
 
-@get_transform.register(AnnData)
+@_get_transform.register(AnnData)
 def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
     if t is not None:
@@ -96,7 +96,7 @@ def _(e: AnnData) -> Optional[BaseTransformation]:
 
 
 # we need the return type because pa.Table is immutable
-@get_transform.register(pa.Table)
+@_get_transform.register(pa.Table)
 def _(e: pa.Table) -> Optional[BaseTransformation]:
     raise NotImplementedError("waiting for the new points implementation")
     t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]

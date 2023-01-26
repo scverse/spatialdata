@@ -202,7 +202,24 @@ def test_io_and_lazy_loading(images, labels):
 
 
 def test_replace_transformation_on_disk_raster(images, labels):
-    pass
+    sdatas = {"images": images, "labels": labels}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
+        # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
+        for elem_name in d.keys():
+            if "multiscale" in elem_name:
+                continue
+            kwargs = {k: {elem_name: d[elem_name]}}
+            single_sdata = SpatialData(**kwargs)
+            with tempfile.TemporaryDirectory() as td:
+                f = os.path.join(td, "data.zarr")
+                single_sdata.write(f)
+                t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                assert type(t0) == Identity
+                single_sdata.set_transformation(single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
+                t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                assert type(t1) == Scale
 
 
 @pytest.mark.skip("waiting for the new points implementation, add points to the test below")

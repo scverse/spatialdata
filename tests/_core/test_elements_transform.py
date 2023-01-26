@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import _set_transform, get_transform
+from spatialdata._core.core_utils import _get_transform, _set_transform
 from spatialdata._core.transformations import Scale
 
 
@@ -23,7 +23,7 @@ class TestElementsTransform:
         points.points["points_0"] = _set_transform(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert get_transform(new_sdata.points["points_0"]) == transform
+        assert _get_transform(new_sdata.points["points_0"]) == transform
 
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]
@@ -38,7 +38,7 @@ class TestElementsTransform:
         _set_transform(shapes.shapes["shapes_0"], transform)
         shapes.write(tmpdir)
         SpatialData.read(tmpdir)
-        assert get_transform(shapes.shapes["shapes_0"]) == transform
+        assert _get_transform(shapes.shapes["shapes_0"]) == transform
 
     @pytest.mark.skip("Coordinate systems not yet ported to the new transformation implementation")
     def test_coordinate_systems(self, shapes: SpatialData) -> None:

@@ -781,12 +781,12 @@ def test_assign_xy_scale_to_cyx_image():
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
     # _set_transform(image, scale)
-    # t = get_transform(image)
+    # t = _get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
     # _set_transform(image, scale.to_affine())
-    # t = get_transform(image)
+    # t = _get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
@@ -798,13 +798,13 @@ def test_assign_xyz_scale_to_cyx_image():
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
     # _set_transform(image, scale)
-    # t = get_transform(image)
+    # t = _get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     # pprint(t.to_affine().to_dict())
     #
     # _set_transform(image, scale.to_affine())
-    # t = get_transform(image)
+    # t = _get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
@@ -816,12 +816,12 @@ def test_assign_cyx_scale_to_xyz_points():
     # points = PointsModel.parse(coords=np.zeros((10, 3)))
     #
     # _set_transform(points, scale)
-    # t = get_transform(points)
+    # t = _get_transform(points)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
     # _set_transform(points, scale.to_affine())
-    # t = get_transform(points)
+    # t = _get_transform(points)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
