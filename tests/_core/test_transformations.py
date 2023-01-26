@@ -1,20 +1,9 @@
-import math
-
 import numpy as np
 import pytest
-import scipy.misc
 import xarray.testing
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData
-from spatialdata._core.core_utils import (
-    ValidAxis_t,
-    get_default_coordinate_system,
-    get_dims,
-)
-from spatialdata._core.models import Image2DModel
+from spatialdata._core.core_utils import ValidAxis_t, get_default_coordinate_system
 from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._core.ngff.ngff_transformations import (
     NgffAffine,
@@ -35,7 +24,6 @@ from spatialdata._core.transformations import (
     Sequence,
     Translation,
 )
-from spatialdata.utils import unpad_raster
 
 
 def test_identity():
@@ -505,122 +493,6 @@ def test_transform_coordinates():
     for t, e in zip(transformaions, expected):
         transformed = t._transform_coordinates(coords)
         xarray.testing.assert_allclose(transformed, e)
-
-
-def _get_affine(small_translation: bool = True) -> Affine:
-    theta = math.pi / 18
-    k = 10.0 if small_translation else 1.0
-    return Affine(
-        [
-            [2 * math.cos(theta), 2 * math.sin(-theta), -1000 / k],
-            [2 * math.sin(theta), 2 * math.cos(theta), 300 / k],
-            [0, 0, 1],
-        ],
-        input_axes=("x", "y"),
-        output_axes=("x", "y"),
-    )
-
-
-def _unpad_rasters(sdata: SpatialData) -> SpatialData:
-    new_images = {}
-    new_labels = {}
-    for name, image in sdata.images.items():
-        unpadded = unpad_raster(image)
-        new_images[name] = unpadded
-    for name, label in sdata.labels.items():
-        unpadded = unpad_raster(label)
-        new_labels[name] = unpadded
-    return SpatialData(images=new_images, labels=new_labels)
-
-
-# TODO: when the io for 3D images and 3D labels work, add those tests
-def test_transform_image_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
-
-    VISUAL_DEBUG = False
-    if VISUAL_DEBUG:
-        im = scipy.misc.face()
-        im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
-        del sdata.images["image2d"]
-        sdata.images["face"] = im_element
-
-    affine = _get_affine(small_translation=False)
-    padded = affine.inverse().transform(affine.transform(sdata))
-    _unpad_rasters(padded)
-    # raise NotImplementedError("TODO: plot the images")
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
-
-
-def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
-    _unpad_rasters(padded)
-    # TODO: unpad the image
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
-
-
-def test_transform_labels_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
-    affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
-    _unpad_rasters(padded)
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
-
-
-def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
-    _unpad_rasters(padded)
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
-
-
-# TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
-@pytest.mark.skip("waiting for the new points implementation")
-def test_transform_points(points: SpatialData):
-    affine = _get_affine()
-    new_points = affine.inverse().transform(affine.transform(points))
-    keys0 = list(points.points.keys())
-    keys1 = list(new_points.points.keys())
-    assert keys0 == keys1
-    for k in keys0:
-        p0 = points.points[k]
-        p1 = new_points.points[k]
-        axes0 = get_dims(p0)
-        axes1 = get_dims(p1)
-        assert axes0 == axes1
-        for ax in axes0:
-            x0 = p0[ax].to_numpy()
-            x1 = p1[ax].to_numpy()
-            assert np.allclose(x0, x1)
-
-
-def test_transform_polygons(polygons: SpatialData):
-    affine = _get_affine()
-    new_polygons = affine.inverse().transform(affine.transform(polygons))
-    keys0 = list(polygons.polygons.keys())
-    keys1 = list(new_polygons.polygons.keys())
-    assert keys0 == keys1
-    for k in keys0:
-        p0 = polygons.polygons[k]
-        p1 = new_polygons.polygons[k]
-        for i in range(len(p0.geometry)):
-            assert p0.geometry.iloc[i].almost_equals(p1.geometry.iloc[i])
-
-
-def test_transform_shapes(shapes: SpatialData):
-    affine = _get_affine()
-    new_shapes = affine.inverse().transform(affine.transform(shapes))
-    keys0 = list(shapes.shapes.keys())
-    keys1 = list(new_shapes.shapes.keys())
-    assert keys0 == keys1
-    for k in keys0:
-        p0 = shapes.shapes[k]
-        p1 = new_shapes.shapes[k]
-        assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
 
 
 def _make_cs(axes: tuple[ValidAxis_t, ...]) -> NgffCoordinateSystem:

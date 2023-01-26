@@ -4,7 +4,7 @@ import hashlib
 import os
 from collections.abc import Generator
 from types import MappingProxyType
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import pyarrow as pa
 import zarr
@@ -294,6 +294,22 @@ class SpatialData:
         """
         _set_transform(element, transformation)
 
+    def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
+        found: list[SpatialElement] = []
+        found_element_type: str = ""
+        found_element_name: str = ""
+        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+            for element_name, element_value in getattr(self, element_type).items():
+                if id(element_value) == id(element):
+                    found.append(element_value)
+                    found_element_type = element_type
+                    found_element_name = element_name
+        if len(found) == 0:
+            raise ValueError("Element not found in the SpatialData object")
+        elif len(found) > 1:
+            raise ValueError("Element found multiple times in the SpatialData object")
+        return found_element_name, found_element_type
+
     def set_transformation(self, element: SpatialElement, transformation: BaseTransformation) -> None:
         """
         Set/replace the transformation of an element, writing it to disk if the SpatialData object is backed.
@@ -310,19 +326,7 @@ class SpatialData:
         - You can also use the static method SpatialData.set_transformation_in_memory() to set the transformation of an element when it is not backed
         """
         self.set_transformation_in_memory(element, transformation)
-        found: list[SpatialElement] = []
-        found_element_type: str = ""
-        found_element_name: str = ""
-        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
-            for element_name, element_value in getattr(self, element_type).items():
-                if id(element_value) == id(element):
-                    found.append(element_value)
-                    found_element_type = element_type
-                    found_element_name = element_name
-        if len(found) == 0:
-            raise ValueError("Element not found in the SpatialData object")
-        elif len(found) > 1:
-            raise ValueError("Element found multiple times in the SpatialData object")
+        found_element_name, found_element_type = self._locate_spatial_element(element)
 
         if self.path is not None:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
@@ -360,6 +364,55 @@ class SpatialData:
                 _overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformation=transformation)
             else:
                 raise ValueError("Unknown element type")
+
+    def map_coordinate_systems(
+        self, source_coordinate_system: Union[SpatialElement, str], target_coordinate_system: Union[SpatialElement, str]
+    ) -> BaseTransformation:
+        """
+        Get the transformation to map a coordinate system (intrinsic or extrinsic) to another one.
+
+        Parameters
+        ----------
+        source_coordinate_system
+            The source coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
+            coordinate system). If a string, it must be "global".
+        target_coordinate_system
+            The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
+            coordinate system). If a string, it must be "global".
+
+        Returns
+        -------
+        The transformation to map the source coordinate system to the target coordinate system.
+        """
+        from spatialdata._core.transformations import Identity, Sequence
+
+        def _is_global(coordinate_system: Any) -> bool:
+            if isinstance(coordinate_system, str):
+                if coordinate_system == "global":
+                    return True
+                else:
+                    raise NotImplementedError(
+                        'for the moment we support just intrinstic coordinate systems and one global coordinate system (named "global")'
+                    )
+            else:
+                return False
+
+        if _is_global(source_coordinate_system) and _is_global(target_coordinate_system):
+            return Identity()
+        elif _is_global(source_coordinate_system):
+            t = self.get_transformation(target_coordinate_system)
+            assert t is not None
+            return t.inverse()
+        elif _is_global(target_coordinate_system):
+            t = self.get_transformation(source_coordinate_system)
+            assert t is not None
+            return t
+        else:
+            t1 = self.get_transformation(source_coordinate_system)
+            t2 = self.get_transformation(target_coordinate_system)
+            assert t1 is not None
+            assert t2 is not None
+            return Sequence([t2, t1.inverse()])
 
     @staticmethod
     def get_transformation(element: SpatialElement) -> Optional[BaseTransformation]:
