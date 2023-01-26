@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 from typing import Literal, Optional, Union
@@ -21,6 +22,7 @@ from spatialdata._core.core_utils import TRANSFORM_KEY, _set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
+from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.format import (
     PointsFormat,
     PolygonsFormat,
@@ -53,13 +55,14 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             images[k] = _read_multiscale(f_elem_store, raster_type="image")
 
     # read multiscale labels
-    labels_store = store / "labels"
-    if labels_store.exists():
-        f = zarr.open(labels_store, mode="r")
-        for k in f.keys():
-            f_elem = f[k].name
-            f_elem_store = f"{labels_store}{f_elem}"
-            labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
+    with ome_zarr_logger(logging.ERROR):
+        labels_store = store / "labels"
+        if labels_store.exists():
+            f = zarr.open(labels_store, mode="r")
+            for k in f.keys():
+                f_elem = f[k].name
+                f_elem_store = f"{labels_store}{f_elem}"
+                labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
 
     # now read rest of the data
     points_store = store / "points"
