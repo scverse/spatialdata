@@ -183,15 +183,58 @@ def _get_spatial_axes(
     return [axis.name for axis in coordinate_system._axes if axis.type == "space"]
 
 
-def make_cs(name: str, ndim: Literal[2, 3], unit: Optional[str] = None) -> NgffCoordinateSystem:
+def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
     if ndim == 2:
-        axes = [NgffAxis(name="y", type="space", unit="pixel"), NgffAxis(name="x", type="space", unit="pixel")]
+        axes = [
+            NgffAxis(name="y", type="space", unit=unit),
+            NgffAxis(name="x", type="space", unit=unit),
+        ]
+        if name is None:
+            name = "yx"
     elif ndim == 3:
         axes = [
-            NgffAxis(name="z", type="space", unit="pixel"),
-            NgffAxis(name="y", type="space", unit="pixel"),
-            NgffAxis(name="x", type="space", unit="pixel"),
+            NgffAxis(name="z", type="space", unit=unit),
+            NgffAxis(name="y", type="space", unit=unit),
+            NgffAxis(name="x", type="space", unit=unit),
         ]
+        if name is None:
+            name = "zyx"
     else:
         raise ValueError(f"ndim must be 2 or 3, got {ndim}")
     return NgffCoordinateSystem(name=name, axes=axes)
+
+
+def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+    """Create a 2D yx coordinate system.
+
+    Parameters
+    ----------
+    name : str, optional
+        The name of the coordinate system. A default value of None leads to the name being set to "yx".
+    unit : str, optional
+        The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
+
+    Returns
+    -------
+    NgffCoordinateSystem
+        The coordinate system.
+    """
+    return _make_cs(name=name, ndim=2, unit=unit)
+
+
+def zyx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+    """Create a 3D zyx coordinate system.
+
+    Parameters
+    ----------
+    name : str, optional
+        The name of the coordinate system. A default value of None leads to the name being set to "zyx".
+    unit : str, optional
+        The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
+
+    Returns
+    -------
+    NgffCoordinateSystem
+        The coordinate system.
+    """
+    return _make_cs(name=name, ndim=3, unit=unit)

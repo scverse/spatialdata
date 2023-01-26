@@ -35,6 +35,7 @@ TRANSFORM_KEY = "transform"
 C, Z, Y, X = "c", "z", "y", "x"
 ValidAxis_t = str
 # ValidAxis_t = Literal["c", "x", "y", "z"]
+MappingToCoordinateSystem_t = dict[NgffCoordinateSystem, BaseTransformation]
 
 
 def validate_axis_name(axis: ValidAxis_t) -> None:
