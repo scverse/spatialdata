@@ -1,3 +1,5 @@
+import os
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -11,13 +13,7 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata.utils import are_directories_identical
-from tests.conftest import (
-    _get_images,
-    _get_labels,
-    _get_points,
-    _get_polygons,
-    _get_shapes,
-)
+from tests.conftest import _get_images, _get_labels, _get_polygons, _get_shapes
 
 
 class TestReadWrite:
@@ -110,7 +106,12 @@ class TestReadWrite:
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
-    @pytest.mark.skip("waiting for the new points implementation")
+    @pytest.mark.skip(
+        "waiting for the new points implementation; add points to the test below and in conftest.py full_sdata()"
+    )
+    def test_incremental_io_points(self):
+        pass
+
     def test_incremental_io(
         self,
         tmp_path: str,
@@ -118,6 +119,10 @@ class TestReadWrite:
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
+
+        # TODO: remove this line when points are ready
+        for k in sdata.points:
+            del sdata.points[k]
 
         sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
         sdata.write(tmpdir)
@@ -166,9 +171,29 @@ class TestReadWrite:
             sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
             break
 
-        for k, v in _get_points().items():
-            sdata.add_points(name=f"incremental_{k}", points=v)
-            with pytest.raises(ValueError):
-                sdata.add_points(name=f"incremental_{k}", points=v)
-            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
-            break
+        # TODO: uncomment this when points are ready
+        # for k, v in _get_points().items():
+        #     sdata.add_points(name=f"incremental_{k}", points=v)
+        #     with pytest.raises(ValueError):
+        #         sdata.add_points(name=f"incremental_{k}", points=v)
+        #     sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+        #     break
+
+
+@pytest.mark.skip("waiting for the new points implementation; add points to the test below")
+def test_io_and_lazy_loading_points(points):
+    pass
+
+
+def test_io_and_lazy_loading(images, labels):
+    sdatas = {"images": images, "labels": labels}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        elem_name = list(d.keys())[0]
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            dask0 = d[elem_name].data
+            sdata.write(f)
+            dask1 = d[elem_name].data
+            assert all("from-zarr" not in key for key in dask0.dask.layers)
+            assert any("from-zarr" in key for key in dask1.dask.layers)

@@ -62,12 +62,13 @@ def table_multiple_annotations() -> SpatialData:
 
 @pytest.fixture()
 def full_sdata() -> SpatialData:
+    print("TODO: add points back in")
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
         polygons=_get_polygons(),
         shapes=_get_shapes(),
-        points=_get_points(),
+        # points=_get_points(),
         table=_get_table("sample1"),
     )
 

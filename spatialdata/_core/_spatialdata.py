@@ -154,7 +154,7 @@ class SpatialData:
         return self._query
 
     def _add_image_in_memory(
-        self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = True
+        self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
         if name in self._images:
             if not overwrite:
@@ -171,9 +171,14 @@ class SpatialData:
         else:
             raise ValueError("Only czyx and cyx images supported")
 
-    def _add_labels_in_memory(self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
+    def _add_labels_in_memory(
+        self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
+    ) -> None:
         if name in self._labels:
-            raise ValueError(f"Labels {name} already exists in the dataset.")
+            if not overwrite:
+                raise ValueError(f"Labels {name} already exists in the dataset.")
+            else:
+                del self._labels[name]
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -184,21 +189,30 @@ class SpatialData:
         else:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
-    def _add_polygons_in_memory(self, name: str, polygons: GeoDataFrame) -> None:
+    def _add_polygons_in_memory(self, name: str, polygons: GeoDataFrame, overwrite: bool = False) -> None:
         if name in self._polygons:
-            raise ValueError(f"Polygons {name} already exists in the dataset.")
+            if not overwrite:
+                raise ValueError(f"Polygons {name} already exists in the dataset.")
+            else:
+                del self._polygons[name]
         Polygon_s.validate(polygons)
         self._polygons[name] = polygons
 
-    def _add_shapes_in_memory(self, name: str, shapes: AnnData) -> None:
+    def _add_shapes_in_memory(self, name: str, shapes: AnnData, overwrite: bool = False) -> None:
         if name in self._shapes:
-            raise ValueError(f"Shapes {name} already exists in the dataset.")
+            if not overwrite:
+                raise ValueError(f"Shapes {name} already exists in the dataset.")
+            else:
+                del self._shapes[name]
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
-    def _add_points_in_memory(self, name: str, points: pa.Table) -> None:
+    def _add_points_in_memory(self, name: str, points: pa.Table, overwrite: bool = False) -> None:
         if name in self._points:
-            raise ValueError(f"Points {name} already exists in the dataset.")
+            if not overwrite:
+                raise ValueError(f"Points {name} already exists in the dataset.")
+            else:
+                del self._points[name]
         Point_s.validate(points)
         self._points[name] = points
 
@@ -278,7 +292,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if _add_in_memory:
-            self._add_image_in_memory(name=name, image=image)
+            self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
             write_image(
@@ -294,8 +308,7 @@ class SpatialData:
             assert elem_group.path == "images"
             path = os.path.join(elem_group.store.path, "images", name)
             image = _read_multiscale(path, raster_type="image")
-            del self.images[name]
-            self._add_image_in_memory(name=name, image=image)
+            self._add_image_in_memory(name=name, image=image, overwrite=True)
 
     def add_labels(
         self,
@@ -328,7 +341,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if _add_in_memory:
-            self._add_labels_in_memory(name=name, labels=labels)
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
             write_labels(
@@ -345,8 +358,7 @@ class SpatialData:
             assert elem_group.path == ""
             path = os.path.join(elem_group.store.path, "labels", name)
             labels = _read_multiscale(path, raster_type="labels")
-            del self.labels[name]
-            self._add_labels_in_memory(name=name, labels=labels)
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
 
     def add_points(
         self,
@@ -378,7 +390,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if _add_in_memory:
-            self._add_points_in_memory(name=name, points=points)
+            self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
             write_points(
@@ -391,8 +403,7 @@ class SpatialData:
             from spatialdata._io.read import _read_points
 
             points = _read_points(store=elem_group.store)
-            del self.points[name]
-            self._add_points_in_memory(name=name, points=points)
+            self._add_points_in_memory(name=name, points=points, overwrite=True)
 
     def add_polygons(
         self,
@@ -424,7 +435,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if _add_in_memory:
-            self._add_polygons_in_memory(name=name, polygons=polygons)
+            self._add_polygons_in_memory(name=name, polygons=polygons, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
             write_polygons(
@@ -464,7 +475,7 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if _add_in_memory:
-            self._add_shapes_in_memory(name=name, shapes=shapes)
+            self._add_shapes_in_memory(name=name, shapes=shapes, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
             write_shapes(
