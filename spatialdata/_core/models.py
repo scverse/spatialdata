@@ -96,7 +96,7 @@ class RasterSchema(DataArraySchema):
     @classmethod
     def parse(
         cls,
-        data: ArrayLike,
+        data: Union[ArrayLike, DataArray, DaskArray],
         dims: Optional[Sequence[str]] = None,
         transform: Optional[BaseTransformation] = None,
         multiscale_factors: Optional[ScaleFactors_t] = None,
@@ -182,7 +182,8 @@ class RasterSchema(DataArraySchema):
             # more generla case will be handled by multiscale-spatial-image)
             assert isinstance(multiscale_factors, list)
             for factor in multiscale_factors:
-                current_shape /= float(factor)
+                scale_vector = np.array([1.0 if ax == "c" else factor for ax in data.dims])
+                current_shape /= scale_vector
                 if current_shape.min() < 1:
                     logger.warning(
                         f"Detected a multiscale factor that would collapse an axis: truncating list of factors from {multiscale_factors} to {adjusted_multiscale_factors}"
@@ -413,6 +414,7 @@ class ShapesModel:
         -------
         :class:`anndata.AnnData` formatted for shapes elements.
         """
+        assert shape_type in ["Circle", "Square"]
         if isinstance(shape_size, list):
             if len(shape_size) != len(coords):
                 raise ValueError("Length of `shape_size` must match length of `coords`.")
