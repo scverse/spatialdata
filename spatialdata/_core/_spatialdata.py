@@ -570,7 +570,7 @@ class SpatialData:
             if isinstance(attribute, AnnData):
                 descr += f"{h('empty_line')}"
                 descr_class = attribute.__class__.__name__
-                descr += f"{h('level1.0')}'{attribute}': {descr_class} {attribute.shape}"
+                descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
                 for k, v in attribute.items():
@@ -578,11 +578,11 @@ class SpatialData:
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
                         descr += (
-                            f"{h(attr + 'level1.1')}'{k}': {descr_class} with `.obsm['spatial']`"
+                            f"{h(attr + 'level1.1')}{k!r}: {descr_class} with `.osbm['spatial']` "
                             f"{v.obsm['spatial'].shape}"
                         )
                     elif attr == "polygons":
-                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} (2D polygons)"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D polygons)"
                     elif attr == "points":
                         if len(v) > 0:
                             n = len(get_dims(v))
@@ -591,10 +591,10 @@ class SpatialData:
                             dim_string = ""
                         if descr_class == "Table":
                             descr_class = "pyarrow.Table"
-                        descr += f"{h(attr + 'level1.1')}'{k}': {descr_class} " f"shape: {v.shape} {dim_string}"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
-                            descr += f"{h(attr + 'level1.1')}'{k}': {descr_class}[{''.join(v.dims)}] {v.shape}"
+                            descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
                         elif isinstance(v, MultiscaleSpatialImage):
                             shapes = []
                             dims: Optional[str] = None
@@ -608,7 +608,7 @@ class SpatialData:
                                     dims = "".join(vv.dims)
                                 shapes.append(shape)
                             descr += (
-                                f"{h(attr + 'level1.1')}'{k}': {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                                f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
                             )
                         else:
                             raise TypeError(f"Unknown type {type(v)}")
