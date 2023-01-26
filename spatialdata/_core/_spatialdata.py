@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
@@ -286,6 +287,15 @@ class SpatialData:
                 name=name,
                 storage_options=storage_options,
             )
+            # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            from spatialdata._io.read import _read_multiscale
+
+            assert elem_group.path == "images"
+            path = os.path.join(elem_group.store.path, "images", name)
+            image = _read_multiscale(path, raster_type="image")
+            del self.images[name]
+            self._add_image_in_memory(name=name, image=image)
 
     def add_labels(
         self,
@@ -327,6 +337,16 @@ class SpatialData:
                 name=name,
                 storage_options=storage_options,
             )
+            # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            from spatialdata._io.read import _read_multiscale
+
+            # just a check to make sure that things go as expected
+            assert elem_group.path == ""
+            path = os.path.join(elem_group.store.path, "labels", name)
+            labels = _read_multiscale(path, raster_type="labels")
+            del self.labels[name]
+            self._add_labels_in_memory(name=name, labels=labels)
 
     def add_points(
         self,
@@ -366,6 +386,13 @@ class SpatialData:
                 group=elem_group,
                 name=name,
             )
+            # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            from spatialdata._io.read import _read_points
+
+            points = _read_points(store=elem_group.store)
+            del self.points[name]
+            self._add_points_in_memory(name=name, points=points)
 
     def add_polygons(
         self,
@@ -405,6 +432,7 @@ class SpatialData:
                 group=elem_group,
                 name=name,
             )
+            # no reloading of the file storage since the GeoDataFrame is not lazy loaded
 
     def add_shapes(
         self,
@@ -444,6 +472,7 @@ class SpatialData:
                 group=elem_group,
                 name=name,
             )
+            # no reloading of the file storage since the AnnData is not lazy loaded
 
     def write(
         self, file_path: str, storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None, overwrite: bool = False
@@ -467,31 +496,38 @@ class SpatialData:
         try:
             if len(self.images):
                 root.create_group(name="images")
-                for el in self.images.keys():
+                # add_image will delete and replace the same key in self.images, so we need to make a copy of the
+                # keys. Same for the other elements
+                keys = list(self.images.keys())
+                for el in keys:
                     self.add_image(
                         name=el, image=self.images[el], storage_options=storage_options, _add_in_memory=False
                     )
 
             if len(self.labels):
                 root.create_group(name="labels")
-                for el in self.labels.keys():
+                keys = list(self.labels.keys())
+                for el in keys:
                     self.add_labels(
                         name=el, labels=self.labels[el], storage_options=storage_options, _add_in_memory=False
                     )
 
             if len(self.points):
                 root.create_group(name="points")
-                for el in self.points.keys():
+                keys = list(self.points.keys())
+                for el in keys:
                     self.add_points(name=el, points=self.points[el], _add_in_memory=False)
 
             if len(self.polygons):
                 root.create_group(name="polygons")
-                for el in self.polygons.keys():
+                keys = list(self.polygons.keys())
+                for el in keys:
                     self.add_polygons(name=el, polygons=self.polygons[el], _add_in_memory=False)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
-                for el in self.shapes.keys():
+                keys = list(self.shapes.keys())
+                for el in keys:
                     self.add_shapes(name=el, shapes=self.shapes[el], _add_in_memory=False)
 
             if self.table is not None:
