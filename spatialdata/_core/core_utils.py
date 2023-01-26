@@ -3,6 +3,7 @@ import json
 from functools import singledispatch
 from typing import Optional, Union
 
+import numpy as np
 import pyarrow as pa
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -12,8 +13,9 @@ from xarray import DataArray
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
+from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
 
 __all__ = [
     "SpatialElement",
@@ -40,13 +42,7 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
         raise TypeError(f"Invalid axis: {axis}")
 
 
-@singledispatch
-def _get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
-    raise TypeError(f"Unsupported type: {type(e)}")
-
-
-@_get_transform.register(DataArray)
-def _(e: DataArray) -> Optional[BaseTransformation]:
+def _get_transform_xarray(e: DataArray) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
     # this double return is to make mypy happy
     if t is not None:
@@ -54,6 +50,16 @@ def _(e: DataArray) -> Optional[BaseTransformation]:
         return t
     else:
         return t
+
+
+@singledispatch
+def _get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
+    raise TypeError(f"Unsupported type: {type(e)}")
+
+
+@_get_transform.register(SpatialImage)
+def _(e: SpatialImage) -> Optional[BaseTransformation]:
+    return _get_transform_xarray(e)
 
 
 @_get_transform.register(MultiscaleSpatialImage)
@@ -67,7 +73,7 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     d = dict(e["scale0"])
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
-    t = _get_transform(xdata)
+    t = _get_transform_xarray(xdata)
     if t is not None:
         assert isinstance(t, BaseTransformation)
         return t
@@ -108,6 +114,10 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
         return t
 
 
+def _set_transform_xarray(e: DataArray, t: BaseTransformation) -> None:
+    e.attrs[TRANSFORM_KEY] = t
+
+
 @singledispatch
 def _set_transform(e: SpatialElement, t: BaseTransformation) -> None:
     """
@@ -129,19 +139,38 @@ def _set_transform(e: SpatialElement, t: BaseTransformation) -> None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_set_transform.register(DataArray)
+@_set_transform.register(SpatialImage)
 def _(e: SpatialImage, t: BaseTransformation) -> None:
-    e.attrs[TRANSFORM_KEY] = t
+    _set_transform_xarray(e, t)
 
 
 @_set_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
-    # no transformation is stored in this object, but at each level of the multiscale
-    raise ValueError(
-        "set_transformation() is not supported for MultiscaleSpatialImage objects. We may "
-        "change this behaviour in the future and allow to assign a transformation to the highest "
-        "level of the multiscale image, and then automatically update all the other levels."
-    )
+    # set the transformation at the highest level and concatenate with the appropriate scale at each level
+    dims = get_dims(e)
+    from spatialdata._core.transformations import Scale, Sequence
+
+    i = 0
+    old_shape: Optional[ArrayLike] = None
+    for scale, node in dict(e).items():
+        # this is to be sure that the pyramid levels are listed here in the correct order
+        assert scale == f"scale{i}"
+        assert len(dict(node)) == 1
+        xdata = list(node.values())[0]
+        new_shape = np.array(xdata.shape)
+        if i > 0:
+            assert old_shape is not None
+            scale_factors = old_shape / new_shape
+            filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
+            filtered_axes = [ax for ax in dims if ax != "c"]
+            scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+            assert t is not None
+            sequence = Sequence([scale, t])
+            _set_transform_xarray(xdata, sequence)
+        else:
+            _set_transform_xarray(xdata, t)
+            old_shape = new_shape
+        i += 1
 
 
 @_set_transform.register(GeoDataFrame)

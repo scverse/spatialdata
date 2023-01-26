@@ -19,7 +19,12 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import ValidAxis_t, _get_transform, get_dims
+from spatialdata._core.core_utils import (
+    ValidAxis_t,
+    _get_transform,
+    _get_transform_xarray,
+    get_dims,
+)
 from spatialdata._core.transformations import (
     BaseTransformation,
     _get_current_output_axes,
@@ -129,7 +134,7 @@ def write_image(
             d = dict(image[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
-            transformation = _get_transform(xdata)
+            transformation = _get_transform_xarray(xdata)
             assert transformation is not None
             transformations.append(transformation)
         chunks = _iter_multiscale(image, "chunks")
@@ -197,7 +202,7 @@ def write_labels(
             d = dict(labels[k])
             assert len(d) == 1
             xdata = d.values().__iter__().__next__()
-            transformation = _get_transform(xdata)
+            transformation = _get_transform_xarray(xdata)
             assert transformation is not None
             transformations.append(transformation)
         chunks = _iter_multiscale(labels, "chunks")

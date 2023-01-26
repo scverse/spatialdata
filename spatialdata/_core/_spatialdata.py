@@ -20,7 +20,13 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_points_dict,
 )
-from spatialdata._core.core_utils import SpatialElement, _get_transform, get_dims
+from spatialdata._core.core_utils import (
+    SpatialElement,
+    _get_transform,
+    _get_transform_xarray,
+    _set_transform,
+    get_dims,
+)
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -286,6 +292,7 @@ class SpatialData:
         -----
         - You can also use the method SpatialData.set_transformation() to set the transformation of an element when it is backed
         """
+        _set_transform(element, transformation)
 
     def set_transformation(self, element: SpatialElement, transformation: BaseTransformation) -> None:
         """
@@ -328,8 +335,20 @@ class SpatialData:
                 if isinstance(element, SpatialImage):
                     transformations = [transformation]
                 elif isinstance(element, MultiscaleSpatialImage):
-                    # transformations = element.transformations
-                    raise NotImplementedError("TODO")
+                    transformations = []
+                    i = 0
+                    for scale, node in dict(element).items():
+                        # this is to be sure that the pyramid levels are listed here in the correct order
+                        assert scale == f"scale{i}"
+                        assert len(dict(node)) == 1
+                        xdata = list(dict(node).values())[0]
+                        t = _get_transform_xarray(xdata)
+                        # just a check that the transformation we passed to set_transformation() has indeed been set
+                        if i == 0:
+                            assert t == transformation
+                        assert t is not None
+                        transformations.append(t)
+                        i += 1
                 else:
                     raise ValueError("Unknown element type")
                 _overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)

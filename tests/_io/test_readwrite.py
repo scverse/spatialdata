@@ -208,8 +208,6 @@ def test_replace_transformation_on_disk_raster(images, labels):
         # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
         # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
         for elem_name in d.keys():
-            if "multiscale" in elem_name:
-                continue
             kwargs = {k: {elem_name: d[elem_name]}}
             single_sdata = SpatialData(**kwargs)
             with tempfile.TemporaryDirectory() as td:
