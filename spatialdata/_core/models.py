@@ -75,9 +75,19 @@ __all__ = [
 
 
 def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> None:
-    if transform is None:
-        transform = Identity()
-    _set_transform(element, transform)
+    transform_in_element = _get_transform(element)
+    if transform_in_element is not None and transform is not None:
+        raise ValueError(
+            "Transform is already set in the element and has also been passed as an argument to the parser. Please "
+            "specify the transform only once."
+        )
+    elif transform_in_element is not None:
+        parsed_transform = transform_in_element
+    elif transform is not None:
+        parsed_transform = transform
+    else:
+        parsed_transform = Identity()
+    _set_transform(element, parsed_transform)
 
 
 class RasterSchema(DataArraySchema):

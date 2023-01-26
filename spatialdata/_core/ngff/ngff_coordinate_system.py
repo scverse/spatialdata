@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 __all__ = ["NgffCoordinateSystem", "NgffAxis"]
 
@@ -181,3 +181,17 @@ def _get_spatial_axes(
         The names of the spatial axes.
     """
     return [axis.name for axis in coordinate_system._axes if axis.type == "space"]
+
+
+def make_cs(name: str, ndim: Literal[2, 3], unit: Optional[str] = None) -> NgffCoordinateSystem:
+    if ndim == 2:
+        axes = [NgffAxis(name="y", type="space", unit="pixel"), NgffAxis(name="x", type="space", unit="pixel")]
+    elif ndim == 3:
+        axes = [
+            NgffAxis(name="z", type="space", unit="pixel"),
+            NgffAxis(name="y", type="space", unit="pixel"),
+            NgffAxis(name="x", type="space", unit="pixel"),
+        ]
+    else:
+        raise ValueError(f"ndim must be 2 or 3, got {ndim}")
+    return NgffCoordinateSystem(name=name, axes=axes)

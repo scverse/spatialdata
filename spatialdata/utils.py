@@ -13,6 +13,8 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._core.transformations import Sequence, Translation
+
 if TYPE_CHECKING:
     from spatialdata import SpatialData
 
@@ -84,6 +86,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     """
     Remove padding from a raster.
     """
+    from spatialdata import SpatialData
     from spatialdata._core.models import get_schema
 
     def _unpad_axis(data: DataArray, axis: str) -> tuple[DataArray, float]:
@@ -114,12 +117,11 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
                 unpadded, left_pad = _unpad_axis(unpadded, axis=ax)
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-        print(
-            "TODO: when the migration from the old transform to the new one is done, uncomment these lines and update the transformation"
-        )
-        # translation = Translation(translation_values, axes=tuple(translation_axes))
-        # old_transform = _get_transform(raster)
-        # sequence = Sequence([translation, old_transform])
+        translation = Translation(translation_values, axes=tuple(translation_axes))
+        old_transform = SpatialData.get_transformation(raster)
+        assert old_transform is not None
+        sequence = Sequence([translation, old_transform])
+        SpatialData.set_transformation_in_memory(unpadded, sequence)
         return unpadded
     elif isinstance(raster, MultiscaleSpatialImage):
         # let's just operate on the highest resolution. This is not an efficient implementation but we can always optimize later

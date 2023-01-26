@@ -43,13 +43,16 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
 
 
 def _get_transform_xarray(e: DataArray) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    # this double return is to make mypy happy
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
+    if TRANSFORM_KEY in e.attrs:
+        t = e.attrs.get(TRANSFORM_KEY)
+        # this double return is to make mypy happy
+        if t is not None:
+            assert isinstance(t, BaseTransformation)
+            return t
+        else:
+            return t
     else:
-        return t
+        return None
 
 
 @singledispatch
@@ -64,9 +67,8 @@ def _(e: SpatialImage) -> Optional[BaseTransformation]:
 
 @_get_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    if t is not None:
-        raise NotImplementedError(
+    if TRANSFORM_KEY in e.attrs:
+        raise ValueError(
             "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
             "stored in the inner levels."
         )
@@ -83,22 +85,28 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
 
 @_get_transform.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
+    if TRANSFORM_KEY in e.attrs:
+        t = e.attrs.get(TRANSFORM_KEY)
+        if t is not None:
+            assert isinstance(t, BaseTransformation)
+            return t
+        else:
+            return t
     else:
-        return t
+        return None
 
 
 @_get_transform.register(AnnData)
 def _(e: AnnData) -> Optional[BaseTransformation]:
-    t = e.uns[TRANSFORM_KEY]
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
+    if TRANSFORM_KEY in e.uns:
+        t = e.uns[TRANSFORM_KEY]
+        if t is not None:
+            assert isinstance(t, BaseTransformation)
+            return t
+        else:
+            return t
     else:
-        return t
+        return None
 
 
 # we need the return type because pa.Table is immutable
