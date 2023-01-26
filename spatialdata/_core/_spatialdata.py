@@ -20,7 +20,7 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_points_dict,
 )
-from spatialdata._core.core_utils import SpatialElement, get_dims
+from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -31,6 +31,7 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -220,6 +221,14 @@ class SpatialData:
         """Check if the data is backed by a Zarr storage or it is in-memory."""
         return self.path is not None
 
+    def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
+        store = parse_url(self.path, mode="r+").store
+        root = zarr.group(store=store)
+        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        element_type_group = root.require_group(element_type)
+        element_group = element_type_group.require_group(name)
+        return element_group
+
     def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
         if self.path is None:
             # in the future we can relax this, but this ensures that we don't have objects that are partially backed
@@ -260,6 +269,85 @@ class SpatialData:
             return elem_group
         else:
             return root
+
+    @staticmethod
+    def set_transformation_in_memory(element: SpatialElement, transformation: BaseTransformation) -> None:
+        """
+        Set/replace the transformation of an element, without writing it to disk.
+
+        Parameters
+        ----------
+        element
+            The element to replace the transformation for.
+        transformation
+            The new transformation.
+
+        Notes
+        -----
+        - You can also use the method SpatialData.set_transformation() to set the transformation of an element when it is backed
+        """
+
+    def set_transformation(self, element: SpatialElement, transformation: BaseTransformation) -> None:
+        """
+        Set/replace the transformation of an element, writing it to disk if the SpatialData object is backed.
+
+        Parameters
+        ----------
+        element
+            The element to replace the transformation for.
+        transformation
+            The new transformation.
+
+        Notes
+        -----
+        - You can also use the static method SpatialData.set_transformation_in_memory() to set the transformation of an element when it is not backed
+        """
+        self.set_transformation_in_memory(element, transformation)
+        found: list[SpatialElement] = []
+        found_element_type: str = ""
+        found_element_name: str = ""
+        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+            for element_name, element_value in getattr(self, element_type).items():
+                if id(element_value) == id(element):
+                    found.append(element_value)
+                    found_element_type = element_type
+                    found_element_name = element_name
+        if len(found) == 0:
+            raise ValueError("Element not found in the SpatialData object")
+        elif len(found) > 1:
+            raise ValueError("Element found multiple times in the SpatialData object")
+
+        if self.path is not None:
+            if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
+                pass
+
+                raise NotImplementedError("TODO")
+            elif isinstance(element, pa.Table) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
+                from spatialdata._io.write import (
+                    _overwrite_coordinate_transformations_non_raster,
+                )
+
+                group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+                axes = get_dims(element)
+                _overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformation=transformation)
+            else:
+                raise ValueError("Unknown element type")
+
+    @staticmethod
+    def get_transformation(element: SpatialElement) -> Optional[BaseTransformation]:
+        """
+        Get the transformation of an element.
+
+        Parameters
+        ----------
+        element
+            The element to get the transformation for.
+
+        Returns
+        -------
+        The transformation of the element.
+        """
+        return get_transform(element)
 
     def add_image(
         self,

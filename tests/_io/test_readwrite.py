@@ -12,6 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
+from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_polygons, _get_shapes
 
@@ -186,6 +187,7 @@ def test_io_and_lazy_loading_points(points):
 
 
 def test_io_and_lazy_loading(images, labels):
+    # addresses bug https://github.com/scverse/spatialdata/issues/117
     sdatas = {"images": images, "labels": labels}
     for k, sdata in sdatas.items():
         d = sdata.__getattribute__(k)
@@ -197,3 +199,27 @@ def test_io_and_lazy_loading(images, labels):
             dask1 = d[elem_name].data
             assert all("from-zarr" not in key for key in dask0.dask.layers)
             assert any("from-zarr" in key for key in dask1.dask.layers)
+
+
+def test_replace_transformation_on_disk_raster(images, labels):
+    pass
+
+
+@pytest.mark.skip("waiting for the new points implementation, add points to the test below")
+def test_replace_transformation_on_disk_points():
+    pass
+
+
+def test_replace_transformation_on_disk_non_raster(polygons, shapes):
+    sdatas = {"polygons": polygons, "shapes": shapes}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        elem_name = list(d.keys())[0]
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            sdata.write(f)
+            t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            assert type(t0) == Identity
+            sdata.set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
+            t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            assert type(t1) == Scale

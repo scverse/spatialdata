@@ -41,9 +41,9 @@ from spatialdata._core.core_utils import (
     X,
     Y,
     Z,
+    _set_transform,
     get_dims,
     get_transform,
-    set_transform,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity, Scale
 from spatialdata._core.transformations import Sequence as SequenceTransformation
@@ -78,7 +78,7 @@ __all__ = [
 def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> SpatialElement:
     if transform is None:
         transform = Identity()
-    new_element = set_transform(element, transform)
+    new_element = _set_transform(element, transform)
     return new_element
 
 

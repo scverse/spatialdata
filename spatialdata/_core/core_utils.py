@@ -19,7 +19,7 @@ __all__ = [
     "SpatialElement",
     "TRANSFORM_KEY",
     "get_transform",
-    "set_transform",
+    "_set_transform",
     "get_default_coordinate_system",
     "get_dims",
     "C",
@@ -109,32 +109,52 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
 
 
 @singledispatch
-def set_transform(e: SpatialElement, t: BaseTransformation) -> None:
+def _set_transform(e: SpatialElement, t: BaseTransformation) -> None:
+    """
+    Set the transformation of a spatial element *only in memory*.
+    Parameters
+    ----------
+    e
+        spatial element
+    t
+        transformation
+
+    Notes
+    -----
+    This function only replaces the transformation in memory and is meant of internal use only. The function
+    SpatialData.set_transform() should be used instead, since it will update the transformation in memory and on disk
+    (when the spatial element is backed).
+
+    """
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@set_transform.register(DataArray)
+@_set_transform.register(DataArray)
 def _(e: SpatialImage, t: BaseTransformation) -> None:
     e.attrs[TRANSFORM_KEY] = t
 
 
-@set_transform.register(MultiscaleSpatialImage)
+@_set_transform.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
     # no transformation is stored in this object, but at each level of the multiscale
-    raise NotImplementedError("")
+    raise ValueError(
+        "set_transformation() is not supported for MultiscaleSpatialImage objects. We may "
+        "change this behaviour in the future and allow to assign a transformation to the highest "
+        "level of the multiscale image, and then automatically update all the other levels."
+    )
 
 
-@set_transform.register(GeoDataFrame)
+@_set_transform.register(GeoDataFrame)
 def _(e: GeoDataFrame, t: BaseTransformation) -> None:
     e.attrs[TRANSFORM_KEY] = t
 
 
-@set_transform.register(AnnData)
+@_set_transform.register(AnnData)
 def _(e: AnnData, t: BaseTransformation) -> None:
     e.uns[TRANSFORM_KEY] = t
 
 
-@set_transform.register(pa.Table)
+@_set_transform.register(pa.Table)
 def _(e: pa.Table, t: BaseTransformation) -> None:
     # in theory this doesn't really copy the data in the table but is referncing to them
     raise NotImplementedError("waiting for the new points implementation")

@@ -771,7 +771,7 @@ def test_set_transform_with_mismatching_cs():
     #     for v in getattr(sdata, element_type).values():
     #         for input_cs in input_css:
     #             affine = NgffAffine.from_input_output_coordinate_systems(input_cs, input_cs)
-    #             set_transform(v, affine)
+    #             _set_transform(v, affine)
 
 
 def test_assign_xy_scale_to_cyx_image():
@@ -780,12 +780,12 @@ def test_assign_xy_scale_to_cyx_image():
     # scale = NgffScale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
-    # set_transform(image, scale)
+    # _set_transform(image, scale)
     # t = get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
-    # set_transform(image, scale.to_affine())
+    # _set_transform(image, scale.to_affine())
     # t = get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
@@ -797,13 +797,13 @@ def test_assign_xyz_scale_to_cyx_image():
     # scale = NgffScale(np.array([2, 3, 4]), input_coordinate_system=xyz_cs, output_coordinate_system=xyz_cs)
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
-    # set_transform(image, scale)
+    # _set_transform(image, scale)
     # t = get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     # pprint(t.to_affine().to_dict())
     #
-    # set_transform(image, scale.to_affine())
+    # _set_transform(image, scale.to_affine())
     # t = get_transform(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
@@ -815,12 +815,12 @@ def test_assign_cyx_scale_to_xyz_points():
     # scale = NgffScale(np.array([1, 3, 2]), input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
     # points = PointsModel.parse(coords=np.zeros((10, 3)))
     #
-    # set_transform(points, scale)
+    # _set_transform(points, scale)
     # t = get_transform(points)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
-    # set_transform(points, scale.to_affine())
+    # _set_transform(points, scale.to_affine())
     # t = get_transform(points)
     # pprint(t.to_dict())
     # print(t.to_affine())

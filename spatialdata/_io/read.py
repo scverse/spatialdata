@@ -17,7 +17,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
+from spatialdata._core.core_utils import TRANSFORM_KEY, _set_transform
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
@@ -163,12 +163,6 @@ def _read_multiscale(
                 attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
-        # assert len(transformations) == len(msi)
-        # for t, k in zip(transformations, msi.keys()):
-        #     d = dict(msi[k])
-        #     assert len(d) == 1
-        #     xdata = d.values().__iter__().__next__()
-        #     set_transform(xdata, t)
         return msi
     else:
         t = transformations[0]
@@ -199,7 +193,7 @@ def _read_polygons(store: str, fmt: SpatialDataFormatV01 = PolygonsFormat()) -> 
     geometry = from_ragged_array(typ, coords, offsets)
 
     geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    set_transform(geo_df, transform)
+    _set_transform(geo_df, transform)
     return geo_df
 
 
@@ -214,7 +208,7 @@ def _read_shapes(store: str, fmt: SpatialDataFormatV01 = ShapesFormat()) -> AnnD
 
     adata = read_anndata_zarr(store)
 
-    set_transform(adata, transform)
+    _set_transform(adata, transform)
     assert adata.uns["spatialdata_attrs"] == attrs
 
     return adata
@@ -231,5 +225,5 @@ def _read_points(store: str, fmt: SpatialDataFormatV01 = PointsFormat()) -> pa.T
     ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
     transform = BaseTransformation.from_ngff(ngff_transform)
 
-    new_table = set_transform(table, transform)
+    new_table = _set_transform(table, transform)
     return new_table
