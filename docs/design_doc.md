@@ -1,4 +1,4 @@
-# Abstract
+# Design document for `SpatialData`
 
 This documents defines the specifications of SpatialData: a FAIR format for multi-modal spatial omics data. It also describes the initial implementation plan. This is meant to be a living document that can be updated as the project evolves.
 
@@ -82,10 +82,18 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
 
 We strongly encourage collaborations and community supports in all of these projects.
 
--   [ ] P0. _Visualization_: we are developing a napari plugin for interactive visualization of _SpatialData_ objects @: scverse/napari-spatialdata
--   [ ] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @: scverse/spatialdata-io . The goal is to provide initial readers but we don't plan to perform long-term maintenance, community contribution will be required. We will curate a tabular graphical representation of the initially supported technologies.
--   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage. Deprecate such functionalities in Squidpy.
+-   [ ] P0. _Visualization_: we are developing a napari plugin for interactive visualization of _SpatialData_ objects @ [napari-spatialdata][].
+-   [ ] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @ [spatialdata-io][].
+-   [ ] P1. _Static plotting_: a static plotting library for _SpatialData_.
+-   [ ] P1. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage.
+        Once ready, we will deprecate such functionalities in [squidpy][].
 -   [ ] P2. _Database_: Some form of update on released datasets with updated specs as development progresses.
+
+<!-- Links -->
+
+[napari-spatialdata]: https://github.com/scverse/napari-spatialdata
+[spatialdata-io]: https://github.com/scverse/napari-spatialdata
+[squidpy]: https://github.com/scverse/squidpy
 
 # Detailed description
 
@@ -118,7 +126,7 @@ We model a spatial dataset as a composition of distinct element types. The eleme
     -   Shapes (such as polygons, circles, ...)
     -   Pixel masks (such as segmentation masks), aka Labels
 -   Points (such as transcript locations, point clouds, ...)
--   Tables of annotations (initally, these are annotations on the regions of interest)
+-   Tables of annotations (initially, these are annotations on the regions of interest)
 
 Each of these elements should be useful by itself, and in combination with other relevant elements. All elements are stored in the Zarr container in hierarchy store that MAY be flat. `SpatialData` will nonetheless be able to read arbitrary hierarchies and make sense of them based on Zarr groups metadata and coordinate systems.
 
@@ -139,7 +147,7 @@ _SpatialData_ closely follows the OME-NGFF specifications and therefore much of 
 
 Images of a sample. Should conform to the [OME-NGFF concept of an image](https://ngff.openmicroscopy.org/latest/#image-layout).
 
-Images are ndimensional arrays where each element of an array is a pixel of an image. These arrays have labelled dimensions which correspond to:
+Images are n-dimensional arrays where each element of an array is a pixel of an image. These arrays have labelled dimensions which correspond to:
 
 -   Spatial dimensions (height and width).
 -   Imaging or feature channels.
@@ -155,7 +163,7 @@ For computational efficiency, images can have a pyramidal or multiscale format. 
 
 ### Regions of interest
 
-Regions of interest define distict regions of space that can be used to select and aggregate observations. Regions can correspond to
+Regions of interest define distinct regions of space that can be used to select and aggregate observations. Regions can correspond to
 
 -   Tissues
 -   Tissue structures
@@ -190,26 +198,45 @@ The Polygon object is implemented as a geopandas dataframe with [multi-polygons 
 
 #### Shapes
 
-Shapes are regions of interest of "regular" shape, as in ther extension on the coordinate space can be computed from the centroid coordinates and a set of values (e.g. diameter for circles, side for squares etc.). Shapes can be used to represent most of array-based spatial omics technologies such as 10X Genomics Visium, BGI Stereo-seq and DBiT-seq.
+Shapes are regions of interest of "regular" shape, as in their extension on the coordinate space can be computed from the centroid coordinates and a set of values (e.g. diameter for circles, side for squares etc.). Shapes can be used to represent most of array-based spatial omics technologies such as 10X Genomics Visium, BGI Stereo-seq and DBiT-seq.
 
-The Shapes object is implemented as an AnnData object with additional properties which parameterize the shape. For instance, for Circles, the `diameter` needs to be specified. For Squares, the `side` length needs to be specified.
-
+The Shapes object is implemented as an AnnData object with additional properties which parameterize the shape.
 The shape metadata is stored, with key `"spatialdata_attrs"`:
 
 -   in-memory in `adata.uns`
--   on-disk in `.zattrs` and (redundantly) in the .zarr representation of the `adata`.
+-   on-disk in `.zattrs` and (redundantly) in the .zarr representation of the `adata.uns`.
 
 The keys to specify the type of shapes are:
 
 -   `"type"`
     -   `"square"`
     -   `"circle"`
--   `"size"` - `np.float`
-    If it is a `square`, the `size` represent the `side`. If it is a `circle`, the `size` represent the diameter.
+-   `"size"` - `Union[float, Sequence[float]]`
+
+```{note}
+If the `type` of the shape is a `square`, the `size` represent the *side*. If the `type` is a `circle`, the `size` represent the *diameter*.
+```
 
 The coordinates of the centroids of Shapes are stored in `adata.obsm` with key `spatial`.
-
 This element is represented in memory as an AnnData object.
+
+````{warning}
+
+In the case where both a `Labels` image and its centroids coordinates are present, the centroids are stored as type of annotation.
+Therefore, there is no `Shapes` element and the centroids coordinates can still be stored in `obsm["spatial"]`
+of slot of the `Table`, yet no coordinates system is defined for them.
+The assumption is that the coordinate system of the centroids corresponds to the implicit coordinates system of the `Labels` image.
+
+Example:
+```{code-block} python
+
+SpatialData
+  - Labels: ["Label1", "Label2", ...]
+  - Table: AnnData
+    - obsm: "spatial" # no coordinate system, assumed to be default of implicit of `Labels`
+
+```
+````
 
 ### Region Table (table of annotations for regions)
 
@@ -228,10 +255,11 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 ### Points (representation to be discussed)
 
-Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.). However, this depends on whether we will adopt AnnData as the representation.
+Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.).
+Current implementation represent points as a parquet file and a `pyarrow.Table` in memory. The only requirement is that the table contains axis name `["x","y","z"]` to represent the axes. It can also contains coordinates transformations in `attrs`.
 
-These are represented as an AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.
-
+If we will adopt AnnData as in-memory representation (and zarr for on-disk storage) it might look like the following:
+AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.
 The `AnnData`'s layer `X` will typically be a sparse array with one entry for each row.
 
 ### Graphs (representation to be refined)

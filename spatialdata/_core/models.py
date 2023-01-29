@@ -434,6 +434,7 @@ class ShapesModel:
         coords: np.ndarray,  # type: ignore[type-arg]
         shape_type: Literal["Circle", "Square"],
         shape_size: Union[float, Sequence[float]],
+        index: Optional[Sequence[Union[str, float]]] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> AnnData:
@@ -444,10 +445,14 @@ class ShapesModel:
         ----------
         coords
             Coordinates of shapes.
+        ids
+            Unique ids of shapes.
         shape_type
             Type of shape.
         shape_size
             Size of shape.
+        index
+            Index names of the shapes.
         transform
             Transform of shape.
         kwargs
@@ -461,9 +466,14 @@ class ShapesModel:
             if len(shape_size) != len(coords):
                 raise ValueError("Length of `shape_size` must match length of `coords`.")
         shape_size_ = np.repeat(shape_size, len(coords)) if isinstance(shape_size, float) else shape_size
+        if index is None:
+            index_ = map(str, np.arange(coords.shape[0]))
+            logger.info("No index provided, using default index `np.arange(coords.shape[0])`.")
+        else:
+            index_ = index  # type: ignore[assignment]
         adata = AnnData(
             None,
-            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=map(str, np.arange(coords.shape[0]))),
+            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=index_),
             **kwargs,
         )
         adata.obsm[cls.COORDS_KEY] = coords
@@ -474,10 +484,7 @@ class ShapesModel:
 
 
 class PointsModel:
-    GEOMETRY_KEY = "geometry"
     ATTRS_KEY = "spatialdata_attrs"
-    GEOS_KEY = "geos"
-    TYPE_KEY = "type"
     NAME_KEY = "name"
     TRANSFORM_KEY = "transform"
 
@@ -563,8 +570,6 @@ class TableModel:
         region: Optional[Union[str, list[str]]] = None,
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
-        region_values: Optional[Union[str, Sequence[str]]] = None,
-        instance_values: Optional[Sequence[Any]] = None,
     ) -> AnnData:
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
@@ -583,10 +588,6 @@ class TableModel:
             if region_key is not None:
                 raise ValueError(
                     f"If `{cls.REGION_KEY}` is of type `str`, `{cls.REGION_KEY_KEY}` must be `None` as it is redundant."
-                )
-            if region_values is not None:
-                raise ValueError(
-                    f"If `{cls.REGION_KEY}` is of type `str`, `region_values` must be `None` as it is redundant."
                 )
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
@@ -607,22 +608,6 @@ class TableModel:
         # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
-
-        # TODO(giovp): do we really need to support this?
-        if region_values is not None:
-            if region_key in adata.obs:
-                raise ValueError(
-                    f"this annotation table already contains the {region_key} ({cls.REGION_KEY_KEY}) column"
-                )
-            assert isinstance(region_values, str) or len(adata) == len(region_values)
-            adata.obs[region_key] = region_values
-        if instance_values is not None:
-            if instance_key in adata.obs:
-                raise ValueError(
-                    f"this annotation table already contains the {instance_key} ({cls.INSTANCE_KEY}) column"
-                )
-            assert len(adata) == len(instance_values)
-            adata.obs[instance_key] = instance_values
         return adata
 
 
