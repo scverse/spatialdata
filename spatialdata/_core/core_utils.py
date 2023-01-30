@@ -5,6 +5,7 @@ from typing import Optional, Union
 
 import pyarrow as pa
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -108,6 +109,7 @@ def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImag
 
 
 @set_transform.register(GeoDataFrame)
+@set_transform.register(DaskDataFrame)
 def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
     e.attrs[TRANSFORM_KEY] = t
     return e
@@ -201,6 +203,13 @@ def _(e: AnnData) -> tuple[str, ...]:
     dims = (X, Y, Z)
     n = e.obsm["spatial"].shape[1]
     return dims[:n]
+
+
+@get_dims.register(DaskDataFrame)
+def _(e: AnnData) -> tuple[str, ...]:
+    valid_dims = (X, Y, Z)
+    dims = [c for c in valid_dims if c in e.columns]
+    return tuple(dims)
 
 
 @get_dims.register(pa.Table)

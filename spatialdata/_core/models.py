@@ -508,8 +508,11 @@ class PointsModel:
         if "instance_key" in data.attrs[cls.ATTRS_KEY]:
             instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
             if not is_categorical_dtype(data[instance_key]):
-                logger.info(f"Instance key `{instance_key}` should be of type `pd.Categorical`. Consider casting it.")
+                logger.info(f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it.")
         for c in data.columns:
+            #  this is not strictly a validation since we are explicitly importing the categories
+            #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
+            #  dataframe, so it is not a big deal.
             if is_categorical_dtype(data[c]):
                 if not data[c].cat.known:
                     try:
@@ -553,6 +556,24 @@ class PointsModel:
         """
         raise NotImplementedError()
 
+    @parse.register(DaskDataFrame)
+    @classmethod
+    def _(
+        cls,
+        data: DaskDataFrame,
+        feature_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        transform: Optional[Any] = None,
+    ) -> DaskDataFrame:
+        data.attrs[cls.ATTRS_KEY] = {}
+        if instance_key is not None:
+            data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
+        data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
+
+        data = _parse_transform(data, transform)
+        cls.validate(data)
+        return data
+
     @parse.register(np.ndarray)
     @classmethod
     def _(
@@ -569,14 +590,14 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)
-        table[feature_key] = pd.Categorical(annotation[feature_key].astype(str))
+        feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
+        table[feature_key] = feature_categ
         if instance_key is not None:
             table[instance_key] = annotation[instance_key]
         for c in set(annotation.columns) - {feature_key, instance_key}:
             table[c] = annotation[c]
-        table = _parse_transform(table, transform)
-        cls.validate(table)
-        return table
+
+        return cls.parse(table, feature_key=feature_key, instance_key=instance_key, transform=transform)
 
     @parse.register(pd.DataFrame)
     @classmethod
@@ -598,9 +619,8 @@ class PointsModel:
             table[instance_key] = data[instance_key]
         for c in set(data.columns) - {feature_key, instance_key}:
             table[c] = data[c]
-        table = _parse_transform(table, transform)
-        cls.validate(table)
-        return table
+
+        return cls.parse(table, feature_key=feature_key, instance_key=instance_key, transform=transform)
 
 
 class TableModel:
