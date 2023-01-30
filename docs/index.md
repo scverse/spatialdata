@@ -10,6 +10,5 @@ api.md
 changelog.md
 design_doc.md
 references.md
-
-notebooks/example
+tutorials/index.md
 ```
