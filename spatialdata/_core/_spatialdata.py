@@ -489,7 +489,7 @@ class SpatialData:
 
     def _build_transformations_graph(self) -> nx.Graph:
         g = nx.DiGraph()
-        gen = self._gen_elements()
+        gen = self._gen_elements_values()
         for cs in self.coordinate_systems:
             g.add_node(cs)
         for e in gen:
@@ -550,11 +550,17 @@ class SpatialData:
                 raise RuntimeError("No path found between the two coordinate systems")
             elif len(paths) > 1:
                 if intermediate_coordinate_systems is None:
-                    # error 1
-                    raise RuntimeError(
-                        "Multiple paths found between the two coordinate systems. Please specify an intermediate "
-                        "coordinate system."
-                    )
+                    # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
+                    # an expection and ask the user to be more specific
+                    paths_with_length_1 = [p for p in paths if len(p) == 2]
+                    if len(paths_with_length_1) == 1:
+                        path = paths_with_length_1[0]
+                    else:
+                        # error 1
+                        raise RuntimeError(
+                            "Multiple paths found between the two coordinate systems. Please specify an intermediate "
+                            "coordinate system."
+                        )
                 else:
                     if has_type_spatial_element(intermediate_coordinate_systems):
                         intermediate_coordinate_systems = id(intermediate_coordinate_systems)
@@ -578,6 +584,78 @@ class SpatialData:
                 transformations.append(g[path[i]][path[i + 1]]["transformation"])
             sequence = Sequence(transformations)
             return sequence
+
+    def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
+        """
+        Filter the SpatialData by a coordinate system.
+
+        Parameters
+        ----------
+        coordinate_system
+            The coordinate system to filter by.
+
+        Returns
+        -------
+        The filtered SpatialData.
+        """
+        elements: dict[str, dict[str, SpatialElement]] = {}
+        for element_type, element_name, element in self._gen_elements():
+            transformations = self.get_all_transformations(element)
+            if coordinate_system in transformations:
+                if element_type not in elements:
+                    elements[element_type] = {}
+                elements[element_type][element_name] = element
+        return SpatialData(**elements, table=self.table)
+
+    def transform_element_to_coordinate_system(
+        self, element: SpatialElement, target_coordinate_system: str
+    ) -> SpatialElement:
+        """
+        Transform an element to a given coordinate system.
+
+        Parameters
+        ----------
+        element
+            The element to transform.
+        target_coordinate_system
+            The target coordinate system.
+
+        Returns
+        -------
+        The transformed element.
+        """
+        t = self.map_coordinate_systems(element, target_coordinate_system)
+        transformed = t.transform(element)
+        return transformed
+
+    def transform_to_coordinate_system(
+        self, target_coordinate_system: str, filter_by_coordinate_system: bool = True
+    ) -> SpatialData:
+        """
+        Transform the SpatialData to a given coordinate system.
+
+        Parameters
+        ----------
+        target_coordinate_system
+            The target coordinate system.
+        filter_by_coordinate_system
+            Whether to filter the SpatialData by the target coordinate system before transforming.
+
+        Returns
+        -------
+        The transformed SpatialData.
+        """
+        if filter_by_coordinate_system:
+            sdata = self.filter_by_coordinate_system(target_coordinate_system)
+        else:
+            sdata = self
+        elements: dict[str, dict[str, SpatialElement]] = {}
+        for element_type, element_name, element in sdata._gen_elements():
+            transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
+            if element_type not in elements:
+                elements[element_type] = {}
+            elements[element_type][element_name] = transformed
+        return SpatialData(**elements, table=sdata.table)
 
     def add_image(
         self,
@@ -912,7 +990,7 @@ class SpatialData:
     @property
     def coordinate_systems(self) -> list[str]:
         all_cs = set()
-        gen = self._gen_elements()
+        gen = self._gen_elements_values()
         for obj in gen:
             transformations = self.get_all_transformations(obj)
             assert transformations is not None
@@ -1022,10 +1100,16 @@ class SpatialData:
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         return descr
 
-    def _gen_elements(self) -> Generator[SpatialElement, None, None]:
+    def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
         for element_type in ["images", "labels", "points", "polygons", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
+
+    def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+            d = getattr(SpatialData, element_type).fget(self)
+            for k, v in d.items():
+                yield element_type, k, v
 
 
 class QueryManager:

@@ -397,3 +397,12 @@ def test_map_coordinate_systems_long_path(full_sdata):
             ]
         ),
     )
+
+
+def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
+    # TODO: we are just applying the transformation, we are not checking it is correct. We could improve this test
+    scale = Scale([2], axes=("x",))
+    for element in sdata._gen_elements_values():
+        sdata.set_transformation(element, scale, "my_space")
+        sdata.transform_element_to_coordinate_system(element, "my_space")
+    sdata.transform_to_coordinate_system("my_space")

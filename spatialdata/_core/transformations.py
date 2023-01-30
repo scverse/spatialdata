@@ -395,7 +395,9 @@ class Translation(BaseTransformation):
 
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
-        translation = DataArray(self.translation, coords={"dim": list(self.axes)})
+        output_axes = self._xarray_coords_get_coords(data)
+        translation_adjusted = self.to_translation_vector(axes=output_axes)
+        translation = DataArray(translation_adjusted, coords={"dim": list(output_axes)})
         transformed = data + translation
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
@@ -480,7 +482,9 @@ class Scale(BaseTransformation):
 
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
-        scale = DataArray(self.scale, coords={"dim": list(self.axes)})
+        output_axes = self._xarray_coords_get_coords(data)
+        scale_adjusted = self.to_scale_vector(axes=output_axes)
+        scale = DataArray(scale_adjusted, coords={"dim": list(output_axes)})
         transformed = data * scale
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
