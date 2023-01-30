@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pyarrow as pa
@@ -18,7 +18,10 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.core_utils import TRANSFORM_KEY, _set_transform
+from spatialdata._core.core_utils import (
+    MappingToCoordinateSystem_t,
+    _set_transformations,
+)
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
@@ -121,6 +124,18 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     return sdata
 
 
+def _get_transformations_from_ngff_dict(
+    list_of_encoded_ngff_transformations: list[dict[str, Any]]
+) -> MappingToCoordinateSystem_t:
+    list_of_ngff_transformations = [NgffBaseTransformation.from_dict(d) for d in list_of_encoded_ngff_transformations]
+    list_of_transformations = [BaseTransformation.from_ngff(t) for t in list_of_ngff_transformations]
+    transformations = {}
+    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations):
+        assert ngff_t.output_coordinate_system is not None
+        transformations[ngff_t.output_coordinate_system.name] = t
+    return transformations
+
+
 def _read_multiscale(
     store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = SpatialDataFormatV01()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
@@ -140,12 +155,17 @@ def _read_multiscale(
                     and np.any([isinstance(spec, Label) for spec in node.specs])
                 ):
                     nodes.append(node)
-    assert len(nodes) == 1
+    if len(nodes) != 1:
+        raise ValueError(
+            f"len(nodes) = {len(nodes)}, expected 1. Unable to read the NGFF file. Please report this "
+            f"bug and attach a minimal data example."
+        )
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
-    ngff_transformations = [NgffBaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
-    transformations = [BaseTransformation.from_ngff(t) for t in ngff_transformations]
-    assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
+    multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
+    assert len(multiscales) == 1
+    encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
+    transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
     name = node.metadata["name"]
     if type(name) == list:
         assert len(name) == 1
@@ -157,25 +177,31 @@ def _read_multiscale(
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
-        for i, (t, d) in enumerate(zip(transformations, datasets)):
+        for i, d in enumerate(datasets):
             data = node.load(Multiscales).array(resolution=d, version=fmt.version)
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
-                name=name,
+                # any name
+                name="image",
+                # name=name,
                 dims=axes,
-                attrs={"transform": t},
+                # attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        _set_transformations(msi, transformations)
         return msi
     else:
-        t = transformations[0]
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-        return SpatialImage(
+        si = SpatialImage(
             data,
-            name=name,
+            # any name
+            name="image",
+            # name=name,
             dims=axes,
-            attrs={TRANSFORM_KEY: t},
+            # attrs={TRANSFORM_KEY: t},
         )
+        _set_transformations(si, transformations)
+        return si
 
 
 def _read_polygons(store: str, fmt: SpatialDataFormatV01 = PolygonsFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
@@ -189,14 +215,12 @@ def _read_polygons(store: str, fmt: SpatialDataFormatV01 = PolygonsFormat()) -> 
     offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
 
     typ = fmt.attrs_from_dict(f.attrs.asdict())
-
-    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
-    transform = BaseTransformation.from_ngff(ngff_transform)
-
     geometry = from_ragged_array(typ, coords, offsets)
-
     geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    _set_transform(geo_df, transform)
+
+    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    _set_transformations(geo_df, transformations)
+
     return geo_df
 
 
@@ -204,14 +228,12 @@ def _read_shapes(store: str, fmt: SpatialDataFormatV01 = ShapesFormat()) -> AnnD
     """Read shapes from a zarr store."""
     assert isinstance(store, str)
     f = zarr.open(store, mode="r")
-
-    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
-    transform = BaseTransformation.from_ngff(ngff_transform)
-    attrs = fmt.attrs_from_dict(f.attrs.asdict())
-
     adata = read_anndata_zarr(store)
 
-    _set_transform(adata, transform)
+    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    _set_transformations(adata, transformations)
+
+    attrs = fmt.attrs_from_dict(f.attrs.asdict())
     assert adata.uns["spatialdata_attrs"] == attrs
 
     return adata
@@ -225,8 +247,7 @@ def _read_points(store: str, fmt: SpatialDataFormatV01 = PointsFormat()) -> pa.T
     path = os.path.join(f._store.path, f.path, "points.parquet")
     table = pq.read_table(path)
 
-    ngff_transform = NgffBaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
-    transform = BaseTransformation.from_ngff(ngff_transform)
+    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    _set_transformations(table, transformations)
 
-    new_table = _set_transform(table, transform)
-    return new_table
+    return table

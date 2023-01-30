@@ -20,7 +20,10 @@ from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import _set_transform_xarray
+from spatialdata._core.core_utils import (
+    _set_transformations,
+    _set_transformations_xarray,
+)
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -48,28 +51,32 @@ RNG = default_rng()
 
 class TestModels:
     def _parse_transformation_from_multiple_places(self, model: Any, element: Any):
-        # sometimes the parser creates a whole new object, other times (see the next if), the object is enriched
-        # in-place. In such cases we check that if there was already a transformation in the object we consider it
+        # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
+        # other times (SpatialImage, DataArray, AnnData, GeoDataFrame), the object is enriched in-place. In such
+        # cases we check that if there was already a transformation in the object we consider it then we are not
+        # passing it also explicitly in the parser.
+        # This function does that for all the models (it's called by the various tests of the models) and it first
+        # creates clean copies of the element, and then puts the transformation inside it with various methods
         if any([isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame)]):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
             if isinstance(element_erased, DataArray) and not isinstance(element_erased, SpatialImage):
                 # this case is for xarray.DataArray where the user manually updates the transform in attrs,
                 # or when a user takes an image from a MultiscaleSpatialImage
-                _set_transform_xarray(element_erased, None)
+                _set_transformations_xarray(element_erased, {})
             else:
-                SpatialData.set_transformation_in_memory(element_erased, None)
+                _set_transformations(element_erased, {})
             element_copy0 = deepcopy(element_erased)
             parsed0 = model.parse(element_copy0)
 
             element_copy1 = deepcopy(element_erased)
             t = Scale([1.0, 1.0], axes=("x", "y"))
-            parsed1 = model.parse(element_copy1, transform=t)
+            parsed1 = model.parse(element_copy1, transformations={"global": t})
             assert SpatialData.get_transformation(parsed0) != SpatialData.get_transformation(parsed1)
 
             element_copy2 = deepcopy(element_erased)
             if isinstance(element_copy2, DataArray) and not isinstance(element_copy2, SpatialImage):
-                _set_transform_xarray(element_copy2, t)
+                _set_transformations_xarray(element_copy2, {"global": t})
             else:
                 SpatialData.set_transformation_in_memory(element_copy2, t)
             parsed2 = model.parse(element_copy2)
@@ -78,10 +85,10 @@ class TestModels:
             with pytest.raises(ValueError):
                 element_copy3 = deepcopy(element_erased)
                 if isinstance(element_copy3, DataArray) and not isinstance(element_copy3, SpatialImage):
-                    _set_transform_xarray(element_copy3, t)
+                    _set_transformations_xarray(element_copy3, {"global": t})
                 else:
                     SpatialData.set_transformation_in_memory(element_copy3, t)
-                model.parse(element_copy3, transform=t)
+                model.parse(element_copy3, transformations={"global": t})
         elif any(
             [
                 isinstance(element, t)

@@ -39,7 +39,7 @@ class NgffAxis:
 
 class NgffCoordinateSystem:
     def __init__(self, name: str, axes: Optional[list[NgffAxis]] = None):
-        self._name = name
+        self.name = name
         self._axes = axes if axes is not None else []
         if len(self._axes) != len({axis.name for axis in self._axes}):
             raise ValueError("Axes names must be unique")
@@ -121,10 +121,6 @@ class NgffCoordinateSystem:
         return NgffCoordinateSystem(name=new_name, axes=axes)
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @property
     def axes_names(self) -> tuple[str, ...]:
         return tuple([ax.name for ax in self._axes])
 
@@ -163,6 +159,13 @@ class NgffCoordinateSystem:
         if new_name is None:
             new_name = coord_sys1.name + "_merged_" + coord_sys2.name
         return NgffCoordinateSystem(name=new_name, axes=axes)
+
+    def set_unit(self, axis_name: str, unit: str) -> None:
+        for axis in self._axes:
+            if axis.name == axis_name:
+                axis.unit = unit
+                return
+        raise ValueError(f"Axis {axis_name} not found in {self.name} coordinate system.")
 
 
 def _get_spatial_axes(

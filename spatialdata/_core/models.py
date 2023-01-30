@@ -35,14 +35,17 @@ from xarray_schema.components import (
 from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._core.core_utils import (
+    DEFAULT_COORDINATE_SYSTEM,
     TRANSFORM_KEY,
     C,
+    MappingToCoordinateSystem_t,
     SpatialElement,
     X,
     Y,
     Z,
-    _get_transform,
-    _set_transform,
+    _get_transformations,
+    _set_transformations,
+    _validate_mapping_to_coordinate_system_type,
     get_dims,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity
@@ -74,20 +77,28 @@ __all__ = [
 ]
 
 
-def _parse_transform(element: SpatialElement, transform: Optional[BaseTransformation] = None) -> None:
-    transform_in_element = _get_transform(element)
-    if transform_in_element is not None and transform is not None:
+def _parse_transformations(
+    element: SpatialElement, transformations: Optional[MappingToCoordinateSystem_t] = None
+) -> None:
+    _validate_mapping_to_coordinate_system_type(transformations)
+    transformations_in_element = _get_transformations(element)
+    if (
+        transformations_in_element is not None
+        and len(transformations_in_element) > 0
+        and transformations is not None
+        and len(transformations) > 0
+    ):
         raise ValueError(
-            "Transform is already set in the element and has also been passed as an argument to the parser. Please "
-            "specify the transform only once."
+            "Transformations are both specified for the element and also passed as an argument to the parser. Please "
+            "specify the transformations only once."
         )
-    elif transform_in_element is not None:
-        parsed_transform = transform_in_element
-    elif transform is not None:
-        parsed_transform = transform
+    elif transformations_in_element is not None and len(transformations_in_element) > 0:
+        parsed_transformations = transformations_in_element
+    elif transformations is not None and len(transformations) > 0:
+        parsed_transformations = transformations
     else:
-        parsed_transform = Identity()
-    _set_transform(element, parsed_transform)
+        parsed_transformations = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    _set_transformations(element, parsed_transformations)
 
 
 class RasterSchema(DataArraySchema):
@@ -98,7 +109,7 @@ class RasterSchema(DataArraySchema):
         cls,
         data: Union[ArrayLike, DataArray, DaskArray],
         dims: Optional[Sequence[str]] = None,
-        transform: Optional[BaseTransformation] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
         multiscale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
@@ -113,8 +124,8 @@ class RasterSchema(DataArraySchema):
             Data to validate.
         dims
             Dimensions of the data.
-        transform
-            Transformation to apply to the data.
+        transformations
+            Transformations to apply to the data.
         multiscale_factors
             Scale factors to apply for multiscale.
             If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
@@ -171,7 +182,7 @@ class RasterSchema(DataArraySchema):
         assert isinstance(data, SpatialImage)
         # TODO(giovp): drop coordinates for now until solution with IO.
         data = data.drop(data.coords.keys())
-        _parse_transform(data, transform)
+        _parse_transformations(data, transformations)
         if multiscale_factors is not None:
             # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
             # of downscaling factors to avoid this
@@ -179,7 +190,7 @@ class RasterSchema(DataArraySchema):
             assert isinstance(data, DataArray)
             current_shape: ArrayLike = np.array(data.shape, dtype=float)
             # multiscale_factors could be a dict, we don't support this case here (in the future this code and the
-            # more generla case will be handled by multiscale-spatial-image)
+            # more general case will be handled by multiscale-spatial-image)
             assert isinstance(multiscale_factors, list)
             for factor in multiscale_factors:
                 scale_vector = np.array([1.0 if ax == "c" else factor for ax in data.dims])
@@ -190,7 +201,7 @@ class RasterSchema(DataArraySchema):
                     )
                     break
                 adjusted_multiscale_factors.append(factor)
-            parsed_transform = _get_transform(data)
+            parsed_transform = _get_transformations(data)
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
@@ -198,7 +209,7 @@ class RasterSchema(DataArraySchema):
                 method=method,
                 chunks=chunks,
             )
-            _parse_transform(data, parsed_transform)
+            _parse_transformations(data, parsed_transform)
             assert isinstance(data, MultiscaleSpatialImage)
         return data
 
@@ -314,14 +325,14 @@ class PolygonsModel:
         data: np.ndarray,  # type: ignore[type-arg]
         offsets: tuple[np.ndarray, ...],  # type: ignore[type-arg]
         geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
-        transform: Optional[Any] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
 
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
-        _parse_transform(geo_df, transform)
+        _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
 
@@ -331,7 +342,7 @@ class PolygonsModel:
     def _(
         cls,
         data: str,
-        transform: Optional[Any] = None,
+        transformations: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
         data = Path(data) if isinstance(data, str) else data  # type: ignore[assignment]
@@ -342,7 +353,7 @@ class PolygonsModel:
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
-        _parse_transform(geo_df, transform)
+        _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
 
@@ -351,11 +362,11 @@ class PolygonsModel:
     def _(
         cls,
         data: GeoDataFrame,
-        transform: Optional[Any] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
 
-        _parse_transform(data, transform)
+        _parse_transformations(data, transformations)
         cls.validate(data)
         return data
 
@@ -387,7 +398,7 @@ class ShapesModel:
         shape_type: Literal["Circle", "Square"],
         shape_size: Union[float, Sequence[float]],
         index: Optional[Sequence[Union[str, float]]] = None,
-        transform: Optional[Any] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> AnnData:
         """
@@ -405,8 +416,8 @@ class ShapesModel:
             Size of shape.
         index
             Index names of the shapes.
-        transform
-            Transform of shape.
+        transformations
+            Transformations for the shape element.
         kwargs
             Additional arguments for shapes.
 
@@ -433,7 +444,7 @@ class ShapesModel:
         )
         adata.obsm[cls.COORDS_KEY] = coords
 
-        _parse_transform(adata, transform)
+        _parse_transformations(adata, transformations)
         adata.uns[cls.ATTRS_KEY] = {cls.TYPE_KEY: shape_type}
         return adata
 
@@ -450,7 +461,7 @@ class PointsModel:
                 assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
         try:
             assert data.schema.metadata is not None
-            _ = _get_transform(data)
+            _ = _get_transformations(data)
         except Exception as e:  # noqa: B902
             logger.error("cannot parse the transformation from the pyarrow.Table object")
             raise e
@@ -460,7 +471,7 @@ class PointsModel:
         cls,
         coords: np.ndarray,  # type: ignore[type-arg]
         annotations: Optional[pa.Table] = None,
-        transform: Optional[Any] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
         supress_categorical_check: bool = False,
         **kwargs: Any,
     ) -> pa.Table:
@@ -485,10 +496,10 @@ class PointsModel:
                 if column in [X, Y, Z]:
                     raise ValueError(f"Column name {column} is reserved for coordinates.")
                 table = table.append_column(column, annotations[column])
-        _parse_transform(table, transform)
+        _parse_transformations(table, transformations)
         cls.validate(table)
         return table
-        # new_table = _parse_transform(table, transform)
+        # new_table = _parse_transformations(table, transform)
         # cls.validate(new_table)
         # return new_table
 

@@ -4,8 +4,10 @@ import hashlib
 import os
 from collections.abc import Generator
 from types import MappingProxyType
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
+import networkx as nx
+import numpy as np
 import pyarrow as pa
 import zarr
 from anndata import AnnData
@@ -21,11 +23,12 @@ from spatialdata._core._spatial_query import (
     _bounding_box_query_points_dict,
 )
 from spatialdata._core.core_utils import (
+    MappingToCoordinateSystem_t,
     SpatialElement,
-    _get_transform,
-    _get_transform_xarray,
-    _set_transform,
+    _get_transformations,
+    _set_transformations,
     get_dims,
+    has_type_spatial_element,
 )
 from spatialdata._core.models import (
     Image2DModel,
@@ -37,7 +40,7 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.transformations import BaseTransformation, Identity, Sequence
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -276,24 +279,6 @@ class SpatialData:
         else:
             return root
 
-    @staticmethod
-    def set_transformation_in_memory(element: SpatialElement, transformation: BaseTransformation) -> None:
-        """
-        Set/replace the transformation of an element, without writing it to disk.
-
-        Parameters
-        ----------
-        element
-            The element to replace the transformation for.
-        transformation
-            The new transformation.
-
-        Notes
-        -----
-        - You can also use the method SpatialData.set_transformation() to set the transformation of an element when it is backed
-        """
-        _set_transform(element, transformation)
-
     def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
         found: list[SpatialElement] = []
         found_element_type: str = ""
@@ -310,22 +295,8 @@ class SpatialData:
             raise ValueError("Element found multiple times in the SpatialData object")
         return found_element_name, found_element_type
 
-    def set_transformation(self, element: SpatialElement, transformation: BaseTransformation) -> None:
-        """
-        Set/replace the transformation of an element, writing it to disk if the SpatialData object is backed.
-
-        Parameters
-        ----------
-        element
-            The element to replace the transformation for.
-        transformation
-            The new transformation.
-
-        Notes
-        -----
-        - You can also use the static method SpatialData.set_transformation_in_memory() to set the transformation of an element when it is not backed
-        """
-        self.set_transformation_in_memory(element, transformation)
+    def _write_transformations_to_disk(self, element: SpatialElement) -> None:
+        transformations = self.get_all_transformations(element)
         found_element_name, found_element_type = self._locate_spatial_element(element)
 
         if self.path is not None:
@@ -333,40 +304,210 @@ class SpatialData:
             axes = get_dims(element)
             if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
                 from spatialdata._io.write import (
-                    _overwrite_coordinate_transformations_raster,
+                    overwrite_coordinate_transformations_raster,
                 )
 
-                if isinstance(element, SpatialImage):
-                    transformations = [transformation]
-                elif isinstance(element, MultiscaleSpatialImage):
-                    transformations = []
-                    i = 0
-                    for scale, node in dict(element).items():
-                        # this is to be sure that the pyramid levels are listed here in the correct order
-                        assert scale == f"scale{i}"
-                        assert len(dict(node)) == 1
-                        xdata = list(dict(node).values())[0]
-                        t = _get_transform_xarray(xdata)
-                        # just a check that the transformation we passed to set_transformation() has indeed been set
-                        if i == 0:
-                            assert t == transformation
-                        assert t is not None
-                        transformations.append(t)
-                        i += 1
-                else:
-                    raise ValueError("Unknown element type")
-                _overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
+                overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
             elif isinstance(element, pa.Table) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
                 from spatialdata._io.write import (
-                    _overwrite_coordinate_transformations_non_raster,
+                    overwrite_coordinate_transformations_non_raster,
                 )
 
-                _overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformation=transformation)
+                overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
             else:
                 raise ValueError("Unknown element type")
 
+    @staticmethod
+    def get_all_transformations(element: SpatialElement) -> MappingToCoordinateSystem_t:
+        """
+        Get the transformations of an element.
+
+        Parameters
+        ----------
+        element
+            The element to get the transformations of.
+
+        Returns
+        -------
+        The transformations of the element.
+        """
+        transformations = _get_transformations(element)
+        assert transformations is not None
+        return transformations
+
+    @staticmethod
+    def get_transformation(
+        element: SpatialElement, target_coordinate_system: Optional[str] = None
+    ) -> BaseTransformation:
+        transformations = SpatialData.get_all_transformations(element)
+        if target_coordinate_system is None:
+            from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
+
+            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
+        if target_coordinate_system not in transformations:
+            raise ValueError(f"Transformation to {target_coordinate_system} not found")
+        return transformations[target_coordinate_system]
+
+    @staticmethod
+    def set_transformation_in_memory(
+        element: SpatialElement, transformation: BaseTransformation, target_coordinate_system: Optional[str] = None
+    ) -> None:
+        """
+        Set/replace a transformation of an element, without writing it to disk.
+
+        Parameters
+        ----------
+        element
+            The element to replace the transformation for.
+        transformation
+            The new transformation.
+        target_coordinate_system
+            The target coordinate system of the transformation. If None, the default coordinate system is used.
+
+        Notes
+        -----
+        - You can also use the method SpatialData.set_transformation() to set the transformation of an element when it
+        is backed
+        """
+        from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
+
+        if target_coordinate_system is None:
+            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
+        transformations = _get_transformations(element)
+        assert transformations is not None
+        transformations[target_coordinate_system] = transformation
+        _set_transformations(element, transformations)
+
+    def set_transformation(
+        self,
+        element: SpatialElement,
+        transformation: BaseTransformation,
+        target_coordinate_system: Optional[str] = None,
+    ) -> None:
+        """
+        Set/replace a transformation of an element, writing it to disk if the SpatialData object is backed.
+
+        Parameters
+        ----------
+        element
+            The element to replace the transformation for.
+        transformation
+            The new transformation.
+        target_coordinate_system
+            The target coordinate system of the transformation. If None, the default coordinate system is used.
+
+        Notes
+        -----
+        - You can also use the static method SpatialData.set_transformation_in_memory() to set the transformation of an
+        element when it is not backed
+        """
+        self.set_transformation_in_memory(element, transformation, target_coordinate_system)
+        self._write_transformations_to_disk(element)
+
+    @staticmethod
+    def remove_transformation_in_memory(
+        element: SpatialElement, target_coordinate_system: Optional[str] = None
+    ) -> None:
+        """
+        Remove a transformation of an element, without writing it to disk.
+
+        Parameters
+        ----------
+        element
+            The element to remove the transformation from.
+        target_coordinate_system
+            The target coordinate system of the transformation to remove. If None, the default coordinate system is used.
+
+        Notes
+        -----
+        - You can also use the method SpatialData.remove_transformation() to remove the transformation of an element when
+        it is backed
+        """
+        from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
+
+        if target_coordinate_system is None:
+            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
+        transformations = _get_transformations(element)
+        assert transformations is not None
+        if target_coordinate_system not in transformations:
+            raise ValueError(f"Transformation to {target_coordinate_system} not found")
+        del transformations[target_coordinate_system]
+        _set_transformations(element, transformations)
+
+    def remove_transformation(self, element: SpatialElement, target_coordinate_system: Optional[str] = None) -> None:
+        """
+        Remove a transformation of an element.
+
+        Parameters
+        ----------
+        element
+            The element to remove the transformation from.
+        target_coordinate_system
+            The target coordinate system of the transformation to remove. If None, the default coordinate system is used.
+
+        Notes
+        -----
+        - You can also use the static method SpatialData.remove_transformation_in_memory() to remove the transformation of
+        an element when it is not backed
+        """
+        self.remove_transformation_in_memory(element, target_coordinate_system)
+        self._write_transformations_to_disk(element)
+
+    @staticmethod
+    def remove_all_transformations_in_memory(element: SpatialElement) -> None:
+        """
+        Remove all transformations of an element, without writing it to disk.
+
+        Parameters
+        ----------
+        element
+            The element to remove the transformations from.
+
+        Notes
+        -----
+        - You can also use the method SpatialData.remove_all_transformations() to remove all transformations of an
+        element when it is backed
+        """
+        _set_transformations(element, {})
+
+    def remove_all_transformations(self, element: SpatialElement) -> None:
+        """
+        Remove all transformations of an element.
+
+        Parameters
+        ----------
+        element
+            The element to remove the transformations from.
+
+        Notes
+        -----
+        - You can also use the static method SpatialData.remove_all_transformations_in_memory() to remove all
+        transformations of an element when it is not backed
+        """
+        self.remove_all_transformations_in_memory(element)
+        self._write_transformations_to_disk(element)
+
+    def _build_transformations_graph(self) -> nx.Graph:
+        g = nx.DiGraph()
+        gen = self._gen_elements()
+        for cs in self.coordinate_systems:
+            g.add_node(cs)
+        for e in gen:
+            g.add_node(id(e))
+            transformations = self.get_all_transformations(e)
+            for cs, t in transformations.items():
+                g.add_edge(id(e), cs, transformation=t)
+                try:
+                    g.add_edge(cs, id(e), transformation=t.inverse())
+                except np.linalg.LinAlgError:
+                    pass
+        return g
+
     def map_coordinate_systems(
-        self, source_coordinate_system: Union[SpatialElement, str], target_coordinate_system: Union[SpatialElement, str]
+        self,
+        source_coordinate_system: Union[SpatialElement, str],
+        target_coordinate_system: Union[SpatialElement, str],
+        intermediate_coordinate_systems: Optional[Union[SpatialElement, str]] = None,
     ) -> BaseTransformation:
         """
         Get the transformation to map a coordinate system (intrinsic or extrinsic) to another one.
@@ -375,60 +516,68 @@ class SpatialData:
         ----------
         source_coordinate_system
             The source coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
-            coordinate system). If a string, it must be "global".
+            coordinate system).
         target_coordinate_system
             The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
-            coordinate system). If a string, it must be "global".
+            coordinate system).
 
         Returns
         -------
         The transformation to map the source coordinate system to the target coordinate system.
         """
-        from spatialdata._core.transformations import Identity, Sequence
-
-        def _is_global(coordinate_system: Any) -> bool:
-            if isinstance(coordinate_system, str):
-                if coordinate_system == "global":
-                    return True
-                else:
-                    raise NotImplementedError(
-                        'for the moment we support just intrinstic coordinate systems and one global coordinate system (named "global")'
-                    )
-            else:
-                return False
-
-        if _is_global(source_coordinate_system) and _is_global(target_coordinate_system):
+        if (
+            isinstance(source_coordinate_system, str)
+            and isinstance(target_coordinate_system, str)
+            and source_coordinate_system == target_coordinate_system
+            or id(source_coordinate_system) == id(target_coordinate_system)
+        ):
             return Identity()
-        elif _is_global(source_coordinate_system):
-            t = self.get_transformation(target_coordinate_system)
-            assert t is not None
-            return t.inverse()
-        elif _is_global(target_coordinate_system):
-            t = self.get_transformation(source_coordinate_system)
-            assert t is not None
-            return t
         else:
-            t1 = self.get_transformation(source_coordinate_system)
-            t2 = self.get_transformation(target_coordinate_system)
-            assert t1 is not None
-            assert t2 is not None
-            return Sequence([t2, t1.inverse()])
-
-    @staticmethod
-    def get_transformation(element: SpatialElement) -> Optional[BaseTransformation]:
-        """
-        Get the transformation of an element.
-
-        Parameters
-        ----------
-        element
-            The element to get the transformation for.
-
-        Returns
-        -------
-        The transformation of the element.
-        """
-        return _get_transform(element)
+            g = self._build_transformations_graph()
+            src_node: Union[int, str]
+            if has_type_spatial_element(source_coordinate_system):
+                src_node = id(source_coordinate_system)
+            else:
+                src_node = source_coordinate_system
+            des_node: Union[int, str]
+            if has_type_spatial_element(target_coordinate_system):
+                des_node = id(target_coordinate_system)
+            else:
+                des_node = target_coordinate_system
+            paths = list(nx.all_simple_paths(g, source=src_node, target=des_node))
+            if len(paths) == 0:
+                # error 0 (we refer to this in the tests)
+                raise RuntimeError("No path found between the two coordinate systems")
+            elif len(paths) > 1:
+                if intermediate_coordinate_systems is None:
+                    # error 1
+                    raise RuntimeError(
+                        "Multiple paths found between the two coordinate systems. Please specify an intermediate "
+                        "coordinate system."
+                    )
+                else:
+                    if has_type_spatial_element(intermediate_coordinate_systems):
+                        intermediate_coordinate_systems = id(intermediate_coordinate_systems)
+                    paths = [p for p in paths if intermediate_coordinate_systems in p]
+                    if len(paths) == 0:
+                        # error 2
+                        raise RuntimeError(
+                            "No path found between the two coordinate systems passing through the intermediate"
+                        )
+                    elif len(paths) > 1:
+                        # error 3
+                        raise RuntimeError(
+                            "Multiple paths found between the two coordinate systems passing through the intermediate"
+                        )
+                    else:
+                        path = paths[0]
+            else:
+                path = paths[0]
+            transformations = []
+            for i in range(len(path) - 1):
+                transformations.append(g[path[i]][path[i + 1]]["transformation"])
+            sequence = Sequence(transformations)
+            return sequence
 
     def add_image(
         self,
@@ -760,26 +909,16 @@ class SpatialData:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
 
-    # @property
-    # def coordinate_systems(self) -> dict[str, NgffCoordinateSystem]:
-    #     ##
-    #     all_cs: dict[str, NgffCoordinateSystem] = {}
-    #     gen = self._gen_elements()
-    #     for obj in gen:
-    #         ct = _get_transform(obj)
-    #         if ct is not None:
-    #             cs = ct.output_coordinate_system
-    #             if cs is not None:
-    #                 assert isinstance(cs, NgffCoordinateSystem)
-    #                 if isinstance(cs, NgffCoordinateSystem):
-    #                     name = cs.name
-    #                     if name in all_cs:
-    #                         added = all_cs[name]
-    #                         assert cs == added
-    #                     else:
-    #                         all_cs[name] = cs
-    #     ##
-    #     return all_cs
+    @property
+    def coordinate_systems(self) -> list[str]:
+        all_cs = set()
+        gen = self._gen_elements()
+        for obj in gen:
+            transformations = self.get_all_transformations(obj)
+            assert transformations is not None
+            for cs in transformations:
+                all_cs.add(cs)
+        return list(all_cs)
 
     def _non_empty_elements(self) -> list[str]:
         """Get the names of the elements that are not empty.

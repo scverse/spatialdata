@@ -118,10 +118,11 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
         translation = Translation(translation_values, axes=tuple(translation_axes))
-        old_transform = SpatialData.get_transformation(raster)
-        assert old_transform is not None
-        sequence = Sequence([translation, old_transform])
-        SpatialData.set_transformation_in_memory(unpadded, sequence)
+        old_transformations = SpatialData.get_all_transformations(raster)
+        for target_cs, old_transform in old_transformations.items():
+            assert old_transform is not None
+            sequence = Sequence([translation, old_transform])
+            SpatialData.set_transformation_in_memory(unpadded, sequence, target_cs)
         return unpadded
     elif isinstance(raster, MultiscaleSpatialImage):
         # let's just operate on the highest resolution. This is not an efficient implementation but we can always optimize later

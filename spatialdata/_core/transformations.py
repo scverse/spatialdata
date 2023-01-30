@@ -88,12 +88,20 @@ class BaseTransformation(ABC):
 
     @abstractmethod
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         pass
 
     def _get_default_coordinate_system(
-        self, axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        name: Optional[str] = None,
+        default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
         from spatialdata._core.core_utils import get_default_coordinate_system
 
@@ -102,6 +110,12 @@ class BaseTransformation(ABC):
             spatial_axes = _get_spatial_axes(cs)
             for ax in spatial_axes:
                 cs.get_axis(ax).unit = unit
+        if name is not None:
+            cs.name = name
+        elif default_to_global:
+            from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
+
+            cs.name = DEFAULT_COORDINATE_SYSTEM
         return cs
 
     @abstractmethod
@@ -224,10 +238,19 @@ class Identity(BaseTransformation):
         return Identity()
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes,
+            unit=unit,
+            name=output_coordinate_system_name,
+            default_to_global=True,
+        )
         ngff_transformation = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
         return ngff_transformation
 
@@ -310,10 +333,19 @@ class MapAxis(BaseTransformation):
         return MapAxis(map_axis=t.map_axis)
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes,
+            unit=unit,
+            name=output_coordinate_system_name,
+            default_to_global=True,
+        )
         ngff_transformation = NgffMapAxis(
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, map_axis=self.map_axis
         )
@@ -379,10 +411,19 @@ class Translation(BaseTransformation):
         return Translation(translation=t.translation, axes=input_axes)
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes,
+            unit=unit,
+            name=output_coordinate_system_name,
+            default_to_global=True,
+        )
         new_translation_vector = self.to_translation_vector(axes=input_axes)
         ngff_transformation = NgffTranslation(
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=new_translation_vector
@@ -455,10 +496,16 @@ class Scale(BaseTransformation):
         return Scale(scale=t.scale, axes=input_axes)
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes, unit=unit, name=output_coordinate_system_name, default_to_global=True
+        )
         new_scale_vector = self.to_scale_vector(input_axes)
         ngff_transformation = NgffScale(
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, scale=new_scale_vector
@@ -553,11 +600,20 @@ class Affine(BaseTransformation):
         return Affine(matrix=t.affine, input_axes=input_axes, output_axes=output_axes)
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         new_matrix = self.to_affine_matrix(input_axes, output_axes)
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes,
+            unit=unit,
+            name=output_coordinate_system_name,
+            default_to_global=True,
+        )
         ngff_transformation = NgffAffine(
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, affine=new_matrix
         )
@@ -627,7 +683,11 @@ class Sequence(BaseTransformation):
         self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], _nested_sequence: bool = False
     ) -> ArrayLike:
         matrix, current_output_axes = self._to_affine_matrix_wrapper(input_axes, output_axes)
-        assert current_output_axes == output_axes
+        if current_output_axes != output_axes:
+            assert set(current_output_axes) == set(output_axes)
+            # we need to reorder the axes
+            reorder = [current_output_axes.index(ax) for ax in output_axes]
+            matrix = matrix[reorder + [-1], :]
         return matrix
 
     def _repr_transformation_description(self, indent: int = 0) -> str:
@@ -649,16 +709,30 @@ class Sequence(BaseTransformation):
         return Sequence(transformations=[BaseTransformation.from_ngff(t) for t in t.transformations])
 
     def to_ngff(
-        self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], unit: Optional[str] = None
+        self,
+        input_axes: tuple[ValidAxis_t, ...],
+        output_axes: tuple[ValidAxis_t, ...],
+        unit: Optional[str] = None,
+        output_coordinate_system_name: Optional[str] = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
-        output_cs = self._get_default_coordinate_system(axes=output_axes, unit=unit)
+        output_cs = self._get_default_coordinate_system(
+            axes=output_axes,
+            unit=unit,
+            name=output_coordinate_system_name,
+            default_to_global=True,
+        )
         converted_transformations = []
         latest_input_axes = input_axes
         for t in self.transformations:
             latest_output_axes = _get_current_output_axes(t, latest_input_axes)
             converted_transformations.append(
-                t.to_ngff(input_axes=latest_input_axes, output_axes=latest_output_axes, unit=unit)
+                t.to_ngff(
+                    input_axes=latest_input_axes,
+                    output_axes=latest_output_axes,
+                    # unit=unit,
+                    # output_coordinate_system_name=output_coordinate_system_name,
+                )
             )
             latest_input_axes = latest_output_axes
         ngff_transformation = NgffSequence(

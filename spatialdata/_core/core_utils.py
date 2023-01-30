@@ -1,7 +1,7 @@
 import copy
 import json
 from functools import singledispatch
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pyarrow as pa
@@ -20,8 +20,8 @@ SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnDa
 __all__ = [
     "SpatialElement",
     "TRANSFORM_KEY",
-    "_get_transform",
-    "_set_transform",
+    "_get_transformations",
+    "_set_transformations",
     "get_default_coordinate_system",
     "get_dims",
     "C",
@@ -32,10 +32,31 @@ __all__ = [
 
 
 TRANSFORM_KEY = "transform"
+DEFAULT_COORDINATE_SYSTEM = "global"
 C, Z, Y, X = "c", "z", "y", "x"
 ValidAxis_t = str
 # ValidAxis_t = Literal["c", "x", "y", "z"]
-MappingToCoordinateSystem_t = dict[NgffCoordinateSystem, BaseTransformation]
+# maybe later we will want this, but let's keep it simple for now
+# MappingToCoordinateSystem_t = dict[NgffCoordinateSystem, BaseTransformation]
+MappingToCoordinateSystem_t = dict[str, BaseTransformation]
+
+# added this code as part of a refactoring to catch errors earlier
+
+
+# mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
+def has_type_spatial_element(e: Any) -> bool:
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table))
+
+
+def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
+    if not (
+        transformations is None
+        or isinstance(transformations, dict)
+        and all(isinstance(k, str) and isinstance(v, BaseTransformation) for k, v in transformations.items())
+    ):
+        raise TypeError(
+            f"Transform must be of type {MappingToCoordinateSystem_t} or None, but is of type {type(transformations)}."
+        )
 
 
 def validate_axis_name(axis: ValidAxis_t) -> None:
@@ -43,31 +64,30 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
         raise TypeError(f"Invalid axis: {axis}")
 
 
-def _get_transform_xarray(e: DataArray) -> Optional[BaseTransformation]:
-    if TRANSFORM_KEY in e.attrs:
-        t = e.attrs.get(TRANSFORM_KEY)
-        # this double return is to make mypy happy
-        if t is not None:
-            assert isinstance(t, BaseTransformation)
-            return t
-        else:
-            return t
+def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+    if TRANSFORM_KEY in dict_container:
+        d = dict_container[TRANSFORM_KEY]
+        return d  # type: ignore[no-any-return]
     else:
         return None
 
 
+def _get_transformations_xarray(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.attrs)
+
+
 @singledispatch
-def _get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
+def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSystem_t]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[BaseTransformation]:
-    return _get_transform_xarray(e)
+@_get_transformations.register(SpatialImage)
+def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_xarray(e)
 
 
-@_get_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
+@_get_transformations.register(MultiscaleSpatialImage)
+def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
     if TRANSFORM_KEY in e.attrs:
         raise ValueError(
             "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
@@ -76,43 +96,22 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
     d = dict(e["scale0"])
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
-    t = _get_transform_xarray(xdata)
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+    return _get_transformations_xarray(xdata)
 
 
-@_get_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
-    if TRANSFORM_KEY in e.attrs:
-        t = e.attrs.get(TRANSFORM_KEY)
-        if t is not None:
-            assert isinstance(t, BaseTransformation)
-            return t
-        else:
-            return t
-    else:
-        return None
+@_get_transformations.register(GeoDataFrame)
+def _(e: GeoDataFrame) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
-@_get_transform.register(AnnData)
-def _(e: AnnData) -> Optional[BaseTransformation]:
-    if TRANSFORM_KEY in e.uns:
-        t = e.uns[TRANSFORM_KEY]
-        if t is not None:
-            assert isinstance(t, BaseTransformation)
-            return t
-        else:
-            return t
-    else:
-        return None
+@_get_transformations.register(AnnData)
+def _(e: AnnData) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.uns)
 
 
 # we need the return type because pa.Table is immutable
-@_get_transform.register(pa.Table)
-def _(e: pa.Table) -> Optional[BaseTransformation]:
+@_get_transformations.register(pa.Table)
+def _(e: pa.Table) -> Optional[MappingToCoordinateSystem_t]:
     raise NotImplementedError("waiting for the new points implementation")
     t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
     t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
@@ -123,12 +122,18 @@ def _(e: pa.Table) -> Optional[BaseTransformation]:
         return t
 
 
-def _set_transform_xarray(e: DataArray, t: BaseTransformation) -> None:
-    e.attrs[TRANSFORM_KEY] = t
+def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    if TRANSFORM_KEY not in dict_container:
+        dict_container[TRANSFORM_KEY] = {}
+    dict_container[TRANSFORM_KEY] = transformations
+
+
+def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 @singledispatch
-def _set_transform(e: SpatialElement, t: BaseTransformation) -> None:
+def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
     """
     Set the transformation of a spatial element *only in memory*.
     Parameters
@@ -148,13 +153,13 @@ def _set_transform(e: SpatialElement, t: BaseTransformation) -> None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: BaseTransformation) -> None:
-    _set_transform_xarray(e, t)
+@_set_transformations.register(SpatialImage)
+def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_xarray(e, transformations)
 
 
-@_set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
+@_set_transformations.register(MultiscaleSpatialImage)
+def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
     dims = get_dims(e)
     from spatialdata._core.transformations import Scale, Sequence
@@ -173,26 +178,29 @@ def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> None:
             filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
             filtered_axes = [ax for ax in dims if ax != "c"]
             scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
-            assert t is not None
-            sequence = Sequence([scale, t])
-            _set_transform_xarray(xdata, sequence)
+            assert transformations is not None
+            new_transformations = {}
+            for k, v in transformations.items():
+                sequence: BaseTransformation = Sequence([scale, v])
+                new_transformations[k] = sequence
+            _set_transformations_xarray(xdata, new_transformations)
         else:
-            _set_transform_xarray(xdata, t)
+            _set_transformations_xarray(xdata, transformations)
             old_shape = new_shape
         i += 1
 
 
-@_set_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame, t: BaseTransformation) -> None:
-    e.attrs[TRANSFORM_KEY] = t
+@_set_transformations.register(GeoDataFrame)
+def _(e: GeoDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
-@_set_transform.register(AnnData)
-def _(e: AnnData, t: BaseTransformation) -> None:
-    e.uns[TRANSFORM_KEY] = t
+@_set_transformations.register(AnnData)
+def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.uns, transformations)
 
 
-@_set_transform.register(pa.Table)
+@_set_transformations.register(pa.Table)
 def _(e: pa.Table, t: BaseTransformation) -> None:
     # in theory this doesn't really copy the data in the table but is referncing to them
     raise NotImplementedError("waiting for the new points implementation")

@@ -92,7 +92,7 @@ class TestReadWrite:
         """Test read/write."""
         self._test_table(tmp_path, table_multiple_annotations)
 
-    @pytest.mark.skip("waiting for the new points implementation")
+    # @pytest.mark.skip("waiting for the new points implementation")
     def test_roundtrip(
         self,
         tmp_path: str,

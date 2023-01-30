@@ -69,7 +69,7 @@ def full_sdata() -> SpatialData:
         polygons=_get_polygons(),
         shapes=_get_shapes(),
         # points=_get_points(),
-        table=_get_table("sample1"),
+        table=_get_table(region="sample1"),
     )
 
 
@@ -79,7 +79,7 @@ def full_sdata() -> SpatialData:
 #         geometry=[],
 #     )
 #     from spatialdata import NgffIdentity
-#     _set_transform(geo_df, NgffIdentity())
+#     _set_transformations(geo_df, NgffIdentity())
 #
 #     return SpatialData(points={"empty": geo_df})
 
@@ -259,7 +259,7 @@ def _get_points() -> dict[str, pa.Table]:
 
 
 def _get_table(
-    region: Optional[AnnData] = None,
+    region: Union[str, list[str]],
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> AnnData:

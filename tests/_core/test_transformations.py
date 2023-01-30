@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import pytest
 import xarray.testing
@@ -447,6 +449,36 @@ def test_sequence():
     print(sequence0)
 
 
+def test_sequence_reorder_axes():
+    # The order of the axes of the sequence is arbitrary, so it may not match the one that the user could ask when
+    # calling to_affine_matrix(). This is why we need to reorder the axes in to_affine_matrix().
+    # This test triggers this case
+    affine = Affine(
+        np.array(
+            [
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "c"),
+    )
+    sequence = Sequence([affine])
+    assert np.allclose(
+        sequence.to_affine_matrix(input_axes=("x", "y"), output_axes=("c", "y", "x")),
+        np.array(
+            [
+                [0, 0, 1],
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+
+
 def test_transform_coordinates():
     map_axis = MapAxis({"x": "y", "y": "x"})
     translation = Translation([1, 2, 3], axes=("x", "y", "z"))
@@ -502,11 +534,51 @@ def _make_cs(axes: tuple[ValidAxis_t, ...]) -> NgffCoordinateSystem:
     return cs
 
 
+def _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(
+    t0: NgffSequence, t1: NgffSequence, outer_sequence: bool = True
+):
+    # in a sequence it is irrelevant which are the intermediate coordinate system names or unit. During conversion we
+    # don't keep them (the code would be unnecessarily complex), therefore here we ignore them
+    if outer_sequence:
+        assert t0.input_coordinate_system.name == t1.input_coordinate_system.name
+        assert t0.output_coordinate_system.name == t1.output_coordinate_system.name
+    for sub0, sub1 in zip(t0.transformations, t1.transformations):
+        if isinstance(sub0, NgffSequence):
+            assert isinstance(sub1, NgffSequence)
+            _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(
+                sub0, sub1, outer_sequence=False
+            )
+        else:
+            sub0_copy = deepcopy(sub0)
+            sub1_copy = deepcopy(sub1)
+            css = [
+                sub0_copy.input_coordinate_system,
+                sub0_copy.output_coordinate_system,
+                sub1_copy.input_coordinate_system,
+                sub1_copy.output_coordinate_system,
+            ]
+            for cs in css:
+                cs.name = ""
+                for ax in cs.axes_names:
+                    cs.set_unit(ax, "")
+            if sub0_copy != sub1_copy:
+                raise AssertionError(f"{sub0_copy} != {sub1_copy}")
+
+
 def _convert_and_compare(t0: NgffBaseTransformation, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem):
     t1 = BaseTransformation.from_ngff(t0)
-    t2 = t1.to_ngff(input_axes=input_cs.axes_names, output_axes=output_cs.axes_names, unit="micrometer")
+    t2 = t1.to_ngff(
+        input_axes=input_cs.axes_names,
+        output_axes=output_cs.axes_names,
+        unit="micrometer",
+        output_coordinate_system_name=output_cs.name,
+    )
     t3 = BaseTransformation.from_ngff(t2)
-    assert t0 == t2
+    if not isinstance(t0, NgffSequence):
+        assert t0 == t2
+    else:
+        assert isinstance(t2, NgffSequence)
+        _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(t0, t2)
     assert t1 == t3
 
 
@@ -643,7 +715,7 @@ def test_set_transform_with_mismatching_cs():
     #     for v in getattr(sdata, element_type).values():
     #         for input_cs in input_css:
     #             affine = NgffAffine.from_input_output_coordinate_systems(input_cs, input_cs)
-    #             _set_transform(v, affine)
+    #             _set_transformations(v, affine)
 
 
 def test_assign_xy_scale_to_cyx_image():
@@ -652,13 +724,13 @@ def test_assign_xy_scale_to_cyx_image():
     # scale = NgffScale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
-    # _set_transform(image, scale)
-    # t = _get_transform(image)
+    # _set_transformations(image, scale)
+    # t = _get_transformations(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
-    # _set_transform(image, scale.to_affine())
-    # t = _get_transform(image)
+    # _set_transformations(image, scale.to_affine())
+    # t = _get_transformations(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
@@ -669,14 +741,14 @@ def test_assign_xyz_scale_to_cyx_image():
     # scale = NgffScale(np.array([2, 3, 4]), input_coordinate_system=xyz_cs, output_coordinate_system=xyz_cs)
     # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
     #
-    # _set_transform(image, scale)
-    # t = _get_transform(image)
+    # _set_transformations(image, scale)
+    # t = _get_transformations(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
     # pprint(t.to_affine().to_dict())
     #
-    # _set_transform(image, scale.to_affine())
-    # t = _get_transform(image)
+    # _set_transformations(image, scale.to_affine())
+    # t = _get_transformations(image)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
@@ -687,13 +759,13 @@ def test_assign_cyx_scale_to_xyz_points():
     # scale = NgffScale(np.array([1, 3, 2]), input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
     # points = PointsModel.parse(coords=np.zeros((10, 3)))
     #
-    # _set_transform(points, scale)
-    # t = _get_transform(points)
+    # _set_transformations(points, scale)
+    # t = _get_transformations(points)
     # pprint(t.to_dict())
     # print(t.to_affine())
     #
-    # _set_transform(points, scale.to_affine())
-    # t = _get_transform(points)
+    # _set_transformations(points, scale.to_affine())
+    # t = _get_transformations(points)
     # pprint(t.to_dict())
     # print(t.to_affine())
 
