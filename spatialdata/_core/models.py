@@ -537,7 +537,7 @@ class PointsModel:
         annotation
             Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
         coordinates
-            Mapping of axes to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
+            Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
         feature_key
             Feature key in `annotation` or `data`.
         instance_key
