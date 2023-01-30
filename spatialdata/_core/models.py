@@ -149,7 +149,7 @@ class RasterSchema(DataArraySchema):
                 data = from_array(data)
             if dims is None:
                 dims = cls.dims.dims
-                logger.info(f"`dims` is set to: {dims}")
+                logger.info(f"no axes information specified in the object, setting `dims` to: {dims}")
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
@@ -414,6 +414,8 @@ class ShapesModel:
         -------
         :class:`anndata.AnnData` formatted for shapes elements.
         """
+        if shape_type is None:
+            shape_type = "Circle"
         assert shape_type in ["Circle", "Square"]
         if isinstance(shape_size, list):
             if len(shape_size) != len(coords):

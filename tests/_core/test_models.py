@@ -183,6 +183,8 @@ class TestModels:
                 raise ValueError(f"Unexpected shape_size: {shape_size}")
         assert ShapesModel.ATTRS_KEY in shapes.uns
         assert ShapesModel.TYPE_KEY in shapes.uns[ShapesModel.ATTRS_KEY]
+        if shape_type is None:
+            shape_type = "Circle"
         assert shape_type == shapes.uns[ShapesModel.ATTRS_KEY][ShapesModel.TYPE_KEY]
 
     @pytest.mark.parametrize("model", [TableModel])
