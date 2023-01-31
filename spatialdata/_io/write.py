@@ -1,9 +1,8 @@
-import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Optional, Union
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
@@ -235,14 +234,13 @@ def write_points(
     assert isinstance(t, BaseTransformation)
     coordinate_transformations = [t.to_dict()]
 
-    path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
-    pq.write_table(points, path)
+    path = Path(points_groups._store.path) / points_groups.path / "points.parquet"
+    points.to_parquet(path)
 
     axes = list(get_dims(points))
 
-    attrs = {}
+    attrs = fmt.attrs_to_dict(points.attrs)
     attrs["version"] = fmt.spatialdata_version
-    (0, get_dims(points))
 
     _write_metadata(
         points_groups,
