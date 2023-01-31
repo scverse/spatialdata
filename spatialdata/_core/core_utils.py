@@ -237,7 +237,23 @@ _DEFAULT_COORDINATE_SYSTEM = {
     (C, Z, Y, X): czyx_cs,
 }
 
-get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_SYSTEM[tuple(dims)])
+# get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_SYSTEM[tuple(dims)])
+
+
+def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem:
+    axes = []
+    for c in dims:
+        if c == X:
+            axes.append(copy.deepcopy(x_axis))
+        elif c == Y:
+            axes.append(copy.deepcopy(y_axis))
+        elif c == Z:
+            axes.append(copy.deepcopy(z_axis))
+        elif c == C:
+            axes.append(copy.deepcopy(c_axis))
+        else:
+            raise ValueError(f"Invalid dimension: {c}")
+    return NgffCoordinateSystem(name="".join(dims), axes=axes)
 
 
 @singledispatch
