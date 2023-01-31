@@ -532,7 +532,9 @@ class PointsModel:
             Data to parse:
 
                 - If :np:class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
-                must be provided, as well as the `feature_key` in the `annotation`.
+                must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                :np:class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
+                "x", "y" and optionally "z".
                 - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
                 with key as *valid axes* and value as column names in dataframe.
                 Furthermore, a `feature_key` must be provided.

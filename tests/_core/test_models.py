@@ -4,7 +4,6 @@ from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 from anndata import AnnData
 from dask.array.core import from_array
@@ -75,20 +74,39 @@ class TestModels:
         assert poly.equals(other_poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
-    @pytest.mark.parametrize(
-        "annotations",
-        [None, pd.DataFrame(RNG.integers(0, 101, size=(10, 3)), columns=["A", "B", "C"])],
-    )
+    @pytest.mark.parametrize("instance_key", [None, "cell_id"])
+    @pytest.mark.parametrize("is_array", [True, False])
+    @pytest.mark.parametrize("is_3d", [True, False])
     def test_points_model(
         self,
         model: PointsModel,
-        annotations: pd.DataFrame,
+        is_array: bool,
+        is_3d: bool,
+        instance_key: Optional[str],
     ) -> None:
-        coords = RNG.normal(size=(10, 2))
-        if annotations is not None:
-            annotations["A"] = annotations["A"].astype(str)
-        points = model.parse(coords, None if annotations is None else pa.Table.from_pandas(annotations))
-        assert PointsModel.TRANSFORM_KEY.encode("utf-8") in points.schema.metadata
+        coords = ["A", "B", "C"]
+        axes = ["x", "y", "z"]
+        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 3)), columns=coords)
+        data["target"] = pd.Series(RNG.integers(0, 2, size=(10,))).astype(str)
+        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(10,))).astype(np.int_)
+        data["anno"] = pd.Series(RNG.integers(0, 1, size=(10,))).astype(np.int_)
+        if not is_3d:
+            coords = coords[:2]
+            axes = axes[:2]
+        if not is_array:
+            points = model.parse(
+                data[coords].to_numpy(), annotation=data, instance_key=instance_key, feature_key="target"
+            )
+        else:
+            coordinates = {k: v for k, v in zip(axes, coords)}
+            points = model.parse(data, coordinates=coordinates, instance_key=instance_key, feature_key="target")
+        assert "transform" in points.attrs
+        assert "spatialdata_attrs" in points.attrs
+        assert "feature_key" in points.attrs["spatialdata_attrs"]
+        assert "target" in points.attrs["spatialdata_attrs"]["feature_key"]
+        if instance_key is not None:
+            assert "instance_key" in points.attrs["spatialdata_attrs"]
+            assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("shape_type", [None, "Circle", "Square"])
