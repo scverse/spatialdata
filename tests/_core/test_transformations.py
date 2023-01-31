@@ -479,6 +479,32 @@ def test_sequence_reorder_axes():
     )
 
 
+def test_sequence_reduce_dimensionality_of_last_transformation():
+    # from a bug that I found, this was raising an expection in Identity when calling to_affine_matrix() since the input_axes contained 'c' but the output_axes didn't
+    affine = Affine(
+        [
+            [1, 2, 3, 4],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+            [0, 0, 0, 1],
+        ],
+        input_axes=("x", "y", "c"),
+        output_axes=("x", "y", "c"),
+    )
+    Sequence([Identity(), affine, Identity()])
+    matrix = affine.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(
+        matrix,
+        np.array(
+            [
+                [1, 2, 4],
+                [4, 5, 7],
+                [0, 0, 1],
+            ]
+        ),
+    )
+
+
 def test_transform_coordinates():
     map_axis = MapAxis({"x": "y", "y": "x"})
     translation = Translation([1, 2, 3], axes=("x", "y", "z"))

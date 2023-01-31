@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
@@ -895,6 +896,8 @@ class SpatialData:
         if not overwrite and parse_url(file_path, mode="r") is not None:
             raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
         else:
+            if os.path.isdir(file_path):
+                shutil.rmtree(file_path)
             store = parse_url(file_path, mode="w").store
             root = zarr.group(store=store)
             store.close()

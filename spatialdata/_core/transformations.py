@@ -645,6 +645,7 @@ class Sequence(BaseTransformation):
     def _to_affine_matrix_wrapper(
         self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], _nested_sequence: bool = False
     ) -> tuple[ArrayLike, tuple[ValidAxis_t, ...]]:
+        DEBUG_SEQUENCE = False
         self._validate_axes(input_axes)
         self._validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
@@ -653,21 +654,19 @@ class Sequence(BaseTransformation):
         current_input_axes = input_axes
         current_output_axes = _get_current_output_axes(self.transformations[0], current_input_axes)
         m = self.transformations[0].to_affine_matrix(current_input_axes, current_output_axes)
-        print(f"# 0: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}")
-        print(self.transformations[0])
-        print()
+        if DEBUG_SEQUENCE:
+            print(f"# 0: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}")
+            print(self.transformations[0])
+            print()
         for i, t in enumerate(self.transformations[1:]):
             current_input_axes = current_output_axes
-            # in the case of nested Sequence transformations, only the very last transformation in the outer sequence
-            # will force the output to be the one specified by the user. To identify the original call from the
-            # nested calls we use the _nested_sequence flag
-            if i == len(self.transformations) - 2 and not _nested_sequence:
-                current_output_axes = output_axes
-            else:
-                current_output_axes = _get_current_output_axes(t, current_input_axes)
-            print(f"# {i + 1}: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}")
-            print(t)
-            print()
+            current_output_axes = _get_current_output_axes(t, current_input_axes)
+            if DEBUG_SEQUENCE:
+                print(
+                    f"# {i + 1}: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}"
+                )
+                print(t)
+                print()
             # lhs hand side
             if not isinstance(t, Sequence):
                 lhs = t.to_affine_matrix(current_input_axes, current_output_axes)
@@ -676,6 +675,12 @@ class Sequence(BaseTransformation):
                     current_input_axes, current_output_axes, _nested_sequence=True
                 )
                 current_output_axes = adjusted_current_output_axes
+            # # in the case of nested Sequence transformations, only the very last transformation in the outer sequence
+            # # will force the output to be the one specified by the user. To identify the original call from the
+            # # nested calls we use the _nested_sequence flag
+            # if i == len(self.transformations) - 2 and not _nested_sequence:
+            #     lhs = lhs[np.array([current_input_axes.index(ax) for ax in output_axes] + [-1]), :]
+            #     current_output_axes = output_axes
             try:
                 m = lhs @ m
             except ValueError as e:
@@ -688,10 +693,19 @@ class Sequence(BaseTransformation):
     ) -> ArrayLike:
         matrix, current_output_axes = self._to_affine_matrix_wrapper(input_axes, output_axes)
         if current_output_axes != output_axes:
-            assert set(current_output_axes) == set(output_axes)
+            reordered = []
+            for ax in output_axes:
+                if ax in current_output_axes:
+                    i = current_output_axes.index(ax)
+                    reordered.append(matrix[i, :])
+                else:
+                    reordered.append(np.zeros(matrix.shape[1]))
+            reordered.append(matrix[-1, :])
+            matrix = np.array(reordered)
+            # assert set(current_output_axes) == set(output_axes)
             # we need to reorder the axes
-            reorder = [current_output_axes.index(ax) for ax in output_axes]
-            matrix = matrix[reorder + [-1], :]
+            # reorder = [current_output_axes.index(ax) for ax in output_axes]
+            # matrix = matrix[reorder + [-1], :]
         return matrix
 
     def _repr_transformation_description(self, indent: int = 0) -> str:
