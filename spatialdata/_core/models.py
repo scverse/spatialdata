@@ -614,10 +614,11 @@ class PointsModel:
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         table = dd.from_array(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs)
-        table[feature_key] = pd.Categorical(data[feature_key].astype(str))
+        feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+        table[feature_key] = feature_categ
         if instance_key is not None:
             table[instance_key] = data[instance_key]
-        for c in set(data.columns) - {feature_key, instance_key}:
+        for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
             table[c] = data[c]
 
         return cls.parse(table, feature_key=feature_key, instance_key=instance_key, transform=transform)
