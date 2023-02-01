@@ -267,8 +267,9 @@ The requirements are the following:
     -   If it's 2D, the axes should be `["x","y"]`.
     -   If it's 3D, the axes should be `["x","y","z"]`.
 -   It MUST also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MUST be of type `pandas.Categorical`.
--   It MUST also contains coordinates transformations in `dask.dataframes.DataFrame().attrs["transform"]`.
--   It MAY contains additional information in `dask.dataframes.DataFrame().attrs["spatialdata_attrs"]`, specifically:
+    This information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`.
+-   It MUST also contains coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]`.
+-   It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
     -   `"instance_key"`: the column name of the table where unique instance ids that this point refers to are stored, if available.
 
 If we will adopt AnnData as in-memory representation (and zarr for on-disk storage) it might look like the following:
