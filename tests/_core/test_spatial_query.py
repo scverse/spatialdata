@@ -1,6 +1,7 @@
 from dataclasses import FrozenInstanceError
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from spatialdata import PointsModel
@@ -15,7 +16,9 @@ from tests._core.conftest import c_cs, cyx_cs, czyx_cs, xy_cs
 def _make_points_element():
     """Helper function to make a Points element."""
     coordinates = np.array([[10, 10], [20, 20], [20, 30]], dtype=float)
-    return PointsModel.parse(coordinates)
+    return PointsModel.parse(
+        coordinates, annotation=pd.DataFrame({"genes": np.repeat("a", len(coordinates))}), feature_key="genes"
+    )
 
 
 def test_bounding_box_request_immutable():
