@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -74,7 +75,8 @@ class TestReadWrite:
         assert points.points.keys() == sdata.points.keys()
         for k in points.points.keys():
             assert isinstance(sdata.points[k], DaskDataFrame)
-            assert points.points[k].equals(sdata.points[k])
+            assert assert_eq(points.points[k], sdata.points[k], check_divisions=False)
+            assert points.points[k].attrs == points.points[k].attrs
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"

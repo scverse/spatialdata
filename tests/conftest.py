@@ -110,8 +110,7 @@ def sdata(request) -> SpatialData:
         s = SpatialData()
     else:
         s = request.getfixturevalue(request.param)
-    print(f"request.param = {request.param}")
-    print(s)
+    # print(f"request.param = {request.param}")
     return s
 
 
@@ -252,7 +251,6 @@ def _get_points() -> dict[str, DaskDataFrame]:
                 "instance_id": points_assignment0,
             },
         )
-        print(annotation)
         out[name] = PointsModel.parse(arr, annotation=annotation, feature_key="genes", instance_key="instance_id")
     return out
 
