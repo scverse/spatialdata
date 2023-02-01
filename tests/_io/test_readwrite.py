@@ -2,9 +2,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -73,7 +73,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
         for k in points.points.keys():
-            assert isinstance(sdata.points[k], pa.Table)
+            assert isinstance(sdata.points[k], DaskDataFrame)
             assert points.points[k].equals(sdata.points[k])
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:

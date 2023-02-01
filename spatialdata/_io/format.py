@@ -119,6 +119,7 @@ class ShapesFormat(SpatialDataFormatV01):
         if Shapes_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
         metadata_ = metadata[Shapes_s.ATTRS_KEY]
+        assert self.spatialdata_version == metadata_["version"]
         if Shapes_s.TYPE_KEY not in metadata_:
             raise KeyError(f"Missing key {Shapes_s.TYPE_KEY} in shapes metadata.")
         return {Shapes_s.TYPE_KEY: metadata_[Shapes_s.TYPE_KEY]}
@@ -134,6 +135,7 @@ class PointsFormat(SpatialDataFormatV01):
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
+        assert self.spatialdata_version == metadata_["version"]
         if Points_s.FEATURE_KEY not in metadata_:
             raise KeyError(f"Missing key {Points_s.FEATURE_KEY} in points metadata.")
         if Points_s.INSTANCE_KEY in metadata_:
@@ -144,7 +146,7 @@ class PointsFormat(SpatialDataFormatV01):
         return {Points_s.FEATURE_KEY: metadata_[Points_s.FEATURE_KEY]}
 
     def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        if Points_s.INSTANCE_KEY:
+        if Points_s.INSTANCE_KEY in data[Points_s.ATTRS_KEY]:
             return {
                 Points_s.FEATURE_KEY: data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY],
                 Points_s.INSTANCE_KEY: data[Points_s.ATTRS_KEY][Points_s.INSTANCE_KEY],

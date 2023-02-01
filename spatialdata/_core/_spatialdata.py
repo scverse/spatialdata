@@ -5,9 +5,9 @@ from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
 
-import pyarrow as pa
 import zarr
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -102,7 +102,7 @@ class SpatialData:
 
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
-    _points: dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
+    _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _polygons: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
@@ -112,7 +112,7 @@ class SpatialData:
         self,
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
-        points: dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
+        points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         polygons: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
@@ -139,7 +139,7 @@ class SpatialData:
                 self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
-            self._points: dict[str, pa.Table] = {}
+            self._points: dict[str, DaskDataFrame] = {}
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
@@ -191,7 +191,7 @@ class SpatialData:
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
-    def _add_points_in_memory(self, name: str, points: pa.Table) -> None:
+    def _add_points_in_memory(self, name: str, points: DaskDataFrame) -> None:
         if name in self._points:
             raise ValueError(f"Points {name} already exists in the dataset.")
         Point_s.validate(points)
@@ -319,7 +319,7 @@ class SpatialData:
     def add_points(
         self,
         name: str,
-        points: pa.Table,
+        points: DaskDataFrame,
         overwrite: bool = False,
     ) -> None:
         """
@@ -330,7 +330,7 @@ class SpatialData:
         name
             Key to the element inside the SpatialData object.
         points
-            The points to add, the object needs to pass validation (see :class:`~spatialdata.PointsModel`).
+            The points to add, the object needs to pass validation (see :class:`spatialdata.PointsModel`).
         storage_options
             Storage options for the Zarr storage.
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
@@ -495,7 +495,7 @@ class SpatialData:
         return self._labels
 
     @property
-    def points(self) -> dict[str, pa.Table]:
+    def points(self) -> dict[str, DaskDataFrame]:
         """Return points as a Dict of name to point data."""
         return self._points
 

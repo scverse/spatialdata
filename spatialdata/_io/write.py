@@ -2,10 +2,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Optional, Union
 
-import pyarrow as pa
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
@@ -223,7 +223,7 @@ def write_shapes(
 
 
 def write_points(
-    points: pa.Table,
+    points: DaskDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
