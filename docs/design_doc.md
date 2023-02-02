@@ -39,7 +39,7 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
     -   [x] rotation
 -   [x] P0. Support definition of common coordinate systems across datasets (i.e., extrinsic coordinate systems).
 -   [x] P0. Sequence of transformation.
--   Utils 
+-   Utils
     -   [x] P0 permute axis
     -   [ ] P1 inverse of
 -   [ ] P1. non-linear
@@ -114,9 +114,9 @@ Elements are the building blocks of _SpatialData_ datasets. Each element represe
 
 **`SpatialData`**
 
-The `SpatialData` object contains a set of Elements to be used for analysis. Elements contained within a `SpatialData` object can be annotated by a single Region Table. Future work may extend `SpatialData` to allow multiple tables (see discussion [here](https://github.com/scverse/spatialdata/issues/43)). All Elements within a `SpatialData` object can be queried, selected, and saved via the `SpatialData` objects. 
+The `SpatialData` object contains a set of Elements to be used for analysis. Elements contained within a `SpatialData` object can be annotated by a single Region Table. Future work may extend `SpatialData` to allow multiple tables (see discussion [here](https://github.com/scverse/spatialdata/issues/43)). All Elements within a `SpatialData` object can be queried, selected, and saved via the `SpatialData` objects.
 
-- [ ] P2. **`NGFFStore`**
+-   [ ] P2. **`NGFFStore`**
 
 The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded. Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files. A `SpatialData` object can be instantiated from a `NGFFStore`. The implementation of the `NGFFStore` has low priority since we can get around it by loading and saving our data in multiple `.zarr` files and combine them in memory, but it will be important for reading arbitrary `.zarr` files when the NGFF specifications will be updated to support the various elements.
 
@@ -157,13 +157,13 @@ Images are n-dimensional arrays where each element of an array is a pixel of an 
 -   Imaging or feature channels.
 -   Z-stacks.
 
-- [ ] P2 We will support also time-point axes in the future. Furthermore, due to NGFF specs v0.5, such axes will not have name constraints (although they do for first iteration due to NGFF specs v0.4).
+-   [ ] P2 We will support also time-point axes in the future. Furthermore, due to NGFF specs v0.5, such axes will not have name constraints (although they do for first iteration due to NGFF specs v0.4).
 
 The image object itself builds on prior art in image analysis, in particular the [xarray library][].
 
 Images have labeled dimensions, and coordinate transformations. These transformations are used to map between pixel space and physical space, and between different physical spaces.
 
-For computational efficiency the images can use lazy loading, chunked storage, and can have a pyramidal or multiscale format. Chunked storage and lazy loading is implemented via the [xarray library][] and [dask library](https://www.dask.org/), multiscale representation uses [xarray datatree library](https://github.com/xarray-contrib/datatree). The coordinate system and transformations are stored in `xarray.DataArray.attrs`. 
+For computational efficiency the images can use lazy loading, chunked storage, and can have a pyramidal or multiscale format. Chunked storage and lazy loading is implemented via the [xarray library][] and [dask library](https://www.dask.org/), multiscale representation uses [xarray datatree library](https://github.com/xarray-contrib/datatree). The coordinate system and transformations are stored in `xarray.DataArray.attrs`.
 
 More precisely, we are using the [spatial-image library](https://github.com/spatial-image/spatial-image) and [multiscale-spatial-image libary](https://github.com/spatial-image/multiscale-spatial-image) to have richer objects representations for the above-mentioned libraries.
 
@@ -237,12 +237,13 @@ of slot of the `Table`, yet no coordinates system is defined for them.
 The assumption is that the coordinate system of the centroids corresponds to the implicit coordinates system of the `Labels` image. If the image gets transfomed (e.g. cropped), the coordinates could get out of sync, [see this issue](https://github.com/scverse/spatialdata/issues/123).
 
 Example:
+
 ```{code-block} python
 
 SpatialData
   - Labels: ["Label1", "Label2", ...]
   - Table: AnnData
-    - obsm: "spatial" # no coordinate system, assumed to be default of implicit 
+    - obsm: "spatial" # no coordinate system, assumed to be default of implicit
                       # of `Labels`
 
 ```
@@ -259,8 +260,8 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
     * 'type': str: `ngff:region_table`
     * `region: str | list[str]`: Regions or list of regions this table refers to
-    * `region_key: Optional[str]`: Key in obs which says which Regions container 
-           this obs exists in ("library_id"). Must be present if `region` is a 
+    * `region_key: Optional[str]`: Key in obs which says which Regions container
+           this obs exists in ("library_id"). Must be present if `region` is a
            list.
     * `instance_key: Optional[str]`: Key in obs that says which instance the obs
            represents. If not present, `.obs_names` is used.
@@ -308,12 +309,14 @@ Coordinate sytems are sets of axes that have a name and a type. Axis names label
 There are two types of coordinate systems: intrinsic and extrinsic. Intrinsic coordinate systems are tied to the data structure of the element. For example, the intrinsic coordinate system of an image is the axes of the array containing the image. Extrinsic coordinate systems are not anchored to a specific element. Multiple elements can share an extrinsic coordinate system.
 
 ### Elements, transformations and coordinate systems
-Each element except for Tables has an *intrinsic coordinate system* and must be mapped to one or more *extrinsic coordinate systems* via *coordinate transformations*. On disk, we read and write both the coordinate systems and the coordinate transformations following the OME-NGFF specification ([current transform specs proposal here](http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs), **# TODO update reference once proposal accepted**; [discussion on transformations here](https://github.com/ome/ngff/pull/138)). In short, a coordinate system is a collection of named axes, where each axis is associated to a specific _type_ and _unit_. The set of operations required to transform elements between coordinate systems are stored as coordinate transformations. A table MUST not have a coordinate system since it annotates Region Elements (which already have one or more coordinate systems).
+
+Each element except for Tables has an _intrinsic coordinate system_ and must be mapped to one or more _extrinsic coordinate systems_ via _coordinate transformations_. On disk, we read and write both the coordinate systems and the coordinate transformations following the OME-NGFF specification ([current transform specs proposal here](http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs), **# TODO update reference once proposal accepted**; [discussion on transformations here](https://github.com/ome/ngff/pull/138)). In short, a coordinate system is a collection of named axes, where each axis is associated to a specific _type_ and _unit_. The set of operations required to transform elements between coordinate systems are stored as coordinate transformations. A table MUST not have a coordinate system since it annotates Region Elements (which already have one or more coordinate systems).
 
 ### In-memory representation
+
 We define classes that follow the NGFF specifications to represent the coordinate systems (class `NgffCoordinateSystem`) and coordinate transformations (classes inheriting from `NgffBaseTransformations`). Anyway, these classes are used only during input and ouput. For operations we define new classes (inheriting from `BaseTransformation`).
 
-Classes inheriting from `NgffBaseTransformation` are: `NgffIdentity`, `NgffMapAxis`, `NgffTranslation`, `NgffScale`, `NgffAffine`, `NgffRotation`, `NgffSequence`, `NgffByDimension`. The following are not supported: `NgffMapIndex`, `NgffDisplacements`, `NgffCoordinates`, `NgffInverseOf`, `NgffBijection`. In the future these classes could be moved outside *SpatialData*, for instance in [ome-zarr-py](https://github.com/ome/ome-zarr-py).
+Classes inheriting from `NgffBaseTransformation` are: `NgffIdentity`, `NgffMapAxis`, `NgffTranslation`, `NgffScale`, `NgffAffine`, `NgffRotation`, `NgffSequence`, `NgffByDimension`. The following are not supported: `NgffMapIndex`, `NgffDisplacements`, `NgffCoordinates`, `NgffInverseOf`, `NgffBijection`. In the future these classes could be moved outside _SpatialData_, for instance in [ome-zarr-py](https://github.com/ome/ome-zarr-py).
 
 Classes inheriting from `BaseTransformation` are: `Identity`, `MapAxis`, `Translation`, `Scale`, `Affine`, `Sequence`.
 
@@ -321,7 +324,7 @@ The conversion between the two transformation is still not 100% supported; it wi
 
 #### Reasons for having two sets of classes
 
-The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation can only be applied to an element that matches the input coordinate system and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second. 
+The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation can only be applied to an element that matches the input coordinate system and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second.
 
 On the contrary, each `BaseTransformation` is self-defined and does not require the information on coordinate systems. Any transformation can be applied unambiguously to any element and any pair of transformations can be chained together. The result is either uniqueuly defined, either an exception is raised when there is ambiguity. This is performed by passing through unaltered those axis that are present in an element but not in a transformation, and by ignoring axes that are present in a transformation but not in an element.
 
@@ -334,13 +337,16 @@ To know more about the separation between the two set of classes see [this issue
 ## Examples
 
 ### Transformations
+
 See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks/transformations_examples.ipynb) for extensive examples on the transformations.
 
 ### Xenium + Visium alignment
+
 See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks/xenium_and_visium.md) for reading raw Xenium and Visium data, converting them to Zarr, visualizing them with napari, aligning them in space and query them together.
 
 ## Legacy examples
-*The text down below may not reflect the latest version of the code and will be eventually replaced by notebooks*
+
+_The text down below may not reflect the latest version of the code and will be eventually replaced by notebooks_
 
 Here is a short list of examples of the elements used to represent some spatial omics datasets. Real world examples will be available as notebooks [in this repository](https://github.com/scverse/spatialdata-notebooks), furthermore, some draft [implementations are available here](https://github.com/giovp/spatialdata-sandbox).
 
