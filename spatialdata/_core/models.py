@@ -180,8 +180,6 @@ class RasterSchema(DataArraySchema):
 
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
         assert isinstance(data, SpatialImage)
-        # TODO(giovp): drop coordinates for now until solution with IO.
-        data = data.drop(data.coords.keys())
         _parse_transformations(data, transformations)
         if multiscale_factors is not None:
             # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
