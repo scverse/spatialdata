@@ -102,6 +102,9 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     "**.ipynb_checkpoints",
+    "tutorials/notebooks/index.md",
+    "tutorials/notebooks/README.md",
+    "tutorials/notebooks/references.md",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.
