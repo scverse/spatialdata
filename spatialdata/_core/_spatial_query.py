@@ -68,11 +68,11 @@ def _bounding_box_query_points(points: pa.Table, request: BoundingBoxRequest) ->
     for axis_index, axis_name in enumerate(spatial_axes):
         # filter by lower bound
         min_value = request.min_coordinate[axis_index]
-        points = points.filter(pa.compute.greater(points[axis_name], min_value))
+        points = points[points[axis_name].gt(min_value)]
 
         # filter by upper bound
         max_value = request.max_coordinate[axis_index]
-        points = points.filter(pa.compute.less(points[axis_name], max_value))
+        points = points[points[axis_name].lt(max_value)]
 
     return points
 
