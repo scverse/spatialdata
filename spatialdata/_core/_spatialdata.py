@@ -231,6 +231,7 @@ class SpatialData:
         """Check if the data is backed by a Zarr storage or it is in-memory."""
         return self.path is not None
 
+    # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
@@ -526,6 +527,25 @@ class SpatialData:
         -------
         The transformation to map the source coordinate system to the target coordinate system.
         """
+
+        def _describe_paths(paths: list[list[Union[int, str]]]) -> str:
+            paths_str = ""
+            for p in paths:
+                components = []
+                for c in p:
+                    if isinstance(c, str):
+                        components.append(f"{c!r}")
+                    else:
+                        ss = [
+                            f"<sdata>.{element_type}[{element_name!r}]"
+                            for element_type, element_name, e in self._gen_elements()
+                            if id(e) == c
+                        ]
+                        assert len(ss) == 1
+                        components.append(ss[0])
+                paths_str += "\n    " + " -> ".join(components)
+            return paths_str
+
         if (
             isinstance(source_coordinate_system, str)
             and isinstance(target_coordinate_system, str)
@@ -540,12 +560,12 @@ class SpatialData:
                 src_node = id(source_coordinate_system)
             else:
                 src_node = source_coordinate_system
-            des_node: Union[int, str]
+            tgt_node: Union[int, str]
             if has_type_spatial_element(target_coordinate_system):
-                des_node = id(target_coordinate_system)
+                tgt_node = id(target_coordinate_system)
             else:
-                des_node = target_coordinate_system
-            paths = list(nx.all_simple_paths(g, source=src_node, target=des_node))
+                tgt_node = target_coordinate_system
+            paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
             if len(paths) == 0:
                 # error 0 (we refer to this in the tests)
                 raise RuntimeError("No path found between the two coordinate systems")
@@ -558,9 +578,10 @@ class SpatialData:
                         path = paths_with_length_1[0]
                     else:
                         # error 1
+                        s = _describe_paths(paths)
                         raise RuntimeError(
                             "Multiple paths found between the two coordinate systems. Please specify an intermediate "
-                            "coordinate system."
+                            f"coordinate system. Available paths are:{s}"
                         )
                 else:
                     if has_type_spatial_element(intermediate_coordinate_systems):
@@ -573,8 +594,10 @@ class SpatialData:
                         )
                     elif len(paths) > 1:
                         # error 3
+                        s = _describe_paths(paths)
                         raise RuntimeError(
-                            "Multiple paths found between the two coordinate systems passing through the intermediate"
+                            "Multiple paths found between the two coordinate systems passing through the intermediate. "
+                            f"Avaliable paths are:{s}"
                         )
                     else:
                         path = paths[0]
