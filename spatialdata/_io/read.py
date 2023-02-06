@@ -74,7 +74,6 @@ def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImag
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
-
     if isinstance(store, str):
         store = Path(store)
 

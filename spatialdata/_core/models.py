@@ -365,7 +365,6 @@ class PolygonsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
@@ -402,7 +401,6 @@ class PolygonsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         _parse_transform(data, transform)
         cls.validate(data)
         return data
