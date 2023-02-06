@@ -292,9 +292,9 @@ class SpatialData:
                     found_element_type = element_type
                     found_element_name = element_name
         if len(found) == 0:
-            raise ValueError("Element not found in the SpatialData object")
+            raise ValueError("Element not found in the SpatialData object.")
         elif len(found) > 1:
-            raise ValueError("Element found multiple times in the SpatialData object")
+            raise ValueError("Element found multiple times in the SpatialData object.")
         return found_element_name, found_element_type
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
