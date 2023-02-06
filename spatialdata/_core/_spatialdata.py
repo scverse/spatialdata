@@ -644,14 +644,13 @@ class QueryManager:
 
         Parameters
         ----------
-        request : BoundingBoxRequest
+        request
             The bounding box request.
 
         Returns
         -------
-        requested_sdata : SpatialData
-            The SpatialData object containing the requested data.
-            Elements with no valid data are omitted.
+        The SpatialData object containing the requested data.
+        Elements with no valid data are omitted.
         """
         requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
         requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)

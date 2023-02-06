@@ -35,12 +35,12 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
     Attributes
     ----------
-    coordinate_system : CoordinateSystem
+    coordinate_system
         The coordinate system the coordinates are expressed in.
-    min_coordinate : np.ndarray
+    min_coordinate
         The coordinate of the lower left hand corner (i.e., minimum values)
         of the bounding box.
-    max_coordinate : np.ndarray
+    max_coordinate
         The coordinate of the upper right hand corner (i.e., maximum values)
         of the bounding box
     """
@@ -54,15 +54,14 @@ def _bounding_box_query_points(points: pa.Table, request: BoundingBoxRequest) ->
 
     Parameters
     ----------
-    points : pa.Table
+    points
         The points element to perform the query on.
-    request : BoundingBoxRequest
+    request
         The request for the query.
 
     Returns
     -------
-    query_result : pa.Table
-        The points contained within the specified bounding box.
+    The points contained within the specified bounding box.
     """
     spatial_axes = _get_spatial_axes(request.coordinate_system)
 
@@ -98,15 +97,14 @@ def _bounding_box_query_image(
 
     Parameters
     ----------
-    image : Union[MultiscaleSpatialImage, SpatialImage]
+    image
         The image element to perform the query on.
-    request : BoundingBoxRequest
+    request
         The request for the query.
 
     Returns
     -------
-    query_result : Union[MultiscaleSpatialImage, SpatialImage]
-        The image contained within the specified bounding box.
+    The image contained within the specified bounding box.
     """
     spatial_axes = _get_spatial_axes(request.coordinate_system)
 
@@ -173,15 +171,14 @@ def _bounding_box_query_polygons(polygons_table: GeoDataFrame, request: Bounding
 
     Parameters
     ----------
-    polygons_table : GeoDataFrame
+    polygons_table
         The polygons element to perform the query on.
-    request : BoundingBoxRequest
+    request
         The request for the query.
 
     Returns
     -------
-    query_result : GeoDataFrame
-        The polygons contained within the specified bounding box.
+    The polygons contained within the specified bounding box.
     """
     spatial_axes = _get_spatial_axes(request.coordinate_system)
 
