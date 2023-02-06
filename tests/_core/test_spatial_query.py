@@ -5,7 +5,14 @@ import numpy as np
 import pytest
 from shapely import linearrings, polygons
 
-from spatialdata import Image2DModel, Image3DModel, PointsModel, PolygonsModel
+from spatialdata import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    PolygonsModel,
+)
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
@@ -13,7 +20,7 @@ from spatialdata._core._spatial_query import (
     _bounding_box_query_points,
     _bounding_box_query_polygons,
 )
-from tests._core.conftest import c_cs, cyx_cs, czyx_cs, xy_cs
+from tests._core.conftest import c_cs, cyx_cs, czyx_cs, xy_cs, yx_cs, zyx_cs
 
 
 def _make_points_element():
@@ -101,19 +108,53 @@ def test_bounding_box_image_2d(n_channels):
 @pytest.mark.skip(reason="Image3D parser not working")
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 def test_bounding_box_image_3d(n_channels):
-    """Apply a bounding box to a 2D image"""
+    """Apply a bounding box to a 3D image"""
     image = np.zeros((n_channels, 10, 10, 10))
     # y: [5, 9], x: [0, 4] has value 1
     image[:, 5::, 0:5, 2:7] = 1
     image_element = Image3DModel.parse(image)
 
-    # bounding box: y: [5, 9], x: [0, 4]
+    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(
         coordinate_system=czyx_cs, min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
     )
 
     image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
+    np.testing.assert_allclose(image_result, expected_image)
+
+
+def test_bounding_box_labels_2d():
+    """Apply a bounding box to a 2D label image"""
+    image = np.zeros((10, 10))
+    # y: [5, 9], x: [0, 4] has value 1
+    image[5::, 0:5] = 1
+    labels_element = Labels2DModel.parse(image)
+
+    # bounding box: y: [5, 9], x: [0, 4]
+    request = BoundingBoxRequest(
+        coordinate_system=yx_cs, min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4])
+    )
+
+    labels_result = _bounding_box_query_image(labels_element, request)
+    expected_image = np.ones((5, 5))
+    np.testing.assert_allclose(labels_result, expected_image)
+
+
+def test_bounding_box_labels_3d():
+    """Apply a bounding box to a 3D label image"""
+    image = np.zeros((10, 10, 10))
+    # y: [5, 9], x: [0, 4] has value 1
+    image[5::, 0:5, 2:7] = 1
+    labels_element = Labels3DModel.parse(image)
+
+    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
+    request = BoundingBoxRequest(
+        coordinate_system=zyx_cs, min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
+    )
+
+    image_result = _bounding_box_query_image(labels_element, request)
+    expected_image = np.ones((5, 5, 5))
     np.testing.assert_allclose(image_result, expected_image)
 
 
