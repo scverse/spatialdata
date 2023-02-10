@@ -370,25 +370,24 @@ class PolygonsModel:
 
                 - If :np:class:`numpy.ndarray`, it assumes the shapes are parsed as ragged array,
                 therefore additional arguments `offsets` and `geometry` must be provided
-                in case of (Multi)Polygons..
-                - If :class:`geopandas.GeoDataFrame`.
+                in case of (Multi)Polygons.
+                A `size` array can also be passed to store the radius of the Circles.
+                - if `Path` or `str`, it's read as a GeoJSON file.
+                A `size` array can also be passed to store the radius of the Circles.
+                - If :class:`geopandas.GeoDataFrame`, it's validated.
 
-        annotation
-            Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
-        coordinates
-            Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
-        feature_key
-            Feature key in `annotation` or `data`.
-        instance_key
-            Instance key in `annotation` or `data`.
+        size
+            Array of size of the `Circles`.
+        size_key
+            In the case of `Circles` shapes, the column name corresponding to the size must be provided.
         transform
             Transform of points.
         kwargs
-            Additional arguments for :func:`dask.dataframe.from_array`.
+            Additional arguments for GeoJSON reader.
 
         Returns
         -------
-        :class:`dask.dataframe.core.DataFrame`
+        :class:`geopandas.GeoDataFrame`
         """
         raise NotImplementedError()
 
@@ -401,7 +400,6 @@ class PolygonsModel:
         offsets: Optional[tuple[ArrayLike, ...]] = None,
         size: Optional[ArrayLike] = None,
         transform: Optional[Any] = None,
-        **kwargs: Any,
     ) -> GeoDataFrame:
 
         geometry = GeometryType(geometry)
@@ -428,7 +426,7 @@ class PolygonsModel:
         if TYPE_CHECKING:
             assert isinstance(data, Path)
 
-        gc: GeometryCollection = from_geojson(data.read_bytes())
+        gc: GeometryCollection = from_geojson(data.read_bytes(), **kwargs)
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
@@ -446,7 +444,6 @@ class PolygonsModel:
         data: GeoDataFrame,
         size_key: Optional[str] = None,
         transform: Optional[Any] = None,
-        **kwargs: Any,
     ) -> GeoDataFrame:
 
         _parse_transform(data, transform)
