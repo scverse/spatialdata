@@ -2,6 +2,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pytest
@@ -75,12 +76,12 @@ class TestModels:
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
-    @pytest.mark.parametrize("is_array", [True, False])
+    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
     @pytest.mark.parametrize("is_3d", [True, False])
     def test_points_model(
         self,
         model: PointsModel,
-        is_array: bool,
+        typ: Any,
         is_3d: bool,
         instance_key: Optional[str],
     ) -> None:
@@ -93,13 +94,29 @@ class TestModels:
         if not is_3d:
             coords = coords[:2]
             axes = axes[:2]
-        if not is_array:
+        if typ == np.ndarray:
             points = model.parse(
-                data[coords].to_numpy(), annotation=data, instance_key=instance_key, feature_key="target"
+                data[coords].to_numpy(),
+                annotation=data,
+                instance_key=instance_key,
+                feature_key="target",
             )
-        else:
+        elif typ == pd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
-            points = model.parse(data, coordinates=coordinates, instance_key=instance_key, feature_key="target")
+            points = model.parse(
+                data,
+                coordinates=coordinates,
+                instance_key=instance_key,
+                feature_key="target",
+            )
+        elif typ == dd.DataFrame:
+            coordinates = {k: v for k, v in zip(axes, coords)}
+            points = model.parse(
+                dd.from_pandas(data, npartitions=2),
+                coordinates=coordinates,
+                instance_key=instance_key,
+                feature_key="target",
+            )
         assert "transform" in points.attrs
         assert "spatialdata_attrs" in points.attrs
         assert "feature_key" in points.attrs["spatialdata_attrs"]

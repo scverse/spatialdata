@@ -512,7 +512,7 @@ class PointsModel:
         for c in data.columns:
             #  this is not strictly a validation since we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
-            #  dataframe, so it is not a big deal.
+            #  series, so it is not a big deal.
             if is_categorical_dtype(data[c]):
                 if not data[c].cat.known:
                     try:
@@ -558,24 +558,6 @@ class PointsModel:
         """
         raise NotImplementedError()
 
-    @parse.register(DaskDataFrame)
-    @classmethod
-    def _(
-        cls,
-        data: DaskDataFrame,
-        feature_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-        transform: Optional[Any] = None,
-    ) -> DaskDataFrame:
-        data.attrs[cls.ATTRS_KEY] = {}
-        if instance_key is not None:
-            data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
-        data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
-
-        data = _parse_transform(data, transform)
-        cls.validate(data)
-        return data
-
     @parse.register(np.ndarray)
     @classmethod
     def _(
@@ -599,9 +581,12 @@ class PointsModel:
         for c in set(annotation.columns) - {feature_key, instance_key}:
             table[c] = annotation[c]
 
-        return cls.parse(table, feature_key=feature_key, instance_key=instance_key, transform=transform)
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transform=transform
+        )
 
     @parse.register(pd.DataFrame)
+    @parse.register(DaskDataFrame)
     @classmethod
     def _(
         cls,
@@ -615,15 +600,43 @@ class PointsModel:
 
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
-        table = dd.from_array(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs)
-        feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
-        table[feature_key] = feature_categ
+        if isinstance(data, pd.DataFrame):
+            table: DaskDataFrame = dd.from_array(
+                data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
+            )
+            feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+            table[feature_key] = feature_categ
+        elif isinstance(data, dd.DataFrame):
+            table = data[[coordinates[ax] for ax in axes]]
+            table.columns = axes
+            table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
             table[c] = data[c]
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transform=transform
+        )
 
-        return cls.parse(table, feature_key=feature_key, instance_key=instance_key, transform=transform)
+    @classmethod
+    def _add_metadata_and_validate(
+        cls,
+        data: DaskDataFrame,
+        feature_key: str,
+        instance_key: Optional[str] = None,
+        transform: Optional[Any] = None,
+    ) -> DaskDataFrame:
+        assert isinstance(data, dd.DataFrame)
+        assert feature_key in data.columns
+        data.attrs[cls.ATTRS_KEY] = {}
+        data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
+        if instance_key is not None:
+            assert instance_key in data.columns
+            data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
+
+        data = _parse_transform(data, transform)
+        cls.validate(data)
+        return data
 
 
 class TableModel:
