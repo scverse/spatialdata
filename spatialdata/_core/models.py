@@ -20,7 +20,7 @@ from numpy.typing import ArrayLike, NDArray
 from pandas.api.types import is_categorical_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -326,8 +326,6 @@ class Image3DModel(RasterSchema):
         )
 
 
-# TODO: should check for columns be strict?
-# TODO: validate attrs for transform.
 class PolygonsModel:
     GEOMETRY_KEY = "geometry"
     ATTRS_KEY = "spatialdata_attrs"
@@ -335,6 +333,7 @@ class PolygonsModel:
     TYPE_KEY = "type"
     NAME_KEY = "name"
     TRANSFORM_KEY = "transform"
+    RADIUS_KEY = "radius_key"
 
     @classmethod
     def validate(cls, data: GeoDataFrame) -> None:
@@ -342,17 +341,55 @@ class PolygonsModel:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
-        if not isinstance(data[cls.GEOMETRY_KEY].values[0], Polygon) and not isinstance(
-            data[cls.GEOMETRY_KEY].values[0], MultiPolygon
-        ):
-            # TODO: should check for all values?
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Polygon or MultiPolygon objects.")
+        geom_ = data[cls.GEOMETRY_KEY].values[0]
+        if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
+            raise ValueError(
+                f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes, but it contains {type(geom_)}."
+            )
+        if isinstance(geom_, Point):
+            if cls.ATTRS_KEY not in data.attrs:
+                raise ValueError(f":attr:`geopandas.GeoDataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
+            if cls.RADIUS_KEY not in data.attrs[cls.ATTRS_KEY]:
+                raise ValueError(f":attr:`geopandas.GeoDataFrame.attrs` does not contain `{cls.RADIUS_KEY}`.")
+            radius_key = data.attrs[cls.ATTRS_KEY][cls.RADIUS_KEY]
+            if radius_key not in data.columns:
+                raise ValueError(f"`radius_key: {radius_key}` not in GeoDataFrame columns.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
+        """
+        Validate (or parse) shapes data.
+
+        Parameters
+        ----------
+        data
+            Data to parse:
+
+                - If :np:class:`numpy.ndarray`, it assumes the shapes are parsed as ragged array,
+                therefore additional arguments `offsets` and `geometry` must be provided
+                in case of (Multi)Polygons..
+                - If :class:`geopandas.GeoDataFrame`.
+
+        annotation
+            Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
+        coordinates
+            Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
+        feature_key
+            Feature key in `annotation` or `data`.
+        instance_key
+            Instance key in `annotation` or `data`.
+        transform
+            Transform of points.
+        kwargs
+            Additional arguments for :func:`dask.dataframe.from_array`.
+
+        Returns
+        -------
+        :class:`dask.dataframe.core.DataFrame`
+        """
         raise NotImplementedError()
 
     @parse.register(np.ndarray)
@@ -360,15 +397,19 @@ class PolygonsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        offsets: tuple[np.ndarray, ...],  # type: ignore[type-arg]
-        geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
+        geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
+        offsets: Optional[tuple[ArrayLike, ...]] = None,
+        size: Optional[ArrayLike] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
 
         geometry = GeometryType(geometry)
-        data = from_ragged_array(geometry, data, offsets)
+        data = from_ragged_array(geometry_type=geometry, coord=data, offsets=offsets)
         geo_df = GeoDataFrame({"geometry": data})
+        if size is not None:
+            geo_df["size"] = size
+            geo_df.attrs[cls.ATTRS_KEY] = {cls.RADIUS_KEY: "size"}
         _parse_transform(geo_df, transform)
         cls.validate(geo_df)
         return geo_df
@@ -378,11 +419,12 @@ class PolygonsModel:
     @classmethod
     def _(
         cls,
-        data: str,
+        data: Union[str, Path],
+        size: Optional[ArrayLike] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-        data = Path(data) if isinstance(data, str) else data  # type: ignore[assignment]
+        data = Path(data) if isinstance(data, str) else data
         if TYPE_CHECKING:
             assert isinstance(data, Path)
 
@@ -390,6 +432,9 @@ class PolygonsModel:
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
+        if size is not None:
+            geo_df["size"] = size
+            geo_df.attrs[cls.ATTRS_KEY] = {cls.RADIUS_KEY: "size"}
         _parse_transform(geo_df, transform)
         cls.validate(geo_df)
         return geo_df
@@ -399,11 +444,17 @@ class PolygonsModel:
     def _(
         cls,
         data: GeoDataFrame,
+        size_key: Optional[str] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
 
         _parse_transform(data, transform)
+        if size_key is not None:
+            if size_key in data.columns:
+                data.attrs[cls.ATTRS_KEY] = {cls.RADIUS_KEY: size_key}
+            else:
+                raise ValueError(f"`size_key: {size_key}` not in GeoDataFrame columns.")
         cls.validate(data)
         return data
 
