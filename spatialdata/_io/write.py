@@ -200,7 +200,6 @@ def write_shapes(
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
-
     transform = shapes.uns.pop("transform")
     coordinate_transformations = [transform.to_dict()]
     write_adata(group, name, shapes)  # creates group[name]
