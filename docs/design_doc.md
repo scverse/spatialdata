@@ -266,9 +266,11 @@ The requirements are the following:
 -   The table MUST contains axis name to represent the axes.
     -   If it's 2D, the axes should be `["x","y"]`.
     -   If it's 3D, the axes should be `["x","y","z"]`.
--   It MUST also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MUST be of type `pandas.Categorical`.
-    This information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`.
 -   It MUST also contains coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]`.
+
+Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`
+
+-   It MAY also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
 -   It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
     -   `"instance_key"`: the column name of the table where unique instance ids that this point refers to are stored, if available.
 

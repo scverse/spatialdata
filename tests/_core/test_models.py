@@ -76,6 +76,7 @@ class TestModels:
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
+    @pytest.mark.parametrize("feature_key", [None, "target"])
     @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
     @pytest.mark.parametrize("is_3d", [True, False])
     def test_points_model(
@@ -84,6 +85,7 @@ class TestModels:
         typ: Any,
         is_3d: bool,
         instance_key: Optional[str],
+        feature_key: Optional[str],
     ) -> None:
         coords = ["A", "B", "C"]
         axes = ["x", "y", "z"]
@@ -99,7 +101,7 @@ class TestModels:
                 data[coords].to_numpy(),
                 annotation=data,
                 instance_key=instance_key,
-                feature_key="target",
+                feature_key=feature_key,
             )
         elif typ == pd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
@@ -107,7 +109,7 @@ class TestModels:
                 data,
                 coordinates=coordinates,
                 instance_key=instance_key,
-                feature_key="target",
+                feature_key=feature_key,
             )
         elif typ == dd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
@@ -115,12 +117,13 @@ class TestModels:
                 dd.from_pandas(data, npartitions=2),
                 coordinates=coordinates,
                 instance_key=instance_key,
-                feature_key="target",
+                feature_key=feature_key,
             )
         assert "transform" in points.attrs
         assert "spatialdata_attrs" in points.attrs
-        assert "feature_key" in points.attrs["spatialdata_attrs"]
-        assert "target" in points.attrs["spatialdata_attrs"]["feature_key"]
+        if feature_key is not None:
+            assert "feature_key" in points.attrs["spatialdata_attrs"]
+            assert "target" in points.attrs["spatialdata_attrs"]["feature_key"]
         if instance_key is not None:
             assert "instance_key" in points.attrs["spatialdata_attrs"]
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]

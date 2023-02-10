@@ -498,13 +498,10 @@ class PointsModel:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
         if cls.ATTRS_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
-        if cls.FEATURE_KEY not in data.attrs[cls.ATTRS_KEY]:
-            raise ValueError(
-                f":attr:`dask.dataframe.core.DataFrame.attrs[`{cls.ATTRS_KEY}`]` does not contain `{cls.FEATURE_KEY}`."
-            )
-        feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-        if not is_categorical_dtype(data[feature_key]):
-            raise ValueError(f"Feature key `{feature_key}` must be of type `pd.Categorical`.")
+        if "feature_key" in data.attrs[cls.ATTRS_KEY]:
+            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+            if not is_categorical_dtype(data[feature_key]):
+                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
         if "instance_key" in data.attrs[cls.ATTRS_KEY]:
             instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
             if not is_categorical_dtype(data[instance_key]):
@@ -564,7 +561,7 @@ class PointsModel:
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
         annotation: pd.DataFrame,
-        feature_key: str,
+        feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
@@ -574,8 +571,9 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)
-        feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
-        table[feature_key] = feature_categ
+        if feature_key is not None:
+            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
+            table[feature_key] = feature_categ
         if instance_key is not None:
             table[instance_key] = annotation[instance_key]
         for c in set(annotation.columns) - {feature_key, instance_key}:
@@ -592,7 +590,7 @@ class PointsModel:
         cls,
         data: pd.DataFrame,
         coordinates: Mapping[str, str],
-        feature_key: str,
+        feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transform: Optional[Any] = None,
         **kwargs: Any,
@@ -604,12 +602,14 @@ class PointsModel:
             table: DaskDataFrame = dd.from_array(
                 data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
             )
-            feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
-            table[feature_key] = feature_categ
+            if feature_key is not None:
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+                table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None:
+                table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
@@ -622,14 +622,15 @@ class PointsModel:
     def _add_metadata_and_validate(
         cls,
         data: DaskDataFrame,
-        feature_key: str,
+        feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transform: Optional[Any] = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)
-        assert feature_key in data.columns
         data.attrs[cls.ATTRS_KEY] = {}
-        data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
+        if feature_key is not None:
+            assert feature_key in data.columns
+            data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
         if instance_key is not None:
             assert instance_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
