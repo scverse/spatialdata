@@ -119,6 +119,7 @@ class ShapesFormat(SpatialDataFormatV01):
         if Shapes_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
         metadata_ = metadata[Shapes_s.ATTRS_KEY]
+        assert self.spatialdata_version == metadata_["version"]
         if Shapes_s.TYPE_KEY not in metadata_:
             raise KeyError(f"Missing key {Shapes_s.TYPE_KEY} in shapes metadata.")
         return {Shapes_s.TYPE_KEY: metadata_[Shapes_s.TYPE_KEY]}
@@ -130,24 +131,24 @@ class ShapesFormat(SpatialDataFormatV01):
 class PointsFormat(SpatialDataFormatV01):
     """Formatter for points."""
 
-    def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
-        # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
-        return {}
-        # if Points_s.ATTRS_KEY not in metadata:
-        #     raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
-        # metadata_ = metadata[Points_s.ATTRS_KEY]
-        # if Points_s.GEOS_KEY not in metadata_:
-        #     raise KeyError(f"Missing key {Points_s.GEOS_KEY} in points metadata.")
-        # for k in [Polygon_s.TYPE_KEY, Polygon_s.NAME_KEY]:
-        #     if k not in metadata_[Polygon_s.GEOS_KEY]:
-        #         raise KeyError(f"Missing key {k} in polygons metadata.")
-        #
-        # typ = GeometryType(metadata_[Points_s.GEOS_KEY][Points_s.TYPE_KEY])
-        # assert typ.name == metadata_[Points_s.GEOS_KEY][Points_s.NAME_KEY]
-        # assert self.spatialdata_version == metadata_["version"]
-        # return typ
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        if Points_s.ATTRS_KEY not in metadata:
+            raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
+        metadata_ = metadata[Points_s.ATTRS_KEY]
+        assert self.spatialdata_version == metadata_["version"]
+        if Points_s.FEATURE_KEY not in metadata_:
+            raise KeyError(f"Missing key {Points_s.FEATURE_KEY} in points metadata.")
+        if Points_s.INSTANCE_KEY in metadata_:
+            return {
+                Points_s.FEATURE_KEY: metadata_[Points_s.FEATURE_KEY],
+                Points_s.INSTANCE_KEY: metadata_[Points_s.INSTANCE_KEY],
+            }
+        return {Points_s.FEATURE_KEY: metadata_[Points_s.FEATURE_KEY]}
 
-    def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
-        # TODO: implement this, at the moment the metadata is manually stored inside pyarraw.table.schema.metadata
-        return {}
-        # return {Points_s.GEOS_KEY: {Points_s.NAME_KEY: geometry.name, Points_s.TYPE_KEY: geometry.value}}
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        if Points_s.INSTANCE_KEY in data[Points_s.ATTRS_KEY]:
+            return {
+                Points_s.FEATURE_KEY: data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY],
+                Points_s.INSTANCE_KEY: data[Points_s.ATTRS_KEY][Points_s.INSTANCE_KEY],
+            }
+        return {Points_s.FEATURE_KEY: data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]}

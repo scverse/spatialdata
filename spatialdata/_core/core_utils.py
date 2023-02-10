@@ -1,10 +1,9 @@
 import copy
-import json
 from functools import singledispatch
 from typing import Optional, Union
 
-import pyarrow as pa
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -12,7 +11,7 @@ from spatial_image import SpatialImage
 from spatialdata._core.coordinate_system import Axis, CoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
@@ -58,6 +57,7 @@ def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
         return t
 
 
+@get_transform.register(DaskDataFrame)
 @get_transform.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
     t = e.attrs.get(TRANSFORM_KEY)
@@ -71,18 +71,6 @@ def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
 @get_transform.register(AnnData)
 def _(e: AnnData) -> Optional[BaseTransformation]:
     t = e.uns[TRANSFORM_KEY]
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
-
-
-# we need the return type because pa.Table is immutable
-@get_transform.register(pa.Table)
-def _(e: pa.Table) -> Optional[BaseTransformation]:
-    t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
     if t is not None:
         assert isinstance(t, BaseTransformation)
         return t
@@ -108,6 +96,7 @@ def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImag
 
 
 @set_transform.register(GeoDataFrame)
+@set_transform.register(DaskDataFrame)
 def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
     e.attrs[TRANSFORM_KEY] = t
     return e
@@ -117,13 +106,6 @@ def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
 def _(e: AnnData, t: BaseTransformation) -> AnnData:
     e.uns[TRANSFORM_KEY] = t
     return e
-
-
-@set_transform.register(pa.Table)
-def _(e: pa.Table, t: BaseTransformation) -> pa.Table:
-    # in theory this doesn't really copy the data in the table but is referncing to them
-    new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
-    return new_e
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
@@ -203,8 +185,8 @@ def _(e: AnnData) -> tuple[str, ...]:
     return dims[:n]
 
 
-@get_dims.register(pa.Table)
-def _(e: pa.Table) -> tuple[str, ...]:
+@get_dims.register(DaskDataFrame)
+def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
-    dims = [c for c in valid_dims if c in e.column_names]
+    dims = [c for c in valid_dims if c in e.columns]
     return tuple(dims)
