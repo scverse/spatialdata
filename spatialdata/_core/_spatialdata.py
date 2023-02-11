@@ -297,6 +297,13 @@ class SpatialData:
             raise ValueError("Element found multiple times in the SpatialData object.")
         return found_element_name, found_element_type
 
+    def contains_element(self, element: SpatialElement) -> bool:
+        try:
+            self._locate_spatial_element(element)
+            return True
+        except ValueError:
+            return False
+
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         transformations = self.get_all_transformations(element)
         found_element_name, found_element_type = self._locate_spatial_element(element)
@@ -1167,3 +1174,118 @@ class QueryManager:
             return self.bounding_box(request)
         else:
             raise TypeError("unknown request type")
+
+
+def set_transformation(
+    element: SpatialElement,
+    transformation: Union[BaseTransformation, dict[str, BaseTransformation]],
+    to_coordinate_system: Optional[str],
+    sdata: Optional[SpatialData] = None,
+) -> None:
+    """
+    Set a transformation/s to an element, in-memory or to disk.
+
+    Parameters
+    ----------
+    element
+        The element to set the transformation/s to.
+    transformation
+        The transformation/s to set.
+    to_coordinate_system
+        The coordinate system to set the transformation/s to. This needs to be none if multiple transformations are
+        being set.
+    sdata
+        The SpatialData object to set the transformation/s to. If None, the transformation/s are set in-memory. If not
+        None, the element needs to belong to the SpatialData object, and the SpatialData object needs to be backed.
+
+    """
+    if sdata is None:
+        if isinstance(transformation, BaseTransformation):
+            transformations = _get_transformations(element)
+            assert transformations is not None
+            assert to_coordinate_system is not None
+            transformations[to_coordinate_system] = transformation
+            _set_transformations(element, transformations)
+        else:
+            assert to_coordinate_system is None
+            _set_transformations(element, transformation)
+    else:
+        if not sdata.contains_element(element):
+            raise ValueError("The element is not part of the SpatialData object.")
+        if not sdata.is_backed():
+            raise ValueError(
+                "The SpatialData object is not backed. You can either set a transformation to an element "
+                "in-memory (sdata=None), or in-memory and to disk; this last case requires the element "
+                "to belong to the SpatialData object that is backed."
+            )
+        set_transformation(element, transformation, to_coordinate_system, sdata=None)
+        sdata._write_transformations_to_disk(element)
+
+
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: Optional[str] = None
+) -> Union[BaseTransformation, dict[str, BaseTransformation]]:
+    """
+    Get the transformation/s of an element.
+
+    Parameters
+    ----------
+    element
+        The element.
+    to_coordinate_system
+        The coordinate system to which the transformation should be returned. If None, all transformations are returned.
+
+    Returns
+    -------
+    transformation
+        The transformation, if `to_coordinate_system` is not None, otherwise a dictionary of transformations to all
+        the coordinate systems.
+    """
+    transformations = _get_transformations(element)
+    assert isinstance(transformations, dict)
+
+    if to_coordinate_system is None:
+        # get the dict of all the transformations
+        return transformations
+    else:
+        # get a specific transformation
+        if to_coordinate_system not in transformations:
+            raise ValueError(f"Transformation to {to_coordinate_system} not found")
+        return transformations[to_coordinate_system]
+
+
+def remove_transformation(
+    element: SpatialElement, to_coordinate_system: Optional[str], sdata: Optional[SpatialData]
+) -> None:
+    """
+    Remove a transformation/s from an element, in-memory or from disk.
+
+    Parameters
+    ----------
+    element
+        The element to remove the transformation/s from.
+    to_coordinate_system
+        The coordinate system to remove the transformation/s from. If None, all transformations are removed.
+    sdata
+        The SpatialData object to remove the transformation/s from. If None, the transformation/s are removed in-memory.
+        If not None, the element needs to belong to the SpatialData object, and the SpatialData object needs to be backed.
+    """
+    if sdata is None:
+        if to_coordinate_system is not None:
+            transformations = _get_transformations(element)
+            assert transformations is not None
+            del transformations[to_coordinate_system]
+            _set_transformations(element, transformations)
+        else:
+            _set_transformations(element, {})
+    else:
+        if not sdata.contains_element(element):
+            raise ValueError("The element is not part of the SpatialData object.")
+        if not sdata.is_backed():
+            raise ValueError(
+                "The SpatialData object is not backed. You can either remove a transformation from an "
+                "element in-memory (sdata=None), or in-memory and from disk; this last case requires the "
+                "element to belong to the SpatialData object that is backed."
+            )
+        remove_transformation(element, to_coordinate_system, sdata=None)
+        sdata._write_transformations_to_disk(element)
