@@ -12,6 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_polygons, _get_shapes
@@ -213,10 +214,12 @@ def test_replace_transformation_on_disk_raster(images, labels):
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
                 single_sdata.write(f)
-                t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t0) == Identity
-                single_sdata.set_transformation(single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
-                t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                set_transformation(
+                    single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=single_sdata
+                )
+                t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t1) == Scale
 
 
@@ -233,8 +236,8 @@ def test_replace_transformation_on_disk_non_raster(polygons, shapes):
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
             sdata.write(f)
-            t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t0) == Identity
-            sdata.set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
-            t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
+            t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t1) == Scale

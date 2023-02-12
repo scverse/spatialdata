@@ -19,7 +19,7 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
-from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.core_utils import (
     _set_transformations,
     _set_transformations_xarray,
@@ -72,22 +72,22 @@ class TestModels:
             element_copy1 = deepcopy(element_erased)
             t = Scale([1.0, 1.0], axes=("x", "y"))
             parsed1 = model.parse(element_copy1, transformations={"global": t})
-            assert SpatialData.get_transformation(parsed0) != SpatialData.get_transformation(parsed1)
+            assert get_transformation(parsed0, "global") != get_transformation(parsed1, "global")
 
             element_copy2 = deepcopy(element_erased)
             if isinstance(element_copy2, DataArray) and not isinstance(element_copy2, SpatialImage):
                 _set_transformations_xarray(element_copy2, {"global": t})
             else:
-                SpatialData.set_transformation_in_memory(element_copy2, t)
+                set_transformation(element_copy2, t, "global")
             parsed2 = model.parse(element_copy2)
-            assert SpatialData.get_transformation(parsed1) == SpatialData.get_transformation(parsed2)
+            assert get_transformation(parsed1, "global") == get_transformation(parsed2, "global")
 
             with pytest.raises(ValueError):
                 element_copy3 = deepcopy(element_erased)
                 if isinstance(element_copy3, DataArray) and not isinstance(element_copy3, SpatialImage):
                     _set_transformations_xarray(element_copy3, {"global": t})
                 else:
-                    SpatialData.set_transformation_in_memory(element_copy3, t)
+                    set_transformation(element_copy3, t, "global")
                 model.parse(element_copy3, transformations={"global": t})
         elif any(
             [
