@@ -137,19 +137,24 @@ class PointsFormat(SpatialDataFormatV01):
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
         assert self.spatialdata_version == metadata_["version"]
-        if Points_s.FEATURE_KEY not in metadata_:
-            raise KeyError(f"Missing key {Points_s.FEATURE_KEY} in points metadata.")
+        # FEATURE_KEY is not required
+        # if Points_s.FEATURE_KEY not in metadata_:
+        #     raise KeyError(f"Missing key {Points_s.FEATURE_KEY} in points metadata.")
+        d = {}
+        if Points_s.FEATURE_KEY in metadata_:
+            d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
         if Points_s.INSTANCE_KEY in metadata_:
             return {
-                Points_s.FEATURE_KEY: metadata_[Points_s.FEATURE_KEY],
                 Points_s.INSTANCE_KEY: metadata_[Points_s.INSTANCE_KEY],
-            }
-        return {Points_s.FEATURE_KEY: metadata_[Points_s.FEATURE_KEY]}
+            } | d
+        return d
 
     def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        d = {}
+        if Points_s.FEATURE_KEY in data[Points_s.ATTRS_KEY]:
+            d[Points_s.FEATURE_KEY] = data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]
         if Points_s.INSTANCE_KEY in data[Points_s.ATTRS_KEY]:
             return {
-                Points_s.FEATURE_KEY: data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY],
                 Points_s.INSTANCE_KEY: data[Points_s.ATTRS_KEY][Points_s.INSTANCE_KEY],
-            }
-        return {Points_s.FEATURE_KEY: data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]}
+            } | d
+        return d

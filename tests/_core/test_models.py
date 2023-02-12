@@ -1,4 +1,6 @@
+import os
 import pathlib
+import tempfile
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
@@ -20,6 +22,7 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
+from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.core_utils import (
     _set_transformations,
@@ -110,6 +113,32 @@ class TestModels:
         else:
             raise ValueError(f"Unknown type {type(element)}")
 
+    def _passes_validation_after_io(self, model: Any, element: Any, element_type: str):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.zarr")
+            d = {"element": element}
+            if element_type == "image":
+                sdata = SpatialData(images=d)
+            elif element_type == "labels":
+                sdata = SpatialData(labels=d)
+            elif element_type == "points":
+                sdata = SpatialData(points=d)
+            elif element_type == "polygons":
+                sdata = SpatialData(polygons=d)
+            elif element_type == "shapes":
+                sdata = SpatialData(shapes=d)
+            else:
+                raise ValueError(f"Unknown element type {element_type}")
+            sdata.write(path)
+            sdata_read = SpatialData.read(path)
+            group_name = element_type if element_type != "image" else "images"
+            element_read = sdata_read.__getattribute__(group_name)["element"]
+            # TODO: raster models have validate as a method (for non-raster it's a class method), probably because they call the xarray schema validation in the superclass. Can we make it consistent?
+            if element_type == "image" or element_type == "labels":
+                model().validate(element_read)
+            else:
+                model.validate(element_read)
+
     @pytest.mark.parametrize("converter", [lambda _: _, from_array, DataArray, to_spatial_image])
     @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel])  # TODO: Image3DModel once fixed.
     @pytest.mark.parametrize("permute", [True, False])
@@ -130,6 +159,13 @@ class TestModels:
         image = converter(image)
         self._parse_transformation_from_multiple_places(model, image)
         spatial_image = model.parse(image)
+        if model in [Image2DModel, Image3DModel]:
+            element_type = "image"
+        elif model in [Labels2DModel, Labels3DModel]:
+            element_type = "labels"
+        else:
+            raise ValueError(f"Unknown model {model}")
+        self._passes_validation_after_io(model, spatial_image, element_type)
 
         assert isinstance(spatial_image, SpatialImage)
         if not permute:
@@ -146,16 +182,19 @@ class TestModels:
     def test_polygons_model(self, model: PolygonsModel, path: Path) -> None:
         self._parse_transformation_from_multiple_places(model, path)
         poly = model.parse(path)
+        self._passes_validation_after_io(model, poly, "polygons")
         assert PolygonsModel.GEOMETRY_KEY in poly
         assert PolygonsModel.TRANSFORM_KEY in poly.attrs
 
         geometry, data, offsets = to_ragged_array(poly.geometry.values)
         self._parse_transformation_from_multiple_places(model, data)
         other_poly = model.parse(data, offsets, geometry)
+        self._passes_validation_after_io(model, other_poly, "polygons")
         assert poly.equals(other_poly)
 
         self._parse_transformation_from_multiple_places(model, poly)
         other_poly = model.parse(poly)
+        self._passes_validation_after_io(model, other_poly, "polygons")
         assert poly.equals(other_poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
@@ -189,6 +228,7 @@ class TestModels:
                 instance_key=instance_key,
                 feature_key=feature_key,
             )
+            self._passes_validation_after_io(model, points, "points")
         elif typ == pd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
             self._parse_transformation_from_multiple_places(model, data)
@@ -198,6 +238,7 @@ class TestModels:
                 instance_key=instance_key,
                 feature_key=feature_key,
             )
+            self._passes_validation_after_io(model, points, "points")
         elif typ == dd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
             dd_data = dd.from_pandas(data, npartitions=2)
@@ -208,6 +249,7 @@ class TestModels:
                 instance_key=instance_key,
                 feature_key=feature_key,
             )
+            self._passes_validation_after_io(model, points, "points")
         assert "transform" in points.attrs
         assert "spatialdata_attrs" in points.attrs
         if feature_key is not None:
@@ -229,6 +271,7 @@ class TestModels:
         coords = RNG.normal(size=(10, 2))
         self._parse_transformation_from_multiple_places(model, coords)
         shapes = model.parse(coords, shape_type, shape_size)
+        self._passes_validation_after_io(model, shapes, "shapes")
         assert ShapesModel.COORDS_KEY in shapes.obsm
         assert ShapesModel.TRANSFORM_KEY in shapes.uns
         assert ShapesModel.SIZE_KEY in shapes.obs
