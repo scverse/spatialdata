@@ -619,6 +619,9 @@ class SpatialData:
     def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
         """
         Filter the SpatialData by a coordinate system.
+        
+        This returns a SpatialData object with the elements containing
+        a transformation mapping to the specified coordinate system.
 
         Parameters
         ----------
@@ -671,6 +674,8 @@ class SpatialData:
             The target coordinate system.
         filter_by_coordinate_system
             Whether to filter the SpatialData by the target coordinate system before transforming.
+            If set to True, only elements with a coordinate transforming to the specified coordinate system
+            will be present in the returned SpatialData object. Default value is True.
 
         Returns
         -------
