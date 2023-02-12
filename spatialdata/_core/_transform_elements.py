@@ -10,11 +10,11 @@ import numpy as np
 import pyarrow as pa
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
 
 from spatialdata import SpatialData
 from spatialdata._core.core_utils import get_dims

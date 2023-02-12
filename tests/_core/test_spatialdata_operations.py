@@ -1,10 +1,9 @@
-import pyarrow as pa
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.delayed import Delayed
 
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import set_transformation
@@ -16,11 +15,7 @@ def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: S
         elements = sdata1.__getattribute__(element_type)
         assert element_name in elements
         element1 = elements[element_name]
-        if (
-            isinstance(element, AnnData)
-            or isinstance(element, SpatialImage)
-            or isinstance(element, GeoDataFrame)
-        ):
+        if isinstance(element, AnnData) or isinstance(element, SpatialImage) or isinstance(element, GeoDataFrame):
             assert element.shape == element1.shape
         elif isinstance(element, DaskDataFrame):
             for s0, s1 in zip(element.shape, element1.shape):

@@ -312,7 +312,9 @@ class SpatialData:
                 )
 
                 overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
+            elif (
+                isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData)
+            ):
                 from spatialdata._io.write import (
                     overwrite_coordinate_transformations_non_raster,
                 )
