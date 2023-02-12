@@ -312,7 +312,7 @@ class SpatialData:
                 )
 
                 overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif isinstance(element, pa.Table) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
+            elif isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
                 from spatialdata._io.write import (
                     overwrite_coordinate_transformations_non_raster,
                 )
@@ -546,7 +546,10 @@ class SpatialData:
             # from the correct storage
             from spatialdata._io.read import _read_points
 
-            points = _read_points(store=elem_group.store)
+            assert elem_group.path == "points"
+
+            path = os.path.join(elem_group.store.path, "points", name)
+            points = _read_points(path)
             self._add_points_in_memory(name=name, points=points, overwrite=True)
 
     def add_polygons(

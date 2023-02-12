@@ -552,7 +552,7 @@ class PointsModel:
     def _(
         cls,
         data: pd.DataFrame,
-        coordinates: Mapping[str, Any],
+        coordinates: Mapping[str, str],
         feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
@@ -743,7 +743,7 @@ def get_schema(
                 return _validate_and_return(Labels2DModel, e)
     elif isinstance(e, GeoDataFrame):
         return _validate_and_return(PolygonsModel, e)
-    elif isinstance(e, pa.Table):
+    elif isinstance(e, DaskDataFrame):
         return _validate_and_return(PointsModel, e)
     elif isinstance(e, AnnData):
         if "spatial" in e.obsm:

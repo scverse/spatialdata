@@ -62,6 +62,16 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
     if axis not in ["c", "x", "y", "z"]:
         raise TypeError(f"Invalid axis: {axis}")
 
+def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
+    for ax in axes:
+        validate_axis_name(ax)
+    if len(axes) != len(set(axes)):
+        raise ValueError("Axes must be unique.")
+
+def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+    validate_axes(axes)
+    return tuple(ax for ax in axes if ax in [X, Y, Z])
+
 
 def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
     if TRANSFORM_KEY in dict_container:

@@ -34,7 +34,13 @@ class TestElementsTransform:
         set_transformation(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert get_transformation(new_sdata.points["points_0"]) == transform
+
+        # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
+        # it from the assertion
+        assert isinstance(transform, Scale)
+        axes = get_dims(points.points['points_0'])
+        expected_scale = Scale(transform.to_scale_vector(axes), axes)
+        assert get_transformation(new_sdata.points["points_0"]) == expected_scale
 
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]
@@ -50,9 +56,17 @@ class TestElementsTransform:
         set_transformation(shapes.shapes["shapes_0"], transform, "my_coordinate_system2")
 
         shapes.write(tmpdir)
-        SpatialData.read(tmpdir)
-        assert get_transformation(shapes.shapes["shapes_0"], "my_coordinate_system1") == transform
-        assert get_transformation(shapes.shapes["shapes_0"], get_all=True)["my_coordinate_system2"] == transform
+        new_sdata = SpatialData.read(tmpdir)
+        loaded_transform1 = get_transformation(new_sdata.shapes["shapes_0"], "my_coordinate_system1")
+        loaded_transform2 = get_transformation(new_sdata.shapes["shapes_0"], get_all=True)["my_coordinate_system2"]
+
+        # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
+        # it from the assertion
+        assert isinstance(transform, Scale)
+        axes = get_dims(new_sdata.shapes["shapes_0"])
+        expected_scale = Scale(transform.to_scale_vector(axes), axes)
+        assert loaded_transform1 == expected_scale
+        assert loaded_transform2 == expected_scale
 
     def test_coordinate_systems(self, shapes: SpatialData) -> None:
         ct = Scale(np.array([1, 2, 3]), axes=("x", "y", "z"))
@@ -141,7 +155,6 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
 
 
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
-@pytest.mark.skip("waiting for the new points implementation")
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
     new_points = affine.inverse().transform(affine.transform(points))

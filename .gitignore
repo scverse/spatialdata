@@ -34,5 +34,10 @@ temp/
 # rst generated from myst
 docs/generated
 
+# symlinks (luca) for extending the refactoring to satellite projects 
+napari-spatialdata
+spatialdata-io
+spatialdata-notebooks
+
 # notebooks
 *.ipynb

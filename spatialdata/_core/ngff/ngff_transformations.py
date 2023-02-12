@@ -23,7 +23,6 @@ __all__ = [
     "NgffSequence",
     # "Displacements",
     # "Coordinates",
-    # "VectorField",
     # "InverseOf",
     # "Bijection",
     "NgffByDimension",
@@ -802,16 +801,6 @@ class NgffSequence(NgffBaseTransformation):
 
 
 # class Displacements(NgffBaseTransformation):
-#     def __init__(self) -> None:
-#         raise NotImplementedError()
-#
-#     # @property
-#     # def ndim(self) -> Optional[int]:
-#     #     return self._ndim
-#
-#
-# # this class is not in the ngff transform specification and is a prototype
-# class VectorField(NgffBaseTransformation):
 #     def __init__(self) -> None:
 #         raise NotImplementedError()
 #

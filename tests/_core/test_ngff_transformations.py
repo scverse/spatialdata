@@ -387,29 +387,23 @@ def test_sequence_nested():
     )
 
 
-@pytest.mark.skip()
-def test_displacements():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_coordinates():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_vector_field():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_inverse_of_inverse_of():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_bijection():
-    raise NotImplementedError()
+# @pytest.mark.skip()
+# def test_displacements():
+#     raise NotImplementedError()
+#
+#
+# @pytest.mark.skip()
+# def test_coordinates():
+#     raise NotImplementedError()
+#
+# @pytest.mark.skip()
+# def test_inverse_of_inverse_of():
+#     raise NotImplementedError()
+#
+#
+# @pytest.mark.skip()
+# def test_bijection():
+#     raise NotImplementedError()
 
 
 #

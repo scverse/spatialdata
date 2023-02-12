@@ -41,6 +41,7 @@ from spatialdata._core.transformations import Scale
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,
+    _get_points,
     _get_labels,
     _get_polygons,
     _get_shapes,
@@ -51,7 +52,7 @@ RNG = default_rng()
 
 
 class TestModels:
-    def _parse_transformation_from_multiple_places(self, model: Any, element: Any):
+    def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs):
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
         # other times (SpatialImage, DataArray, AnnData, GeoDataFrame) the object is enriched in-place. In such
         # cases we check that if there was already a transformation in the object we consider it then we are not
@@ -68,11 +69,11 @@ class TestModels:
             else:
                 _set_transformations(element_erased, {})
             element_copy0 = deepcopy(element_erased)
-            parsed0 = model.parse(element_copy0)
+            parsed0 = model.parse(element_copy0, **kwargs)
 
             element_copy1 = deepcopy(element_erased)
             t = Scale([1.0, 1.0], axes=("x", "y"))
-            parsed1 = model.parse(element_copy1, transformations={"global": t})
+            parsed1 = model.parse(element_copy1, transformations={"global": t}, **kwargs)
             assert get_transformation(parsed0, "global") != get_transformation(parsed1, "global")
 
             element_copy2 = deepcopy(element_erased)
@@ -80,7 +81,7 @@ class TestModels:
                 _set_transformations_xarray(element_copy2, {"global": t})
             else:
                 set_transformation(element_copy2, t, "global")
-            parsed2 = model.parse(element_copy2)
+            parsed2 = model.parse(element_copy2, **kwargs)
             assert get_transformation(parsed1, "global") == get_transformation(parsed2, "global")
 
             with pytest.raises(ValueError):
@@ -89,7 +90,7 @@ class TestModels:
                     _set_transformations_xarray(element_copy3, {"global": t})
                 else:
                     set_transformation(element_copy3, t, "global")
-                model.parse(element_copy3, transformations={"global": t})
+                model.parse(element_copy3, transformations={"global": t}, **kwargs)
         elif any(
             [
                 isinstance(element, t)
@@ -157,7 +158,6 @@ class TestModels:
         other_poly = model.parse(poly)
         assert poly.equals(other_poly)
 
-    @pytest.mark.skip("Waiting for the new points implementation")
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
@@ -201,7 +201,7 @@ class TestModels:
         elif typ == dd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
             dd_data = dd.from_pandas(data, npartitions=2)
-            self._parse_transformation_from_multiple_places(model, dd_data)
+            self._parse_transformation_from_multiple_places(model, dd_data, coordinates=coordinates)
             points = model.parse(
                 dd_data,
                 coordinates=coordinates,
@@ -272,16 +272,11 @@ class TestModels:
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
 
-@pytest.mark.skip("Waiting for the new points implementation, add points to the next test")
-def test_get_schema_points():
-    pass
-
-
 def test_get_schema():
     images = _get_images()
     labels = _get_labels()
     polygons = _get_polygons()
-    # points = _get_points()
+    points = _get_points()
     shapes = _get_shapes()
     table = _get_table(region="sample1")
     for k, v in images.items():
@@ -303,9 +298,9 @@ def test_get_schema():
     for v in polygons.values():
         schema = get_schema(v)
         assert schema == PolygonsModel
-    # for v in points.values():
-    #     schema = get_schema(v)
-    #     assert schema == PointsModel
+    for v in points.values():
+        schema = get_schema(v)
+        assert schema == PointsModel
     for v in shapes.values():
         schema = get_schema(v)
         assert schema == ShapesModel

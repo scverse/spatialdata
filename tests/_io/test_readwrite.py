@@ -65,7 +65,6 @@ class TestReadWrite:
             np.testing.assert_array_equal(shapes.shapes[k].obsm["spatial"], sdata.shapes[k].obsm["spatial"])
             assert shapes.shapes[k].uns == sdata.shapes[k].uns
 
-    @pytest.mark.skip("waiting for the new points implementation")
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -109,12 +108,6 @@ class TestReadWrite:
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
-
-    @pytest.mark.skip(
-        "waiting for the new points implementation; add points to the test below and in conftest.py full_sdata()"
-    )
-    def test_incremental_io_points(self):
-        pass
 
     def test_incremental_io(
         self,
@@ -175,21 +168,19 @@ class TestReadWrite:
             sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
             break
 
-        # TODO: uncomment this when points are ready
-        # for k, v in _get_points().items():
-        #     sdata.add_points(name=f"incremental_{k}", points=v)
-        #     with pytest.raises(ValueError):
-        #         sdata.add_points(name=f"incremental_{k}", points=v)
-        #     sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
-        #     break
+        for k, v in _get_points().items():
+            sdata.add_points(name=f"incremental_{k}", points=v)
+            with pytest.raises(ValueError):
+                sdata.add_points(name=f"incremental_{k}", points=v)
+            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+            break
 
 
-@pytest.mark.skip("waiting for the new points implementation; add points to the test below")
 def test_io_and_lazy_loading_points(points):
-    pass
+    assert False
 
 
-def test_io_and_lazy_loading(images, labels):
+def test_io_and_lazy_loading_raster(images, labels):
     # addresses bug https://github.com/scverse/spatialdata/issues/117
     sdatas = {"images": images, "labels": labels}
     for k, sdata in sdatas.items():
@@ -225,13 +216,8 @@ def test_replace_transformation_on_disk_raster(images, labels):
                 assert type(t1) == Scale
 
 
-@pytest.mark.skip("waiting for the new points implementation, add points to the test below")
-def test_replace_transformation_on_disk_points():
-    pass
-
-
-def test_replace_transformation_on_disk_non_raster(polygons, shapes):
-    sdatas = {"polygons": polygons, "shapes": shapes}
+def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
+    sdatas = {"polygons": polygons, "shapes": shapes, "points": points}
     for k, sdata in sdatas.items():
         d = sdata.__getattribute__(k)
         elem_name = list(d.keys())[0]

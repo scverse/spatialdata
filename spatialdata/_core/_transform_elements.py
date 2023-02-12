@@ -14,6 +14,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
+from dask.dataframe.core import DataFrame as DaskDataFrame
 
 from spatialdata import SpatialData
 from spatialdata._core.core_utils import get_dims
@@ -194,8 +195,8 @@ def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> Multi
     return transformed_data
 
 
-@_transform.register(pa.Table)
-def _(data: pa.Table, transformation: BaseTransformation) -> pa.Table:
+@_transform.register(DaskDataFrame)
+def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
     axes = get_dims(data)
     arrays = []
     for ax in axes:
