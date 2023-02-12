@@ -33,6 +33,7 @@ dependencies = [
     "geopandas",
     "shapely==2.0rc2",
     "rich",
+    "pyarrow",
     "tqdm",
     "typing_extensions>=4.0.0",
     "dask-image",
