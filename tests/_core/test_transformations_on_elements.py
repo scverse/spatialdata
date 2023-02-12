@@ -21,7 +21,6 @@ from spatialdata.utils import unpad_raster
 
 
 class TestElementsTransform:
-    @pytest.mark.skip("Waiting for the new points implementation")
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]
     )
@@ -32,12 +31,10 @@ class TestElementsTransform:
         transform: Scale,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        points.points["points_0"] = points.set_transformation(
-            points.points["points_0"], transform, target_coordinate_system="global"
-        )
+        set_transformation(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert SpatialData.get_all_transformations(new_sdata.points["points_0"])["global"] == transform
+        assert get_transformation(new_sdata.points["points_0"]) == transform
 
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]

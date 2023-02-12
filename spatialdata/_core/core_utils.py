@@ -1,11 +1,10 @@
 import copy
-import json
 from functools import singledispatch
 from typing import Any, Optional, Union
 
 import numpy as np
-import pyarrow as pa
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -110,16 +109,9 @@ def _(e: AnnData) -> Optional[MappingToCoordinateSystem_t]:
 
 
 # we need the return type because pa.Table is immutable
-@_get_transformations.register(pa.Table)
-def _(e: pa.Table) -> Optional[MappingToCoordinateSystem_t]:
-    raise NotImplementedError("waiting for the new points implementation")
-    t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+@_get_transformations.register(DaskDataFrame)
+def _(e: DaskDataFrame) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
 def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
@@ -200,12 +192,9 @@ def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.uns, transformations)
 
 
-@_set_transformations.register(pa.Table)
-def _(e: pa.Table, t: BaseTransformation) -> None:
-    # in theory this doesn't really copy the data in the table but is referncing to them
-    raise NotImplementedError("waiting for the new points implementation")
-    # new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
-    # return new_e
+@_set_transformations.register(DaskDataFrame)
+def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving

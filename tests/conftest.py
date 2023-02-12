@@ -62,13 +62,12 @@ def table_multiple_annotations() -> SpatialData:
 
 @pytest.fixture()
 def full_sdata() -> SpatialData:
-    print("TODO: add points back in")
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
         polygons=_get_polygons(),
         shapes=_get_shapes(),
-        # points=_get_points(),
+        points=_get_points(),
         table=_get_table(region="sample1"),
     )
 
@@ -239,8 +238,6 @@ def _get_shapes() -> dict[str, AnnData]:
 
 
 def _get_points() -> dict[str, pa.Table]:
-    print("TODO: restore this fixture once the new points implementation is done")
-    return {}
     name = "points"
     var_names = [np.arange(3), ["genex", "geney"]]
 

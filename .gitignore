@@ -33,3 +33,6 @@ temp/
 
 # rst generated from myst
 docs/generated
+
+# notebooks
+*.ipynb
