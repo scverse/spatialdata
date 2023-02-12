@@ -268,8 +268,24 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 ### Points
 
+```{note}
+This representation is still under discussion and it might change. What is described here is the current implementation.
+```
+
 Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.).
-Current implementation represent points as a `.parquet` file loaded lazyly and a [Dask dataframee](https://docs.dask.org/en/stable/dataframe.html) in memory. The only requirement is that the table contains (a subset of) axis name `["x","y","z"]` to represent the axes. It can also contains coordinates transformations in `attrs`.
+Current implementation represent points as a Parquet file and a [`dask.dataframe.DataFrame`](https://docs.dask.org/en/stable/dataframe.html) in memory.
+The requirements are the following:
+
+-   The table MUST contains axis name to represent the axes.
+    -   If it's 2D, the axes should be `["x","y"]`.
+    -   If it's 3D, the axes should be `["x","y","z"]`.
+-   It MUST also contains coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]`.
+
+Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`
+
+-   It MAY also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
+-   It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
+    -   `"instance_key"`: the column name of the table where unique instance ids that this point refers to are stored, if available.
 
 The points representation is anyway still being under [discussion](https://github.com/scverse/spatialdata/issues/46). If we will adopt AnnData as in-memory representation (and zarr for on-disk storage) it might look like the following:
 AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.

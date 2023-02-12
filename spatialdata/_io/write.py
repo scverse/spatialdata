@@ -1,12 +1,11 @@
-import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
-import pyarrow as pa
-import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata.experimental import write_elem as write_adata
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
@@ -309,7 +308,7 @@ def write_shapes(
 
 
 def write_points(
-    points: pa.Table,
+    points: DaskDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
@@ -319,12 +318,11 @@ def write_points(
     t = _get_transformations(points)
 
     points_groups = group.require_group(name)
-    path = os.path.join(points_groups._store.path, points_groups.path, "points.parquet")
-    pq.write_table(points, path)
+    path = Path(points_groups._store.path) / points_groups.path / "points.parquet"
+    points.to_parquet(path)
 
-    attrs = {}
+    attrs = fmt.attrs_to_dict(points.attrs)
     attrs["version"] = fmt.spatialdata_version
-    (0, get_dims(points))
 
     _write_metadata(
         points_groups,

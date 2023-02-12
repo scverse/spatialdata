@@ -7,9 +7,9 @@ from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
 
-import pyarrow as pa
 import zarr
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -19,7 +19,9 @@ from spatial_image import SpatialImage
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
+    _bounding_box_query_image_dict,
     _bounding_box_query_points_dict,
+    _bounding_box_query_polygons_dict,
 )
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
@@ -103,7 +105,7 @@ class SpatialData:
 
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
-    _points: dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
+    _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _polygons: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
@@ -113,7 +115,7 @@ class SpatialData:
         self,
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
-        points: dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
+        points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         polygons: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
@@ -140,7 +142,7 @@ class SpatialData:
                 self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
-            self._points: dict[str, pa.Table] = {}
+            self._points: dict[str, DaskDataFrame] = {}
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
@@ -208,7 +210,7 @@ class SpatialData:
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
-    def _add_points_in_memory(self, name: str, points: pa.Table, overwrite: bool = False) -> None:
+    def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")
@@ -322,7 +324,7 @@ class SpatialData:
     def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
         """
         Filter the SpatialData by a coordinate system.
-        
+
         This returns a SpatialData object with the elements containing
         a transformation mapping to the specified coordinate system.
 
@@ -505,7 +507,7 @@ class SpatialData:
     def add_points(
         self,
         name: str,
-        points: pa.Table,
+        points: DaskDataFrame,
         overwrite: bool = False,
         _add_in_memory: bool = True,
     ) -> None:
@@ -517,7 +519,7 @@ class SpatialData:
         name
             Key to the element inside the SpatialData object.
         points
-            The points to add, the object needs to pass validation (see :class:`~spatialdata.PointsModel`).
+            The points to add, the object needs to pass validation (see :class:`spatialdata.PointsModel`).
         storage_options
             Storage options for the Zarr storage.
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
@@ -721,7 +723,7 @@ class SpatialData:
         return self._labels
 
     @property
-    def points(self) -> dict[str, pa.Table]:
+    def points(self) -> dict[str, DaskDataFrame]:
         """Return points as a Dict of name to point data."""
         return self._points
 
@@ -873,18 +875,25 @@ class QueryManager:
 
         Parameters
         ----------
-        request : BoundingBoxRequest
+        request
             The bounding box request.
 
         Returns
         -------
-        requested_sdata : SpatialData
-            The SpatialData object containing the requested data.
-            Elements with no valid data are omitted.
+        The SpatialData object containing the requested data.
+        Elements with no valid data are omitted.
         """
         requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
+        requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)
+        requested_polygons = _bounding_box_query_polygons_dict(polygons_dict=self._sdata.polygons, request=request)
 
-        return SpatialData(points=requested_points)
+        return SpatialData(
+            points=requested_points,
+            images=requested_images,
+            polygons=requested_polygons,
+            shapes=self._sdata.shapes,
+            table=self._sdata.table,
+        )
 
     def __call__(self, request: BaseSpatialRequest) -> SpatialData:
         if isinstance(request, BoundingBoxRequest):

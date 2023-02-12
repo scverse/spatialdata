@@ -2,9 +2,9 @@ from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
@@ -110,8 +110,7 @@ def sdata(request) -> SpatialData:
         s = SpatialData()
     else:
         s = request.getfixturevalue(request.param)
-    print(f"request.param = {request.param}")
-    print(s)
+    # print(f"request.param = {request.param}")
     return s
 
 
@@ -237,21 +236,22 @@ def _get_shapes() -> dict[str, AnnData]:
     return out
 
 
-def _get_points() -> dict[str, pa.Table]:
+def _get_points() -> dict[str, DaskDataFrame]:
     name = "points"
-    var_names = [np.arange(3), ["genex", "geney"]]
-
     out = {}
-    for i, v in enumerate(var_names):
+    for i in range(2):
         name = f"{name}_{i}"
         arr = RNG.normal(size=(100, 2))
         # randomly assign some values from v to the points
-        points_assignment0 = pd.Series(RNG.choice(v, size=arr.shape[0]))
-        points_assignment1 = pd.Series(RNG.choice(v, size=arr.shape[0]))
-        annotations = pa.table(
-            {"points_assignment0": points_assignment0, "points_assignment1": points_assignment1},
+        points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+        genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        annotation = pd.DataFrame(
+            {
+                "genes": genes,
+                "instance_id": points_assignment0,
+            },
         )
-        out[name] = PointsModel.parse(coords=arr, annotations=annotations)
+        out[name] = PointsModel.parse(arr, annotation=annotation, feature_key="genes", instance_key="instance_id")
     return out
 
 

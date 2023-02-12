@@ -6,12 +6,13 @@ from functools import singledispatchmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -328,7 +329,6 @@ class PolygonsModel:
         transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry, data, offsets)
         geo_df = GeoDataFrame({"geometry": data})
@@ -365,7 +365,6 @@ class PolygonsModel:
         transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-
         _parse_transformations(data, transformations)
         cls.validate(data)
         return data
@@ -451,57 +450,156 @@ class ShapesModel:
 
 class PointsModel:
     ATTRS_KEY = "spatialdata_attrs"
-    NAME_KEY = "name"
+    INSTANCE_KEY = "instance_key"
+    FEATURE_KEY = "feature_key"
     TRANSFORM_KEY = "transform"
 
     @classmethod
-    def validate(cls, data: pa.Table) -> None:
+    def validate(cls, data: DaskDataFrame) -> None:
         for ax in [X, Y, Z]:
-            if ax in data.column_names:
-                assert data.schema.field(ax).type in [pa.float32(), pa.float64(), pa.int64()]
-        try:
-            assert data.schema.metadata is not None
-            _ = _get_transformations(data)
-        except Exception as e:  # noqa: B902
-            logger.error("cannot parse the transformation from the pyarrow.Table object")
-            raise e
+            if ax in data.columns:
+                assert data[ax].dtype in [np.float32, np.float64, np.int64]
+        if cls.TRANSFORM_KEY not in data.attrs:
+            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
+        if cls.ATTRS_KEY not in data.attrs:
+            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
+        if "feature_key" in data.attrs[cls.ATTRS_KEY]:
+            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+            if not is_categorical_dtype(data[feature_key]):
+                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
+        if "instance_key" in data.attrs[cls.ATTRS_KEY]:
+            instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
+            if not is_categorical_dtype(data[instance_key]):
+                logger.info(f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it.")
+        for c in data.columns:
+            #  this is not strictly a validation since we are explicitly importing the categories
+            #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
+            #  series, so it is not a big deal.
+            if is_categorical_dtype(data[c]):
+                if not data[c].cat.known:
+                    try:
+                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                    except ValueError:
+                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+
+    @singledispatchmethod
+    @classmethod
+    def parse(cls, data: Any, **kwargs: Any) -> DaskDataFrame:
+        """
+        Validate (or parse) points data.
+
+        Parameters
+        ----------
+        data
+            Data to parse:
+
+                - If :np:class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
+                must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                :np:class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
+                "x", "y" and optionally "z".
+                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
+                with key as *valid axes* and value as column names in dataframe.
+
+        annotation
+            Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
+        coordinates
+            Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
+        feature_key
+            Feature key in `annotation` or `data`.
+        instance_key
+            Instance key in `annotation` or `data`.
+        transform
+            Transform of points.
+        kwargs
+            Additional arguments for :func:`dask.dataframe.from_array`.
+
+        Returns
+        -------
+        :class:`dask.dataframe.core.DataFrame`
+        """
+        raise NotImplementedError()
+
+    @parse.register(np.ndarray)
+    @classmethod
+    def _(
+        cls,
+        data: np.ndarray,  # type: ignore[type-arg]
+        annotation: pd.DataFrame,
+        feature_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        **kwargs: Any,
+    ) -> DaskDataFrame:
+        assert len(data.shape) == 2
+        ndim = data.shape[1]
+        axes = [X, Y, Z][:ndim]
+        table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)
+        if feature_key is not None:
+            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
+            table[feature_key] = feature_categ
+        if instance_key is not None:
+            table[instance_key] = annotation[instance_key]
+        for c in set(annotation.columns) - {feature_key, instance_key}:
+            table[c] = annotation[c]
+
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+        )
+
+    @parse.register(pd.DataFrame)
+    @parse.register(DaskDataFrame)
+    @classmethod
+    def _(
+        cls,
+        data: pd.DataFrame,
+        coordinates: Mapping[str, Any],
+        feature_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        **kwargs: Any,
+    ) -> DaskDataFrame:
+        ndim = len(coordinates)
+        axes = [X, Y, Z][:ndim]
+        if isinstance(data, pd.DataFrame):
+            table: DaskDataFrame = dd.from_array(
+                data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
+            )
+            if feature_key is not None:
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+                table[feature_key] = feature_categ
+        elif isinstance(data, dd.DataFrame):
+            table = data[[coordinates[ax] for ax in axes]]
+            table.columns = axes
+            if feature_key is not None:
+                table[feature_key] = data[feature_key].astype(str).astype("category")
+        if instance_key is not None:
+            table[instance_key] = data[instance_key]
+        for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
+            table[c] = data[c]
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+        )
 
     @classmethod
-    def parse(
+    def _add_metadata_and_validate(
         cls,
-        coords: np.ndarray,  # type: ignore[type-arg]
-        annotations: Optional[pa.Table] = None,
+        data: DaskDataFrame,
+        feature_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        supress_categorical_check: bool = False,
-        **kwargs: Any,
-    ) -> pa.Table:
-        if annotations is not None:
-            if not supress_categorical_check:
-                assert isinstance(annotations, pa.Table)
-                # TODO: restore this warning and fix, or TODO(giovp): consider casting to categorical
-                # for column in annotations.column_names:
-                #     c = annotations[column]
-                #     if not isinstance(c.dictionary_encode().type, pa.DictionaryType):
-                #         logger.warning(
-                #             "detected columns that are not categorical, consider converting it to categorical with "
-                #             ".dictionary_encode() to achieve faster performance. Call parse() with "
-                #             "suppress_categorical_check=True to hide this warning"
-                #         )
-        assert len(coords.shape) == 2
-        ndim = coords.shape[1]
-        axes = [X, Y, Z][:ndim]
-        table = pa.Table.from_arrays([pa.array(coords[:, i].flatten()) for i in range(coords.shape[1])], names=axes)
-        if annotations is not None:
-            for column in annotations.column_names:
-                if column in [X, Y, Z]:
-                    raise ValueError(f"Column name {column} is reserved for coordinates.")
-                table = table.append_column(column, annotations[column])
-        _parse_transformations(table, transformations)
-        cls.validate(table)
-        return table
-        # new_table = _parse_transformations(table, transform)
-        # cls.validate(new_table)
-        # return new_table
+    ) -> DaskDataFrame:
+        assert isinstance(data, dd.DataFrame)
+        data.attrs[cls.ATTRS_KEY] = {}
+        if feature_key is not None:
+            assert feature_key in data.columns
+            data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
+        if instance_key is not None:
+            assert instance_key in data.columns
+            data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
+
+        _parse_transformations(data, transformations)
+        cls.validate(data)
+        return data
 
 
 class TableModel:

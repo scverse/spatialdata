@@ -4,7 +4,7 @@ from typing import Any, Optional, Union
 
 import numpy as np
 from anndata import AnnData
-from dask.dataframe import DataFrame as DaskDataFrame
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -14,7 +14,7 @@ from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordina
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
@@ -44,7 +44,7 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table))
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame))
 
 
 def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
@@ -99,19 +99,14 @@ def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
 
 
 @_get_transformations.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_from_dict_container(e.attrs)
 
 
 @_get_transformations.register(AnnData)
 def _(e: AnnData) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_from_dict_container(e.uns)
-
-
-# we need the return type because pa.Table is immutable
-@_get_transformations.register(DaskDataFrame)
-def _(e: DaskDataFrame) -> Optional[MappingToCoordinateSystem_t]:
-    return _get_transformations_from_dict_container(e.attrs)
 
 
 def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
@@ -183,7 +178,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
 
 
 @_set_transformations.register(GeoDataFrame)
-def _(e: GeoDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.attrs, transformations)
 
 
@@ -192,7 +188,6 @@ def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.uns, transformations)
 
 
-@_set_transformations.register(DaskDataFrame)
 def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.attrs, transformations)
 
@@ -297,8 +292,8 @@ def _(e: AnnData) -> tuple[str, ...]:
     return dims[:n]
 
 
-@get_dims.register(pa.Table)
-def _(e: pa.Table) -> tuple[str, ...]:
+@get_dims.register(DaskDataFrame)
+def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
-    dims = [c for c in valid_dims if c in e.column_names]
+    dims = [c for c in valid_dims if c in e.columns]
     return tuple(dims)
