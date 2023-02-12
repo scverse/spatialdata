@@ -32,7 +32,6 @@ dependencies = [
     "pygeos",
     "geopandas",
     "shapely==2.0rc2",
-    "pyarrow",
     "rich",
     "tqdm",
     "typing_extensions>=4.0.0",

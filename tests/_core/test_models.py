@@ -41,8 +41,8 @@ from spatialdata._core.transformations import Scale
 from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,
-    _get_points,
     _get_labels,
+    _get_points,
     _get_polygons,
     _get_shapes,
     _get_table,

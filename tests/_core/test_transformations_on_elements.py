@@ -38,7 +38,7 @@ class TestElementsTransform:
         # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
         # it from the assertion
         assert isinstance(transform, Scale)
-        axes = get_dims(points.points['points_0'])
+        axes = get_dims(points.points["points_0"])
         expected_scale = Scale(transform.to_scale_vector(axes), axes)
         assert get_transformation(new_sdata.points["points_0"]) == expected_scale
 
@@ -168,8 +168,8 @@ def test_transform_points(points: SpatialData):
         axes1 = get_dims(p1)
         assert axes0 == axes1
         for ax in axes0:
-            x0 = p0[ax].to_numpy()
-            x1 = p1[ax].to_numpy()
+            x0 = p0[ax].to_dask_array().compute()
+            x1 = p1[ax].to_dask_array().compute()
             assert np.allclose(x0, x1)
 
 

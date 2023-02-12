@@ -533,9 +533,11 @@ class PointsModel:
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
-        table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)
+        # mypy says that dask.dataframe does not have a from_array method, but it does.
+        table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)  # type: ignore[attr-defined]
         if feature_key is not None:
-            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
+            # mypy says that dask.dataframe does not have a from_pandas method, but it does.
+            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)  # type: ignore[attr-defined]
             table[feature_key] = feature_categ
         if instance_key is not None:
             table[instance_key] = annotation[instance_key]
@@ -561,13 +563,15 @@ class PointsModel:
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_array(
+            # mypy says that dask.dataframe does not have a from_array method, but it does.
+            table: DaskDataFrame = dd.from_array(  # type: ignore[attr-defined]
                 data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
             )
             if feature_key is not None:
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+                # mypy says that dask.dataframe does not have a from_pandas method, but it does.
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):
+        elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
             if feature_key is not None:
@@ -588,7 +592,7 @@ class PointsModel:
         instance_key: Optional[str] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> DaskDataFrame:
-        assert isinstance(data, dd.DataFrame)
+        assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
         data.attrs[cls.ATTRS_KEY] = {}
         if feature_key is not None:
             assert feature_key in data.columns
@@ -599,7 +603,8 @@ class PointsModel:
 
         _parse_transformations(data, transformations)
         cls.validate(data)
-        return data
+        # false positive with the PyCharm mypy plugin
+        return data  # type: ignore[no-any-return]
 
 
 class TableModel:

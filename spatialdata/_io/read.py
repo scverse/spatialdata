@@ -7,7 +7,7 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
-from dask.dataframe import read_parquet
+from dask.dataframe import read_parquet  # type: ignore[attr-defined]
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -247,6 +247,7 @@ def _read_points(
 
     path = Path(f._store.path) / f.path / "points.parquet"
     table = read_parquet(path)
+    assert isinstance(table, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(table, transformations)

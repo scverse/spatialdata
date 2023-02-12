@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import numpy as np
-import pyarrow as pa
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from dask.dataframe.core import DataFrame as DaskDataFrame
 
-from spatialdata._core.transformations import Sequence, Translation
-from spatialdata._core.core_utils import ValidAxis_t, validate_axes, get_spatial_axes
+from spatialdata._core.core_utils import ValidAxis_t, get_spatial_axes
+from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
 
 
 @dataclass(frozen=True)
@@ -115,7 +114,10 @@ def _bounding_box_query_image(
     -------
     The image contained within the specified bounding box.
     """
-    from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
 
     # build the request
     selection = {}
@@ -136,11 +138,9 @@ def _bounding_box_query_image(
     # is the intrinsic coordinate system
     # todo: this should be updated when we support multiple transforms
     initial_transform = get_transformation(query_result)
+    assert isinstance(initial_transform, BaseTransformation)
 
-    translation = Translation(
-        translation=request.min_coordinate,
-        axes=request.axes
-    )
+    translation = Translation(translation=request.min_coordinate, axes=request.axes)
 
     new_transformation = Sequence(
         [translation, initial_transform],

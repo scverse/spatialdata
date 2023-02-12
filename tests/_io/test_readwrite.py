@@ -16,7 +16,13 @@ from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import are_directories_identical
-from tests.conftest import _get_images, _get_labels, _get_polygons, _get_shapes
+from tests.conftest import (
+    _get_images,
+    _get_labels,
+    _get_points,
+    _get_polygons,
+    _get_shapes,
+)
 
 
 class TestReadWrite:
@@ -117,10 +123,6 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
 
-        # TODO: remove this line when points are ready
-        for k in sdata.points:
-            del sdata.points[k]
-
         sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
         sdata.write(tmpdir)
 
@@ -177,7 +179,14 @@ class TestReadWrite:
 
 
 def test_io_and_lazy_loading_points(points):
-    assert False
+    elem_name = list(points.points.keys())[0]
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, "data.zarr")
+        dask0 = points.points[elem_name]
+        points.write(f)
+        dask1 = points.points[elem_name]
+        assert all("read-parquet" not in key for key in dask0.dask.layers)
+        assert any("read-parquet" in key for key in dask1.dask.layers)
 
 
 def test_io_and_lazy_loading_raster(images, labels):

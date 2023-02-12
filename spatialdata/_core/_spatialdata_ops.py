@@ -230,11 +230,13 @@ def get_transformation_between_coordinate_systems(
         if has_type_spatial_element(source_coordinate_system):
             src_node = id(source_coordinate_system)
         else:
+            assert isinstance(source_coordinate_system, str)
             src_node = source_coordinate_system
         tgt_node: Union[int, str]
         if has_type_spatial_element(target_coordinate_system):
             tgt_node = id(target_coordinate_system)
         else:
+            assert isinstance(target_coordinate_system, str)
             tgt_node = target_coordinate_system
         paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
         if len(paths) == 0:
