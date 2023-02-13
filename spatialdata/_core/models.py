@@ -599,10 +599,12 @@ class PointsModel:
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
             table: DaskDataFrame = dd.from_pandas(
-                data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
+                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), npartitions=1, **kwargs
             )
             if feature_key is not None:
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)
+                feature_categ = dd.from_pandas(
+                    data[feature_key].astype(str).astype("category"), npartitions=table.npartitions
+                )
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
