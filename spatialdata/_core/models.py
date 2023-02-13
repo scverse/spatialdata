@@ -494,16 +494,17 @@ class PointsModel:
                 assert data[ax].dtype in [np.float32, np.float64, np.int64]
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
-        if cls.ATTRS_KEY not in data.attrs:
-            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
-        if "feature_key" in data.attrs[cls.ATTRS_KEY]:
-            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-            if not is_categorical_dtype(data[feature_key]):
-                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
-        if "instance_key" in data.attrs[cls.ATTRS_KEY]:
-            instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
-            if not is_categorical_dtype(data[instance_key]):
-                logger.info(f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it.")
+        if cls.ATTRS_KEY in data.attrs:
+            if "feature_key" in data.attrs[cls.ATTRS_KEY]:
+                feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+                if not is_categorical_dtype(data[feature_key]):
+                    logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
+            if "instance_key" in data.attrs[cls.ATTRS_KEY]:
+                instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
+                if not is_categorical_dtype(data[instance_key]):
+                    logger.info(
+                        f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
+                    )
         for c in data.columns:
             #  this is not strictly a validation since we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
@@ -597,7 +598,7 @@ class PointsModel:
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_array(
+            table: DaskDataFrame = dd.from_pandas(
                 data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
             )
             if feature_key is not None:
@@ -625,7 +626,8 @@ class PointsModel:
         transform: Optional[Any] = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)
-        data.attrs[cls.ATTRS_KEY] = {}
+        if feature_key is not None or instance_key is not None:
+            data.attrs[cls.ATTRS_KEY] = {}
         if feature_key is not None:
             assert feature_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key

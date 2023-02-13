@@ -116,17 +116,18 @@ class TestModels:
         elif typ == dd.DataFrame:
             coordinates = {k: v for k, v in zip(axes, coords)}
             points = model.parse(
-                dd.from_pandas(data, npartitions=2),
+                dd.from_pandas(data, npartitions=1),
                 coordinates=coordinates,
                 instance_key=instance_key,
                 feature_key=feature_key,
             )
         assert "transform" in points.attrs
-        assert "spatialdata_attrs" in points.attrs
         if feature_key is not None and is_annotation:
+            assert "spatialdata_attrs" in points.attrs
             assert "feature_key" in points.attrs["spatialdata_attrs"]
             assert "target" in points.attrs["spatialdata_attrs"]["feature_key"]
         if instance_key is not None and is_annotation:
+            assert "spatialdata_attrs" in points.attrs
             assert "instance_key" in points.attrs["spatialdata_attrs"]
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
 
