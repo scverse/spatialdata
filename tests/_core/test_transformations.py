@@ -1,367 +1,820 @@
-import json
+from copy import deepcopy
 
 import numpy as np
 import pytest
+import xarray.testing
+from xarray import DataArray
 
-from spatialdata._core.coordinate_system import CoordinateSystem
+from spatialdata._core.core_utils import ValidAxis_t, get_default_coordinate_system
+from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
+from spatialdata._core.ngff.ngff_transformations import (
+    NgffAffine,
+    NgffBaseTransformation,
+    NgffByDimension,
+    NgffIdentity,
+    NgffMapAxis,
+    NgffScale,
+    NgffSequence,
+    NgffTranslation,
+)
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
-    ByDimension,
     Identity,
     MapAxis,
-    Rotation,
     Scale,
     Sequence,
     Translation,
 )
-from tests._core.conftest import (
-    c_cs,
-    cyx_cs,
-    x_cs,
-    xy_cs,
-    xyc_cs,
-    xyz_cs,
-    y_cs,
-    yx_cs,
-    z_cs,
-    zyx_cs,
-)
-
-
-def _test_transformation(
-    transformation: BaseTransformation,
-    original: np.ndarray,
-    transformed: np.ndarray,
-    input_cs: CoordinateSystem,
-    output_cs: CoordinateSystem,
-    wrong_output_cs: CoordinateSystem,
-    test_affine: bool = True,
-    test_affine_inverse: bool = True,
-    test_inverse: bool = True,
-):
-    # missing input and output coordinate systems
-    with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original), transformed)
-
-    # missing output coordinate system
-    transformation.input_coordinate_system = input_cs
-    with pytest.raises(ValueError):
-        assert np.allclose(transformation.transform_points(original), transformed)
-
-    # wrong output coordinate system
-    transformation.output_coordinate_system = wrong_output_cs
-    try:
-        # if the output coordinate system still allows to compute the transformation, it will give points different
-        # from the one we expect
-        assert not np.allclose(transformation.transform_points(original), transformed)
-    except ValueError:
-        # covers the case in which the tranformation failed because of an incompatible output coordinate system
-        pass
-
-    # wrong points shapes
-    transformation.output_coordinate_system = output_cs
-    with pytest.raises(ValueError):
-        assert transformation.transform_points(original.ravel())
-    with pytest.raises(ValueError):
-        assert transformation.transform_points(original.transpose())
-    with pytest.raises(ValueError):
-        assert transformation.transform_points(np.expand_dims(original, 0))
-
-    # correct
-    assert np.allclose(transformation.transform_points(original), transformed)
-
-    if test_affine:
-        affine = transformation.to_affine()
-        assert np.allclose(affine.transform_points(original), transformed)
-        if test_inverse:
-            affine = transformation.to_affine()
-            assert np.allclose(affine.inverse().transform_points(transformed), original)
-
-    if test_inverse:
-        inverse = transformation.inverse()
-        assert np.allclose(inverse.transform_points(transformed), original)
-    else:
-        try:
-            transformation.inverse()
-        except ValueError:
-            pass
-        except np.linalg.LinAlgError:
-            pass
-
-    # test to_dict roundtrip
-    assert transformation.to_dict() == BaseTransformation.from_dict(transformation.to_dict()).to_dict()
-
-    # test to_json roundtrip
-    assert json.dumps(transformation.to_dict()) == json.dumps(
-        BaseTransformation.from_dict(json.loads(json.dumps(transformation.to_dict()))).to_dict()
-    )
-
-    # test repr
-    as_str = repr(transformation)
-    assert repr(transformation.input_coordinate_system) in as_str
-    assert repr(transformation.output_coordinate_system) in as_str
-    assert type(transformation).__name__ in as_str
 
 
 def test_identity():
-    _test_transformation(
-        transformation=Identity(),
-        original=np.array([[1, 2, 3], [1, 1, 1]]),
-        transformed=np.array([[1, 2, 3], [1, 1, 1]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
+    assert np.allclose(Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.allclose(Identity().inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+    assert np.allclose(
+        Identity().to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("y", "x", "z")),
+        np.array(
+            [
+                [0, 1, 0, 0],
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
     )
+    assert np.allclose(
+        Identity().to_affine_matrix(input_axes=("x", "y"), output_axes=("c", "y", "x")),
+        np.array(
+            [
+                [0, 0, 0],
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    with pytest.raises(ValueError):
+        Identity().to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y"))
 
 
 def test_map_axis():
-    _test_transformation(
-        transformation=MapAxis({"x": "x", "y": "y", "z": "z"}),
-        original=np.array([[1, 2, 3], [2, 3, 4]]),
-        transformed=np.array([[3, 2, 1], [4, 3, 2]]),
-        input_cs=xyz_cs,
-        output_cs=zyx_cs,
-        wrong_output_cs=xyz_cs,
+    # map_axis0 behaves like an identity
+    map_axis0 = MapAxis({"x": "x", "y": "y"})
+    # second validation logic
+    with pytest.raises(ValueError):
+        map_axis0.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y"))
+
+    # first validation logic
+    with pytest.raises(ValueError):
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("z",), output_axes=("z",))
+    assert np.allclose(
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x",), output_axes=("x",)),
+        np.array(
+            [
+                [1, 0],
+                [0, 1],
+            ]
+        ),
     )
-    _test_transformation(
-        transformation=MapAxis({"x": "x", "y": "y", "z": "y"}),
-        original=np.array([[1, 2]]),
-        transformed=np.array([[2, 2, 1]]),
-        input_cs=xy_cs,
-        output_cs=zyx_cs,
-        wrong_output_cs=xyz_cs,
-        test_inverse=False,
+    # adding new axes with MapAxis (something that the Ngff MapAxis can't do)
+    assert np.allclose(
+        MapAxis({"z": "x"}).to_affine_matrix(input_axes=("x",), output_axes=("x", "z")),
+        np.array(
+            [
+                [1, 0],
+                [1, 0],
+                [0, 1],
+            ]
+        ),
     )
-    _test_transformation(
-        transformation=MapAxis({"x": "y", "y": "x", "z": "z"}),
-        original=np.array([[1, 2, 3]]),
-        transformed=np.array([[2, 1, 3]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
+
+    map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(map_axis0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3))
+
+    # map_axis1 is an example of invertible MapAxis; here it swaps x and y
+    map_axis1 = MapAxis({"x": "y", "y": "x"})
+    map_axis1_inverse = map_axis1.inverse()
+    assert np.allclose(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    assert np.allclose(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        map_axis1_inverse.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.allclose(
+        map_axis1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z")),
+        np.array(
+            [
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    assert np.allclose(
+        map_axis1.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z")),
+        np.array(
+            [
+                [0, 1, 0, 0],
+                [1, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
+    # map_axis2 is an example of non-invertible MapAxis
+    map_axis2 = MapAxis({"x": "z", "y": "z", "c": "x"})
+    with pytest.raises(ValueError):
+        map_axis2.inverse()
+    with pytest.raises(ValueError):
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "c"))
+    assert np.allclose(
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "z", "c")),
+        np.array(
+            [
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+    )
+    assert np.allclose(
+        map_axis2.to_affine_matrix(input_axes=("x", "y", "z", "c"), output_axes=("x", "y", "c", "z")),
+        np.array(
+            [
+                [0, 0, 1, 0, 0],
+                [0, 0, 1, 0, 0],
+                [1, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
     )
 
 
-def test_translations():
-    _test_transformation(
-        transformation=Translation(np.array([1, 2, 3])),
-        original=np.array([[1, 2, 3], [1, 1, 1]]),
-        transformed=np.array([[2, 4, 6], [2, 3, 4]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
+def test_translation():
+    with pytest.raises(TypeError):
+        Translation(translation=(1, 2, 3))
+    t0 = Translation([1, 2], axes=("x", "y"))
+    t1 = Translation(np.array([2, 1]), axes=("y", "x"))
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
+        np.array([[0, 1, 0, 2], [1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+    )
+    assert np.allclose(
+        t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1, 0, -1],
+                [0, 1, -2],
+                [0, 0, 1],
+            ]
+        ),
     )
 
 
 def test_scale():
-    _test_transformation(
-        transformation=Scale(np.array([1, 2, 3])),
-        original=np.array([[1, 2, 3], [1, 1, 1]]),
-        transformed=np.array([[1, 4, 9], [1, 2, 3]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
+    with pytest.raises(TypeError):
+        Scale(scale=(1, 2, 3))
+    t0 = Scale([3, 2], axes=("x", "y"))
+    t1 = Scale(np.array([2, 3]), axes=("y", "x"))
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        t1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+    )
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("y", "x", "z", "c")),
+        np.array([[0, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+    )
+    assert np.allclose(
+        t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1 / 3.0, 0, 0],
+                [0, 1 / 2.0, 0],
+                [0, 0, 1],
+            ]
+        ),
     )
 
 
 def test_affine():
-    _test_transformation(
-        transformation=Affine(np.array([[1, 2, 3], [4, 5, 6], [0, 0, 1]])),
-        original=np.array([[1, 2], [3, 4], [5, 6]]),
-        transformed=np.array([[8, 20], [14, 38], [20, 56]]),
-        input_cs=xy_cs,
-        output_cs=xy_cs,
-        # this would give the same result as above, because affine doesn't check the axes
-        # wrong_output_cs=yx_cs,
-        # instead, this is wrong, since the affine matrix is not compatible with the output coordinate system
-        wrong_output_cs=zyx_cs,
+    with pytest.raises(TypeError):
+        Affine(affine=(1, 2, 3))
+    with pytest.raises(ValueError):
+        # wrong shape
+        Affine([1, 2, 3, 4, 5, 6, 0, 0, 1], input_axes=("x", "y"), output_axes=("x", "y"))
+    t0 = Affine(
+        np.array(
+            [
+                [4, 5, 6],
+                [1, 2, 3],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("y", "x"),
+    )
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        np.array(
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+                [0, 0, 1],
+            ]
+        ),
+    )
+    # checking that permuting the axes of an affine matrix and inverting it are operations that commute (the order doesn't matter)
+    inverse0 = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    t1 = Affine(
+        t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    inverse1 = t1.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(inverse0, inverse1)
+    # check that the inversion works
+    m0 = t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    m0_inverse = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(np.dot(m0, m0_inverse), np.eye(3))
+
+    assert np.allclose(
+        t0.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")),
+        np.array(
+            [
+                [1, 2, 0, 3],
+                [4, 5, 0, 6],
+                [0, 0, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
     )
 
-    # embedding a space into a larger one
-    _test_transformation(
-        transformation=Affine(np.array([[1, 2, 3], [1, 2, 3], [4, 5, 6], [0, 0, 1]])),
-        original=np.array([[1, 2], [3, 4], [5, 6]]),
-        transformed=np.array([[8, 8, 20], [14, 14, 38], [20, 20, 56]]),
-        input_cs=yx_cs,
-        output_cs=cyx_cs,
-        wrong_output_cs=yx_cs,
-        test_inverse=False,
+    # adding new axes
+    assert np.allclose(
+        Affine(
+            np.array(
+                [
+                    [0, 0],
+                    [1, 0],
+                    [0, 1],
+                ]
+            ),
+            input_axes=("x"),
+            output_axes=("x", "y"),
+        ).to_affine_matrix(input_axes=("x"), output_axes=("x", "y")),
+        np.array(
+            [
+                [0, 0],
+                [1, 0],
+                [0, 1],
+            ]
+        ),
     )
+    # validation logic: adding an axes via the matrix but also having it as input
+    with pytest.raises(ValueError):
+        Affine(
+            np.array(
+                [
+                    [0, 0],
+                    [1, 0],
+                    [0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ).to_affine_matrix(input_axes=("x"), output_axes=("x", "y"))
 
-    # projecting a space into a smaller one
-    _test_transformation(
-        transformation=Affine(np.array([[4, 5, 6], [0, 0, 1]])),
-        original=np.array([[1, 2], [3, 4], [5, 6]]),
-        transformed=np.array([[20], [38], [56]]),
-        input_cs=xy_cs,
-        output_cs=y_cs,
-        wrong_output_cs=xy_cs,
-        test_inverse=False,
-    )
-
-
-def test_rotations():
-    _test_transformation(
-        transformation=Rotation(np.array([[0, -1], [1, 0]])),
-        original=np.array([[1, 2], [3, 4], [5, 6]]),
-        transformed=np.array([[-2, 1], [-4, 3], [-6, 5]]),
-        input_cs=xy_cs,
-        output_cs=xy_cs,
-        # this would give the same result as above, because affine doesn't check the axes
-        # wrong_output_cs=yx_cs,
-        # instead, this is wrong, since the affine matrix is not compatible with the output coordinate system
-        wrong_output_cs=zyx_cs,
+    # removing axes
+    assert np.allclose(
+        Affine(
+            np.array(
+                [
+                    [1, 0, 0],
+                    [0, 0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x"),
+        ).to_affine_matrix(input_axes=("x", "y"), output_axes=("x")),
+        np.array(
+            [
+                [1, 0, 0],
+                [0, 0, 1],
+            ]
+        ),
     )
 
 
 def test_sequence():
-    original = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
-    affine = Affine(np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]))
-    transformed = np.matmul(
-        np.array([[5, 6, 7], [8, 9, 10], [0, 0, 1]]),
-        np.vstack([np.transpose((original + np.array([1, 2])) * np.array([3, 4])), [1] * len(original)]),
-    )[:-1, :].T
-
-    # ambiguous 2d case (no input/output coordinate system specified for the affine transformation composing the
-    # sequence)
-    with pytest.raises(ValueError):
-        _test_transformation(
-            transformation=Sequence(
-                [
-                    Translation(np.array([1, 2])),
-                    Scale(np.array([3, 4])),
-                    affine,
-                ]
-            ),
-            original=original,
-            transformed=transformed,
-            input_cs=xy_cs,
-            output_cs=xy_cs,
-            wrong_output_cs=yx_cs,
+    translation = Translation([1, 2], axes=("x", "y"))
+    scale = Scale([3, 2, 1], axes=("y", "x", "z"))
+    affine = Affine(
+        np.array(
+            [
+                [4, 5, 6],
+                [1, 2, 3],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("y", "x"),
+    )
+    sequence = Sequence([translation, scale, affine])
+    manual = (
+        # affine
+        np.array(
+            [
+                [1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+                [0.0, 0.0, 1.0],
+            ]
         )
-
-    # 2d case
-    affine.input_coordinate_system = xy_cs
-    affine.output_coordinate_system = xy_cs
-    _test_transformation(
-        transformation=Sequence(
+        # scale
+        @ np.array(
             [
-                Translation(np.array([1, 2])),
-                Scale(np.array([3, 4])),
-                affine,
+                [2.0, 0.0, 0.0],
+                [0.0, 3.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        # translation
+        @ np.array(
+            [
+                [1.0, 0.0, 1.0],
+                [0.0, 1.0, 2.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+    )
+    computed = sequence.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(manual, computed)
+
+    larger_space0 = sequence.to_affine_matrix(input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c"))
+    larger_space1 = Affine(manual, input_axes=("x", "y"), output_axes=("x", "y")).to_affine_matrix(
+        input_axes=("x", "y", "c"), output_axes=("x", "y", "z", "c")
+    )
+    assert np.allclose(larger_space0, larger_space1)
+    assert np.allclose(
+        larger_space0,
+        (
+            # affine
+            np.array(
+                [
+                    [1.0, 2.0, 0.0, 3.0],
+                    [4.0, 5.0, 0.0, 6.0],
+                    [0.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+            # scale
+            @ np.array(
+                [
+                    [2.0, 0.0, 0.0, 0.0],
+                    [0.0, 3.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+            # translation
+            @ np.array(
+                [
+                    [1.0, 0.0, 0.0, 1.0],
+                    [0.0, 1.0, 0.0, 2.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            )
+        ),
+    )
+    # test sequence with MapAxis
+    map_axis = MapAxis({"x": "y", "y": "x"})
+    assert np.allclose(
+        Sequence([map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")), np.eye(3)
+    )
+    assert np.allclose(
+        Sequence([map_axis, map_axis, map_axis]).to_affine_matrix(input_axes=("x", "y"), output_axes=("y", "x")),
+        np.eye(3),
+    )
+    # test nested sequence
+    affine_2d_to_3d = Affine(
+        [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 2, 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "z"),
+    )
+    # the function _get_current_output_axes() doesn't get called for the last transformation in a sequence,
+    # that's why we add Identity()
+    sequence0 = Sequence([translation, map_axis, affine_2d_to_3d, Identity()])
+    sequence1 = Sequence([Sequence([translation, map_axis]), affine_2d_to_3d, Identity()])
+    sequence2 = Sequence([translation, Sequence([map_axis, affine_2d_to_3d, Identity()]), Identity()])
+    matrix0 = sequence0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    matrix1 = sequence1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    print("test with error:")
+    matrix2 = sequence2.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    assert np.allclose(matrix0, matrix1)
+    assert np.allclose(matrix0, matrix2)
+    assert np.allclose(
+        matrix0,
+        np.array(
+            [
+                [0, 1, 2],
+                [1, 0, 1],
+                [2, 0, 2],
+                [0, 0, 1],
             ]
         ),
-        original=original,
-        transformed=transformed,
-        input_cs=xy_cs,
-        output_cs=xy_cs,
-        wrong_output_cs=yx_cs,
     )
+    print(sequence0)
 
-    # 3d case
-    _test_transformation(
-        transformation=Sequence(
+
+def test_sequence_reorder_axes():
+    # The order of the axes of the sequence is arbitrary, so it may not match the one that the user could ask when
+    # calling to_affine_matrix(). This is why we need to reorder the axes in to_affine_matrix().
+    # This test triggers this case
+    affine = Affine(
+        np.array(
             [
-                Translation(np.array([1, 2, 3])),
-                Scale(np.array([4, 5, 6])),
-                Translation(np.array([7, 8, 9])),
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+                [0, 0, 1],
             ]
         ),
-        original=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
-        transformed=np.array([[15, 28, 45], [27, 43, 63], [39, 58, 81], [51, 73, 99]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "c"),
     )
-
-    # 2d case, extending a xy->xy transformation to a cyx->cyx transformation using additional affine transformations
-    cyx_to_xy = Affine(
-        np.array([[0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]),
-        input_coordinate_system=cyx_cs,
-        output_coordinate_system=xy_cs,
-    )
-    xy_to_cyx = Affine(
-        np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]]),
-        input_coordinate_system=xy_cs,
-        output_coordinate_system=cyx_cs,
-    )
-
-    def _manual_xy_to_cyz(x: np.ndarray) -> np.ndarray:
-        return np.hstack((np.zeros(len(x)).reshape((len(x), 1)), np.fliplr(x)))
-
-    _test_transformation(
-        transformation=Sequence(
+    sequence = Sequence([affine])
+    assert np.allclose(
+        sequence.to_affine_matrix(input_axes=("x", "y"), output_axes=("c", "y", "x")),
+        np.array(
             [
-                cyx_to_xy,
-                # some alternative ways to go back and forth between xy and cyx
-                # xy -> cyx
-                ByDimension(
-                    transformations=[
-                        MapAxis({"x": "x", "y": "y"}, input_coordinate_system=xy_cs, output_coordinate_system=yx_cs),
-                        Affine(
-                            np.array([[0, 0], [0, 1]]),
-                            input_coordinate_system=x_cs,
-                            output_coordinate_system=c_cs,
-                        ),
-                    ],
-                    input_coordinate_system=xy_cs,
-                    output_coordinate_system=cyx_cs,
-                ),
-                # cyx -> xy
-                MapAxis({"x": "x", "y": "y"}, input_coordinate_system=cyx_cs, output_coordinate_system=xy_cs),
-                Translation(np.array([1, 2])),
-                Scale(np.array([3, 4])),
-                affine,
-                xy_to_cyx,
+                [0, 0, 1],
+                [0, 1, 0],
+                [1, 0, 0],
+                [0, 0, 1],
             ]
         ),
-        original=_manual_xy_to_cyz(original),
-        transformed=_manual_xy_to_cyz(transformed),
-        input_cs=cyx_cs,
-        output_cs=cyx_cs,
-        wrong_output_cs=xyc_cs,
-        test_inverse=False,
     )
 
 
-@pytest.mark.skip()
-def test_displacements():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_coordinates():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_vector_field():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_inverse_of_inverse_of():
-    raise NotImplementedError()
-
-
-@pytest.mark.skip()
-def test_bijection():
-    raise NotImplementedError()
-
-
-#
-def test_by_dimension():
-    _test_transformation(
-        transformation=ByDimension(
+def test_sequence_reduce_dimensionality_of_last_transformation():
+    # from a bug that I found, this was raising an expection in Identity when calling to_affine_matrix() since the input_axes contained 'c' but the output_axes didn't
+    affine = Affine(
+        [
+            [1, 2, 3, 4],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+            [0, 0, 0, 1],
+        ],
+        input_axes=("x", "y", "c"),
+        output_axes=("x", "y", "c"),
+    )
+    Sequence([Identity(), affine, Identity()])
+    matrix = affine.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+    assert np.allclose(
+        matrix,
+        np.array(
             [
-                Translation(np.array([1, 2]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs),
-                Scale(np.array([3]), input_coordinate_system=z_cs, output_coordinate_system=z_cs),
+                [1, 2, 4],
+                [4, 5, 7],
+                [0, 0, 1],
             ]
         ),
-        original=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
-        transformed=np.array([[2, 4, 9], [5, 7, 18], [8, 10, 27], [11, 13, 36]]),
-        input_cs=xyz_cs,
-        output_cs=xyz_cs,
-        wrong_output_cs=zyx_cs,
     )
+
+
+def test_transform_coordinates():
+    map_axis = MapAxis({"x": "y", "y": "x"})
+    translation = Translation([1, 2, 3], axes=("x", "y", "z"))
+    scale = Scale([2, 3, 4], axes=("x", "y", "z"))
+    affine = Affine(
+        [
+            [1, 2, 3],
+            [4, 5, 6],
+            [0, 0, 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "c"),
+    )
+    transformaions = [
+        Identity(),
+        map_axis,
+        translation,
+        scale,
+        affine,
+        Sequence([translation, scale, affine]),
+    ]
+    affine_matrix_manual = np.array(
+        [
+            [1, 2, 0, 3],
+            [4, 5, 0, 6],
+            [0, 0, 1, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+    coords = DataArray([[0, 0, 0], [1, 2, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]})
+    manual0 = (affine_matrix_manual @ np.vstack((coords.data.T, np.ones((1, 2)))))[:-2].T
+    coords_manual = np.array([[2, 6, 12], [4, 12, 24]])
+    manual1 = (affine_matrix_manual @ np.vstack((coords_manual.T, np.ones((1, 2)))))[:-2].T
+    expected = [
+        DataArray([[0, 0, 0], [1, 2, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[0, 0, 0], [2, 1, 3]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[1, 2, 3], [2, 4, 6]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray([[0, 0, 0], [2, 6, 12]], coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray(manual0, coords={"points": range(2), "dim": ["x", "y", "z"]}),
+        DataArray(manual1, coords={"points": range(2), "dim": ["x", "y", "z"]}),
+    ]
+    for t, e in zip(transformaions, expected):
+        transformed = t._transform_coordinates(coords)
+        xarray.testing.assert_allclose(transformed, e)
+
+
+def _make_cs(axes: tuple[ValidAxis_t, ...]) -> NgffCoordinateSystem:
+    cs = get_default_coordinate_system(axes)
+    for ax in axes:
+        cs.get_axis(ax).unit = "micrometer"
+    return cs
+
+
+def _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(
+    t0: NgffSequence, t1: NgffSequence, outer_sequence: bool = True
+):
+    # in a sequence it is irrelevant which are the intermediate coordinate system names or unit. During conversion we
+    # don't keep them (the code would be unnecessarily complex), therefore here we ignore them
+    if outer_sequence:
+        assert t0.input_coordinate_system.name == t1.input_coordinate_system.name
+        assert t0.output_coordinate_system.name == t1.output_coordinate_system.name
+    for sub0, sub1 in zip(t0.transformations, t1.transformations):
+        if isinstance(sub0, NgffSequence):
+            assert isinstance(sub1, NgffSequence)
+            _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(
+                sub0, sub1, outer_sequence=False
+            )
+        else:
+            sub0_copy = deepcopy(sub0)
+            sub1_copy = deepcopy(sub1)
+            css = [
+                sub0_copy.input_coordinate_system,
+                sub0_copy.output_coordinate_system,
+                sub1_copy.input_coordinate_system,
+                sub1_copy.output_coordinate_system,
+            ]
+            for cs in css:
+                cs.name = ""
+                for ax in cs.axes_names:
+                    cs.set_unit(ax, "")
+            if sub0_copy != sub1_copy:
+                raise AssertionError(f"{sub0_copy} != {sub1_copy}")
+
+
+def _convert_and_compare(t0: NgffBaseTransformation, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem):
+    t1 = BaseTransformation.from_ngff(t0)
+    t2 = t1.to_ngff(
+        input_axes=input_cs.axes_names,
+        output_axes=output_cs.axes_names,
+        unit="micrometer",
+        output_coordinate_system_name=output_cs.name,
+    )
+    t3 = BaseTransformation.from_ngff(t2)
+    if not isinstance(t0, NgffSequence):
+        assert t0 == t2
+    else:
+        assert isinstance(t2, NgffSequence)
+        _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(t0, t2)
+    assert t1 == t3
+
+
+# conversion back and forth the NGFF transformations
+def test_ngff_conversion_identity():
+    # matching axes
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
+    _convert_and_compare(t0, input_cs, output_cs)
+
+    # TODO: add tests like this to all the transformations (https://github.com/scverse/spatialdata/issues/114)
+    # # mismatching axes
+    # input_cs, output_cs = _get_input_output_coordinate_systems(input_axes=("x", "y"), output_axes=("x", "y", "z"))
+    # t0 = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
+    # _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_map_axis():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffMapAxis(
+        input_coordinate_system=input_cs, output_coordinate_system=output_cs, map_axis={"x": "y", "y": "x", "z": "z"}
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_map_axis_creating_new_axes():
+    # this is a case that is supported by the MapAxis class but not by the NgffMapAxis class, since in NGFF the
+    # MapAxis can't create new axes
+
+    # TODO: the conversion should raise an error in the NgffMapAxis class and should require adjusted input/output when
+    # converting to fix it (see https://github.com/scverse/spatialdata/issues/114)
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffMapAxis(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        map_axis={"x": "y", "y": "x", "z": "z", "c": "x"},
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_translation():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffTranslation(
+        input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=[1.0, 2.0, 3.0]
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_scale():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffScale(input_coordinate_system=input_cs, output_coordinate_system=output_cs, scale=[1.0, 2.0, 3.0])
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_affine():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y"))
+    t0 = NgffAffine(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        affine=[
+            [1.0, 2.0, 3.0, 10.0],
+            [4.0, 5.0, 6.0, 11.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    )
+    _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_ngff_conversion_sequence():
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y"))
+    affine0 = NgffAffine(
+        input_coordinate_system=_make_cs(("x", "y", "z")),
+        output_coordinate_system=_make_cs(("x", "y")),
+        affine=[
+            [1.0, 2.0, 3.0, 10.0],
+            [4.0, 5.0, 6.0, 11.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    )
+    affine1 = NgffAffine(
+        input_coordinate_system=_make_cs(("x", "y")),
+        output_coordinate_system=_make_cs(("x", "y", "z")),
+        affine=[
+            [1.0, 2.0, 10.0],
+            [4.0, 5.0, 11.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+        ],
+    )
+    sequence = NgffSequence(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        transformations=[
+            NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=input_cs),
+            NgffSequence(
+                input_coordinate_system=input_cs,
+                output_coordinate_system=input_cs,
+                transformations=[affine0, affine1],
+            ),
+        ],
+    )
+    _convert_and_compare(sequence, input_cs, output_cs)
+
+
+def test_ngff_conversion_not_supported():
+    # NgffByDimension is not supported in the new transformations classes
+    # we may add converters in the future to create an Affine out of a NgffByDimension class
+    input_cs = _make_cs(("x", "y", "z"))
+    output_cs = _make_cs(("x", "y", "z"))
+    t0 = NgffByDimension(
+        input_coordinate_system=input_cs,
+        output_coordinate_system=output_cs,
+        transformations=[NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)],
+    )
+    with pytest.raises(ValueError):
+        _convert_and_compare(t0, input_cs, output_cs)
+
+
+def test_set_transform_with_mismatching_cs():
+    pass
+    # input_css = [
+    #     get_default_coordinate_system(t) for t in [(X, Y), (Y, X), (C, Y, X), (X, Y, Z), (Z, Y, X), (C, Z, Y, X)]
+    # ]
+    # for element_type in sdata._non_empty_elements():
+    #     if element_type == "table":
+    #         continue
+    #     for v in getattr(sdata, element_type).values():
+    #         for input_cs in input_css:
+    #             affine = NgffAffine.from_input_output_coordinate_systems(input_cs, input_cs)
+    #             _set_transformations(v, affine)
+
+
+def test_assign_xy_scale_to_cyx_image():
+    pass
+    # xy_cs = get_default_coordinate_system(("x", "y"))
+    # scale = NgffScale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
+    # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+    #
+    # _set_transformations(image, scale)
+    # t = _get_transformations(image)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+    #
+    # _set_transformations(image, scale.to_affine())
+    # t = _get_transformations(image)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+
+
+def test_assign_xyz_scale_to_cyx_image():
+    pass
+    # xyz_cs = get_default_coordinate_system(("x", "y", "z"))
+    # scale = NgffScale(np.array([2, 3, 4]), input_coordinate_system=xyz_cs, output_coordinate_system=xyz_cs)
+    # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+    #
+    # _set_transformations(image, scale)
+    # t = _get_transformations(image)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+    # pprint(t.to_affine().to_dict())
+    #
+    # _set_transformations(image, scale.to_affine())
+    # t = _get_transformations(image)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+
+
+def test_assign_cyx_scale_to_xyz_points():
+    pass
+    # cyx_cs = get_default_coordinate_system(("c", "y", "x"))
+    # scale = NgffScale(np.array([1, 3, 2]), input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
+    # points = PointsModel.parse(coords=np.zeros((10, 3)))
+    #
+    # _set_transformations(points, scale)
+    # t = _get_transformations(points)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+    #
+    # _set_transformations(points, scale.to_affine())
+    # t = _get_transformations(points)
+    # pprint(t.to_dict())
+    # print(t.to_affine())
+
+
+def test_compose_in_xy_and_operate_in_cyx():
+    pass
+    # xy_cs = get_default_coordinate_system(("x", "y"))
+    # cyx_cs = get_default_coordinate_system(("c", "y", "x"))
+    # k = 0.5
+    # scale = NgffScale([k, k], input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
+    # theta = np.pi / 6
+    # rotation = NgffAffine(
+    #     np.array(
+    #         [
+    #             [np.cos(theta), -np.sin(theta), 0],
+    #             [np.sin(theta), np.cos(theta), 0],
+    #             [0, 0, 1],
+    #         ]
+    #     ),
+    #     input_coordinate_system=xy_cs,
+    #     output_coordinate_system=xy_cs,
+    # )
+    # sequence = NgffSequence([rotation, scale], input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
+    # affine = sequence.to_affine()
+    # print(affine)
+    # assert affine.affine[0, 0] == 1.0

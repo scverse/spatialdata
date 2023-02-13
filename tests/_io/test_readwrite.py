@@ -1,3 +1,5 @@
+import os
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +13,8 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import are_directories_identical
 from tests.conftest import (
     _get_images,
@@ -96,6 +100,7 @@ class TestReadWrite:
         """Test read/write."""
         self._test_table(tmp_path, table_multiple_annotations)
 
+    # @pytest.mark.skip("waiting for the new points implementation")
     def test_roundtrip(
         self,
         tmp_path: str,
@@ -171,3 +176,65 @@ class TestReadWrite:
                 sdata.add_points(name=f"incremental_{k}", points=v)
             sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
             break
+
+
+def test_io_and_lazy_loading_points(points):
+    elem_name = list(points.points.keys())[0]
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, "data.zarr")
+        dask0 = points.points[elem_name]
+        points.write(f)
+        dask1 = points.points[elem_name]
+        assert all("read-parquet" not in key for key in dask0.dask.layers)
+        assert any("read-parquet" in key for key in dask1.dask.layers)
+
+
+def test_io_and_lazy_loading_raster(images, labels):
+    # addresses bug https://github.com/scverse/spatialdata/issues/117
+    sdatas = {"images": images, "labels": labels}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        elem_name = list(d.keys())[0]
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            dask0 = d[elem_name].data
+            sdata.write(f)
+            dask1 = d[elem_name].data
+            assert all("from-zarr" not in key for key in dask0.dask.layers)
+            assert any("from-zarr" in key for key in dask1.dask.layers)
+
+
+def test_replace_transformation_on_disk_raster(images, labels):
+    sdatas = {"images": images, "labels": labels}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
+        # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
+        for elem_name in d.keys():
+            kwargs = {k: {elem_name: d[elem_name]}}
+            single_sdata = SpatialData(**kwargs)
+            with tempfile.TemporaryDirectory() as td:
+                f = os.path.join(td, "data.zarr")
+                single_sdata.write(f)
+                t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                assert type(t0) == Identity
+                set_transformation(
+                    single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=single_sdata
+                )
+                t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                assert type(t1) == Scale
+
+
+def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
+    sdatas = {"polygons": polygons, "shapes": shapes, "points": points}
+    for k, sdata in sdatas.items():
+        d = sdata.__getattribute__(k)
+        elem_name = list(d.keys())[0]
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            sdata.write(f)
+            t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            assert type(t0) == Identity
+            set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
+            t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            assert type(t1) == Scale

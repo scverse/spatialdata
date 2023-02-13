@@ -1,6 +1,7 @@
 # Temp files
 .DS_Store
 *~
+.dmypy.json
 
 # Compiled files
 __pycache__/
@@ -32,3 +33,11 @@ temp/
 
 # rst generated from myst
 docs/generated
+
+# symlinks (luca) for extending the refactoring to satellite projects
+napari-spatialdata
+spatialdata-io
+spatialdata-notebooks
+
+# notebooks
+*.ipynb
