@@ -862,21 +862,22 @@ class SpatialData:
                             f"{v.obsm['spatial'].shape}"
                         )
                     elif attr == "polygons":
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D polygons)"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {v.shape} (2D polygons)"
                     elif attr == "points":
                         if len(v) > 0:
                             n = len(get_dims(v))
                             dim_string = f"({n}D points)"
                         else:
                             dim_string = ""
-                        if descr_class == "Table":
-                            descr_class = "pyarrow.Table"
-                        shape_str = (
-                            "("
-                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                            + ")"
-                        )
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {shape_str} {dim_string}"
+                        assert len(v.shape) == 2
+                        shape_str = f'({len(v)}, {v.shape[1]})'
+                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
+                        # shape_str = (
+                        #     "("
+                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                        #     + ")"
+                        # )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
