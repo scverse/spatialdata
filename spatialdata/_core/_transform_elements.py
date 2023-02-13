@@ -254,7 +254,7 @@ def get_transformation_between_landmarks(
     references_coords: AnnData,
     moving_coords: AnnData,
 ) -> Affine:
-    from spatialdata._core.transformations import Affine, Sequence
+    from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
 
     model = estimate_transform("affine", src=moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"])
     transform_matrix = model.params
@@ -303,7 +303,7 @@ def align_elements_using_landmarks(
     moving_coordinate_system: str = "global",
     new_coordinate_system: Optional[str] = None,
 ) -> tuple[BaseTransformation, BaseTransformation]:
-    from spatialdata._core.transformations import Sequence
+    from spatialdata._core.transformations import BaseTransformation, Sequence
 
     affine = get_transformation_between_landmarks(references_coords, moving_coords)
 
