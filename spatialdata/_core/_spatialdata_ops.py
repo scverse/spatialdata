@@ -24,7 +24,7 @@ __all__ = [
     "remove_transformation",
     "get_transformation_between_coordinate_systems",
     "concatenate_tables",
-    "concatenate"
+    "concatenate",
 ]
 
 
@@ -287,16 +287,48 @@ def get_transformation_between_coordinate_systems(
         sequence = Sequence(transformations)
         return sequence
 
+
+##
 def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
+    """
+    Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
+
+    Parameters
+    ----------
+    tables
+        A list of tables to concatenate
+
+    Returns
+    -------
+    A table with all the tables concatenated. If the list of tables is empty, None is returned.
+
+    Notes
+    -----
+    Not all tables can be merged, they need to have compatible region, region_key and instance_key values. This function
+    checks this and merges if possible.
+
+    """
     if len(tables) == 0:
         return None
     if len(tables) == 1:
         return tables[0]
 
-    # not all tables can be merged, they need to have compatible region, region_key and instance_key values
     MERGED_TABLES_REGION_KEY = "annotated_element_merged"
-    for table in tables:
-        assert MERGED_TABLES_REGION_KEY not in table.obs
+    MAX_CONCATENTAION_TABLES = 100
+    for i in range(MAX_CONCATENTAION_TABLES):
+        if i == 0:
+            key = MERGED_TABLES_REGION_KEY
+        else:
+            key = f"{MERGED_TABLES_REGION_KEY}_{i}"
+
+        all_without = True
+        for table in tables:
+            if key in table.obs:
+                all_without = False
+                break
+        if all_without:
+            MERGED_TABLES_REGION_KEY = key
+            break
 
     spatialdata_attrs_found = [TableModel.ATTRS_KEY in table.uns for table in tables]
     assert all(spatialdata_attrs_found) or not any(spatialdata_attrs_found)
@@ -311,14 +343,18 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
 
         all_region_keys = []
         for table in tables:
+            TableModel().validate(table)
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
             region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-            assert (
+            if not (
                 isinstance(region, str)
                 and region_key is None
                 or isinstance(region, list)
                 and isinstance(region_key, str)
-            )
+            ):
+                # this code should be never reached because the validate function should have raised an exception, but
+                # let's be extra safe
+                raise RuntimeError("Tables have incompatible region keys")
             if isinstance(region, list):
                 all_region_keys.append(region_key)
             else:
@@ -329,7 +365,8 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
                 )
                 table.obs[MERGED_TABLES_REGION_KEY] = region
                 all_region_keys.append(MERGED_TABLES_REGION_KEY)
-        assert len(set(all_region_keys)) == 1
+        if len(set(all_region_keys)) != 1:
+            raise RuntimeError("Tables have incompatible region keys")
         merged_region_key = all_region_keys[0]
 
         all_regions = []
@@ -339,12 +376,8 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
                 all_regions.append(region)
             else:
                 all_regions.extend(region)
-        assert len(all_regions) == len(set(all_regions))
+        all_regions = list(set(all_regions))
         merged_region = all_regions
-
-    # print(merged_region)
-    # print(merged_region_key)
-    # print(merged_instance_key)
 
     attr = {"region": merged_region, "region_key": merged_region_key, "instance_key": merged_instance_key}
     merged_table = AnnData.concatenate(*tables, join="outer", uns_merge="same")
@@ -356,17 +389,22 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
             del table.obs[MERGED_TABLES_REGION_KEY]
 
     merged_table.uns[TableModel.ATTRS_KEY] = attr
-    # print(merged_table.uns)
     merged_table.obs[merged_region_key] = merged_table.obs[merged_region_key].astype("category")
     TableModel().validate(merged_table)
     return merged_table
 
-def concatenate(*sdatas: SpatialData) -> SpatialData:
-    """Concatenate multiple spatial data objects.
+
+##
+
+
+def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
+    """Concatenate a list of spatial data objects.
+
     Parameters
     ----------
     sdatas
         The spatial data objects to concatenate.
+
     Returns
     -------
     SpatialData
@@ -374,47 +412,39 @@ def concatenate(*sdatas: SpatialData) -> SpatialData:
     """
     from spatialdata._core._spatialdata import SpatialData
 
+    assert type(sdatas) == list
+    assert len(sdatas) > 0
+    if len(sdatas) == 1:
+        return sdatas[0]
 
-    assert type(sdatas) == tuple
-    assert len(sdatas) == 1
-    sdatas_ = sdatas[0]
-    # TODO: check that .uns['mapping_info'] is the same for all tables and if not warn that it will be
-    #  discarded
-    # by AnnData.concatenate
-    list_of_tables = [sdata.table for sdata in sdatas_ if sdata.table is not None]
-    if len(list_of_tables) > 0:
-        merged_table = AnnData.concatenate(*list_of_tables, join="outer", uns_merge="same")
-        if "mapping_info" in merged_table.uns:
-            if (
-                "regions_key" in merged_table.uns["mapping_info"]
-                and "instance_key" in merged_table.uns["mapping_info"]
-            ):
-                merged_regions = []
-                for sdata in sdatas_:
-                    regions = sdata.table.uns["mapping_info"]["regions"]
-                    if isinstance(regions, str):
-                        merged_regions.append(regions)
-                    else:
-                        merged_regions.extend(regions)
-                merged_table.uns["mapping_info"]["regions"] = merged_regions
+    if not omit_table:
+        list_of_tables = [sdata.table for sdata in sdatas if sdata.table is not None]
+        merged_table = concatenate_tables(list_of_tables)
     else:
         merged_table = None
-    ##
-    transformations = {}
-    for sdata in sdatas_:
-        for element_type in ["images", "labels", "points", "polygons"]:
-            for name, element in sdata.__getattribute__(element_type).items():
-                for cs_name, ct in element.transformations.items():
-                    transformations[(f"/{element_type}/{name}", cs_name)] = ct
-    ##
+
+    merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
+    if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
+        raise RuntimeError("Images must have unique names across the SpatialData objects to concatenate")
+    merged_labels = {**{k: v for sdata in sdatas for k, v in sdata.labels.items()}}
+    if len(merged_labels) != np.sum([len(sdata.labels) for sdata in sdatas]):
+        raise RuntimeError("Labels must have unique names across the SpatialData objects to concatenate")
+    merged_points = {**{k: v for sdata in sdatas for k, v in sdata.points.items()}}
+    if len(merged_points) != np.sum([len(sdata.points) for sdata in sdatas]):
+        raise RuntimeError("Points must have unique names across the SpatialData objects to concatenate")
+    merged_polygons = {**{k: v for sdata in sdatas for k, v in sdata.polygons.items()}}
+    if len(merged_polygons) != np.sum([len(sdata.polygons) for sdata in sdatas]):
+        raise RuntimeError("Polygons must have unique names across the SpatialData objects to concatenate")
+    merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
+    if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
+        raise RuntimeError("Shapes must have unique names across the SpatialData objects to concatenate")
+
     sdata = SpatialData(
-        images={**{k: v.data for sdata in sdatas_ for k, v in sdata.images.items()}},
-        labels={**{k: v.data for sdata in sdatas_ for k, v in sdata.labels.items()}},
-        points={**{k: v.data for sdata in sdatas_ for k, v in sdata.points.items()}},
-        polygons={**{k: v.data for sdata in sdatas_ for k, v in sdata.polygons.items()}},
-        transformations=transformations,
+        images=merged_images,
+        labels=merged_labels,
+        points=merged_points,
+        polygons=merged_polygons,
+        shapes=merged_shapes,
         table=merged_table,
-        _validate_transformations=False,
     )
-    ##
     return sdata

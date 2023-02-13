@@ -59,6 +59,17 @@ def table_single_annotation() -> SpatialData:
 def table_multiple_annotations() -> SpatialData:
     return SpatialData(table=_get_table(region=["sample1", "sample2"]))
 
+@pytest.fixture()
+def tables() -> list[AnnData]:
+    _tables = []
+    for region, region_key, instance_key in (
+        [None, None, None],
+        ["my_region0", None, "my_instance_key"],
+        [["my_region0", "my_region1"], "my_region_key", "my_instance_key"],
+    ):
+        _tables.append(_get_table(region=region, region_key=region_key, instance_key=instance_key))
+    return _tables
+
 
 @pytest.fixture()
 def full_sdata() -> SpatialData:

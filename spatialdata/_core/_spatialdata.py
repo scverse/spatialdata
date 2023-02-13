@@ -325,19 +325,20 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: str, filter_table: bool = False) -> SpatialData:
+    def filter_by_coordinate_system(self, coordinate_system: Union[str, list[str]], filter_table: bool = False) -> SpatialData:
         """
-        Filter the SpatialData by a coordinate system.
+        Filter the SpatialData by one (or a list of) coordinate system.
 
-        This returns a SpatialData object with the elements containing
-        a transformation mapping to the specified coordinate system.
+        This returns a SpatialData object with the elements containing a transformation mapping to the specified
+        coordinate system(s).
 
         Parameters
         ----------
         coordinate_system
-            The coordinate system to filter by.
+            The coordinate system(s) to filter by.
         filter_table
-            If True, the table will be filtered to only contain the regions
+            If True, the table will be filtered to only contain regions of an element belonging to the specified
+            coordinate system(s).
 
         Returns
         -------
@@ -347,14 +348,17 @@ class SpatialData:
 
         elements: dict[str, dict[str, SpatialElement]] = {}
         element_paths_in_coordinate_system = []
+        if isinstance(coordinate_system, str):
+            coordinate_system = [coordinate_system]
         for element_type, element_name, element in self._gen_elements():
             transformations = get_transformation(element, get_all=True)
             assert isinstance(transformations, dict)
-            if coordinate_system in transformations:
-                if element_type not in elements:
-                    elements[element_type] = {}
-                elements[element_type][element_name] = element
-                element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+            for cs in coordinate_system:
+                if cs in transformations:
+                    if element_type not in elements:
+                        elements[element_type] = {}
+                    elements[element_type][element_name] = element
+                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
 
         if filter_table:
             table_mapping_metadata = get_table_mapping_metadata(self.table)
