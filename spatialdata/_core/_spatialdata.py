@@ -24,6 +24,7 @@ from spatialdata._core._spatial_query import (
     _bounding_box_query_points_dict,
     _bounding_box_query_polygons_dict,
 )
+from spatialdata.utils import get_table_mapping_metadata
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -324,7 +325,7 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
+    def filter_by_coordinate_system(self, coordinate_system: str, filter_table: bool = False) -> SpatialData:
         """
         Filter the SpatialData by a coordinate system.
 
@@ -335,6 +336,8 @@ class SpatialData:
         ----------
         coordinate_system
             The coordinate system to filter by.
+        filter_table
+            If True, the table will be filtered to only contain the regions
 
         Returns
         -------
@@ -343,6 +346,7 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
+        element_paths_in_coordinate_system = []
         for element_type, element_name, element in self._gen_elements():
             transformations = get_transformation(element, get_all=True)
             assert isinstance(transformations, dict)
@@ -350,7 +354,16 @@ class SpatialData:
                 if element_type not in elements:
                     elements[element_type] = {}
                 elements[element_type][element_name] = element
-        return SpatialData(**elements, table=self.table)
+                element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+
+        if filter_table:
+            table_mapping_metadata = get_table_mapping_metadata(self.table)
+            region_key = table_mapping_metadata["region_key"]
+            table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+        else:
+            table = self.table
+
+        return SpatialData(**elements, table=table)
 
     def transform_element_to_coordinate_system(
         self, element: SpatialElement, target_coordinate_system: str
@@ -710,6 +723,40 @@ class SpatialData:
         The table.
         """
         return self._table
+
+    @table.setter
+    def table(self, table: AnnData) -> None:
+        """
+        Set the table of a SpatialData object in a object that doesn't contain a table.
+
+        Parameters
+        ----------
+        table
+            The table to set.
+
+        Notes
+        -----
+        If a table is already present, it needs to be removed first.
+        The table needs to pass validation (see :class:`~spatialdata.TableModel`).
+        If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
+        """
+        TableModel().validate(table)
+        if self.table is not None:
+            raise ValueError("The table already exists. Use del sdata.table to remove it first.")
+        self._table = table
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            write_table(table=self.table, group=root, name="table")
+
+    @table.deleter
+    def table(self) -> None:
+        """Delete the table."""
+        self._table = None
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            del root["table"]
 
     @staticmethod
     def read(file_path: str) -> SpatialData:

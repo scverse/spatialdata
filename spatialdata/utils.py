@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import numpy as np
+from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -35,7 +36,7 @@ class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
         self.same_files, self.diff_files, self.funny_files = fcomp
 
 
-def are_directories_identical(
+def _are_directories_identical(
     dir1: Any,
     dir2: Any,
     exclude_regexp: Optional[str] = None,
@@ -60,7 +61,7 @@ def are_directories_identical(
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
         return False
     for subdir in compared.common_dirs:
-        if not are_directories_identical(
+        if not _are_directories_identical(
             os.path.join(dir1, subdir),
             os.path.join(dir2, subdir),
             exclude_regexp=exclude_regexp,
@@ -71,7 +72,7 @@ def are_directories_identical(
     return True
 
 
-def compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
+def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
     from spatialdata import SpatialData
 
     if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
@@ -80,12 +81,21 @@ def compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
     with tempfile.TemporaryDirectory() as tmpdir:
         a.write(os.path.join(tmpdir, "a.zarr"))
         b.write(os.path.join(tmpdir, "b.zarr"))
-        return are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))
+        return _are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))
 
 
 def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[SpatialImage, MultiscaleSpatialImage]:
     """
-    Remove padding from a raster.
+    Remove padding from a raster type that was eventually added by the rotation component of a transformation.
+
+    Parameters
+    ----------
+    raster
+        The raster to unpad. Contiguous zero values are considered padding.
+
+    Returns
+    -------
+    The unpadded raster.
     """
     from spatialdata._core.models import get_schema
 
@@ -137,3 +147,28 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         return unpadded_multiscale
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
+
+
+def get_table_mapping_metadata(
+    table: AnnData
+) -> dict[str, Union[Optional[Union[str, list[str]]], Optional[str]]]:
+    """
+    Get the region, region_key and instance_key from the table metadata.
+
+    Parameters
+    ----------
+    table
+        The table to get the metadata from.
+
+    Returns
+    -------
+    The `region`, `region_key`, and `instance_key` values.
+    """
+    from spatialdata._core.models import TableModel
+
+    TableModel().validate(table)
+    region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    d = {TableModel.REGION_KEY: region, TableModel.REGION_KEY_KEY: region_key, TableModel.INSTANCE_KEY: instance_key}
+    return d
