@@ -201,12 +201,14 @@ class TestModels:
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
     @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
+    @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
     def test_points_model(
         self,
         model: PointsModel,
         typ: Any,
         is_3d: bool,
+        is_annotation: bool,
         instance_key: Optional[str],
         feature_key: Optional[str],
     ) -> None:
@@ -251,11 +253,12 @@ class TestModels:
             )
             self._passes_validation_after_io(model, points, "points")
         assert "transform" in points.attrs
-        assert "spatialdata_attrs" in points.attrs
-        if feature_key is not None:
+        if feature_key is not None and is_annotation:
+            assert "spatialdata_attrs" in points.attrs
             assert "feature_key" in points.attrs["spatialdata_attrs"]
             assert "target" in points.attrs["spatialdata_attrs"]["feature_key"]
-        if instance_key is not None:
+        if instance_key is not None and is_annotation:
+            assert "spatialdata_attrs" in points.attrs
             assert "instance_key" in points.attrs["spatialdata_attrs"]
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
 

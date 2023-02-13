@@ -253,5 +253,6 @@ def _read_points(
     _set_transformations(table, transformations)
 
     attrs = fmt.attrs_from_dict(f.attrs.asdict())
-    table.attrs["spatialdata_attrs"] = attrs
+    if len(attrs):
+        table.attrs["spatialdata_attrs"] = attrs
     return table

@@ -453,6 +453,7 @@ class PointsModel:
     INSTANCE_KEY = "instance_key"
     FEATURE_KEY = "feature_key"
     TRANSFORM_KEY = "transform"
+    NPARTITIONS = 1
 
     @classmethod
     def validate(cls, data: DaskDataFrame) -> None:
@@ -461,16 +462,17 @@ class PointsModel:
                 assert data[ax].dtype in [np.float32, np.float64, np.int64]
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
-        if cls.ATTRS_KEY not in data.attrs:
-            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.ATTRS_KEY}`.")
-        if "feature_key" in data.attrs[cls.ATTRS_KEY]:
-            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-            if not is_categorical_dtype(data[feature_key]):
-                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
-        if "instance_key" in data.attrs[cls.ATTRS_KEY]:
-            instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
-            if not is_categorical_dtype(data[instance_key]):
-                logger.info(f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it.")
+        if cls.ATTRS_KEY in data.attrs:
+            if "feature_key" in data.attrs[cls.ATTRS_KEY]:
+                feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+                if not is_categorical_dtype(data[feature_key]):
+                    logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
+            if "instance_key" in data.attrs[cls.ATTRS_KEY]:
+                instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
+                if not is_categorical_dtype(data[instance_key]):
+                    logger.info(
+                        f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
+                    )
         for c in data.columns:
             #  this is not strictly a validation since we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
@@ -524,30 +526,32 @@ class PointsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        annotation: pd.DataFrame,
+        annotation: Optional[pd.DataFrame] = None,
         feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
         if "npartitions" not in kwargs and "chunksize" not in kwargs:
-            kwargs["chunksize"] = 50000
+            kwargs["npartitions"] = cls.NPARTITIONS
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes), **kwargs)  # type: ignore[attr-defined]
-        if feature_key is not None:
-            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=table.npartitions)  # type: ignore[attr-defined]
-            table[feature_key] = feature_categ
-        if instance_key is not None:
-            table[instance_key] = annotation[instance_key]
-        for c in set(annotation.columns) - {feature_key, instance_key}:
-            series = dd.from_pandas(annotation[c], npartitions=table.npartitions)
-            table[c] = series
-
-        return cls._add_metadata_and_validate(
-            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
-        )
+        if annotation is not None:
+            if feature_key is not None:
+                feature_categ = dd.from_pandas(  # type: ignore[attr-defined]
+                    annotation[feature_key].astype(str).astype("category"), **kwargs
+                )
+                table[feature_key] = feature_categ
+            if instance_key is not None:
+                table[instance_key] = annotation[instance_key]
+            for c in set(annotation.columns) - {feature_key, instance_key}:
+                table[c] = dd.from_pandas(annotation[c], **kwargs)
+            return cls._add_metadata_and_validate(
+                table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+            )
+        return cls._add_metadata_and_validate(table, transformations=transformations)
 
     @parse.register(pd.DataFrame)
     @parse.register(DaskDataFrame)
@@ -561,16 +565,16 @@ class PointsModel:
         transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
+        if "npartitions" not in kwargs and "chunksize" not in kwargs:
+            kwargs["npartitions"] = cls.NPARTITIONS
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
-            # mypy says that dask.dataframe does not have a from_array method, but it does.
-            table: DaskDataFrame = dd.from_array(  # type: ignore[attr-defined]
-                data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, **kwargs
+            table: DaskDataFrame = dd.from_pandas(
+                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
             )
             if feature_key is not None:
-                # mypy says that dask.dataframe does not have a from_pandas method, but it does.
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), npartitions=1)  # type: ignore[attr-defined]
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]
@@ -594,7 +598,8 @@ class PointsModel:
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
-        data.attrs[cls.ATTRS_KEY] = {}
+        if feature_key is not None or instance_key is not None:
+            data.attrs[cls.ATTRS_KEY] = {}
         if feature_key is not None:
             assert feature_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
