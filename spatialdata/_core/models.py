@@ -557,7 +557,7 @@ class PointsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        annotation: pd.DataFrame,
+        annotation: Optional[pd.DataFrame] = None,
         feature_key: Optional[str] = None,
         instance_key: Optional[str] = None,
         transform: Optional[Any] = None,
@@ -566,18 +566,21 @@ class PointsModel:
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
-        table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)
-        if feature_key is not None:
-            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)
-            table[feature_key] = feature_categ
-        if instance_key is not None:
-            table[instance_key] = annotation[instance_key]
-        for c in set(annotation.columns) - {feature_key, instance_key}:
-            table[c] = annotation[c]
-
-        return cls._add_metadata_and_validate(
-            table, feature_key=feature_key, instance_key=instance_key, transform=transform
-        )
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes), npartitions=1, **kwargs)
+        if annotation is not None:
+            if feature_key is not None:
+                feature_categ = dd.from_pandas(
+                    annotation[feature_key].astype(str).astype("category"), npartitions=table.npartitions
+                )
+                table[feature_key] = feature_categ
+            if instance_key is not None:
+                table[instance_key] = annotation[instance_key]
+            for c in set(annotation.columns) - {feature_key, instance_key}:
+                table[c] = annotation[c]
+            return cls._add_metadata_and_validate(
+                table, feature_key=feature_key, instance_key=instance_key, transform=transform
+            )
+        return cls._add_metadata_and_validate(table, transform=transform)
 
     @parse.register(pd.DataFrame)
     @parse.register(DaskDataFrame)
