@@ -510,8 +510,8 @@ class PointsModel:
             Feature key in `annotation` or `data`.
         instance_key
             Instance key in `annotation` or `data`.
-        transform
-            Transform of points.
+        transformations
+            Transformations of points.
         kwargs
             Additional arguments for :func:`dask.dataframe.from_array`.
 
@@ -580,7 +580,8 @@ class PointsModel:
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
             if feature_key is not None:
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+                if data[feature_key].dtype.name != "category":
+                    table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:

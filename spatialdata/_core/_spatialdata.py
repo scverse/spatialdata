@@ -10,6 +10,7 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -823,7 +824,12 @@ class SpatialData:
                             dim_string = ""
                         if descr_class == "Table":
                             descr_class = "pyarrow.Table"
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} {dim_string}"
+                        shape_str = (
+                            "("
+                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                            + ")"
+                        )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
