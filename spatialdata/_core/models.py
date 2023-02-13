@@ -530,19 +530,20 @@ class PointsModel:
         transformations: Optional[MappingToCoordinateSystem_t] = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
+        if "npartitions" not in kwargs and "chunksize" not in kwargs:
+            kwargs["chunksize"] = 50000
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
-        # mypy says that dask.dataframe does not have a from_array method, but it does.
-        table: DaskDataFrame = dd.from_array(data, columns=axes, **kwargs)  # type: ignore[attr-defined]
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes), **kwargs)  # type: ignore[attr-defined]
         if feature_key is not None:
-            # mypy says that dask.dataframe does not have a from_pandas method, but it does.
-            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=1)  # type: ignore[attr-defined]
+            feature_categ = dd.from_pandas(annotation[feature_key].astype(str).astype("category"), npartitions=table.npartitions)  # type: ignore[attr-defined]
             table[feature_key] = feature_categ
         if instance_key is not None:
             table[instance_key] = annotation[instance_key]
         for c in set(annotation.columns) - {feature_key, instance_key}:
-            table[c] = annotation[c]
+            series = dd.from_pandas(annotation[c], npartitions=table.npartitions)
+            table[c] = series
 
         return cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
