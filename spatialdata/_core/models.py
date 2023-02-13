@@ -539,7 +539,6 @@ class PointsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
-
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
@@ -568,7 +567,6 @@ class PointsModel:
         transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
-
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):

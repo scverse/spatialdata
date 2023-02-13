@@ -42,7 +42,6 @@ class SpatialDataFormatV01(CurrentFormat):
                 raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
 
     def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> Optional[list[list[dict[str, Any]]]]:
-
         data_shape = shapes[0]
         coordinate_transformations: list[list[dict[str, Any]]] = []
         # calculate minimal 'scale' transform based on pyramid dims

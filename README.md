@@ -17,7 +17,9 @@ You can take a look at the [](./design_doc.md).
 
 ## Getting started
 
-coming soon
+Please refer to the [documentation][link-docs]. In particular, the
+
+-   [API documentation][link-api].
 
 ## Installation
 
@@ -42,6 +44,8 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 [issue-tracker]: https://github.com/scverse/spatialdata/issues
 [changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
 [design doc]: https://scverse-spatialdata.readthedocs.io/en/latest/design_doc.html
+[link-docs]: https://spatialdata.scverse.org/en/latest/
+[link-api]: https://spatialdata.scverse.org/en/latest/api.html
 
 <img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
 
