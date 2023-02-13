@@ -19,12 +19,11 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
     RasterSchema,
     ShapesModel,
     TableModel,
 )
-from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
+from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 
 RNG = default_rng()
 
@@ -60,15 +59,18 @@ class TestModels:
             assert set(spatial_image.data.shape) == set(image.shape)
         assert spatial_image.data.dtype == image.dtype
 
-    @pytest.mark.parametrize("model", [PolygonsModel])
-    @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH])
-    def test_polygons_model(self, model: PolygonsModel, path: Path) -> None:
-        poly = model.parse(path)
-        assert PolygonsModel.GEOMETRY_KEY in poly
-        assert PolygonsModel.TRANSFORM_KEY in poly.attrs
-
+    @pytest.mark.parametrize("model", [ShapesModel])
+    @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
+    def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
+        if path.name == "points.json":
+            radius = np.random.normal(size=(2,))
+        else:
+            radius = None
+        poly = model.parse(path, radius=radius)
+        assert ShapesModel.GEOMETRY_KEY in poly
+        assert ShapesModel.TRANSFORM_KEY in poly.attrs
         geometry, data, offsets = to_ragged_array(poly.geometry.values)
-        other_poly = model.parse(data, offsets, geometry)
+        other_poly = model.parse(data, geometry=geometry, offsets=offsets, radius=radius)
         assert poly.equals(other_poly)
 
         other_poly = model.parse(poly)
@@ -127,32 +129,6 @@ class TestModels:
         if instance_key is not None:
             assert "instance_key" in points.attrs["spatialdata_attrs"]
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
-
-    @pytest.mark.parametrize("model", [ShapesModel])
-    @pytest.mark.parametrize("shape_type", [None, "Circle", "Square"])
-    @pytest.mark.parametrize("shape_size", [None, RNG.normal(size=(10,)), 0.3])
-    def test_shapes_model(
-        self,
-        model: ShapesModel,
-        shape_type: Optional[str],
-        shape_size: Optional[Union[int, float, np.ndarray]],
-    ) -> None:
-        coords = RNG.normal(size=(10, 2))
-        shapes = model.parse(coords, shape_type, shape_size)
-        assert ShapesModel.COORDS_KEY in shapes.obsm
-        assert ShapesModel.TRANSFORM_KEY in shapes.uns
-        assert ShapesModel.SIZE_KEY in shapes.obs
-        if shape_size is not None:
-            assert shapes.obs[ShapesModel.SIZE_KEY].dtype == np.float64
-            if isinstance(shape_size, np.ndarray):
-                assert shapes.obs[ShapesModel.SIZE_KEY].shape == shape_size.shape
-            elif isinstance(shape_size, float):
-                assert shapes.obs[ShapesModel.SIZE_KEY].unique() == shape_size
-            else:
-                raise ValueError(f"Unexpected shape_size: {shape_size}")
-        assert ShapesModel.ATTRS_KEY in shapes.uns
-        assert ShapesModel.TYPE_KEY in shapes.uns[ShapesModel.ATTRS_KEY]
-        assert shape_type == shapes.uns[ShapesModel.ATTRS_KEY][ShapesModel.TYPE_KEY]
 
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", ["sample", RNG.choice([1, 2], size=10).tolist()])

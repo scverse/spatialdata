@@ -8,7 +8,6 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
@@ -19,7 +18,7 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     _bounding_box_query_image_dict,
     _bounding_box_query_points_dict,
-    _bounding_box_query_polygons_dict,
+    _bounding_box_query_shapes_dict,
 )
 from spatialdata._core.coordinate_system import CoordinateSystem
 from spatialdata._core.core_utils import SpatialElement, get_dims, get_transform
@@ -29,7 +28,6 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
     ShapesModel,
     TableModel,
 )
@@ -37,7 +35,6 @@ from spatialdata._io.write import (
     write_image,
     write_labels,
     write_points,
-    write_polygons,
     write_shapes,
     write_table,
 )
@@ -48,9 +45,8 @@ Label2D_s = Labels2DModel()
 Label3D_s = Labels3DModel()
 Image2D_s = Image2DModel()
 Image3D_s = Image3DModel()
-Polygon_s = PolygonsModel()
-Point_s = PointsModel()
 Shape_s = ShapesModel()
+Point_s = PointsModel()
 Table_s = TableModel()
 
 
@@ -75,14 +71,11 @@ class SpatialData:
     points
         Dict of points elements. Points can contain annotations. The following parsers is available:
         :class:`~spatialdata.PointsModel`.
-    polygons
-        Dict of 2D polygons elements. They can't contain annotation but they can be annotated
-        by a table. The following parsers is available: :class:`~spatialdata.PolygonsModel`.
     shapes
-        Dict of 2D shapes elements (circles, squares). Shapes are regions, they can't contain annotation but they
+        Dict of 2D shapes elements (circles, polygons, multipolygons). Shapes are regions, they can't contain annotation but they
         can be annotated by a table. The following parsers is available: :class:`~spatialdata.ShapesModel`.
     table
-        AnnData table containing annotations for regions (labels, polygons, shapes). The following parsers is
+        AnnData table containing annotations for regions (labels and shapes). The following parsers is
         available: :class:`~spatialdata.TableModel`.
 
     Notes
@@ -90,22 +83,21 @@ class SpatialData:
     The spatial elements are stored with standard types:
 
         - images and labels are stored as :class:`spatial_image.SpatialImage` or :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
-        - points and shapes are stored as :class:`anndata.AnnData` objects, with the spatial coordinates stored in the obsm slot.
-        - polygons are stored as :class:`geopandas.GeoDataFrame`.
+        - points are stored as :class:`dask.dataframe.DataFrame` objects.
+        - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects, with the spatial coordinates stored in the obsm slot.
 
-    The table can annotate regions (shapes, polygons or labels) and can be used to store additional information.
+    The table can annotate regions (shapesor labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
 
     The elements need to pass a validation step. To construct valid elements you can use the parsers that we
-    provide (:class:`~spatialdata.Image2DModel`, :class:`~spatialdata.Image3DModel`, :class:`~spatialdata.Labels2DModel`, :class:`~spatialdata.Labels3DModel`, :class:`~spatialdata.PointsModel`, :class:`~spatialdata.PolygonsModel`, :class:`~spatialdata.ShapesModel`, :class:`~spatialdata.TableModel`).
+    provide (:class:`~spatialdata.Image2DModel`, :class:`~spatialdata.Image3DModel`, :class:`~spatialdata.Labels2DModel`, :class:`~spatialdata.Labels3DModel`, :class:`~spatialdata.PointsModel`, :class:`~spatialdata.ShapesModel`, :class:`~spatialdata.TableModel`).
     """
 
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _polygons: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
@@ -115,7 +107,6 @@ class SpatialData:
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        polygons: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
@@ -129,11 +120,6 @@ class SpatialData:
             self._labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in labels.items():
                 self._add_labels_in_memory(name=k, labels=v)
-
-        if polygons is not None:
-            self._polygons: dict[str, GeoDataFrame] = {}
-            for k, v in polygons.items():
-                self._add_polygons_in_memory(name=k, polygons=v)
 
         if shapes is not None:
             self._shapes: dict[str, AnnData] = {}
@@ -181,12 +167,6 @@ class SpatialData:
         else:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
-    def _add_polygons_in_memory(self, name: str, polygons: GeoDataFrame) -> None:
-        if name in self._polygons:
-            raise ValueError(f"Polygons {name} already exists in the dataset.")
-        Polygon_s.validate(polygons)
-        self._polygons[name] = polygons
-
     def _add_shapes_in_memory(self, name: str, shapes: AnnData) -> None:
         if name in self._shapes:
             raise ValueError(f"Shapes {name} already exists in the dataset.")
@@ -213,7 +193,7 @@ class SpatialData:
             )
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        assert element_type in ["images", "labels", "points", "shapes"]
         # not need to create the group for labels as it is already handled by ome-zarr-py
         if element_type != "labels":
             if element_type not in root:
@@ -353,41 +333,6 @@ class SpatialData:
                 name=name,
             )
 
-    def add_polygons(
-        self,
-        name: str,
-        polygons: GeoDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """
-        Add polygons to the SpatialData object.
-
-        Parameters
-        ----------
-        name
-            Key to the element inside the SpatialData object.
-        polygons
-            The polygons to add, the object needs to pass validation (see :class:`~spatialdata.PolygonsModel`).
-        storage_options
-            Storage options for the Zarr storage.
-            See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
-        overwrite
-            If True, overwrite the element if it already exists.
-
-        Notes
-        -----
-        If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
-        """
-        if name not in self.polygons:
-            self._add_polygons_in_memory(name=name, polygons=polygons)
-        if self.is_backed():
-            elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
-            write_polygons(
-                polygons=self.polygons[name],
-                group=elem_group,
-                name=name,
-            )
-
     def add_shapes(
         self,
         name: str,
@@ -458,11 +403,6 @@ class SpatialData:
                 for el in self.points.keys():
                     self.add_points(name=el, points=self.points[el])
 
-            if len(self.polygons):
-                elem_group = root.create_group(name="polygons")
-                for el in self.polygons.keys():
-                    self.add_polygons(name=el, polygons=self.polygons[el])
-
             if len(self.shapes):
                 elem_group = root.create_group(name="shapes")
                 for el in self.shapes.keys():
@@ -502,11 +442,6 @@ class SpatialData:
         return self._points
 
     @property
-    def polygons(self) -> dict[str, GeoDataFrame]:
-        """Return polygons as a Dict of name to polygon data."""
-        return self._polygons
-
-    @property
     def shapes(self) -> dict[str, AnnData]:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
@@ -540,7 +475,7 @@ class SpatialData:
         non_empty_elements
             The names of the elements that are not empty.
         """
-        all_elements = ["images", "labels", "points", "polygons", "shapes", "table"]
+        all_elements = ["images", "labels", "points", "shapes", "table"]
         return [
             element
             for element in all_elements
@@ -579,12 +514,7 @@ class SpatialData:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
-                        descr += (
-                            f"{h(attr + 'level1.1')}{k!r}: {descr_class} with `.osbm['spatial']` "
-                            f"{v.obsm['spatial'].shape}"
-                        )
-                    elif attr == "polygons":
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D polygons)"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                     elif attr == "points":
                         if len(v) > 0:
                             n = len(get_dims(v))
@@ -622,13 +552,13 @@ class SpatialData:
         descr = rreplace(descr, h("level0"), "└── ", 1)
         descr = descr.replace(h("level0"), "├── ")
 
-        for attr in ["images", "labels", "points", "polygons", "table", "shapes"]:
+        for attr in ["images", "labels", "points", "table", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
         return descr
 
     def _gen_elements(self) -> Generator[SpatialElement, None, None]:
-        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
 
@@ -654,13 +584,12 @@ class QueryManager:
         """
         requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
         requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)
-        requested_polygons = _bounding_box_query_polygons_dict(polygons_dict=self._sdata.polygons, request=request)
+        requested_shapes = _bounding_box_query_shapes_dict(shapes_dict=self._sdata.shapes, request=request)
 
         return SpatialData(
             points=requested_points,
             images=requested_images,
-            polygons=requested_polygons,
-            shapes=self._sdata.shapes,
+            shapes=requested_shapes,
             table=self._sdata.table,
         )
 

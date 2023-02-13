@@ -20,15 +20,11 @@ from shapely.io import to_ragged_array
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_dims, get_transform
+from spatialdata._core.models import ShapesModel
 from spatialdata._core.transformations import BaseTransformation
-from spatialdata._io.format import (
-    PointsFormat,
-    PolygonsFormat,
-    ShapesFormat,
-    SpatialDataFormatV01,
-)
+from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
 
-__all__ = ["write_image", "write_labels", "write_points", "write_polygons", "write_table"]
+__all__ = ["write_image", "write_labels", "write_points", "write_shapes", "write_table"]
 
 
 def _write_metadata(
@@ -160,60 +156,33 @@ def write_labels(
         )
 
 
-def write_polygons(
-    polygons: GeoDataFrame,
-    group: zarr.Group,
-    name: str,
-    group_type: str = "ngff:polygons",
-    fmt: Format = PolygonsFormat(),
-) -> None:
-    polygons_groups = group.require_group(name)
-    t = get_transform(polygons)
-    assert isinstance(t, BaseTransformation)
-    coordinate_transformations = [t.to_dict()]
-
-    geometry, coords, offsets = to_ragged_array(polygons.geometry)
-    polygons_groups.create_dataset(name="coords", data=coords)
-    for i, o in enumerate(offsets):
-        polygons_groups.create_dataset(name=f"offset{i}", data=o)
-    polygons_groups.create_dataset(name="Index", data=polygons.index.values)
-
-    attrs = fmt.attrs_to_dict(geometry)
-    attrs["version"] = fmt.spatialdata_version
-
-    axes = list(get_dims(polygons))
-
-    _write_metadata(
-        polygons_groups,
-        group_type=group_type,
-        coordinate_transformations=coordinate_transformations,
-        axes=axes,
-        attrs=attrs,
-        fmt=fmt,
-    )
-
-
 def write_shapes(
-    shapes: AnnData,
+    shapes: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
+    shapes_groups = group.require_group(name)
+    t = get_transform(shapes)
+    assert isinstance(t, BaseTransformation)
+    coordinate_transformations = [t.to_dict()]
 
-    transform = shapes.uns.pop("transform")
-    coordinate_transformations = [transform.to_dict()]
-    write_adata(group, name, shapes)  # creates group[name]
-    shapes.uns["transform"] = transform
+    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    shapes_groups.create_dataset(name="coords", data=coords)
+    for i, o in enumerate(offsets):
+        shapes_groups.create_dataset(name=f"offset{i}", data=o)
+    shapes_groups.create_dataset(name="Index", data=shapes.index.values)
+    if geometry.name == "POINT":
+        shapes_groups.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
-    attrs = fmt.attrs_to_dict(shapes.uns)
+    attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
     axes = list(get_dims(shapes))
 
-    shapes_group = group[name]
     _write_metadata(
-        shapes_group,
+        shapes_groups,
         group_type=group_type,
         coordinate_transformations=coordinate_transformations,
         axes=axes,

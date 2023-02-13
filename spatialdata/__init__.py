@@ -33,7 +33,7 @@ __all__ = [
     "Labels2DModel",
     "Labels3DModel",
     "PointsModel",
-    "PolygonsModel",
+    "ShapesModel",
     "ShapesModel",
     "TableModel",
     # --- from spatialdata._core.core_utils ---
@@ -58,7 +58,6 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
     ShapesModel,
     TableModel,
 )
