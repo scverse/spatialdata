@@ -149,9 +149,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         raise TypeError(f"Unsupported type: {type(raster)}")
 
 
-def get_table_mapping_metadata(
-    table: AnnData
-) -> dict[str, Union[Optional[Union[str, list[str]]], Optional[str]]]:
+def get_table_mapping_metadata(table: AnnData) -> dict[str, Union[Optional[Union[str, list[str]]], Optional[str]]]:
     """
     Get the region, region_key and instance_key from the table metadata.
 

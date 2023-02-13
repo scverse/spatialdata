@@ -2,17 +2,16 @@ import itertools
 from typing import Optional, Union
 
 import dask_image.ndinterp
+import pytest
 import xarray
 import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
-from anndata import AnnData
-import pytest
 
 from spatialdata._core.models import get_schema
 from spatialdata._core.transformations import Affine
-from spatialdata.utils import unpad_raster, get_table_mapping_metadata
+from spatialdata.utils import get_table_mapping_metadata, unpad_raster
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:

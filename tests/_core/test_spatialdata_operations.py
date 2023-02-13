@@ -1,19 +1,22 @@
-from anndata import AnnData
+import numpy as np
 import pytest
+from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-import numpy as np
-from typing import Optional, Union
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import set_transformation, concatenate, concatenate_tables
+from spatialdata._core._spatialdata_ops import (
+    concatenate,
+    concatenate_tables,
+    set_transformation,
+)
+from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import get_table_mapping_metadata
 from tests.conftest import _get_table
-from spatialdata._core.models import TableModel
 
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
@@ -108,27 +111,33 @@ def test_concatenate_tables():
     assert len(c0) == len(table0) + len(table1)
 
     d = get_table_mapping_metadata(c0)
-    d['region'] = sorted(d['region'])
+    d["region"] = sorted(d["region"])
     assert d == {
-        'region': ['shapes/shapes_0', 'shapes/shapes_1'],
-        'region_key': 'annotated_element_merged_1',
-        'instance_key': 'instance_id'
+        "region": ["shapes/shapes_0", "shapes/shapes_1"],
+        "region_key": "annotated_element_merged_1",
+        "instance_key": "instance_id",
     }
 
     ##
     table3 = _get_table(region="shapes/shapes_0", region_key="annotated_shapes_other", instance_key="instance_id")
-    table3.uns[TableModel.ATTRS_KEY]['region_key'] = 'annotated_shapes_other'
+    table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
     with pytest.raises(AssertionError):
         concatenate_tables([table0, table3])
-    table3.uns[TableModel.ATTRS_KEY]['region_key'] = None
-    table3.uns[TableModel.ATTRS_KEY]['instance_key'] = ['shapes/shapes_0', 'shapes/shapes_1']
+    table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
+    table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/shapes_0", "shapes/shapes_1"]
     with pytest.raises(AssertionError):
         concatenate_tables([table0, table3])
 
     ##
-    table4 = _get_table(region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id")
-    table5 = _get_table(region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id")
-    table6 = _get_table(region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape1", instance_key="instance_id")
+    table4 = _get_table(
+        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id"
+    )
+    table5 = _get_table(
+        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id"
+    )
+    table6 = _get_table(
+        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape1", instance_key="instance_id"
+    )
 
     assert len(concatenate_tables([table4, table5])) == len(table4) + len(table5)
 
@@ -138,15 +147,15 @@ def test_concatenate_tables():
 
 def test_concatenate_sdatas(full_sdata):
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(images={'image2d': full_sdata.images['image2d']})])
+        concatenate([full_sdata, SpatialData(images={"image2d": full_sdata.images["image2d"]})])
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(labels={'labels2d': full_sdata.labels['labels2d']})])
+        concatenate([full_sdata, SpatialData(labels={"labels2d": full_sdata.labels["labels2d"]})])
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(points={'points_0': full_sdata.points['points_0']})])
+        concatenate([full_sdata, SpatialData(points={"points_0": full_sdata.points["points_0"]})])
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(polygons={'poly': full_sdata.polygons['poly']})])
+        concatenate([full_sdata, SpatialData(polygons={"poly": full_sdata.polygons["poly"]})])
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(shapes={'shapes_0': full_sdata.shapes['shapes_0']})])
+        concatenate([full_sdata, SpatialData(shapes={"shapes_0": full_sdata.shapes["shapes_0"]})])
 
     assert concatenate([full_sdata, SpatialData()]).table is not None
     assert concatenate([full_sdata, SpatialData()], omit_table=True).table is None

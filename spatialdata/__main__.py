@@ -5,7 +5,7 @@ import click
 
 @click.command(help="Peek inside the SpatialData .zarr file")
 @click.argument("path", default=False, type=str)
-def peek(path):
+def peek(path: str) -> None:
     if not os.path.isdir(path):
         print(
             f"Error: .zarr storage not found at {path}. Please specify a valid OME-NGFF spatial data (.zarr) file. "
@@ -21,14 +21,14 @@ def peek(path):
 
 
 @click.group()
-def cli():
+def cli() -> None:
     pass
 
 
 cli.add_command(peek)
 
 
-def main():
+def main() -> None:
     cli()
 
 

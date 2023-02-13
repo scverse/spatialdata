@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import dask.array as da
 import dask_image.ndinterp
@@ -12,16 +12,18 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from skimage.transform import estimate_transform
 from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import get_dims
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import get_schema
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
-    from spatialdata._core.transformations import BaseTransformation
+    from spatialdata._core.transformations import Affine, BaseTransformation
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
@@ -247,23 +249,18 @@ def _(data: AnnData, transformation: BaseTransformation) -> AnnData:
     ShapesModel.validate(transformed_adata)
     return transformed_adata
 
-def map_elements(
+
+def get_transformation_between_landmarks(
     references_coords: AnnData,
     moving_coords: AnnData,
-    reference_element: SpatialElement,
-    moving_element: SpatialElement,
-    sdata: Optional[SpatialData] = None,
-    reference_coordinate_system: str = "global",
-    moving_coordinate_system: str = "global",
-    new_coordinate_system: Optional[str] = None,
-) -> tuple[BaseTransformation, BaseTransformation]:
-    from skimage.transform import estimate_transform
+) -> Affine:
+    from spatialdata._core.transformations import Affine, Sequence
 
     model = estimate_transform("affine", src=moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"])
     transform_matrix = model.params
     a = transform_matrix[:2, :2]
     d = np.linalg.det(a)
-    # print(d)
+    final: BaseTransformation
     if d < 0:
         m = (moving_coords.obsm["spatial"][:, 0].max() - moving_coords.obsm["spatial"][:, 0].min()) / 2
         flip = Affine(
@@ -293,10 +290,28 @@ def map_elements(
         input_axes=("x", "y"),
         output_axes=("x", "y"),
     )
+    return affine
+
+
+def align_elements_using_landmarks(
+    references_coords: AnnData,
+    moving_coords: AnnData,
+    reference_element: SpatialElement,
+    moving_element: SpatialElement,
+    sdata: Optional[SpatialData] = None,
+    reference_coordinate_system: str = "global",
+    moving_coordinate_system: str = "global",
+    new_coordinate_system: Optional[str] = None,
+) -> tuple[BaseTransformation, BaseTransformation]:
+    from spatialdata._core.transformations import Sequence
+
+    affine = get_transformation_between_landmarks(references_coords, moving_coords)
 
     # get the old transformations of the visium and xenium data
-    old_moving_transformation = SpatialData.get_transformation(moving_element, moving_coordinate_system)
-    old_reference_transformation = SpatialData.get_transformation(reference_element, reference_coordinate_system)
+    old_moving_transformation = get_transformation(moving_element, moving_coordinate_system)
+    old_reference_transformation = get_transformation(reference_element, reference_coordinate_system)
+    assert isinstance(old_moving_transformation, BaseTransformation)
+    assert isinstance(old_reference_transformation, BaseTransformation)
 
     # compute the new transformations
     new_moving_transformation = Sequence([old_moving_transformation, affine])
@@ -304,7 +319,6 @@ def map_elements(
 
     if new_coordinate_system is not None:
         # this allows to work on singleton objects, not embedded in a SpatialData object
-        set_transform = sdata.set_transformation if sdata is not None else SpatialData.set_transformation_in_memory
-        set_transform(moving_element, new_moving_transformation, new_coordinate_system)
-        set_transform(reference_element, new_reference_transformation, new_coordinate_system)
+        set_transformation(moving_element, new_moving_transformation, new_coordinate_system, write_to_sdata=sdata)
+        set_transformation(reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=sdata)
     return new_moving_transformation, new_reference_transformation

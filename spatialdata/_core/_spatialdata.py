@@ -10,7 +10,6 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -24,7 +23,6 @@ from spatialdata._core._spatial_query import (
     _bounding_box_query_points_dict,
     _bounding_box_query_polygons_dict,
 )
-from spatialdata.utils import get_table_mapping_metadata
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -45,6 +43,7 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
+from spatialdata.utils import get_table_mapping_metadata
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -325,7 +324,9 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: Union[str, list[str]], filter_table: bool = False) -> SpatialData:
+    def filter_by_coordinate_system(
+        self, coordinate_system: Union[str, list[str]], filter_table: bool = False
+    ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
 
@@ -874,7 +875,7 @@ class SpatialData:
                         else:
                             dim_string = ""
                         assert len(v.shape) == 2
-                        shape_str = f'({len(v)}, {v.shape[1]})'
+                        shape_str = f"({len(v)}, {v.shape[1]})"
                         # if the above is slow, use this (this actually doesn't show the length of the dataframe)
                         # shape_str = (
                         #     "("
