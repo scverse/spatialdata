@@ -1,6 +1,8 @@
 import itertools
+from typing import Optional, Union
 
 import dask_image.ndinterp
+import pytest
 import xarray
 import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -9,7 +11,7 @@ from xarray import DataArray
 
 from spatialdata._core.models import get_schema
 from spatialdata._core.transformations import Affine
-from spatialdata.utils import unpad_raster
+from spatialdata.utils import get_table_mapping_metadata, unpad_raster
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
@@ -60,3 +62,23 @@ def test_unpad_raster(images, labels) -> None:
             xarray.testing.assert_equal(d0.values().__iter__().__next__(), d1.values().__iter__().__next__())
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
+
+
+@pytest.mark.parametrize(
+    "region,region_key,instance_key",
+    (
+        [None, None, None],
+        ["my_region0", None, "my_instance_key"],
+        [["my_region0", "my_region1"], "my_region_key", "my_instance_key"],
+    ),
+)
+def test_get_table_mapping_metadata(
+    region: Optional[Union[str, list[str]]], region_key: Optional[str], instance_key: Optional[str]
+):
+    from tests.conftest import _get_table
+
+    table = _get_table(region, region_key, instance_key)
+    metadata = get_table_mapping_metadata(table)
+    assert metadata["region"] == region
+    assert metadata["region_key"] == region_key
+    assert metadata["instance_key"] == instance_key

@@ -12,7 +12,6 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -46,6 +45,7 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
+from spatialdata.utils import get_table_mapping_metadata
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -326,17 +326,22 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
+    def filter_by_coordinate_system(
+        self, coordinate_system: Union[str, list[str]], filter_table: bool = False
+    ) -> SpatialData:
         """
-        Filter the SpatialData by a coordinate system.
+        Filter the SpatialData by one (or a list of) coordinate system.
 
-        This returns a SpatialData object with the elements containing
-        a transformation mapping to the specified coordinate system.
+        This returns a SpatialData object with the elements containing a transformation mapping to the specified
+        coordinate system(s).
 
         Parameters
         ----------
         coordinate_system
-            The coordinate system to filter by.
+            The coordinate system(s) to filter by.
+        filter_table
+            If True, the table will be filtered to only contain regions of an element belonging to the specified
+            coordinate system(s).
 
         Returns
         -------
@@ -345,14 +350,27 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
+        element_paths_in_coordinate_system = []
+        if isinstance(coordinate_system, str):
+            coordinate_system = [coordinate_system]
         for element_type, element_name, element in self._gen_elements():
             transformations = get_transformation(element, get_all=True)
             assert isinstance(transformations, dict)
-            if coordinate_system in transformations:
-                if element_type not in elements:
-                    elements[element_type] = {}
-                elements[element_type][element_name] = element
-        return SpatialData(**elements, table=self.table)
+            for cs in coordinate_system:
+                if cs in transformations:
+                    if element_type not in elements:
+                        elements[element_type] = {}
+                    elements[element_type][element_name] = element
+                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+
+        if filter_table:
+            table_mapping_metadata = get_table_mapping_metadata(self.table)
+            region_key = table_mapping_metadata["region_key"]
+            table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+        else:
+            table = self.table
+
+        return SpatialData(**elements, table=table)
 
     def transform_element_to_coordinate_system(
         self, element: SpatialElement, target_coordinate_system: str
@@ -778,6 +796,40 @@ class SpatialData:
         """
         return self._table
 
+    @table.setter
+    def table(self, table: AnnData) -> None:
+        """
+        Set the table of a SpatialData object in a object that doesn't contain a table.
+
+        Parameters
+        ----------
+        table
+            The table to set.
+
+        Notes
+        -----
+        If a table is already present, it needs to be removed first.
+        The table needs to pass validation (see :class:`~spatialdata.TableModel`).
+        If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
+        """
+        TableModel().validate(table)
+        if self.table is not None:
+            raise ValueError("The table already exists. Use del sdata.table to remove it first.")
+        self._table = table
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            write_table(table=self.table, group=root, name="table")
+
+    @table.deleter
+    def table(self) -> None:
+        """Delete the table."""
+        self._table = None
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            del root["table"]
+
     @staticmethod
     def read(file_path: str) -> SpatialData:
         from spatialdata._io.read import read_zarr
@@ -882,21 +934,22 @@ class SpatialData:
                             f"{v.obsm['spatial'].shape}"
                         )
                     elif attr == "polygons":
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D polygons)"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {v.shape} (2D polygons)"
                     elif attr == "points":
                         if len(v) > 0:
                             n = len(get_dims(v))
                             dim_string = f"({n}D points)"
                         else:
                             dim_string = ""
-                        if descr_class == "Table":
-                            descr_class = "pyarrow.Table"
-                        shape_str = (
-                            "("
-                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                            + ")"
-                        )
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {shape_str} {dim_string}"
+                        assert len(v.shape) == 2
+                        shape_str = f"({len(v)}, {v.shape[1]})"
+                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
+                        # shape_str = (
+                        #     "("
+                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                        #     + ")"
+                        # )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
