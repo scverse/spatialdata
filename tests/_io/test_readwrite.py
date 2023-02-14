@@ -238,3 +238,61 @@ def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
             set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
             t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t1) == Scale
+
+
+def test_overwrite_files_with_backed_data(full_sdata):
+    # addressing https://github.com/scverse/spatialdata/issues/137
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+        full_sdata.write(f, overwrite=True)
+        print(full_sdata)
+
+        sdata2 = SpatialData(
+            images=full_sdata.images,
+            labels=full_sdata.labels,
+            points=full_sdata.points,
+            shapes=full_sdata.shapes,
+            polygons=full_sdata.polygons,
+            table=full_sdata.table,
+        )
+        sdata2.write(f, overwrite=True)
+
+
+def test_incremental_io_with_backed_elements(full_sdata):
+    # addressing https://github.com/scverse/spatialdata/issues/137
+    # we test also the non-backed case so that if we switch to the backed version in the future we already have the tests
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        e = full_sdata.images.values().__iter__().__next__()
+        full_sdata.add_image("new_images", e, overwrite=True)
+        full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
+
+        e = full_sdata.labels.values().__iter__().__next__()
+        full_sdata.add_labels("new_labels", e, overwrite=True)
+        full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
+
+        e = full_sdata.points.values().__iter__().__next__()
+        full_sdata.add_points("new_points", e, overwrite=True)
+        full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
+
+        e = full_sdata.polygons.values().__iter__().__next__()
+        full_sdata.add_polygons("new_polygons", e, overwrite=True)
+        full_sdata.add_polygons("new_polygons", full_sdata.polygons["new_polygons"], overwrite=True)
+
+        e = full_sdata.shapes.values().__iter__().__next__()
+        full_sdata.add_shapes("new_shapes", e, overwrite=True)
+        full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
+
+        print(full_sdata)
+
+        # f2 = os.path.join(tmpdir, "data2.zarr")
+        # sdata2 = SpatialData(table=full_sdata.table.copy())
+        # sdata2.write(f2)
+        # full_sdata.table = sdata2.table
+        # full_sdata.write(f2)
+        #
+        # print(full_sdata)
