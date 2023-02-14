@@ -310,10 +310,11 @@ def test_incremental_io_with_backed_elements(full_sdata):
 
         print(full_sdata)
 
-        # f2 = os.path.join(tmpdir, "data2.zarr")
-        # sdata2 = SpatialData(table=full_sdata.table.copy())
-        # sdata2.write(f2)
-        # full_sdata.table = sdata2.table
-        # full_sdata.write(f2)
-        #
-        # print(full_sdata)
+        f2 = os.path.join(tmpdir, "data2.zarr")
+        sdata2 = SpatialData(table=full_sdata.table.copy())
+        sdata2.write(f2)
+        del full_sdata.table
+        full_sdata.table = sdata2.table
+        full_sdata.write(f2, overwrite=True)
+
+        print(full_sdata)

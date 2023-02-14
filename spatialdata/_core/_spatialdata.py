@@ -690,6 +690,8 @@ class SpatialData:
         self, file_path: str, storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None, overwrite: bool = False
     ) -> None:
         """Write the SpatialData object to Zarr."""
+        if isinstance(file_path, pathlib.PosixPath):
+            file_path = str(file_path)
 
         if self.is_backed() and self.path != file_path:
             logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
@@ -784,6 +786,7 @@ class SpatialData:
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
                     self.__getattribute__(element_type)[name] = element
+        assert isinstance(self.path, str)
 
     @property
     def table(self) -> AnnData:
