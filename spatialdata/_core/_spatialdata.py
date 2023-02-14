@@ -434,7 +434,7 @@ class SpatialData:
         image: Union[SpatialImage, MultiscaleSpatialImage],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
+        _called_from_write: bool = False,
     ) -> None:
         """
         Add an image to the SpatialData object.
@@ -450,7 +450,7 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
+        _called_from_write
             Internal flag, to differentiate between an element added by the user and an element saved to disk by
             write method.
 
@@ -459,8 +459,9 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if _add_in_memory:
+            if not _called_from_write:
                 self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
+            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
             with tempfile.TemporaryDirectory() as tmpdir:
                 store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
                 root = zarr.group(store=store)
@@ -485,7 +486,7 @@ class SpatialData:
                 image = _read_multiscale(des_path, raster_type="image")
                 self._add_image_in_memory(name=name, image=image, overwrite=True)
         else:
-            assert _add_in_memory is True
+            assert _called_from_write is True
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
 
     def add_labels(
@@ -494,7 +495,7 @@ class SpatialData:
         labels: Union[SpatialImage, MultiscaleSpatialImage],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
+        _called_from_write: bool = False,
     ) -> None:
         """
         Add labels to the SpatialData object.
@@ -510,7 +511,7 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
+        _called_from_write
             Internal flag, to differentiate between an element added by the user and an element saved to disk by
             write method.
 
@@ -519,8 +520,9 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if _add_in_memory:
+            if not _called_from_write:
                 self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
+            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
             with tempfile.TemporaryDirectory() as tmpdir:
                 store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
                 root = zarr.group(store=store)
@@ -545,7 +547,7 @@ class SpatialData:
                 labels = _read_multiscale(des_path, raster_type="labels")
                 self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
         else:
-            assert _add_in_memory is True
+            assert _called_from_write is True
             self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
 
     def add_points(
@@ -553,7 +555,7 @@ class SpatialData:
         name: str,
         points: DaskDataFrame,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
+        _called_from_write: bool = False,
     ) -> None:
         """
         Add points to the SpatialData object.
@@ -569,7 +571,7 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
+        _called_from_write
             Internal flag, to differentiate between an element added by the user and an element saved to disk by
             write method.
 
@@ -578,8 +580,9 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if _add_in_memory:
+            if not _called_from_write:
                 self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
+            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
             with tempfile.TemporaryDirectory() as tmpdir:
                 store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
                 root = zarr.group(store=store)
@@ -603,7 +606,7 @@ class SpatialData:
                 points = _read_points(des_path)
                 self._add_points_in_memory(name=name, points=points, overwrite=True)
         else:
-            assert _add_in_memory is True
+            assert _called_from_write is True
             self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
 
     def add_polygons(
@@ -611,7 +614,7 @@ class SpatialData:
         name: str,
         polygons: GeoDataFrame,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
+        _called_from_write: bool = False,
     ) -> None:
         """
         Add polygons to the SpatialData object.
@@ -627,7 +630,7 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
+        _called_from_write
             Internal flag, to differentiate between an element added by the user and an element saved to disk by
             write method.
 
@@ -635,7 +638,7 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
+        if not _called_from_write:
             self._add_polygons_in_memory(name=name, polygons=polygons, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="polygons", overwrite=overwrite)
@@ -651,7 +654,7 @@ class SpatialData:
         name: str,
         shapes: AnnData,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
+        _called_from_write: bool = False,
     ) -> None:
         """
         Add shapes to the SpatialData object.
@@ -667,7 +670,7 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
+        _called_from_write
             Internal flag, to differentiate between an element added by the user and an element saved to disk by
             write method.
 
@@ -675,7 +678,7 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
+        if not _called_from_write:
             self._add_shapes_in_memory(name=name, shapes=shapes, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
@@ -724,7 +727,7 @@ class SpatialData:
                 keys = list(self.images.keys())
                 for el in keys:
                     self.add_image(
-                        name=el, image=self.images[el], storage_options=storage_options, _add_in_memory=False
+                        name=el, image=self.images[el], storage_options=storage_options, _called_from_write=True
                     )
 
             if len(self.labels):
@@ -732,26 +735,26 @@ class SpatialData:
                 keys = list(self.labels.keys())
                 for el in keys:
                     self.add_labels(
-                        name=el, labels=self.labels[el], storage_options=storage_options, _add_in_memory=False
+                        name=el, labels=self.labels[el], storage_options=storage_options, _called_from_write=True
                     )
 
             if len(self.points):
                 root.create_group(name="points")
                 keys = list(self.points.keys())
                 for el in keys:
-                    self.add_points(name=el, points=self.points[el], _add_in_memory=False)
+                    self.add_points(name=el, points=self.points[el], _called_from_write=True)
 
             if len(self.polygons):
                 root.create_group(name="polygons")
                 keys = list(self.polygons.keys())
                 for el in keys:
-                    self.add_polygons(name=el, polygons=self.polygons[el], _add_in_memory=False)
+                    self.add_polygons(name=el, polygons=self.polygons[el], _called_from_write=True)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
                 keys = list(self.shapes.keys())
                 for el in keys:
-                    self.add_shapes(name=el, shapes=self.shapes[el], _add_in_memory=False)
+                    self.add_shapes(name=el, shapes=self.shapes[el], _called_from_write=True)
 
             if self.table is not None:
                 elem_group = root.create_group(name="table")
