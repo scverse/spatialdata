@@ -486,7 +486,7 @@ class SpatialData:
                 image = _read_multiscale(des_path, raster_type="image")
                 self._add_image_in_memory(name=name, image=image, overwrite=True)
         else:
-            assert _called_from_write is True
+            assert _called_from_write is False
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
 
     def add_labels(
@@ -547,7 +547,7 @@ class SpatialData:
                 labels = _read_multiscale(des_path, raster_type="labels")
                 self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
         else:
-            assert _called_from_write is True
+            assert _called_from_write is False
             self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
 
     def add_points(
@@ -606,7 +606,7 @@ class SpatialData:
                 points = _read_points(des_path)
                 self._add_points_in_memory(name=name, points=points, overwrite=True)
         else:
-            assert _called_from_write is True
+            assert _called_from_write is False
             self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
 
     def add_polygons(
@@ -766,6 +766,7 @@ class SpatialData:
 
         if target_path is not None:
             if os.path.isdir(file_path):
+                assert overwrite is True
                 shutil.rmtree(file_path)
             assert isinstance(tmp_zarr_file, str)
             shutil.move(tmp_zarr_file, file_path)
