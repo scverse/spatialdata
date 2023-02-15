@@ -459,32 +459,39 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if not _called_from_write:
-                self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
-            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
-            with tempfile.TemporaryDirectory() as tmpdir:
-                store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
-                root = zarr.group(store=store)
+            des_path = os.path.join(str(self.path), "images", name)
+            if _called_from_write:
+                elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
                 write_image(
                     image=self.images[name],
-                    group=root,
+                    group=elem_group,
                     name=name,
                     storage_options=storage_options,
                 )
-                # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
-                # from the correct storage
-                from spatialdata._io.read import _read_multiscale
+            else:
+                self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
+                    root = zarr.group(store=store)
+                    write_image(
+                        image=self.images[name],
+                        group=root,
+                        name=name,
+                        storage_options=storage_options,
+                    )
+                    src_path = os.path.join(store.path, name)
+                    assert isinstance(self.path, str)
 
-                src_path = os.path.join(store.path, name)
-                assert isinstance(self.path, str)
-                des_path = os.path.join(self.path, "images", name)
+                    if os.path.isdir(des_path) and overwrite:
+                        shutil.rmtree(des_path)
+                    pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(src_path, des_path)
+            from spatialdata._io.read import _read_multiscale
 
-                if os.path.isdir(des_path) and overwrite:
-                    shutil.rmtree(des_path)
-                pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(src_path, des_path)
-                image = _read_multiscale(des_path, raster_type="image")
-                self._add_image_in_memory(name=name, image=image, overwrite=True)
+            # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            image = _read_multiscale(des_path, raster_type="image")
+            self._add_image_in_memory(name=name, image=image, overwrite=True)
         else:
             assert _called_from_write is False
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
@@ -520,32 +527,39 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if not _called_from_write:
-                self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
-            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
-            with tempfile.TemporaryDirectory() as tmpdir:
-                store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
-                root = zarr.group(store=store)
+            des_path = os.path.join(str(self.path), "labels", name)
+            if _called_from_write:
+                elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
                 write_labels(
                     labels=self.labels[name],
-                    group=root,
+                    group=elem_group,
                     name=name,
                     storage_options=storage_options,
                 )
-                # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
-                # from the correct storage
-                from spatialdata._io.read import _read_multiscale
+            else:
+                self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
+                    root = zarr.group(store=store)
+                    write_labels(
+                        labels=self.labels[name],
+                        group=root,
+                        name=name,
+                        storage_options=storage_options,
+                    )
+                    src_path = os.path.join(store.path, "labels", name)
+                    assert isinstance(self.path, str)
 
-                src_path = os.path.join(store.path, "labels", name)
-                assert isinstance(self.path, str)
-                des_path = os.path.join(self.path, "labels", name)
+                    if os.path.isdir(des_path) and overwrite:
+                        shutil.rmtree(des_path)
+                    pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(src_path, des_path)
+            from spatialdata._io.read import _read_multiscale
 
-                if os.path.isdir(des_path) and overwrite:
-                    shutil.rmtree(des_path)
-                pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(src_path, des_path)
-                labels = _read_multiscale(des_path, raster_type="labels")
-                self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
+            # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            labels = _read_multiscale(des_path, raster_type="labels")
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
         else:
             assert _called_from_write is False
             self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
@@ -580,31 +594,37 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
-            if not _called_from_write:
-                self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
-            # TODO: if _called_from_write is True, write directly to the Zarr storage, instead of writing in a temporary directory. This improves performance and keeps integrity
-            with tempfile.TemporaryDirectory() as tmpdir:
-                store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
-                root = zarr.group(store=store)
+            des_path = os.path.join(str(self.path), "points", name)
+            if _called_from_write:
+                elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
                 write_points(
                     points=self.points[name],
-                    group=root,
+                    group=elem_group,
                     name=name,
                 )
-                # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
-                # from the correct storage
-                from spatialdata._io.read import _read_points
+            else:
+                self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    store = parse_url(os.path.join(tmpdir, "data.zarr"), mode="w").store
+                    root = zarr.group(store=store)
+                    write_points(
+                        points=self.points[name],
+                        group=root,
+                        name=name,
+                    )
+                    src_path = os.path.join(store.path, name)
+                    assert isinstance(self.path, str)
 
-                src_path = os.path.join(store.path, name)
-                assert isinstance(self.path, str)
-                des_path = os.path.join(self.path, "points", name)
+                    if os.path.isdir(des_path) and overwrite:
+                        shutil.rmtree(des_path)
+                    pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(src_path, des_path)
+            from spatialdata._io.read import _read_points
 
-                if os.path.isdir(des_path) and overwrite:
-                    shutil.rmtree(des_path)
-                pathlib.Path(des_path).parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(src_path, des_path)
-                points = _read_points(des_path)
-                self._add_points_in_memory(name=name, points=points, overwrite=True)
+            # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
+            points = _read_points(des_path)
+            self._add_points_in_memory(name=name, points=points, overwrite=True)
         else:
             assert _called_from_write is False
             self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
