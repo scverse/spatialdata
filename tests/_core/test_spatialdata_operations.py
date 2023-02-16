@@ -9,13 +9,12 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import (
+    _concatenate_tables,
     concatenate,
-    concatenate_tables,
     set_transformation,
 )
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import get_table_mapping_metadata
 from tests.conftest import _get_table
 
 
@@ -101,16 +100,16 @@ def test_concatenate_tables():
     table0 = _get_table(region="shapes/shapes_0", region_key=None, instance_key="instance_id")
     table1 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
     table2 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
-    assert concatenate_tables([]) is None
-    assert len(concatenate_tables([table0])) == len(table0)
-    assert len(concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
+    assert _concatenate_tables([]) is None
+    assert len(_concatenate_tables([table0])) == len(table0)
+    assert len(_concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
 
     ##
     table0.obs["annotated_element_merged"] = np.arange(len(table0))
-    c0 = concatenate_tables([table0, table1])
+    c0 = _concatenate_tables([table0, table1])
     assert len(c0) == len(table0) + len(table1)
 
-    d = get_table_mapping_metadata(c0)
+    d = c0.uns[TableModel.ATTRS_KEY]
     d["region"] = sorted(d["region"])
     assert d == {
         "region": ["shapes/shapes_0", "shapes/shapes_1"],
@@ -122,11 +121,11 @@ def test_concatenate_tables():
     table3 = _get_table(region="shapes/shapes_0", region_key="annotated_shapes_other", instance_key="instance_id")
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
     with pytest.raises(AssertionError):
-        concatenate_tables([table0, table3])
+        _concatenate_tables([table0, table3])
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
     table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/shapes_0", "shapes/shapes_1"]
     with pytest.raises(AssertionError):
-        concatenate_tables([table0, table3])
+        _concatenate_tables([table0, table3])
 
     ##
     table4 = _get_table(
@@ -139,10 +138,10 @@ def test_concatenate_tables():
         region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape1", instance_key="instance_id"
     )
 
-    assert len(concatenate_tables([table4, table5])) == len(table4) + len(table5)
+    assert len(_concatenate_tables([table4, table5])) == len(table4) + len(table5)
 
     with pytest.raises(RuntimeError):
-        concatenate_tables([table4, table6])
+        _concatenate_tables([table4, table6])
 
 
 def test_concatenate_sdatas(full_sdata):

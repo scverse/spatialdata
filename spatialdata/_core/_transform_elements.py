@@ -254,6 +254,33 @@ def get_transformation_between_landmarks(
     references_coords: AnnData,
     moving_coords: AnnData,
 ) -> Affine:
+    """
+    Get a similarity transformation between two sets of landmarks. Landmarks are assumed to be in the same space.
+
+    Parameters
+    ----------
+    references_coords
+        landmarks annotating the reference element. Must be a valid element describing points or circles.
+    moving_coords
+        landmarks annotating the moving element. Must be a valid element describing points or circles.
+
+    Returns
+    -------
+    The Affine transformation that maps the moving element to the reference element.
+
+    Examples
+    --------
+    If you save the landmark points using napari_spatialdata, they will be alredy saved as circles. Here is an
+    example on how to call this function on two sets of numpy arrays describing x, y coordinates.
+    >>> import numpy as np
+    >>> from spatialdata.models import PointsModel
+    >>> from spatialdata.transform import get_transformation_between_landmarks
+    >>> points_moving = np.array([[0, 0], [1, 1], [2, 2]])
+    >>> points_reference = np.array([[0, 0], [10, 10], [20, 20]])
+    >>> moving_coords = PointsModel(points_moving)
+    >>> references_coords = PointsModel(points_reference)
+    >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
+    """
     from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
 
     model = estimate_transform("affine", src=moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"])
@@ -298,11 +325,41 @@ def align_elements_using_landmarks(
     moving_coords: AnnData,
     reference_element: SpatialElement,
     moving_element: SpatialElement,
-    sdata: Optional[SpatialData] = None,
     reference_coordinate_system: str = "global",
     moving_coordinate_system: str = "global",
     new_coordinate_system: Optional[str] = None,
-) -> tuple[BaseTransformation, BaseTransformation]:
+    write_to_sdata: Optional[SpatialData] = None,
+) -> BaseTransformation:
+    """
+    Maps a moving object into a reference object using landmarks; returns the transformations that enable this
+    mapping and optinally saves them, to map to a new shared coordinate system.
+
+    Parameters
+    ----------
+    references_coords
+        landmarks annotating the reference element. Must be a valid element describing points or circles.
+    moving_coords
+        landmarks annotating the moving element. Must be a valid element describing points or circles.
+    reference_element
+        the reference element.
+    moving_element
+        the moving element.
+    reference_coordinate_system
+        the coordinate system of the reference element that have been used to annotate the landmarks.
+    moving_coordinate_system
+        the coordinate system of the moving element that have been used to annotate the landmarks.
+    new_coordinate_system
+        If provided, both elements will be mapped to this new coordinate system with the new transformations just
+        computed.
+    write_to_sdata
+        If provided, the transformations will be saved to disk in the specified SpatialData object. The SpatialData
+        object must be backed and must contain both the reference and moving elements.
+
+    Returns
+    -------
+    A similarity transformation that maps the moving element to the same coordinate of reference element in the
+    coordinate system specified by reference_coordinate_system.
+    """
     from spatialdata._core.transformations import BaseTransformation, Sequence
 
     affine = get_transformation_between_landmarks(references_coords, moving_coords)
@@ -319,6 +376,10 @@ def align_elements_using_landmarks(
 
     if new_coordinate_system is not None:
         # this allows to work on singleton objects, not embedded in a SpatialData object
-        set_transformation(moving_element, new_moving_transformation, new_coordinate_system, write_to_sdata=sdata)
-        set_transformation(reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=sdata)
-    return new_moving_transformation, new_reference_transformation
+        set_transformation(
+            moving_element, new_moving_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
+        )
+        set_transformation(
+            reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
+        )
+    return new_moving_transformation

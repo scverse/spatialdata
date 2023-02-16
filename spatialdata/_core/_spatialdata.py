@@ -44,7 +44,6 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
-from spatialdata.utils import get_table_mapping_metadata
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -363,7 +362,7 @@ class SpatialData:
                     element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
 
         if filter_table:
-            table_mapping_metadata = get_table_mapping_metadata(self.table)
+            table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
             region_key = table_mapping_metadata["region_key"]
             table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
         else:

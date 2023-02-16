@@ -25,7 +25,7 @@ __all__ = [
     "get_transformation",
     "remove_transformation",
     "get_transformation_between_coordinate_systems",
-    "concatenate_tables",
+    "_concatenate_tables",
     "concatenate",
 ]
 
@@ -291,7 +291,7 @@ def get_transformation_between_coordinate_systems(
 
 
 ##
-def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
+def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     """
     Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
 
@@ -421,7 +421,7 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
 
     if not omit_table:
         list_of_tables = [sdata.table for sdata in sdatas if sdata.table is not None]
-        merged_table = concatenate_tables(list_of_tables)
+        merged_table = _concatenate_tables(list_of_tables)
     else:
         merged_table = None
 

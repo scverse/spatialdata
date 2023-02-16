@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import numpy as np
-from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -147,26 +146,3 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         return unpadded_multiscale
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
-
-
-def get_table_mapping_metadata(table: AnnData) -> dict[str, Union[Optional[Union[str, list[str]]], Optional[str]]]:
-    """
-    Get the region, region_key and instance_key from the table metadata.
-
-    Parameters
-    ----------
-    table
-        The table to get the metadata from.
-
-    Returns
-    -------
-    The `region`, `region_key`, and `instance_key` values.
-    """
-    from spatialdata._core.models import TableModel
-
-    TableModel().validate(table)
-    region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-    d = {TableModel.REGION_KEY: region, TableModel.REGION_KEY_KEY: region_key, TableModel.INSTANCE_KEY: instance_key}
-    return d

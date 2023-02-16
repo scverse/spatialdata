@@ -490,9 +490,9 @@ def test_transformations_between_coordinate_systems(images):
                 moving_coords=moving_landmarks,
                 reference_element=el0,
                 moving_element=el1,
-                sdata=sdata,
                 reference_coordinate_system="global0",
                 moving_coordinate_system="global1",
                 new_coordinate_system="global2",
+                write_to_sdata=sdata,
             )
         assert "global2" in images.coordinate_systems
