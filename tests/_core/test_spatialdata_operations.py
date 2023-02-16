@@ -52,7 +52,7 @@ def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: Spat
 
 
 def test_filter_by_coordinate_system(full_sdata):
-    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global")
+    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
     _assert_spatialdata_objects_seem_identical(sdata, full_sdata)
 
     scale = Scale([2.0], axes=("x",))
@@ -60,11 +60,13 @@ def test_filter_by_coordinate_system(full_sdata):
     set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
 
-    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     assert len(list(sdata_my_space._gen_elements())) == 2
     _assert_tables_seem_identical(sdata_my_space.table, full_sdata.table)
 
-    sdata_my_space1 = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1", "my_space2"])
+    sdata_my_space1 = full_sdata.filter_by_coordinate_system(
+        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
+    )
     assert len(list(sdata_my_space1._gen_elements())) == 3
 
 
@@ -85,9 +87,9 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
     set_transformation(full_sdata.shapes["shapes_0"], scale, "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], scale, "my_space1")
 
-    filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=True)
-    filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=True)
-    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
+    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
 
     assert len(filtered_sdata0.table) + len(filtered_sdata1.table) == len(full_sdata.table)
     assert len(filtered_sdata2.table) == len(full_sdata.table)
@@ -161,9 +163,9 @@ def test_concatenate_sdatas(full_sdata):
 
     set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
-    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"])
+    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
     assert len(list(filtered._gen_elements())) == 2
-    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0")
-    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1")
+    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
     concatenated = concatenate([filtered0, filtered1])
     assert len(list(concatenated._gen_elements())) == 2

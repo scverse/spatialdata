@@ -315,6 +315,22 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     if len(tables) == 1:
         return tables[0]
 
+    # 1) if REGION is a list, REGION_KEY is a string and there is a column in the table, with that name, specifying
+    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY is not used.
+    #
+    # In case 1), we require that each table has the same value for REGION_KEY (this assumption could be relaxed,
+    # see below) and then we concatenate the table. The new concatenated column is correcly annotating the rows.
+    #
+    # In case 2), we require that each table has no REGION_KEY value. In such a case, contatenating the tables would
+    # not add any "REGION_KEY" column, since no table has it. For this reason we add such column to each table and we
+    # call it "annotated_element_merged". Such a column could be already present in the table (for instance merging a
+    # table that had already been merged), so the for loop before find a unique name. I added an upper bound,
+    # so if the user keeps merging the same table more than 100 times (this is bad practice anyway), then we raise an
+    # exception.
+    #
+    # Final note, as mentioned we could relax the requirement that all the tables have the same REGION_KEY value (
+    # either all the same string, either all None), but I wanted to start simple, since this covers a lot of use
+    # cases already.
     MERGED_TABLES_REGION_KEY = "annotated_element_merged"
     MAX_CONCATENTAION_TABLES = 100
     for i in range(MAX_CONCATENTAION_TABLES):
@@ -406,6 +422,8 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
     ----------
     sdatas
         The spatial data objects to concatenate.
+    omit_table
+        If True, the table is not concatenated. This is useful if the tables are not compatible.
 
     Returns
     -------
