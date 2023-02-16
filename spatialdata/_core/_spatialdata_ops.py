@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 
+import anndata
 import networkx as nx
 import numpy as np
 from anndata import AnnData
@@ -398,7 +399,7 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
         merged_region = all_regions
 
     attr = {"region": merged_region, "region_key": merged_region_key, "instance_key": merged_instance_key}
-    merged_table = AnnData.concatenate(*tables, join="outer", uns_merge="same")
+    merged_table = anndata.concat(tables, join="outer", uns_merge="same")
 
     # remove the MERGED_TABLES_REGION_KEY column if it has been added (the code above either adds that column
     # to all the tables, either it doesn't add it at all)
