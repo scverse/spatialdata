@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import dask_image.ndinterp
@@ -251,11 +251,11 @@ def _(data: AnnData, transformation: BaseTransformation) -> AnnData:
 
 
 def get_transformation_between_landmarks(
-    references_coords: AnnData,
-    moving_coords: AnnData,
+    references_coords: Union[AnnData, DaskDataFrame],
+    moving_coords: Union[AnnData, DaskDataFrame],
 ) -> Affine:
     """
-    Get a similarity transformation between two sets of landmarks. Landmarks are assumed to be in the same space.
+    Get a similarity transformation between two lists of (n >= 3) landmarks. Landmarks are assumed to be in the same space.
 
     Parameters
     ----------
@@ -283,13 +283,25 @@ def get_transformation_between_landmarks(
     """
     from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
 
-    model = estimate_transform("affine", src=moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"])
+    assert get_dims(references_coords) == ("x", "y")
+    assert get_dims(moving_coords) == ("x", "y")
+
+    if isinstance(references_coords, AnnData):
+        references_xy = references_coords.obsm["spatial"]
+        moving_xy = moving_coords.obsm["spatial"]
+    elif isinstance(references_coords, DaskDataFrame):
+        references_xy = references_coords[["x", "y"]].to_dask_array().compute()
+        moving_xy = moving_coords[["x", "y"]].to_dask_array().compute()
+    else:
+        raise TypeError("references_coords must be either an AnnData or a DaskDataFrame")
+
+    model = estimate_transform("affine", src=moving_xy, dst=references_xy)
     transform_matrix = model.params
     a = transform_matrix[:2, :2]
     d = np.linalg.det(a)
     final: BaseTransformation
     if d < 0:
-        m = (moving_coords.obsm["spatial"][:, 0].max() - moving_coords.obsm["spatial"][:, 0].min()) / 2
+        m = (moving_xy[:, 0].max() - moving_xy[:, 0].min()) / 2
         flip = Affine(
             np.array(
                 [
@@ -301,15 +313,17 @@ def get_transformation_between_landmarks(
             input_axes=("x", "y"),
             output_axes=("x", "y"),
         )
-        flipped_moving_coords = flip.transform(moving_coords)
-        model = estimate_transform(
-            "similarity", src=flipped_moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"]
-        )
+        flipped_moving = flip.transform(moving_coords)
+        if isinstance(flipped_moving, AnnData):
+            flipped_moving_xy = flipped_moving.obsm["spatial"]
+        elif isinstance(flipped_moving, DaskDataFrame):
+            flipped_moving_xy = flipped_moving[["x", "y"]].to_dask_array().compute()
+        else:
+            raise TypeError("flipped_moving must be either an AnnData or a DaskDataFrame")
+        model = estimate_transform("similarity", src=flipped_moving_xy, dst=references_xy)
         final = Sequence([flip, Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))])
     else:
-        model = estimate_transform(
-            "similarity", src=moving_coords.obsm["spatial"], dst=references_coords.obsm["spatial"]
-        )
+        model = estimate_transform("similarity", src=moving_xy, dst=references_xy)
         final = Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))
 
     affine = Affine(
@@ -321,8 +335,8 @@ def get_transformation_between_landmarks(
 
 
 def align_elements_using_landmarks(
-    references_coords: AnnData,
-    moving_coords: AnnData,
+    references_coords: Union[AnnData | DaskDataFrame],
+    moving_coords: Union[AnnData | DaskDataFrame],
     reference_element: SpatialElement,
     moving_element: SpatialElement,
     reference_coordinate_system: str = "global",
@@ -331,7 +345,7 @@ def align_elements_using_landmarks(
     write_to_sdata: Optional[SpatialData] = None,
 ) -> BaseTransformation:
     """
-    Maps a moving object into a reference object using landmarks; returns the transformations that enable this
+    Maps a moving object into a reference object using two lists of (n >= 3) landmarks; returns the transformations that enable this
     mapping and optinally saves them, to map to a new shared coordinate system.
 
     Parameters
