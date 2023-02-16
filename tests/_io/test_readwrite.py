@@ -279,6 +279,19 @@ def test_overwrite_files_with_backed_data(full_sdata):
         )
         sdata2.write(f, overwrite=True)
 
+def test_overwrite_onto_non_zarr_file(full_sdata):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f0 = os.path.join(tmpdir, 'test.txt')
+        with open(f0, 'w'):
+            with pytest.raises(ValueError):
+                full_sdata.write(f0)
+            with pytest.raises(ValueError):
+                full_sdata.write(f0, overwrite=True)
+        f1 = os.path.join(tmpdir, 'test.zarr')
+        os.mkdir(f1)
+        with pytest.raises(ValueError):
+            full_sdata.write(f1)
+
 
 def test_incremental_io_with_backed_elements(full_sdata):
     # addressing https://github.com/scverse/spatialdata/issues/137

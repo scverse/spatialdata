@@ -721,7 +721,11 @@ class SpatialData:
 
         target_path = None
         tmp_zarr_file = None
-        if parse_url(file_path, mode="r") is not None or os.path.exists(file_path):
+        if os.path.exists(file_path):
+            if parse_url(file_path, mode="r") is None:
+                raise ValueError("The target file path specified already exists, and it has been detected not not be "
+                                 "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
+                                 "data loss.")
             if not overwrite:
                 raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
             else:
@@ -787,9 +791,15 @@ class SpatialData:
         if target_path is not None:
             if os.path.isdir(file_path):
                 assert overwrite is True
-                shutil.rmtree(file_path)
+                store = parse_url(file_path, mode="w").store
+                root = zarr.group(store=store, overwrite=overwrite)
+                store.close()
+                pass
             assert isinstance(tmp_zarr_file, str)
-            shutil.move(tmp_zarr_file, file_path)
+            for file in os.listdir(tmp_zarr_file):
+                source_file = os.path.join(tmp_zarr_file, file)
+                target_file = os.path.join(file_path, file)
+                os.rename(source_file, target_file)
             target_path.cleanup()
 
             self.path = file_path
