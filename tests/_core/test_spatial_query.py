@@ -79,8 +79,23 @@ def test_bounding_box_points():
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([18, 25]), max_coordinate=np.array([22, 35]))
-    points_result = _bounding_box_query_points(points_element, request)
+    ##
+    from spatialdata import SpatialData
+
+    sdata = SpatialData(points={"points": points_element})
+    queried_sdata = sdata.query.bounding_box(
+        axes=("x", "y"),
+        min_coordinate=np.array([18, 25]),
+        max_coordinate=np.array([22, 35]),
+        target_coordinate_system="global",
+    )
+    points_result = queried_sdata.points["points"]
+    ##
+
+    # TODO: this commented part should remain and the current code should be in a new test (also for images, labels, polygons, shapes)
+    # request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([18, 25]), max_coordinate=np.array([22, 35]))
+    # points_result = _bounding_box_query_points(points_element, request)
+    ##
     np.testing.assert_allclose(points_result["x"], [20])
     np.testing.assert_allclose(points_result["y"], [30])
 
@@ -90,6 +105,7 @@ def test_bounding_box_points():
     # original element should be unchanged
     np.testing.assert_allclose(points_element["x"], original_x)
     np.testing.assert_allclose(points_element["y"], original_y)
+    ##
 
 
 def test_bounding_box_points_no_points():

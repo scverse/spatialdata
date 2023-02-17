@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import singledispatch
 from typing import Union
 
 import numpy as np
@@ -9,6 +10,8 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata import SpatialData, SpatialElement
+from spatialdata._core._query_requests import _dict_query_dispatcher
 from spatialdata._core.core_utils import ValidAxis_t, get_spatial_axes
 from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
 
@@ -17,6 +20,7 @@ from spatialdata._core.transformations import BaseTransformation, Sequence, Tran
 class BaseSpatialRequest:
     """Base class for spatial queries."""
 
+    target_coordinate_system: str
     axes: tuple[ValidAxis_t, ...]
 
     def __post_init__(self) -> None:
@@ -73,14 +77,22 @@ def _bounding_box_query_points(points: DaskDataFrame, request: BoundingBoxReques
     The points contained within the specified bounding box.
     """
 
-    for axis_index, axis_name in enumerate(request.axes):
-        # filter by lower bound
-        min_value = request.min_coordinate[axis_index]
-        points = points[points[axis_name].gt(min_value)]
+    transformation  # is an argument
+    transformation.inverse()
+    points  # this is in the local coordiante system
+    # transform the bounding from the extsinstic coordinate system to the intrinsic coordinate system and compute the bounding box of this rotated bounding boxc
+    # now filter the data from the intrinsic coordinate system using this larger boundingbox
+    # transform the filtered data back to the extrinsic coordinate system
+    # now query the transformed data using the original bounding box (which is axis aligned)
 
-        # filter by upper bound
-        max_value = request.max_coordinate[axis_index]
-        points = points[points[axis_name].lt(max_value)]
+    # for axis_index, axis_name in enumerate(request.axes):
+    #     # filter by lower bound
+    #     min_value = request.min_coordinate[axis_index]
+    #     points = points[points[axis_name].gt(min_value)]
+    #
+    #     # filter by upper bound
+    #     max_value = request.max_coordinate[axis_index]
+    #     points = points[points[axis_name].lt(max_value)]
 
     return points
 
@@ -114,6 +126,7 @@ def _bounding_box_query_image(
     -------
     The image contained within the specified bounding box.
     """
+    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This reasoning applies also to points, polygons and shapes
     from spatialdata._core._spatialdata_ops import (
         get_transformation,
         set_transformation,
@@ -208,3 +221,58 @@ def _bounding_box_query_polygons_dict(
             requested_polygons[polygons_name] = polygons_table
 
     return requested_polygons
+
+
+@singledispatch
+def bounding_box_query(
+    element: Union[SpatialElement, SpatialData],
+    axes: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    target_coordinate_system: str,
+) -> Union[SpatialElement, SpatialData]:
+    raise NotImplementedError()
+
+
+@bounding_box_query.register(SpatialData)
+def _(
+    sdata: SpatialData,
+    axes: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    target_coordinate_system: str,
+) -> SpatialData:
+    new_elements = {}
+    for element_type in ["points", "images", "polygons", "shapes"]:
+        elements = getattr(sdata, element_type)
+        queried_elements = _dict_query_dispatcher(
+            elements,
+            bounding_box_query,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+        )
+        new_elements[element_type] = queried_elements
+    return SpatialData(**new_elements, table=sdata.table)
+
+
+@bounding_box_query.register(DaskDataFrame)
+def _(
+    points: DaskDataFrame,
+    axes: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    target_coordinate_system: str,
+) -> DaskDataFrame:
+    request = BoundingBoxRequest(
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_coordinate_system=target_coordinate_system,
+    )
+    return _bounding_box_query_points(points, request)
+
+
+# def bounding_box_query_request(sdata: SpatialData, request: BoundingBoxRequest) -> SpatialData:
+#     sdata.query.bounding_box(**request.to_dict())
