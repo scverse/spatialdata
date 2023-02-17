@@ -271,7 +271,16 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-    return _bounding_box_query_points(points, request)
+    from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+    t = get_transformation(points, to_coordinate_system=target_coordinate_system)
+    from spatialdata._core.core_utils import get_dims
+    dims = get_dims(points)
+    # which one is needed?
+    t.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
+    t.inverse().to_affine_matrix(input_axes=dims, output_axes=dims)
+    set_transformation(points, t.inverse(), to_coordinate_system='new_target')
+    set_transformation(points, {'new_target': t.inverse()}, set_all=True)
+    return _bounding_box_query_points(points, request, transformation=t)
 
 
 # def bounding_box_query_request(sdata: SpatialData, request: BoundingBoxRequest) -> SpatialData:
