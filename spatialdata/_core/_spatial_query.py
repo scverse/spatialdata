@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import singledispatch
 from typing import Union
 
+import dask.array as da
 import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -14,6 +15,90 @@ from spatialdata import SpatialData, SpatialElement
 from spatialdata._core._query_requests import _dict_query_dispatcher
 from spatialdata._core.core_utils import ValidAxis_t, get_spatial_axes
 from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
+from spatialdata._types import ArrayLike
+
+
+def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLike) -> ArrayLike:
+    """From the min and max coordinates of a bounding box, get the coordinates
+    of all corners.
+
+    Parameters
+    ----------
+    min_coordinate : np.ndarray
+        The upper left hand corner of the bounding box (i.e., minimum coordinates
+        along all dimensions).
+    max_coordinate : np.ndarray
+        The lower right hand corner of the bounding box (i.e., the maximum coordinates
+        along all dimensions
+
+    Returns
+    -------
+    (N, D) array of coordinates of the corners. N = 4 for 2D and 8 for 3D.
+    """
+    if len(min_coordinate) == 2:
+        # 2D bounding box
+        return np.array(
+            [
+                [min_coordinate[0], min_coordinate[1]],
+                [min_coordinate[0], max_coordinate[1]],
+                [max_coordinate[0], max_coordinate[1]],
+                [max_coordinate[0], min_coordinate[1]],
+            ]
+        )
+
+    elif len(min_coordinate) == 3:
+        # 3D bounding cube
+        return np.array(
+            [
+                [min_coordinate[0], min_coordinate[1], min_coordinate[2]],
+                [min_coordinate[0], min_coordinate[1], max_coordinate[2]],
+                [min_coordinate[0], max_coordinate[1], max_coordinate[2]],
+                [min_coordinate[0], max_coordinate[1], min_coordinate[2]],
+                [max_coordinate[0], min_coordinate[1], min_coordinate[2]],
+                [max_coordinate[0], min_coordinate[1], max_coordinate[2]],
+                [max_coordinate[0], max_coordinate[1], max_coordinate[2]],
+                [max_coordinate[0], max_coordinate[1], min_coordinate[2]],
+            ]
+        )
+    else:
+        raise ValueError("bounding box must be 2D or 3D")
+
+
+def _get_bounding_box_corners_in_intrinsic_coordinates(
+    element: SpatialElement,
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    target_coordinate_system: str,
+    axes: tuple[str, ...],
+) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
+    from spatialdata._core._spatialdata_ops import get_transformation
+    from spatialdata._core.core_utils import get_dims
+
+    # get the transformation from the element's intrinsic coordinate system
+    # to the query coordinate space
+    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
+
+    # get the coordinates of the bounding box corners
+    bounding_box_corners = get_bounding_box_corners(
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+    )
+
+    # transform the coordinates to the intrinsic coordinate system
+    intrinsic_axes = get_dims(element)
+    transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
+        input_axes=axes, output_axes=intrinsic_axes
+    )
+    ndim = len(min_coordinate)
+    rotation_matrix = transform_to_intrinsic[0:ndim, 0:ndim]
+    translation = transform_to_intrinsic[0:ndim, ndim]
+
+    intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
+
+    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
+    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
+
+    return min_coordinate_intrinsic, max_coordinate_intrinsic, intrinsic_axes
 
 
 @dataclass(frozen=True)
@@ -62,7 +147,9 @@ class BoundingBoxRequest(BaseSpatialRequest):
             raise ValueError("The minimum coordinate must be less than the maximum coordinate.")
 
 
-def _bounding_box_query_points(points: DaskDataFrame, request: BoundingBoxRequest) -> DaskDataFrame:
+def _bounding_box_mask_points(
+    points: DaskDataFrame, min_coordinate: ArrayLike, max_coordinate: ArrayLike, axes: tuple[str, ...]
+) -> DaskDataFrame:
     """Perform a spatial bounding box query on a points element.
 
     Parameters
@@ -77,37 +164,15 @@ def _bounding_box_query_points(points: DaskDataFrame, request: BoundingBoxReques
     The points contained within the specified bounding box.
     """
 
-    transformation  # is an argument
-    transformation.inverse()
-    points  # this is in the local coordiante system
-    # transform the bounding from the extsinstic coordinate system to the intrinsic coordinate system and compute the bounding box of this rotated bounding boxc
-    # now filter the data from the intrinsic coordinate system using this larger boundingbox
-    # transform the filtered data back to the extrinsic coordinate system
-    # now query the transformed data using the original bounding box (which is axis aligned)
-
-    # for axis_index, axis_name in enumerate(request.axes):
-    #     # filter by lower bound
-    #     min_value = request.min_coordinate[axis_index]
-    #     points = points[points[axis_name].gt(min_value)]
-    #
-    #     # filter by upper bound
-    #     max_value = request.max_coordinate[axis_index]
-    #     points = points[points[axis_name].lt(max_value)]
-
-    return points
-
-
-def _bounding_box_query_points_dict(
-    points_dict: dict[str, DaskDataFrame], request: BoundingBoxRequest
-) -> dict[str, DaskDataFrame]:
-    requested_points = {}
-    for points_name, points_data in points_dict.items():
-        points = _bounding_box_query_points(points_data, request)
-        if len(points) > 0:
-            # do not include elements with no data
-            requested_points[points_name] = points
-
-    return requested_points
+    in_bounding_box_masks = []
+    for axis_index, axis_name in enumerate(axes):
+        min_value = min_coordinate[axis_index]
+        in_bounding_box_masks.append(points[axis_name].gt(min_value).to_dask_array(lengths=True))
+    for axis_index, axis_name in enumerate(axes):
+        max_value = max_coordinate[axis_index]
+        in_bounding_box_masks.append(points[axis_name].lt(max_value).to_dask_array(lengths=True))
+    in_bounding_box_masks = da.stack(in_bounding_box_masks, axis=-1)
+    return da.all(in_bounding_box_masks, axis=1)
 
 
 def _bounding_box_query_image(
@@ -265,23 +330,66 @@ def _(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> DaskDataFrame:
-    request = BoundingBoxRequest(
-        axes=axes,
+    from spatialdata._core._spatialdata_ops import get_transformation
+
+    # get the four corners of the bounding box
+    (
+        min_coordinate_intrinsic,
+        max_coordinate_intrinsic,
+        intrinsic_axes,
+    ) = _get_bounding_box_corners_in_intrinsic_coordinates(
+        element=points,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
+        axes=axes,
     )
-    from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
-    t = get_transformation(points, to_coordinate_system=target_coordinate_system)
-    from spatialdata._core.core_utils import get_dims
-    dims = get_dims(points)
-    # which one is needed?
-    t.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-    t.inverse().to_affine_matrix(input_axes=dims, output_axes=dims)
-    set_transformation(points, t.inverse(), to_coordinate_system='new_target')
-    set_transformation(points, {'new_target': t.inverse()}, set_all=True)
-    return _bounding_box_query_points(points, request, transformation=t)
 
+    # get the points in the intrinsic coordinate bounding box
+    in_intrinsic_bounding_box = _bounding_box_mask_points(
+        points=points,
+        min_coordinate=min_coordinate_intrinsic,
+        max_coordinate=max_coordinate_intrinsic,
+        axes=intrinsic_axes,
+    )
+    points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
 
-# def bounding_box_query_request(sdata: SpatialData, request: BoundingBoxRequest) -> SpatialData:
-#     sdata.query.bounding_box(**request.to_dict())
+    if in_intrinsic_bounding_box.sum() == 0:
+        # if there aren't any points, just return
+        return None
+
+    # we have to reset the index since we have subset
+    # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
+    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
+    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
+        points_in_intrinsic_bounding_box.idx.cumsum() - 1
+    )
+    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
+        lambda df: df.rename(index={"idx": None})
+    )
+    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
+
+    # transform the element to the query coordinate system
+    transform_to_query_space = get_transformation(points, to_coordinate_system=target_coordinate_system)
+    points_query_coordinate_system = transform_to_query_space.transform(points_in_intrinsic_bounding_box)  # type: ignore[union-attr]
+
+    # get a mask for the points in the bounding box
+    bounding_box_mask = _bounding_box_mask_points(
+        points=points_query_coordinate_system,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        axes=axes,
+    )
+    if bounding_box_mask.sum() == 0:
+        return None
+    else:
+        return points_in_intrinsic_bounding_box.loc[bounding_box_mask]
+
+    #
+    #
+    # # which one is needed?
+    # t.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
+    #
+    # set_transformation(points, t.inverse(), to_coordinate_system='new_target')
+    # set_transformation(points, {'new_target': t.inverse()}, set_all=True)
+    # return _bounding_box_query_points(points, request, transformation=t)

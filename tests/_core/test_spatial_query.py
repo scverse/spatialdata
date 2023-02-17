@@ -18,8 +18,8 @@ from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     _bounding_box_query_image,
-    _bounding_box_query_points,
     _bounding_box_query_polygons,
+    bounding_box_query,
 )
 
 
@@ -79,32 +79,24 @@ def test_bounding_box_points():
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
-    ##
-    from spatialdata import SpatialData
-
-    sdata = SpatialData(points={"points": points_element})
-    queried_sdata = sdata.query.bounding_box(
+    points_result = bounding_box_query(
+        points_element,
         axes=("x", "y"),
         min_coordinate=np.array([18, 25]),
         max_coordinate=np.array([22, 35]),
         target_coordinate_system="global",
     )
-    points_result = queried_sdata.points["points"]
-    ##
 
-    # TODO: this commented part should remain and the current code should be in a new test (also for images, labels, polygons, shapes)
-    # request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([18, 25]), max_coordinate=np.array([22, 35]))
-    # points_result = _bounding_box_query_points(points_element, request)
-    ##
-    np.testing.assert_allclose(points_result["x"], [20])
-    np.testing.assert_allclose(points_result["y"], [30])
+    # Check that the correct point was selected
+    np.testing.assert_allclose(points_result["x"].compute(), [20])
+    np.testing.assert_allclose(points_result["y"].compute(), [30])
 
     # result should be valid points element
     PointsModel.validate(points_result)
 
     # original element should be unchanged
-    np.testing.assert_allclose(points_element["x"], original_x)
-    np.testing.assert_allclose(points_element["y"], original_y)
+    np.testing.assert_allclose(points_element["x"].compute(), original_x)
+    np.testing.assert_allclose(points_element["y"].compute(), original_y)
     ##
 
 
@@ -113,12 +105,14 @@ def test_bounding_box_points_no_points():
     return a points element with length 0.
     """
     points_element = _make_points_element()
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([40, 50]), max_coordinate=np.array([45, 55]))
-    points_result = _bounding_box_query_points(points_element, request)
-    assert len(points_result) == 0
-
-    # result should be valid points element
-    PointsModel.validate(points_result)
+    request = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([40, 50]),
+        max_coordinate=np.array([45, 55]),
+        target_coordinate_system="global",
+    )
+    assert request is None
 
 
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
@@ -132,7 +126,7 @@ def test_bounding_box_image_2d(n_channels):
     # bounding box: y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
 
-    image_result = _bounding_box_query_image(image_element, request)
+    image_result = bounding_box_query(image_element, request)
     expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)
 

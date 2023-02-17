@@ -5,6 +5,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 import dask.array as da
+import dask.dataframe as dd
 import dask_image.ndinterp
 import numpy as np
 from anndata import AnnData
@@ -197,7 +198,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
     axes = get_dims(data)
     arrays = []
     for ax in axes:
-        arrays.append(data[ax].to_dask_array())
+        arrays.append(data[ax].to_dask_array(lengths=True))
     xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
     xtransformed = transformation._transform_coordinates(xdata)
     transformed = data.drop(columns=list(axes))
@@ -206,7 +207,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices].data.flatten()
         # mypy says that from_array is not a method of DaskDataFrame, but it is
-        transformed[ax] = da.from_array(np.array(new_ax))  # type: ignore[attr-defined]
+        transformed[ax] = dd.from_dask_array(da.from_array(np.array(new_ax)))  # type: ignore[attr-defined]
 
     # to avoid cyclic import
     from spatialdata._core.models import PointsModel

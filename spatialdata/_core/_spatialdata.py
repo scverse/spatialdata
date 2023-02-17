@@ -37,6 +37,7 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
+from spatialdata._types import ArrayLike
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -880,8 +881,8 @@ class QueryManager:
     def bounding_box(
         self,
         axes: tuple[str, ...],
-        min_coordinate: np.ndarray,
-        max_coordinate: np.ndarray,
+        min_coordinate: ArrayLike,
+        max_coordinate: ArrayLike,
         target_coordinate_system: str,
     ) -> SpatialData:
         """Perform a bounding box query on the SpatialData object.
