@@ -899,7 +899,7 @@ class QueryManager:
         """
         from spatialdata._core._spatial_query import bounding_box_query
 
-        return bounding_box_query(
+        return bounding_box_query(  # type: ignore[return-value]
             self._sdata,
             axes=axes,
             min_coordinate=min_coordinate,

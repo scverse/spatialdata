@@ -18,7 +18,6 @@ from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     _bounding_box_query_image,
-    _bounding_box_query_polygons,
     bounding_box_query,
 )
 
@@ -97,7 +96,6 @@ def test_bounding_box_points():
     # original element should be unchanged
     np.testing.assert_allclose(points_element["x"].compute(), original_x)
     np.testing.assert_allclose(points_element["y"].compute(), original_y)
-    ##
 
 
 def test_bounding_box_points_no_points():
@@ -209,10 +207,13 @@ def test_bounding_box_polygons():
     cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
     sd_polygons = PolygonsModel.parse(cell_polygon_table)
 
-    request = BoundingBoxRequest(
-        axes=("y", "x"), min_coordinate=np.array([40, 40]), max_coordinate=np.array([100, 100])
+    polygons_result = bounding_box_query(
+        sd_polygons,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([40, 40]),
+        max_coordinate=np.array([100, 100]),
     )
-    polygons_result = _bounding_box_query_polygons(sd_polygons, request)
 
     assert len(polygons_result) == 1
     assert polygons_result.index[0] == 3
