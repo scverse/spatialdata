@@ -1,13 +1,13 @@
 import logging
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
-from dask.dataframe import read_parquet
+from dask.dataframe import read_parquet  # type: ignore[attr-defined]
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -18,60 +18,21 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._spatialdata import SpatialData
-from spatialdata._core.core_utils import TRANSFORM_KEY, set_transform
+from spatialdata._core.core_utils import (
+    MappingToCoordinateSystem_t,
+    _set_transformations,
+)
 from spatialdata._core.models import TableModel
+from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
 from spatialdata._logging import logger
 
 
-def _read_multiscale(node: Node, fmt: SpatialDataFormatV01) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    datasets = node.load(Multiscales).datasets
-    transformations = [BaseTransformation.from_dict(t[0]) for t in node.metadata["coordinateTransformations"]]
-    name = node.metadata["name"]
-    if type(name) == list:
-        assert len(name) == 1
-        name = name[0]
-        logger.warning(
-            "omero metadata is not fully supported yet, using a workaround. If you encounter bugs related "
-            "to omero metadata please follow the discussion at https://github.com/scverse/spatialdata/issues/60"
-        )
-    axes = [i["name"] for i in node.metadata["axes"]]
-    assert len(transformations) == len(datasets), "Expecting one transformation per dataset."
-    if len(datasets) > 1:
-        multiscale_image = {}
-        for i, (t, d) in enumerate(zip(transformations, datasets)):
-            data = node.load(Multiscales).array(resolution=d, version=fmt.version)
-            multiscale_image[f"scale{i}"] = DataArray(
-                data,
-                name=name,
-                dims=axes,
-                attrs={"transform": t},
-            )
-        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
-        # for some reasons if we put attrs={"transform": t} in the dict above, it does not get copied to
-        # MultiscaleSpatialImage. We put it also above otherwise we get a schema error
-        # TODO: think if we can/want to do something about this
-        t = transformations[0]
-        set_transform(msi, t)
-        return msi
-    else:
-        t = transformations[0]
-        data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-        return SpatialImage(
-            data,
-            name=name,
-            dims=axes,
-            attrs={TRANSFORM_KEY: t},
-        )
-
-
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if isinstance(store, str):
         store = Path(store)
-
-    fmt = SpatialDataFormatV01()
 
     f = zarr.open(store, mode="r")
     images = {}
@@ -87,20 +48,9 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         for k in f.keys():
             f_elem = f[k].name
             f_elem_store = f"{images_store}{f_elem}"
-            image_loc = ZarrLocation(f_elem_store)
-            if image_loc.exists():
-                image_reader = Reader(image_loc)()
-                image_nodes = list(image_reader)
-                if len(image_nodes):
-                    for node in image_nodes:
-                        if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.all(
-                            [not isinstance(spec, Label) for spec in node.specs]
-                        ):
-                            images[k] = _read_multiscale(node, fmt)
+            images[k] = _read_multiscale(f_elem_store, raster_type="image")
 
     # read multiscale labels
-    # `WARNING  ome_zarr.reader:reader.py:225 no parent found for` is expected
-    # since we don't link the image and the label inside .zattrs['image-label']
     with ome_zarr_logger(logging.ERROR):
         labels_store = store / "labels"
         if labels_store.exists():
@@ -108,17 +58,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             for k in f.keys():
                 f_elem = f[k].name
                 f_elem_store = f"{labels_store}{f_elem}"
-                labels_loc = ZarrLocation(f_elem_store)
-                if labels_loc.exists():
-                    labels_reader = Reader(labels_loc)()
-                    labels_nodes = list(labels_reader)
-                    # time.time()
-                    if len(labels_nodes):
-                        for node in labels_nodes:
-                            if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and np.any(
-                                [isinstance(spec, Label) for spec in node.specs]
-                            ):
-                                labels[k] = _read_multiscale(node, fmt)
+                labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
 
     # now read rest of the data
     points_store = store / "points"
@@ -168,9 +108,89 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     return sdata
 
 
+def _get_transformations_from_ngff_dict(
+    list_of_encoded_ngff_transformations: list[dict[str, Any]]
+) -> MappingToCoordinateSystem_t:
+    list_of_ngff_transformations = [NgffBaseTransformation.from_dict(d) for d in list_of_encoded_ngff_transformations]
+    list_of_transformations = [BaseTransformation.from_ngff(t) for t in list_of_ngff_transformations]
+    transformations = {}
+    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations):
+        assert ngff_t.output_coordinate_system is not None
+        transformations[ngff_t.output_coordinate_system.name] = t
+    return transformations
+
+
+def _read_multiscale(
+    store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = SpatialDataFormatV01()
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    assert isinstance(store, str)
+    assert raster_type in ["image", "labels"]
+    nodes: list[Node] = []
+    image_loc = ZarrLocation(store)
+    if image_loc.exists():
+        image_reader = Reader(image_loc)()
+        image_nodes = list(image_reader)
+        if len(image_nodes):
+            for node in image_nodes:
+                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and (
+                    raster_type == "image"
+                    and np.all([not isinstance(spec, Label) for spec in node.specs])
+                    or raster_type == "labels"
+                    and np.any([isinstance(spec, Label) for spec in node.specs])
+                ):
+                    nodes.append(node)
+    if len(nodes) != 1:
+        raise ValueError(
+            f"len(nodes) = {len(nodes)}, expected 1. Unable to read the NGFF file. Please report this "
+            f"bug and attach a minimal data example."
+        )
+    node = nodes[0]
+    datasets = node.load(Multiscales).datasets
+    multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
+    assert len(multiscales) == 1
+    encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
+    transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
+    name = node.metadata["name"]
+    if type(name) == list:
+        assert len(name) == 1
+        name = name[0]
+        logger.warning(
+            "omero metadata is not fully supported yet, using a workaround. If you encounter bugs related "
+            "to omero metadata please follow the discussion at https://github.com/scverse/spatialdata/issues/60"
+        )
+    axes = [i["name"] for i in node.metadata["axes"]]
+    if len(datasets) > 1:
+        multiscale_image = {}
+        for i, d in enumerate(datasets):
+            data = node.load(Multiscales).array(resolution=d, version=fmt.version)
+            multiscale_image[f"scale{i}"] = DataArray(
+                data,
+                # any name
+                name="image",
+                # name=name,
+                dims=axes,
+                # attrs={"transform": t},
+            )
+        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        _set_transformations(msi, transformations)
+        return msi
+    else:
+        data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
+        si = SpatialImage(
+            data,
+            # any name
+            name="image",
+            # name=name,
+            dims=axes,
+            # attrs={TRANSFORM_KEY: t},
+        )
+        _set_transformations(si, transformations)
+        return si
+
+
 def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = ShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read shapes from a zarr store."""
-
+    assert isinstance(store, str)
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
@@ -186,8 +206,8 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
         geometry = from_ragged_array(typ, coords, offsets)
         geo_df = GeoDataFrame({"geometry": geometry}, index=index)
 
-    transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
-    set_transform(geo_df, transforms)
+    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    _set_transformations(adata, transformations)
     return geo_df
 
 
@@ -195,14 +215,17 @@ def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
+    assert isinstance(store, str)
     f = zarr.open(store, mode="r")
 
     path = Path(f._store.path) / f.path / "points.parquet"
     table = read_parquet(path)
+    assert isinstance(table, DaskDataFrame)
 
-    transforms = BaseTransformation.from_dict(f.attrs.asdict()["coordinateTransformations"][0])
+    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    _set_transformations(table, transformations)
 
-    set_transform(table, transforms)
     attrs = fmt.attrs_from_dict(f.attrs.asdict())
-    table.attrs["spatialdata_attrs"] = attrs
+    if len(attrs):
+        table.attrs["spatialdata_attrs"] = attrs
     return table

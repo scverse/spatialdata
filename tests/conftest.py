@@ -61,7 +61,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(),
+        table=_get_table(region="sample1"),
     )
 
 
@@ -70,8 +70,8 @@ def full_sdata() -> SpatialData:
 #     geo_df = GeoDataFrame(
 #         geometry=[],
 #     )
-#     from spatialdata import Identity
-#     set_transform(geo_df, Identity())
+#     from spatialdata import NgffIdentity
+#     _set_transformations(geo_df, NgffIdentity())
 #
 #     return SpatialData(points={"empty": geo_df})
 
@@ -96,7 +96,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            table=_get_table(),
+            table=_get_table("sample1"),
         )
     elif request.param == "empty":
         s = SpatialData()
@@ -112,7 +112,7 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
 
     out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
+        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 2], dims=dims_2d
     )
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
     # out["image2d_xarray"] = Image2DModel.parse(
@@ -253,7 +253,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Optional[AnnData] = None,
+    region: Union[str, list[str]],
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> AnnData:
@@ -267,3 +267,5 @@ def _get_table(
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
         return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+    else:
+        raise ValueError("region must be a string or a list of strings")

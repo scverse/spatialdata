@@ -1,23 +1,26 @@
 import copy
 from functools import singledispatch
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
+import numpy as np
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
+from xarray import DataArray
 
-from spatialdata._core.coordinate_system import Axis, CoordinateSystem
+from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata._core.transformations import BaseTransformation
+from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
     "TRANSFORM_KEY",
-    "get_transform",
-    "set_transform",
+    "_get_transformations",
+    "_set_transformations",
     "get_default_coordinate_system",
     "get_dims",
     "C",
@@ -28,102 +31,194 @@ __all__ = [
 
 
 TRANSFORM_KEY = "transform"
+DEFAULT_COORDINATE_SYSTEM = "global"
 C, Z, Y, X = "c", "z", "y", "x"
+ValidAxis_t = str
+# ValidAxis_t = Literal["c", "x", "y", "z"]
+# maybe later we will want this, but let's keep it simple for now
+# MappingToCoordinateSystem_t = dict[NgffCoordinateSystem, BaseTransformation]
+MappingToCoordinateSystem_t = dict[str, BaseTransformation]
+
+# added this code as part of a refactoring to catch errors earlier
+
+
+# mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
+def has_type_spatial_element(e: Any) -> bool:
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
+
+
+def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
+    if not (
+        transformations is None
+        or isinstance(transformations, dict)
+        and all(isinstance(k, str) and isinstance(v, BaseTransformation) for k, v in transformations.items())
+    ):
+        raise TypeError(
+            f"Transform must be of type {MappingToCoordinateSystem_t} or None, but is of type {type(transformations)}."
+        )
+
+
+def validate_axis_name(axis: ValidAxis_t) -> None:
+    if axis not in ["c", "x", "y", "z"]:
+        raise TypeError(f"Invalid axis: {axis}")
+
+
+def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
+    for ax in axes:
+        validate_axis_name(ax)
+    if len(axes) != len(set(axes)):
+        raise ValueError("Axes must be unique.")
+
+
+def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+    validate_axes(axes)
+    return tuple(ax for ax in axes if ax in [X, Y, Z])
+
+
+def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+    if TRANSFORM_KEY in dict_container:
+        d = dict_container[TRANSFORM_KEY]
+        return d  # type: ignore[no-any-return]
+    else:
+        return None
+
+
+def _get_transformations_xarray(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch
-def get_transform(e: SpatialElement) -> Optional[BaseTransformation]:
+def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSystem_t]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_transform.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    # this double return is to make mypy happy
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+@_get_transformations.register(SpatialImage)
+def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_xarray(e)
 
 
-@get_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+@_get_transformations.register(MultiscaleSpatialImage)
+def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+    if TRANSFORM_KEY in e.attrs:
+        raise ValueError(
+            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
+            "stored in the inner levels."
+        )
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    xdata = d.values().__iter__().__next__()
+    return _get_transformations_xarray(xdata)
 
 
-@get_transform.register(DaskDataFrame)
-@get_transform.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Optional[BaseTransformation]:
-    t = e.attrs.get(TRANSFORM_KEY)
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+@_get_transformations.register(GeoDataFrame)
+@_get_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
-@get_transform.register(AnnData)
-def _(e: AnnData) -> Optional[BaseTransformation]:
-    t = e.uns[TRANSFORM_KEY]
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
+@_get_transformations.register(AnnData)
+def _(e: AnnData) -> Optional[MappingToCoordinateSystem_t]:
+    return _get_transformations_from_dict_container(e.uns)
+
+
+def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    if TRANSFORM_KEY not in dict_container:
+        dict_container[TRANSFORM_KEY] = {}
+    dict_container[TRANSFORM_KEY] = transformations
+
+
+def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 @singledispatch
-def set_transform(e: SpatialElement, t: BaseTransformation) -> SpatialElement:
+def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
+    """
+    Set the transformation of a spatial element *only in memory*.
+    Parameters
+    ----------
+    e
+        spatial element
+    t
+        transformation
+
+    Notes
+    -----
+    This function only replaces the transformation in memory and is meant of internal use only. The function
+    SpatialData.set_transform() should be used instead, since it will update the transformation in memory and on disk
+    (when the spatial element is backed).
+
+    """
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@set_transform.register(SpatialImage)
-def _(e: SpatialImage, t: BaseTransformation) -> SpatialImage:
-    e.attrs[TRANSFORM_KEY] = t
-    return e
+@_set_transformations.register(SpatialImage)
+def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_xarray(e, transformations)
 
 
-@set_transform.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, t: BaseTransformation) -> MultiscaleSpatialImage:
-    e.attrs[TRANSFORM_KEY] = t
-    return e
+@_set_transformations.register(MultiscaleSpatialImage)
+def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+    # set the transformation at the highest level and concatenate with the appropriate scale at each level
+    dims = get_dims(e)
+    from spatialdata._core.transformations import Scale, Sequence
+
+    i = 0
+    old_shape: Optional[ArrayLike] = None
+    for scale, node in dict(e).items():
+        # this is to be sure that the pyramid levels are listed here in the correct order
+        assert scale == f"scale{i}"
+        assert len(dict(node)) == 1
+        xdata = list(node.values())[0]
+        new_shape = np.array(xdata.shape)
+        if i > 0:
+            assert old_shape is not None
+            scale_factors = old_shape / new_shape
+            filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
+            filtered_axes = [ax for ax in dims if ax != "c"]
+            scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+            assert transformations is not None
+            new_transformations = {}
+            for k, v in transformations.items():
+                sequence: BaseTransformation = Sequence([scale, v])
+                new_transformations[k] = sequence
+            _set_transformations_xarray(xdata, new_transformations)
+        else:
+            _set_transformations_xarray(xdata, transformations)
+            old_shape = new_shape
+        i += 1
 
 
-@set_transform.register(GeoDataFrame)
-@set_transform.register(DaskDataFrame)
-def _(e: GeoDataFrame, t: BaseTransformation) -> GeoDataFrame:
-    e.attrs[TRANSFORM_KEY] = t
-    return e
+@_set_transformations.register(GeoDataFrame)
+@_set_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
-@set_transform.register(AnnData)
-def _(e: AnnData, t: BaseTransformation) -> AnnData:
-    e.uns[TRANSFORM_KEY] = t
-    return e
+@_set_transformations.register(AnnData)
+def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.uns, transformations)
+
+
+def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
-# TODO: when saving, give a warning if the user does not replace it
-x_axis = Axis(name=X, type="space", unit="unit")
-y_axis = Axis(name=Y, type="space", unit="unit")
-z_axis = Axis(name=Z, type="space", unit="unit")
-c_axis = Axis(name=C, type="channel")
-x_cs = CoordinateSystem(name="x", axes=[x_axis])
-y_cs = CoordinateSystem(name="y", axes=[y_axis])
-z_cs = CoordinateSystem(name="z", axes=[z_axis])
-c_cs = CoordinateSystem(name="c", axes=[c_axis])
-xy_cs = CoordinateSystem(name="xy", axes=[x_axis, y_axis])
-xyz_cs = CoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
-yx_cs = CoordinateSystem(name="yx", axes=[y_axis, x_axis])
-zyx_cs = CoordinateSystem(name="zyx", axes=[z_axis, y_axis, x_axis])
-cyx_cs = CoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
-czyx_cs = CoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
+x_axis = NgffAxis(name=X, type="space", unit="unit")
+y_axis = NgffAxis(name=Y, type="space", unit="unit")
+z_axis = NgffAxis(name=Z, type="space", unit="unit")
+c_axis = NgffAxis(name=C, type="channel")
+x_cs = NgffCoordinateSystem(name="x", axes=[x_axis])
+y_cs = NgffCoordinateSystem(name="y", axes=[y_axis])
+z_cs = NgffCoordinateSystem(name="z", axes=[z_axis])
+c_cs = NgffCoordinateSystem(name="c", axes=[c_axis])
+xy_cs = NgffCoordinateSystem(name="xy", axes=[x_axis, y_axis])
+xyz_cs = NgffCoordinateSystem(name="xyz", axes=[x_axis, y_axis, z_axis])
+yx_cs = NgffCoordinateSystem(name="yx", axes=[y_axis, x_axis])
+zyx_cs = NgffCoordinateSystem(name="zyx", axes=[z_axis, y_axis, x_axis])
+cyx_cs = NgffCoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
+czyx_cs = NgffCoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
 
 _DEFAULT_COORDINATE_SYSTEM = {
     (X,): x_cs,
@@ -138,7 +233,23 @@ _DEFAULT_COORDINATE_SYSTEM = {
     (C, Z, Y, X): czyx_cs,
 }
 
-get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_SYSTEM[tuple(dims)])
+# get_default_coordinate_system = lambda dims: copy.deepcopy(_DEFAULT_COORDINATE_SYSTEM[tuple(dims)])
+
+
+def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem:
+    axes = []
+    for c in dims:
+        if c == X:
+            axes.append(copy.deepcopy(x_axis))
+        elif c == Y:
+            axes.append(copy.deepcopy(y_axis))
+        elif c == Z:
+            axes.append(copy.deepcopy(z_axis))
+        elif c == C:
+            axes.append(copy.deepcopy(c_axis))
+        else:
+            raise ValueError(f"Invalid dimension: {c}")
+    return NgffCoordinateSystem(name="".join(dims), axes=axes)
 
 
 @singledispatch
@@ -167,8 +278,16 @@ def _(e: SpatialImage) -> tuple[str, ...]:
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
+    # luca: I prefer this first method
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    dims0 = d.values().__iter__().__next__().dims
+    assert isinstance(dims0, tuple)
+    # still, let's do a runtime check against the other method
     variables = list(e[list(e.keys())[0]].variables)
-    return e[list(e.keys())[0]][variables[0]].dims  # type: ignore
+    dims1 = e[list(e.keys())[0]][variables[0]].dims
+    assert dims0 == dims1
+    return dims0
 
 
 @get_dims.register(GeoDataFrame)
