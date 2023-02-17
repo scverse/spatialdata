@@ -290,12 +290,15 @@ class SpatialData:
             raise ValueError("Element found multiple times in the SpatialData object.")
         return found_element_name, found_element_type
 
-    def contains_element(self, element: SpatialElement) -> bool:
+    def contains_element(self, element: SpatialElement, raise_exception: bool = False) -> bool:
         try:
             self._locate_spatial_element(element)
             return True
-        except ValueError:
-            return False
+        except ValueError as e:
+            if raise_exception:
+                raise e
+            else:
+                return False
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         from spatialdata._core._spatialdata_ops import get_transformation
@@ -861,6 +864,21 @@ class SpatialData:
         for attr in ["images", "labels", "points", "polygons", "table", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
+
+        from spatialdata._core._spatialdata_ops import get_transformation
+
+        descr += "\nwith coordinate systems:\n"
+        for cs in self.coordinate_systems:
+            descr += f"▸ {cs}\n"
+            gen = self._gen_elements()
+            elements_in_cs = []
+            for k, name, obj in gen:
+                coordinate_systems = get_transformation(obj, get_all=True).keys()
+                if cs in coordinate_systems:
+                    elements_in_cs.append(f"/{k}/{name}")
+            if len(elements_in_cs) > 0:
+                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
+        ##
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:

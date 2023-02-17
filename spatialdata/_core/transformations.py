@@ -197,10 +197,40 @@ class BaseTransformation(ABC):
             raise ValueError(f"Invalid axes: {axes}")
         return valid_axes[axes]
 
-    def transform(self, element: SpatialElement) -> SpatialElement:
+    def transform(self, element: SpatialElement, maintain_positioning: bool = False) -> SpatialElement:
+        """
+        Transform a spatial element using this transformation and returns the transformed element.
+
+        Parameters
+        ----------
+        element
+            Spatial element to transform.
+        maintain_positioning
+            If True, each transformation of the transformed element will be prepended with the inverse of the current
+            transformation. In this way the data is transformed but the global positioning is maintained. An use case
+            changing the orientation/scale/etc of the data but keeping the alignment of the data within each coordinate
+            system. Please see notes for more details of how this parameter interact with xarray.DataArray for raster
+            data.
+
+        Returns
+        -------
+        SpatialElement
+            Transformed spatial element.
+
+        Notes
+        -----
+        An affine transformation contains a linear transformation and a translation. For raster types,
+        only the the linear transformation is applied to the data (e.g. the data is rotated or resized), but not the
+        translation part.
+        This means that calling Translation(...).transform(raster_element) will have the same effect as pre-pending the
+        translation to each transformation of the raster element.
+        Similarly, Translation(...).transform(raster_element, maintain_positioning=True) will not modify the raster
+        element. We are considering to change this behavior by letting translations modify the coordinates stored with
+        xarray.DataArray. If you are interested in this usecase please get in touch by opening a GitHub Issue.
+        """
         from spatialdata._core._transform_elements import _transform
 
-        transformed = _transform(element, self)
+        transformed = _transform(element, self, maintain_positioning=maintain_positioning)
         return transformed
 
     @abstractmethod
