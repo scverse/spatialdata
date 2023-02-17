@@ -201,8 +201,8 @@ def test_replace_transformation_on_disk_raster(images, labels):
                 assert type(t1) == Scale
 
 
-def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
-    sdatas = {"polygons": polygons, "shapes": shapes, "points": points}
+def test_replace_transformation_on_disk_non_raster(shapes, points):
+    sdatas = {"shapes": shapes, "points": points}
     for k, sdata in sdatas.items():
         d = sdata.__getattribute__(k)
         elem_name = list(d.keys())[0]

@@ -249,30 +249,31 @@ def write_shapes(
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
-    axes = get_dims(polygons)
-    _get_transformations(polygons)
-    shapes_groups = group.require_group(name)
+    axes = get_dims(shapes)
+    t = _get_transformations(shapes)
+
+    shapes_group = group.require_group(name)
     geometry, coords, offsets = to_ragged_array(shapes.geometry)
-    shapes_groups.create_dataset(name="coords", data=coords)
+    shapes_group.create_dataset(name="coords", data=coords)
     for i, o in enumerate(offsets):
-        shapes_groups.create_dataset(name=f"offset{i}", data=o)
-    shapes_groups.create_dataset(name="Index", data=shapes.index.values)
+        shapes_group.create_dataset(name=f"offset{i}", data=o)
+    shapes_group.create_dataset(name="Index", data=shapes.index.values)
     if geometry.name == "POINT":
-        shapes_groups.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+        shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
     attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
     _write_metadata(
-        shapes_groups,
+        shapes_group,
         group_type=group_type,
         # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
     )
-    assert transform is not None
-    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=transform)
+    assert t is not None
+    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=t)
 
 
 def write_points(

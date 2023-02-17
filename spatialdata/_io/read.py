@@ -207,7 +207,7 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
         geo_df = GeoDataFrame({"geometry": geometry}, index=index)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
-    _set_transformations(adata, transformations)
+    _set_transformations(geo_df, transformations)
     return geo_df
 
 

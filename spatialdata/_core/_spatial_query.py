@@ -179,11 +179,11 @@ def _bounding_box_query_shapes(shapes_table: GeoDataFrame, request: BoundingBoxR
     The shapes contained within the specified bounding box.
     """
     # get the polygon bounding boxes
-    polygons_min_column_keys = [f"min{axis}" for axis in request.axes]
-    polygons_table.bounds[polygons_min_column_keys].values
+    shapes_min_column_keys = [f"min{axis}" for axis in request.axes]
+    shapes_min_coordinates = shapes_table.bounds[shapes_min_column_keys].values
 
-    polygons_max_column_keys = [f"max{axis}" for axis in request.axes]
-    polygons_table.bounds[polygons_max_column_keys].values
+    shapes_max_column_keys = [f"max{axis}" for axis in request.axes]
+    shapes_max_coordinates = shapes_table.bounds[shapes_max_column_keys].values
 
     # check that the min coordinates are inside the bounding box
     min_inside = np.all(request.min_coordinate < shapes_min_coordinates, axis=1)

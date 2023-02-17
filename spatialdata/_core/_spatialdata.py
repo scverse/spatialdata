@@ -180,7 +180,7 @@ class SpatialData:
         else:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
-    def _add_shapes_in_memory(self, name: str, shapes: AnnData) -> None:
+    def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
         if name in self._shapes:
             if not overwrite:
                 raise ValueError(f"Shapes {name} already exists in the dataset.")
@@ -256,7 +256,7 @@ class SpatialData:
         found: list[SpatialElement] = []
         found_element_type: str = ""
         found_element_name: str = ""
-        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes"]:
             for element_name, element_value in getattr(self, element_type).items():
                 if id(element_value) == id(element):
                     found.append(element_value)
@@ -791,7 +791,7 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
-        for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
