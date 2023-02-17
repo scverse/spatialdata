@@ -1,5 +1,5 @@
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from typing import Any, Literal, Optional, Union
 
 import pyarrow as pa
@@ -189,6 +189,7 @@ def _write_raster(
         assert transformations is not None
         assert len(transformations) > 0
         chunks = _iter_multiscale(raster_data, "chunks")
+        # coords = _iter_multiscale(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
@@ -361,19 +362,12 @@ def write_table(
 def _iter_multiscale(
     data: MultiscaleSpatialImage,
     attr: str,
-    key: Optional[str] = None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
-    name = None
     for i in data.keys():
-        variables = list(data[i].variables)
-        if len(variables) != 1:
-            raise ValueError("MultiscaleSpatialImage must have exactly one variable (the variable name is arbitrary)")
-        if name is not None:
-            if name != variables[0]:
-                raise ValueError("MultiscaleSpatialImage must have the same variable name across all levels")
-        name = variables[0]
-    if key is None:
-        return [getattr(data[i][name], attr) for i in data.keys()]
-    else:
-        return [getattr(data[i][name], attr).get(key) for i in data.keys()]
+        variables = set(data[i].variables.keys())
+        names: Set[str] = variables.difference({"c", "z", "y", "x"})
+        if len(names) != 1:
+            raise ValueError(f"Invalid variable name: `{names}`.")
+    name: str = next(iter(names))
+    return [getattr(data[i][name], attr) for i in data.keys()]
