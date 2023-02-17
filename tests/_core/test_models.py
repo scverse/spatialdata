@@ -52,7 +52,7 @@ from tests.conftest import (
 RNG = default_rng()
 
 # should be set to False for pre-commit and CI; useful to set to True for are fixing/debugging tests
-SHORT_TESTS = True
+SHORT_TESTS = False
 
 
 class TestModels:
