@@ -32,7 +32,12 @@ def _make_points_element():
 
 def test_bounding_box_request_immutable():
     """Test that the bounding box request is immutable."""
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([0, 0]),
+        max_coordinate=np.array([10, 10]),
+        target_coordinate_system="global",
+    )
     isinstance(request, BaseSpatialRequest)
 
     # fields should be immutable
@@ -49,27 +54,50 @@ def test_bounding_box_request_immutable():
 def test_bounding_box_request_only_spatial_axes():
     """Requests with axes that are not spatial should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("c", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("c", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_request_wrong_number_of_coordinates():
     """Requests which specify coordinates not consistent with the axes should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10]))
-
-    with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
     with pytest.raises(ValueError):
         _ = BoundingBoxRequest(
-            axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10, 10])
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
+        )
+
+    with pytest.raises(ValueError):
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
         )
 
 
 def test_bounding_box_request_wrong_coordinate_order():
     """Requests where the min coordinate is greater than the max coordinate should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 10]), max_coordinate=np.array([10, 0]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 10]),
+            max_coordinate=np.array([10, 0]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_points():
@@ -122,9 +150,14 @@ def test_bounding_box_image_2d(n_channels):
     image_element = Image2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="global",
+    )
 
-    image_result = bounding_box_query(image_element, request)
+    image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)
 
@@ -140,7 +173,9 @@ def test_bounding_box_image_3d(n_channels):
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
+        axes=("z", "y", "x"),
+        min_coordinate=np.array([5, 0, 2]),
+        max_coordinate=np.array([9, 4, 6], target_coordinate_system="global"),
     )
 
     image_result = _bounding_box_query_image(image_element, request)
@@ -156,7 +191,12 @@ def test_bounding_box_labels_2d():
     labels_element = Labels2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="global",
+    )
 
     labels_result = _bounding_box_query_image(labels_element, request)
     expected_image = np.ones((5, 5))
@@ -172,7 +212,10 @@ def test_bounding_box_labels_3d():
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
+        axes=("z", "y", "x"),
+        min_coordinate=np.array([5, 0, 2]),
+        max_coordinate=np.array([9, 4, 6]),
+        target_coordinate_system="global",
     )
 
     image_result = _bounding_box_query_image(labels_element, request)
