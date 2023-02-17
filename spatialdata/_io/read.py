@@ -1,14 +1,14 @@
 import logging
-import os
+from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
 import zarr
 from anndata import AnnData
 from anndata._io import read_zarr as read_anndata_zarr
+from dask.dataframe import read_parquet  # type: ignore[attr-defined]
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import ZarrLocation
@@ -36,7 +36,6 @@ from spatialdata._logging import logger
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
-
     if isinstance(store, str):
         store = Path(store)
 
@@ -239,15 +238,21 @@ def _read_shapes(store: str, fmt: SpatialDataFormatV01 = ShapesFormat()) -> AnnD
     return adata
 
 
-def _read_points(store: str, fmt: SpatialDataFormatV01 = PointsFormat()) -> pa.Table:  # type: ignore[type-arg]
+def _read_points(
+    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
+) -> DaskDataFrame:
     """Read points from a zarr store."""
     assert isinstance(store, str)
     f = zarr.open(store, mode="r")
 
-    path = os.path.join(f._store.path, f.path, "points.parquet")
-    table = pq.read_table(path)
+    path = Path(f._store.path) / f.path / "points.parquet"
+    table = read_parquet(path)
+    assert isinstance(table, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(table, transformations)
 
+    attrs = fmt.attrs_from_dict(f.attrs.asdict())
+    if len(attrs):
+        table.attrs["spatialdata_attrs"] = attrs
     return table

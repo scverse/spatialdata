@@ -44,14 +44,12 @@ TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]
 class BaseTransformation(ABC):
     """Base class for all transformations."""
 
-    def _validate_axes(self, axes: tuple[ValidAxis_t, ...]) -> None:
-        # to avoid circular imports
-        from spatialdata._core.core_utils import validate_axis_name
+    @staticmethod
+    def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
+        """This function is to allow to call validate_axes() from this file in multiple places while avoiding circular imports."""
+        from spatialdata._core.core_utils import validate_axes
 
-        for ax in axes:
-            validate_axis_name(ax)
-        if len(axes) != len(set(axes)):
-            raise ValueError("Axes must be unique.")
+        validate_axes(axes)
 
     @staticmethod
     def _empty_affine_matrix(input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
@@ -212,8 +210,8 @@ class BaseTransformation(ABC):
 
 class Identity(BaseTransformation):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
@@ -279,8 +277,8 @@ class MapAxis(BaseTransformation):
         return MapAxis({des_ax: src_ax for src_ax, des_ax in self.map_axis.items()})
 
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         # validation logic:
         # if an ax is in output_axes, then:
         #    if it is in self.keys, then the corresponding value must be in input_axes
@@ -358,7 +356,7 @@ class MapAxis(BaseTransformation):
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
         self.translation = self._parse_list_into_array(translation)
-        self._validate_axes(axes)
+        self.validate_axes(axes)
         self.axes = axes
         assert len(self.translation) == len(self.axes)
 
@@ -366,8 +364,8 @@ class Translation(BaseTransformation):
         return Translation(-self.translation, self.axes)
 
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
@@ -380,7 +378,7 @@ class Translation(BaseTransformation):
         return m
 
     def to_translation_vector(self, axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(axes)
+        self.validate_axes(axes)
         v = []
         for ax in axes:
             if ax not in self.axes:
@@ -443,7 +441,7 @@ class Translation(BaseTransformation):
 class Scale(BaseTransformation):
     def __init__(self, scale: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
         self.scale = self._parse_list_into_array(scale)
-        self._validate_axes(axes)
+        self.validate_axes(axes)
         self.axes = axes
         assert len(self.scale) == len(self.axes)
 
@@ -451,8 +449,8 @@ class Scale(BaseTransformation):
         return Scale(1 / self.scale, self.axes)
 
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
@@ -467,7 +465,7 @@ class Scale(BaseTransformation):
         return m
 
     def to_scale_vector(self, axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(axes)
+        self.validate_axes(axes)
         v = []
         for ax in axes:
             if ax not in self.axes:
@@ -527,8 +525,8 @@ class Affine(BaseTransformation):
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         self.input_axes = input_axes
         self.output_axes = output_axes
         self.matrix = self._parse_list_into_array(matrix)
@@ -544,8 +542,8 @@ class Affine(BaseTransformation):
         return Affine(inv, self.output_axes, self.input_axes)
 
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         # validation logic:
         # either an ax in input_axes is present in self.input_axes or it is not present in self.output_axes. That is:
         # if the ax in input_axes is mapped by the matrix to something, ok, otherwise it must not appear as the
@@ -646,8 +644,8 @@ class Sequence(BaseTransformation):
         self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...], _nested_sequence: bool = False
     ) -> tuple[ArrayLike, tuple[ValidAxis_t, ...]]:
         DEBUG_SEQUENCE = False
-        self._validate_axes(input_axes)
-        self._validate_axes(output_axes)
+        self.validate_axes(input_axes)
+        self.validate_axes(output_axes)
         if not all([ax in output_axes for ax in input_axes]):
             raise ValueError("Input axes must be a subset of output axes.")
 

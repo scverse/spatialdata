@@ -8,6 +8,12 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import (
+    get_transformation,
+    get_transformation_between_coordinate_systems,
+    remove_transformation,
+    set_transformation,
+)
 from spatialdata._core.core_utils import get_dims
 from spatialdata._core.models import Image2DModel
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
@@ -15,7 +21,6 @@ from spatialdata.utils import unpad_raster
 
 
 class TestElementsTransform:
-    @pytest.mark.skip("Waiting for the new points implementation")
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]
     )
@@ -26,12 +31,16 @@ class TestElementsTransform:
         transform: Scale,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        points.points["points_0"] = points.set_transformation(
-            points.points["points_0"], transform, target_coordinate_system="global"
-        )
+        set_transformation(points.points["points_0"], transform)
         points.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        assert SpatialData.get_all_transformations(new_sdata.points["points_0"])["global"] == transform
+
+        # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
+        # it from the assertion
+        assert isinstance(transform, Scale)
+        axes = get_dims(points.points["points_0"])
+        expected_scale = Scale(transform.to_scale_vector(axes), axes)
+        assert get_transformation(new_sdata.points["points_0"]) == expected_scale
 
     @pytest.mark.parametrize(
         "transform", [Scale(np.array([1, 2, 3]), axes=("x", "y", "z")), Scale(np.array([2]), axes=("x",))]
@@ -43,30 +52,33 @@ class TestElementsTransform:
         transform: Scale,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        shapes.set_transformation(
-            shapes.shapes["shapes_0"], transform, target_coordinate_system="my_coordinate_system1"
-        )
-        shapes.set_transformation(
-            shapes.shapes["shapes_0"], transform, target_coordinate_system="my_coordinate_system2"
-        )
+        set_transformation(shapes.shapes["shapes_0"], transform, "my_coordinate_system1")
+        set_transformation(shapes.shapes["shapes_0"], transform, "my_coordinate_system2")
+
         shapes.write(tmpdir)
-        SpatialData.read(tmpdir)
-        assert shapes.get_all_transformations(shapes.shapes["shapes_0"])["my_coordinate_system1"] == transform
-        assert shapes.get_all_transformations(shapes.shapes["shapes_0"])["my_coordinate_system2"] == transform
+        new_sdata = SpatialData.read(tmpdir)
+        loaded_transform1 = get_transformation(new_sdata.shapes["shapes_0"], "my_coordinate_system1")
+        loaded_transform2 = get_transformation(new_sdata.shapes["shapes_0"], get_all=True)["my_coordinate_system2"]
+
+        # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
+        # it from the assertion
+        assert isinstance(transform, Scale)
+        axes = get_dims(new_sdata.shapes["shapes_0"])
+        expected_scale = Scale(transform.to_scale_vector(axes), axes)
+        assert loaded_transform1 == expected_scale
+        assert loaded_transform2 == expected_scale
 
     def test_coordinate_systems(self, shapes: SpatialData) -> None:
         ct = Scale(np.array([1, 2, 3]), axes=("x", "y", "z"))
-        shapes.set_transformation(shapes.shapes["shapes_0"], ct, target_coordinate_system="test")
+        set_transformation(shapes.shapes["shapes_0"], ct, "test")
         assert set(shapes.coordinate_systems) == {"global", "test"}
 
     @pytest.mark.skip("Physical units are not supported for now with the new implementation for transformations")
     def test_physical_units(self, tmp_path: str, shapes: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         ct = Scale(np.array([1, 2, 3]), axes=("x", "y", "z"))
-        shapes.shapes["shapes_0"] = shapes.set_transformation(
-            shapes.shapes["shapes_0"], ct, target_coordinate_system="test"
-        )
         shapes.write(tmpdir)
+        set_transformation(shapes.shapes["shapes_0"], ct, "test", shapes)
         new_sdata = SpatialData.read(tmpdir)
         assert new_sdata.coordinate_systems["test"]._axes[0].unit == "micrometers"
 
@@ -143,7 +155,6 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
 
 
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
-@pytest.mark.skip("waiting for the new points implementation")
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
     new_points = affine.inverse().transform(affine.transform(points))
@@ -157,8 +168,8 @@ def test_transform_points(points: SpatialData):
         axes1 = get_dims(p1)
         assert axes0 == axes1
         for ax in axes0:
-            x0 = p0[ax].to_numpy()
-            x1 = p1[ax].to_numpy()
+            x0 = p0[ax].to_dask_array().compute()
+            x1 = p1[ax].to_dask_array().compute()
             assert np.allclose(x0, x1)
 
 
@@ -187,7 +198,7 @@ def test_transform_shapes(shapes: SpatialData):
         assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
 
 
-def test_map_coordinate_systems_single_path(full_sdata):
+def test_map_coordinate_systems_single_path(full_sdata: SpatialData):
     scale = Scale([2], axes=("x",))
     translation = Translation([100], axes=("x",))
 
@@ -195,21 +206,37 @@ def test_map_coordinate_systems_single_path(full_sdata):
     la = full_sdata.labels["labels2d"]
     po = full_sdata.polygons["multipoly"]
 
-    full_sdata.set_transformation(im, scale)
-    full_sdata.set_transformation(po, translation, target_coordinate_system="my_space")
-    full_sdata.set_transformation(po, scale)
+    set_transformation(im, scale)
+    set_transformation(po, translation)
+    set_transformation(po, translation, "my_space")
+    set_transformation(po, scale)
     # identity
     assert (
-        full_sdata.map_coordinate_systems(source_coordinate_system="global", target_coordinate_system="global")
+        get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system="global", target_coordinate_system="global"
+        )
         == Identity()
     )
-    assert full_sdata.map_coordinate_systems(source_coordinate_system=la, target_coordinate_system=la) == Identity()
+    assert (
+        get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system=la, target_coordinate_system=la
+        )
+        == Identity()
+    )
 
     # intrinsic coordinate system (element) to extrinsic coordinate system and back
-    t0 = full_sdata.map_coordinate_systems(source_coordinate_system=im, target_coordinate_system="global")
-    t1 = full_sdata.map_coordinate_systems(source_coordinate_system="global", target_coordinate_system=im)
-    t2 = full_sdata.map_coordinate_systems(source_coordinate_system=po, target_coordinate_system="my_space")
-    t3 = full_sdata.map_coordinate_systems(source_coordinate_system="my_space", target_coordinate_system=po)
+    t0 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system=im, target_coordinate_system="global"
+    )
+    t1 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system="global", target_coordinate_system=im
+    )
+    t2 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system=po, target_coordinate_system="my_space"
+    )
+    t3 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system="my_space", target_coordinate_system=po
+    )
     assert np.allclose(
         t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
@@ -252,7 +279,9 @@ def test_map_coordinate_systems_single_path(full_sdata):
     )
 
     # intrinsic to intrinsic (element to element)
-    t4 = full_sdata.map_coordinate_systems(source_coordinate_system=im, target_coordinate_system=la)
+    t4 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system=im, target_coordinate_system=la
+    )
     assert np.allclose(
         t4.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
@@ -265,7 +294,9 @@ def test_map_coordinate_systems_single_path(full_sdata):
     )
 
     # extrinsic to extrinsic
-    t5 = full_sdata.map_coordinate_systems(source_coordinate_system="global", target_coordinate_system="my_space")
+    t5 = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system="global", target_coordinate_system="my_space"
+    )
     assert np.allclose(
         t5.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         np.array(
@@ -284,19 +315,26 @@ def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
     im = full_sdata.images["image2d_multiscale"]
     la = full_sdata.labels["labels2d"]
 
-    full_sdata.set_transformation(im, scale, "my_space0")
-    full_sdata.set_transformation(la, scale, "my_space0")
+    set_transformation(im, scale, "my_space0")
+    set_transformation(la, scale, "my_space0")
 
     # error 0
     with pytest.raises(RuntimeError):
-        full_sdata.map_coordinate_systems(source_coordinate_system="my_space0", target_coordinate_system="globalE")
+        get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system="my_space0", target_coordinate_system="globalE"
+        )
 
     # error 1
     with pytest.raises(RuntimeError):
-        t = full_sdata.map_coordinate_systems(source_coordinate_system="my_space0", target_coordinate_system="global")
+        t = get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system="my_space0", target_coordinate_system="global"
+        )
 
-    t = full_sdata.map_coordinate_systems(
-        source_coordinate_system="my_space0", target_coordinate_system="global", intermediate_coordinate_systems=im
+    t = get_transformation_between_coordinate_systems(
+        full_sdata,
+        source_coordinate_system="my_space0",
+        target_coordinate_system="global",
+        intermediate_coordinate_systems=im,
     )
     assert np.allclose(
         t.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
@@ -310,14 +348,16 @@ def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
     )
     # error 2
     with pytest.raises(RuntimeError):
-        full_sdata.map_coordinate_systems(
+        get_transformation_between_coordinate_systems(
+            full_sdata,
             source_coordinate_system="my_space0",
             target_coordinate_system="global",
             intermediate_coordinate_systems="globalE",
         )
     # error 3
     with pytest.raises(RuntimeError):
-        full_sdata.map_coordinate_systems(
+        get_transformation_between_coordinate_systems(
+            full_sdata,
             source_coordinate_system="my_space0",
             target_coordinate_system="global",
             intermediate_coordinate_systems="global",
@@ -338,8 +378,10 @@ def test_map_coordinate_systems_non_invertible_transformations(full_sdata):
         output_axes=("x", "y", "c"),
     )
     im = full_sdata.images["image2d_multiscale"]
-    full_sdata.set_transformation(im, affine)
-    t = full_sdata.map_coordinate_systems(source_coordinate_system=im, target_coordinate_system="global")
+    set_transformation(im, affine)
+    t = get_transformation_between_coordinate_systems(
+        full_sdata, source_coordinate_system=im, target_coordinate_system="global"
+    )
     assert np.allclose(
         t.to_affine_matrix(input_axes=("x", "y"), output_axes=("c", "y", "x")),
         np.array(
@@ -353,7 +395,9 @@ def test_map_coordinate_systems_non_invertible_transformations(full_sdata):
     )
     with pytest.raises(RuntimeError):
         # error 0 (no path between source and target because the affine matrix is not invertible)
-        full_sdata.map_coordinate_systems(source_coordinate_system="global", target_coordinate_system=im)
+        get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system="global", target_coordinate_system=im
+        )
 
 
 def test_map_coordinate_systems_long_path(full_sdata):
@@ -364,28 +408,33 @@ def test_map_coordinate_systems_long_path(full_sdata):
 
     scale = Scale([2], axes=("x",))
 
-    full_sdata.remove_all_transformations(im)
-    full_sdata.set_transformation(im, scale.inverse(), "my_space0")
-    full_sdata.set_transformation(im, scale, "my_space1")
+    remove_transformation(im, remove_all=True)
+    set_transformation(im, scale.inverse(), "my_space0")
+    set_transformation(im, scale, "my_space1")
 
-    full_sdata.remove_all_transformations(la0)
-    full_sdata.set_transformation(la0, scale.inverse(), "my_space1")
-    full_sdata.set_transformation(la0, scale, "my_space2")
+    remove_transformation(la0, remove_all=True)
+    set_transformation(la0, scale.inverse(), "my_space1")
+    set_transformation(la0, scale, "my_space2")
 
-    full_sdata.remove_all_transformations(la1)
-    full_sdata.set_transformation(la1, scale.inverse(), "my_space1")
-    full_sdata.set_transformation(la1, scale, "my_space2")
+    remove_transformation(la1, remove_all=True)
+    set_transformation(la1, scale.inverse(), "my_space1")
+    set_transformation(la1, scale, "my_space2")
 
-    full_sdata.remove_all_transformations(po)
-    full_sdata.set_transformation(po, scale.inverse(), "my_space2")
-    full_sdata.set_transformation(po, scale, "my_space3")
+    remove_transformation(po, remove_all=True)
+    set_transformation(po, scale.inverse(), "my_space2")
+    set_transformation(po, scale, "my_space3")
 
     with pytest.raises(RuntimeError):
         # error 1
-        full_sdata.map_coordinate_systems(source_coordinate_system="my_space0", target_coordinate_system="my_space3")
+        get_transformation_between_coordinate_systems(
+            full_sdata, source_coordinate_system="my_space0", target_coordinate_system="my_space3"
+        )
 
-    t = full_sdata.map_coordinate_systems(
-        source_coordinate_system="my_space0", target_coordinate_system="my_space3", intermediate_coordinate_systems=la1
+    t = get_transformation_between_coordinate_systems(
+        full_sdata,
+        source_coordinate_system="my_space0",
+        target_coordinate_system="my_space3",
+        intermediate_coordinate_systems=la1,
     )
     assert np.allclose(
         t.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
@@ -403,6 +452,6 @@ def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
     # TODO: we are just applying the transformation, we are not checking it is correct. We could improve this test
     scale = Scale([2], axes=("x",))
     for element in sdata._gen_elements_values():
-        sdata.set_transformation(element, scale, "my_space")
+        set_transformation(element, scale, "my_space")
         sdata.transform_element_to_coordinate_system(element, "my_space")
     sdata.transform_to_coordinate_system("my_space")

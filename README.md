@@ -1,10 +1,8 @@
 # Work in progress ⚠
 
+-   **The library is not ready.** We aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
 -   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/SpatialData.20meetings).
--   **This repository doesn't contain the latest version of the code**; we aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
-
-You can take a look at the [](./design_doc.md).
 
 # spatialdata
 
@@ -17,7 +15,10 @@ You can take a look at the [](./design_doc.md).
 
 ## Getting started
 
-coming soon
+Please refer to the [documentation][link-docs]. In particular, the
+
+-   [API documentation][link-api].
+-   [Design doc][link-design-doc].
 
 ## Installation
 
@@ -42,5 +43,15 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 [issue-tracker]: https://github.com/scverse/spatialdata/issues
 [changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
 [design doc]: https://scverse-spatialdata.readthedocs.io/en/latest/design_doc.html
+[link-docs]: https://spatialdata.scverse.org/en/latest/
+[link-api]: https://spatialdata.scverse.org/en/latest/api.html
+[link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
 
 <img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+
+### Remove once contributing docs are in place
+
+link repo to notebok repo:
+
+-   git submodule add https://github.com/scverse/spatialdata-notebooks notebooks
+-   fetch and pull to update from main directly in the submodule

@@ -268,8 +268,24 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 ### Points
 
+```{note}
+This representation is still under discussion and it might change. What is described here is the current implementation.
+```
+
 Coordinates of points for single molecule data. Each observation is a point, and might have additional information (intensity etc.).
-Current implementation represent points as a `.parquet` file loaded lazyly and a [Dask dataframee](https://docs.dask.org/en/stable/dataframe.html) in memory. The only requirement is that the table contains (a subset of) axis name `["x","y","z"]` to represent the axes. It can also contains coordinates transformations in `attrs`.
+Current implementation represent points as a Parquet file and a [`dask.dataframe.DataFrame`](https://docs.dask.org/en/stable/dataframe.html) in memory.
+The requirements are the following:
+
+-   The table MUST contains axis name to represent the axes.
+    -   If it's 2D, the axes should be `["x","y"]`.
+    -   If it's 3D, the axes should be `["x","y","z"]`.
+-   It MUST also contains coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]`.
+
+Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`
+
+-   It MAY also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
+-   It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
+    -   `"instance_key"`: the column name of the table where unique instance ids that this point refers to are stored, if available.
 
 The points representation is anyway still being under [discussion](https://github.com/scverse/spatialdata/issues/46). If we will adopt AnnData as in-memory representation (and zarr for on-disk storage) it might look like the following:
 AnnData object of shape `(n_points, n_features)`, saved in X. Coordinates are stored as an array in `obsm` with key `spatial`. Points can have only one set of coordinates, as defined in `adata.obsm["spatial"]`.
@@ -302,15 +318,45 @@ Features or annotation on nodes coincide with the information stored in the anno
 
 ## Transforms and coordinate systems
 
-### Coordinate systems
+In the following we refer to the NGFF proposal for transformations and coordinate systems.
+You can find the [current transformations and coordinate systems specs proposal here](http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs), **# TODO update reference once proposal accepted**; [discussion on the proposal is here](https://github.com/ome/ngff/pull/138)).
 
-Coordinate sytems are sets of axes that have a name and a type. Axis names label the axis and the axis type describes what the axis represents. _SpatialData_ implements the OME-NGFF axis types.
+The NGFF specifications introduces the concepts of coordiante systems and axes. Coordinate sytems are sets of axes that have a name, and where each axis is an object that has a name, a type and eventually a unit information. The set of operations required to transform elements between coordinate systems are stored as coordinate transformations. A table MUST not have a coordinate system since it annotates Region Elements (which already have one or more coordinate systems).
 
-There are two types of coordinate systems: intrinsic and extrinsic. Intrinsic coordinate systems are tied to the data structure of the element. For example, the intrinsic coordinate system of an image is the axes of the array containing the image. Extrinsic coordinate systems are not anchored to a specific element. Multiple elements can share an extrinsic coordinate system.
+### NGFF approach
 
-### Elements, transformations and coordinate systems
+There are two types of coordinate systems: intrinsic (called also implicit) and extrinsic (called also explicit). Intrinsic coordinate systems are tied to the data structure of the element and decribe it (for NGFF, an image without an intrinsic coordinate system would have no information on the axes). The intrinsic coordinate system of an image is the set of axes of the array containing the image. Extrinsic coordinate systems are not anchored to a specific element.
 
-Each element except for Tables has an _intrinsic coordinate system_ and must be mapped to one or more _extrinsic coordinate systems_ via _coordinate transformations_. On disk, we read and write both the coordinate systems and the coordinate transformations following the OME-NGFF specification ([current transform specs proposal here](http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs), **# TODO update reference once proposal accepted**; [discussion on transformations here](https://github.com/ome/ngff/pull/138)). In short, a coordinate system is a collection of named axes, where each axis is associated to a specific _type_ and _unit_. The set of operations required to transform elements between coordinate systems are stored as coordinate transformations. A table MUST not have a coordinate system since it annotates Region Elements (which already have one or more coordinate systems).
+The NGFF specification only operates with images and labels, so it specifies rules for the coordinate systems only for these two types of elements. The main points are the following:
+
+-   each image/labels MUST have one and only one intrinsic coordinate system;
+-   each image/labels MAY have a transformation mapping them to one or more extrinsic coordinate systems;
+-   a transformation MAY be defined between any two coordinate systems, including intrinsic and extrinsic coordinate systems.
+
+Furthermore, acoording to NGFF, a coordinate system:
+
+-   MUST have a name;
+-   MUST specify all the axes.
+
+### SpatialData approach
+
+In SpatialData we extend the concept of coordiante systems also for the other types of spatial elements (Points, Shapes, Polygons).
+Since elements are allowed to have only (a subset of the) c, x, y, z axes and must follow a specific schema, we can relax some restrictions of the NGFF coordinate systems and provide less verbose APIs. The framework still reads and writes to valid NGFF, converting to the SpatialData coordinate system if possible or raising an error.
+
+In details:
+
+-   we don't need to specify the intrinsic coordinate systems, these are inferred from the element schema
+-   each element MAY have a transformation mapping them to one or more extrinsic coordinate systems
+
+Each coordinate system
+
+-   MUST have a name
+-   MAY specify its axes
+
+We also have a constraint (that we may relax in the future):
+
+-   a transformation MAY be defined only between an intrinsic coordinate system and an extrinsic coordinate system
+-   each element MUST be mapped at least to an extrinsic coordinate system. When no mapping is specified, we define a mapping to the "global" coordinate system via an "Identity" transformation.
 
 ### In-memory representation
 
@@ -324,15 +370,19 @@ The conversion between the two transformation is still not 100% supported; it wi
 
 #### Reasons for having two sets of classes
 
-The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation can only be applied to an element that matches the input coordinate system and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second.
+The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation MUST be compatible with the input coordinate system and output coordinate system (full description in the NGFF specification) and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second.
 
-On the contrary, each `BaseTransformation` is self-defined and does not require the information on coordinate systems. Any transformation can be applied unambiguously to any element and any pair of transformations can be chained together. The result is either uniqueuly defined, either an exception is raised when there is ambiguity. This is performed by passing through unaltered those axis that are present in an element but not in a transformation, and by ignoring axes that are present in a transformation but not in an element.
+On the contrary, each `BaseTransformation` is self-defined and does not require the information on coordinate systems. Almost (see below) any transformation can be applied unambiguously to any element and almost any pair of transformations can be chained together. The result is either uniqueuly defined, either an exception is raised when there is ambiguity.
+
+Precisely, this is performed by passing through unaltered those axis that are present in an element but not in a transformation, and by ignoring axes that are present in a transformation but not in an element.
 
 For example one can apply a `Scale([2, 3, 4], axes=('x', 'y', 'z'))` to a `cyx` image (the axes `c` is passed through unaltered, and the scaling on `z` is ignored since there is no `z` axis.)
 
 An example of transformation that cannot be applied is an `Affine xy -> xyz` to `xyz` data, since `z` can't be passed through as it is also the output of the transformation.
 
 To know more about the separation between the two set of classes see [this issue](https://github.com/scverse/spatialdata/issues/39), [this other issue](https://github.com/scverse/spatialdata/issues/47) and [this pr](https://github.com/scverse/spatialdata/pull/100).
+
+This document will be udpated with the precise description of each transformation, for the moment please refer to `transformations.py` to see the exact implementation.
 
 ## Examples
 

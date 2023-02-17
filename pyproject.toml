@@ -32,11 +32,12 @@ dependencies = [
     "pygeos",
     "geopandas",
     "shapely==2.0rc2",
-    "pyarrow",
     "rich",
+    "pyarrow",
     "tqdm",
     "typing_extensions>=4.0.0",
-    "dask-image"
+    "dask-image",
+    "networkx"
 ]
 
 [project.optional-dependencies]
@@ -71,7 +72,6 @@ xfail_strict = true
 addopts = [
 #    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name
-    "-x",  # exit on first test if it fails
     "-s"  # print output from tests
 ]
 # info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest

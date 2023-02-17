@@ -4,17 +4,25 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import are_directories_identical
-from tests.conftest import _get_images, _get_labels, _get_polygons, _get_shapes
+from tests.conftest import (
+    _get_images,
+    _get_labels,
+    _get_points,
+    _get_polygons,
+    _get_shapes,
+)
 
 
 class TestReadWrite:
@@ -63,7 +71,6 @@ class TestReadWrite:
             np.testing.assert_array_equal(shapes.shapes[k].obsm["spatial"], sdata.shapes[k].obsm["spatial"])
             assert shapes.shapes[k].uns == sdata.shapes[k].uns
 
-    @pytest.mark.skip("waiting for the new points implementation")
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -71,8 +78,9 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
         for k in points.points.keys():
-            assert isinstance(sdata.points[k], pa.Table)
-            assert points.points[k].equals(sdata.points[k])
+            assert isinstance(sdata.points[k], DaskDataFrame)
+            assert assert_eq(points.points[k], sdata.points[k], check_divisions=False)
+            assert points.points[k].attrs == points.points[k].attrs
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -107,12 +115,6 @@ class TestReadWrite:
         sdata2.write(tmpdir2)
         are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
-    @pytest.mark.skip(
-        "waiting for the new points implementation; add points to the test below and in conftest.py full_sdata()"
-    )
-    def test_incremental_io_points(self):
-        pass
-
     def test_incremental_io(
         self,
         tmp_path: str,
@@ -120,10 +122,6 @@ class TestReadWrite:
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
-
-        # TODO: remove this line when points are ready
-        for k in sdata.points:
-            del sdata.points[k]
 
         sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
         sdata.write(tmpdir)
@@ -172,21 +170,26 @@ class TestReadWrite:
             sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
             break
 
-        # TODO: uncomment this when points are ready
-        # for k, v in _get_points().items():
-        #     sdata.add_points(name=f"incremental_{k}", points=v)
-        #     with pytest.raises(ValueError):
-        #         sdata.add_points(name=f"incremental_{k}", points=v)
-        #     sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
-        #     break
+        for k, v in _get_points().items():
+            sdata.add_points(name=f"incremental_{k}", points=v)
+            with pytest.raises(ValueError):
+                sdata.add_points(name=f"incremental_{k}", points=v)
+            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+            break
 
 
-@pytest.mark.skip("waiting for the new points implementation; add points to the test below")
 def test_io_and_lazy_loading_points(points):
-    pass
+    elem_name = list(points.points.keys())[0]
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, "data.zarr")
+        dask0 = points.points[elem_name]
+        points.write(f)
+        dask1 = points.points[elem_name]
+        assert all("read-parquet" not in key for key in dask0.dask.layers)
+        assert any("read-parquet" in key for key in dask1.dask.layers)
 
 
-def test_io_and_lazy_loading(images, labels):
+def test_io_and_lazy_loading_raster(images, labels):
     # addresses bug https://github.com/scverse/spatialdata/issues/117
     sdatas = {"images": images, "labels": labels}
     for k, sdata in sdatas.items():
@@ -213,28 +216,25 @@ def test_replace_transformation_on_disk_raster(images, labels):
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
                 single_sdata.write(f)
-                t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t0) == Identity
-                single_sdata.set_transformation(single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
-                t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                set_transformation(
+                    single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=single_sdata
+                )
+                t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t1) == Scale
 
 
-@pytest.mark.skip("waiting for the new points implementation, add points to the test below")
-def test_replace_transformation_on_disk_points():
-    pass
-
-
-def test_replace_transformation_on_disk_non_raster(polygons, shapes):
-    sdatas = {"polygons": polygons, "shapes": shapes}
+def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
+    sdatas = {"polygons": polygons, "shapes": shapes, "points": points}
     for k, sdata in sdatas.items():
         d = sdata.__getattribute__(k)
         elem_name = list(d.keys())[0]
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
             sdata.write(f)
-            t0 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t0) == Identity
-            sdata.set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)))
-            t1 = SpatialData.get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+            set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
+            t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t1) == Scale

@@ -1,11 +1,10 @@
 import copy
-import json
 from functools import singledispatch
 from typing import Any, Optional, Union
 
 import numpy as np
-import pyarrow as pa
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -15,7 +14,7 @@ from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordina
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
@@ -45,7 +44,7 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, pa.Table))
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame))
 
 
 def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
@@ -62,6 +61,18 @@ def _validate_mapping_to_coordinate_system_type(transformations: Optional[Mappin
 def validate_axis_name(axis: ValidAxis_t) -> None:
     if axis not in ["c", "x", "y", "z"]:
         raise TypeError(f"Invalid axis: {axis}")
+
+
+def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
+    for ax in axes:
+        validate_axis_name(ax)
+    if len(axes) != len(set(axes)):
+        raise ValueError("Axes must be unique.")
+
+
+def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+    validate_axes(axes)
+    return tuple(ax for ax in axes if ax in [X, Y, Z])
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
@@ -100,26 +111,14 @@ def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
 
 
 @_get_transformations.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_from_dict_container(e.attrs)
 
 
 @_get_transformations.register(AnnData)
 def _(e: AnnData) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_from_dict_container(e.uns)
-
-
-# we need the return type because pa.Table is immutable
-@_get_transformations.register(pa.Table)
-def _(e: pa.Table) -> Optional[MappingToCoordinateSystem_t]:
-    raise NotImplementedError("waiting for the new points implementation")
-    t_bytes = e.schema.metadata[TRANSFORM_KEY.encode("utf-8")]
-    t = BaseTransformation.from_dict(json.loads(t_bytes.decode("utf-8")))
-    if t is not None:
-        assert isinstance(t, BaseTransformation)
-        return t
-    else:
-        return t
 
 
 def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
@@ -191,7 +190,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
 
 
 @_set_transformations.register(GeoDataFrame)
-def _(e: GeoDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.attrs, transformations)
 
 
@@ -200,12 +200,8 @@ def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.uns, transformations)
 
 
-@_set_transformations.register(pa.Table)
-def _(e: pa.Table, t: BaseTransformation) -> None:
-    # in theory this doesn't really copy the data in the table but is referncing to them
-    raise NotImplementedError("waiting for the new points implementation")
-    # new_e = e.replace_schema_metadata({TRANSFORM_KEY: json.dumps(t.to_dict()).encode("utf-8")})
-    # return new_e
+def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
@@ -298,8 +294,8 @@ def _(e: AnnData) -> tuple[str, ...]:
     return dims[:n]
 
 
-@get_dims.register(pa.Table)
-def _(e: pa.Table) -> tuple[str, ...]:
+@get_dims.register(DaskDataFrame)
+def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
-    dims = [c for c in valid_dims if c in e.column_names]
+    dims = [c for c in valid_dims if c in e.columns]
     return tuple(dims)

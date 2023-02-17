@@ -4,12 +4,12 @@ import itertools
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import dask.array
+import dask.array as da
 import dask_image.ndinterp
 import numpy as np
-import pyarrow as pa
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -86,10 +86,8 @@ def _transform_raster(
             # min_y_inverse = np.min(new_v_inverse[:, 1])
 
             if "c" in axes:
-                plt.imshow(
-                    dask.array.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5  # type: ignore[attr-defined]
-                )
-                plt.imshow(dask.array.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
+                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
+                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
             else:
                 plt.imshow(transformed_dask, origin="lower", alpha=0.5)
                 plt.imshow(im, origin="lower", alpha=0.5)
@@ -194,19 +192,21 @@ def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> Multi
     return transformed_data
 
 
-@_transform.register(pa.Table)
-def _(data: pa.Table, transformation: BaseTransformation) -> pa.Table:
+@_transform.register(DaskDataFrame)
+def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
     axes = get_dims(data)
     arrays = []
     for ax in axes:
-        arrays.append(data[ax].to_numpy())
+        arrays.append(data[ax].to_dask_array())
     xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
     xtransformed = transformation._transform_coordinates(xdata)
-    transformed = data.drop(axes)
+    transformed = data.drop(columns=list(axes))
+    assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax
-        new_ax = pa.array(xtransformed[:, indices].data.flatten())
-        transformed = transformed.append_column(ax, new_ax)
+        new_ax = xtransformed[:, indices].data.flatten()
+        # mypy says that from_array is not a method of DaskDataFrame, but it is
+        transformed[ax] = da.from_array(np.array(new_ax))  # type: ignore[attr-defined]
 
     # to avoid cyclic import
     from spatialdata._core.models import PointsModel

@@ -7,11 +7,10 @@ from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
 
-import networkx as nx
-import numpy as np
-import pyarrow as pa
 import zarr
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -21,16 +20,11 @@ from spatial_image import SpatialImage
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
+    _bounding_box_query_image_dict,
     _bounding_box_query_points_dict,
+    _bounding_box_query_polygons_dict,
 )
-from spatialdata._core.core_utils import (
-    MappingToCoordinateSystem_t,
-    SpatialElement,
-    _get_transformations,
-    _set_transformations,
-    get_dims,
-    has_type_spatial_element,
-)
+from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -41,7 +35,6 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata._core.transformations import BaseTransformation, Identity, Sequence
 from spatialdata._io.write import (
     write_image,
     write_labels,
@@ -113,7 +106,7 @@ class SpatialData:
 
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
-    _points: dict[str, pa.Table] = MappingProxyType({})  # type: ignore[assignment]
+    _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _polygons: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
@@ -123,7 +116,7 @@ class SpatialData:
         self,
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
-        points: dict[str, pa.Table] = MappingProxyType({}),  # type: ignore[assignment]
+        points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         polygons: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
@@ -150,7 +143,7 @@ class SpatialData:
                 self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
-            self._points: dict[str, pa.Table] = {}
+            self._points: dict[str, DaskDataFrame] = {}
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
@@ -218,7 +211,7 @@ class SpatialData:
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
-    def _add_points_in_memory(self, name: str, points: pa.Table, overwrite: bool = False) -> None:
+    def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")
@@ -231,6 +224,7 @@ class SpatialData:
         """Check if the data is backed by a Zarr storage or it is in-memory."""
         return self.path is not None
 
+    # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
@@ -296,8 +290,18 @@ class SpatialData:
             raise ValueError("Element found multiple times in the SpatialData object.")
         return found_element_name, found_element_type
 
+    def contains_element(self, element: SpatialElement) -> bool:
+        try:
+            self._locate_spatial_element(element)
+            return True
+        except ValueError:
+            return False
+
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
-        transformations = self.get_all_transformations(element)
+        from spatialdata._core._spatialdata_ops import get_transformation
+
+        transformations = get_transformation(element, get_all=True)
+        assert isinstance(transformations, dict)
         found_element_name, found_element_type = self._locate_spatial_element(element)
 
         if self.path is not None:
@@ -309,7 +313,9 @@ class SpatialData:
                 )
 
                 overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif isinstance(element, pa.Table) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData):
+            elif (
+                isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData)
+            ):
                 from spatialdata._io.write import (
                     overwrite_coordinate_transformations_non_raster,
                 )
@@ -318,277 +324,12 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    @staticmethod
-    def get_all_transformations(element: SpatialElement) -> MappingToCoordinateSystem_t:
-        """
-        Get the transformations of an element.
-
-        Parameters
-        ----------
-        element
-            The element to get the transformations of.
-
-        Returns
-        -------
-        The transformations of the element.
-        """
-        transformations = _get_transformations(element)
-        assert transformations is not None
-        return transformations
-
-    @staticmethod
-    def get_transformation(
-        element: SpatialElement, target_coordinate_system: Optional[str] = None
-    ) -> BaseTransformation:
-        transformations = SpatialData.get_all_transformations(element)
-        if target_coordinate_system is None:
-            from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
-
-            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
-        if target_coordinate_system not in transformations:
-            raise ValueError(f"Transformation to {target_coordinate_system} not found")
-        return transformations[target_coordinate_system]
-
-    @staticmethod
-    def set_transformation_in_memory(
-        element: SpatialElement, transformation: BaseTransformation, target_coordinate_system: Optional[str] = None
-    ) -> None:
-        """
-        Set/replace a transformation of an element, without writing it to disk.
-
-        Parameters
-        ----------
-        element
-            The element to replace the transformation for.
-        transformation
-            The new transformation.
-        target_coordinate_system
-            The target coordinate system of the transformation. If None, the default coordinate system is used.
-
-        Notes
-        -----
-        - You can also use the method SpatialData.set_transformation() to set the transformation of an element when it
-        is backed
-        """
-        from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
-
-        if target_coordinate_system is None:
-            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
-        transformations = _get_transformations(element)
-        assert transformations is not None
-        transformations[target_coordinate_system] = transformation
-        _set_transformations(element, transformations)
-
-    def set_transformation(
-        self,
-        element: SpatialElement,
-        transformation: BaseTransformation,
-        target_coordinate_system: Optional[str] = None,
-    ) -> None:
-        """
-        Set/replace a transformation of an element, writing it to disk if the SpatialData object is backed.
-
-        Parameters
-        ----------
-        element
-            The element to replace the transformation for.
-        transformation
-            The new transformation.
-        target_coordinate_system
-            The target coordinate system of the transformation. If None, the default coordinate system is used.
-
-        Notes
-        -----
-        - You can also use the static method SpatialData.set_transformation_in_memory() to set the transformation of an
-        element when it is not backed
-        """
-        self.set_transformation_in_memory(element, transformation, target_coordinate_system)
-        self._write_transformations_to_disk(element)
-
-    @staticmethod
-    def remove_transformation_in_memory(
-        element: SpatialElement, target_coordinate_system: Optional[str] = None
-    ) -> None:
-        """
-        Remove a transformation of an element, without writing it to disk.
-
-        Parameters
-        ----------
-        element
-            The element to remove the transformation from.
-        target_coordinate_system
-            The target coordinate system of the transformation to remove. If None, the default coordinate system is used.
-
-        Notes
-        -----
-        - You can also use the method SpatialData.remove_transformation() to remove the transformation of an element when
-        it is backed
-        """
-        from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
-
-        if target_coordinate_system is None:
-            target_coordinate_system = DEFAULT_COORDINATE_SYSTEM
-        transformations = _get_transformations(element)
-        assert transformations is not None
-        if target_coordinate_system not in transformations:
-            raise ValueError(f"Transformation to {target_coordinate_system} not found")
-        del transformations[target_coordinate_system]
-        _set_transformations(element, transformations)
-
-    def remove_transformation(self, element: SpatialElement, target_coordinate_system: Optional[str] = None) -> None:
-        """
-        Remove a transformation of an element.
-
-        Parameters
-        ----------
-        element
-            The element to remove the transformation from.
-        target_coordinate_system
-            The target coordinate system of the transformation to remove. If None, the default coordinate system is used.
-
-        Notes
-        -----
-        - You can also use the static method SpatialData.remove_transformation_in_memory() to remove the transformation of
-        an element when it is not backed
-        """
-        self.remove_transformation_in_memory(element, target_coordinate_system)
-        self._write_transformations_to_disk(element)
-
-    @staticmethod
-    def remove_all_transformations_in_memory(element: SpatialElement) -> None:
-        """
-        Remove all transformations of an element, without writing it to disk.
-
-        Parameters
-        ----------
-        element
-            The element to remove the transformations from.
-
-        Notes
-        -----
-        - You can also use the method SpatialData.remove_all_transformations() to remove all transformations of an
-        element when it is backed
-        """
-        _set_transformations(element, {})
-
-    def remove_all_transformations(self, element: SpatialElement) -> None:
-        """
-        Remove all transformations of an element.
-
-        Parameters
-        ----------
-        element
-            The element to remove the transformations from.
-
-        Notes
-        -----
-        - You can also use the static method SpatialData.remove_all_transformations_in_memory() to remove all
-        transformations of an element when it is not backed
-        """
-        self.remove_all_transformations_in_memory(element)
-        self._write_transformations_to_disk(element)
-
-    def _build_transformations_graph(self) -> nx.Graph:
-        g = nx.DiGraph()
-        gen = self._gen_elements_values()
-        for cs in self.coordinate_systems:
-            g.add_node(cs)
-        for e in gen:
-            g.add_node(id(e))
-            transformations = self.get_all_transformations(e)
-            for cs, t in transformations.items():
-                g.add_edge(id(e), cs, transformation=t)
-                try:
-                    g.add_edge(cs, id(e), transformation=t.inverse())
-                except np.linalg.LinAlgError:
-                    pass
-        return g
-
-    def map_coordinate_systems(
-        self,
-        source_coordinate_system: Union[SpatialElement, str],
-        target_coordinate_system: Union[SpatialElement, str],
-        intermediate_coordinate_systems: Optional[Union[SpatialElement, str]] = None,
-    ) -> BaseTransformation:
-        """
-        Get the transformation to map a coordinate system (intrinsic or extrinsic) to another one.
-
-        Parameters
-        ----------
-        source_coordinate_system
-            The source coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
-            coordinate system).
-        target_coordinate_system
-            The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
-            coordinate system).
-
-        Returns
-        -------
-        The transformation to map the source coordinate system to the target coordinate system.
-        """
-        if (
-            isinstance(source_coordinate_system, str)
-            and isinstance(target_coordinate_system, str)
-            and source_coordinate_system == target_coordinate_system
-            or id(source_coordinate_system) == id(target_coordinate_system)
-        ):
-            return Identity()
-        else:
-            g = self._build_transformations_graph()
-            src_node: Union[int, str]
-            if has_type_spatial_element(source_coordinate_system):
-                src_node = id(source_coordinate_system)
-            else:
-                src_node = source_coordinate_system
-            des_node: Union[int, str]
-            if has_type_spatial_element(target_coordinate_system):
-                des_node = id(target_coordinate_system)
-            else:
-                des_node = target_coordinate_system
-            paths = list(nx.all_simple_paths(g, source=src_node, target=des_node))
-            if len(paths) == 0:
-                # error 0 (we refer to this in the tests)
-                raise RuntimeError("No path found between the two coordinate systems")
-            elif len(paths) > 1:
-                if intermediate_coordinate_systems is None:
-                    # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
-                    # an expection and ask the user to be more specific
-                    paths_with_length_1 = [p for p in paths if len(p) == 2]
-                    if len(paths_with_length_1) == 1:
-                        path = paths_with_length_1[0]
-                    else:
-                        # error 1
-                        raise RuntimeError(
-                            "Multiple paths found between the two coordinate systems. Please specify an intermediate "
-                            "coordinate system."
-                        )
-                else:
-                    if has_type_spatial_element(intermediate_coordinate_systems):
-                        intermediate_coordinate_systems = id(intermediate_coordinate_systems)
-                    paths = [p for p in paths if intermediate_coordinate_systems in p]
-                    if len(paths) == 0:
-                        # error 2
-                        raise RuntimeError(
-                            "No path found between the two coordinate systems passing through the intermediate"
-                        )
-                    elif len(paths) > 1:
-                        # error 3
-                        raise RuntimeError(
-                            "Multiple paths found between the two coordinate systems passing through the intermediate"
-                        )
-                    else:
-                        path = paths[0]
-            else:
-                path = paths[0]
-            transformations = []
-            for i in range(len(path) - 1):
-                transformations.append(g[path[i]][path[i + 1]]["transformation"])
-            sequence = Sequence(transformations)
-            return sequence
-
     def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
         """
         Filter the SpatialData by a coordinate system.
+
+        This returns a SpatialData object with the elements containing
+        a transformation mapping to the specified coordinate system.
 
         Parameters
         ----------
@@ -599,9 +340,12 @@ class SpatialData:
         -------
         The filtered SpatialData.
         """
+        from spatialdata._core._spatialdata_ops import get_transformation
+
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in self._gen_elements():
-            transformations = self.get_all_transformations(element)
+            transformations = get_transformation(element, get_all=True)
+            assert isinstance(transformations, dict)
             if coordinate_system in transformations:
                 if element_type not in elements:
                     elements[element_type] = {}
@@ -625,7 +369,11 @@ class SpatialData:
         -------
         The transformed element.
         """
-        t = self.map_coordinate_systems(element, target_coordinate_system)
+        from spatialdata._core._spatialdata_ops import (
+            get_transformation_between_coordinate_systems,
+        )
+
+        t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         transformed = t.transform(element)
         return transformed
 
@@ -641,6 +389,8 @@ class SpatialData:
             The target coordinate system.
         filter_by_coordinate_system
             Whether to filter the SpatialData by the target coordinate system before transforming.
+            If set to True, only elements with a coordinate transforming to the specified coordinate system
+            will be present in the returned SpatialData object. Default value is True.
 
         Returns
         -------
@@ -760,7 +510,7 @@ class SpatialData:
     def add_points(
         self,
         name: str,
-        points: pa.Table,
+        points: DaskDataFrame,
         overwrite: bool = False,
         _add_in_memory: bool = True,
     ) -> None:
@@ -772,7 +522,7 @@ class SpatialData:
         name
             Key to the element inside the SpatialData object.
         points
-            The points to add, the object needs to pass validation (see :class:`~spatialdata.PointsModel`).
+            The points to add, the object needs to pass validation (see :class:`spatialdata.PointsModel`).
         storage_options
             Storage options for the Zarr storage.
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
@@ -799,7 +549,10 @@ class SpatialData:
             # from the correct storage
             from spatialdata._io.read import _read_points
 
-            points = _read_points(store=elem_group.store)
+            assert elem_group.path == "points"
+
+            path = os.path.join(elem_group.store.path, "points", name)
+            points = _read_points(path)
             self._add_points_in_memory(name=name, points=points, overwrite=True)
 
     def add_polygons(
@@ -976,7 +729,7 @@ class SpatialData:
         return self._labels
 
     @property
-    def points(self) -> dict[str, pa.Table]:
+    def points(self) -> dict[str, DaskDataFrame]:
         """Return points as a Dict of name to point data."""
         return self._points
 
@@ -992,11 +745,13 @@ class SpatialData:
 
     @property
     def coordinate_systems(self) -> list[str]:
+        from spatialdata._core._spatialdata_ops import get_transformation
+
         all_cs = set()
         gen = self._gen_elements_values()
         for obj in gen:
-            transformations = self.get_all_transformations(obj)
-            assert transformations is not None
+            transformations = get_transformation(obj, get_all=True)
+            assert isinstance(transformations, dict)
             for cs in transformations:
                 all_cs.add(cs)
         return list(all_cs)
@@ -1069,7 +824,12 @@ class SpatialData:
                             dim_string = ""
                         if descr_class == "Table":
                             descr_class = "pyarrow.Table"
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} {dim_string}"
+                        shape_str = (
+                            "("
+                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                            + ")"
+                        )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
@@ -1126,18 +886,25 @@ class QueryManager:
 
         Parameters
         ----------
-        request : BoundingBoxRequest
+        request
             The bounding box request.
 
         Returns
         -------
-        requested_sdata : SpatialData
-            The SpatialData object containing the requested data.
-            Elements with no valid data are omitted.
+        The SpatialData object containing the requested data.
+        Elements with no valid data are omitted.
         """
         requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
+        requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)
+        requested_polygons = _bounding_box_query_polygons_dict(polygons_dict=self._sdata.polygons, request=request)
 
-        return SpatialData(points=requested_points)
+        return SpatialData(
+            points=requested_points,
+            images=requested_images,
+            polygons=requested_polygons,
+            shapes=self._sdata.shapes,
+            table=self._sdata.table,
+        )
 
     def __call__(self, request: BaseSpatialRequest) -> SpatialData:
         if isinstance(request, BoundingBoxRequest):
