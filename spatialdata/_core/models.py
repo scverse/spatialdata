@@ -547,7 +547,7 @@ class PointsModel:
             if instance_key is not None:
                 table[instance_key] = annotation[instance_key]
             for c in set(annotation.columns) - {feature_key, instance_key}:
-                table[c] = dd.from_pandas(annotation[c], **kwargs)
+                table[c] = dd.from_pandas(annotation[c], **kwargs)  # type: ignore[attr-defined]
             return cls._add_metadata_and_validate(
                 table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
             )
@@ -570,11 +570,11 @@ class PointsModel:
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(
+            table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
             )
             if feature_key is not None:
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]

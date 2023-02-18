@@ -837,9 +837,33 @@ def _get_current_output_axes(
                     )
         return tuple(to_return)
     elif isinstance(transformation, Sequence):
+        for t in transformation.transformations:
+            input_axes = _get_current_output_axes(t, input_axes)
         return input_axes
     else:
         raise ValueError("Unknown transformation type.")
+
+
+def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
+    from spatialdata._core.core_utils import get_dims
+
+    input_axes = get_dims(element)
+    output_axes = _get_current_output_axes(transformation, input_axes)
+    matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
+    return Affine(matrix, input_axes=input_axes, output_axes=output_axes)
+
+
+def _decompose_affine_into_linear_and_translation(affine: Affine) -> tuple[Affine, Translation]:
+    matrix = affine.matrix
+    translation_part = matrix[:-1, -1]
+
+    linear_part = np.zeros_like(matrix)
+    linear_part[:-1, :-1] = matrix[:-1, :-1]
+    linear_part[-1, -1] = 1
+
+    linear_transformation = Affine(linear_part, input_axes=affine.input_axes, output_axes=affine.output_axes)
+    translation_transformation = Translation(translation_part, axes=affine.output_axes)
+    return linear_transformation, translation_transformation
 
 
 TRANSFORMATIONS_MAP[NgffIdentity] = Identity

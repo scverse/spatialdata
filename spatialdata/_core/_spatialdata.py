@@ -873,7 +873,9 @@ class SpatialData:
             gen = self._gen_elements()
             elements_in_cs = []
             for k, name, obj in gen:
-                coordinate_systems = get_transformation(obj, get_all=True).keys()
+                transformations = get_transformation(obj, get_all=True)
+                assert isinstance(transformations, dict)
+                coordinate_systems = transformations.keys()
                 if cs in coordinate_systems:
                     elements_in_cs.append(f"/{k}/{name}")
             if len(elements_in_cs) > 0:

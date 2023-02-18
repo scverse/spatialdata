@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import dask.array as da
 import dask_image.ndinterp
@@ -27,7 +27,7 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
-    from spatialdata._core.transformations import BaseTransformation
+    from spatialdata._core.transformations import BaseTransformation, Translation
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
@@ -121,29 +121,12 @@ def _prepend_transformation(
 ) -> None:
     ##
     from spatialdata._core._spatialdata_ops import set_transformation
-    from spatialdata._core.transformations import (
-        Affine,
-        Identity,
-        Sequence,
-        Translation,
-        _get_current_output_axes,
-    )
+    from spatialdata._core.transformations import Identity, Sequence
 
     to_prepend: Optional[BaseTransformation] = None
     if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
-        input_axes = get_dims(element)
-        output_axes = _get_current_output_axes(transformation, input_axes)
-        matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
-        vector_part = matrix[:-1, :-1]
-        translation_part = matrix[:-1, -1]
-
-        vector_part_affine = np.zeros_like(matrix)
-        vector_part_affine[:-1, :-1] = vector_part
-        vector_part_affine[-1, -1] = 1
-
-        vector_transformation = Affine(vector_part_affine, input_axes=input_axes, output_axes=output_axes)
-        translation_transformation = Translation(translation_part, axes=output_axes)
         if maintain_positioning:
+            assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
@@ -164,6 +147,7 @@ def _prepend_transformation(
         )
         d = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     for cs, t in d.items():
+        new_t: BaseTransformation
         if to_prepend is not None:
             new_t = Sequence([to_prepend, t])
         else:
@@ -209,10 +193,12 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     )
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
     _prepend_transformation(
         transformed_data,
         transformation,
-        old_transformations=get_transformation(data, get_all=True),
+        old_transformations=old_transformations,
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
     )
@@ -262,10 +248,12 @@ def _(
             raise e
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
     _prepend_transformation(
         transformed_data,
         transformation,
-        old_transformations=get_transformation(data, get_all=True),
+        old_transformations=old_transformations,
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
     )
@@ -294,10 +282,12 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
     from spatialdata._core.models import PointsModel
 
     PointsModel.validate(transformed)
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
     _prepend_transformation(
         transformed,
         transformation,
-        old_transformations=get_transformation(data, get_all=True),
+        old_transformations=old_transformations,
         raster_translation=None,
         maintain_positioning=maintain_positioning,
     )
@@ -320,11 +310,13 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
     # to avoid cyclic import
     from spatialdata._core.models import PolygonsModel
 
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
     PolygonsModel.validate(transformed_data)
     _prepend_transformation(
         transformed_data,
         transformation,
-        old_transformations=get_transformation(data, get_all=True),
+        old_transformations=old_transformations,
         raster_translation=None,
         maintain_positioning=maintain_positioning,
     )
@@ -344,11 +336,13 @@ def _(data: AnnData, transformation: BaseTransformation, maintain_positioning: b
     # to avoid cyclic import
     from spatialdata._core.models import ShapesModel
 
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
     ShapesModel.validate(transformed_adata)
     _prepend_transformation(
         transformed_adata,
         transformation,
-        old_transformations=get_transformation(data, get_all=True),
+        old_transformations=old_transformations,
         raster_translation=None,
         maintain_positioning=maintain_positioning,
     )
