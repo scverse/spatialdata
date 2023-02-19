@@ -47,6 +47,7 @@ from spatialdata._core.core_utils import (
     _get_transformations,
     _set_transformations,
     _validate_mapping_to_coordinate_system_type,
+    compute_coordinates,
     get_dims,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity
@@ -193,6 +194,7 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
             assert isinstance(data, MultiscaleSpatialImage)
+        data = compute_coordinates(data)
         return data
 
     def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
