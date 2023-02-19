@@ -1,6 +1,6 @@
 import copy
 from functools import singledispatch
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from anndata import AnnData
@@ -277,7 +277,10 @@ def _(e: SpatialImage) -> tuple[str, ...]:
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
-    return tuple(i for i in e["scale0"].dims.keys())
+    if "scale0" in e:
+        return tuple(i for i in e["scale0"].dims.keys())
+    else:
+        return tuple(i for i in e.dims.keys())
 
 
 @get_dims.register(GeoDataFrame)
@@ -299,3 +302,62 @@ def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = [c for c in valid_dims if c in e.columns]
     return tuple(dims)
+
+
+@singledispatch
+def compute_coordinates(data: Union[SpatialImage, MultiscaleSpatialImage]) -> tuple[str, ...]:
+    """
+    Computes and assign coordinates to a (Multiscale)SpatialImage.
+
+    Parameters
+    ----------
+    data
+        :class:`SpatialImage` or :class:`MultiscaleSpatialImage`.
+
+    Returns
+    -------
+    :class:`SpatialImage` or :class:`MultiscaleSpatialImage` with coordinates assigned.
+    """
+    raise TypeError(f"Unsupported type: {type(data)}")
+
+
+@compute_coordinates.register(SpatialImage)
+def _(data: SpatialImage) -> SpatialImage:
+    coords: dict[str, ArrayLike] = {
+        d: np.arange(data.sizes[d], dtype=np.float_) for d in data.sizes.keys() if d in ["x", "y", "z"]
+    }
+    return data.assign_coords(coords)
+
+
+@compute_coordinates.register(MultiscaleSpatialImage)
+def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+    def _get_scale(transforms: dict[str, Any]) -> Optional[ArrayLike]:
+        for t in transforms["global"].transformations:
+            if hasattr(t, "scale"):
+                if TYPE_CHECKING:
+                    assert isinstance(t.scale, np.ndarray)
+                return t.scale
+
+    def _compute_coords(max_: int, scale_f: Union[int, float]) -> ArrayLike:
+        return (  # type: ignore[no-any-return]
+            DataArray(np.linspace(0, max_, max_, endpoint=False, dtype=np.float_))
+            .coarsen(dim_0=scale_f, boundary="trim", side="right")
+            .mean()
+            .values
+        )
+
+    max_scale0 = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+    out = {}
+
+    for name, dt in data.items():
+        max_scale = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+        if name == "scale0":
+            coords: dict[str, ArrayLike] = {d: np.arange(max_scale[d], dtype=np.float_) for d in max_scale.keys()}
+            out[name] = dt["image"].assign_coords(coords)
+        else:
+            scalef = _get_scale(dt["image"].attrs["transform"])
+            assert len(max_scale.keys()) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
+            out[name] = dt["image"].assign_coords(
+                {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
+            )
+    return MultiscaleSpatialImage.from_dict(d=out)
