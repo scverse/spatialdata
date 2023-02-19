@@ -183,28 +183,11 @@ class RasterSchema(DataArraySchema):
         assert isinstance(data, SpatialImage)
         _parse_transformations(data, transformations)
         if multiscale_factors is not None:
-            # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
-            # of downscaling factors to avoid this
-            adjusted_multiscale_factors: list[int] = []
-            assert isinstance(data, DataArray)
-            current_shape: ArrayLike = np.array(data.shape, dtype=float)
-            # multiscale_factors could be a dict, we don't support this case here (in the future this code and the
-            # more general case will be handled by multiscale-spatial-image)
-            assert isinstance(multiscale_factors, list)
-            for factor in multiscale_factors:
-                scale_vector = np.array([1.0 if ax == "c" else factor for ax in data.dims])
-                current_shape /= scale_vector
-                if current_shape.min() < 1:
-                    logger.warning(
-                        f"Detected a multiscale factor that would collapse an axis: truncating list of factors from {multiscale_factors} to {adjusted_multiscale_factors}"
-                    )
-                    break
-                adjusted_multiscale_factors.append(factor)
             parsed_transform = _get_transformations(data)
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
-                scale_factors=adjusted_multiscale_factors,
+                scale_factors=multiscale_factors,
                 method=method,
                 chunks=chunks,
             )
