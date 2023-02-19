@@ -10,11 +10,11 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
+from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
 from spatialdata._core._spatial_query import (
@@ -817,19 +817,33 @@ class SpatialData:
                     elif attr == "polygons":
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D polygons)"
                     elif attr == "points":
-                        if len(v) > 0:
+                        if len(v.dask.layers) == 1:
+                            name, layer = v.dask.layers.items().__iter__().__next__()
+                            if "read-parquet" in name:
+                                t = layer.creation_info["args"]
+                                assert isinstance(t, tuple)
+                                assert len(t) == 1
+                                parquet_file = t[0]
+                                table = read_table(parquet_file)
+                                length = len(table)
+                            else:
+                                length = len(v)
+                        else:
+                            length = len(v)
+                        if length > 0:
                             n = len(get_dims(v))
                             dim_string = f"({n}D points)"
                         else:
                             dim_string = ""
-                        if descr_class == "Table":
-                            descr_class = "pyarrow.Table"
-                        shape_str = (
-                            "("
-                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                            + ")"
-                        )
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {shape_str} {dim_string}"
+                        assert len(v.shape) == 2
+                        shape_str = f"({length}, {v.shape[1]})"
+                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
+                        # shape_str = (
+                        #     "("
+                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                        #     + ")"
+                        # )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
