@@ -14,7 +14,7 @@ from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordina
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
@@ -44,7 +44,7 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame))
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
 
 
 def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
@@ -384,7 +384,7 @@ def get_channels(data: Any) -> list[Any]:
 
 @get_channels.register
 def _(data: SpatialImage) -> list[Any]:
-    return data.coords["c"].values.tolist()
+    return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
 
 
 @get_channels.register
@@ -393,4 +393,4 @@ def _(data: MultiscaleSpatialImage) -> list[Any]:
     channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
     if len(channels) > 1:
         raise ValueError("TODO")
-    return [i for i in next(iter(channels))]
+    return list(next(iter(channels)))
