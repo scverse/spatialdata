@@ -744,8 +744,6 @@ class SpatialData:
                             dim_string = f"({n}D points)"
                         else:
                             dim_string = ""
-                        if descr_class == "Table":
-                            descr_class = "pyarrow.Table"
                         shape_str = (
                             "("
                             + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
