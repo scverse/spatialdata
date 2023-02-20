@@ -12,13 +12,14 @@ class SpotCropDataset(Dataset):
         self,
         sdata: SpatialData,
         coordinates: ArrayLike,
+        radius: int = 5,
         transform: Optional[Callable[[SpatialData], SpatialData]] = None,
     ):
         self.sdata = sdata
         self.transform = transform
 
         self.coordinates = coordinates
-        self.radius = 5
+        self.radius = radius
 
     def _get_bounding_box_coordinates(self, spot_index: int) -> tuple[ArrayLike, ArrayLike]:
         """Get the coordinates for the corners of the bounding box of that encompasses a given spot.
@@ -41,10 +42,10 @@ class SpotCropDataset(Dataset):
 
         return min_coordinate, max_coordinate
 
-    def __len___(self) -> int:
-        return len(self.coordiantes)
+    def __len__(self) -> int:
+        return len(self.coordinates)
 
-    def _getitem__(self, idx: int) -> SpatialData:
+    def __getitem__(self, idx: int) -> SpatialData:
         min_coordinate, max_coordinate = self._get_bounding_box_coordinates(spot_index=idx)
 
         request = BoundingBoxRequest(min_coordinate=min_coordinate, max_coordinate=max_coordinate, axes=("y", "x"))
