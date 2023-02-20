@@ -26,12 +26,7 @@ from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io._utils import ome_zarr_logger
-from spatialdata._io.format import (
-    PointsFormat,
-    PolygonsFormat,
-    ShapesFormat,
-    SpatialDataFormatV01,
-)
+from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
 from spatialdata._logging import logger
 
 
@@ -44,7 +39,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     labels = {}
     points = {}
     table: Optional[AnnData] = None
-    polygons = {}
     shapes = {}
 
     # read multiscale images
@@ -83,14 +77,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             f_elem_store = f"{shapes_store}{f_elem}"
             shapes[k] = _read_shapes(f_elem_store)
 
-    polygons_store = store / "polygons"
-    if polygons_store.exists():
-        f = zarr.open(polygons_store, mode="r")
-        for k in f.keys():
-            f_elem = f[k].name
-            f_elem_store = f"{polygons_store}{f_elem}"
-            polygons[k] = _read_polygons(f_elem_store)
-
     table_store = store / "table"
     if table_store.exists():
         f = zarr.open(table_store, mode="r")
@@ -115,7 +101,6 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         images=images,
         labels=labels,
         points=points,
-        polygons=polygons,
         shapes=shapes,
         table=table,
     )
@@ -203,39 +188,27 @@ def _read_multiscale(
         return si
 
 
-def _read_polygons(store: str, fmt: SpatialDataFormatV01 = PolygonsFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
-    """Read polygons from a zarr store."""
+def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = ShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
+    """Read shapes from a zarr store."""
     assert isinstance(store, str)
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
     index = np.array(f["Index"])
-    offsets_keys = [k for k in f.keys() if k.startswith("offset")]
-    offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
-
     typ = fmt.attrs_from_dict(f.attrs.asdict())
-    geometry = from_ragged_array(typ, coords, offsets)
-    geo_df = GeoDataFrame({"geometry": geometry}, index=index)
+    if typ.name == "POINT":
+        radius = np.array(f["radius"])
+        geometry = from_ragged_array(typ, coords)
+        geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
+    else:
+        offsets_keys = [k for k in f.keys() if k.startswith("offset")]
+        offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
+        geometry = from_ragged_array(typ, coords, offsets)
+        geo_df = GeoDataFrame({"geometry": geometry}, index=index)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(geo_df, transformations)
-
     return geo_df
-
-
-def _read_shapes(store: str, fmt: SpatialDataFormatV01 = ShapesFormat()) -> AnnData:  # type: ignore[type-arg]
-    """Read shapes from a zarr store."""
-    assert isinstance(store, str)
-    f = zarr.open(store, mode="r")
-    adata = read_anndata_zarr(store)
-
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
-    _set_transformations(adata, transformations)
-
-    attrs = fmt.attrs_from_dict(f.attrs.asdict())
-    assert adata.uns["spatialdata_attrs"] == attrs
-
-    return adata
 
 
 def _read_points(

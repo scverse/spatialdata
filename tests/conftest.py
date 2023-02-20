@@ -8,7 +8,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
@@ -17,7 +17,6 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
     ShapesModel,
     TableModel,
 )
@@ -33,11 +32,6 @@ def images() -> SpatialData:
 @pytest.fixture()
 def labels() -> SpatialData:
     return SpatialData(labels=_get_labels())
-
-
-@pytest.fixture()
-def polygons() -> SpatialData:
-    return SpatialData(polygons=_get_polygons())
 
 
 @pytest.fixture()
@@ -65,7 +59,6 @@ def full_sdata() -> SpatialData:
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
-        polygons=_get_polygons(),
         shapes=_get_shapes(),
         points=_get_points(),
         table=_get_table(region="sample1"),
@@ -101,7 +94,6 @@ def sdata(request) -> SpatialData:
         s = SpatialData(
             images=_get_images(),
             labels=_get_labels(),
-            polygons=_get_polygons(),
             shapes=_get_shapes(),
             points=_get_points(),
             table=_get_table("sample1"),
@@ -186,7 +178,7 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     return out
 
 
-def _get_polygons() -> dict[str, GeoDataFrame]:
+def _get_shapes() -> dict[str, GeoDataFrame]:
     # TODO: add polygons from geojson and from ragged arrays since now only the GeoDataFrame initializer is tested.
     out = {}
     poly = GeoDataFrame(
@@ -221,17 +213,22 @@ def _get_polygons() -> dict[str, GeoDataFrame]:
         }
     )
 
-    out["poly"] = PolygonsModel.parse(poly, name="poly")
-    out["multipoly"] = PolygonsModel.parse(multipoly, name="multipoly")
+    points = GeoDataFrame(
+        {
+            "geometry": [
+                Point((0, 1)),
+                Point((1, 1)),
+                Point((3, 4)),
+                Point((4, 2)),
+                Point((5, 6)),
+            ]
+        }
+    )
+    points["radius"] = np.random.normal(size=(len(points), 1))
 
-    return out
-
-
-def _get_shapes() -> dict[str, AnnData]:
-    out = {}
-    arr = RNG.normal(size=(100, 2))
-    out["shapes_0"] = ShapesModel.parse(arr, shape_type="Square", shape_size=3)
-    out["shapes_1"] = ShapesModel.parse(arr, shape_type="Circle", shape_size=np.repeat(1, len(arr)))
+    out["poly"] = ShapesModel.parse(poly)
+    out["multipoly"] = ShapesModel.parse(multipoly)
+    out["circles"] = ShapesModel.parse(points)
 
     return out
 

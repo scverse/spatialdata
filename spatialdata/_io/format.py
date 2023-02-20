@@ -5,11 +5,10 @@ from ome_zarr.format import CurrentFormat
 from pandas.api.types import is_categorical_dtype
 from shapely import GeometryType
 
-from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
+from spatialdata._core.models import PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
 
-Polygon_s = PolygonsModel()
 Shapes_s = ShapesModel()
 Points_s = PointsModel()
 
@@ -91,42 +90,26 @@ class SpatialDataFormatV01(CurrentFormat):
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
 
 
-class PolygonsFormat(SpatialDataFormatV01):
-    """Formatter for polygons."""
+class ShapesFormat(SpatialDataFormatV01):
+    """Formatter for shapes."""
 
     def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
-        if Polygon_s.ATTRS_KEY not in metadata:
-            raise KeyError(f"Missing key {Polygon_s.ATTRS_KEY} in polygons metadata.")
-        metadata_ = metadata[Polygon_s.ATTRS_KEY]
-        if Polygon_s.GEOS_KEY not in metadata_:
-            raise KeyError(f"Missing key {Polygon_s.GEOS_KEY} in polygons metadata.")
-        for k in [Polygon_s.TYPE_KEY, Polygon_s.NAME_KEY]:
-            if k not in metadata_[Polygon_s.GEOS_KEY]:
-                raise KeyError(f"Missing key {k} in polygons metadata.")
+        if Shapes_s.ATTRS_KEY not in metadata:
+            raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
+        metadata_ = metadata[Shapes_s.ATTRS_KEY]
+        if Shapes_s.GEOS_KEY not in metadata_:
+            raise KeyError(f"Missing key {Shapes_s.GEOS_KEY} in shapes metadata.")
+        for k in [Shapes_s.TYPE_KEY, Shapes_s.NAME_KEY]:
+            if k not in metadata_[Shapes_s.GEOS_KEY]:
+                raise KeyError(f"Missing key {k} in shapes metadata.")
 
-        typ = GeometryType(metadata_[Polygon_s.GEOS_KEY][Polygon_s.TYPE_KEY])
-        assert typ.name == metadata_[Polygon_s.GEOS_KEY][Polygon_s.NAME_KEY]
+        typ = GeometryType(metadata_[Shapes_s.GEOS_KEY][Shapes_s.TYPE_KEY])
+        assert typ.name == metadata_[Shapes_s.GEOS_KEY][Shapes_s.NAME_KEY]
         assert self.spatialdata_version == metadata_["version"]
         return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
-        return {Polygon_s.GEOS_KEY: {Polygon_s.NAME_KEY: geometry.name, Polygon_s.TYPE_KEY: geometry.value}}
-
-
-class ShapesFormat(SpatialDataFormatV01):
-    """Formatter for shapes."""
-
-    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        if Shapes_s.ATTRS_KEY not in metadata:
-            raise KeyError(f"Missing key {Shapes_s.ATTRS_KEY} in shapes metadata.")
-        metadata_ = metadata[Shapes_s.ATTRS_KEY]
-        assert self.spatialdata_version == metadata_["version"]
-        if Shapes_s.TYPE_KEY not in metadata_:
-            raise KeyError(f"Missing key {Shapes_s.TYPE_KEY} in shapes metadata.")
-        return {Shapes_s.TYPE_KEY: metadata_[Shapes_s.TYPE_KEY]}
-
-    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        return {Shapes_s.TYPE_KEY: data[Shapes_s.ATTRS_KEY][Shapes_s.TYPE_KEY]}
+        return {Shapes_s.GEOS_KEY: {Shapes_s.NAME_KEY: geometry.name, Shapes_s.TYPE_KEY: geometry.value}}
 
 
 class PointsFormat(SpatialDataFormatV01):
