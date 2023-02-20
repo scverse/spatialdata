@@ -202,16 +202,39 @@ class RasterSchema(DataArraySchema):
         data = compute_coordinates(data)
         return data
 
-    def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
-        if isinstance(data, SpatialImage):
-            super().validate(data)
-        elif isinstance(data, MultiscaleSpatialImage):
-            name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
-            if len(name) > 1:
-                raise ValueError(f"Wrong name for datatree: {name}.")
-            name = list(name)[0]
-            for d in data:
-                super().validate(data[d][name])
+    @singledispatchmethod
+    def validate(self, data: Any) -> None:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            Data to validate.
+
+        Raises
+        ------
+        ValueError
+            If data is not valid.
+        """
+
+        raise ValueError(f"Unsupported data type: {type(data)}.")
+
+    @validate.register(SpatialImage)
+    def _(self, data: SpatialImage) -> None:
+        super().validate(data)
+
+    @validate.register(MultiscaleSpatialImage)
+    def _(self, data: MultiscaleSpatialImage) -> None:
+        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
+            if j != k:
+                raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
+        name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+        if len(name) > 1:
+            raise ValueError(f"Wrong name for datatree: `{name}`.")
+        name = list(name)[0]
+        for d in data:
+            super().validate(data[d][name])
 
 
 class Labels2DModel(RasterSchema):
@@ -223,8 +246,6 @@ class Labels2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -239,8 +260,6 @@ class Labels3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -255,8 +274,7 @@ class Image2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -271,8 +289,7 @@ class Image3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
