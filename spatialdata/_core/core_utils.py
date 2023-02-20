@@ -364,3 +364,33 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
                 {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
             )
     return MultiscaleSpatialImage.from_dict(d=out)
+
+
+@singledispatch
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data.
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+    """
+    raise ValueError(f"Cannot get channels from {type(data)}")
+
+
+@get_channels.register
+def _(data: SpatialImage) -> list[Any]:
+    return data.coords["c"].values.tolist()
+
+
+@get_channels.register
+def _(data: MultiscaleSpatialImage) -> list[Any]:
+    name = list({list(data[i].data_vars.keys())[0] for i in data.keys()})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
+    if len(channels) > 1:
+        raise ValueError("TODO")
+    return [i for i in next(iter(channels))]

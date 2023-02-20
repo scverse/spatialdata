@@ -6,6 +6,9 @@ from pandas.api.types import is_categorical_dtype
 from shapely import GeometryType
 
 from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
+from spatialdata._core.core_utils import get_channels
 
 CoordinateTransform_t = list[dict[str, Any]]
 
@@ -89,6 +92,27 @@ class SpatialDataFormatV01(CurrentFormat):
             import numpy as np
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
+
+    def channels_to_metadata(
+        self, data: Union[SpatialImage, MultiscaleSpatialImage], channels_metadata: Optional[dict[str, Any]] = None
+    ) -> dict[str, Union[int, str]]:
+        """Convert channels to metadata."""
+        channels = get_channels(data)
+        metadata: dict[str, Any] = {"channels": []}
+        if channels_metadata is not None:
+            if set(channels_metadata.keys()).symmetric_difference(set(channels)):
+                for c in channels:
+                    metadata["channels"].append({"labels": c} | omero_metadata[c])
+            else:
+                raise ValueError("Channels metadata must contain all channels.")
+        else:
+            for c in channels:
+                metadata["channels"].append({"labels": c})
+        return metadata
+
+    def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
+        """Convert channels from metadata."""
+        return [d["labels"] for d in omero_metadata["channels"]]
 
 
 class PolygonsFormat(SpatialDataFormatV01):

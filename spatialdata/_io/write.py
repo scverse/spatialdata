@@ -118,6 +118,7 @@ def _write_raster(
     fmt: Format = SpatialDataFormatV01(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
+    channels_metadata: Optional[JSONDict] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
     assert raster_type in ["image", "labels"]
@@ -162,6 +163,7 @@ def _write_raster(
         # We need this because the argument of write_image_ngff is called image while the argument of
         # write_labels_ngff is called label.
         metadata[raster_type] = data
+        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
         write_single_scale_ngff(
             group=_get_group_for_writing_data(),
             scaler=None,
