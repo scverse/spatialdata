@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
-from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -113,7 +112,7 @@ def _transform(data: Any, transformation: BaseTransformation) -> Any:
 @_transform.register(SpatialData)
 def _(data: SpatialData, transformation: BaseTransformation) -> SpatialData:
     new_elements: dict[str, dict[str, Any]] = {}
-    for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+    for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
         if len(d) > 0:
             new_elements[element_type] = {}
@@ -227,22 +226,7 @@ def _(data: GeoDataFrame, transformation: BaseTransformation) -> GeoDataFrame:
     transformed_data.geometry = transformed_geometry
 
     # to avoid cyclic import
-    from spatialdata._core.models import PolygonsModel
-
-    PolygonsModel.validate(transformed_data)
-    return transformed_data
-
-
-@_transform.register(AnnData)
-def _(data: AnnData, transformation: BaseTransformation) -> AnnData:
-    ndim = len(get_dims(data))
-    xdata = DataArray(data.obsm["spatial"], coords={"points": range(len(data)), "dim": ["x", "y", "z"][:ndim]})
-    transformed_spatial = transformation._transform_coordinates(xdata)
-    transformed_adata = data.copy()
-    transformed_adata.obsm["spatial"] = transformed_spatial.data
-
-    # to avoid cyclic import
     from spatialdata._core.models import ShapesModel
 
-    ShapesModel.validate(transformed_adata)
-    return transformed_adata
+    ShapesModel.validate(transformed_data)
+    return transformed_data

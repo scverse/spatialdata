@@ -164,47 +164,47 @@ def _bounding_box_query_image_dict(
     return requested_images
 
 
-def _bounding_box_query_polygons(polygons_table: GeoDataFrame, request: BoundingBoxRequest) -> GeoDataFrame:
-    """Perform a spatial bounding box query on a polygons element.
+def _bounding_box_query_shapes(shapes_table: GeoDataFrame, request: BoundingBoxRequest) -> GeoDataFrame:
+    """Perform a spatial bounding box query on a shapes element.
 
     Parameters
     ----------
-    polygons_table
-        The polygons element to perform the query on.
+    shapes_table
+        The shapes element to perform the query on.
     request
         The request for the query.
 
     Returns
     -------
-    The polygons contained within the specified bounding box.
+    The shapes contained within the specified bounding box.
     """
     # get the polygon bounding boxes
-    polygons_min_column_keys = [f"min{axis}" for axis in request.axes]
-    polygons_min_coordinates = polygons_table.bounds[polygons_min_column_keys].values
+    shapes_min_column_keys = [f"min{axis}" for axis in request.axes]
+    shapes_min_coordinates = shapes_table.bounds[shapes_min_column_keys].values
 
-    polygons_max_column_keys = [f"max{axis}" for axis in request.axes]
-    polygons_max_coordinates = polygons_table.bounds[polygons_max_column_keys].values
+    shapes_max_column_keys = [f"max{axis}" for axis in request.axes]
+    shapes_max_coordinates = shapes_table.bounds[shapes_max_column_keys].values
 
     # check that the min coordinates are inside the bounding box
-    min_inside = np.all(request.min_coordinate < polygons_min_coordinates, axis=1)
+    min_inside = np.all(request.min_coordinate < shapes_min_coordinates, axis=1)
 
     # check that the max coordinates are inside the bounding box
-    max_inside = np.all(request.max_coordinate > polygons_max_coordinates, axis=1)
+    max_inside = np.all(request.max_coordinate > shapes_max_coordinates, axis=1)
 
-    # polygons inside the bounding box satisfy both
-    polygon_inside = np.logical_and(min_inside, max_inside)
+    # shapes inside the bounding box satisfy both
+    shapes_inside = np.logical_and(min_inside, max_inside)
 
-    return polygons_table.loc[polygon_inside]
+    return shapes_table.loc[shapes_inside]
 
 
-def _bounding_box_query_polygons_dict(
-    polygons_dict: dict[str, GeoDataFrame], request: BoundingBoxRequest
+def _bounding_box_query_shapes_dict(
+    shapes_dict: dict[str, GeoDataFrame], request: BoundingBoxRequest
 ) -> dict[str, GeoDataFrame]:
-    requested_polygons = {}
-    for polygons_name, polygons_data in polygons_dict.items():
-        polygons_table = _bounding_box_query_polygons(polygons_data, request)
-        if len(polygons_table) > 0:
+    requested_shapes = {}
+    for shapes_name, shapes_data in shapes_dict.items():
+        shapes_table = _bounding_box_query_shapes(shapes_data, request)
+        if len(shapes_table) > 0:
             # do not include elements with no data
-            requested_polygons[polygons_name] = polygons_table
+            requested_shapes[shapes_name] = shapes_table
 
-    return requested_polygons
+    return requested_shapes

@@ -49,7 +49,7 @@ def test_filter_by_coordinate_system(full_sdata):
 
     scale = Scale([2.0], axes=("x",))
     set_transformation(full_sdata.images["image2d"], scale, "my_space")
-    set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space")
+    set_transformation(full_sdata.shapes["circles"], Identity(), "my_space")
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space")
     assert len(list(sdata_my_space._gen_elements())) == 2
