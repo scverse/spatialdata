@@ -305,7 +305,9 @@ def _(e: AnnData) -> tuple[str, ...]:
 
 
 @singledispatch
-def compute_coordinates(data: Union[SpatialImage, MultiscaleSpatialImage]) -> tuple[str, ...]:
+def compute_coordinates(
+    data: Union[SpatialImage, MultiscaleSpatialImage]
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
     """
     Computes and assign coordinates to a (Multiscale)SpatialImage.
 
@@ -347,17 +349,18 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         )
 
     max_scale0 = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+    img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
 
     for name, dt in data.items():
         max_scale = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
         if name == "scale0":
             coords: dict[str, ArrayLike] = {d: np.arange(max_scale[d], dtype=np.float_) for d in max_scale.keys()}
-            out[name] = dt["image"].assign_coords(coords)
+            out[name] = dt[img_name].assign_coords(coords)
         else:
-            scalef = _get_scale(dt["image"].attrs["transform"])
+            scalef = _get_scale(dt[img_name].attrs["transform"])
             assert len(max_scale.keys()) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
-            out[name] = dt["image"].assign_coords(
+            out[name] = dt[img_name].assign_coords(
                 {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
             )
     return MultiscaleSpatialImage.from_dict(d=out)
