@@ -158,31 +158,28 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out["labels2d_multiscale"] = Labels2DModel.parse(
         RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4], dims=dims_2d
     )
-
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["labels2d_xarray"] = Labels2DModel.parse(
-    #     DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), name="labels2d_xarray", dims=None
-    # )
-    # out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
-    #     DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
-    #     name="labels2d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
+    out["labels2d_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), name="labels2d_xarray", dims=None
+    )
+    out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
+        name="labels2d_multiscale_xarray",
+        scale_factors=[2, 4],
+        dims=None,
+    )
     out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d_numpy", dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
         RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale_numpy", scale_factors=[2, 4], dims=dims_3d
     )
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["labels3d_xarray"] = Labels3DModel.parse(
-    #     DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), name="labels3d_xarray", dims=None
-    # )
-    # out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
-    #     DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
-    #     name="labels3d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
+    out["labels3d_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), name="labels3d_xarray", dims=None
+    )
+    out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
+        name="labels3d_multiscale_xarray",
+        scale_factors=[2, 4],
+        dims=None,
+    )
     return out
 
 
