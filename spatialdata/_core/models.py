@@ -146,7 +146,7 @@ class RasterSchema(DataArraySchema):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
-                if set(dims).difference(data.dims):
+                if set(dims).symmetric_difference(data.dims):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
@@ -154,9 +154,11 @@ class RasterSchema(DataArraySchema):
                     logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
                 dims = data.dims
-            if set(dims).difference(cls.dims.dims):
+            # but if dims don't match the model's dims, throw error
+            if set(dims).symmetric_difference(cls.dims.dims):
                 raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
+        # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
@@ -180,11 +182,14 @@ class RasterSchema(DataArraySchema):
             except ValueError:
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
+        # finally convert to spatial image
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        assert isinstance(data, SpatialImage)
+        # parse transformations
         _parse_transformations(data, transformations)
+        # convert to multiscale if needed
         if scale_factors is not None:
             parsed_transform = _get_transformations(data)
+            # delete transforms
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
@@ -193,7 +198,7 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
-            assert isinstance(data, MultiscaleSpatialImage)
+        # recompute coordinates for (multiscale) spatial image
         data = compute_coordinates(data)
         return data
 
