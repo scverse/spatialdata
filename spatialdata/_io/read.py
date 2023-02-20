@@ -166,7 +166,7 @@ def _read_multiscale(
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
     name = node.metadata["name"]
-    channels_metadata = fmt.channels_from_metadata(node.metadata["omero"])
+    fmt.channels_from_metadata(node.metadata["omero"])
     if type(name) == list:
         assert len(name) == 1
         name = name[0]

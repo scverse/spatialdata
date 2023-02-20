@@ -1,14 +1,14 @@
 from typing import Any, Optional, Union
 
 from anndata import AnnData
+from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import CurrentFormat
 from pandas.api.types import is_categorical_dtype
 from shapely import GeometryType
-
-from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
+
 from spatialdata._core.core_utils import get_channels
+from spatialdata._core.models import PointsModel, PolygonsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
 
