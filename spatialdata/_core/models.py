@@ -128,7 +128,7 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data.
         transformations
             Transformations to apply to the data.
-        multiscale_factors
+        scale_factors
             Scale factors to apply for multiscale.
             If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method

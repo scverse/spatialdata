@@ -133,7 +133,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         unpadded = unpad_raster(SpatialImage(xdata))
         # TODO: here I am using some arbitrary scalingfactors, I think that we need an automatic initialization of multiscale. See discussion: https://github.com/scverse/spatialdata/issues/108
         # mypy thinks that the schema could be a ShapeModel, ... but it's not
-        unpadded_multiscale = get_schema(raster).parse(unpadded, multiscale_factors=[2, 2])  # type: ignore[call-arg]
+        unpadded_multiscale = get_schema(raster).parse(unpadded, scale_factors=[2, 2])  # type: ignore[call-arg]
         return unpadded_multiscale
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")

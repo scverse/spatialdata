@@ -46,7 +46,7 @@ def test_unpad_raster(images, labels) -> None:
             padded = schema.parse(padded, dims=data.dims)
         elif isinstance(raster, MultiscaleSpatialImage):
             # some arbitrary scaling factors
-            padded = schema.parse(padded, dims=data.dims, multiscale_factors=[2, 2])
+            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2])
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)

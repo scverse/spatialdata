@@ -185,7 +185,7 @@ def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> Multi
         except OverflowError as e:
             raise e
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=axes, scale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
     print(
         "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
     )
