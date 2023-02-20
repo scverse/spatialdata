@@ -144,7 +144,8 @@ def _write_raster(
             return group["labels"][name]
 
     # convert channel names to channel metadata
-    metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+    if raster_type == "image":
+        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data

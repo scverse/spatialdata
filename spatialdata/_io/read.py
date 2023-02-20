@@ -155,8 +155,10 @@ def _read_multiscale(
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
     node.metadata["name"]
-    omero = multiscales[0]["omero"]
-    channels = fmt.channels_from_metadata(omero)
+    # if image, read channels metadata
+    if raster_type == "image":
+        omero = multiscales[0]["omero"]
+        channels = fmt.channels_from_metadata(omero)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -168,7 +170,7 @@ def _read_multiscale(
                 name="image",
                 # name=name,
                 dims=axes,
-                coords={"c": channels},
+                coords={"c": channels} if raster_type == "image" else {},
                 # attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
@@ -182,7 +184,7 @@ def _read_multiscale(
             name="image",
             # name=name,
             dims=axes,
-            coords={"c": channels},
+            coords={"c": channels} if raster_type == "image" else {},
             # attrs={TRANSFORM_KEY: t},
         )
         _set_transformations(si, transformations)
