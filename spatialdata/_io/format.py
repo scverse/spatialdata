@@ -95,7 +95,7 @@ class SpatialDataFormatV01(CurrentFormat):
     def channels_to_metadata(
         self, data: Union[SpatialImage, MultiscaleSpatialImage], channels_metadata: Optional[dict[str, Any]] = None
     ) -> dict[str, Union[int, str]]:
-        """Convert channels to metadata."""
+        """Convert channels to omero metadata."""
         channels = get_channels(data)
         metadata: dict[str, Any] = {"channels": []}
         if channels_metadata is not None:
@@ -110,7 +110,7 @@ class SpatialDataFormatV01(CurrentFormat):
         return metadata
 
     def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
-        """Convert channels from metadata."""
+        """Convert channels from omero metadata."""
         return [d["labels"] for d in omero_metadata["channels"]]
 
 

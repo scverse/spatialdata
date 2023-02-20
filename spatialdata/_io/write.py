@@ -143,6 +143,9 @@ def _write_raster(
         else:
             return group["labels"][name]
 
+    # convert channel names to channel metadata
+    metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
         transformations = _get_transformations(raster_data)
@@ -158,7 +161,6 @@ def _write_raster(
         # We need this because the argument of write_image_ngff is called image while the argument of
         # write_labels_ngff is called label.
         metadata[raster_type] = data
-        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
         write_single_scale_ngff(
             group=_get_group_for_writing_data(),
             scaler=None,
