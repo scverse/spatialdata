@@ -10,7 +10,6 @@ from spatialdata._core.models import PointsModel, ShapesModel
 CoordinateTransform_t = list[dict[str, Any]]
 
 Shapes_s = ShapesModel()
-Shapes_s = ShapesModel()
 Points_s = PointsModel()
 
 

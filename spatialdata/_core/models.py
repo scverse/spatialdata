@@ -71,7 +71,6 @@ __all__ = [
     "Image2DModel",
     "Image3DModel",
     "ShapesModel",
-    "ShapesModel",
     "PointsModel",
     "TableModel",
     "get_schema",
