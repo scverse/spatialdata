@@ -182,7 +182,7 @@ def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> Multi
         # assert np.allclose(almost_zero, np.zeros_like(almost_zero), rtol=2.)
         try:
             multiscale_factors.append(round(factors[0]))
-        except OverflowError as e:
+        except ValueError as e:
             raise e
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes, scale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
