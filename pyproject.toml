@@ -31,7 +31,7 @@ dependencies = [
     "xarray-schema",
     "pygeos",
     "geopandas",
-    "shapely==2.0rc2",
+    "shapely>=2.0.1",
     "rich",
     "pyarrow",
     "tqdm",
