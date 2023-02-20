@@ -112,7 +112,7 @@ class RasterSchema(DataArraySchema):
         data: Union[ArrayLike, DataArray, DaskArray],
         dims: Optional[Sequence[str]] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        multiscale_factors: Optional[ScaleFactors_t] = None,
+        scale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
         **kwargs: Any,
@@ -130,7 +130,7 @@ class RasterSchema(DataArraySchema):
             Transformations to apply to the data.
         multiscale_factors
             Scale factors to apply for multiscale.
-            If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+            If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method
             Method to use for multiscale.
         chunks
@@ -139,23 +139,23 @@ class RasterSchema(DataArraySchema):
         Returns
         -------
         :class:`spatial_image.SpatialImage` or
-        :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
+        :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
         """
-        # check if dims is specified and if it has correct values
-
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
-                if dims != data.dims:
+                if set(dims).difference(data.dims):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
                 else:
-                    logger.info("`dims` is specified redundantly: found also inside `data`")
+                    logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
-                dims = data.dims  # type: ignore[assignment]
+                dims = data.dims
+            if set(dims).difference(cls.dims.dims):
+                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
@@ -183,12 +183,12 @@ class RasterSchema(DataArraySchema):
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
         assert isinstance(data, SpatialImage)
         _parse_transformations(data, transformations)
-        if multiscale_factors is not None:
+        if scale_factors is not None:
             parsed_transform = _get_transformations(data)
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
-                scale_factors=multiscale_factors,
+                scale_factors=scale_factors,
                 method=method,
                 chunks=chunks,
             )

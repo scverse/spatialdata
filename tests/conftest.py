@@ -10,10 +10,12 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata import SpatialData
 from spatialdata._core.models import (
     Image2DModel,
+    Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
@@ -117,35 +119,33 @@ def sdata(request) -> SpatialData:
 def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
-
+    dims_3d = ("z", "y", "x", "c")
     out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 2], dims=dims_2d
+        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", scale_factors=[2, 2], dims=dims_2d
     )
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["image2d_xarray"] = Image2DModel.parse(
-    #     DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), name="image2d_xarray", dims=None
-    # )
-    # out["image2d_multiscale_xarray"] = Image2DModel.parse(
-    #     DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
-    #     name="image2d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
-    # # TODO: not supported atm.
-    # out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), name="image3d_numpy", dims=dims_3d)
-    # out["image3d_multiscale_numpy"] = Image3DModel.parse(
-    #     RNG.normal(size=(2, 64, 64, 3)), name="image3d_multiscale_numpy", scale_factors=[2, 4], dims=dims_3d
-    # )
-    # out["image3d_xarray"] = Image3DModel.parse(
-    #     DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), name="image3d_xarray", dims=None
-    # )
-    # out["image3d_multiscale_xarray"] = Image3DModel.parse(
-    #     DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
-    #     name="image3d_multiscale_xarray",
-    #     scale_factors=[2, 4],
-    #     dims=None,
-    # )
+    out["image2d_xarray"] = Image2DModel.parse(
+        DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), name="image2d_xarray", dims=None
+    )
+    out["image2d_multiscale_xarray"] = Image2DModel.parse(
+        DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
+        name="image2d_multiscale_xarray",
+        scale_factors=[2, 4],
+        dims=None,
+    )
+    out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), name="image3d_numpy", dims=dims_3d)
+    out["image3d_multiscale_numpy"] = Image3DModel.parse(
+        RNG.normal(size=(2, 64, 64, 3)), name="image3d_multiscale_numpy", scale_factors=[2], dims=dims_3d
+    )
+    out["image3d_xarray"] = Image3DModel.parse(
+        DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), name="image3d_xarray", dims=None
+    )
+    out["image3d_multiscale_xarray"] = Image3DModel.parse(
+        DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
+        name="image3d_multiscale_xarray",
+        scale_factors=[2],
+        dims=None,
+    )
     return out
 
 
@@ -156,7 +156,7 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
 
     out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d", dims=dims_2d)
     out["labels2d_multiscale"] = Labels2DModel.parse(
-        RNG.normal(size=(64, 64)), name="labels2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
+        RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4], dims=dims_2d
     )
 
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
@@ -171,7 +171,7 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     # )
     out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d_numpy", dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale_numpy", multiscale_factors=[2, 4], dims=dims_3d
+        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale_numpy", scale_factors=[2, 4], dims=dims_3d
     )
     # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
     # out["labels3d_xarray"] = Labels3DModel.parse(
