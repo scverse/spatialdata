@@ -884,7 +884,6 @@ class SpatialData:
                     elements_in_cs.append(f"/{k}/{name}")
             if len(elements_in_cs) > 0:
                 descr += f'    with elements: {", ".join(elements_in_cs)}\n'
-        ##
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
