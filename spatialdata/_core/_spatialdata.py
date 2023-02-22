@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
@@ -302,17 +301,22 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: str) -> SpatialData:
+    def filter_by_coordinate_system(
+        self, coordinate_system: Union[str, list[str]], filter_table: bool = True
+    ) -> SpatialData:
         """
-        Filter the SpatialData by a coordinate system.
+        Filter the SpatialData by one (or a list of) coordinate system.
 
-        This returns a SpatialData object with the elements containing
-        a transformation mapping to the specified coordinate system.
+        This returns a SpatialData object with the elements containing a transformation mapping to the specified
+        coordinate system(s).
 
         Parameters
         ----------
         coordinate_system
-            The coordinate system to filter by.
+            The coordinate system(s) to filter by.
+        filter_table
+            If True (default), the table will be filtered to only contain regions of an element belonging to the specified
+            coordinate system(s).
 
         Returns
         -------
@@ -321,14 +325,27 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
+        element_paths_in_coordinate_system = []
+        if isinstance(coordinate_system, str):
+            coordinate_system = [coordinate_system]
         for element_type, element_name, element in self._gen_elements():
             transformations = get_transformation(element, get_all=True)
             assert isinstance(transformations, dict)
-            if coordinate_system in transformations:
-                if element_type not in elements:
-                    elements[element_type] = {}
-                elements[element_type][element_name] = element
-        return SpatialData(**elements, table=self.table)
+            for cs in coordinate_system:
+                if cs in transformations:
+                    if element_type not in elements:
+                        elements[element_type] = {}
+                    elements[element_type][element_name] = element
+                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+
+        if filter_table:
+            table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
+            region_key = table_mapping_metadata["region_key"]
+            table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+        else:
+            table = self.table
+
+        return SpatialData(**elements, table=table)
 
     def transform_element_to_coordinate_system(
         self, element: SpatialElement, target_coordinate_system: str
@@ -375,7 +392,7 @@ class SpatialData:
         The transformed SpatialData.
         """
         if filter_by_coordinate_system:
-            sdata = self.filter_by_coordinate_system(target_coordinate_system)
+            sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         else:
             sdata = self
         elements: dict[str, dict[str, SpatialElement]] = {}
@@ -587,8 +604,6 @@ class SpatialData:
         if not overwrite and parse_url(file_path, mode="r") is not None:
             raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
         else:
-            if os.path.isdir(file_path):
-                shutil.rmtree(file_path)
             store = parse_url(file_path, mode="w").store
             root = zarr.group(store=store)
             store.close()
@@ -642,6 +657,40 @@ class SpatialData:
         The table.
         """
         return self._table
+
+    @table.setter
+    def table(self, table: AnnData) -> None:
+        """
+        Set the table of a SpatialData object in a object that doesn't contain a table.
+
+        Parameters
+        ----------
+        table
+            The table to set.
+
+        Notes
+        -----
+        If a table is already present, it needs to be removed first.
+        The table needs to pass validation (see :class:`~spatialdata.TableModel`).
+        If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
+        """
+        TableModel().validate(table)
+        if self.table is not None:
+            raise ValueError("The table already exists. Use del sdata.table to remove it first.")
+        self._table = table
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            write_table(table=self.table, group=root, name="table")
+
+    @table.deleter
+    def table(self) -> None:
+        """Delete the table."""
+        self._table = None
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            del root["table"]
 
     @staticmethod
     def read(file_path: str) -> SpatialData:

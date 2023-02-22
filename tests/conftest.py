@@ -55,6 +55,18 @@ def table_multiple_annotations() -> SpatialData:
 
 
 @pytest.fixture()
+def tables() -> list[AnnData]:
+    _tables = []
+    for region, region_key, instance_key in (
+        [None, None, None],
+        ["my_region0", None, "my_instance_key"],
+        [["my_region0", "my_region1"], "my_region_key", "my_instance_key"],
+    ):
+        _tables.append(_get_table(region=region, region_key=region_key, instance_key=instance_key))
+    return _tables
+
+
+@pytest.fixture()
 def full_sdata() -> SpatialData:
     return SpatialData(
         images=_get_images(),
@@ -253,19 +265,23 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Union[str, list[str]],
+    region: Optional[Union[str, list[str]]],
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> AnnData:
-    region_key = region_key or "annotated_region"
-    instance_key = instance_key or "instance_id"
+    if region is not None:
+        region_key = region_key or "annotated_region"
+        instance_key = instance_key or "instance_id"
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
-    adata.obs[instance_key] = np.arange(adata.n_obs)
+    if instance_key is not None:
+        adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         return TableModel.parse(adata=adata, region=region, instance_key=instance_key)
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
         return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+    elif region is None:
+        return TableModel.parse(adata=adata)
     else:
-        raise ValueError("region must be a string or a list of strings")
+        raise ValueError(f"region must be a string or list of strings, not {type(region)}")
