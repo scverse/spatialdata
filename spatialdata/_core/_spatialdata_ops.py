@@ -412,8 +412,6 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     return merged_table
 
 
-
-
 def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
     """Concatenate a list of spatial data objects.
 
@@ -451,9 +449,6 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
     merged_points = {**{k: v for sdata in sdatas for k, v in sdata.points.items()}}
     if len(merged_points) != np.sum([len(sdata.points) for sdata in sdatas]):
         raise RuntimeError("Points must have unique names across the SpatialData objects to concatenate")
-    merged_polygons = {**{k: v for sdata in sdatas for k, v in sdata.polygons.items()}}
-    if len(merged_polygons) != np.sum([len(sdata.polygons) for sdata in sdatas]):
-        raise RuntimeError("Polygons must have unique names across the SpatialData objects to concatenate")
     merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
     if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
         raise RuntimeError("Shapes must have unique names across the SpatialData objects to concatenate")
@@ -462,7 +457,6 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
         images=merged_images,
         labels=merged_labels,
         points=merged_points,
-        polygons=merged_polygons,
         shapes=merged_shapes,
         table=merged_table,
     )

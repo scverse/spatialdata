@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
-from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -115,7 +114,7 @@ def _transform(data: Any, transformation: BaseTransformation) -> Any:
 @_transform.register(SpatialData)
 def _(data: SpatialData, transformation: BaseTransformation) -> SpatialData:
     new_elements: dict[str, dict[str, Any]] = {}
-    for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+    for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
         if len(d) > 0:
             new_elements[element_type] = {}
@@ -229,30 +228,15 @@ def _(data: GeoDataFrame, transformation: BaseTransformation) -> GeoDataFrame:
     transformed_data.geometry = transformed_geometry
 
     # to avoid cyclic import
-    from spatialdata._core.models import PolygonsModel
+    from spatialdata._core.models import ShapesModel
 
-    PolygonsModel.validate(transformed_data)
+    ShapesModel.validate(transformed_data)
     return transformed_data
 
 
-@_transform.register(AnnData)
-def _(data: AnnData, transformation: BaseTransformation) -> AnnData:
-    ndim = len(get_dims(data))
-    xdata = DataArray(data.obsm["spatial"], coords={"points": range(len(data)), "dim": ["x", "y", "z"][:ndim]})
-    transformed_spatial = transformation._transform_coordinates(xdata)
-    transformed_adata = data.copy()
-    transformed_adata.obsm["spatial"] = transformed_spatial.data
-
-    # to avoid cyclic import
-    from spatialdata._core.models import ShapesModel
-
-    ShapesModel.validate(transformed_adata)
-    return transformed_adata
-
-
 def get_transformation_between_landmarks(
-    references_coords: Union[AnnData, DaskDataFrame],
-    moving_coords: Union[AnnData, DaskDataFrame],
+    references_coords: Union[GeoDataFrame, DaskDataFrame],
+    moving_coords: Union[GeoDataFrame, DaskDataFrame],
 ) -> Affine:
     """
     Get a similarity transformation between two lists of (n >= 3) landmarks. Landmarks are assumed to be in the same space.
@@ -286,14 +270,14 @@ def get_transformation_between_landmarks(
     assert get_dims(references_coords) == ("x", "y")
     assert get_dims(moving_coords) == ("x", "y")
 
-    if isinstance(references_coords, AnnData):
-        references_xy = references_coords.obsm["spatial"]
-        moving_xy = moving_coords.obsm["spatial"]
+    if isinstance(references_coords, GeoDataFrame):
+        references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)
+        moving_xy = np.stack([moving_coords.geometry.x, moving_coords.geometry.y], axis=1)
     elif isinstance(references_coords, DaskDataFrame):
         references_xy = references_coords[["x", "y"]].to_dask_array().compute()
         moving_xy = moving_coords[["x", "y"]].to_dask_array().compute()
     else:
-        raise TypeError("references_coords must be either an AnnData or a DaskDataFrame")
+        raise TypeError("references_coords must be either an GeoDataFrame or a DaskDataFrame")
 
     model = estimate_transform("affine", src=moving_xy, dst=references_xy)
     transform_matrix = model.params
@@ -314,12 +298,12 @@ def get_transformation_between_landmarks(
             output_axes=("x", "y"),
         )
         flipped_moving = flip.transform(moving_coords)
-        if isinstance(flipped_moving, AnnData):
+        if isinstance(flipped_moving, GeoDataFrame):
             flipped_moving_xy = flipped_moving.obsm["spatial"]
         elif isinstance(flipped_moving, DaskDataFrame):
             flipped_moving_xy = flipped_moving[["x", "y"]].to_dask_array().compute()
         else:
-            raise TypeError("flipped_moving must be either an AnnData or a DaskDataFrame")
+            raise TypeError("flipped_moving must be either an GeoDataFrame or a DaskDataFrame")
         model = estimate_transform("similarity", src=flipped_moving_xy, dst=references_xy)
         final = Sequence([flip, Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))])
     else:
@@ -335,8 +319,8 @@ def get_transformation_between_landmarks(
 
 
 def align_elements_using_landmarks(
-    references_coords: Union[AnnData | DaskDataFrame],
-    moving_coords: Union[AnnData | DaskDataFrame],
+    references_coords: Union[GeoDataFrame | DaskDataFrame],
+    moving_coords: Union[GeoDataFrame | DaskDataFrame],
     reference_element: SpatialElement,
     moving_element: SpatialElement,
     reference_coordinate_system: str = "global",
