@@ -253,21 +253,40 @@ class SpatialData:
 
     def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
         found: list[SpatialElement] = []
-        found_element_type: str = ""
-        found_element_name: str = ""
+        found_element_type: list[str] = []
+        found_element_name: list[str] = []
         for element_type in ["images", "labels", "points", "shapes"]:
             for element_name, element_value in getattr(self, element_type).items():
                 if id(element_value) == id(element):
                     found.append(element_value)
-                    found_element_type = element_type
-                    found_element_name = element_name
+                    found_element_type.append(element_type)
+                    found_element_name.append(element_name)
         if len(found) == 0:
             raise ValueError("Element not found in the SpatialData object.")
         elif len(found) > 1:
-            raise ValueError("Element found multiple times in the SpatialData object.")
-        return found_element_name, found_element_type
+            raise ValueError(
+                f"Element found multiple times in the SpatialData object. Found {len(found)} elements with names: {found_element_name}, and types: {found_element_type}"
+            )
+        assert len(found_element_name) == 1
+        assert len(found_element_type) == 1
+        return found_element_name[0], found_element_type[0]
 
     def contains_element(self, element: SpatialElement, raise_exception: bool = False) -> bool:
+        """
+        Check if the spatial element is contained in the SpatialData object.
+
+        Parameters
+        ----------
+        element
+            The spatial element to check
+        raise_exception
+            If True, raise an exception if the element is not found. If False, return False if the element is not found.
+
+        Returns
+        -------
+        True if the element is found; False otherwise (if raise_exception is False).
+
+        """
         try:
             self._locate_spatial_element(element)
             return True
