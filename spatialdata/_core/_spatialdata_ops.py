@@ -291,7 +291,6 @@ def get_transformation_between_coordinate_systems(
         return sequence
 
 
-##
 def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     """
     Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
@@ -413,7 +412,6 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     return merged_table
 
 
-##
 
 
 def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
