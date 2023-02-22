@@ -13,15 +13,19 @@ class SpotCropDataset(Dataset):
     def __init__(
         self,
         sdata: SpatialData,
-        spots_element_key: str,
+        spots_element_keys: list[str],
         transform: Optional[Callable[[SpatialData], SpatialData]] = None,
     ):
         self.sdata = sdata
-        self.spots_element_key = spots_element_key
+        self.spots_element_keys = spots_element_keys
         self.transform = transform
 
         self.min_coordinates, self.max_coordinates, self.spots_dims = self._get_bounding_box_coordinates()
         self.n_spots = len(self.min_coordinates)
+
+    def _get_centroids_and_metadata(self) -> None:
+        for key in self.spots_element_keys:
+            print(key)
 
     def _get_bounding_box_coordinates(self) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
         """Get the coordinates for the corners of the bounding box of that encompasses a given spot.
@@ -33,7 +37,7 @@ class SpotCropDataset(Dataset):
         max_coordinate
             The maximum coordinate of the bounding box.
         """
-        spots_element = self.sdata.shapes[self.spots_element_key]
+        spots_element = self.sdata.shapes[self.spots_element_keys[0]]
         spots_dims = get_dims(spots_element)
 
         centroids = []
