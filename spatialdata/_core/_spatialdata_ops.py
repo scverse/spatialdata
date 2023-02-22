@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 
+import anndata
 import networkx as nx
 import numpy as np
 from anndata import AnnData
@@ -25,7 +26,7 @@ __all__ = [
     "get_transformation",
     "remove_transformation",
     "get_transformation_between_coordinate_systems",
-    "concatenate_tables",
+    "_concatenate_tables",
     "concatenate",
 ]
 
@@ -290,8 +291,7 @@ def get_transformation_between_coordinate_systems(
         return sequence
 
 
-##
-def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
+def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     """
     Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
 
@@ -315,6 +315,22 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     if len(tables) == 1:
         return tables[0]
 
+    # 1) if REGION is a list, REGION_KEY is a string and there is a column in the table, with that name, specifying
+    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY is not used.
+    #
+    # In case 1), we require that each table has the same value for REGION_KEY (this assumption could be relaxed,
+    # see below) and then we concatenate the table. The new concatenated column is correcly annotating the rows.
+    #
+    # In case 2), we require that each table has no REGION_KEY value. In such a case, contatenating the tables would
+    # not add any "REGION_KEY" column, since no table has it. For this reason we add such column to each table and we
+    # call it "annotated_element_merged". Such a column could be already present in the table (for instance merging a
+    # table that had already been merged), so the for loop before find a unique name. I added an upper bound,
+    # so if the user keeps merging the same table more than 100 times (this is bad practice anyway), then we raise an
+    # exception.
+    #
+    # Final note, as mentioned we could relax the requirement that all the tables have the same REGION_KEY value (
+    # either all the same string, either all None), but I wanted to start simple, since this covers a lot of use
+    # cases already.
     MERGED_TABLES_REGION_KEY = "annotated_element_merged"
     MAX_CONCATENTAION_TABLES = 100
     for i in range(MAX_CONCATENTAION_TABLES):
@@ -382,7 +398,7 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
         merged_region = all_regions
 
     attr = {"region": merged_region, "region_key": merged_region_key, "instance_key": merged_instance_key}
-    merged_table = AnnData.concatenate(*tables, join="outer", uns_merge="same")
+    merged_table = anndata.concat(tables, join="outer", uns_merge="same")
 
     # remove the MERGED_TABLES_REGION_KEY column if it has been added (the code above either adds that column
     # to all the tables, either it doesn't add it at all)
@@ -396,9 +412,6 @@ def concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
     return merged_table
 
 
-##
-
-
 def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
     """Concatenate a list of spatial data objects.
 
@@ -406,6 +419,8 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
     ----------
     sdatas
         The spatial data objects to concatenate.
+    omit_table
+        If True, the table is not concatenated. This is useful if the tables are not compatible.
 
     Returns
     -------
@@ -421,7 +436,7 @@ def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialD
 
     if not omit_table:
         list_of_tables = [sdata.table for sdata in sdatas if sdata.table is not None]
-        merged_table = concatenate_tables(list_of_tables)
+        merged_table = _concatenate_tables(list_of_tables)
     else:
         merged_table = None
 

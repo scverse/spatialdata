@@ -9,13 +9,12 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import (
+    _concatenate_tables,
     concatenate,
-    concatenate_tables,
     set_transformation,
 )
 from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import get_table_mapping_metadata
 from tests.conftest import _get_table
 
 
@@ -53,7 +52,7 @@ def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: Spat
 
 
 def test_filter_by_coordinate_system(full_sdata):
-    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global")
+    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
     _assert_spatialdata_objects_seem_identical(sdata, full_sdata)
 
     scale = Scale([2.0], axes=("x",))
@@ -61,11 +60,13 @@ def test_filter_by_coordinate_system(full_sdata):
     set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
 
-    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     assert len(list(sdata_my_space._gen_elements())) == 2
     _assert_tables_seem_identical(sdata_my_space.table, full_sdata.table)
 
-    sdata_my_space1 = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1", "my_space2"])
+    sdata_my_space1 = full_sdata.filter_by_coordinate_system(
+        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
+    )
     assert len(list(sdata_my_space1._gen_elements())) == 3
 
 
@@ -86,9 +87,9 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
     set_transformation(full_sdata.shapes["shapes_0"], scale, "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], scale, "my_space1")
 
-    filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=True)
-    filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=True)
-    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
+    filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
+    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
 
     assert len(filtered_sdata0.table) + len(filtered_sdata1.table) == len(full_sdata.table)
     assert len(filtered_sdata2.table) == len(full_sdata.table)
@@ -101,16 +102,16 @@ def test_concatenate_tables():
     table0 = _get_table(region="shapes/shapes_0", region_key=None, instance_key="instance_id")
     table1 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
     table2 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
-    assert concatenate_tables([]) is None
-    assert len(concatenate_tables([table0])) == len(table0)
-    assert len(concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
+    assert _concatenate_tables([]) is None
+    assert len(_concatenate_tables([table0])) == len(table0)
+    assert len(_concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
 
     ##
     table0.obs["annotated_element_merged"] = np.arange(len(table0))
-    c0 = concatenate_tables([table0, table1])
+    c0 = _concatenate_tables([table0, table1])
     assert len(c0) == len(table0) + len(table1)
 
-    d = get_table_mapping_metadata(c0)
+    d = c0.uns[TableModel.ATTRS_KEY]
     d["region"] = sorted(d["region"])
     assert d == {
         "region": ["shapes/shapes_0", "shapes/shapes_1"],
@@ -122,11 +123,11 @@ def test_concatenate_tables():
     table3 = _get_table(region="shapes/shapes_0", region_key="annotated_shapes_other", instance_key="instance_id")
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
     with pytest.raises(AssertionError):
-        concatenate_tables([table0, table3])
+        _concatenate_tables([table0, table3])
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
     table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/shapes_0", "shapes/shapes_1"]
     with pytest.raises(AssertionError):
-        concatenate_tables([table0, table3])
+        _concatenate_tables([table0, table3])
 
     ##
     table4 = _get_table(
@@ -139,10 +140,10 @@ def test_concatenate_tables():
         region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape1", instance_key="instance_id"
     )
 
-    assert len(concatenate_tables([table4, table5])) == len(table4) + len(table5)
+    assert len(_concatenate_tables([table4, table5])) == len(table4) + len(table5)
 
     with pytest.raises(RuntimeError):
-        concatenate_tables([table4, table6])
+        _concatenate_tables([table4, table6])
 
 
 def test_concatenate_sdatas(full_sdata):
@@ -162,9 +163,9 @@ def test_concatenate_sdatas(full_sdata):
 
     set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
-    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"])
+    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
     assert len(list(filtered._gen_elements())) == 2
-    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0")
-    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1")
+    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
     concatenated = concatenate([filtered0, filtered1])
     assert len(list(concatenated._gen_elements())) == 2

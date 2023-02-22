@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 from collections.abc import Generator
 from types import MappingProxyType
 from typing import Optional, Union
@@ -43,7 +42,6 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
-from spatialdata.utils import get_table_mapping_metadata
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -325,7 +323,7 @@ class SpatialData:
                 raise ValueError("Unknown element type")
 
     def filter_by_coordinate_system(
-        self, coordinate_system: Union[str, list[str]], filter_table: bool = False
+        self, coordinate_system: Union[str, list[str]], filter_table: bool = True
     ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
@@ -338,7 +336,7 @@ class SpatialData:
         coordinate_system
             The coordinate system(s) to filter by.
         filter_table
-            If True, the table will be filtered to only contain regions of an element belonging to the specified
+            If True (default), the table will be filtered to only contain regions of an element belonging to the specified
             coordinate system(s).
 
         Returns
@@ -362,7 +360,7 @@ class SpatialData:
                     element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
 
         if filter_table:
-            table_mapping_metadata = get_table_mapping_metadata(self.table)
+            table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
             region_key = table_mapping_metadata["region_key"]
             table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
         else:
@@ -415,7 +413,7 @@ class SpatialData:
         The transformed SpatialData.
         """
         if filter_by_coordinate_system:
-            sdata = self.filter_by_coordinate_system(target_coordinate_system)
+            sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         else:
             sdata = self
         elements: dict[str, dict[str, SpatialElement]] = {}
@@ -667,8 +665,6 @@ class SpatialData:
         if not overwrite and parse_url(file_path, mode="r") is not None:
             raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
         else:
-            if os.path.isdir(file_path):
-                shutil.rmtree(file_path)
             store = parse_url(file_path, mode="w").store
             root = zarr.group(store=store)
             store.close()
