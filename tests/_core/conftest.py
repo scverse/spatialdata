@@ -22,3 +22,4 @@ czyx_cs = NgffCoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis
 
 POLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
+POINT_PATH = Path(__file__).parent.parent / "data/points.json"

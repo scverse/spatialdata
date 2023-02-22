@@ -21,7 +21,7 @@ from numpy.typing import NDArray
 from pandas.api.types import is_categorical_dtype
 from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -70,7 +70,6 @@ __all__ = [
     "Labels3DModel",
     "Image2DModel",
     "Image3DModel",
-    "PolygonsModel",
     "ShapesModel",
     "PointsModel",
     "TableModel",
@@ -290,14 +289,13 @@ class Image3DModel(RasterSchema):
         )
 
 
-# TODO: should check for columns be strict?
-# TODO: validate attrs for transform.
-class PolygonsModel:
+class ShapesModel:
     GEOMETRY_KEY = "geometry"
     ATTRS_KEY = "spatialdata_attrs"
     GEOS_KEY = "geos"
     TYPE_KEY = "type"
     NAME_KEY = "name"
+    RADIUS_KEY = "radius"
     TRANSFORM_KEY = "transform"
 
     @classmethod
@@ -306,17 +304,56 @@ class PolygonsModel:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
-        if not isinstance(data[cls.GEOMETRY_KEY].values[0], Polygon) and not isinstance(
-            data[cls.GEOMETRY_KEY].values[0], MultiPolygon
-        ):
-            # TODO: should check for all values?
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must contain Polygon or MultiPolygon objects.")
+        geom_ = data[cls.GEOMETRY_KEY].values[0]
+        if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
+            raise ValueError(
+                f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes, but it contains {type(geom_)}."
+            )
+        if isinstance(geom_, Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
+        """
+        Validate (or parse) shapes data.
+
+        Parameters
+        ----------
+        data
+            Data to parse:
+
+                - If :np:class:`numpy.ndarray`, it assumes the shapes are parsed as ragged array,
+                therefore additional arguments `offsets` and `geometry` must be provided
+                in case of (Multi)`Polygons`.
+                - if `Path` or `str`, it's read as a GeoJSON file.
+                - If :class:`geopandas.GeoDataFrame`, it's validated.
+
+            A `radius` array can also be passed to store the radius of the `Circles`.
+
+        geometry
+            Geometry type of the shapes. The following geometries are supported:
+
+                - 0: `Circles`
+                - 3: `Polygon`
+                - 6: `MultiPolygon`
+
+        offsets
+            In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
+        radius
+            Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+        transform
+            Transform of points.
+        kwargs
+            Additional arguments for GeoJSON reader.
+
+        Returns
+        -------
+        :class:`geopandas.GeoDataFrame`
+        """
         raise NotImplementedError()
 
     @parse.register(np.ndarray)
@@ -324,14 +361,18 @@ class PolygonsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        offsets: tuple[np.ndarray, ...],  # type: ignore[type-arg]
-        geometry: Literal[3, 6],  # [GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
+        geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
+        offsets: Optional[tuple[ArrayLike, ...]] = None,
+        radius: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        **kwargs: Any,
     ) -> GeoDataFrame:
         geometry = GeometryType(geometry)
-        data = from_ragged_array(geometry, data, offsets)
+        data = from_ragged_array(geometry_type=geometry, coords=data, offsets=offsets)
         geo_df = GeoDataFrame({"geometry": data})
+        if GeometryType(geometry).name == "POINT":
+            if radius is None:
+                raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
+            geo_df[cls.RADIUS_KEY] = radius
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -341,18 +382,23 @@ class PolygonsModel:
     @classmethod
     def _(
         cls,
-        data: str,
+        data: Union[str, Path],
+        radius: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
-        data = Path(data) if isinstance(data, str) else data  # type: ignore[assignment]
+        data = Path(data) if isinstance(data, str) else data
         if TYPE_CHECKING:
             assert isinstance(data, Path)
 
-        gc: GeometryCollection = from_geojson(data.read_bytes())
+        gc: GeometryCollection = from_geojson(data.read_bytes(), **kwargs)
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
+        if isinstance(geo_df["geometry"][0], Point):
+            if radius is None:
+                raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
+            geo_df[cls.RADIUS_KEY] = radius
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -363,89 +409,15 @@ class PolygonsModel:
         cls,
         data: GeoDataFrame,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        **kwargs: Any,
     ) -> GeoDataFrame:
+        if "geometry" not in data.columns:
+            raise ValueError("`geometry` column not found in `GeoDataFrame`.")
+        if isinstance(data["geometry"][0], Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         _parse_transformations(data, transformations)
         cls.validate(data)
         return data
-
-
-class ShapesModel:
-    COORDS_KEY = "spatial"
-    ATTRS_KEY = "spatialdata_attrs"
-    TYPE_KEY = "type"
-    SIZE_KEY = "size"
-    TRANSFORM_KEY = "transform"
-
-    @classmethod
-    def validate(cls, data: AnnData) -> None:
-        if cls.COORDS_KEY not in data.obsm:
-            raise ValueError(f":attr:`anndata.AnnData.obsm` does not contain shapes coordinates `{cls.COORDS_KEY}`.")
-        if cls.TRANSFORM_KEY not in data.uns:
-            raise ValueError(f":attr:`anndata.AnnData.uns` does not contain `{cls.TRANSFORM_KEY}`.")
-        if cls.ATTRS_KEY not in data.uns:
-            raise ValueError(f":attr:`anndata.AnnData.uns` does not contain `{cls.ATTRS_KEY}`.")
-        if cls.TYPE_KEY not in data.uns[cls.ATTRS_KEY]:
-            raise ValueError(f":attr:`anndata.AnnData.uns[`{cls.ATTRS_KEY}`]` does not contain `{cls.TYPE_KEY}`.")
-        if cls.SIZE_KEY not in data.obs:
-            raise ValueError(f":attr:`anndata.AnnData.obs` does not contain `{cls.SIZE_KEY}`.")
-
-    @classmethod
-    def parse(
-        cls,
-        coords: np.ndarray,  # type: ignore[type-arg]
-        shape_type: Literal["Circle", "Square"],
-        shape_size: Union[float, Sequence[float]],
-        index: Optional[Sequence[Union[str, float]]] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
-        **kwargs: Any,
-    ) -> AnnData:
-        """
-        Parse shape data into SpatialData.
-
-        Parameters
-        ----------
-        coords
-            Coordinates of shapes.
-        ids
-            Unique ids of shapes.
-        shape_type
-            Type of shape.
-        shape_size
-            Size of shape.
-        index
-            Index names of the shapes.
-        transformations
-            Transformations for the shape element.
-        kwargs
-            Additional arguments for shapes.
-
-        Returns
-        -------
-        :class:`anndata.AnnData` formatted for shapes elements.
-        """
-        if shape_type is None:
-            shape_type = "Circle"
-        assert shape_type in ["Circle", "Square"]
-        if isinstance(shape_size, list):
-            if len(shape_size) != len(coords):
-                raise ValueError("Length of `shape_size` must match length of `coords`.")
-        shape_size_ = np.repeat(shape_size, len(coords)) if isinstance(shape_size, float) else shape_size
-        if index is None:
-            index_ = map(str, np.arange(coords.shape[0]))
-            logger.info("No index provided, using default index `np.arange(coords.shape[0])`.")
-        else:
-            index_ = index  # type: ignore[assignment]
-        adata = AnnData(
-            None,
-            obs=pd.DataFrame({cls.SIZE_KEY: shape_size_}, index=index_),
-            **kwargs,
-        )
-        adata.obsm[cls.COORDS_KEY] = coords
-
-        _parse_transformations(adata, transformations)
-        adata.uns[cls.ATTRS_KEY] = {cls.TYPE_KEY: shape_type}
-        return adata
 
 
 class PointsModel:
@@ -473,16 +445,17 @@ class PointsModel:
                     logger.info(
                         f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
                     )
-        for c in data.columns:
-            #  this is not strictly a validation since we are explicitly importing the categories
-            #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
-            #  series, so it is not a big deal.
-            if is_categorical_dtype(data[c]):
-                if not data[c].cat.known:
-                    try:
-                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
-                    except ValueError:
-                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+        # commented out to address this issue: https://github.com/scverse/spatialdata/issues/140
+        # for c in data.columns:
+        #     #  this is not strictly a validation since we are explicitly importing the categories
+        #     #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
+        #     #  series, so it is not a big deal.
+        #     if is_categorical_dtype(data[c]):
+        #         if not data[c].cat.known:
+        #             try:
+        #                 data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+        #             except ValueError:
+        #                 logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
     @singledispatchmethod
     @classmethod
@@ -725,7 +698,6 @@ Schema_t = Union[
     type[Labels2DModel],
     type[Labels3DModel],
     type[PointsModel],
-    type[PolygonsModel],
     type[ShapesModel],
     type[TableModel],
 ]
@@ -754,13 +726,10 @@ def get_schema(
             else:
                 return _validate_and_return(Labels2DModel, e)
     elif isinstance(e, GeoDataFrame):
-        return _validate_and_return(PolygonsModel, e)
+        return _validate_and_return(ShapesModel, e)
     elif isinstance(e, DaskDataFrame):
         return _validate_and_return(PointsModel, e)
     elif isinstance(e, AnnData):
-        if "spatial" in e.obsm:
-            return _validate_and_return(ShapesModel, e)
-        else:
-            return _validate_and_return(TableModel, e)
+        return _validate_and_return(TableModel, e)
     else:
         raise TypeError(f"Unsupported type {type(e)}")

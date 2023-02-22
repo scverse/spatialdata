@@ -57,8 +57,8 @@ def test_filter_by_coordinate_system(full_sdata):
 
     scale = Scale([2.0], axes=("x",))
     set_transformation(full_sdata.images["image2d"], scale, "my_space0")
-    set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
-    set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
+    set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
+    set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     assert len(list(sdata_my_space._gen_elements())) == 2
@@ -74,18 +74,18 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata._core.models import TableModel
 
     full_sdata.table.obs["annotated_shapes"] = np.random.choice(
-        ["shapes/shapes_0", "shapes/shapes_1"], size=full_sdata.table.shape[0]
+        ["shapes/circles", "shapes/poly"], size=full_sdata.table.shape[0]
     )
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
     full_sdata.table = TableModel.parse(
-        adata, region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shapes", instance_key="instance_id"
+        adata, region=["shapes/circles", "shapes/poly"], region_key="annotated_shapes", instance_key="instance_id"
     )
 
     scale = Scale([2.0], axes=("x",))
-    set_transformation(full_sdata.shapes["shapes_0"], scale, "my_space0")
-    set_transformation(full_sdata.shapes["shapes_1"], scale, "my_space1")
+    set_transformation(full_sdata.shapes["circles"], scale, "my_space0")
+    set_transformation(full_sdata.shapes["poly"], scale, "my_space1")
 
     filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
     filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
@@ -99,9 +99,9 @@ def test_concatenate_tables():
     """
     The concatenation uses AnnData.concatenate(), here we test the contatenation result on region, region_key, instance_key
     """
-    table0 = _get_table(region="shapes/shapes_0", region_key=None, instance_key="instance_id")
-    table1 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
-    table2 = _get_table(region="shapes/shapes_1", region_key=None, instance_key="instance_id")
+    table0 = _get_table(region="shapes/circles", region_key=None, instance_key="instance_id")
+    table1 = _get_table(region="shapes/poly", region_key=None, instance_key="instance_id")
+    table2 = _get_table(region="shapes/poly", region_key=None, instance_key="instance_id")
     assert _concatenate_tables([]) is None
     assert len(_concatenate_tables([table0])) == len(table0)
     assert len(_concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
@@ -114,30 +114,30 @@ def test_concatenate_tables():
     d = c0.uns[TableModel.ATTRS_KEY]
     d["region"] = sorted(d["region"])
     assert d == {
-        "region": ["shapes/shapes_0", "shapes/shapes_1"],
+        "region": ["shapes/circles", "shapes/poly"],
         "region_key": "annotated_element_merged_1",
         "instance_key": "instance_id",
     }
 
     ##
-    table3 = _get_table(region="shapes/shapes_0", region_key="annotated_shapes_other", instance_key="instance_id")
+    table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
     with pytest.raises(AssertionError):
         _concatenate_tables([table0, table3])
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
-    table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/shapes_0", "shapes/shapes_1"]
+    table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/circles", "shapes/poly"]
     with pytest.raises(AssertionError):
         _concatenate_tables([table0, table3])
 
     ##
     table4 = _get_table(
-        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id"
+        region=["shapes/circles", "shapes/poly"], region_key="annotated_shape0", instance_key="instance_id"
     )
     table5 = _get_table(
-        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape0", instance_key="instance_id"
+        region=["shapes/circles", "shapes/poly"], region_key="annotated_shape0", instance_key="instance_id"
     )
     table6 = _get_table(
-        region=["shapes/shapes_0", "shapes/shapes_1"], region_key="annotated_shape1", instance_key="instance_id"
+        region=["shapes/circles", "shapes/poly"], region_key="annotated_shape1", instance_key="instance_id"
     )
 
     assert len(_concatenate_tables([table4, table5])) == len(table4) + len(table5)
@@ -154,15 +154,13 @@ def test_concatenate_sdatas(full_sdata):
     with pytest.raises(RuntimeError):
         concatenate([full_sdata, SpatialData(points={"points_0": full_sdata.points["points_0"]})])
     with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(polygons={"poly": full_sdata.polygons["poly"]})])
-    with pytest.raises(RuntimeError):
-        concatenate([full_sdata, SpatialData(shapes={"shapes_0": full_sdata.shapes["shapes_0"]})])
+        concatenate([full_sdata, SpatialData(shapes={"circles": full_sdata.shapes["circles"]})])
 
     assert concatenate([full_sdata, SpatialData()]).table is not None
     assert concatenate([full_sdata, SpatialData()], omit_table=True).table is None
 
-    set_transformation(full_sdata.shapes["shapes_0"], Identity(), "my_space0")
-    set_transformation(full_sdata.shapes["shapes_1"], Identity(), "my_space1")
+    set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
+    set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
     filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
     assert len(list(filtered._gen_elements())) == 2
     filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
