@@ -1,9 +1,11 @@
 import math
+import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 import scipy.misc
+from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
@@ -14,8 +16,12 @@ from spatialdata._core._spatialdata_ops import (
     remove_transformation,
     set_transformation,
 )
+from spatialdata._core._transform_elements import (
+    align_elements_using_landmarks,
+    get_transformation_between_landmarks,
+)
 from spatialdata._core.core_utils import get_dims
-from spatialdata._core.models import Image2DModel
+from spatialdata._core.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
 from spatialdata.utils import unpad_raster
 
@@ -52,25 +58,25 @@ class TestElementsTransform:
         transform: Scale,
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        set_transformation(shapes.shapes["shapes_0"], transform, "my_coordinate_system1")
-        set_transformation(shapes.shapes["shapes_0"], transform, "my_coordinate_system2")
+        set_transformation(shapes.shapes["circles"], transform, "my_coordinate_system1")
+        set_transformation(shapes.shapes["circles"], transform, "my_coordinate_system2")
 
         shapes.write(tmpdir)
         new_sdata = SpatialData.read(tmpdir)
-        loaded_transform1 = get_transformation(new_sdata.shapes["shapes_0"], "my_coordinate_system1")
-        loaded_transform2 = get_transformation(new_sdata.shapes["shapes_0"], get_all=True)["my_coordinate_system2"]
+        loaded_transform1 = get_transformation(new_sdata.shapes["circles"], "my_coordinate_system1")
+        loaded_transform2 = get_transformation(new_sdata.shapes["circles"], get_all=True)["my_coordinate_system2"]
 
         # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
         # it from the assertion
         assert isinstance(transform, Scale)
-        axes = get_dims(new_sdata.shapes["shapes_0"])
+        axes = get_dims(new_sdata.shapes["circles"])
         expected_scale = Scale(transform.to_scale_vector(axes), axes)
         assert loaded_transform1 == expected_scale
         assert loaded_transform2 == expected_scale
 
     def test_coordinate_systems(self, shapes: SpatialData) -> None:
         ct = Scale(np.array([1, 2, 3]), axes=("x", "y", "z"))
-        set_transformation(shapes.shapes["shapes_0"], ct, "test")
+        set_transformation(shapes.shapes["circles"], ct, "test")
         assert set(shapes.coordinate_systems) == {"global", "test"}
 
     @pytest.mark.skip("Physical units are not supported for now with the new implementation for transformations")
@@ -78,7 +84,7 @@ class TestElementsTransform:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         ct = Scale(np.array([1, 2, 3]), axes=("x", "y", "z"))
         shapes.write(tmpdir)
-        set_transformation(shapes.shapes["shapes_0"], ct, "test", shapes)
+        set_transformation(shapes.shapes["circles"], ct, "test", shapes)
         new_sdata = SpatialData.read(tmpdir)
         assert new_sdata.coordinate_systems["test"]._axes[0].unit == "micrometers"
 
@@ -173,19 +179,6 @@ def test_transform_points(points: SpatialData):
             assert np.allclose(x0, x1)
 
 
-def test_transform_polygons(polygons: SpatialData):
-    affine = _get_affine()
-    new_polygons = affine.inverse().transform(affine.transform(polygons))
-    keys0 = list(polygons.polygons.keys())
-    keys1 = list(new_polygons.polygons.keys())
-    assert keys0 == keys1
-    for k in keys0:
-        p0 = polygons.polygons[k]
-        p1 = new_polygons.polygons[k]
-        for i in range(len(p0.geometry)):
-            assert p0.geometry.iloc[i].almost_equals(p1.geometry.iloc[i])
-
-
 def test_transform_shapes(shapes: SpatialData):
     affine = _get_affine()
     new_shapes = affine.inverse().transform(affine.transform(shapes))
@@ -195,7 +188,7 @@ def test_transform_shapes(shapes: SpatialData):
     for k in keys0:
         p0 = shapes.shapes[k]
         p1 = new_shapes.shapes[k]
-        assert np.allclose(p0.obsm["spatial"], p1.obsm["spatial"])
+        assert geom_almost_equals(p0["geometry"], p1["geometry"])
 
 
 def test_map_coordinate_systems_single_path(full_sdata: SpatialData):
@@ -204,7 +197,7 @@ def test_map_coordinate_systems_single_path(full_sdata: SpatialData):
 
     im = full_sdata.images["image2d_multiscale"]
     la = full_sdata.labels["labels2d"]
-    po = full_sdata.polygons["multipoly"]
+    po = full_sdata.shapes["multipoly"]
 
     set_transformation(im, scale)
     set_transformation(po, translation)
@@ -404,7 +397,7 @@ def test_map_coordinate_systems_long_path(full_sdata):
     im = full_sdata.images["image2d_multiscale"]
     la0 = full_sdata.labels["labels2d"]
     la1 = full_sdata.labels["labels2d_multiscale"]
-    po = full_sdata.polygons["multipoly"]
+    po = full_sdata.shapes["multipoly"]
 
     scale = Scale([2], axes=("x",))
 
@@ -455,3 +448,66 @@ def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
         set_transformation(element, scale, "my_space")
         sdata.transform_element_to_coordinate_system(element, "my_space")
     sdata.transform_to_coordinate_system("my_space")
+
+
+def test_transformations_between_coordinate_systems(images):
+    # just a test that all the code is executed without errors and a quick test that the affine matrix is correct.
+    # For a full test the notebooks are more exhaustive
+    with tempfile.TemporaryDirectory() as tmpdir:
+        images.write(Path(tmpdir) / "sdata.zarr")
+        el0 = images.images["image2d"]
+        el1 = images.images["image2d_multiscale"]
+        set_transformation(el0, {"global0": Identity()}, set_all=True, write_to_sdata=images)
+        set_transformation(el1, {"global1": Identity()}, set_all=True, write_to_sdata=images)
+        for positive_determinant in [True, False]:
+            reference_landmarks_coords = np.array([[0, 0], [0, 1], [1, 1], [3, 3]])
+            if positive_determinant:
+                moving_landmarks_coords = np.array([[0, 0], [0, 2], [2, 2], [6, 6]])
+            else:
+                moving_landmarks_coords = np.array([[0, 0], [0, -2], [2, -2], [6, -6]])
+
+            reference_landmarks_shapes = ShapesModel.parse(reference_landmarks_coords, geometry=0, radius=10)
+            moving_landmarks_shapes = ShapesModel.parse(np.array(moving_landmarks_coords), geometry=0, radius=10)
+            reference_landmarks_points = PointsModel.parse(reference_landmarks_coords)
+            moving_landmarks_points = PointsModel.parse(moving_landmarks_coords)
+
+            for reference_landmarks, moving_landmarks in [
+                (reference_landmarks_shapes, moving_landmarks_shapes),
+                (reference_landmarks_points, moving_landmarks_points),
+            ]:
+                affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
+                # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
+                if positive_determinant:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, 0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                else:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, -0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                for sdata in [images, None]:
+                    align_elements_using_landmarks(
+                        references_coords=reference_landmarks,
+                        moving_coords=moving_landmarks,
+                        reference_element=el0,
+                        moving_element=el1,
+                        reference_coordinate_system="global0",
+                        moving_coordinate_system="global1",
+                        new_coordinate_system="global2",
+                        write_to_sdata=sdata,
+                    )
+                assert "global2" in images.coordinate_systems

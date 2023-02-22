@@ -26,19 +26,14 @@ from spatialdata._core.core_utils import (
     _validate_mapping_to_coordinate_system_type,
     get_dims,
 )
+from spatialdata._core.models import ShapesModel
 from spatialdata._core.transformations import _get_current_output_axes
-from spatialdata._io.format import (
-    PointsFormat,
-    PolygonsFormat,
-    ShapesFormat,
-    SpatialDataFormatV01,
-)
+from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
 
 __all__ = [
     "write_image",
     "write_labels",
     "write_points",
-    "write_polygons",
     "write_table",
     "overwrite_coordinate_transformations_non_raster",
     "overwrite_coordinate_transformations_raster",
@@ -247,54 +242,28 @@ def write_labels(
     )
 
 
-def write_polygons(
-    polygons: GeoDataFrame,
-    group: zarr.Group,
-    name: str,
-    group_type: str = "ngff:polygons",
-    fmt: Format = PolygonsFormat(),
-) -> None:
-    axes = get_dims(polygons)
-    t = _get_transformations(polygons)
-    polygons_groups = group.require_group(name)
-    geometry, coords, offsets = to_ragged_array(polygons.geometry)
-    polygons_groups.create_dataset(name="coords", data=coords)
-    for i, o in enumerate(offsets):
-        polygons_groups.create_dataset(name=f"offset{i}", data=o)
-    polygons_groups.create_dataset(name="Index", data=polygons.index.values)
-
-    attrs = fmt.attrs_to_dict(geometry)
-    attrs["version"] = fmt.spatialdata_version
-
-    _write_metadata(
-        polygons_groups,
-        group_type=group_type,
-        # coordinate_transformations=coordinate_transformations,
-        axes=list(axes),
-        attrs=attrs,
-        fmt=fmt,
-    )
-    assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=polygons_groups, axes=axes, transformations=t)
-
-
 def write_shapes(
-    shapes: AnnData,
+    shapes: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
     axes = get_dims(shapes)
-    transform = shapes.uns.pop("transform")
-    assert transform is not None
-    write_adata(group, name, shapes)  # creates group[name]
-    shapes.uns["transform"] = transform
+    t = _get_transformations(shapes)
 
-    attrs = fmt.attrs_to_dict(shapes.uns)
+    shapes_group = group.require_group(name)
+    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    shapes_group.create_dataset(name="coords", data=coords)
+    for i, o in enumerate(offsets):
+        shapes_group.create_dataset(name=f"offset{i}", data=o)
+    shapes_group.create_dataset(name="Index", data=shapes.index.values)
+    if geometry.name == "POINT":
+        shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+
+    attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
-    shapes_group = group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
@@ -303,8 +272,8 @@ def write_shapes(
         attrs=attrs,
         fmt=fmt,
     )
-    assert transform is not None
-    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=transform)
+    assert t is not None
+    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=t)
 
 
 def write_points(

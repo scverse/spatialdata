@@ -2,27 +2,20 @@ import os
 import tempfile
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
-from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from shapely.geometry import Point
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import are_directories_identical
-from tests.conftest import (
-    _get_images,
-    _get_labels,
-    _get_points,
-    _get_polygons,
-    _get_shapes,
-)
+from spatialdata.utils import _are_directories_identical
+from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 
 class TestReadWrite:
@@ -50,16 +43,6 @@ class TestReadWrite:
             elif isinstance(sdata.labels[k], MultiscaleSpatialImage):
                 assert labels.labels[k].equals(sdata.labels[k])
 
-    def test_polygons(self, tmp_path: str, polygons: SpatialData) -> None:
-        """Test read/write."""
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        polygons.write(tmpdir)
-        sdata = SpatialData.read(tmpdir)
-        assert polygons.polygons.keys() == sdata.polygons.keys()
-        for k in polygons.polygons.keys():
-            assert isinstance(sdata.polygons[k], GeoDataFrame)
-            assert polygons.polygons[k].equals(sdata.polygons[k])
-
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -67,9 +50,11 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert shapes.shapes.keys() == sdata.shapes.keys()
         for k in shapes.shapes.keys():
-            assert isinstance(sdata.shapes[k], AnnData)
-            np.testing.assert_array_equal(shapes.shapes[k].obsm["spatial"], sdata.shapes[k].obsm["spatial"])
-            assert shapes.shapes[k].uns == sdata.shapes[k].uns
+            assert isinstance(sdata.shapes[k], GeoDataFrame)
+            assert shapes.shapes[k].equals(sdata.shapes[k])
+            if "radius" in shapes.shapes["circles"].columns:
+                assert shapes.shapes["circles"]["radius"].equals(sdata.shapes["circles"]["radius"])
+                assert isinstance(sdata.shapes["circles"]["geometry"][0], Point)
 
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         """Test read/write."""
@@ -113,7 +98,7 @@ class TestReadWrite:
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
-        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
     def test_incremental_io(
         self,
@@ -154,15 +139,6 @@ class TestReadWrite:
                 sdata.add_labels(name=f"incremental_{k}", labels=v)
             sdata.add_labels(name=f"incremental_{k}", labels=v, overwrite=True)
 
-        for k, v in _get_polygons().items():
-            sdata.add_polygons(name=f"incremental_{k}", polygons=v)
-            with pytest.raises(ValueError):
-                sdata.add_polygons(name=f"incremental_{k}", polygons=v)
-            sdata.add_polygons(name=f"incremental_{k}", polygons=v, overwrite=True)
-            # only one element to save time to do the test. We have this for the other types too, but not for images
-            # and labels beacuse we want to test both the Multiscale and the non-Multiscale case
-            break
-
         for k, v in _get_shapes().items():
             sdata.add_shapes(name=f"incremental_{k}", shapes=v)
             with pytest.raises(ValueError):
@@ -176,6 +152,27 @@ class TestReadWrite:
                 sdata.add_points(name=f"incremental_{k}", points=v)
             sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
             break
+
+    def test_incremental_io_table(self, table_single_annotation):
+        s = table_single_annotation
+        t = s.table[:10, :].copy()
+        with pytest.raises(ValueError):
+            s.table = t
+        del s.table
+        s.table = t
+
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            s.write(f)
+            s2 = SpatialData.read(f)
+            assert len(s2.table) == len(t)
+            del s2.table
+            s2.table = s.table
+            assert len(s2.table) == len(s.table)
+            f2 = os.path.join(td, "data2.zarr")
+            s2.write(f2)
+            s3 = SpatialData.read(f2)
+            assert len(s3.table) == len(s2.table)
 
 
 def test_io_and_lazy_loading_points(points):
@@ -225,8 +222,8 @@ def test_replace_transformation_on_disk_raster(images, labels):
                 assert type(t1) == Scale
 
 
-def test_replace_transformation_on_disk_non_raster(polygons, shapes, points):
-    sdatas = {"polygons": polygons, "shapes": shapes, "points": points}
+def test_replace_transformation_on_disk_non_raster(shapes, points):
+    sdatas = {"shapes": shapes, "points": points}
     for k, sdata in sdatas.items():
         d = sdata.__getattribute__(k)
         elem_name = list(d.keys())[0]
