@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -13,6 +15,9 @@ from xarray import DataArray
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata._core.transformations import BaseTransformation, Sequence
 from spatialdata._types import ArrayLike
+
+if TYPE_CHECKING:
+    from spatialdata._core.transformations import Scale
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 
@@ -178,11 +183,11 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
             filtered_axes = [ax for ax in dims if ax != "c"]
             if not np.isfinite(filtered_scale_factors).all():
                 raise ValueError("Scale factors must be finite.")
-            scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+            scale_transformation = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
             assert transformations is not None
             new_transformations = {}
             for k, v in transformations.items():
-                sequence: BaseTransformation = Sequence([scale, v])
+                sequence: BaseTransformation = Sequence([scale_transformation, v])
                 new_transformations[k] = sequence
             _set_transformations_xarray(xdata, new_transformations)
         else:
@@ -254,6 +259,14 @@ def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem
     return NgffCoordinateSystem(name="".join(dims), axes=axes)
 
 
+def _validate_dims(dims: tuple[str, ...]) -> None:
+    for c in dims:
+        if c not in (X, Y, Z, C):
+            raise ValueError(f"Invalid dimension: {c}")
+    if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
+        raise ValueError(f"Invalid dimensions: {dims}")
+
+
 @singledispatch
 def get_dims(e: SpatialElement) -> tuple[str, ...]:
     """
@@ -274,13 +287,33 @@ def get_dims(e: SpatialElement) -> tuple[str, ...]:
 @get_dims.register(SpatialImage)
 def _(e: SpatialImage) -> tuple[str, ...]:
     dims = e.dims
+    # dims_sizes = tuple(list(e.sizes.keys()))
+    # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
+    # if dims != dims_sizes:
+    #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
+    _validate_dims(dims)
     return dims  # type: ignore
 
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     if "scale0" in e:
-        return tuple(i for i in e["scale0"].dims.keys())
+        # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
+
+        assert len(e["scale0"].values()) == 1
+        xdata = e["scale0"].values().__iter__().__next__()
+        dims_data = xdata.dims
+        assert isinstance(dims_data, tuple)
+
+        # dims_sizes = tuple(list(xdata.sizes.keys()))
+
+        # # we check that all the following values are the same otherwise we could incur in subtle bugs downstreams
+        # if dims_coordinates != dims_data or dims_coordinates != dims_sizes:
+        #     raise ValueError(
+        #         f"MultiscaleSpatialImage has inconsistent dimensions: {dims_coordinates}, {dims_data}, {dims_sizes}"
+        #     )
+        _validate_dims(dims_data)
+        return dims_data
     else:
         raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
         # return tuple(i for i in e.dims.keys())
@@ -288,23 +321,19 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
 
 @get_dims.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
-    dims = (X, Y, Z)
+    all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
-    return dims[:n]
-
-
-@get_dims.register(AnnData)
-def _(e: AnnData) -> tuple[str, ...]:
-    dims = (X, Y, Z)
-    n = e.obsm["spatial"].shape[1]
-    return dims[:n]
+    dims = all_dims[:n]
+    _validate_dims(dims)
+    return dims
 
 
 @get_dims.register(DaskDataFrame)
 def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
-    dims = [c for c in valid_dims if c in e.columns]
-    return tuple(dims)
+    dims = tuple([c for c in valid_dims if c in e.columns])
+    _validate_dims(dims)
+    return dims
 
 
 @singledispatch
@@ -334,28 +363,37 @@ def _(data: SpatialImage) -> SpatialImage:
     return data.assign_coords(coords)
 
 
+def _get_scale(transforms: dict[str, Any]) -> Scale:
+    from spatialdata._core.transformations import Scale
+
+    all_scale_vectors = []
+    all_scale_axes = []
+    for transformation in transforms.values():
+        assert isinstance(transformation, Sequence)
+        # the first transformation is the scale
+        t = transformation.transformations[0]
+        if hasattr(t, "scale"):
+            if TYPE_CHECKING:
+                assert isinstance(t.scale, np.ndarray)
+            all_scale_vectors.append(tuple(t.scale.tolist()))
+            assert isinstance(t, Scale)
+            all_scale_axes.append(tuple(t.axes))
+        else:
+            raise ValueError(f"Unsupported transformation: {t}")
+    # all the scales should be the same since they all refer to the mapping of the level of the multiscale to the
+    # base level, with respect to the intrinstic coordinate system
+    assert len(set(all_scale_vectors)) == 1
+    assert len(set(all_scale_axes)) == 1
+    scalef = np.array(all_scale_vectors[0])
+    if not np.isfinite(scalef).all():
+        raise ValueError(f"Invalid scale factor: {scalef}")
+    scale_axes = all_scale_axes[0]
+    scale = Scale(scalef, axes=scale_axes)
+    return scale
+
+
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    def _get_scale(transforms: dict[str, Any]) -> Optional[ArrayLike]:
-        all_scale_vectors = []
-        for transformation in transforms.values():
-            assert isinstance(transformation, Sequence)
-            # the first transformation is the scale
-            t = transformation.transformations[0]
-            if hasattr(t, "scale"):
-                if TYPE_CHECKING:
-                    assert isinstance(t.scale, np.ndarray)
-                all_scale_vectors.append(tuple(t.scale.tolist()))
-            else:
-                raise ValueError(f"Unsupported transformation: {t}")
-        # all the scales should be the same since they all refer to the mapping of the level of the multiscale to the
-        # base level, with respect to the intrinstic coordinate system
-        assert len(set(all_scale_vectors)) == 1
-        scalef = np.array(all_scale_vectors[0])
-        if not np.isfinite(scalef).all():
-            raise ValueError(f"Invalid scale factor: {scalef}")
-        return scalef
-
     def _compute_coords(max_: int, scale_f: Union[int, float]) -> ArrayLike:
         return (  # type: ignore[no-any-return]
             DataArray(np.linspace(0, max_, max_, endpoint=False, dtype=np.float_))
@@ -374,12 +412,15 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
             coords: dict[str, ArrayLike] = {d: np.arange(max_scale[d], dtype=np.float_) for d in max_scale.keys()}
             out[name] = dt[img_name].assign_coords(coords)
         else:
-            scalef = _get_scale(dt[img_name].attrs["transform"])
+            scale = _get_scale(dt[img_name].attrs["transform"])
+            scalef = scale.scale
             assert len(max_scale.keys()) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
-            out[name] = dt[img_name].assign_coords(
-                {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
-            )
-    return MultiscaleSpatialImage.from_dict(d=out)
+            new_coords = {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
+            out[name] = dt[img_name].assign_coords(new_coords)
+    msi = MultiscaleSpatialImage.from_dict(d=out)
+    # this is to trigger the validation of the dims
+    _ = get_dims(msi)
+    return msi
 
 
 @singledispatch

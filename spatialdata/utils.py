@@ -138,14 +138,14 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     elif isinstance(unpadded, MultiscaleSpatialImage):
         for ax in axes:
             if ax != "c":
-                # let's just operate on the highest resolution. This is not an efficient implementation but we can always optimize later
+                # let's just operate on the highest resolution. This is not an efficient implementation but we can
+                # always optimize later
                 d = dict(unpadded["scale0"])
                 assert len(d) == 1
                 xdata = d.values().__iter__().__next__()
 
                 left_pad, right_pad = _compute_paddings(data=xdata, axis=ax)
-                EPS = 1e-6
-                unpadded = unpadded.sel({ax: slice(left_pad, right_pad - EPS)})
+                unpadded = unpadded.sel({ax: slice(left_pad, right_pad - 1e-6)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
         d = {}
@@ -154,15 +154,6 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
             xdata = v.values().__iter__().__next__()
             d[k] = xdata
         unpadded = MultiscaleSpatialImage.from_dict(d)
-        # left_pad, right_pad = _compute_paddings(SpatialImage(xdata), axis=ax)
-        # TODO: here I am using some arbitrary scalingfactors, I think that we need an automatic initialization of multiscale. See discussion: https://github.com/scverse/spatialdata/issues/108
-        # mypy thinks that the schema could be a ShapeModel, ... but it's not
-        # if "z" in axes:
-        #     scale_factors = [2]
-        # else:
-        #     scale_factors = [2, 2]
-        # unpadded_multiscale = get_schema(unpadded).parse(unpadded, scale_factors=scale_factors)  # type: ignore[call-arg]
-        # return compute_coordinates(unpadded_multiscale)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
 
@@ -173,7 +164,8 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         assert old_transform is not None
         sequence = Sequence([translation, old_transform])
         set_transformation(element=unpadded, transformation=sequence, to_coordinate_system=target_cs)
-    return compute_coordinates(unpadded)
+    unpadded = compute_coordinates(unpadded)
+    return unpadded
 
 
 def get_table_mapping_metadata(table: AnnData) -> dict[str, Union[Optional[Union[str, list[str]]], Optional[str]]]:

@@ -1,4 +1,5 @@
 import logging
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
@@ -154,7 +155,7 @@ def _read_multiscale(
     # and for instance in the xenium example
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
-    name = node.metadata["name"]
+    name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     if raster_type == "image":
         omero = multiscales[0]["omero"]
