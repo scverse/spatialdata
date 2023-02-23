@@ -9,6 +9,7 @@ import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from shapely.geometry import Polygon
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData, SpatialElement
@@ -70,7 +71,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
     axes: tuple[str, ...],
-) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
+) -> tuple[ArrayLike, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
 
     Parameters
@@ -88,11 +89,8 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     axes
         The axes of the coordinate system the bounding box is defined in.
 
-    Returns
-    -------
-    The minimum coordinate in the intrinsic coordinate system.
-
-    The maximum coordinate in the intrinsic coordinate system.
+    Returns ------- All the corners of the bounding box in the intrinsic coordinate system of the element. The shape
+    is (2, 4) when axes has 2 spatial dimensions, and (2, 8) when axes has 3 spatial dimensions.
 
     The axes of the intrinsic coordinate system.
     """
@@ -120,10 +118,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
 
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
-
-    return min_coordinate_intrinsic, max_coordinate_intrinsic, intrinsic_axes
+    return intrinsic_bounding_box_corners, intrinsic_axes
 
 
 @dataclass(frozen=True)
@@ -273,44 +268,46 @@ def _bounding_box_query_image_dict(
     return requested_images
 
 
-def _bounding_box_query_polygons(
-    polygons_table: GeoDataFrame, max_coordinate: ArrayLike, min_coordinate: ArrayLike, axes: tuple[str, ...]
-) -> ArrayLike:
-    """Perform a spatial bounding box query on a polygons element.
-
-    Parameters
-    ----------
-    polygons_table
-        The polygons element to perform the query on.
-    min_coordinate
-        The upper left hand corner of the bounding box (i.e., minimum coordinates
-        along all dimensions).
-    max_coordinate
-        The lower right hand corner of the bounding box (i.e., the maximum coordinates
-        along all dimensions
-    axes
-        The axes for the min/max coordinates.
-
-    Returns
-    -------
-    The mask for the polygons inside of the bounding box
-    """
-    # get the polygon bounding boxes
-    polygons_min_column_keys = [f"min{axis}" for axis in axes]
-    polygons_min_coordinates = polygons_table.bounds[polygons_min_column_keys].values
-
-    polygons_max_column_keys = [f"max{axis}" for axis in axes]
-    polygons_max_coordinates = polygons_table.bounds[polygons_max_column_keys].values
-
-    # check that the min coordinates are inside the bounding box
-    min_inside = np.all(min_coordinate < polygons_min_coordinates, axis=1)
-
-    # check that the max coordinates are inside the bounding box
-    max_inside = np.all(max_coordinate > polygons_max_coordinates, axis=1)
-
-    # polygons inside the bounding box satisfy both
-    inside_mask: ArrayLike = np.logical_and(min_inside, max_inside)
-    return inside_mask
+#
+# def _bounding_box_query_polygons(
+#     polygons_table: GeoDataFrame, max_coordinate: ArrayLike, min_coordinate: ArrayLike, axes: tuple[str, ...]
+# ) -> ArrayLike:
+#     """Perform a spatial bounding box query on a polygons element.
+#
+#     Parameters
+#     ----------
+#     polygons_table
+#         The polygons element to perform the query on.
+#     min_coordinate
+#         The upper left hand corner of the bounding box (i.e., minimum coordinates
+#         along all dimensions).
+#     max_coordinate
+#         The lower right hand corner of the bounding box (i.e., the maximum coordinates
+#         along all dimensions
+#     axes
+#         The axes for the min/max coordinates.
+#
+#     Returns
+#     -------
+#     The mask for the polygons inside of the bounding box
+#     """
+#     # get the polygon bounding boxes
+#     polygons_min_column_keys = [f"min{axis}" for axis in axes]
+#     polygons_min_coordinates = polygons_table.bounds[polygons_min_column_keys].values
+#
+#     polygons_max_column_keys = [f"max{axis}" for axis in axes]
+#     polygons_max_coordinates = polygons_table.bounds[polygons_max_column_keys].values
+#
+#     # check that the min coordinates are inside the bounding box
+#     min_inside = np.all(min_coordinate < polygons_min_coordinates, axis=1)
+#
+#     # check that the max coordinates are inside the bounding box
+#     max_inside = np.all(max_coordinate > polygons_max_coordinates, axis=1)
+#
+#     # polygons inside the bounding box satisfy both
+#     inside_mask: ArrayLike = np.logical_and(min_inside, max_inside)
+#
+#     return inside_mask
 
 
 @singledispatch
@@ -357,18 +354,16 @@ def _(
 ) -> Optional[DaskDataFrame]:
     from spatialdata._core._spatialdata_ops import get_transformation
 
-    # get the four corners of the bounding box
-    (
-        min_coordinate_intrinsic,
-        max_coordinate_intrinsic,
-        intrinsic_axes,
-    ) = _get_bounding_box_corners_in_intrinsic_coordinates(
+    # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
+    (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=points,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
         axes=axes,
     )
+    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
+    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
 
     # get the points in the intrinsic coordinate bounding box
     in_intrinsic_bounding_box = _bounding_box_mask_points(
@@ -413,20 +408,14 @@ def _(
 
 @bounding_box_query.register(GeoDataFrame)
 def _(
-    polygons: DaskDataFrame,
+    polygons: GeoDataFrame,
     axes: tuple[str, ...],
     min_coordinate: ArrayLike,
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> Optional[GeoDataFrame]:
-    from spatialdata._core._spatialdata_ops import get_transformation
-
     # get the four corners of the bounding box
-    (
-        min_coordinate_intrinsic,
-        max_coordinate_intrinsic,
-        intrinsic_axes,
-    ) = _get_bounding_box_corners_in_intrinsic_coordinates(
+    (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
@@ -434,36 +423,6 @@ def _(
         axes=axes,
     )
 
-    # get the polygons
-    in_intrinsic_bounding_box_mask = _bounding_box_query_polygons(
-        polygons, min_coordinate=min_coordinate_intrinsic, max_coordinate=max_coordinate_intrinsic, axes=intrinsic_axes
-    )
-    polygons_in_intrinsic_bounding_box = polygons.loc[in_intrinsic_bounding_box_mask]
-
-    if len(polygons_in_intrinsic_bounding_box) == 0:
-        return None
-
-    # transform the element to the query coordinate system
-    transform_to_query_space = get_transformation(polygons, to_coordinate_system=target_coordinate_system)
-    polygons_query_coordinate_system = transform_to_query_space.transform(polygons_in_intrinsic_bounding_box)  # type: ignore[union-attr]
-
-    # get the polygons in the bounding box in the
-    in_bounding_box = _bounding_box_query_polygons(
-        polygons_table=polygons_query_coordinate_system,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-        axes=axes,
-    )
-
-    if in_bounding_box.sum() > 0:
-        return polygons_in_intrinsic_bounding_box.loc[in_bounding_box]
-    else:
-        return None
-    #
-    #
-    # # which one is needed?
-    # t.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-    #
-    # set_transformation(points, t.inverse(), to_coordinate_system='new_target')
-    # set_transformation(points, {'new_target': t.inverse()}, set_all=True)
-    # return _bounding_box_query_points(points, request, transformation=t)
+    bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
+    queried = polygons[polygons.geometry.intersects(bounding_box_non_axes_aligned)]
+    return queried
