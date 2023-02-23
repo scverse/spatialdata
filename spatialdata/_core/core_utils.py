@@ -280,7 +280,8 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     if "scale0" in e:
         return tuple(i for i in e["scale0"].dims.keys())
     else:
-        return tuple(i for i in e.dims.keys())
+        raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
+        # return tuple(i for i in e.dims.keys())
 
 
 @get_dims.register(GeoDataFrame)

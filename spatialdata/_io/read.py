@@ -154,7 +154,7 @@ def _read_multiscale(
     # and for instance in the xenium example
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
-    node.metadata["name"]
+    name = node.metadata["name"]
     # if image, read channels metadata
     if raster_type == "image":
         omero = multiscales[0]["omero"]
@@ -166,9 +166,7 @@ def _read_multiscale(
             data = node.load(Multiscales).array(resolution=d, version=fmt.version)
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
-                # any name
-                name="image",
-                # name=name,
+                name=name,
                 dims=axes,
                 coords={"c": channels} if raster_type == "image" else {},
                 # attrs={"transform": t},
@@ -180,9 +178,7 @@ def _read_multiscale(
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
         si = SpatialImage(
             data,
-            # any name
-            name="image",
-            # name=name,
+            name=name,
             dims=axes,
             coords={"c": channels} if raster_type == "image" else {},
             # attrs={TRANSFORM_KEY: t},
