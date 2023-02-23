@@ -268,48 +268,6 @@ def _bounding_box_query_image_dict(
     return requested_images
 
 
-#
-# def _bounding_box_query_polygons(
-#     polygons_table: GeoDataFrame, max_coordinate: ArrayLike, min_coordinate: ArrayLike, axes: tuple[str, ...]
-# ) -> ArrayLike:
-#     """Perform a spatial bounding box query on a polygons element.
-#
-#     Parameters
-#     ----------
-#     polygons_table
-#         The polygons element to perform the query on.
-#     min_coordinate
-#         The upper left hand corner of the bounding box (i.e., minimum coordinates
-#         along all dimensions).
-#     max_coordinate
-#         The lower right hand corner of the bounding box (i.e., the maximum coordinates
-#         along all dimensions
-#     axes
-#         The axes for the min/max coordinates.
-#
-#     Returns
-#     -------
-#     The mask for the polygons inside of the bounding box
-#     """
-#     # get the polygon bounding boxes
-#     polygons_min_column_keys = [f"min{axis}" for axis in axes]
-#     polygons_min_coordinates = polygons_table.bounds[polygons_min_column_keys].values
-#
-#     polygons_max_column_keys = [f"max{axis}" for axis in axes]
-#     polygons_max_coordinates = polygons_table.bounds[polygons_max_column_keys].values
-#
-#     # check that the min coordinates are inside the bounding box
-#     min_inside = np.all(min_coordinate < polygons_min_coordinates, axis=1)
-#
-#     # check that the max coordinates are inside the bounding box
-#     max_inside = np.all(max_coordinate > polygons_max_coordinates, axis=1)
-#
-#     # polygons inside the bounding box satisfy both
-#     inside_mask: ArrayLike = np.logical_and(min_inside, max_inside)
-#
-#     return inside_mask
-
-
 @singledispatch
 def bounding_box_query(
     element: Union[SpatialElement, SpatialData],
@@ -424,5 +382,5 @@ def _(
     )
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    queried = polygons[polygons.geometry.intersects(bounding_box_non_axes_aligned)]
+    queried = polygons[polygons.geometry.within(bounding_box_non_axes_aligned)]
     return queried
