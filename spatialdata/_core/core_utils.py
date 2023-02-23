@@ -11,7 +11,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.transformations import BaseTransformation, Sequence
 from spatialdata._types import ArrayLike
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
@@ -176,6 +176,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
             scale_factors = old_shape / new_shape
             filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
             filtered_axes = [ax for ax in dims if ax != "c"]
+            if not np.isfinite(filtered_scale_factors).all():
+                raise ValueError("Scale factors must be finite.")
             scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
             assert transformations is not None
             new_transformations = {}
@@ -335,11 +337,24 @@ def _(data: SpatialImage) -> SpatialImage:
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
     def _get_scale(transforms: dict[str, Any]) -> Optional[ArrayLike]:
-        for t in transforms["global"].transformations:
+        all_scale_vectors = []
+        for transformation in transforms.values():
+            assert isinstance(transformation, Sequence)
+            # the first transformation is the scale
+            t = transformation.transformations[0]
             if hasattr(t, "scale"):
                 if TYPE_CHECKING:
                     assert isinstance(t.scale, np.ndarray)
-                return t.scale
+                all_scale_vectors.append(tuple(t.scale.tolist()))
+            else:
+                raise ValueError(f"Unsupported transformation: {t}")
+        # all the scales should be the same since they all refer to the mapping of the level of the multiscale to the
+        # base level, with respect to the intrinstic coordinate system
+        assert len(set(all_scale_vectors)) == 1
+        scalef = np.array(all_scale_vectors[0])
+        if not np.isfinite(scalef).all():
+            raise ValueError(f"Invalid scale factor: {scalef}")
+        return scalef
 
     def _compute_coords(max_: int, scale_f: Union[int, float]) -> ArrayLike:
         return (  # type: ignore[no-any-return]

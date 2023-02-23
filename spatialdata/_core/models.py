@@ -174,9 +174,12 @@ class RasterSchema(DataArraySchema):
         # transpose if possible
         if dims != cls.dims.dims:
             try:
-                assert isinstance(data, DaskArray) or isinstance(data, DataArray)
-                # mypy complains that data has no .transpose but I have asserted right above that data is a DaskArray...
-                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])  # type: ignore[attr-defined]
+                if isinstance(data, DataArray):
+                    data = data.transpose(*list(cls.dims.dims))
+                elif isinstance(data, DaskArray):
+                    data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                else:
+                    raise ValueError(f"Unsupported data type: {type(data)}.")
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError:
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
