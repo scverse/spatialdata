@@ -14,7 +14,7 @@ from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import are_directories_identical
+from spatialdata.utils import _are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 
@@ -92,7 +92,7 @@ class TestReadWrite:
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
-        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
     def test_incremental_io(
         self,
@@ -146,6 +146,27 @@ class TestReadWrite:
                 sdata.add_points(name=f"incremental_{k}", points=v)
             sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
             break
+
+    def test_incremental_io_table(self, table_single_annotation):
+        s = table_single_annotation
+        t = s.table[:10, :].copy()
+        with pytest.raises(ValueError):
+            s.table = t
+        del s.table
+        s.table = t
+
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            s.write(f)
+            s2 = SpatialData.read(f)
+            assert len(s2.table) == len(t)
+            del s2.table
+            s2.table = s.table
+            assert len(s2.table) == len(s.table)
+            f2 = os.path.join(td, "data2.zarr")
+            s2.write(f2)
+            s3 = SpatialData.read(f2)
+            assert len(s3.table) == len(s2.table)
 
 
 def test_io_and_lazy_loading_points(points):

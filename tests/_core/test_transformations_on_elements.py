@@ -1,4 +1,5 @@
 import math
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -15,8 +16,12 @@ from spatialdata._core._spatialdata_ops import (
     remove_transformation,
     set_transformation,
 )
+from spatialdata._core._transform_elements import (
+    align_elements_using_landmarks,
+    get_transformation_between_landmarks,
+)
 from spatialdata._core.core_utils import get_dims
-from spatialdata._core.models import Image2DModel
+from spatialdata._core.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
 from spatialdata.utils import unpad_raster
 
@@ -443,3 +448,66 @@ def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
         set_transformation(element, scale, "my_space")
         sdata.transform_element_to_coordinate_system(element, "my_space")
     sdata.transform_to_coordinate_system("my_space")
+
+
+def test_transformations_between_coordinate_systems(images):
+    # just a test that all the code is executed without errors and a quick test that the affine matrix is correct.
+    # For a full test the notebooks are more exhaustive
+    with tempfile.TemporaryDirectory() as tmpdir:
+        images.write(Path(tmpdir) / "sdata.zarr")
+        el0 = images.images["image2d"]
+        el1 = images.images["image2d_multiscale"]
+        set_transformation(el0, {"global0": Identity()}, set_all=True, write_to_sdata=images)
+        set_transformation(el1, {"global1": Identity()}, set_all=True, write_to_sdata=images)
+        for positive_determinant in [True, False]:
+            reference_landmarks_coords = np.array([[0, 0], [0, 1], [1, 1], [3, 3]])
+            if positive_determinant:
+                moving_landmarks_coords = np.array([[0, 0], [0, 2], [2, 2], [6, 6]])
+            else:
+                moving_landmarks_coords = np.array([[0, 0], [0, -2], [2, -2], [6, -6]])
+
+            reference_landmarks_shapes = ShapesModel.parse(reference_landmarks_coords, geometry=0, radius=10)
+            moving_landmarks_shapes = ShapesModel.parse(np.array(moving_landmarks_coords), geometry=0, radius=10)
+            reference_landmarks_points = PointsModel.parse(reference_landmarks_coords)
+            moving_landmarks_points = PointsModel.parse(moving_landmarks_coords)
+
+            for reference_landmarks, moving_landmarks in [
+                (reference_landmarks_shapes, moving_landmarks_shapes),
+                (reference_landmarks_points, moving_landmarks_points),
+            ]:
+                affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
+                # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
+                if positive_determinant:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, 0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                else:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, -0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                for sdata in [images, None]:
+                    align_elements_using_landmarks(
+                        references_coords=reference_landmarks,
+                        moving_coords=moving_landmarks,
+                        reference_element=el0,
+                        moving_element=el1,
+                        reference_coordinate_system="global0",
+                        moving_coordinate_system="global1",
+                        new_coordinate_system="global2",
+                        write_to_sdata=sdata,
+                    )
+                assert "global2" in images.coordinate_systems

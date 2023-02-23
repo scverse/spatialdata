@@ -6,6 +6,7 @@ import xarray.testing
 from xarray import DataArray
 
 from spatialdata._core.core_utils import ValidAxis_t, get_default_coordinate_system
+from spatialdata._core.models import Image2DModel, PointsModel
 from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._core.ngff.ngff_transformations import (
     NgffAffine,
@@ -25,6 +26,8 @@ from spatialdata._core.transformations import (
     Scale,
     Sequence,
     Translation,
+    _decompose_affine_into_linear_and_translation,
+    _get_affine_for_element,
 )
 
 
@@ -730,91 +733,131 @@ def test_ngff_conversion_not_supported():
         _convert_and_compare(t0, input_cs, output_cs)
 
 
-def test_set_transform_with_mismatching_cs():
-    pass
-    # input_css = [
-    #     get_default_coordinate_system(t) for t in [(X, Y), (Y, X), (C, Y, X), (X, Y, Z), (Z, Y, X), (C, Z, Y, X)]
-    # ]
-    # for element_type in sdata._non_empty_elements():
-    #     if element_type == "table":
-    #         continue
-    #     for v in getattr(sdata, element_type).values():
-    #         for input_cs in input_css:
-    #             affine = NgffAffine.from_input_output_coordinate_systems(input_cs, input_cs)
-    #             _set_transformations(v, affine)
+def test_get_affine_for_element(images):
+    """This is testing the ability to predict the axis of a transformation given the transformation and the element
+    it will be applied to. It is also testing the embedding of a 2d image with channel into the 3d space."""
+    image = images.images["image2d"]
+    t = Affine(
+        np.array(
+            [
+                [1, 0, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y", "z"),
+    )
+    translation = Translation(np.array([1, 2, 3]), axes=("x", "y", "z"))
+    sequence = Sequence([t, translation])
+    real = _get_affine_for_element(image, sequence)
+    assert real.input_axes == ("c", "y", "x")
+    assert real.output_axes == ("c", "x", "y", "z")
+    assert np.allclose(
+        real.matrix,
+        np.array(
+            [
+                # fmt: off
+                #c  y  x       # noqa: E265
+                [1, 0, 0, 0],  # c
+                [0, 0, 1, 1],  # x
+                [0, 1, 0, 2],  # y
+                [0, 0, 0, 4],  # z
+                [0, 0, 0, 1],
+                # fmt: on
+            ]
+        ),
+    )
+
+
+def test_decompose_affine_into_linear_and_translation():
+    matrix = np.array([[1, 2, 3, 10], [4, 5, 6, 11], [0, 0, 0, 1]])
+    affine = Affine(matrix, input_axes=("x", "y", "z"), output_axes=("x", "y"))
+    linear, translation = _decompose_affine_into_linear_and_translation(affine)
+    assert np.allclose(linear.matrix, np.array([[1, 2, 3, 0], [4, 5, 6, 0], [0, 0, 0, 1]]))
+    assert np.allclose(translation.translation, np.array([10, 11]))
 
 
 def test_assign_xy_scale_to_cyx_image():
-    pass
-    # xy_cs = get_default_coordinate_system(("x", "y"))
-    # scale = NgffScale(np.array([2, 3]), input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
-    # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
-    #
-    # _set_transformations(image, scale)
-    # t = _get_transformations(image)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
-    #
-    # _set_transformations(image, scale.to_affine())
-    # t = _get_transformations(image)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
+    scale = Scale(np.array([2, 3]), axes=("x", "y"))
+    image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+
+    affine = _get_affine_for_element(image, scale)
+    assert np.allclose(
+        affine.matrix,
+        np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 3, 0, 0],
+                [0, 0, 2, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
 
 
 def test_assign_xyz_scale_to_cyx_image():
-    pass
-    # xyz_cs = get_default_coordinate_system(("x", "y", "z"))
-    # scale = NgffScale(np.array([2, 3, 4]), input_coordinate_system=xyz_cs, output_coordinate_system=xyz_cs)
-    # image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
-    #
-    # _set_transformations(image, scale)
-    # t = _get_transformations(image)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
-    # pprint(t.to_affine().to_dict())
-    #
-    # _set_transformations(image, scale.to_affine())
-    # t = _get_transformations(image)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
+    scale = Scale(np.array([2, 3, 4]), axes=("x", "y", "z"))
+    image = Image2DModel.parse(np.zeros((10, 10, 10)), dims=("c", "y", "x"))
+
+    affine = _get_affine_for_element(image, scale)
+    assert np.allclose(
+        affine.matrix,
+        np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 3, 0, 0],
+                [0, 0, 2, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
 
 
 def test_assign_cyx_scale_to_xyz_points():
-    pass
-    # cyx_cs = get_default_coordinate_system(("c", "y", "x"))
-    # scale = NgffScale(np.array([1, 3, 2]), input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
-    # points = PointsModel.parse(coords=np.zeros((10, 3)))
-    #
-    # _set_transformations(points, scale)
-    # t = _get_transformations(points)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
-    #
-    # _set_transformations(points, scale.to_affine())
-    # t = _get_transformations(points)
-    # pprint(t.to_dict())
-    # print(t.to_affine())
+    scale = Scale(np.array([1, 3, 2]), axes=("c", "y", "x"))
+    points = PointsModel.parse(np.zeros((10, 3)))
+
+    affine = _get_affine_for_element(points, scale)
+    assert np.allclose(
+        affine.matrix,
+        np.array(
+            [
+                [2, 0, 0, 0],
+                [0, 3, 0, 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
 
 
 def test_compose_in_xy_and_operate_in_cyx():
-    pass
-    # xy_cs = get_default_coordinate_system(("x", "y"))
-    # cyx_cs = get_default_coordinate_system(("c", "y", "x"))
-    # k = 0.5
-    # scale = NgffScale([k, k], input_coordinate_system=xy_cs, output_coordinate_system=xy_cs)
-    # theta = np.pi / 6
-    # rotation = NgffAffine(
-    #     np.array(
-    #         [
-    #             [np.cos(theta), -np.sin(theta), 0],
-    #             [np.sin(theta), np.cos(theta), 0],
-    #             [0, 0, 1],
-    #         ]
-    #     ),
-    #     input_coordinate_system=xy_cs,
-    #     output_coordinate_system=xy_cs,
-    # )
-    # sequence = NgffSequence([rotation, scale], input_coordinate_system=cyx_cs, output_coordinate_system=cyx_cs)
-    # affine = sequence.to_affine()
-    # print(affine)
-    # assert affine.affine[0, 0] == 1.0
+    k = 0.5
+    scale = Scale([k, k], axes=("x", "y"))
+    theta = np.pi / 6
+    rotation = Affine(
+        np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 0],
+                [np.sin(theta), np.cos(theta), 0],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    sequence = Sequence([rotation, scale])
+    affine = sequence.to_affine_matrix(input_axes=("c", "y", "x"), output_axes=("c", "y", "x"))
+    assert np.allclose(
+        affine,
+        np.array(
+            [
+                [1, 0, 0, 0],
+                [0, k * np.cos(theta), k * np.sin(theta), 0],
+                [0, k * -np.sin(theta), k * np.cos(theta), 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+    )
