@@ -248,6 +248,7 @@ class Labels2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -262,6 +263,7 @@ class Labels3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
