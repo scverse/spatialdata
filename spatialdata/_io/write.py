@@ -326,7 +326,7 @@ def write_table(
     fmt.validate_table(table, region_key, instance_key)
     write_adata(group, name, table)  # creates group[name]
     tables_group = group[name]
-    tables_group.attrs["encoding_type"] = group_type
+    tables_group.attrs["encoding-type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
