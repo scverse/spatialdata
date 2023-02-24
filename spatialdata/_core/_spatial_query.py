@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import dask.array as da
 import numpy as np
@@ -13,7 +13,6 @@ from shapely.geometry import Polygon
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData, SpatialElement
-from spatialdata._core._query_requests import _dict_query_dispatcher
 from spatialdata._core.core_utils import ValidAxis_t, get_spatial_axes
 from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
 from spatialdata._types import ArrayLike
@@ -201,71 +200,16 @@ def _bounding_box_mask_points(
     return da.all(in_bounding_box_masks, axis=1)
 
 
-def _bounding_box_query_image(
-    image: Union[MultiscaleSpatialImage, SpatialImage], request: BoundingBoxRequest
-) -> Union[MultiscaleSpatialImage, SpatialImage]:
-    """Perform a spatial bounding box query on an Image or Labels element.
-
-    Parameters
-    ----------
-    image
-        The image element to perform the query on.
-    request
-        The request for the query.
-
-    Returns
-    -------
-    The image contained within the specified bounding box.
-    """
-    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This reasoning applies also to points, polygons and shapes
-    from spatialdata._core._spatialdata_ops import (
-        get_transformation,
-        set_transformation,
-    )
-
-    # build the request
-    selection = {}
-    for axis_index, axis_name in enumerate(request.axes):
-        # get the min value along the axis
-        min_value = request.min_coordinate[axis_index]
-
-        # get max value, slices are open half interval
-        max_value = request.max_coordinate[axis_index] + 1
-
-        # add the
-        selection[axis_name] = slice(min_value, max_value)
-
-    query_result = image.isel(selection)
-
-    # update the transform
-    # currently, this assumes the existing transforms input coordinate system
-    # is the intrinsic coordinate system
-    # todo: this should be updated when we support multiple transforms
-    initial_transform = get_transformation(query_result)
-    assert isinstance(initial_transform, BaseTransformation)
-
-    translation = Translation(translation=request.min_coordinate, axes=request.axes)
-
-    new_transformation = Sequence(
-        [translation, initial_transform],
-    )
-
-    set_transformation(query_result, new_transformation)
-
-    return query_result
-
-
-def _bounding_box_query_image_dict(
-    image_dict: dict[str, Union[MultiscaleSpatialImage, SpatialImage]], request: BoundingBoxRequest
-) -> dict[str, Union[MultiscaleSpatialImage, SpatialImage]]:
-    requested_images = {}
-    for image_name, image_data in image_dict.items():
-        image = _bounding_box_query_image(image_data, request)
-        if 0 not in image.shape:
-            # do not include elements with no data
-            requested_images[image_name] = image
-
-    return requested_images
+def _dict_query_dispatcher(
+    elements: dict[str, SpatialElement], query_function: Callable[[SpatialElement], SpatialElement], **kwargs: Any
+) -> dict[str, SpatialElement]:
+    queried_elements = {}
+    for key, element in elements.items():
+        result = query_function(element, **kwargs)
+        if result is not None:
+            # query returns None if it is empty
+            queried_elements[key] = result
+    return queried_elements
 
 
 @singledispatch
@@ -302,6 +246,65 @@ def _(
     return SpatialData(**new_elements, table=sdata.table)
 
 
+@bounding_box_query.register(SpatialImage)
+@bounding_box_query.register(MultiscaleSpatialImage)
+def _(
+    image: SpatialImage,
+    axes: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    target_coordinate_system: str,
+) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
+    # for triggering validation
+    _ = BoundingBoxRequest(
+        target_coordinate_system=target_coordinate_system,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+    )
+    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a
+    #  simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the
+    #  diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This
+    #  reasoning applies also to points, polygons and shapes
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+
+    # build the request
+    selection = {}
+    for axis_index, axis_name in enumerate(axes):
+        # get the min value along the axis
+        min_value = min_coordinate[axis_index]
+
+        # get max value, slices are open half interval
+        max_value = max_coordinate[axis_index] + 1
+
+        # add the
+        selection[axis_name] = slice(min_value, max_value)
+
+    query_result = image.isel(selection)
+    if 0 in query_result.shape:
+        return None
+
+    # update the transform
+    # currently, this assumes the existing transforms input coordinate system
+    # is the intrinsic coordinate system
+    # todo: this should be updated when we support multiple transforms
+    initial_transform = get_transformation(query_result)
+    assert isinstance(initial_transform, BaseTransformation)
+
+    translation = Translation(translation=min_coordinate, axes=axes)
+
+    new_transformation = Sequence(
+        [translation, initial_transform],
+    )
+
+    set_transformation(query_result, new_transformation)
+
+    return query_result
+
+
 @bounding_box_query.register(DaskDataFrame)
 def _(
     points: DaskDataFrame,
@@ -310,6 +313,13 @@ def _(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> Optional[DaskDataFrame]:
+    # for triggering validation
+    _ = BoundingBoxRequest(
+        target_coordinate_system=target_coordinate_system,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+    )
     from spatialdata._core._spatialdata_ops import get_transformation
 
     # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
@@ -372,6 +382,13 @@ def _(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> Optional[GeoDataFrame]:
+    # for triggering validation
+    _ = BoundingBoxRequest(
+        target_coordinate_system=target_coordinate_system,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+    )
     # get the four corners of the bounding box
     (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,

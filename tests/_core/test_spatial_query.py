@@ -17,7 +17,6 @@ from spatialdata import (
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
-    _bounding_box_query_image,
     bounding_box_query,
 )
 
@@ -150,14 +149,13 @@ def test_bounding_box_image_2d(n_channels):
     image_element = Image2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
+    image_result = bounding_box_query(
+        image_element,
         axes=("y", "x"),
         min_coordinate=np.array([5, 0]),
         max_coordinate=np.array([9, 4]),
         target_coordinate_system="global",
     )
-
-    image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)
 
@@ -172,13 +170,12 @@ def test_bounding_box_image_3d(n_channels):
     image_element = Image3DModel.parse(image)
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
+    image_result = bounding_box_query(
+        image_element,
         axes=("z", "y", "x"),
         min_coordinate=np.array([5, 0, 2]),
         max_coordinate=np.array([9, 4, 6], target_coordinate_system="global"),
     )
-
-    image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)
 
@@ -191,14 +188,13 @@ def test_bounding_box_labels_2d():
     labels_element = Labels2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
+    labels_result = bounding_box_query(
+        labels_element,
         axes=("y", "x"),
         min_coordinate=np.array([5, 0]),
         max_coordinate=np.array([9, 4]),
         target_coordinate_system="global",
     )
-
-    labels_result = _bounding_box_query_image(labels_element, request)
     expected_image = np.ones((5, 5))
     np.testing.assert_allclose(labels_result, expected_image)
 
@@ -211,14 +207,13 @@ def test_bounding_box_labels_3d():
     labels_element = Labels3DModel.parse(image)
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
+    image_result = bounding_box_query(
+        labels_element,
         axes=("z", "y", "x"),
         min_coordinate=np.array([5, 0, 2]),
         max_coordinate=np.array([9, 4, 6]),
         target_coordinate_system="global",
     )
-
-    image_result = _bounding_box_query_image(labels_element, request)
     expected_image = np.ones((5, 5, 5))
     np.testing.assert_allclose(image_result, expected_image)
 
