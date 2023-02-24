@@ -28,7 +28,12 @@ from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io._utils import ome_zarr_logger
-from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
+from spatialdata._io.format import (
+    CurrentPointsFormat,
+    CurrentRasterFormat,
+    CurrentShapesFormat,
+    SpatialDataFormatV01,
+)
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
@@ -122,7 +127,7 @@ def _get_transformations_from_ngff_dict(
 
 
 def _read_multiscale(
-    store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = SpatialDataFormatV01()
+    store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
     assert isinstance(store, str)
     assert raster_type in ["image", "labels"]
@@ -159,7 +164,7 @@ def _read_multiscale(
     # if image, read channels metadata
     if raster_type == "image":
         omero = multiscales[0]["omero"]
-        channels = fmt.channels_from_metadata(omero)
+        channels: list[Any] = fmt.channels_from_metadata(omero)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -188,7 +193,7 @@ def _read_multiscale(
         return compute_coordinates(si)
 
 
-def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = ShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
+def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read shapes from a zarr store."""
     assert isinstance(store, str)
     f = zarr.open(store, mode="r")
@@ -212,7 +217,7 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
+    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentPointsFormat()  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     assert isinstance(store, str)

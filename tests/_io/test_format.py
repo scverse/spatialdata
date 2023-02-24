@@ -3,9 +3,9 @@ from typing import Any, Optional
 import pytest
 
 from spatialdata._core.models import PointsModel
-from spatialdata._io.format import PointsFormat
+from spatialdata._io.format import CurrentPointsFormat
 
-Points_f = PointsFormat()
+Points_f = CurrentPointsFormat()
 
 
 class TestFormat:
