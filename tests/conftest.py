@@ -124,29 +124,21 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
-    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
-    out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", scale_factors=[2, 2], dims=dims_2d
-    )
-    out["image2d_xarray"] = Image2DModel.parse(
-        DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), name="image2d_xarray", dims=None
-    )
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d)
+    out["image2d_multiscale"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d)
+    out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
         DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
-        name="image2d_multiscale_xarray",
         scale_factors=[2, 4],
         dims=None,
     )
-    out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), name="image3d_numpy", dims=dims_3d)
+    out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d)
     out["image3d_multiscale_numpy"] = Image3DModel.parse(
-        RNG.normal(size=(2, 64, 64, 3)), name="image3d_multiscale_numpy", scale_factors=[2], dims=dims_3d
+        RNG.normal(size=(2, 64, 64, 3)), scale_factors=[2], dims=dims_3d
     )
-    out["image3d_xarray"] = Image3DModel.parse(
-        DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), name="image3d_xarray", dims=None
-    )
+    out["image3d_xarray"] = Image3DModel.parse(DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), dims=None)
     out["image3d_multiscale_xarray"] = Image3DModel.parse(
         DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
-        name="image3d_multiscale_xarray",
         scale_factors=[2],
         dims=None,
     )
@@ -158,29 +150,21 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d", dims=dims_2d)
-    out["labels2d_multiscale"] = Labels2DModel.parse(
-        RNG.normal(size=(64, 64)), name="labels2d_multiscale", scale_factors=[2, 4], dims=dims_2d
-    )
-    out["labels2d_xarray"] = Labels2DModel.parse(
-        DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), name="labels2d_xarray", dims=None
-    )
+    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), dims=dims_2d)
+    out["labels2d_multiscale"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), scale_factors=[2, 4], dims=dims_2d)
+    out["labels2d_xarray"] = Labels2DModel.parse(DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), dims=None)
     out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
         DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
-        name="labels2d_multiscale_xarray",
         scale_factors=[2, 4],
         dims=None,
     )
-    out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d_numpy", dims=dims_3d)
+    out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale_numpy", scale_factors=[2, 4], dims=dims_3d
+        RNG.normal(size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
     )
-    out["labels3d_xarray"] = Labels3DModel.parse(
-        DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), name="labels3d_xarray", dims=None
-    )
+    out["labels3d_xarray"] = Labels3DModel.parse(DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), dims=None)
     out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
         DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
-        name="labels3d_multiscale_xarray",
         scale_factors=[2, 4],
         dims=None,
     )

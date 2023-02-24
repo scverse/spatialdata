@@ -140,6 +140,8 @@ class RasterSchema(DataArraySchema):
         :class:`spatial_image.SpatialImage` or
         :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
         """
+        if "name" in kwargs:
+            raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
