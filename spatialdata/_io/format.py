@@ -113,7 +113,7 @@ class ShapesFormatV01(SpatialDataFormatV01):
 
         typ = GeometryType(metadata_[Shapes_s.GEOS_KEY][Shapes_s.TYPE_KEY])
         assert typ.name == metadata_[Shapes_s.GEOS_KEY][Shapes_s.NAME_KEY]
-        assert self.spatialdata_version == metadata_["version"]
+        assert self.version == metadata_["version"]
         return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
@@ -131,7 +131,7 @@ class PointsFormatV01(SpatialDataFormatV01):
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.spatialdata_version == metadata_["version"]
+        assert self.version == metadata_["version"]
         d = {}
         if Points_s.FEATURE_KEY in metadata_:
             d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]

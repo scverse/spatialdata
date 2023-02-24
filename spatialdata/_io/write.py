@@ -272,7 +272,7 @@ def write_shapes(
         shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
     attrs = fmt.attrs_to_dict(geometry)
-    attrs["version"] = fmt.spatialdata_version
+    attrs["version"] = fmt.version
 
     _write_metadata(
         shapes_group,
@@ -300,7 +300,7 @@ def write_points(
     points.to_parquet(path)
 
     attrs = fmt.attrs_to_dict(points.attrs)
-    attrs["version"] = fmt.spatialdata_version
+    attrs["version"] = fmt.version
 
     _write_metadata(
         points_groups,
@@ -326,11 +326,11 @@ def write_table(
     fmt.validate_table(table, region_key, instance_key)
     write_adata(group, name, table)  # creates group[name]
     tables_group = group[name]
-    tables_group.attrs["@type"] = group_type
+    tables_group.attrs["encoding_type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
-    tables_group.attrs["version"] = fmt.spatialdata_version
+    tables_group.attrs["version"] = fmt.version
 
 
 def _iter_multiscale(
