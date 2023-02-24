@@ -17,13 +17,6 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core._spatial_query import (
-    BaseSpatialRequest,
-    BoundingBoxRequest,
-    _bounding_box_query_image_dict,
-    _bounding_box_query_points_dict,
-    _bounding_box_query_polygons_dict,
-)
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -44,6 +37,7 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
+from spatialdata._types import ArrayLike
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -881,7 +875,16 @@ class QueryManager:
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata
 
-    def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
+    # def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
+    # type: ignore[type-arg]
+
+    def bounding_box(
+        self,
+        axes: tuple[str, ...],
+        min_coordinate: ArrayLike,
+        max_coordinate: ArrayLike,
+        target_coordinate_system: str,
+    ) -> SpatialData:
         """Perform a bounding box query on the SpatialData object.
 
         Parameters
@@ -894,20 +897,18 @@ class QueryManager:
         The SpatialData object containing the requested data.
         Elements with no valid data are omitted.
         """
-        requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
-        requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)
-        requested_polygons = _bounding_box_query_polygons_dict(polygons_dict=self._sdata.polygons, request=request)
+        from spatialdata._core._spatial_query import bounding_box_query
 
-        return SpatialData(
-            points=requested_points,
-            images=requested_images,
-            polygons=requested_polygons,
-            shapes=self._sdata.shapes,
-            table=self._sdata.table,
+        return bounding_box_query(  # type: ignore[return-value]
+            self._sdata,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
-        if isinstance(request, BoundingBoxRequest):
-            return self.bounding_box(request)
-        else:
-            raise TypeError("unknown request type")
+    # def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    #     if isinstance(request, BoundingBoxRequest):
+    #         return self.bounding_box(**request.to_dict())
+    #     else:
+    #         raise TypeError("unknown request type")

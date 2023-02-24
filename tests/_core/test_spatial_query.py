@@ -18,8 +18,7 @@ from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     _bounding_box_query_image,
-    _bounding_box_query_points,
-    _bounding_box_query_polygons,
+    bounding_box_query,
 )
 
 
@@ -33,7 +32,12 @@ def _make_points_element():
 
 def test_bounding_box_request_immutable():
     """Test that the bounding box request is immutable."""
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([0, 0]),
+        max_coordinate=np.array([10, 10]),
+        target_coordinate_system="global",
+    )
     isinstance(request, BaseSpatialRequest)
 
     # fields should be immutable
@@ -50,27 +54,50 @@ def test_bounding_box_request_immutable():
 def test_bounding_box_request_only_spatial_axes():
     """Requests with axes that are not spatial should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("c", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("c", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_request_wrong_number_of_coordinates():
     """Requests which specify coordinates not consistent with the axes should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10]))
-
-    with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
     with pytest.raises(ValueError):
         _ = BoundingBoxRequest(
-            axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10, 10])
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
+        )
+
+    with pytest.raises(ValueError):
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
         )
 
 
 def test_bounding_box_request_wrong_coordinate_order():
     """Requests where the min coordinate is greater than the max coordinate should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 10]), max_coordinate=np.array([10, 0]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 10]),
+            max_coordinate=np.array([10, 0]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_points():
@@ -79,17 +106,24 @@ def test_bounding_box_points():
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([18, 25]), max_coordinate=np.array([22, 35]))
-    points_result = _bounding_box_query_points(points_element, request)
-    np.testing.assert_allclose(points_result["x"], [20])
-    np.testing.assert_allclose(points_result["y"], [30])
+    points_result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([18, 25]),
+        max_coordinate=np.array([22, 35]),
+        target_coordinate_system="global",
+    )
+
+    # Check that the correct point was selected
+    np.testing.assert_allclose(points_result["x"].compute(), [20])
+    np.testing.assert_allclose(points_result["y"].compute(), [30])
 
     # result should be valid points element
     PointsModel.validate(points_result)
 
     # original element should be unchanged
-    np.testing.assert_allclose(points_element["x"], original_x)
-    np.testing.assert_allclose(points_element["y"], original_y)
+    np.testing.assert_allclose(points_element["x"].compute(), original_x)
+    np.testing.assert_allclose(points_element["y"].compute(), original_y)
 
 
 def test_bounding_box_points_no_points():
@@ -97,12 +131,14 @@ def test_bounding_box_points_no_points():
     return a points element with length 0.
     """
     points_element = _make_points_element()
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([40, 50]), max_coordinate=np.array([45, 55]))
-    points_result = _bounding_box_query_points(points_element, request)
-    assert len(points_result) == 0
-
-    # result should be valid points element
-    PointsModel.validate(points_result)
+    request = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([40, 50]),
+        max_coordinate=np.array([45, 55]),
+        target_coordinate_system="global",
+    )
+    assert request is None
 
 
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
@@ -114,7 +150,12 @@ def test_bounding_box_image_2d(n_channels):
     image_element = Image2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="global",
+    )
 
     image_result = _bounding_box_query_image(image_element, request)
     expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
@@ -132,7 +173,9 @@ def test_bounding_box_image_3d(n_channels):
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
+        axes=("z", "y", "x"),
+        min_coordinate=np.array([5, 0, 2]),
+        max_coordinate=np.array([9, 4, 6], target_coordinate_system="global"),
     )
 
     image_result = _bounding_box_query_image(image_element, request)
@@ -148,7 +191,12 @@ def test_bounding_box_labels_2d():
     labels_element = Labels2DModel.parse(image)
 
     # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="global",
+    )
 
     labels_result = _bounding_box_query_image(labels_element, request)
     expected_image = np.ones((5, 5))
@@ -164,7 +212,10 @@ def test_bounding_box_labels_3d():
 
     # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
     request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
+        axes=("z", "y", "x"),
+        min_coordinate=np.array([5, 0, 2]),
+        max_coordinate=np.array([9, 4, 6]),
+        target_coordinate_system="global",
     )
 
     image_result = _bounding_box_query_image(labels_element, request)
@@ -199,10 +250,13 @@ def test_bounding_box_polygons():
     cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
     sd_polygons = PolygonsModel.parse(cell_polygon_table)
 
-    request = BoundingBoxRequest(
-        axes=("y", "x"), min_coordinate=np.array([40, 40]), max_coordinate=np.array([100, 100])
+    polygons_result = bounding_box_query(
+        sd_polygons,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([40, 40]),
+        max_coordinate=np.array([100, 100]),
     )
-    polygons_result = _bounding_box_query_polygons(sd_polygons, request)
 
     assert len(polygons_result) == 1
     assert polygons_result.index[0] == 3

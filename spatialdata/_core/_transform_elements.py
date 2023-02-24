@@ -197,16 +197,15 @@ def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
     axes = get_dims(data)
     arrays = []
     for ax in axes:
-        arrays.append(data[ax].to_dask_array())
-    xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
+        arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
+    xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
     xtransformed = transformation._transform_coordinates(xdata)
     transformed = data.drop(columns=list(axes))
     assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax
-        new_ax = xtransformed[:, indices].data.flatten()
-        # mypy says that from_array is not a method of DaskDataFrame, but it is
-        transformed[ax] = da.from_array(np.array(new_ax))  # type: ignore[attr-defined]
+        new_ax = xtransformed[:, indices]
+        transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
 
     # to avoid cyclic import
     from spatialdata._core.models import PointsModel
