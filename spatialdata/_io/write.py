@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
@@ -26,19 +26,14 @@ from spatialdata._core.core_utils import (
     _validate_mapping_to_coordinate_system_type,
     get_dims,
 )
+from spatialdata._core.models import ShapesModel
 from spatialdata._core.transformations import _get_current_output_axes
-from spatialdata._io.format import (
-    PointsFormat,
-    PolygonsFormat,
-    ShapesFormat,
-    SpatialDataFormatV01,
-)
+from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
 
 __all__ = [
     "write_image",
     "write_labels",
     "write_points",
-    "write_polygons",
     "write_table",
     "overwrite_coordinate_transformations_non_raster",
     "overwrite_coordinate_transformations_raster",
@@ -118,6 +113,7 @@ def _write_raster(
     fmt: Format = SpatialDataFormatV01(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
+    channels_metadata: Optional[JSONDict] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
     assert raster_type in ["image", "labels"]
@@ -146,6 +142,10 @@ def _write_raster(
             return group.require_group(name)
         else:
             return group["labels"][name]
+
+    # convert channel names to channel metadata
+    if raster_type == "image":
+        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
@@ -188,6 +188,7 @@ def _write_raster(
         assert transformations is not None
         assert len(transformations) > 0
         chunks = _iter_multiscale(raster_data, "chunks")
+        # coords = _iter_multiscale(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
@@ -247,54 +248,28 @@ def write_labels(
     )
 
 
-def write_polygons(
-    polygons: GeoDataFrame,
-    group: zarr.Group,
-    name: str,
-    group_type: str = "ngff:polygons",
-    fmt: Format = PolygonsFormat(),
-) -> None:
-    axes = get_dims(polygons)
-    t = _get_transformations(polygons)
-    polygons_groups = group.require_group(name)
-    geometry, coords, offsets = to_ragged_array(polygons.geometry)
-    polygons_groups.create_dataset(name="coords", data=coords)
-    for i, o in enumerate(offsets):
-        polygons_groups.create_dataset(name=f"offset{i}", data=o)
-    polygons_groups.create_dataset(name="Index", data=polygons.index.values)
-
-    attrs = fmt.attrs_to_dict(geometry)
-    attrs["version"] = fmt.spatialdata_version
-
-    _write_metadata(
-        polygons_groups,
-        group_type=group_type,
-        # coordinate_transformations=coordinate_transformations,
-        axes=list(axes),
-        attrs=attrs,
-        fmt=fmt,
-    )
-    assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=polygons_groups, axes=axes, transformations=t)
-
-
 def write_shapes(
-    shapes: AnnData,
+    shapes: GeoDataFrame,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:shapes",
     fmt: Format = ShapesFormat(),
 ) -> None:
     axes = get_dims(shapes)
-    transform = shapes.uns.pop("transform")
-    assert transform is not None
-    write_adata(group, name, shapes)  # creates group[name]
-    shapes.uns["transform"] = transform
+    t = _get_transformations(shapes)
 
-    attrs = fmt.attrs_to_dict(shapes.uns)
+    shapes_group = group.require_group(name)
+    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    shapes_group.create_dataset(name="coords", data=coords)
+    for i, o in enumerate(offsets):
+        shapes_group.create_dataset(name=f"offset{i}", data=o)
+    shapes_group.create_dataset(name="Index", data=shapes.index.values)
+    if geometry.name == "POINT":
+        shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+
+    attrs = fmt.attrs_to_dict(geometry)
     attrs["version"] = fmt.spatialdata_version
 
-    shapes_group = group[name]
     _write_metadata(
         shapes_group,
         group_type=group_type,
@@ -303,8 +278,8 @@ def write_shapes(
         attrs=attrs,
         fmt=fmt,
     )
-    assert transform is not None
-    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=transform)
+    assert t is not None
+    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=t)
 
 
 def write_points(
@@ -359,19 +334,12 @@ def write_table(
 def _iter_multiscale(
     data: MultiscaleSpatialImage,
     attr: str,
-    key: Optional[str] = None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
-    name = None
     for i in data.keys():
-        variables = list(data[i].variables)
-        if len(variables) != 1:
-            raise ValueError("MultiscaleSpatialImage must have exactly one variable (the variable name is arbitrary)")
-        if name is not None:
-            if name != variables[0]:
-                raise ValueError("MultiscaleSpatialImage must have the same variable name across all levels")
-        name = variables[0]
-    if key is None:
-        return [getattr(data[i][name], attr) for i in data.keys()]
-    else:
-        return [getattr(data[i][name], attr).get(key) for i in data.keys()]
+        variables = set(data[i].variables.keys())
+        names: Set[str] = variables.difference({"c", "z", "y", "x"})
+        if len(names) != 1:
+            raise ValueError(f"Invalid variable name: `{names}`.")
+    name: str = next(iter(names))
+    return [getattr(data[i][name], attr) for i in data.keys()]

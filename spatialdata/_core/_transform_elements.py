@@ -2,26 +2,38 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
-from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from skimage.transform import estimate_transform
 from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import get_dims
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+from spatialdata._core.core_utils import (
+    DEFAULT_COORDINATE_SYSTEM,
+    SpatialElement,
+    _get_scale,
+    compute_coordinates,
+    get_dims,
+)
 from spatialdata._core.models import get_schema
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
-    from spatialdata._core.transformations import BaseTransformation
+    from spatialdata._core.transformations import (
+        Affine,
+        BaseTransformation,
+        Translation,
+    )
 
 # from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
@@ -30,7 +42,7 @@ DEBUG_WITH_PLOTS = False
 
 def _transform_raster(
     data: DaskArray, axes: tuple[str, ...], transformation: BaseTransformation, **kwargs: Any
-) -> DaskArray:
+) -> tuple[DaskArray, Translation]:
     # dims = {ch: axes.index(ch) for ch in axes}
     from spatialdata._core.transformations import Sequence, Translation
 
@@ -54,9 +66,10 @@ def _transform_raster(
     output_shape = c_shape + new_spatial_shape
     ##
     translation_vector = np.min(new_v[:, :-1], axis=0)
+    translation = Translation(translation_vector, axes=axes)
     inverse_matrix_adjusted = Sequence(
         [
-            Translation(translation_vector, axes=axes),
+            translation,
             transformation.inverse(),
         ]
     ).to_affine_matrix(input_axes=axes, output_axes=axes)
@@ -102,98 +115,205 @@ def _transform_raster(
         else:
             assert n_spatial_dims == 3
             # raise NotImplementedError()
-    return transformed_dask
+    return transformed_dask, translation
+
+
+def _prepend_transformation(
+    element: SpatialElement,
+    transformation: BaseTransformation,
+    raster_translation: Optional[Translation],
+    maintain_positioning: bool,
+) -> None:
+    """
+    After an element has been transformed, this method is called to eventually prepend a particular transformation to
+    the existing transformations of the element. The transformation to prepend depends on the type of the element (
+    raster vs non-raster) and on the maintain_positioning flag.
+
+    Parameters
+    ----------
+    element
+        The spatial element to which the transformation should be prepended
+    transformation
+        The transformation to prepend
+    raster_translation
+        If the data is non-raster this parameter must be None. If the data is raster, this translation is the one
+        that would make the old data and the transformed data aligned. Note that if the transformation that was used
+        to transform the data contained a rotation-like component, then the transformed data contains some padding on
+        the corners. This parameter takes into account also for that (i.e. if prepended to the transformation,
+        it will make the transformed data aligned with the old data).
+    maintain_positioning
+        If True, the inverse of the transformation is prepended to the existing transformations of the element (after
+        the eventual raster_translation). This is useful when the user wants to transform the actual data,
+        but maintain the positioning of the element in the various coordinate systems.
+    """
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+    from spatialdata._core.transformations import Identity, Sequence
+
+    to_prepend: Optional[BaseTransformation] = None
+    if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
+        if maintain_positioning:
+            assert raster_translation is not None
+            to_prepend = Sequence([raster_translation, transformation.inverse()])
+        else:
+            to_prepend = raster_translation
+
+    elif isinstance(element, GeoDataFrame) or isinstance(element, DaskDataFrame):
+        assert raster_translation is None
+        if maintain_positioning:
+            to_prepend = transformation.inverse()
+    else:
+        raise TypeError(f"Unsupported type {type(element)}")
+
+    d = get_transformation(element, get_all=True)
+    assert isinstance(d, dict)
+    if len(d) == 0:
+        logger.info(
+            f"No transformations found in the element, adding a default identity transformation to the coordinate system "
+            f"{DEFAULT_COORDINATE_SYSTEM}"
+        )
+        d = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    for cs, t in d.items():
+        new_t: BaseTransformation
+        if to_prepend is not None:
+            new_t = Sequence([to_prepend, t])
+        else:
+            new_t = t
+        set_transformation(element, new_t, to_coordinate_system=cs)
 
 
 @singledispatch
-def _transform(data: Any, transformation: BaseTransformation) -> Any:
+def _transform(data: Any, transformation: BaseTransformation, maintain_positioning: bool) -> Any:
+    """This function is documented in the docstring of BaseTransformation.transform()"""
     raise NotImplementedError()
 
 
 @_transform.register(SpatialData)
-def _(data: SpatialData, transformation: BaseTransformation) -> SpatialData:
+def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool) -> SpatialData:
     new_elements: dict[str, dict[str, Any]] = {}
-    for element_type in ["images", "labels", "points", "polygons", "shapes"]:
+    for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
         if len(d) > 0:
             new_elements[element_type] = {}
         for k, v in d.items():
-            new_elements[element_type][k] = transformation.transform(v)
-
+            new_elements[element_type][k] = transformation.transform(v, maintain_positioning=maintain_positioning)
     new_sdata = SpatialData(**new_elements)
     return new_sdata
 
 
 @_transform.register(SpatialImage)
-def _(data: SpatialImage, transformation: BaseTransformation) -> SpatialImage:
+def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool) -> SpatialImage:
     schema = get_schema(data)
-    from spatialdata._core.models import Labels2DModel, Labels3DModel
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+    from spatialdata._core.models import (
+        Image2DModel,
+        Image3DModel,
+        Labels2DModel,
+        Labels3DModel,
+    )
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
-    else:
+    elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
+    else:
+        raise ValueError(f"Unsupported schema {schema}")
 
     axes = get_dims(data)
-    transformed_dask = _transform_raster(data=data.data, axes=axes, transformation=transformation, **kwargs)
+    transformed_dask, raster_translation = _transform_raster(
+        data=data.data, axes=axes, transformation=transformation, **kwargs
+    )
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
-    print(
-        "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
+    set_transformation(transformed_data, old_transformations, set_all=True)
+    _prepend_transformation(
+        transformed_data,
+        transformation,
+        raster_translation=raster_translation,
+        maintain_positioning=maintain_positioning,
     )
+    transformed_data = compute_coordinates(transformed_data)
+    schema().validate(transformed_data)
     return transformed_data
 
 
 @_transform.register(MultiscaleSpatialImage)
-def _(data: MultiscaleSpatialImage, transformation: BaseTransformation) -> MultiscaleSpatialImage:
+def _(
+    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool
+) -> MultiscaleSpatialImage:
     schema = get_schema(data)
-    from spatialdata._core.models import Labels2DModel, Labels3DModel
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+    from spatialdata._core.models import (
+        Image2DModel,
+        Image3DModel,
+        Labels2DModel,
+        Labels3DModel,
+    )
+    from spatialdata._core.transformations import BaseTransformation, Sequence
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
-    else:
+    elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
+    else:
+        raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
 
-    axes = get_dims(data)
-    scale0 = dict(data["scale0"])
-    assert len(scale0) == 1
-    scale0_data = scale0.values().__iter__().__next__()
-    transformed_dask = _transform_raster(
-        data=scale0_data.data, axes=scale0_data.dims, transformation=transformation, **kwargs
-    )
+    get_dims(data)
+    transformed_dict = {}
+    for k, v in data.items():
+        assert len(v) == 1
+        xdata = v.values().__iter__().__next__()
 
-    # this code is temporary and doens't work in all cases (in particular it breaks when the data is not similar
-    # to a square but has sides of very different lengths). I would remove it an implement (inside the parser)
-    # the logic described in https://github.com/scverse/spatialdata/issues/108)
-    shapes = []
-    for level in range(len(data)):
-        dims = data[f"scale{level}"].dims.values()
-        shape = np.array([dict(dims._mapping)[k] for k in axes if k != "c"])
-        shapes.append(shape)
-    multiscale_factors = []
-    shape0 = shapes[0]
-    for shape in shapes[1:]:
-        factors = shape0 / shape
-        factors - min(factors)
-        # assert np.allclose(almost_zero, np.zeros_like(almost_zero), rtol=2.)
-        try:
-            multiscale_factors.append(round(factors[0]))
-        except OverflowError as e:
-            raise e
+        composed: BaseTransformation
+        if k == "scale0":
+            composed = transformation
+        else:
+            scale = _get_scale(xdata.attrs["transform"])
+            composed = Sequence([scale, transformation, scale.inverse()])
+
+        transformed_dask, raster_translation = _transform_raster(
+            data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
+        )
+        transformed_dict[k] = SpatialImage(transformed_dask, dims=xdata.dims, name=xdata.name)
+
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
-    print(
-        "TODO: compose the transformation!!!! we need to put the previous one concatenated with the translation showen above. The translation operates before the other transformation"
+    transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
+    set_transformation(transformed_data, old_transformations, set_all=True)
+    _prepend_transformation(
+        transformed_data,
+        transformation,
+        raster_translation=raster_translation,
+        maintain_positioning=maintain_positioning,
     )
+    transformed_data = compute_coordinates(transformed_data)
+    schema().validate(transformed_data)
     return transformed_data
 
 
 @_transform.register(DaskDataFrame)
-def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
+def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> DaskDataFrame:
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+    from spatialdata._core.models import PointsModel
+
     axes = get_dims(data)
     arrays = []
     for ax in axes:
@@ -207,16 +327,24 @@ def _(data: DaskDataFrame, transformation: BaseTransformation) -> DaskDataFrame:
         new_ax = xtransformed[:, indices]
         transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
 
-    # to avoid cyclic import
-    from spatialdata._core.models import PointsModel
-
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
+    set_transformation(transformed, old_transformations, set_all=True)
+    _prepend_transformation(
+        transformed,
+        transformation,
+        raster_translation=None,
+        maintain_positioning=maintain_positioning,
+    )
     PointsModel.validate(transformed)
     return transformed
 
 
 @_transform.register(GeoDataFrame)
-def _(data: GeoDataFrame, transformation: BaseTransformation) -> GeoDataFrame:
-    ##
+def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> GeoDataFrame:
+    from spatialdata._core._spatialdata_ops import get_transformation
+    from spatialdata._core.models import ShapesModel
+
     ndim = len(get_dims(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
     matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
@@ -225,23 +353,163 @@ def _(data: GeoDataFrame, transformation: BaseTransformation) -> GeoDataFrame:
     transformed_data = data.copy(deep=True)
     transformed_data.geometry = transformed_geometry
 
-    # to avoid cyclic import
-    from spatialdata._core.models import PolygonsModel
-
-    PolygonsModel.validate(transformed_data)
+    old_transformations = get_transformation(data, get_all=True)
+    assert isinstance(old_transformations, dict)
+    set_transformation(transformed_data, old_transformations, set_all=True)
+    _prepend_transformation(
+        transformed_data,
+        transformation,
+        raster_translation=None,
+        maintain_positioning=maintain_positioning,
+    )
+    ShapesModel.validate(transformed_data)
     return transformed_data
 
 
-@_transform.register(AnnData)
-def _(data: AnnData, transformation: BaseTransformation) -> AnnData:
-    ndim = len(get_dims(data))
-    xdata = DataArray(data.obsm["spatial"], coords={"points": range(len(data)), "dim": ["x", "y", "z"][:ndim]})
-    transformed_spatial = transformation._transform_coordinates(xdata)
-    transformed_adata = data.copy()
-    transformed_adata.obsm["spatial"] = transformed_spatial.data
+def get_transformation_between_landmarks(
+    references_coords: Union[GeoDataFrame, DaskDataFrame],
+    moving_coords: Union[GeoDataFrame, DaskDataFrame],
+) -> Affine:
+    """
+    Get a similarity transformation between two lists of (n >= 3) landmarks. Landmarks are assumed to be in the same space.
 
-    # to avoid cyclic import
-    from spatialdata._core.models import ShapesModel
+    Parameters
+    ----------
+    references_coords
+        landmarks annotating the reference element. Must be a valid element describing points or circles.
+    moving_coords
+        landmarks annotating the moving element. Must be a valid element describing points or circles.
 
-    ShapesModel.validate(transformed_adata)
-    return transformed_adata
+    Returns
+    -------
+    The Affine transformation that maps the moving element to the reference element.
+
+    Examples
+    --------
+    If you save the landmark points using napari_spatialdata, they will be alredy saved as circles. Here is an
+    example on how to call this function on two sets of numpy arrays describing x, y coordinates.
+    >>> import numpy as np
+    >>> from spatialdata.models import PointsModel
+    >>> from spatialdata.transform import get_transformation_between_landmarks
+    >>> points_moving = np.array([[0, 0], [1, 1], [2, 2]])
+    >>> points_reference = np.array([[0, 0], [10, 10], [20, 20]])
+    >>> moving_coords = PointsModel(points_moving)
+    >>> references_coords = PointsModel(points_reference)
+    >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
+    """
+    from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
+
+    assert get_dims(references_coords) == ("x", "y")
+    assert get_dims(moving_coords) == ("x", "y")
+
+    if isinstance(references_coords, GeoDataFrame):
+        references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)
+        moving_xy = np.stack([moving_coords.geometry.x, moving_coords.geometry.y], axis=1)
+    elif isinstance(references_coords, DaskDataFrame):
+        references_xy = references_coords[["x", "y"]].to_dask_array().compute()
+        moving_xy = moving_coords[["x", "y"]].to_dask_array().compute()
+    else:
+        raise TypeError("references_coords must be either an GeoDataFrame or a DaskDataFrame")
+
+    model = estimate_transform("affine", src=moving_xy, dst=references_xy)
+    transform_matrix = model.params
+    a = transform_matrix[:2, :2]
+    d = np.linalg.det(a)
+    final: BaseTransformation
+    if d < 0:
+        m = (moving_xy[:, 0].max() - moving_xy[:, 0].min()) / 2
+        flip = Affine(
+            np.array(
+                [
+                    [-1, 0, 2 * m],
+                    [0, 1, 0],
+                    [0, 0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        )
+        flipped_moving = flip.transform(moving_coords)
+        if isinstance(flipped_moving, GeoDataFrame):
+            flipped_moving_xy = np.stack([flipped_moving.geometry.x, flipped_moving.geometry.y], axis=1)
+        elif isinstance(flipped_moving, DaskDataFrame):
+            flipped_moving_xy = flipped_moving[["x", "y"]].to_dask_array().compute()
+        else:
+            raise TypeError("flipped_moving must be either an GeoDataFrame or a DaskDataFrame")
+        model = estimate_transform("similarity", src=flipped_moving_xy, dst=references_xy)
+        final = Sequence([flip, Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))])
+    else:
+        model = estimate_transform("similarity", src=moving_xy, dst=references_xy)
+        final = Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))
+
+    affine = Affine(
+        final.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    return affine
+
+
+def align_elements_using_landmarks(
+    references_coords: Union[GeoDataFrame | DaskDataFrame],
+    moving_coords: Union[GeoDataFrame | DaskDataFrame],
+    reference_element: SpatialElement,
+    moving_element: SpatialElement,
+    reference_coordinate_system: str = "global",
+    moving_coordinate_system: str = "global",
+    new_coordinate_system: Optional[str] = None,
+    write_to_sdata: Optional[SpatialData] = None,
+) -> BaseTransformation:
+    """
+    Maps a moving object into a reference object using two lists of (n >= 3) landmarks; returns the transformations that enable this
+    mapping and optinally saves them, to map to a new shared coordinate system.
+
+    Parameters
+    ----------
+    references_coords
+        landmarks annotating the reference element. Must be a valid element describing points or circles.
+    moving_coords
+        landmarks annotating the moving element. Must be a valid element describing points or circles.
+    reference_element
+        the reference element.
+    moving_element
+        the moving element.
+    reference_coordinate_system
+        the coordinate system of the reference element that have been used to annotate the landmarks.
+    moving_coordinate_system
+        the coordinate system of the moving element that have been used to annotate the landmarks.
+    new_coordinate_system
+        If provided, both elements will be mapped to this new coordinate system with the new transformations just
+        computed.
+    write_to_sdata
+        If provided, the transformations will be saved to disk in the specified SpatialData object. The SpatialData
+        object must be backed and must contain both the reference and moving elements.
+
+    Returns
+    -------
+    A similarity transformation that maps the moving element to the same coordinate of reference element in the
+    coordinate system specified by reference_coordinate_system.
+    """
+    from spatialdata._core.transformations import BaseTransformation, Sequence
+
+    affine = get_transformation_between_landmarks(references_coords, moving_coords)
+
+    # get the old transformations of the visium and xenium data
+    old_moving_transformation = get_transformation(moving_element, moving_coordinate_system)
+    old_reference_transformation = get_transformation(reference_element, reference_coordinate_system)
+    assert isinstance(old_moving_transformation, BaseTransformation)
+    assert isinstance(old_reference_transformation, BaseTransformation)
+
+    # compute the new transformations
+    new_moving_transformation = Sequence([old_moving_transformation, affine])
+    new_reference_transformation = old_reference_transformation
+
+    if new_coordinate_system is not None:
+        # this allows to work on singleton objects, not embedded in a SpatialData object
+        set_transformation(
+            moving_element, new_moving_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
+        )
+        set_transformation(
+            reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
+        )
+    return new_moving_transformation

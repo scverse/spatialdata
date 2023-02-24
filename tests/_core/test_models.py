@@ -34,34 +34,38 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
     RasterSchema,
     ShapesModel,
     TableModel,
     get_schema,
 )
 from spatialdata._core.transformations import Scale
-from tests._core.conftest import MULTIPOLYGON_PATH, POLYGON_PATH
+from spatialdata._types import ArrayLike
+from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,
     _get_labels,
     _get_points,
-    _get_polygons,
     _get_shapes,
     _get_table,
 )
 
 RNG = default_rng()
 
+# should be set to False for pre-commit and CI; useful to set to True for are fixing/debugging tests
+SHORT_TESTS = False
+
 
 class TestModels:
-    def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs):
+    def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs) -> None:
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
         # other times (SpatialImage, DataArray, AnnData, GeoDataFrame) the object is enriched in-place. In such
         # cases we check that if there was already a transformation in the object we consider it then we are not
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
+        if SHORT_TESTS:
+            return
         if any([isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)]):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
@@ -113,7 +117,9 @@ class TestModels:
         else:
             raise ValueError(f"Unknown type {type(element)}")
 
-    def _passes_validation_after_io(self, model: Any, element: Any, element_type: str):
+    def _passes_validation_after_io(self, model: Any, element: Any, element_type: str) -> None:
+        if SHORT_TESTS:
+            return
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.zarr")
             d = {"element": element}
@@ -123,8 +129,6 @@ class TestModels:
                 sdata = SpatialData(labels=d)
             elif element_type == "points":
                 sdata = SpatialData(points=d)
-            elif element_type == "polygons":
-                sdata = SpatialData(polygons=d)
             elif element_type == "shapes":
                 sdata = SpatialData(shapes=d)
             else:
@@ -140,9 +144,12 @@ class TestModels:
                 model.validate(element_read)
 
     @pytest.mark.parametrize("converter", [lambda _: _, from_array, DataArray, to_spatial_image])
-    @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel])  # TODO: Image3DModel once fixed.
+    @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel, Image3DModel])
     @pytest.mark.parametrize("permute", [True, False])
-    def test_raster_schema(self, converter: Callable[..., Any], model: RasterSchema, permute: bool) -> None:
+    @pytest.mark.parametrize("kwargs", [None, {"name": "test"}])
+    def test_raster_schema(
+        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: Optional[dict[str, str]]
+    ) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
             RNG.shuffle(dims)
@@ -153,9 +160,11 @@ class TestModels:
         elif converter is to_spatial_image:
             converter = partial(converter, dims=model.dims.dims)
         if n_dims == 2:
-            image: np.ndarray = np.random.rand(10, 10)
+            image: ArrayLike = np.random.rand(10, 10)
         elif n_dims == 3:
-            image = np.random.rand(3, 10, 10)
+            image: ArrayLike = np.random.rand(3, 10, 10)
+        elif n_dims == 4:
+            image: ArrayLike = np.random.rand(2, 3, 10, 10)
         image = converter(image)
         self._parse_transformation_from_multiple_places(model, image)
         spatial_image = model.parse(image)
@@ -176,25 +185,31 @@ class TestModels:
             assert set(spatial_image.shape) == set(image.shape)
             assert set(spatial_image.data.shape) == set(image.shape)
         assert spatial_image.data.dtype == image.dtype
+        if kwargs is not None:
+            with pytest.raises(ValueError):
+                model.parse(image, **kwargs)
 
-    @pytest.mark.parametrize("model", [PolygonsModel])
-    @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH])
-    def test_polygons_model(self, model: PolygonsModel, path: Path) -> None:
+    @pytest.mark.parametrize("model", [ShapesModel])
+    @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
+    def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
+        if path.name == "points.json":
+            radius = np.random.normal(size=(2,))
+        else:
+            radius = None
         self._parse_transformation_from_multiple_places(model, path)
-        poly = model.parse(path)
-        self._passes_validation_after_io(model, poly, "polygons")
-        assert PolygonsModel.GEOMETRY_KEY in poly
-        assert PolygonsModel.TRANSFORM_KEY in poly.attrs
-
+        poly = model.parse(path, radius=radius)
+        self._passes_validation_after_io(model, poly, "shapes")
+        assert ShapesModel.GEOMETRY_KEY in poly
+        assert ShapesModel.TRANSFORM_KEY in poly.attrs
         geometry, data, offsets = to_ragged_array(poly.geometry.values)
         self._parse_transformation_from_multiple_places(model, data)
-        other_poly = model.parse(data, offsets, geometry)
-        self._passes_validation_after_io(model, other_poly, "polygons")
+        other_poly = model.parse(data, geometry=geometry, offsets=offsets, radius=radius)
+        self._passes_validation_after_io(model, other_poly, "shapes")
         assert poly.equals(other_poly)
 
         self._parse_transformation_from_multiple_places(model, poly)
         other_poly = model.parse(poly)
-        self._passes_validation_after_io(model, other_poly, "polygons")
+        self._passes_validation_after_io(model, other_poly, "shapes")
         assert poly.equals(other_poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
@@ -262,36 +277,6 @@ class TestModels:
             assert "instance_key" in points.attrs["spatialdata_attrs"]
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
 
-    @pytest.mark.parametrize("model", [ShapesModel])
-    @pytest.mark.parametrize("shape_type", [None, "Circle", "Square"])
-    @pytest.mark.parametrize("shape_size", [None, RNG.normal(size=(10,)), 0.3])
-    def test_shapes_model(
-        self,
-        model: ShapesModel,
-        shape_type: Optional[str],
-        shape_size: Optional[Union[int, float, np.ndarray]],
-    ) -> None:
-        coords = RNG.normal(size=(10, 2))
-        self._parse_transformation_from_multiple_places(model, coords)
-        shapes = model.parse(coords, shape_type, shape_size)
-        self._passes_validation_after_io(model, shapes, "shapes")
-        assert ShapesModel.COORDS_KEY in shapes.obsm
-        assert ShapesModel.TRANSFORM_KEY in shapes.uns
-        assert ShapesModel.SIZE_KEY in shapes.obs
-        if shape_size is not None:
-            assert shapes.obs[ShapesModel.SIZE_KEY].dtype == np.float64
-            if isinstance(shape_size, np.ndarray):
-                assert shapes.obs[ShapesModel.SIZE_KEY].shape == shape_size.shape
-            elif isinstance(shape_size, float):
-                assert shapes.obs[ShapesModel.SIZE_KEY].unique() == shape_size
-            else:
-                raise ValueError(f"Unexpected shape_size: {shape_size}")
-        assert ShapesModel.ATTRS_KEY in shapes.uns
-        assert ShapesModel.TYPE_KEY in shapes.uns[ShapesModel.ATTRS_KEY]
-        if shape_type is None:
-            shape_type = "Circle"
-        assert shape_type == shapes.uns[ShapesModel.ATTRS_KEY][ShapesModel.TYPE_KEY]
-
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", ["sample", RNG.choice([1, 2], size=10).tolist()])
     def test_table_model(
@@ -321,7 +306,6 @@ class TestModels:
 def test_get_schema():
     images = _get_images()
     labels = _get_labels()
-    polygons = _get_polygons()
     points = _get_points()
     shapes = _get_shapes()
     table = _get_table(region="sample1")
@@ -341,9 +325,6 @@ def test_get_schema():
             assert schema == Labels3DModel
         else:
             raise ValueError(f"Unexpected key: {k}")
-    for v in polygons.values():
-        schema = get_schema(v)
-        assert schema == PolygonsModel
     for v in points.values():
         schema = get_schema(v)
         assert schema == PointsModel

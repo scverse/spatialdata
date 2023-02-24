@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import copy
 from functools import singledispatch
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from anndata import AnnData
@@ -11,10 +13,13 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.transformations import BaseTransformation, Sequence
 from spatialdata._types import ArrayLike
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame]
+if TYPE_CHECKING:
+    from spatialdata._core.transformations import Scale
+
+SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 
 __all__ = [
     "SpatialElement",
@@ -44,7 +49,7 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, AnnData, DaskDataFrame))
+    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
 
 
 def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
@@ -176,11 +181,13 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
             scale_factors = old_shape / new_shape
             filtered_scale_factors = [scale_factors[i] for i, ax in enumerate(dims) if ax != "c"]
             filtered_axes = [ax for ax in dims if ax != "c"]
-            scale = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
+            if not np.isfinite(filtered_scale_factors).all():
+                raise ValueError("Scale factors must be finite.")
+            scale_transformation = Scale(scale=filtered_scale_factors, axes=tuple(filtered_axes))
             assert transformations is not None
             new_transformations = {}
             for k, v in transformations.items():
-                sequence: BaseTransformation = Sequence([scale, v])
+                sequence: BaseTransformation = Sequence([scale_transformation, v])
                 new_transformations[k] = sequence
             _set_transformations_xarray(xdata, new_transformations)
         else:
@@ -252,10 +259,18 @@ def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem
     return NgffCoordinateSystem(name="".join(dims), axes=axes)
 
 
+def _validate_dims(dims: tuple[str, ...]) -> None:
+    for c in dims:
+        if c not in (X, Y, Z, C):
+            raise ValueError(f"Invalid dimension: {c}")
+    if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
+        raise ValueError(f"Invalid dimensions: {dims}")
+
+
 @singledispatch
 def get_dims(e: SpatialElement) -> tuple[str, ...]:
     """
-    Get the dimensions of a spatial element
+    Get the dimensions of a spatial element.
 
     Parameters
     ----------
@@ -264,8 +279,7 @@ def get_dims(e: SpatialElement) -> tuple[str, ...]:
 
     Returns
     -------
-    dims
-        Dimensions of the spatial element (e.g. ("z", "y", "x"))
+    Dimensions of the spatial element (e.g. ("z", "y", "x"))
     """
     raise TypeError(f"Unsupported type: {type(e)}")
 
@@ -273,39 +287,167 @@ def get_dims(e: SpatialElement) -> tuple[str, ...]:
 @get_dims.register(SpatialImage)
 def _(e: SpatialImage) -> tuple[str, ...]:
     dims = e.dims
+    # dims_sizes = tuple(list(e.sizes.keys()))
+    # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
+    # if dims != dims_sizes:
+    #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
+    _validate_dims(dims)
     return dims  # type: ignore
 
 
 @get_dims.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
-    # luca: I prefer this first method
-    d = dict(e["scale0"])
-    assert len(d) == 1
-    dims0 = d.values().__iter__().__next__().dims
-    assert isinstance(dims0, tuple)
-    # still, let's do a runtime check against the other method
-    variables = list(e[list(e.keys())[0]].variables)
-    dims1 = e[list(e.keys())[0]][variables[0]].dims
-    assert dims0 == dims1
-    return dims0
+    if "scale0" in e:
+        # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
+
+        assert len(e["scale0"].values()) == 1
+        xdata = e["scale0"].values().__iter__().__next__()
+        dims_data = xdata.dims
+        assert isinstance(dims_data, tuple)
+
+        # dims_sizes = tuple(list(xdata.sizes.keys()))
+
+        # # we check that all the following values are the same otherwise we could incur in subtle bugs downstreams
+        # if dims_coordinates != dims_data or dims_coordinates != dims_sizes:
+        #     raise ValueError(
+        #         f"MultiscaleSpatialImage has inconsistent dimensions: {dims_coordinates}, {dims_data}, {dims_sizes}"
+        #     )
+        _validate_dims(dims_data)
+        return dims_data
+    else:
+        raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
+        # return tuple(i for i in e.dims.keys())
 
 
 @get_dims.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
-    dims = (X, Y, Z)
+    all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
-    return dims[:n]
-
-
-@get_dims.register(AnnData)
-def _(e: AnnData) -> tuple[str, ...]:
-    dims = (X, Y, Z)
-    n = e.obsm["spatial"].shape[1]
-    return dims[:n]
+    dims = all_dims[:n]
+    _validate_dims(dims)
+    return dims
 
 
 @get_dims.register(DaskDataFrame)
 def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
-    dims = [c for c in valid_dims if c in e.columns]
-    return tuple(dims)
+    dims = tuple([c for c in valid_dims if c in e.columns])
+    _validate_dims(dims)
+    return dims
+
+
+@singledispatch
+def compute_coordinates(
+    data: Union[SpatialImage, MultiscaleSpatialImage]
+) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    """
+    Computes and assign coordinates to a (Multiscale)SpatialImage.
+
+    Parameters
+    ----------
+    data
+        :class:`SpatialImage` or :class:`MultiscaleSpatialImage`.
+
+    Returns
+    -------
+    :class:`SpatialImage` or :class:`MultiscaleSpatialImage` with coordinates assigned.
+    """
+    raise TypeError(f"Unsupported type: {type(data)}")
+
+
+@compute_coordinates.register(SpatialImage)
+def _(data: SpatialImage) -> SpatialImage:
+    coords: dict[str, ArrayLike] = {
+        d: np.arange(data.sizes[d], dtype=np.float_) for d in data.sizes.keys() if d in ["x", "y", "z"]
+    }
+    return data.assign_coords(coords)
+
+
+def _get_scale(transforms: dict[str, Any]) -> Scale:
+    from spatialdata._core.transformations import Scale
+
+    all_scale_vectors = []
+    all_scale_axes = []
+    for transformation in transforms.values():
+        assert isinstance(transformation, Sequence)
+        # the first transformation is the scale
+        t = transformation.transformations[0]
+        if hasattr(t, "scale"):
+            if TYPE_CHECKING:
+                assert isinstance(t.scale, np.ndarray)
+            all_scale_vectors.append(tuple(t.scale.tolist()))
+            assert isinstance(t, Scale)
+            all_scale_axes.append(tuple(t.axes))
+        else:
+            raise ValueError(f"Unsupported transformation: {t}")
+    # all the scales should be the same since they all refer to the mapping of the level of the multiscale to the
+    # base level, with respect to the intrinstic coordinate system
+    assert len(set(all_scale_vectors)) == 1
+    assert len(set(all_scale_axes)) == 1
+    scalef = np.array(all_scale_vectors[0])
+    if not np.isfinite(scalef).all():
+        raise ValueError(f"Invalid scale factor: {scalef}")
+    scale_axes = all_scale_axes[0]
+    scale = Scale(scalef, axes=scale_axes)
+    return scale
+
+
+@compute_coordinates.register(MultiscaleSpatialImage)
+def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+    def _compute_coords(max_: int, scale_f: Union[int, float]) -> ArrayLike:
+        return (  # type: ignore[no-any-return]
+            DataArray(np.linspace(0, max_, max_, endpoint=False, dtype=np.float_))
+            .coarsen(dim_0=scale_f, boundary="trim", side="right")
+            .mean()
+            .values
+        )
+
+    max_scale0 = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+    img_name = list(data["scale0"].data_vars.keys())[0]
+    out = {}
+
+    for name, dt in data.items():
+        max_scale = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+        if name == "scale0":
+            coords: dict[str, ArrayLike] = {d: np.arange(max_scale[d], dtype=np.float_) for d in max_scale.keys()}
+            out[name] = dt[img_name].assign_coords(coords)
+        else:
+            scale = _get_scale(dt[img_name].attrs["transform"])
+            scalef = scale.scale
+            assert len(max_scale.keys()) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
+            new_coords = {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
+            out[name] = dt[img_name].assign_coords(new_coords)
+    msi = MultiscaleSpatialImage.from_dict(d=out)
+    # this is to trigger the validation of the dims
+    _ = get_dims(msi)
+    return msi
+
+
+@singledispatch
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data.
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+    """
+    raise ValueError(f"Cannot get channels from {type(data)}")
+
+
+@get_channels.register
+def _(data: SpatialImage) -> list[Any]:
+    return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
+
+
+@get_channels.register
+def _(data: MultiscaleSpatialImage) -> list[Any]:
+    name = list({list(data[i].data_vars.keys())[0] for i in data.keys()})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
+    if len(channels) > 1:
+        raise ValueError("TODO")
+    return list(next(iter(channels)))

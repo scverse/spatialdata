@@ -12,7 +12,7 @@ from spatialdata import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
-    PolygonsModel,
+    ShapesModel,
 )
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
@@ -248,7 +248,7 @@ def test_bounding_box_polygons():
 
     polygon_series = gpd.GeoSeries(cell_outline_polygons)
     cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
-    sd_polygons = PolygonsModel.parse(cell_polygon_table)
+    sd_polygons = ShapesModel.parse(cell_polygon_table)
 
     polygons_result = bounding_box_query(
         sd_polygons,
@@ -260,3 +260,20 @@ def test_bounding_box_polygons():
 
     assert len(polygons_result) == 1
     assert polygons_result.index[0] == 3
+
+
+def test_bounding_box_circles():
+    centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
+
+    sd_circles = ShapesModel.parse(centroids, geometry=0, radius=10)
+
+    circles_result = bounding_box_query(
+        sd_circles,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([40, 40]),
+        max_coordinate=np.array([100, 100]),
+    )
+
+    assert len(circles_result) == 1
+    assert circles_result.index[0] == 3
