@@ -38,7 +38,7 @@ class TestFormat:
     @pytest.mark.parametrize("geos_key", [ShapesModel.GEOS_KEY])
     @pytest.mark.parametrize("type_key", [ShapesModel.TYPE_KEY])
     @pytest.mark.parametrize("name_key", [ShapesModel.NAME_KEY])
-    @pytest.mark.parametrize("shapes_type", [0])
+    @pytest.mark.parametrize("shapes_type", [0, 3, 6])
     def test_format_shapes(
         self,
         attrs_key: str,
