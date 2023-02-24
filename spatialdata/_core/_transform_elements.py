@@ -20,6 +20,8 @@ from spatialdata._core._spatialdata_ops import get_transformation, set_transform
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,
     SpatialElement,
+    _get_scale,
+    compute_coordinates,
     get_dims,
 )
 from spatialdata._core.models import get_schema
@@ -208,14 +210,21 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
         get_transformation,
         set_transformation,
     )
-    from spatialdata._core.models import Labels2DModel, Labels3DModel
+    from spatialdata._core.models import (
+        Image2DModel,
+        Image3DModel,
+        Labels2DModel,
+        Labels3DModel,
+    )
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
-    else:
+    elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
+    else:
+        raise ValueError(f"Unsupported schema {schema}")
 
     axes = get_dims(data)
     transformed_dask, raster_translation = _transform_raster(
@@ -232,6 +241,8 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
     )
+    transformed_data = compute_coordinates(transformed_data)
+    schema().validate(transformed_data)
     return transformed_data
 
 
@@ -244,43 +255,43 @@ def _(
         get_transformation,
         set_transformation,
     )
-    from spatialdata._core.models import Labels2DModel, Labels3DModel
+    from spatialdata._core.models import (
+        Image2DModel,
+        Image3DModel,
+        Labels2DModel,
+        Labels3DModel,
+    )
+    from spatialdata._core.transformations import BaseTransformation, Sequence
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
-    else:
+    elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
+    else:
+        raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
 
-    axes = get_dims(data)
-    scale0 = dict(data["scale0"])
-    assert len(scale0) == 1
-    scale0_data = scale0.values().__iter__().__next__()
-    transformed_dask, raster_translation = _transform_raster(
-        data=scale0_data.data, axes=scale0_data.dims, transformation=transformation, **kwargs
-    )
+    get_dims(data)
+    transformed_dict = {}
+    for k, v in data.items():
+        assert len(v) == 1
+        xdata = v.values().__iter__().__next__()
 
-    # this code is temporary and doens't work in all cases (in particular it breaks when the data is not similar
-    # to a square but has sides of very different lengths). I would remove it an implement (inside the parser)
-    # the logic described in https://github.com/scverse/spatialdata/issues/108)
-    shapes = []
-    for level in range(len(data)):
-        dims = data[f"scale{level}"].dims.values()
-        shape = np.array([dict(dims._mapping)[k] for k in axes if k != "c"])
-        shapes.append(shape)
-    multiscale_factors = []
-    shape0 = shapes[0]
-    for shape in shapes[1:]:
-        factors = shape0 / shape
-        factors - min(factors)
-        # assert np.allclose(almost_zero, np.zeros_like(almost_zero), rtol=2.)
-        try:
-            multiscale_factors.append(round(factors[0]))
-        except OverflowError as e:
-            raise e
+        composed: BaseTransformation
+        if k == "scale0":
+            composed = transformation
+        else:
+            scale = _get_scale(xdata.attrs["transform"])
+            composed = Sequence([scale, transformation, scale.inverse()])
+
+        transformed_dask, raster_translation = _transform_raster(
+            data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
+        )
+        transformed_dict[k] = SpatialImage(transformed_dask, dims=xdata.dims, name=xdata.name)
+
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes, multiscale_factors=multiscale_factors)  # type: ignore[call-arg,arg-type]
+    transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     set_transformation(transformed_data, old_transformations, set_all=True)
@@ -290,6 +301,8 @@ def _(
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
     )
+    transformed_data = compute_coordinates(transformed_data)
+    schema().validate(transformed_data)
     return transformed_data
 
 

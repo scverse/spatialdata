@@ -131,7 +131,7 @@ def _bounding_box_query_image(
         # add the
         selection[axis_name] = slice(min_value, max_value)
 
-    query_result = image.sel(selection)
+    query_result = image.isel(selection)
 
     # update the transform
     # currently, this assumes the existing transforms input coordinate system

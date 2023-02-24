@@ -47,6 +47,7 @@ from spatialdata._core.core_utils import (
     _get_transformations,
     _set_transformations,
     _validate_mapping_to_coordinate_system_type,
+    compute_coordinates,
     get_dims,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity
@@ -110,7 +111,7 @@ class RasterSchema(DataArraySchema):
         data: Union[ArrayLike, DataArray, DaskArray],
         dims: Optional[Sequence[str]] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        multiscale_factors: Optional[ScaleFactors_t] = None,
+        scale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
         **kwargs: Any,
@@ -126,9 +127,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data.
         transformations
             Transformations to apply to the data.
-        multiscale_factors
+        scale_factors
             Scale factors to apply for multiscale.
-            If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+            If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method
             Method to use for multiscale.
         chunks
@@ -137,24 +138,28 @@ class RasterSchema(DataArraySchema):
         Returns
         -------
         :class:`spatial_image.SpatialImage` or
-        :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
+        :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
         """
-        # check if dims is specified and if it has correct values
-
+        if "name" in kwargs:
+            raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
-                if dims != data.dims:
+                if set(dims).symmetric_difference(data.dims):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
                 else:
-                    logger.info("`dims` is specified redundantly: found also inside `data`")
+                    logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
-                dims = data.dims  # type: ignore[assignment]
+                dims = data.dims
+            # but if dims don't match the model's dims, throw error
+            if set(dims).symmetric_difference(cls.dims.dims):
+                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
+        # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
@@ -171,58 +176,69 @@ class RasterSchema(DataArraySchema):
         # transpose if possible
         if dims != cls.dims.dims:
             try:
-                assert isinstance(data, DaskArray) or isinstance(data, DataArray)
-                # mypy complains that data has no .transpose but I have asserted right above that data is a DaskArray...
-                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])  # type: ignore[attr-defined]
+                if isinstance(data, DataArray):
+                    data = data.transpose(*list(cls.dims.dims))
+                elif isinstance(data, DaskArray):
+                    data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                else:
+                    raise ValueError(f"Unsupported data type: {type(data)}.")
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError:
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
+        # finally convert to spatial image
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        assert isinstance(data, SpatialImage)
-        # TODO(giovp): drop coordinates for now until solution with IO.
-        data = data.drop(data.coords.keys())
+        # parse transformations
         _parse_transformations(data, transformations)
-        if multiscale_factors is not None:
-            # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
-            # of downscaling factors to avoid this
-            adjusted_multiscale_factors: list[int] = []
-            assert isinstance(data, DataArray)
-            current_shape: ArrayLike = np.array(data.shape, dtype=float)
-            # multiscale_factors could be a dict, we don't support this case here (in the future this code and the
-            # more general case will be handled by multiscale-spatial-image)
-            assert isinstance(multiscale_factors, list)
-            for factor in multiscale_factors:
-                scale_vector = np.array([1.0 if ax == "c" else factor for ax in data.dims])
-                current_shape /= scale_vector
-                if current_shape.min() < 1:
-                    logger.warning(
-                        f"Detected a multiscale factor that would collapse an axis: truncating list of factors from {multiscale_factors} to {adjusted_multiscale_factors}"
-                    )
-                    break
-                adjusted_multiscale_factors.append(factor)
+        # convert to multiscale if needed
+        if scale_factors is not None:
             parsed_transform = _get_transformations(data)
+            # delete transforms
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
-                scale_factors=adjusted_multiscale_factors,
+                scale_factors=scale_factors,
                 method=method,
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
-            assert isinstance(data, MultiscaleSpatialImage)
+        # recompute coordinates for (multiscale) spatial image
+        data = compute_coordinates(data)
         return data
 
-    def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
-        if isinstance(data, SpatialImage):
-            super().validate(data)
-        elif isinstance(data, MultiscaleSpatialImage):
-            name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
-            if len(name) > 1:
-                raise ValueError(f"Wrong name for datatree: {name}.")
-            name = list(name)[0]
-            for d in data:
-                super().validate(data[d][name])
+    @singledispatchmethod
+    def validate(self, data: Any) -> None:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            Data to validate.
+
+        Raises
+        ------
+        ValueError
+            If data is not valid.
+        """
+
+        raise ValueError(f"Unsupported data type: {type(data)}.")
+
+    @validate.register(SpatialImage)
+    def _(self, data: SpatialImage) -> None:
+        super().validate(data)
+
+    @validate.register(MultiscaleSpatialImage)
+    def _(self, data: MultiscaleSpatialImage) -> None:
+        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
+            if j != k:
+                raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
+        name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+        if len(name) > 1:
+            raise ValueError(f"Wrong name for datatree: `{name}`.")
+        name = list(name)[0]
+        for d in data:
+            super().validate(data[d][name])
 
 
 class Labels2DModel(RasterSchema):
@@ -234,8 +250,7 @@ class Labels2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -250,8 +265,7 @@ class Labels3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -266,8 +280,7 @@ class Image2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -282,8 +295,7 @@ class Image3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )

@@ -22,4 +22,5 @@ def _check_geopandas_using_shapely() -> None:
                     "If you intended to use PyGEOS, set the option to False."
                 ),
                 UserWarning,
+                stacklevel=2,
             )

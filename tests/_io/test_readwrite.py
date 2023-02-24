@@ -26,10 +26,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert images.images.keys() == sdata.images.keys()
         for k in images.images.keys():
-            if isinstance(sdata.images[k], SpatialImage):
-                assert images.images[k].equals(sdata.images[k])
-            elif isinstance(images.images[k], MultiscaleSpatialImage):
-                assert images.images[k].equals(sdata.images[k])
+            assert images.images[k].equals(sdata.images[k])
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
         """Test read/write."""
@@ -38,10 +35,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert labels.labels.keys() == sdata.labels.keys()
         for k in labels.labels.keys():
-            if isinstance(sdata.labels[k], SpatialImage):
-                assert labels.labels[k].equals(sdata.labels[k])
-            elif isinstance(sdata.labels[k], MultiscaleSpatialImage):
-                assert labels.labels[k].equals(sdata.labels[k])
+            assert labels.labels[k].equals(sdata.labels[k])
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         """Test read/write."""
