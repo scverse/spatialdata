@@ -160,7 +160,6 @@ def test_bounding_box_image_2d(n_channels):
     np.testing.assert_allclose(image_result, expected_image)
 
 
-@pytest.mark.skip(reason="Image3D parser not working")
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 def test_bounding_box_image_3d(n_channels):
     """Apply a bounding box to a 3D image"""
@@ -174,7 +173,8 @@ def test_bounding_box_image_3d(n_channels):
         image_element,
         axes=("z", "y", "x"),
         min_coordinate=np.array([5, 0, 2]),
-        max_coordinate=np.array([9, 4, 6], target_coordinate_system="global"),
+        max_coordinate=np.array([9, 4, 6]),
+        target_coordinate_system="global",
     )
     expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
     np.testing.assert_allclose(image_result, expected_image)

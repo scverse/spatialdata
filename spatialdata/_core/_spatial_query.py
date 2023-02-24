@@ -13,7 +13,7 @@ from shapely.geometry import Polygon
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData, SpatialElement
-from spatialdata._core.core_utils import ValidAxis_t, get_spatial_axes
+from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_spatial_axes
 from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
 from spatialdata._types import ArrayLike
 
@@ -111,9 +111,8 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
         input_axes=axes, output_axes=intrinsic_axes
     )
-    ndim = len(min_coordinate)
-    rotation_matrix = transform_to_intrinsic[0:ndim, 0:ndim]
-    translation = transform_to_intrinsic[0:ndim, ndim]
+    rotation_matrix = transform_to_intrinsic[0:-1, 0:-1]
+    translation = transform_to_intrinsic[0:-1, -1]
 
     intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
 
@@ -262,14 +261,28 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
-    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a
-    #  simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the
-    #  diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This
-    #  reasoning applies also to points, polygons and shapes
     from spatialdata._core._spatialdata_ops import (
         get_transformation,
         set_transformation,
     )
+
+    # get the transformation from the element's intrinsic coordinate system
+    # to the query coordinate space
+    transform_to_query_space = get_transformation(image, to_coordinate_system=target_coordinate_system)
+
+    # transform the coordinates to the intrinsic coordinate system
+    intrinsic_axes = get_dims(image)
+    transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
+        input_axes=axes, output_axes=intrinsic_axes
+    )
+    transform_to_intrinsic
+    # rotation_matrix = transform_to_intrinsic[0:-1, 0:-1]
+    # translation = transform_to_intrinsic[0:-1, -1]
+
+    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a
+    #  simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the
+    #  diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This
+    #  reasoning applies also to points, polygons and shapes
 
     # build the request
     selection = {}
