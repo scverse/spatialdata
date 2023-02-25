@@ -202,63 +202,6 @@ def test_bounding_box_labels_2d():
     np.testing.assert_allclose(labels_result, expected_image)
 
 
-def test_affine_labels_2d():
-    ##
-    # in this test let's try some affine transformations, we could do that also for the other tests
-    image = np.random.randint(low=10, high=100, size=(100, 100))
-    # y: [5, 9], x: [0, 4] has value 1
-    image[50:, :50] = 2
-    labels_element = Labels2DModel.parse(image)
-    set_transformation(
-        labels_element,
-        Affine(
-            np.array(
-                [
-                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 2],
-                    [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
-                    [0, 0, 1],
-                ]
-            ),
-            input_axes=("x", "y"),
-            output_axes=("x", "y"),
-        ),
-        "rotated",
-    )
-
-    # bounding box: y: [5, 9], x: [0, 4]
-    labels_result_rotated = bounding_box_query(
-        labels_element,
-        axes=("y", "x"),
-        min_coordinate=np.array([50, 0]),
-        max_coordinate=np.array([90, 40]),
-        target_coordinate_system="rotated",
-    )
-    labels_result_global = bounding_box_query(
-        labels_element,
-        axes=("y", "x"),
-        min_coordinate=np.array([50, 0]),
-        max_coordinate=np.array([90, 40]),
-        target_coordinate_system="global",
-    )
-    from napari_spatialdata import Interactive
-
-    from spatialdata import SpatialData
-
-    remove_transformation(labels_result_global, "rotated")
-    d = {
-        "cropped_global": labels_result_global,
-        "original": labels_element,
-    }
-    if labels_result_rotated is not None:
-        d["cropped_rotated"] = labels_result_rotated
-    sdata = SpatialData(labels=d)
-    Interactive(sdata)
-    ##
-
-
-test_affine_labels_2d()
-
-
 def test_bounding_box_labels_3d():
     """Apply a bounding box to a 3D label image"""
     image = np.zeros((10, 10, 10), dtype=int)
@@ -335,3 +278,61 @@ def test_bounding_box_circles():
 
     assert len(circles_result) == 1
     assert circles_result.index[0] == 3
+
+
+def _visualize_crop_affine_labels_2d():
+    ##
+    # in this test let's try some affine transformations, we could do that also for the other tests
+    image = np.random.randint(low=10, high=100, size=(100, 100))
+    # y: [5, 9], x: [0, 4] has value 1
+    image[50:, :50] = 2
+    labels_element = Labels2DModel.parse(image)
+    set_transformation(
+        labels_element,
+        Affine(
+            np.array(
+                [
+                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 2],
+                    [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
+                    [0, 0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        "rotated",
+    )
+
+    # bounding box: y: [5, 9], x: [0, 4]
+    labels_result_rotated = bounding_box_query(
+        labels_element,
+        axes=("y", "x"),
+        min_coordinate=np.array([50, 0]),
+        max_coordinate=np.array([90, 40]),
+        target_coordinate_system="rotated",
+    )
+    labels_result_global = bounding_box_query(
+        labels_element,
+        axes=("y", "x"),
+        min_coordinate=np.array([50, 0]),
+        max_coordinate=np.array([90, 40]),
+        target_coordinate_system="global",
+    )
+    from napari_spatialdata import Interactive
+
+    from spatialdata import SpatialData
+
+    remove_transformation(labels_result_global, "rotated")
+    d = {
+        "cropped_global": labels_result_global,
+        "original": labels_element,
+    }
+    if labels_result_rotated is not None:
+        d["cropped_rotated"] = labels_result_rotated
+    sdata = SpatialData(labels=d)
+    Interactive(sdata)
+    ##
+
+
+if __name__ == "__main__":
+    _visualize_crop_affine_labels_2d()
