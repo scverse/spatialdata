@@ -4,7 +4,7 @@ import hashlib
 import os
 from collections.abc import Generator
 from types import MappingProxyType
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import zarr
 from anndata import AnnData
@@ -35,6 +35,9 @@ from spatialdata._io.write import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+
+if TYPE_CHECKING:
+    from spatialdata._core._spatial_query import BaseSpatialRequest
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -930,8 +933,10 @@ class QueryManager:
             target_coordinate_system=target_coordinate_system,
         )
 
-    # def __call__(self, request: BaseSpatialRequest) -> SpatialData:
-    #     if isinstance(request, BoundingBoxRequest):
-    #         return self.bounding_box(**request.to_dict())
-    #     else:
-    #         raise TypeError("unknown request type")
+    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+        from spatialdata._core._spatial_query import BoundingBoxRequest
+
+        if isinstance(request, BoundingBoxRequest):
+            return self.bounding_box(**request.to_dict())
+        else:
+            raise TypeError("unknown request type")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
 from typing import Any, Callable, Optional, Union
@@ -7,6 +8,7 @@ from typing import Any, Callable, Optional, Union
 import dask.array as da
 import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import Polygon
@@ -14,7 +16,12 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData, SpatialElement
-from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_spatial_axes
+from spatialdata._core.core_utils import (
+    ValidAxis_t,
+    compute_coordinates,
+    get_dims,
+    get_spatial_axes,
+)
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -22,6 +29,7 @@ from spatialdata._core.transformations import (
     Translation,
     _get_affine_for_element,
 )
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 
@@ -144,6 +152,10 @@ class BaseSpatialRequest:
         if len(non_spatial_axes) > 0:
             raise ValueError(f"Non-spatial axes specified: {non_spatial_axes}")
 
+    @abstractmethod
+    def to_dict(self) -> dict[str, Any]:
+        pass
+
 
 @dataclass(frozen=True)
 class BoundingBoxRequest(BaseSpatialRequest):
@@ -174,6 +186,14 @@ class BoundingBoxRequest(BaseSpatialRequest):
         # validate the coordinates
         if np.any(self.min_coordinate > self.max_coordinate):
             raise ValueError("The minimum coordinate must be less than the maximum coordinate.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "target_coordinate_system": self.target_coordinate_system,
+            "axes": self.axes,
+            "min_coordinate": self.min_coordinate,
+            "max_coordinate": self.max_coordinate,
+        }
 
 
 def _bounding_box_mask_points(
@@ -241,8 +261,10 @@ def _(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> SpatialData:
+    from spatialdata import SpatialData
+
     new_elements = {}
-    for element_type in ["points", "images", "polygons", "shapes"]:
+    for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
             elements,
@@ -328,8 +350,18 @@ def _(
     else:
         raise RuntimeError("This should not happen")
 
-    assert len(axes) == transform_coordinate_length
-    assert set(axes) == set(output_axes_without_c)
+    if set(axes) != set(output_axes_without_c):
+        if set(axes).issubset(output_axes_without_c):
+            logger.warning(
+                f"The element has axes {output_axes_without_c}, but the query has axes {axes}. Excluding the element "
+                f"from the query result. In the future we can add support for this case. If you are interested, "
+                f"please open a GitHub issue."
+            )
+            return None
+        else:
+            raise ValueError(
+                f"Invalid case. The bounding box axes are {axes}, the spatial axes in {target_coordinate_system} are {output_axes_without_c}"
+            )
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     spatial_transform_bb_axes = Affine(
         spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
@@ -345,7 +377,8 @@ def _(
             )
         else:
             assert case == 2
-            # TODO: we need to intersect the plane in the intrinsic coordiante system with the 3D bounding box. The vertices of this polygons needs to be transformed to the intrinsic coordinate system
+            # TODO: we need to intersect the plane in the extrinsic coordiante system with the 3D bounding box. The
+            #  vertices of this polygons needs to be transformed to the intrinsic coordinate system
             raise NotImplementedError("Case 2 is not implemented yet")
         inverse = spatial_transform_bb_axes.inverse()
         assert isinstance(inverse, Affine)
@@ -380,8 +413,27 @@ def _(
             translation_vector.append(0)
 
     query_result = image.sel(selection)
-    if 0 in query_result.shape:
-        return None
+    if isinstance(image, SpatialImage):
+        if 0 in query_result.shape:
+            return None
+        assert isinstance(query_result, SpatialImage)
+    else:
+        assert isinstance(image, MultiscaleSpatialImage)
+        assert isinstance(query_result, DataTree)
+        # we need to convert query_result it to MultiscaleSpatialImage, dropping eventual collapses scales (or even
+        # the whole object if the first scale is collapsed)
+        d = {}
+        for k, data_tree in query_result.items():
+            v = data_tree.values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            if 0 in xdata.shape:
+                if k == "scale0":
+                    return None
+            else:
+                d[k] = xdata
+        query_result = MultiscaleSpatialImage.from_dict(d)
+    query_result = compute_coordinates(query_result)
 
     if not np.allclose(np.array(translation_vector), 0):
         translation_transform = Translation(translation=translation_vector, axes=axes)
@@ -494,4 +546,6 @@ def _(
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
     queried = polygons[polygons.geometry.within(bounding_box_non_axes_aligned)]
+    if len(queried) == 0:
+        return None
     return queried

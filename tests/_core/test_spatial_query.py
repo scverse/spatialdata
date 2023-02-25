@@ -4,7 +4,9 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
+from spatial_image import SpatialImage
 
 from spatialdata import (
     Image2DModel,
@@ -19,7 +21,11 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     bounding_box_query,
 )
-from spatialdata._core._spatialdata_ops import remove_transformation, set_transformation
+from spatialdata._core._spatialdata_ops import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
 from spatialdata._core.transformations import Affine
 
 
@@ -149,37 +155,61 @@ def test_bounding_box_image_2d(n_channels):
     # y: [5, 9], x: [0, 4] has value 1
     image[:, 5::, 0:5] = 1
     image_element = Image2DModel.parse(image)
+    image_element_multiscale = Image2DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: y: [5, 9], x: [0, 4]
-    image_result = bounding_box_query(
-        image_element,
-        axes=("y", "x"),
-        min_coordinate=np.array([5, 0]),
-        max_coordinate=np.array([9, 4]),
-        target_coordinate_system="global",
-    )
-    expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
-    np.testing.assert_allclose(image_result, expected_image)
+    for image in [image_element, image_element_multiscale]:
+        # bounding box: y: [5, 10[, x: [0, 5[
+        image_result = bounding_box_query(
+            image,
+            axes=("y", "x"),
+            min_coordinate=np.array([5, 0]),
+            max_coordinate=np.array([10, 5]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 def test_bounding_box_image_3d(n_channels):
     """Apply a bounding box to a 3D image"""
     image = np.zeros((n_channels, 10, 10, 10))
-    # y: [5, 9], x: [0, 4] has value 1
+    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
     image[:, 5::, 0:5, 2:7] = 1
     image_element = Image3DModel.parse(image)
+    image_element_multiscale = Image3DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    image_result = bounding_box_query(
-        image_element,
-        axes=("z", "y", "x"),
-        min_coordinate=np.array([5, 0, 2]),
-        max_coordinate=np.array([9, 4, 6]),
-        target_coordinate_system="global",
-    )
-    expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
-    np.testing.assert_allclose(image_result, expected_image)
+    for image in [image_element, image_element_multiscale]:
+        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
+        image_result = bounding_box_query(
+            image,
+            axes=("z", "y", "x"),
+            min_coordinate=np.array([5, 0, 2]),
+            max_coordinate=np.array([10, 5, 7]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 def test_bounding_box_labels_2d():
@@ -189,36 +219,60 @@ def test_bounding_box_labels_2d():
     # y: [5, 9], x: [0, 4] has value 1
     image[5::, 0:5] = 1
     labels_element = Labels2DModel.parse(image)
+    labels_element_multiscale = Labels2DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: y: [5, 9], x: [0, 4]
-    labels_result = bounding_box_query(
-        labels_element,
-        axes=("y", "x"),
-        min_coordinate=np.array([5, 0]),
-        max_coordinate=np.array([9, 4]),
-        target_coordinate_system="global",
-    )
-    expected_image = np.ones((5, 5))
-    np.testing.assert_allclose(labels_result, expected_image)
+    for labels in [labels_element, labels_element_multiscale]:
+        # bounding box: y: [5, 10[, x: [0, 5[
+        labels_result = bounding_box_query(
+            labels,
+            axes=("y", "x"),
+            min_coordinate=np.array([5, 0]),
+            max_coordinate=np.array([10, 5]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((5, 5))
+        if isinstance(labels, SpatialImage):
+            assert isinstance(labels, SpatialImage)
+            np.testing.assert_allclose(labels_result, expected_image)
+        elif isinstance(labels, MultiscaleSpatialImage):
+            assert isinstance(labels_result, MultiscaleSpatialImage)
+            v = labels_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 def test_bounding_box_labels_3d():
     """Apply a bounding box to a 3D label image"""
     image = np.zeros((10, 10, 10), dtype=int)
-    # y: [5, 9], x: [0, 4] has value 1
+    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
     image[5::, 0:5, 2:7] = 1
     labels_element = Labels3DModel.parse(image)
+    labels_element_multiscale = Labels3DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    image_result = bounding_box_query(
-        labels_element,
-        axes=("z", "y", "x"),
-        min_coordinate=np.array([5, 0, 2]),
-        max_coordinate=np.array([9, 4, 6]),
-        target_coordinate_system="global",
-    )
-    expected_image = np.ones((5, 5, 5))
-    np.testing.assert_allclose(image_result, expected_image)
+    for labels in [labels_element, labels_element_multiscale]:
+        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
+        labels_result = bounding_box_query(
+            labels,
+            axes=("z", "y", "x"),
+            min_coordinate=np.array([5, 0, 2]),
+            max_coordinate=np.array([10, 5, 7]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((5, 5, 5))
+        if isinstance(labels, SpatialImage):
+            assert isinstance(labels, SpatialImage)
+            np.testing.assert_allclose(labels_result, expected_image)
+        elif isinstance(labels, MultiscaleSpatialImage):
+            assert isinstance(labels_result, MultiscaleSpatialImage)
+            v = labels_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 # TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
@@ -278,6 +332,33 @@ def test_bounding_box_circles():
 
     assert len(circles_result) == 1
     assert circles_result.index[0] == 3
+
+
+def test_bounding_box_spatial_data(full_sdata):
+    request = BoundingBoxRequest(
+        target_coordinate_system="global",
+        axes=("y", "x"),
+        min_coordinate=np.array([2, 1]),
+        max_coordinate=np.array([40, 60]),
+    )
+    result = bounding_box_query(full_sdata, **request.to_dict())
+    result2 = full_sdata.query(request)
+    from tests._core.test_spatialdata_operations import (
+        _assert_spatialdata_objects_seem_identical,
+    )
+
+    _assert_spatialdata_objects_seem_identical(result, result2)
+
+    for element in result._gen_elements_values():
+        d = get_transformation(element, get_all=True)
+        new_d = {k.replace("global", "cropped"): v for k, v in d.items()}
+        set_transformation(element, new_d, set_all=True)
+
+    VISUALIZE = False
+    if VISUALIZE:
+        from napari_spatialdata import Interactive
+
+        Interactive([full_sdata, result])
 
 
 def _visualize_crop_affine_labels_2d():
