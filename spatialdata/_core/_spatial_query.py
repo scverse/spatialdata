@@ -250,7 +250,7 @@ def bounding_box_query(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> Optional[Union[SpatialElement, SpatialData]]:
-    raise NotImplementedError()
+    raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
 
 @bounding_box_query.register(SpatialData)

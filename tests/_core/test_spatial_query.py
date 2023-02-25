@@ -26,7 +26,7 @@ from spatialdata._core._spatialdata_ops import (
     remove_transformation,
     set_transformation,
 )
-from spatialdata._core.transformations import Affine
+from spatialdata._core.transformations import Affine, Sequence, Scale
 
 
 def _make_points_element():
@@ -380,11 +380,12 @@ def _visualize_crop_affine_labels_2d():
     requested crop, as exaplained above)
     5) then enable "3 cropped rotated processed", this shows the data that we wanted to query in the first place,
     in the target coordinate system ("rotated"). This is probaly the data you care about if for instance you want to
-    use tiles for deep learning. Note that for obtaning this answer there is also a better function (not available at
-    the time of this writing): rasterize(), which is faster and more accurate, so it should be used instead. The
-    function rasterize() transforms all the coordinates of the data into the target coordinate system, and it returns
-    only SpatialImage objects. So it has different use cases than the bounding box query.
-    6) finally switch to the "global" coordinate_system. This is, for how we constructed the example, showing the
+    use tiles for deep learning.
+    6) Note that for obtaning the previous answer there is also a better function rasterize().
+    This is what "4 rasterized" shows, which is faster and more accurate, so it should be used instead. The function
+    rasterize() transforms all the coordinates of the data into the target coordinate system, and it returns only
+    SpatialImage objects. So it has different use cases than the bounding box query.
+    7) finally switch to the "global" coordinate_system. This is, for how we constructed the example, showing the
     original image as it would appear its intrinsic coordinate system (since the transformation that maps the
     original image to "global" is an identity. It then shows how the data showed at the point 5), localizes in the
     original image.
@@ -395,9 +396,7 @@ def _visualize_crop_affine_labels_2d():
     # y: [5, 9], x: [0, 4] has value 1
     image[50:, :50] = 2
     labels_element = Labels2DModel.parse(image)
-    set_transformation(
-        labels_element,
-        Affine(
+    affine = Affine(
             np.array(
                 [
                     [np.cos(np.pi / 6), np.sin(-np.pi / 6), 20],
@@ -407,7 +406,10 @@ def _visualize_crop_affine_labels_2d():
             ),
             input_axes=("x", "y"),
             output_axes=("x", "y"),
-        ),
+        )
+    set_transformation(
+        labels_element,
+        affine,
         "rotated",
     )
 
@@ -451,6 +453,25 @@ def _visualize_crop_affine_labels_2d():
         )
         d["3 cropped_rotated_processed_recropped"] = transform_rotated_processed_recropped
         remove_transformation(labels_result_rotated, "global")
+
+    multiscale_image = np.random.randint(low=10, high=100, size=(400, 400))
+    multiscale_image[200:, :200] = 2
+    # multiscale_labels = Labels2DModel.parse(multiscale_image)
+    multiscale_labels = Labels2DModel.parse(multiscale_image, scale_factors=[2, 2, 2, 2])
+    sequence = Sequence([Scale([0.5, 0.5], axes=('x', 'y')), affine])
+    set_transformation(multiscale_labels, sequence, "rotated")
+
+    from spatialdata._core._rasterize import rasterize
+
+    rasterized = rasterize(
+        multiscale_labels,
+        axes=("y", "x"),
+        min_coordinate=np.array([25, 25]),
+        max_coordinate=np.array([75, 100]),
+        target_coordinate_system="rotated",
+        target_width=300,
+    )
+    d["4 rasterized"] = rasterized
 
     sdata = SpatialData(labels=d)
     Interactive(sdata)
