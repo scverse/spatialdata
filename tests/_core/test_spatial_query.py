@@ -19,6 +19,8 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     bounding_box_query,
 )
+from spatialdata._core._spatialdata_ops import remove_transformation, set_transformation
+from spatialdata._core.transformations import Affine
 
 
 def _make_points_element():
@@ -182,6 +184,7 @@ def test_bounding_box_image_3d(n_channels):
 
 def test_bounding_box_labels_2d():
     """Apply a bounding box to a 2D label image"""
+    # in this test let's try some affine transformations, we could do that also for the other tests
     image = np.zeros((10, 10))
     # y: [5, 9], x: [0, 4] has value 1
     image[5::, 0:5] = 1
@@ -199,9 +202,66 @@ def test_bounding_box_labels_2d():
     np.testing.assert_allclose(labels_result, expected_image)
 
 
+def test_affine_labels_2d():
+    ##
+    # in this test let's try some affine transformations, we could do that also for the other tests
+    image = np.random.randint(low=10, high=100, size=(10, 10))
+    # y: [5, 9], x: [0, 4] has value 1
+    image[5::, 0:5] = 1
+    labels_element = Labels2DModel.parse(image)
+    set_transformation(
+        labels_element,
+        Affine(
+            np.array(
+                [
+                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 2],
+                    [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
+                    [0, 0, 1],
+                ]
+            ),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        "rotated",
+    )
+
+    # bounding box: y: [5, 9], x: [0, 4]
+    labels_result_rotated = bounding_box_query(
+        labels_element,
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="rotated",
+    )
+    labels_result_global = bounding_box_query(
+        labels_element,
+        axes=("y", "x"),
+        min_coordinate=np.array([5, 0]),
+        max_coordinate=np.array([9, 4]),
+        target_coordinate_system="global",
+    )
+    from napari_spatialdata import Interactive
+
+    from spatialdata import SpatialData
+
+    remove_transformation(labels_result_global, "rotated")
+    d = {
+        "cropped_global": labels_result_global,
+        "original": labels_element,
+    }
+    if labels_result_rotated is not None:
+        d["cropped_rotated"] = labels_result_rotated
+    sdata = SpatialData(labels=d)
+    Interactive(sdata)
+    ##
+
+
+test_affine_labels_2d()
+
+
 def test_bounding_box_labels_3d():
     """Apply a bounding box to a 3D label image"""
-    image = np.zeros((10, 10, 10))
+    image = np.zeros((10, 10, 10), dtype=int)
     # y: [5, 9], x: [0, 4] has value 1
     image[5::, 0:5, 2:7] = 1
     labels_element = Labels3DModel.parse(image)
@@ -216,6 +276,9 @@ def test_bounding_box_labels_3d():
     )
     expected_image = np.ones((5, 5, 5))
     np.testing.assert_allclose(image_result, expected_image)
+
+
+# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:

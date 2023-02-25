@@ -11,14 +11,20 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata import SpatialData, SpatialElement
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_spatial_axes
-from spatialdata._core.transformations import BaseTransformation, Sequence, Translation
+from spatialdata._core.transformations import (
+    Affine,
+    Sequence,
+    Translation,
+    _get_affine_for_element,
+)
 from spatialdata._types import ArrayLike
 
 
-def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLike) -> ArrayLike:
+def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLike, axes: tuple[str, ...]) -> DataArray:
     """From the min and max coordinates of a bounding box, get the coordinates
     of all corners.
 
@@ -37,18 +43,21 @@ def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLik
     """
     if len(min_coordinate) == 2:
         # 2D bounding box
-        return np.array(
+        assert len(axes) == 2
+        return DataArray(
             [
                 [min_coordinate[0], min_coordinate[1]],
                 [min_coordinate[0], max_coordinate[1]],
                 [max_coordinate[0], max_coordinate[1]],
                 [max_coordinate[0], min_coordinate[1]],
-            ]
+            ],
+            coords={"corner": range(4), "axis": list(axes)},
         )
 
     elif len(min_coordinate) == 3:
         # 3D bounding cube
-        return np.array(
+        assert len(axes) == 3
+        return DataArray(
             [
                 [min_coordinate[0], min_coordinate[1], min_coordinate[2]],
                 [min_coordinate[0], min_coordinate[1], max_coordinate[2]],
@@ -58,7 +67,8 @@ def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLik
                 [max_coordinate[0], min_coordinate[1], max_coordinate[2]],
                 [max_coordinate[0], max_coordinate[1], max_coordinate[2]],
                 [max_coordinate[0], max_coordinate[1], min_coordinate[2]],
-            ]
+            ],
+            coords={"corner": range(8), "axis": list(axes)},
         )
     else:
         raise ValueError("bounding box must be 2D or 3D")
@@ -94,7 +104,6 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     The axes of the intrinsic coordinate system.
     """
     from spatialdata._core._spatialdata_ops import get_transformation
-    from spatialdata._core.core_utils import get_dims
 
     # get the transformation from the element's intrinsic coordinate system
     # to the query coordinate space
@@ -104,7 +113,8 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     bounding_box_corners = get_bounding_box_corners(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
-    )
+        axes=axes,
+    ).data
 
     # transform the coordinates to the intrinsic coordinate system
     intrinsic_axes = get_dims(element)
@@ -254,6 +264,25 @@ def _(
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
+    """
+
+    Parameters
+    ----------
+    image
+    axes
+    min_coordinate
+    max_coordinate
+    target_coordinate_system
+
+    Returns
+    -------
+
+    Notes
+    _____
+    See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
+    and for the cases the comments refer to.
+
+    """
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -269,15 +298,60 @@ def _(
     # get the transformation from the element's intrinsic coordinate system
     # to the query coordinate space
     transform_to_query_space = get_transformation(image, to_coordinate_system=target_coordinate_system)
+    m = _get_affine_for_element(image, transform_to_query_space)
+    input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
+    output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
+    m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+    m_without_c_linear = m_without_c[:-1, :-1]
+    transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
+    transform_coordinate_length = len(output_axes_without_c)
+    data_dim = len(input_axes_without_c)
 
-    # transform the coordinates to the intrinsic coordinate system
-    intrinsic_axes = get_dims(image)
-    transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
-        input_axes=axes, output_axes=intrinsic_axes
-    )
-    transform_to_intrinsic
-    # rotation_matrix = transform_to_intrinsic[0:-1, 0:-1]
-    # translation = transform_to_intrinsic[0:-1, -1]
+    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+
+    assert data_dim in [2, 3]
+    assert transform_dimension in [2, 3]
+    assert transform_coordinate_length in [2, 3]
+    assert not (data_dim == 2 and transform_dimension == 3)
+    assert not (transform_dimension == 3 and transform_coordinate_length == 2)
+    # see explanation in https://github.com/scverse/spatialdata/pull/151
+    if data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 2:
+        case = 1
+    elif data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 3:
+        case = 2
+    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 2:
+        case = 3
+    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 3:
+        case = 4
+    elif data_dim == 3 and transform_dimension == 3 and transform_coordinate_length == 3:
+        case = 5
+    else:
+        raise RuntimeError("This should not happen")
+    if case in [1, 5]:
+        bounding_box_corners = get_bounding_box_corners(
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            axes=axes,
+        )
+
+        assert set(output_axes_without_c) == set(axes)
+        spatial_transform_bb_axes = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=axes)
+        inverse = spatial_transform_bb_axes.inverse()
+        inverse.matrix @ spatial_transform_bb_axes.matrix
+        assert isinstance(inverse, Affine)
+        rotation_matrix = inverse.matrix[0:-1, 0:-1]
+        translation = inverse.matrix[0:-1, -1]
+
+        intrinsic_bounding_box_corners = DataArray(
+            bounding_box_corners.data @ rotation_matrix.T + translation,
+            coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+        )
+    elif case == 2:
+        # TODO: we need to intersect the plane in the intrinsic coordiante system with the 3D bounding box. The vertices of this polygons needs to be transformed to the intrinsic coordinate system
+        raise NotImplementedError("Case 2 is not implemented yet")
+    else:
+        # TODO: we need to work with the underspecified linear system of equations, etc..
+        raise NotImplementedError("Case 3 and 4 are not implemented yet")
 
     # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a
     #  simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the
@@ -286,35 +360,39 @@ def _(
 
     # build the request
     selection = {}
+    translation_vector = []
     for axis_index, axis_name in enumerate(axes):
         # get the min value along the axis
-        min_value = min_coordinate[axis_index]
+        min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
 
         # get max value, slices are open half interval
-        max_value = max_coordinate[axis_index] + 1
+        max_value = intrinsic_bounding_box_corners.sel(axis=axis_name).max().item()
 
         # add the
         selection[axis_name] = slice(min_value, max_value)
 
-    query_result = image.isel(selection)
+        if min_value > 0:
+            translation_vector.append(min_value)
+        else:
+            translation_vector.append(0)
+
+    query_result = image.sel(selection)
     if 0 in query_result.shape:
         return None
 
-    # update the transform
-    # currently, this assumes the existing transforms input coordinate system
-    # is the intrinsic coordinate system
-    # todo: this should be updated when we support multiple transforms
-    initial_transform = get_transformation(query_result)
-    assert isinstance(initial_transform, BaseTransformation)
+    if not np.allclose(np.array(translation_vector), 0):
+        translation = Translation(translation=translation_vector, axes=axes)
 
-    translation = Translation(translation=min_coordinate, axes=axes)
+        transformations = get_transformation(query_result, get_all=True)
+        assert isinstance(transformations, dict)
 
-    new_transformation = Sequence(
-        [translation, initial_transform],
-    )
-
-    set_transformation(query_result, new_transformation)
-
+        new_transformations = {}
+        for coordinate_system, initial_transform in transformations.items():
+            new_transformation = Sequence(
+                [translation, initial_transform],
+            )
+            new_transformations[coordinate_system] = new_transformation
+        set_transformation(query_result, new_transformations, set_all=True)
     return query_result
 
 
