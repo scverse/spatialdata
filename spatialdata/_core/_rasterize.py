@@ -1,19 +1,41 @@
-import numpy as np
 from functools import singledispatch
+from typing import Optional, Union
 
-from spatialdata import SpatialData
-from typing import Union, Optional
-from spatial_image import SpatialImage
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatialdata._types import ArrayLike
-from spatialdata._core.core_utils import SpatialElement, get_dims, compute_coordinates, _get_scale
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation, remove_transformation
-from spatialdata._core.transformations import _get_affine_for_element, Sequence, Translation, Scale, Affine
+import dask_image.ndinterp
+import numpy as np
+from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-import dask_image.ndinterp
-from spatialdata._core.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, get_schema
-from dask.array.core import Array as DaskArray
+from multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
+
+from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
+from spatialdata._core.core_utils import (
+    SpatialElement,
+    _get_scale,
+    compute_coordinates,
+    get_dims,
+)
+from spatialdata._core.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    get_schema,
+)
+from spatialdata._core.transformations import (
+    Affine,
+    Scale,
+    Sequence,
+    Translation,
+    _get_affine_for_element,
+)
+from spatialdata._types import ArrayLike
 
 
 def _compute_target_dimensions(
@@ -176,8 +198,8 @@ def _(
                 break
         assert latest_scale is not None
         xdata = next(iter(data[latest_scale].values()))
-        if latest_scale != 'scale0':
-            transformations = xdata.attrs['transform']
+        if latest_scale != "scale0":
+            transformations = xdata.attrs["transform"]
             pyramid_scale = _get_scale(transformations)
         else:
             pyramid_scale = None
@@ -200,10 +222,7 @@ def _(
         affine.to_affine_matrix(input_axes=dims, output_axes=target_axes), input_axes=dims, output_axes=target_axes
     )
 
-    bb_sizes = {
-        ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)]
-        for ax in target_axes
-    }
+    bb_sizes = {ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)] for ax in target_axes}
     scale_vector = [bb_sizes[ax] / target_sizes[ax] for ax in target_axes]
     scale = Scale(scale_vector, axes=target_axes)
 
