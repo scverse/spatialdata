@@ -205,9 +205,9 @@ def test_bounding_box_labels_2d():
 def test_affine_labels_2d():
     ##
     # in this test let's try some affine transformations, we could do that also for the other tests
-    image = np.random.randint(low=10, high=100, size=(10, 10))
+    image = np.random.randint(low=10, high=100, size=(100, 100))
     # y: [5, 9], x: [0, 4] has value 1
-    image[5::, 0:5] = 1
+    image[50:, :50] = 2
     labels_element = Labels2DModel.parse(image)
     set_transformation(
         labels_element,
@@ -229,15 +229,15 @@ def test_affine_labels_2d():
     labels_result_rotated = bounding_box_query(
         labels_element,
         axes=("y", "x"),
-        min_coordinate=np.array([5, 0]),
-        max_coordinate=np.array([9, 4]),
+        min_coordinate=np.array([50, 0]),
+        max_coordinate=np.array([90, 40]),
         target_coordinate_system="rotated",
     )
     labels_result_global = bounding_box_query(
         labels_element,
         axes=("y", "x"),
-        min_coordinate=np.array([5, 0]),
-        max_coordinate=np.array([9, 4]),
+        min_coordinate=np.array([50, 0]),
+        max_coordinate=np.array([90, 40]),
         target_coordinate_system="global",
     )
     from napari_spatialdata import Interactive

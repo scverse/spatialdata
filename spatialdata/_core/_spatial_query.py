@@ -17,6 +17,7 @@ from spatialdata import SpatialData, SpatialElement
 from spatialdata._core.core_utils import ValidAxis_t, get_dims, get_spatial_axes
 from spatialdata._core.transformations import (
     Affine,
+    BaseTransformation,
     Sequence,
     Translation,
     _get_affine_for_element,
@@ -295,19 +296,18 @@ def _(
         set_transformation,
     )
 
-    # get the transformation from the element's intrinsic coordinate system
-    # to the query coordinate space
+    # get the transformation from the element's intrinsic coordinate system to the query coordinate space
     transform_to_query_space = get_transformation(image, to_coordinate_system=target_coordinate_system)
+    assert isinstance(transform_to_query_space, BaseTransformation)
     m = _get_affine_for_element(image, transform_to_query_space)
     input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
     output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
     m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     m_without_c_linear = m_without_c[:-1, :-1]
+
     transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
     transform_coordinate_length = len(output_axes_without_c)
     data_dim = len(input_axes_without_c)
-
-    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
 
     assert data_dim in [2, 3]
     assert transform_dimension in [2, 3]
@@ -327,17 +327,27 @@ def _(
         case = 5
     else:
         raise RuntimeError("This should not happen")
-    if case in [1, 5]:
-        bounding_box_corners = get_bounding_box_corners(
-            min_coordinate=min_coordinate,
-            max_coordinate=max_coordinate,
-            axes=axes,
-        )
 
-        assert set(output_axes_without_c) == set(axes)
-        spatial_transform_bb_axes = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=axes)
+    assert len(axes) == transform_coordinate_length
+    assert set(axes) == set(output_axes_without_c)
+    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+    spatial_transform_bb_axes = Affine(
+        spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
+        input_axes=input_axes_without_c,
+        output_axes=axes,
+    )
+    if case in [1, 2, 5]:
+        if case in [1, 5]:
+            bounding_box_corners = get_bounding_box_corners(
+                min_coordinate=min_coordinate,
+                max_coordinate=max_coordinate,
+                axes=axes,
+            )
+        else:
+            assert case == 2
+            # TODO: we need to intersect the plane in the intrinsic coordiante system with the 3D bounding box. The vertices of this polygons needs to be transformed to the intrinsic coordinate system
+            raise NotImplementedError("Case 2 is not implemented yet")
         inverse = spatial_transform_bb_axes.inverse()
-        inverse.matrix @ spatial_transform_bb_axes.matrix
         assert isinstance(inverse, Affine)
         rotation_matrix = inverse.matrix[0:-1, 0:-1]
         translation = inverse.matrix[0:-1, -1]
@@ -346,22 +356,15 @@ def _(
             bounding_box_corners.data @ rotation_matrix.T + translation,
             coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
         )
-    elif case == 2:
-        # TODO: we need to intersect the plane in the intrinsic coordiante system with the 3D bounding box. The vertices of this polygons needs to be transformed to the intrinsic coordinate system
-        raise NotImplementedError("Case 2 is not implemented yet")
     else:
+        assert case in [3, 4]
         # TODO: we need to work with the underspecified linear system of equations, etc..
         raise NotImplementedError("Case 3 and 4 are not implemented yet")
-
-    # TODO: if the perforamnce are bad for teh translation + scale case, we can replace the dask_image method with a
-    #  simple image slicing. We can do this when the transformation, in it's affine form, has only zeros outside the
-    #  diagonal and outside the translation vector. If it has non-zero elements we need to call dask_image. This
-    #  reasoning applies also to points, polygons and shapes
 
     # build the request
     selection = {}
     translation_vector = []
-    for axis_index, axis_name in enumerate(axes):
+    for axis_name in axes:
         # get the min value along the axis
         min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
 
@@ -372,7 +375,7 @@ def _(
         selection[axis_name] = slice(min_value, max_value)
 
         if min_value > 0:
-            translation_vector.append(min_value)
+            translation_vector.append(np.ceil(min_value).item())
         else:
             translation_vector.append(0)
 
@@ -381,15 +384,15 @@ def _(
         return None
 
     if not np.allclose(np.array(translation_vector), 0):
-        translation = Translation(translation=translation_vector, axes=axes)
+        translation_transform = Translation(translation=translation_vector, axes=axes)
 
         transformations = get_transformation(query_result, get_all=True)
         assert isinstance(transformations, dict)
 
         new_transformations = {}
         for coordinate_system, initial_transform in transformations.items():
-            new_transformation = Sequence(
-                [translation, initial_transform],
+            new_transformation: BaseTransformation = Sequence(
+                [translation_transform, initial_transform],
             )
             new_transformations[coordinate_system] = new_transformation
         set_transformation(query_result, new_transformations, set_all=True)
