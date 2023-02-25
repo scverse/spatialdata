@@ -12,6 +12,19 @@ AXIS_ORDER = ["t", "c", "z", "y", "x"]
 
 
 class NgffAxis:
+
+    """A class for Ngff-format axes
+    
+    Attributes
+    ----------
+    name : str
+        name of the axis. Should be in ["t", "c", "z", "y", "x"].
+    type : str
+        type of the axis. Should be in ["type", "channel", "space"].
+    unit : TYPE
+        unit of the axis. For set of options see https://ngff.openmicroscopy.org/
+    """
+    
     name: str
     type: str
     unit: Optional[str]
@@ -26,6 +39,7 @@ class NgffAxis:
         return f"NgffAxis({inner})"
 
     def to_dict(self) -> Axis_t:
+
         d = {"name": self.name, "type": self.type}
         if self.unit is not None:
             d["unit"] = self.unit
@@ -38,6 +52,16 @@ class NgffAxis:
 
 
 class NgffCoordinateSystem:
+
+    """An Ngff-format coordinate system
+        Parameters
+        ----------
+        name : str
+            name of the coordinate system
+        axes : Optional[list[NgffAxis]], optional
+            names of the axes
+    """
+    
     def __init__(self, name: str, axes: Optional[list[NgffAxis]] = None):
         self.name = name
         self._axes = axes if axes is not None else []
@@ -83,14 +107,17 @@ class NgffCoordinateSystem:
         return out
 
     def from_array(self, array: Any) -> None:
+        """Reading form array"""
         raise NotImplementedError()
 
     @staticmethod
     def from_json(data: Union[str, bytes]) -> NgffCoordinateSystem:
+        """Reading form json"""
         coord_sys = json.loads(data)
         return NgffCoordinateSystem.from_dict(coord_sys)
 
     def to_json(self, **kwargs: Any) -> str:
+        """Writing into json"""
         out = self.to_dict()
         return json.dumps(out, **kwargs)
 
@@ -100,6 +127,7 @@ class NgffCoordinateSystem:
         return self.to_dict() == other.to_dict()
 
     def equal_up_to_the_units(self, other: NgffCoordinateSystem) -> bool:
+        """Checks if two CS are the same based on the axes' names and types (not units)"""
         if self.name != other.name:
             return False
         if len(self._axes) != len(other._axes):
@@ -112,9 +140,24 @@ class NgffCoordinateSystem:
         return True
 
     def equal_up_to_the_name(self, other: NgffCoordinateSystem) -> bool:
+        """Checks if two CS are the same based on the axes"""
         return self._axes == other._axes
 
     def subset(self, axes_names: list[str], new_name: Optional[str] = None) -> NgffCoordinateSystem:
+        """Querys a subset of axes by axes' names
+        
+        Parameters
+        ----------
+        axes_names : list[str]
+            
+        new_name : Optional[str], optional
+            name of the new CoordinateSystem
+        
+        Returns
+        -------
+        NgffCoordinateSystem
+            a new CoordinateSystem with the subset axes
+        """
         axes = [copy.deepcopy(axis) for axis in self._axes if axis.name in axes_names]
         if new_name is None:
             new_name = self.name + "_subset " + str(axes_names)
@@ -122,22 +165,33 @@ class NgffCoordinateSystem:
 
     @property
     def axes_names(self) -> tuple[str, ...]:
+        """Gets axe's names"""
         return tuple([ax.name for ax in self._axes])
 
     @property
     def axes_types(self) -> tuple[str, ...]:
+        """Gets axes' types"""
         return tuple([ax.type for ax in self._axes])
 
     def __hash__(self) -> int:
+        """hashes the object"""
         return hash(frozenset(self.to_dict()))
 
     def has_axis(self, name: str) -> bool:
+        """Check if the axis exists in the Coordinate system by name
+        
+        Parameters
+        ----------
+        name : str
+            Name of the axis
+        """
         for axis in self._axes:
             if axis.name == name:
                 return True
         return False
 
     def get_axis(self, name: str) -> NgffAxis:
+        """Get axis by name"""
         for axis in self._axes:
             if axis.name == name:
                 return axis
@@ -147,6 +201,17 @@ class NgffCoordinateSystem:
     def merge(
         coord_sys1: NgffCoordinateSystem, coord_sys2: NgffCoordinateSystem, new_name: Optional[str] = None
     ) -> NgffCoordinateSystem:
+        """Merges two coordinate systems
+        
+        Parameters
+        ----------
+        coord_sys1 : NgffCoordinateSystem
+            
+        coord_sys2 : NgffCoordinateSystem
+
+        new_name : Optional[str], optional
+            name of the new coordinate system
+        """
         # common axes need to be the identical otherwise no merge is made
         common_axes = set(coord_sys1.axes_names).intersection(coord_sys2.axes_names)
         for axis_name in common_axes:
@@ -161,6 +226,15 @@ class NgffCoordinateSystem:
         return NgffCoordinateSystem(name=new_name, axes=axes)
 
     def set_unit(self, axis_name: str, unit: str) -> None:
+        """sets units of an axis
+        
+        Parameters
+        ----------
+        axis_name : str
+            name of the axis
+        unit : str
+            unit of the axis
+        """
         for axis in self._axes:
             if axis.name == axis_name:
                 axis.unit = unit
@@ -172,14 +246,14 @@ def _get_spatial_axes(
     coordinate_system: NgffCoordinateSystem,
 ) -> list[str]:
     """Get the names of the spatial axes in a coordinate system.
-
+    
     Parameters
     ----------
     coordinate_system : NgffCoordinateSystem
         The coordinate system to get the spatial axes from.
-
-    Returns
-    -------
+    
+    No Longer Returned
+    ------------------
     spatial_axis_names : List[str]
         The names of the spatial axes.
     """
@@ -187,6 +261,7 @@ def _get_spatial_axes(
 
 
 def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+    """makes a coordinate system"""
     if ndim == 2:
         axes = [
             NgffAxis(name="y", type="space", unit=unit),
@@ -209,14 +284,14 @@ def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str
 
 def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
     """Create a 2D yx coordinate system.
-
+    
     Parameters
     ----------
-    name : str, optional
+    name : Optional[str], optional
         The name of the coordinate system. A default value of None leads to the name being set to "yx".
-    unit : str, optional
+    unit : Optional[str], optional
         The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
-
+    
     Returns
     -------
     NgffCoordinateSystem
@@ -227,14 +302,14 @@ def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordin
 
 def zyx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
     """Create a 3D zyx coordinate system.
-
+    
     Parameters
     ----------
-    name : str, optional
+    name : Optional[str], optional
         The name of the coordinate system. A default value of None leads to the name being set to "zyx".
-    unit : str, optional
+    unit : Optional[str], optional
         The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
-
+    
     Returns
     -------
     NgffCoordinateSystem
