@@ -234,7 +234,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,
@@ -294,7 +294,7 @@ def _(
     transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,
@@ -329,7 +329,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed, old_transformations, set_all=True)
+    set_transformation(transformed, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed,
         transformation,
@@ -355,7 +355,7 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,

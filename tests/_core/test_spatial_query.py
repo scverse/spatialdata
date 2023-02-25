@@ -373,7 +373,7 @@ def _visualize_crop_affine_labels_2d():
         Affine(
             np.array(
                 [
-                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 2],
+                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 20],
                     [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
                     [0, 0, 1],
                 ]
@@ -388,15 +388,15 @@ def _visualize_crop_affine_labels_2d():
     labels_result_rotated = bounding_box_query(
         labels_element,
         axes=("y", "x"),
-        min_coordinate=np.array([50, 0]),
-        max_coordinate=np.array([90, 40]),
+        min_coordinate=np.array([25, 25]),
+        max_coordinate=np.array([75, 100]),
         target_coordinate_system="rotated",
     )
     labels_result_global = bounding_box_query(
         labels_element,
         axes=("y", "x"),
-        min_coordinate=np.array([50, 0]),
-        max_coordinate=np.array([90, 40]),
+        min_coordinate=np.array([25, 25]),
+        max_coordinate=np.array([75, 100]),
         target_coordinate_system="global",
     )
     from napari_spatialdata import Interactive
@@ -410,6 +410,18 @@ def _visualize_crop_affine_labels_2d():
     }
     if labels_result_rotated is not None:
         d["cropped_rotated"] = labels_result_rotated
+
+        transform = labels_result_rotated.attrs["transform"]["rotated"]
+        transform_rotated_processed = transform.transform(labels_result_rotated, maintain_positioning=True)
+        transform_rotated_processed_recropped = bounding_box_query(
+            transform_rotated_processed,
+            axes=("y", "x"),
+            min_coordinate=np.array([25, 25]),
+            max_coordinate=np.array([75, 100]),
+            target_coordinate_system="rotated",
+        )
+        d["cropped_rotated_processed_recropped"] = transform_rotated_processed_recropped
+
     sdata = SpatialData(labels=d)
     Interactive(sdata)
     ##
