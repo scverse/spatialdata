@@ -14,7 +14,7 @@ AXIS_ORDER = ["t", "c", "z", "y", "x"]
 class NgffAxis:
 
     """A class for Ngff-format axes
-    
+
     Attributes
     ----------
     name : str
@@ -24,7 +24,7 @@ class NgffAxis:
     unit : TYPE
         unit of the axis. For set of options see https://ngff.openmicroscopy.org/
     """
-    
+
     name: str
     type: str
     unit: Optional[str]
@@ -39,7 +39,6 @@ class NgffAxis:
         return f"NgffAxis({inner})"
 
     def to_dict(self) -> Axis_t:
-
         d = {"name": self.name, "type": self.type}
         if self.unit is not None:
             d["unit"] = self.unit
@@ -54,14 +53,14 @@ class NgffAxis:
 class NgffCoordinateSystem:
 
     """An Ngff-format coordinate system
-        Parameters
-        ----------
-        name : str
-            name of the coordinate system
-        axes : Optional[list[NgffAxis]], optional
-            names of the axes
+    Parameters
+    ----------
+    name : str
+        name of the coordinate system
+    axes : Optional[list[NgffAxis]], optional
+        names of the axes
     """
-    
+
     def __init__(self, name: str, axes: Optional[list[NgffAxis]] = None):
         self.name = name
         self._axes = axes if axes is not None else []
@@ -145,14 +144,14 @@ class NgffCoordinateSystem:
 
     def subset(self, axes_names: list[str], new_name: Optional[str] = None) -> NgffCoordinateSystem:
         """Querys a subset of axes by axes' names
-        
+
         Parameters
         ----------
         axes_names : list[str]
-            
+
         new_name : Optional[str], optional
             name of the new CoordinateSystem
-        
+
         Returns
         -------
         NgffCoordinateSystem
@@ -179,7 +178,7 @@ class NgffCoordinateSystem:
 
     def has_axis(self, name: str) -> bool:
         """Check if the axis exists in the Coordinate system by name
-        
+
         Parameters
         ----------
         name : str
@@ -202,11 +201,11 @@ class NgffCoordinateSystem:
         coord_sys1: NgffCoordinateSystem, coord_sys2: NgffCoordinateSystem, new_name: Optional[str] = None
     ) -> NgffCoordinateSystem:
         """Merges two coordinate systems
-        
+
         Parameters
         ----------
         coord_sys1 : NgffCoordinateSystem
-            
+
         coord_sys2 : NgffCoordinateSystem
 
         new_name : Optional[str], optional
@@ -227,7 +226,7 @@ class NgffCoordinateSystem:
 
     def set_unit(self, axis_name: str, unit: str) -> None:
         """sets units of an axis
-        
+
         Parameters
         ----------
         axis_name : str
@@ -246,12 +245,12 @@ def _get_spatial_axes(
     coordinate_system: NgffCoordinateSystem,
 ) -> list[str]:
     """Get the names of the spatial axes in a coordinate system.
-    
+
     Parameters
     ----------
     coordinate_system : NgffCoordinateSystem
         The coordinate system to get the spatial axes from.
-    
+
     No Longer Returned
     ------------------
     spatial_axis_names : List[str]
@@ -284,14 +283,14 @@ def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str
 
 def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
     """Create a 2D yx coordinate system.
-    
+
     Parameters
     ----------
     name : Optional[str], optional
         The name of the coordinate system. A default value of None leads to the name being set to "yx".
     unit : Optional[str], optional
         The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
-    
+
     Returns
     -------
     NgffCoordinateSystem
@@ -302,14 +301,14 @@ def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordin
 
 def zyx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
     """Create a 3D zyx coordinate system.
-    
+
     Parameters
     ----------
     name : Optional[str], optional
         The name of the coordinate system. A default value of None leads to the name being set to "zyx".
     unit : Optional[str], optional
         The unit of the spatial axes. A default value of None leads to the unit being set to "unit".
-    
+
     Returns
     -------
     NgffCoordinateSystem

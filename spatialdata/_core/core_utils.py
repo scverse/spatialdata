@@ -50,12 +50,12 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
     """Check if the object is an SpatialElement
-    
+
     Parameters
     ----------
     e : Any
         The input object
-    
+
     Returns
     -------
     bool
@@ -77,12 +77,12 @@ def _validate_mapping_to_coordinate_system_type(transformations: Optional[Mappin
 
 def validate_axis_name(axis: ValidAxis_t) -> None:
     """Check if the axis name is valid
-    
+
     Parameters
     ----------
     axis : ValidAxis_t
         The axis name
-    
+
     Raises
     ------
     TypeError
@@ -94,12 +94,12 @@ def validate_axis_name(axis: ValidAxis_t) -> None:
 
 def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
     """Check if the axes' names are valid
-    
+
     Parameters
     ----------
     axis : ValidAxis_t
         List of the axes' names
-    
+
     Raises
     ------
     TypeError
@@ -113,12 +113,12 @@ def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
 
 def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
     """Get the spatial axes of interest
-    
+
     Parameters
     ----------
     axes : tuple[ValidAxis_t, ...]
         Should be a subset of ['x', 'y', 'z']
-    
+
     Returns
     -------
     tuple[ValidAxis_t, ...]
@@ -293,11 +293,11 @@ _DEFAULT_COORDINATE_SYSTEM = {
 
 def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem:
     """Get the default coordinate system
-    
+
     Parameters
     ----------
     dims : tuple[str, ...]
-        The dimension names to get the corresponding axes of the defeault coordinate system for. 
+        The dimension names to get the corresponding axes of the defeault coordinate system for.
         Names should be in ['x', 'y', 'z', 'c'].
 
     """
@@ -422,6 +422,7 @@ def _(data: SpatialImage) -> SpatialImage:
 
 def _get_scale(transforms: dict[str, Any]) -> Scale:
     from spatialdata._core.transformations import Scale
+
     all_scale_vectors = []
     all_scale_axes = []
     for transformation in transforms.values():

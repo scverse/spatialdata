@@ -144,7 +144,7 @@ class SpatialData:
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
         """Adds an image to the SpatialData object
-        
+
         Parameters
         ----------
         name : str
@@ -173,7 +173,7 @@ class SpatialData:
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
         """Adds labels to the SpatialData object
-        
+
         Parameters
         ----------
         name : str
@@ -200,7 +200,7 @@ class SpatialData:
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
         """Adds shapes to the SpatialData object
-        
+
         Parameters
         ----------
         name : str
@@ -220,7 +220,7 @@ class SpatialData:
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
         """Adds points to the SpatialData object
-        
+
         Parameters
         ----------
         name : str
@@ -245,14 +245,14 @@ class SpatialData:
     # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
         """Get the group for an elemnt, creates a new one if the element doesn't exist
-        
+
         Parameters
         ----------
         name : str
             name of the element
         element_type : str
             type of the element. Should be in ["images", "labels", "points", "polygons", "shapes"].
-        
+
         Returns
         -------
         zarr.Group
@@ -308,18 +308,18 @@ class SpatialData:
 
     def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
         """Find the SpatialElement within the object
-        
+
         Parameters
         ----------
         element : SpatialElement
             The SpatialElement of query
-            
-        
+
+
         Returns
         -------
         tuple[str, str]
-            name and type of the element 
-        
+            name and type of the element
+
         Raises
         ------
         ValueError
@@ -371,7 +371,7 @@ class SpatialData:
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         """Write transformations to disk for an element
-        
+
         Parameters
         ----------
         element : SpatialElement

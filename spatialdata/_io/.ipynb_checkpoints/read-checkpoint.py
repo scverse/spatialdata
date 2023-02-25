@@ -36,7 +36,6 @@ from spatialdata._logging import logger
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
-
     if isinstance(store, str):
         store = Path(store)
 
