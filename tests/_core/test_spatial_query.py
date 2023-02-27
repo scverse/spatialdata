@@ -26,7 +26,7 @@ from spatialdata._core._spatialdata_ops import (
     remove_transformation,
     set_transformation,
 )
-from spatialdata._core.transformations import Affine, Sequence, Scale
+from spatialdata._core.transformations import Affine, Scale, Sequence
 
 
 def _make_points_element():
@@ -392,21 +392,25 @@ def _visualize_crop_affine_labels_2d():
     """
     ##
     # in this test let's try some affine transformations, we could do that also for the other tests
+    # image = scipy.misc.face()[:100, :100, :].copy()
     image = np.random.randint(low=10, high=100, size=(100, 100))
+    multiscale_image = np.repeat(np.repeat(image, 4, axis=0), 4, axis=1)
+
     # y: [5, 9], x: [0, 4] has value 1
     image[50:, :50] = 2
+    # labels_element = Image2DModel.parse(image, dims=('y', 'x', 'c'))
     labels_element = Labels2DModel.parse(image)
     affine = Affine(
-            np.array(
-                [
-                    [np.cos(np.pi / 6), np.sin(-np.pi / 6), 20],
-                    [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
-                    [0, 0, 1],
-                ]
-            ),
-            input_axes=("x", "y"),
-            output_axes=("x", "y"),
-        )
+        np.array(
+            [
+                [np.cos(np.pi / 6), np.sin(-np.pi / 6), 0],
+                [np.sin(np.pi / 6), np.cos(np.pi / 6), 0],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
     set_transformation(
         labels_element,
         affine,
@@ -454,11 +458,10 @@ def _visualize_crop_affine_labels_2d():
         d["3 cropped_rotated_processed_recropped"] = transform_rotated_processed_recropped
         remove_transformation(labels_result_rotated, "global")
 
-    multiscale_image = np.random.randint(low=10, high=100, size=(400, 400))
     multiscale_image[200:, :200] = 2
     # multiscale_labels = Labels2DModel.parse(multiscale_image)
     multiscale_labels = Labels2DModel.parse(multiscale_image, scale_factors=[2, 2, 2, 2])
-    sequence = Sequence([Scale([0.5, 0.5], axes=('x', 'y')), affine])
+    sequence = Sequence([Scale([0.25, 0.25], axes=("x", "y")), affine])
     set_transformation(multiscale_labels, sequence, "rotated")
 
     from spatialdata._core._rasterize import rasterize
@@ -473,6 +476,7 @@ def _visualize_crop_affine_labels_2d():
     )
     d["4 rasterized"] = rasterized
 
+    # sdata = SpatialData(images=d)
     sdata = SpatialData(labels=d)
     Interactive(sdata)
     ##

@@ -128,6 +128,10 @@ class BaseTransformation(ABC):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         pass
 
+    def to_affine(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> Affine:
+        affine_matrix = self.to_affine_matrix(input_axes, output_axes)
+        return Affine(affine_matrix, input_axes, output_axes)
+
     # order of the composition: self is applied first, then the transformation passed as argument
     def compose_with(self, transformations: Union[BaseTransformation, list[BaseTransformation]]) -> BaseTransformation:
         if isinstance(transformations, BaseTransformation):

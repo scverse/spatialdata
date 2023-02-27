@@ -1,19 +1,41 @@
-import numpy as np
 from functools import singledispatch
+from typing import Optional, Union
 
-from spatialdata import SpatialData
-from typing import Union, Optional
-from spatial_image import SpatialImage
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatialdata._types import ArrayLike
-from spatialdata._core.core_utils import SpatialElement, get_dims, compute_coordinates, _get_scale
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation, remove_transformation
-from spatialdata._core.transformations import _get_affine_for_element, Sequence, Translation, Scale, Affine
+import dask_image.ndinterp
+import numpy as np
+from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-import dask_image.ndinterp
-from spatialdata._core.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, get_schema
-from dask.array.core import Array as DaskArray
+from multiscale_spatial_image import MultiscaleSpatialImage
+from spatial_image import SpatialImage
+
+from spatialdata import SpatialData
+from spatialdata._core._spatialdata_ops import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
+from spatialdata._core.core_utils import (
+    SpatialElement,
+    _get_scale,
+    compute_coordinates,
+    get_dims,
+)
+from spatialdata._core.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    get_schema,
+)
+from spatialdata._core.transformations import (
+    BaseTransformation,
+    Scale,
+    Sequence,
+    Translation,
+    _get_affine_for_element,
+)
+from spatialdata._types import ArrayLike
 
 
 def _compute_target_dimensions(
@@ -24,7 +46,7 @@ def _compute_target_dimensions(
     target_width: Optional[float],
     target_height: Optional[float],
     target_depth: Optional[float],
-) -> tuple[float, float, float]:
+) -> tuple[float, float, Optional[float]]:
     assert (
         np.sum(
             [
@@ -73,10 +95,15 @@ def _compute_target_dimensions(
             assert d_to_h_bb is not None
             target_depth = target_height * d_to_h_bb
     elif target_depth is not None:
+        assert d_to_h_bb is not None
         target_height = target_depth / d_to_h_bb
         target_width = target_height * w_to_h_bb
     else:
         raise RuntimeError("Should not reach here")
+    assert target_width is not None
+    assert isinstance(target_width, float)
+    assert target_height is not None
+    assert isinstance(target_height, float)
     return target_width, target_height, target_depth
 
 
@@ -142,6 +169,7 @@ def _(
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialImage:
+    # get dimensions of the target image
     target_width, target_height, target_depth = _compute_target_dimensions(
         axes=axes,
         min_coordinate=min_coordinate,
@@ -156,9 +184,26 @@ def _(
         "y": target_height,
         "z": target_depth,
     }
+
+    # get inverse transformation
+    transformation = get_transformation(data, target_coordinate_system)
+    dims = get_dims(data)
+    assert isinstance(transformation, BaseTransformation)
+    affine = _get_affine_for_element(data, transformation)
+    target_axes_unordered = affine.output_axes
+    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}]
+    assert len(target_axes_unordered) == len(min_coordinate)
+    assert len(target_axes_unordered) == len(max_coordinate)
+    target_axes: tuple[str, ...]
+    if "z" in target_axes_unordered:
+        target_axes = ("z", "y", "x")
+    else:
+        target_axes = ("y", "x")
+    corrected_affine = affine.to_affine(input_axes=dims, output_axes=target_axes)
+
     # get xdata
     if isinstance(data, SpatialImage):
-        xdata = data.data
+        xdata = data
         pyramid_scale = None
     elif isinstance(data, MultiscaleSpatialImage):
         latest_scale: Optional[str] = None
@@ -169,41 +214,44 @@ def _(
             assert len(v) == 1
             xdata = next(iter(v))
             assert set(xdata.sizes.keys()) == set(axes)
+
+            m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
+            m_linear = m[:-1, :-1]
+            m_translation = m[:-1, -1]
+            from spatialdata._core._spatial_query import get_bounding_box_corners
+
+            bb_corners = get_bounding_box_corners(
+                min_coordinate=min_coordinate, max_coordinate=max_coordinate, axes=axes
+            )
+            assert tuple(bb_corners.axis.data.tolist()) == axes
+            bb_in_xdata = bb_corners.data @ m_linear + m_translation
+            bb_in_xdata_sizes = {
+                ax: bb_in_xdata[axes.index(ax)].max() - bb_in_xdata[axes.index(ax)].min() for ax in axes
+            }
             for ax in axes:
-                if xdata.sizes[ax] < target_sizes[ax]:
+                # TLDR; the sqrt selects a pyramid level in which the requested bounding box is a bit larger than the
+                # size of the data we want to obtain
+                #
+                # Intuition: the sqrt is to account for the fact that the bounding box could be rotated in the
+                # intrinsic space, so bb_in_xdata_sizes is actually measuring the size of the bounding box of the
+                # inverse-transformed bounding box. The sqrt comes from the ratio of the side of a square,
+                # and the maximum diagonal of a square containing the original square, if the original square is
+                # rotated.
+                if bb_in_xdata_sizes[ax] * np.sqrt(len(axes)) < target_sizes[ax]:
                     break
             else:
                 break
         assert latest_scale is not None
         xdata = next(iter(data[latest_scale].values()))
-        if latest_scale != 'scale0':
-            transformations = xdata.attrs['transform']
+        if latest_scale != "scale0":
+            transformations = xdata.attrs["transform"]
             pyramid_scale = _get_scale(transformations)
         else:
             pyramid_scale = None
     else:
         raise RuntimeError("Should not reach here")
 
-    # get transformation
-    transformation = get_transformation(data, target_coordinate_system)
-    dims = get_dims(data)
-    affine = _get_affine_for_element(data, transformation)
-    target_axes_unordered = affine.output_axes
-    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}]
-    assert len(target_axes_unordered) == len(min_coordinate)
-    assert len(target_axes_unordered) == len(max_coordinate)
-    if "z" in target_axes_unordered:
-        target_axes = ("z", "y", "x")
-    else:
-        target_axes = ("y", "x")
-    corrected_affine = Affine(
-        affine.to_affine_matrix(input_axes=dims, output_axes=target_axes), input_axes=dims, output_axes=target_axes
-    )
-
-    bb_sizes = {
-        ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)]
-        for ax in target_axes
-    }
+    bb_sizes = {ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)] for ax in target_axes}
     scale_vector = [bb_sizes[ax] / target_sizes[ax] for ax in target_axes]
     scale = Scale(scale_vector, axes=target_axes)
 
@@ -214,18 +262,23 @@ def _(
         extra = [pyramid_scale.inverse()]
     else:
         extra = []
+
     sequence = Sequence([scale, translation, corrected_affine.inverse()] + extra)
     matrix = sequence.to_affine_matrix(input_axes=target_axes, output_axes=dims)
 
     # get output shape
-    output_shape = tuple(int(target_sizes[ax]) for ax in dims)
+    output_shape_ = []
+    for ax in dims:
+        f = target_sizes[ax]
+        if f is not None:
+            output_shape_.append(int(f))
+    output_shape = tuple(output_shape_)
 
     # get kwargs and schema
     schema = get_schema(data)
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
-        # TODO: this should work, test better
-        kwargs = {"prefilter": False}
+        kwargs = {"prefilter": False, "order": 0}
     elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
     else:
