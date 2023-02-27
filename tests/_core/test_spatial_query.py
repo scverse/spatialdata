@@ -384,7 +384,8 @@ def _visualize_crop_affine_labels_2d():
     6) Note that for obtaning the previous answer there is also a better function rasterize().
     This is what "4 rasterized" shows, which is faster and more accurate, so it should be used instead. The function
     rasterize() transforms all the coordinates of the data into the target coordinate system, and it returns only
-    SpatialImage objects. So it has different use cases than the bounding box query.
+    SpatialImage objects. So it has different use cases than the bounding box query. BUG: Note that it is not pixel
+     perfect. I think this is due to the difference between considering the origin of a pixel its center or its corner.
     7) finally switch to the "global" coordinate_system. This is, for how we constructed the example, showing the
     original image as it would appear its intrinsic coordinate system (since the transformation that maps the
     original image to "global" is an identity. It then shows how the data showed at the point 5), localizes in the
