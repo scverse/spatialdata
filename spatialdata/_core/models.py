@@ -357,6 +357,8 @@ class ShapesModel:
             In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
         radius
             Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+        index
+            Index of the shapes, must be of type `str`. If None, it's generated automatically.
         transform
             Transform of points.
         kwargs
@@ -376,6 +378,7 @@ class ShapesModel:
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: Optional[tuple[ArrayLike, ...]] = None,
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> GeoDataFrame:
         geometry = GeometryType(geometry)
@@ -385,6 +388,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -396,6 +401,7 @@ class ShapesModel:
         cls,
         data: Union[str, Path],
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
@@ -411,6 +417,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -457,17 +465,6 @@ class PointsModel:
                     logger.info(
                         f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
                     )
-        # commented out to address this issue: https://github.com/scverse/spatialdata/issues/140
-        # for c in data.columns:
-        #     #  this is not strictly a validation since we are explicitly importing the categories
-        #     #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
-        #     #  series, so it is not a big deal.
-        #     if is_categorical_dtype(data[c]):
-        #         if not data[c].cat.known:
-        #             try:
-        #                 data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
-        #             except ValueError:
-        #                 logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
     @singledispatchmethod
     @classmethod
@@ -592,6 +589,17 @@ class PointsModel:
         if instance_key is not None:
             assert instance_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
+
+        for c in data.columns:
+            #  Here we are explicitly importing the categories
+            #  but it is a convenient way to ensure that the categories are known.
+            # It also just changes the state of the series, so it is not a big deal.
+            if is_categorical_dtype(data[c]):
+                if not data[c].cat.known:
+                    try:
+                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                    except ValueError:
+                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
         _parse_transformations(data, transformations)
         cls.validate(data)
