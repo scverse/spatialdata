@@ -267,6 +267,8 @@ def write_shapes(
     shapes_group.create_dataset(name="coords", data=coords)
     for i, o in enumerate(offsets):
         shapes_group.create_dataset(name=f"offset{i}", data=o)
+    # index cannot be string
+    # https://github.com/zarr-developers/zarr-python/issues/1090
     shapes_group.create_dataset(name="Index", data=shapes.index.values)
     if geometry.name == "POINT":
         shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
