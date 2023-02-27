@@ -5,10 +5,14 @@ import filecmp
 import os.path
 import re
 import tempfile
+from collections.abc import Generator
+from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import numpy as np
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -146,3 +150,76 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         return unpadded_multiscale
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
+
+
+def _get_backing_files_raster(raster: DataArray) -> list[str]:
+    files = []
+    for k, v in raster.data.dask.layers.items():
+        if k.startswith("original-from-zarr-"):
+            mapping = v.mapping[k]
+            path = mapping.store.path
+            files.append(path)
+    return files
+
+
+@singledispatch
+def get_backing_files(element: Union[SpatialImage, MultiscaleSpatialImage, DaskDataFrame]) -> list[str]:
+    raise TypeError(f"Unsupported type: {type(element)}")
+
+
+@get_backing_files.register(SpatialImage)
+def _(element: SpatialImage) -> list[str]:
+    return _get_backing_files_raster(element)
+
+
+@get_backing_files.register(MultiscaleSpatialImage)
+def _(element: MultiscaleSpatialImage) -> list[str]:
+    xdata0 = next(iter(iterate_pyramid_levels(element)))
+    return _get_backing_files_raster(xdata0)
+
+
+@get_backing_files.register(DaskDataFrame)
+def _(element: DaskDataFrame) -> list[str]:
+    files = []
+    layers = element.dask.layers
+    for k, v in layers.items():
+        if k.startswith("read-parquet-"):
+            t = v.creation_info["args"]
+            assert isinstance(t, tuple)
+            assert len(t) == 1
+            parquet_file = t[0]
+            files.append(parquet_file)
+    return files
+
+
+# TODO: probably we want this method to live in multiscale_spatial_image
+def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSpatialImage:
+    d = {}
+    for k, dt in data_tree.items():
+        v = dt.values()
+        assert len(v) == 1
+        xdata = v.__iter__().__next__()
+        d[k] = xdata
+    return MultiscaleSpatialImage.from_dict(d)
+
+
+def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray, None, None]:
+    """
+    Iterate over the pyramid levels of a multiscale spatial image.
+
+    Parameters
+    ----------
+    image
+        The multiscale spatial image.
+
+    Returns
+    -------
+    A generator that yields the pyramid levels.
+    """
+    for k in range(len(image)):
+        scale_name = f"scale{k}"
+        dt = image[scale_name]
+        v = dt.values()
+        assert len(v) == 1
+        xdata = next(iter(v))
+        yield xdata

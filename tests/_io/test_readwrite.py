@@ -242,17 +242,24 @@ def test_overwrite_files_with_backed_data(full_sdata):
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         full_sdata.write(f)
-        full_sdata.write(f, overwrite=True)
-        print(full_sdata)
+        with pytest.raises(ValueError):
+            full_sdata.write(f, overwrite=True)
 
-        sdata2 = SpatialData(
-            images=full_sdata.images,
-            labels=full_sdata.labels,
-            points=full_sdata.points,
-            shapes=full_sdata.shapes,
-            table=full_sdata.table,
-        )
-        sdata2.write(f, overwrite=True)
+    # support for overwriting backed sdata has been temporarily removed
+    # with tempfile.TemporaryDirectory() as tmpdir:
+    #     f = os.path.join(tmpdir, "data.zarr")
+    #     full_sdata.write(f)
+    #     full_sdata.write(f, overwrite=True)
+    #     print(full_sdata)
+    #
+    #     sdata2 = SpatialData(
+    #         images=full_sdata.images,
+    #         labels=full_sdata.labels,
+    #         points=full_sdata.points,
+    #         shapes=full_sdata.shapes,
+    #         table=full_sdata.table,
+    #     )
+    #     sdata2.write(f, overwrite=True)
 
 
 def test_overwrite_onto_non_zarr_file(full_sdata):
@@ -279,15 +286,21 @@ def test_incremental_io_with_backed_elements(full_sdata):
 
         e = full_sdata.images.values().__iter__().__next__()
         full_sdata.add_image("new_images", e, overwrite=True)
-        full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
+        # support for overwriting backed images has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
 
         e = full_sdata.labels.values().__iter__().__next__()
         full_sdata.add_labels("new_labels", e, overwrite=True)
-        full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
+        # support for overwriting backed images has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
 
         e = full_sdata.points.values().__iter__().__next__()
         full_sdata.add_points("new_points", e, overwrite=True)
-        full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
+        # support for overwriting backed images has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
 
         e = full_sdata.shapes.values().__iter__().__next__()
         full_sdata.add_shapes("new_shapes", e, overwrite=True)
