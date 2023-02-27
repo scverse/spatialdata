@@ -28,7 +28,12 @@ from spatialdata._core.core_utils import (
 )
 from spatialdata._core.models import ShapesModel
 from spatialdata._core.transformations import _get_current_output_axes
-from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
+from spatialdata._io.format import (
+    CurrentPointsFormat,
+    CurrentRasterFormat,
+    CurrentShapesFormat,
+    CurrentTablesFormat,
+)
 
 __all__ = [
     "write_image",
@@ -89,15 +94,14 @@ def overwrite_coordinate_transformations_raster(
 def _write_metadata(
     group: zarr.Group,
     group_type: str,
-    # coordinate_transformations: list[dict[str, Any]],
+    fmt: Format,
     axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
     attrs: Optional[Mapping[str, Any]] = None,
-    fmt: Format = SpatialDataFormatV01(),
 ) -> None:
     """Write metdata to a group."""
     axes = _get_valid_axes(axes=axes, fmt=fmt)
 
-    group.attrs["@type"] = group_type
+    group.attrs["encoding-type"] = group_type
     group.attrs["axes"] = axes
     # we write empty coordinateTransformations and then overwrite them with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
@@ -110,7 +114,7 @@ def _write_raster(
     raster_data: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     channels_metadata: Optional[JSONDict] = None,
@@ -212,7 +216,7 @@ def write_image(
     image: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
@@ -231,7 +235,7 @@ def write_labels(
     labels: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -253,7 +257,7 @@ def write_shapes(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:shapes",
-    fmt: Format = ShapesFormat(),
+    fmt: Format = CurrentShapesFormat(),
 ) -> None:
     axes = get_dims(shapes)
     t = _get_transformations(shapes)
@@ -268,12 +272,11 @@ def write_shapes(
         shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
     attrs = fmt.attrs_to_dict(geometry)
-    attrs["version"] = fmt.spatialdata_version
+    attrs["version"] = fmt.version
 
     _write_metadata(
         shapes_group,
         group_type=group_type,
-        # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
@@ -287,7 +290,7 @@ def write_points(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
-    fmt: Format = PointsFormat(),
+    fmt: Format = CurrentPointsFormat(),
 ) -> None:
     axes = get_dims(points)
     t = _get_transformations(points)
@@ -297,12 +300,11 @@ def write_points(
     points.to_parquet(path)
 
     attrs = fmt.attrs_to_dict(points.attrs)
-    attrs["version"] = fmt.spatialdata_version
+    attrs["version"] = fmt.version
 
     _write_metadata(
         points_groups,
         group_type=group_type,
-        # coordinate_transformations=coordinate_transformations,
         axes=list(axes),
         attrs=attrs,
         fmt=fmt,
@@ -316,7 +318,7 @@ def write_table(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
-    fmt: Format = SpatialDataFormatV01(),
+    fmt: Format = CurrentTablesFormat(),
 ) -> None:
     region = table.uns["spatialdata_attrs"]["region"]
     region_key = table.uns["spatialdata_attrs"].get("region_key", None)
@@ -324,11 +326,11 @@ def write_table(
     fmt.validate_table(table, region_key, instance_key)
     write_adata(group, name, table)  # creates group[name]
     tables_group = group[name]
-    tables_group.attrs["@type"] = group_type
+    tables_group.attrs["spatialdata-encoding-type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
-    tables_group.attrs["version"] = fmt.spatialdata_version
+    tables_group.attrs["version"] = fmt.version
 
 
 def _iter_multiscale(

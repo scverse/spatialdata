@@ -17,31 +17,11 @@ Points_s = PointsModel()
 
 
 class SpatialDataFormatV01(CurrentFormat):
-    """
-    SpatialDataFormat defines the format of the spatialdata
-    package.
-    """
+    """SpatialDataFormat defines the format of the spatialdata package."""
 
-    @property
-    def spatialdata_version(self) -> str:
-        return "0.1"
 
-    def validate_table(
-        self,
-        table: AnnData,
-        region_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-    ) -> None:
-        if not isinstance(table, AnnData):
-            raise TypeError(f"`tables` must be `anndata.AnnData`, was {type(table)}.")
-        if region_key is not None:
-            if not is_categorical_dtype(table.obs[region_key]):
-                raise ValueError(
-                    f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
-                )
-        if instance_key is not None:
-            if table.obs[instance_key].isnull().values.any():
-                raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
+class RasterFormatV01(SpatialDataFormatV01):
+    """Formatter for raster data."""
 
     def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> Optional[list[list[dict[str, Any]]]]:
         data_shape = shapes[0]
@@ -114,8 +94,12 @@ class SpatialDataFormatV01(CurrentFormat):
         return [d["labels"] for d in omero_metadata["channels"]]
 
 
-class ShapesFormat(SpatialDataFormatV01):
+class ShapesFormatV01(SpatialDataFormatV01):
     """Formatter for shapes."""
+
+    @property
+    def version(self) -> str:
+        return "0.1"
 
     def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
         if Shapes_s.ATTRS_KEY not in metadata:
@@ -129,21 +113,25 @@ class ShapesFormat(SpatialDataFormatV01):
 
         typ = GeometryType(metadata_[Shapes_s.GEOS_KEY][Shapes_s.TYPE_KEY])
         assert typ.name == metadata_[Shapes_s.GEOS_KEY][Shapes_s.NAME_KEY]
-        assert self.spatialdata_version == metadata_["version"]
+        assert self.version == metadata_["version"]
         return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
         return {Shapes_s.GEOS_KEY: {Shapes_s.NAME_KEY: geometry.name, Shapes_s.TYPE_KEY: geometry.value}}
 
 
-class PointsFormat(SpatialDataFormatV01):
+class PointsFormatV01(SpatialDataFormatV01):
     """Formatter for points."""
+
+    @property
+    def version(self) -> str:
+        return "0.1"
 
     def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.spatialdata_version == metadata_["version"]
+        assert self.version == metadata_["version"]
         d = {}
         if Points_s.FEATURE_KEY in metadata_:
             d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
@@ -159,3 +147,34 @@ class PointsFormat(SpatialDataFormatV01):
             if Points_s.FEATURE_KEY in data[Points_s.ATTRS_KEY]:
                 d[Points_s.FEATURE_KEY] = data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]
         return d
+
+
+class TablesFormatV01(SpatialDataFormatV01):
+    """Formatter for tables."""
+
+    @property
+    def version(self) -> str:
+        return "0.1"
+
+    def validate_table(
+        self,
+        table: AnnData,
+        region_key: Optional[str] = None,
+        instance_key: Optional[str] = None,
+    ) -> None:
+        if not isinstance(table, AnnData):
+            raise TypeError(f"`tables` must be `anndata.AnnData`, was {type(table)}.")
+        if region_key is not None:
+            if not is_categorical_dtype(table.obs[region_key]):
+                raise ValueError(
+                    f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
+                )
+        if instance_key is not None:
+            if table.obs[instance_key].isnull().values.any():
+                raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
+
+
+CurrentRasterFormat = RasterFormatV01
+CurrentShapesFormat = ShapesFormatV01
+CurrentPointsFormat = PointsFormatV01
+CurrentTablesFormat = TablesFormatV01
