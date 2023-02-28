@@ -80,7 +80,7 @@ def _aggregate_shapes_by_shapes(
         # We should only be buffering points, not polygons. Unfortunately this is an expensive check.
         values_geotypes = list(values.geom_type.unique())
         if values_geotypes == ["Point"]:
-            df = df.buffer(df[ShapesModel.RADIUS_KEY])
+            df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY]))
         elif "Point" in values_geotypes:
             raise TypeError("Geometry contained shapes and polygons.")
         return df
