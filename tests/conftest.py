@@ -24,6 +24,12 @@ from spatialdata.models import (
     TableModel,
 )
 
+# isort: off
+import os
+
+os.environ["USE_PYGEOS"] = "0"
+# isort:on
+
 RNG = default_rng()
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
