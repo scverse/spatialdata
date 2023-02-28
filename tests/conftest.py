@@ -1,3 +1,8 @@
+# isort: off
+import os
+
+os.environ["USE_PYGEOS"] = "0"
+# isort:on
 from typing import Optional, Union
 
 import numpy as np
