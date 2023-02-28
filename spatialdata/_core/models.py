@@ -629,7 +629,6 @@ class TableModel:
                 if "instance_key" not in attr:
                     raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
             elif isinstance(attr["region"], str):
-                assert attr["region_key"] is None
                 if "instance_key" not in attr:
                     raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
         return data
@@ -656,10 +655,6 @@ class TableModel:
             instance_key = attr[cls.INSTANCE_KEY]
 
         if isinstance(region, str):
-            if region_key is not None:
-                raise ValueError(
-                    f"If `{cls.REGION_KEY}` is of type `str`, `{cls.REGION_KEY_KEY}` must be `None` as it is redundant."
-                )
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
         elif isinstance(region, list):

@@ -251,14 +251,16 @@ def _get_table(
     instance_key: Optional[str] = None,
 ) -> AnnData:
     if region is not None:
-        region_key = region_key or "annotated_region"
         instance_key = instance_key or "instance_id"
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
     if instance_key is not None:
+        # from today pycharm refuses to execute this line if I run a test...
         adata.obs[instance_key] = np.arange(adata.n_obs)
+        # adata.obs.__setitem__(instance_key, np.arange(adata.n_obs))
     if isinstance(region, str):
-        return TableModel.parse(adata=adata, region=region, instance_key=instance_key)
+        return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
     elif isinstance(region, list):
+        region_key = region_key or "annotated_region"
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
         return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)

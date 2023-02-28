@@ -8,6 +8,7 @@ import numpy as np
 from anndata import AnnData
 
 from spatialdata._core.models import TableModel
+from spatialdata._logging import logger
 
 if TYPE_CHECKING:
     from spatialdata._core._spatialdata import SpatialData
@@ -316,17 +317,18 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
         return tables[0]
 
     # 1) if REGION is a list, REGION_KEY is a string and there is a column in the table, with that name, specifying
-    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY is not used.
+    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY may or not be specified.
     #
     # In case 1), we require that each table has the same value for REGION_KEY (this assumption could be relaxed,
-    # see below) and then we concatenate the table. The new concatenated column is correcly annotating the rows.
+    # see below) and then we concatenate the table. The new concatenated column is correctly annotating the rows.
     #
-    # In case 2), we require that each table has no REGION_KEY value. In such a case, contatenating the tables would
-    # not add any "REGION_KEY" column, since no table has it. For this reason we add such column to each table and we
-    # call it "annotated_element_merged". Such a column could be already present in the table (for instance merging a
-    # table that had already been merged), so the for loop before find a unique name. I added an upper bound,
-    # so if the user keeps merging the same table more than 100 times (this is bad practice anyway), then we raise an
-    # exception.
+    # In case 2), we check if there is a REGION_KEY value. Let's first assume there is no value. Then contatenating
+    # the tables would not add any "REGION_KEY" column, since no table has it. For this reason we add such column to
+    # each table and we call it "annotated_element_merged". Such a column could be already present in the table (for
+    # instance merging a table that had already been merged), so the for loop before find a unique name. I added an
+    # upper bound, so if the user keeps merging the same table more than 100 times (this is bad practice anyway),
+    # then we raise an exception. Let's now assume that some tables have a REGION_KEY value. We require that all
+    # those table have the same REGION_KEY value. Again, this assumption could be relaxed (see below).
     #
     # Final note, as mentioned we could relax the requirement that all the tables have the same REGION_KEY value (
     # either all the same string, either all None), but I wanted to start simple, since this covers a lot of use
@@ -359,33 +361,34 @@ def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
         assert all(all_instance_keys[0] == instance_key for instance_key in all_instance_keys)
         merged_instance_key = all_instance_keys[0]
 
-        all_region_keys = []
+        all_region_keys = set()
         for table in tables:
             TableModel().validate(table)
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
             region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-            if not (
-                isinstance(region, str)
-                and region_key is None
-                or isinstance(region, list)
-                and isinstance(region_key, str)
-            ):
+            if isinstance(region, list) and region_key is None:
                 # this code should be never reached because the validate function should have raised an exception, but
                 # let's be extra safe
                 raise RuntimeError("Tables have incompatible region keys")
-            if isinstance(region, list):
-                all_region_keys.append(region_key)
+            if region_key is not None:
+                try:
+                    table.obs[MERGED_TABLES_REGION_KEY] = table.obs[region_key]
+                except KeyError as e:
+                    logger.error(
+                        f"The table has a region_key ({region_key}), but the column with that name is not present in the table"
+                    )
+                    raise e
+                all_region_keys.add(region_key)
             else:
-                assert (
-                    len(all_region_keys) == 0
-                    or len(set(all_region_keys)) == 1
-                    and all_region_keys[0] == MERGED_TABLES_REGION_KEY
-                )
                 table.obs[MERGED_TABLES_REGION_KEY] = region
-                all_region_keys.append(MERGED_TABLES_REGION_KEY)
-        if len(set(all_region_keys)) != 1:
-            raise RuntimeError("Tables have incompatible region keys")
-        merged_region_key = all_region_keys[0]
+            if not len(all_region_keys) <= 1:
+                raise RuntimeError("Tables have incompatible region keys (at most one different value is allowed)")
+        if len(all_region_keys) == 0:
+            merged_region_key = MERGED_TABLES_REGION_KEY
+        else:
+            merged_region_key = all_region_keys.pop()
+            for table in tables:
+                table.obs[merged_region_key] = table.obs[MERGED_TABLES_REGION_KEY]
 
         all_regions = []
         for table in tables:

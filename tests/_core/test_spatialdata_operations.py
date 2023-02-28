@@ -111,19 +111,31 @@ def test_concatenate_tables():
     c0 = _concatenate_tables([table0, table1])
     assert len(c0) == len(table0) + len(table1)
 
-    d = c0.uns[TableModel.ATTRS_KEY]
-    d["region"] = sorted(d["region"])
-    assert d == {
+    d0 = c0.uns[TableModel.ATTRS_KEY]
+    d0["region"] = sorted(d0["region"])
+    assert d0 == {
         "region": ["shapes/circles", "shapes/poly"],
         "region_key": "annotated_element_merged_1",
         "instance_key": "instance_id",
     }
 
     ##
-    table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
-    table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
-    with pytest.raises(AssertionError):
-        _concatenate_tables([table0, table3])
+    table3 = _get_table(region="shapes/circles", region_key="annotated_element_merged_1", instance_key="instance_id")
+    table3.obs["annotated_element_merged_1"] = "shapes/circles"
+    c1 = _concatenate_tables([table0, table3])
+    d1 = c1.uns[TableModel.ATTRS_KEY]
+    d1["region"] = sorted(d1["region"])
+    assert d1 == {
+        "region": ["shapes/circles"],
+        "region_key": "annotated_element_merged_1",
+        "instance_key": "instance_id",
+    }
+    table1.uns[TableModel.ATTRS_KEY]["region_key"] = "another"
+    table1.obs["another"] = "shapes/poly"
+    # region key can't have more than one value across the tables to concatenate
+    with pytest.raises(RuntimeError):
+        _concatenate_tables([table0, table3, table1])
+
     table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
     table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/circles", "shapes/poly"]
     with pytest.raises(AssertionError):
@@ -142,6 +154,7 @@ def test_concatenate_tables():
 
     assert len(_concatenate_tables([table4, table5])) == len(table4) + len(table5)
 
+    # region key can't have more than one value across the tables to concatenate
     with pytest.raises(RuntimeError):
         _concatenate_tables([table4, table6])
 
