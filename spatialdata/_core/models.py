@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from warnings import warn
 
 import dask.dataframe as dd
 import numpy as np
@@ -668,7 +669,7 @@ class TableModel:
             if not adata.obs[region_key].isin(region).all():
                 raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
             if not is_categorical_dtype(adata.obs[region_key]):
-                logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+                warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
                 adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
