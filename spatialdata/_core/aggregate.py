@@ -65,7 +65,6 @@ def _aggregate_points_by_shapes(
     if isinstance(points, ddf.DataFrame):
         points = points.compute()
     points = gpd.GeoDataFrame(points, geometry=gpd.points_from_xy(*[points[dim] for dim in dims]))
-    print(points.geometry, shapes.geometry)
     return _aggregate(points, shapes, id_key, value_key, agg_func)
 
 
