@@ -60,7 +60,7 @@ def test_aggregate_polygons_by_polygons():
     np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
 
 
-def aggregate_circles_by_polygons():
+def test_aggregate_circles_by_polygons():
     # Basically the same as above, but not buffering explicitly
     cellular = ShapesModel.parse(
         gpd.GeoDataFrame(
