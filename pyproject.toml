@@ -34,7 +34,6 @@ dependencies = [
     "shapely>=2.0.1",
     "rich",
     "pyarrow",
-    "tqdm",
     "typing_extensions>=4.0.0",
     "dask-image",
     "networkx"

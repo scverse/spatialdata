@@ -99,9 +99,9 @@ def test_concatenate_tables():
     """
     The concatenation uses AnnData.concatenate(), here we test the contatenation result on region, region_key, instance_key
     """
-    table0 = _get_table(region="shapes/circles", region_key=None, instance_key="instance_id")
-    table1 = _get_table(region="shapes/poly", region_key=None, instance_key="instance_id")
-    table2 = _get_table(region="shapes/poly", region_key=None, instance_key="instance_id")
+    table0 = _get_table(region="shapes/circles", instance_key="instance_id")
+    table1 = _get_table(region="shapes/poly", instance_key="instance_id")
+    table2 = _get_table(region="shapes/poly", instance_key="instance_id")
     assert _concatenate_tables([]) is None
     assert len(_concatenate_tables([table0])) == len(table0)
     assert len(_concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
