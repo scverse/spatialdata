@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import anndata
 import networkx as nx
 import numpy as np
-from anndata import AnnData
+import pandas as pd
 
 from spatialdata._core.models import TableModel
 
@@ -26,7 +26,6 @@ __all__ = [
     "get_transformation",
     "remove_transformation",
     "get_transformation_between_coordinate_systems",
-    "_concatenate_tables",
     "concatenate",
 ]
 
@@ -291,154 +290,65 @@ def get_transformation_between_coordinate_systems(
         return sequence
 
 
-def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
+def concatenate(
+    sdatas: list[SpatialData],
+    region_key: str = "region_merged",
+    instance_key: str = "instance_merged",
+    **kwargs: Any,
+) -> SpatialData:
     """
-    Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
-
-    Parameters
-    ----------
-    tables
-        A list of tables to concatenate
-
-    Returns
-    -------
-    A table with all the tables concatenated. If the list of tables is empty, None is returned.
-
-    Notes
-    -----
-    Not all tables can be merged, they need to have compatible region, region_key and instance_key values. This function
-    checks this and merges if possible.
-
-    """
-    if len(tables) == 0:
-        return None
-    if len(tables) == 1:
-        return tables[0]
-
-    # 1) if REGION is a list, REGION_KEY is a string and there is a column in the table, with that name, specifying
-    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY is not used.
-    #
-    # In case 1), we require that each table has the same value for REGION_KEY (this assumption could be relaxed,
-    # see below) and then we concatenate the table. The new concatenated column is correcly annotating the rows.
-    #
-    # In case 2), we require that each table has no REGION_KEY value. In such a case, contatenating the tables would
-    # not add any "REGION_KEY" column, since no table has it. For this reason we add such column to each table and we
-    # call it "annotated_element_merged". Such a column could be already present in the table (for instance merging a
-    # table that had already been merged), so the for loop before find a unique name. I added an upper bound,
-    # so if the user keeps merging the same table more than 100 times (this is bad practice anyway), then we raise an
-    # exception.
-    #
-    # Final note, as mentioned we could relax the requirement that all the tables have the same REGION_KEY value (
-    # either all the same string, either all None), but I wanted to start simple, since this covers a lot of use
-    # cases already.
-    MERGED_TABLES_REGION_KEY = "annotated_element_merged"
-    MAX_CONCATENTAION_TABLES = 100
-    for i in range(MAX_CONCATENTAION_TABLES):
-        if i == 0:
-            key = MERGED_TABLES_REGION_KEY
-        else:
-            key = f"{MERGED_TABLES_REGION_KEY}_{i}"
-
-        all_without = True
-        for table in tables:
-            if key in table.obs:
-                all_without = False
-                break
-        if all_without:
-            MERGED_TABLES_REGION_KEY = key
-            break
-
-    spatialdata_attrs_found = [TableModel.ATTRS_KEY in table.uns for table in tables]
-    assert all(spatialdata_attrs_found) or not any(spatialdata_attrs_found)
-    if not any(spatialdata_attrs_found):
-        merged_region = None
-        merged_region_key = None
-        merged_instance_key = None
-    else:
-        all_instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
-        assert all(all_instance_keys[0] == instance_key for instance_key in all_instance_keys)
-        merged_instance_key = all_instance_keys[0]
-
-        all_region_keys = []
-        for table in tables:
-            TableModel().validate(table)
-            region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-            region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-            if not (
-                isinstance(region, str)
-                and region_key is None
-                or isinstance(region, list)
-                and isinstance(region_key, str)
-            ):
-                # this code should be never reached because the validate function should have raised an exception, but
-                # let's be extra safe
-                raise RuntimeError("Tables have incompatible region keys")
-            if isinstance(region, list):
-                all_region_keys.append(region_key)
-            else:
-                assert (
-                    len(all_region_keys) == 0
-                    or len(set(all_region_keys)) == 1
-                    and all_region_keys[0] == MERGED_TABLES_REGION_KEY
-                )
-                table.obs[MERGED_TABLES_REGION_KEY] = region
-                all_region_keys.append(MERGED_TABLES_REGION_KEY)
-        if len(set(all_region_keys)) != 1:
-            raise RuntimeError("Tables have incompatible region keys")
-        merged_region_key = all_region_keys[0]
-
-        all_regions = []
-        for table in tables:
-            region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-            if isinstance(region, str):
-                all_regions.append(region)
-            else:
-                all_regions.extend(region)
-        all_regions = list(set(all_regions))
-        merged_region = all_regions
-
-    attr = {"region": merged_region, "region_key": merged_region_key, "instance_key": merged_instance_key}
-    merged_table = anndata.concat(tables, join="outer", uns_merge="same")
-
-    # remove the MERGED_TABLES_REGION_KEY column if it has been added (the code above either adds that column
-    # to all the tables, either it doesn't add it at all)
-    for table in tables:
-        if MERGED_TABLES_REGION_KEY in table.obs:
-            del table.obs[MERGED_TABLES_REGION_KEY]
-
-    merged_table.uns[TableModel.ATTRS_KEY] = attr
-    merged_table.obs[merged_region_key] = merged_table.obs[merged_region_key].astype("category")
-    TableModel().validate(merged_table)
-    return merged_table
-
-
-def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
-    """Concatenate a list of spatial data objects.
+    Concatenate a list of spatial data objects.
 
     Parameters
     ----------
     sdatas
         The spatial data objects to concatenate.
-    omit_table
-        If True, the table is not concatenated. This is useful if the tables are not compatible.
+    region_key
+        The key to use for the region column in the concatenated object.
+    instance_key
+        The key to use for the instance column in the concatenated object.
+    kwargs
+        See :func:`anndata.concat` for more details.
 
     Returns
     -------
-    SpatialData
-        The concatenated spatial data object.
+    The concatenated :class:`spatialdata.SpatialData` object.
     """
     from spatialdata._core._spatialdata import SpatialData
 
-    assert type(sdatas) == list
-    assert len(sdatas) > 0
+    assert type(sdatas) == list, "sdatas must be a list"
+    assert len(sdatas) > 0, "sdatas must be a non-empty list"
     if len(sdatas) == 1:
         return sdatas[0]
 
-    if not omit_table:
-        list_of_tables = [sdata.table for sdata in sdatas if sdata.table is not None]
-        merged_table = _concatenate_tables(list_of_tables)
-    else:
-        merged_table = None
+    region_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for sdata in sdatas]
+    instance_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for sdata in sdatas]
+    regions = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for sdata in sdatas]
+
+    tables = []
+    regions_merge = []
+    instance_keys_merge = []
+    for k, i, regs, s in zip(region_keys, instance_keys, regions, sdatas):
+        if len(regs) > 1:
+            for r in regs:
+                table_ = s.table[s.table.obs[k] == r]
+                tables.append(table_)
+                regions_merge.append(r)
+                instance_keys_merge.append(pd.repeat(i, len(table_)))
+        else:
+            tables.append(s.table)
+            regions_merge.append(regs)
+            instance_keys_merge.append(pd.repeat(i, len(s.table)))
+
+    merged_table = anndata.concat(tables, label=region_key, **kwargs)
+    merged_table.obs[instance_key] = pd.concat(instance_keys_merge)
+    attrs = {
+        TableModel.REGION_KEY: regions_merge,
+        TableModel.REGION_KEY_KEY: region_key,
+        TableModel.INSTANCE_KEY: instance_key,
+    }
+    merged_table.uns[TableModel.ATTRS_KEY] = attrs
+    TableModel().validate(merged_table)
 
     merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
     if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):

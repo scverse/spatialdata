@@ -669,9 +669,12 @@ class TableModel:
 
         if region_key is None:
             raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided.")
+        if isinstance(region, np.ndarray):
+            region = region.tolist()
         if region is None:
             raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
         region_ = region if isinstance(region, list) else [region]
+        print(region_)
         if TYPE_CHECKING:
             assert isinstance(region_, list)
         if not adata.obs[region_key].isin(region_).all():
@@ -688,7 +691,7 @@ class TableModel:
 
 
 # TODO: consider removing if we settle with geodataframe
-def _sparse_matrix_from_assignment(
+def _sparse_matrix_from_assignment(  # pragma: no cover
     n_obs: int, var_names: Union[list[str], ArrayLike], assignment: pd.Series
 ) -> csr_matrix:
     """Create a sparse matrix from an assignment array."""
