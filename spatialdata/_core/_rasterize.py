@@ -1,5 +1,6 @@
 from functools import singledispatch
 from typing import Optional, Union
+from warnings import warn
 
 import dask_image.ndinterp
 import numpy as np
@@ -8,6 +9,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import (
@@ -30,6 +32,7 @@ from spatialdata._core.models import (
     get_schema,
 )
 from spatialdata._core.transformations import (
+    Affine,
     BaseTransformation,
     Scale,
     Sequence,
@@ -37,17 +40,48 @@ from spatialdata._core.transformations import (
     _get_affine_for_element,
 )
 from spatialdata._types import ArrayLike
+from spatialdata.utils import Number, _parse_list_into_array
 
 
 def _compute_target_dimensions(
     spatial_axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_unit_to_pixels: Optional[float],
     target_width: Optional[float],
     target_height: Optional[float],
     target_depth: Optional[float],
 ) -> tuple[float, float, Optional[float]]:
+    """
+    Compute the pixel sizes (width, height, depth) of the image that will be produced by the rasterization.
+
+    Parameters
+    ----------
+    spatial_axes
+        The axes that min_coordinate and max_coordinate refer to.
+    min_coordinate
+        The minimum coordinates of the bounding box.
+    max_coordinate
+        The maximum coordinates of the bounding box.
+    target_unit_to_pixels
+        The number of pixels per unit that the target image should have. It is mandatory to specify precisely one of
+        the following options: target_unit_to_pixels, target_width, target_height, target_depth.
+    target_width
+        The width of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+    target_height
+        The height of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+    target_depth
+        The depth of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+
+    Returns
+    -------
+    target_width, target_height, target_depth
+        The pixel sizes (width, height, depth) of the image that will be produced by the rasterization.
+        If spatial_axes does not contain "z", target_depth will be None.
+    """
     if isinstance(target_width, int):
         target_width = float(target_width)
     if isinstance(target_height, int):
@@ -118,14 +152,50 @@ def _compute_target_dimensions(
 def rasterize(
     data: Union[SpatialData, SpatialElement],
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
     target_unit_to_pixels: Optional[float] = None,
     target_width: Optional[float] = None,
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> Union[SpatialData, SpatialImage]:
+    """
+    Rasterize a SpatialData object or a SpatialElement (image, labels, points, shapes).
+
+    Parameters
+    ----------
+    data
+        The SpatialData object or SpatialElement to rasterize.
+    axes
+        The axes that min_coordinate and max_coordinate refer to.
+    min_coordinate
+        The minimum coordinates of the bounding box.
+    max_coordinate
+        The maximum coordinates of the bounding box.
+    target_coordinate_system
+        The coordinate system in which we define the bounding box. This will also be the coordinate system of the
+        produced rasterized image.
+    target_unit_to_pixels
+        The number of pixels per unit that the target image should have. It is mandatory to specify precisely one of
+        the following options: target_unit_to_pixels, target_width, target_height, target_depth.
+    target_width
+        The width of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+    target_height
+        The height of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+    target_depth
+        The depth of the target image in units. It is mandatory to specify precisely one of the following options:
+        target_unit_to_pixels, target_width, target_height, target_depth.
+
+    Returns
+    -------
+    SpatialData or SpatialImage
+        The rasterized SpatialData object or SpatialImage. Each SpatialElement will be rasterized into a
+        SpatialImage. So if a SpatialData object with elements is passed, a SpatialData object with images will be
+        returned.
+    """
     raise RuntimeError("Unsupported type: {type(data)}")
 
 
@@ -133,8 +203,8 @@ def rasterize(
 def _(
     sdata: SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
     target_unit_to_pixels: Optional[float] = None,
     target_width: Optional[float] = None,
@@ -143,8 +213,14 @@ def _(
 ) -> SpatialData:
     from spatialdata import SpatialData
 
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
+
     new_images = {}
     for element_type in ["points", "images", "labels", "shapes"]:
+        if element_type in ["points", "shapes"]:
+            warn("Rasterizing points and shapes is not supported yet. Skipping.")
+            continue
         elements = getattr(sdata, element_type)
         for name, element in elements:
             rasterized = rasterize(
@@ -162,61 +238,44 @@ def _(
             new_images[new_name] = rasterized
     return SpatialData(images=new_images, table=sdata.table)
 
-
-@rasterize.register(SpatialImage)
-@rasterize.register(MultiscaleSpatialImage)
-def _(
-    data: SpatialImage,
-    axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
-    target_coordinate_system: str,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
-) -> SpatialImage:
-    # get dimensions of the target image
-    spatial_axes = get_spatial_axes(axes)
-    target_width, target_height, target_depth = _compute_target_dimensions(
-        spatial_axes=spatial_axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-        target_unit_to_pixels=target_unit_to_pixels,
-        target_width=target_width,
-        target_height=target_height,
-        target_depth=target_depth,
-    )
-    target_sizes = {
-        "x": target_width,
-        "y": target_height,
-        "z": target_depth,
-    }
-
-    # get inverse transformation
-    transformation = get_transformation(data, target_coordinate_system)
-    dims = get_dims(data)
-    assert isinstance(transformation, BaseTransformation)
-    affine = _get_affine_for_element(data, transformation)
-    target_axes_unordered = affine.output_axes
-    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
-    target_axes: tuple[str, ...]
-    if "z" in target_axes_unordered:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "z", "y", "x")
-        else:
-            target_axes = ("z", "y", "x")
-    else:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "y", "x")
-        else:
-            target_axes = ("y", "x")
-    target_spatial_axes = get_spatial_axes(target_axes)
-    assert len(target_spatial_axes) == len(min_coordinate)
-    assert len(target_spatial_axes) == len(max_coordinate)
-    corrected_affine = affine.to_affine(input_axes=axes, output_axes=target_spatial_axes)
-
     # get xdata
+
+
+def _get_xarray_data_to_rasterize(
+    data: Union[SpatialImage, MultiscaleSpatialImage],
+    axes: tuple[str, ...],
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
+    target_sizes: dict[str, Optional[float]],
+    corrected_affine: Affine,
+) -> tuple[DataArray, Optional[Scale]]:
+    """
+    Returns the DataArray to rasterize along with its eventual scale factor (if from a pyramid level) from either a
+    SpatialImage or a MultiscaleSpatialImage.
+
+    Parameters
+    ----------
+    data
+        The input data to be rasterized.
+    axes
+       The axes that min_coordinate and max_coordinate refer to.
+    min_coordinate
+        The minimum coordinates of the bounding box for the data to be rasterized.
+    max_coordinate
+        The maximum coordinates of the bounding box for the data to be rasterized.
+    target_sizes
+        A dictionary containing the target size (in pixels) of each axis after rasterization.
+    corrected_affine
+        The affine matrix that maps the intrinsic coordinates of the data to the axes of the target coordinate
+        system, excluding the eventual channel axis (c).
+
+    Returns
+    -------
+    A tuple containing the DataArray to be rasterized and its scale, if the selected DataArray comes from a pyramid
+    level that is not the full resolution but has been scaled.
+    """
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     if isinstance(data, SpatialImage):
         xdata = data
         pyramid_scale = None
@@ -265,6 +324,63 @@ def _(
             pyramid_scale = None
     else:
         raise RuntimeError("Should not reach here")
+    return xdata, pyramid_scale
+
+
+@rasterize.register(SpatialImage)
+@rasterize.register(MultiscaleSpatialImage)
+def _(
+    data: SpatialImage,
+    axes: tuple[str, ...],
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
+    target_coordinate_system: str,
+    target_unit_to_pixels: Optional[float] = None,
+    target_width: Optional[float] = None,
+    target_height: Optional[float] = None,
+    target_depth: Optional[float] = None,
+) -> SpatialImage:
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
+    # get dimensions of the target image
+    spatial_axes = get_spatial_axes(axes)
+    target_width, target_height, target_depth = _compute_target_dimensions(
+        spatial_axes=spatial_axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_unit_to_pixels=target_unit_to_pixels,
+        target_width=target_width,
+        target_height=target_height,
+        target_depth=target_depth,
+    )
+    target_sizes = {
+        "x": target_width,
+        "y": target_height,
+        "z": target_depth,
+    }
+
+    # get inverse transformation
+    transformation = get_transformation(data, target_coordinate_system)
+    dims = get_dims(data)
+    assert isinstance(transformation, BaseTransformation)
+    affine = _get_affine_for_element(data, transformation)
+    target_axes_unordered = affine.output_axes
+    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
+    target_axes: tuple[str, ...]
+    if "z" in target_axes_unordered:
+        if "c" in target_axes_unordered:
+            target_axes = ("c", "z", "y", "x")
+        else:
+            target_axes = ("z", "y", "x")
+    else:
+        if "c" in target_axes_unordered:
+            target_axes = ("c", "y", "x")
+        else:
+            target_axes = ("y", "x")
+    target_spatial_axes = get_spatial_axes(target_axes)
+    assert len(target_spatial_axes) == len(min_coordinate)
+    assert len(target_spatial_axes) == len(max_coordinate)
+    corrected_affine = affine.to_affine(input_axes=axes, output_axes=target_spatial_axes)
 
     bb_sizes = {ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)] for ax in axes}
     scale_vector = [bb_sizes[ax] / target_sizes[ax] for ax in axes]
@@ -272,6 +388,15 @@ def _(
 
     offset = [min_coordinate[axes.index(ax)] for ax in axes]
     translation = Translation(offset, axes=axes)
+
+    xdata, pyramid_scale = _get_xarray_data_to_rasterize(
+        data=data,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_sizes=target_sizes,
+        corrected_affine=corrected_affine,
+    )
 
     if pyramid_scale is not None:
         extra = [pyramid_scale.inverse()]
@@ -339,14 +464,16 @@ def _(
 def _(
     data: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
     target_unit_to_pixels: Optional[float] = None,
     target_width: Optional[float] = None,
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialImage:
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
         spatial_axes=axes,
         min_coordinate=min_coordinate,
@@ -363,14 +490,16 @@ def _(
 def _(
     data: GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
     target_unit_to_pixels: Optional[float] = None,
     target_width: Optional[float] = None,
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialImage:
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
         spatial_axes=axes,
         min_coordinate=min_coordinate,

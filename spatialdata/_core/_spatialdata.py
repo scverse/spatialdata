@@ -25,6 +25,7 @@ from spatialdata._core.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    get_schema,
 )
 from spatialdata._io.write import (
     write_image,
@@ -135,6 +136,51 @@ class SpatialData:
             self._table = table
 
         self._query = QueryManager(self)
+
+    @staticmethod
+    def from_elements_dict(elements_dict: dict[str, Union[SpatialElement, AnnData]]) -> SpatialData:
+        """
+        Create a SpatialData object from a dict of elements.
+
+        Parameters
+        ----------
+        elements_dict
+            Dict of elements. The keys are the names of the elements and the values are the elements.
+            A table can be present in the dict, but only at most one; its name is not used and can be anything.
+
+        Returns
+        -------
+            The SpatialData object.
+        """
+        d: dict[str, Union[dict[str, SpatialElement], Optional[AnnData]]] = {
+            "images": {},
+            "labels": {},
+            "points": {},
+            "shapes": {},
+            "table": None,
+        }
+        for k, e in elements_dict.items():
+            schema = get_schema(e)
+            if schema == Image2DModel or schema == Image3DModel:
+                assert isinstance(d["images"], dict)
+                d["images"][k] = e
+            elif schema == Labels2DModel or schema == Labels3DModel:
+                assert isinstance(d["labels"], dict)
+                d["labels"][k] = e
+            elif schema == PointsModel:
+                assert isinstance(d["points"], dict)
+                d["points"][k] = e
+            elif schema == ShapesModel:
+                assert isinstance(d["shapes"], dict)
+                d["shapes"][k] = e
+            elif schema == TableModel:
+                if d["table"] is not None:
+                    raise ValueError("Only one table can be present in the dataset.")
+                d["table"] = e
+            else:
+                raise ValueError(f"Unknown schema {schema}")
+        sdata = SpatialData(**d)  # type: ignore[arg-type]
+        return sdata
 
     @property
     def query(self) -> QueryManager:
@@ -915,8 +961,14 @@ class QueryManager:
 
         Parameters
         ----------
-        request
-            The bounding box request.
+        axes
+            The axes min_coordinate and max_coordinate refer to.
+        min_coordinate
+            The minimum coordinates of the bounding box.
+        max_coordinate
+            The maximum coordinates of the bounding box.
+        target_coordinate_system
+            The coordinate system the bounding box is defined in.
 
         Returns
         -------

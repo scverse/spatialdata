@@ -16,6 +16,10 @@ from xarray import DataArray
 
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Sequence, Translation
+from spatialdata._types import ArrayLike
+
+# I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
+Number = Union[int, float]
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData
@@ -190,3 +194,11 @@ def get_table_mapping_metadata(table: AnnData) -> dict[str, Union[Optional[Union
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
     d = {TableModel.REGION_KEY: region, TableModel.REGION_KEY_KEY: region_key, TableModel.INSTANCE_KEY: instance_key}
     return d
+
+
+def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+    if isinstance(array, list):
+        array = np.array(array)
+    if array.dtype != float:
+        array = array.astype(float)
+    return array
