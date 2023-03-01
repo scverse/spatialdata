@@ -150,21 +150,27 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), dims=dims_2d)
-    out["labels2d_multiscale"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), scale_factors=[2, 4], dims=dims_2d)
-    out["labels2d_xarray"] = Labels2DModel.parse(DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), dims=None)
+    out["labels2d"] = Labels2DModel.parse(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d)
+    out["labels2d_multiscale"] = Labels2DModel.parse(
+        RNG.integers(0, 100, size=(64, 64)), scale_factors=[2, 4], dims=dims_2d
+    )
+    out["labels2d_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d), dims=None
+    )
     out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
-        DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d),
         scale_factors=[2, 4],
         dims=None,
     )
-    out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), dims=dims_3d)
+    out["labels3d_numpy"] = Labels3DModel.parse(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.normal(size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
+        RNG.integers(0, 100, size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
     )
-    out["labels3d_xarray"] = Labels3DModel.parse(DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), dims=None)
+    out["labels3d_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d), dims=None
+    )
     out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
-        DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d),
         scale_factors=[2, 4],
         dims=None,
     )
@@ -180,7 +186,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
                 Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
                 Polygon(((0, 0), (0, 1), (1, 10))),
-                Polygon(((0, 0), (0, 1), (1, 1))),
+                Polygon(((10, 10), (10, 20), (20, 20))),
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
             ]
         }

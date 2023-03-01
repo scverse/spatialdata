@@ -317,6 +317,8 @@ class ShapesModel:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+        if len(data[cls.GEOMETRY_KEY]) == 0:
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(

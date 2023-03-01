@@ -145,14 +145,15 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
                 xdata = d.values().__iter__().__next__()
 
                 left_pad, right_pad = _compute_paddings(data=xdata, axis=ax)
-                unpadded = unpadded.sel({ax: slice(left_pad, right_pad - 1e-6)})
+                unpadded = unpadded.sel({ax: slice(left_pad, right_pad)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
         d = {}
         for k, v in unpadded.items():
             assert len(v.values()) == 1
             xdata = v.values().__iter__().__next__()
-            d[k] = xdata
+            if 0 not in xdata.shape:
+                d[k] = xdata
         unpadded = MultiscaleSpatialImage.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
