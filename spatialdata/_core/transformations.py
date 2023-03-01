@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional, Union
+from warnings import warn
 
 import numpy as np
 import xarray as xr
@@ -20,7 +21,6 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
@@ -593,10 +593,11 @@ class Affine(BaseTransformation):
                 )
         # asking a representation of the affine transformation that is not using the matrix
         if len(set(input_axes).intersection(self.input_axes)) == 0:
-            logger.warning(
+            warn(
                 "Asking a representation of the affine transformation that is not using the matrix: "
                 f"self.input_axews = {self.input_axes}, self.output_axes = {self.output_axes}, "
-                f"input_axes = {input_axes}, output_axes = {output_axes}"
+                f"input_axes = {input_axes}, output_axes = {output_axes}",
+                UserWarning,
             )
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):

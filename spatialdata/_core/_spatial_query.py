@@ -360,6 +360,11 @@ def _(
     else:
         raise RuntimeError("This should not happen")
 
+    if case in [3, 4]:
+        raise ValueError(
+            f"This case is not supported (data with dimension {data_dim} but transformation with rank {transform_dimension}. Please open a GitHub issue if you want to discuss a case."
+        )
+
     if set(axes) != set(output_axes_without_c):
         if set(axes).issubset(output_axes_without_c):
             logger.warning(
@@ -378,31 +383,31 @@ def _(
         input_axes=input_axes_without_c,
         output_axes=axes,
     )
-    if case in [1, 2, 5]:
-        if case in [1, 5]:
-            bounding_box_corners = get_bounding_box_corners(
-                min_coordinate=min_coordinate,
-                max_coordinate=max_coordinate,
-                axes=axes,
-            )
-        else:
-            assert case == 2
-            # TODO: we need to intersect the plane in the extrinsic coordiante system with the 3D bounding box. The
-            #  vertices of this polygons needs to be transformed to the intrinsic coordinate system
-            raise NotImplementedError("Case 2 is not implemented yet")
-        inverse = spatial_transform_bb_axes.inverse()
-        assert isinstance(inverse, Affine)
-        rotation_matrix = inverse.matrix[0:-1, 0:-1]
-        translation = inverse.matrix[0:-1, -1]
-
-        intrinsic_bounding_box_corners = DataArray(
-            bounding_box_corners.data @ rotation_matrix.T + translation,
-            coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+    assert case in [1, 2, 5]
+    if case in [1, 5]:
+        bounding_box_corners = get_bounding_box_corners(
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            axes=axes,
         )
     else:
-        assert case in [3, 4]
-        # TODO: we need to work with the underspecified linear system of equations, etc..
-        raise NotImplementedError("Case 3 and 4 are not implemented yet")
+        assert case == 2
+        # TODO: we need to intersect the plane in the extrinsic coordiante system with the 3D bounding box. The
+        #  vertices of this polygons needs to be transformed to the intrinsic coordinate system
+        raise NotImplementedError(
+            "Case 2 (the transformation is embedding 2D data in the 3D space, is not "
+            "implemented yet. Please open a Github issue about this and we will prioritize the "
+            "development."
+        )
+    inverse = spatial_transform_bb_axes.inverse()
+    assert isinstance(inverse, Affine)
+    rotation_matrix = inverse.matrix[0:-1, 0:-1]
+    translation = inverse.matrix[0:-1, -1]
+
+    intrinsic_bounding_box_corners = DataArray(
+        bounding_box_corners.data @ rotation_matrix.T + translation,
+        coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+    )
 
     # build the request
     selection = {}
@@ -445,6 +450,10 @@ def _(
         query_result = MultiscaleSpatialImage.from_dict(d)
     query_result = compute_coordinates(query_result)
 
+    # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
+    # points is likely starting away from the origin (this is described by translation_vector), so we need to prepend
+    # this translation to every transformation in the new queries elements (unless the translation_vector is zero,
+    # in that case the translation is not needed)
     if not np.allclose(np.array(translation_vector), 0):
         translation_transform = Translation(translation=translation_vector, axes=axes)
 

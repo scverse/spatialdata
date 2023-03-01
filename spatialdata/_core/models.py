@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from warnings import warn
 
 import dask.dataframe as dd
 import numpy as np
@@ -359,6 +360,8 @@ class ShapesModel:
             In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
         radius
             Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+        index
+            Index of the shapes, must be of type `str`. If None, it's generated automatically.
         transform
             Transform of points.
         kwargs
@@ -378,6 +381,7 @@ class ShapesModel:
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: Optional[tuple[ArrayLike, ...]] = None,
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> GeoDataFrame:
         geometry = GeometryType(geometry)
@@ -387,6 +391,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -398,6 +404,7 @@ class ShapesModel:
         cls,
         data: Union[str, Path],
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
@@ -413,6 +420,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -459,17 +468,6 @@ class PointsModel:
                     logger.info(
                         f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
                     )
-        # commented out to address this issue: https://github.com/scverse/spatialdata/issues/140
-        # for c in data.columns:
-        #     #  this is not strictly a validation since we are explicitly importing the categories
-        #     #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
-        #     #  series, so it is not a big deal.
-        #     if is_categorical_dtype(data[c]):
-        #         if not data[c].cat.known:
-        #             try:
-        #                 data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
-        #             except ValueError:
-        #                 logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
     @singledispatchmethod
     @classmethod
@@ -595,6 +593,17 @@ class PointsModel:
             assert instance_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
+        for c in data.columns:
+            #  Here we are explicitly importing the categories
+            #  but it is a convenient way to ensure that the categories are known.
+            # It also just changes the state of the series, so it is not a big deal.
+            if is_categorical_dtype(data[c]):
+                if not data[c].cat.known:
+                    try:
+                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                    except ValueError:
+                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
@@ -662,7 +671,7 @@ class TableModel:
             if not adata.obs[region_key].isin(region).all():
                 raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
             if not is_categorical_dtype(adata.obs[region_key]):
-                logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+                warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
                 adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")

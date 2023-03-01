@@ -113,7 +113,7 @@ def get_transformation(
             to_coordinate_system = DEFAULT_COORDINATE_SYSTEM
         # get a specific transformation
         if to_coordinate_system not in transformations:
-            raise ValueError(f"Transformation to {to_coordinate_system} not found")
+            raise ValueError(f"Transformation to {to_coordinate_system} not found in element {element}.")
         return transformations[to_coordinate_system]
     else:
         assert to_coordinate_system is None
