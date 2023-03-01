@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import Any, Optional, Union
 
 import anndata
 import networkx as nx
 import numpy as np
-import pandas as pd
+from anndata import AnnData
 
-from spatialdata._core.models import TableModel
-
-if TYPE_CHECKING:
-    from spatialdata._core._spatialdata import SpatialData
-
+from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,
     SpatialElement,
@@ -19,6 +15,7 @@ from spatialdata._core.core_utils import (
     _set_transformations,
     has_type_spatial_element,
 )
+from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation, Identity, Sequence
 
 __all__ = [
@@ -290,6 +287,43 @@ def get_transformation_between_coordinate_systems(
         return sequence
 
 
+def _concatenate_tables(
+    sdatas: list[SpatialData],
+    region_key: str = "region_merged",
+    instance_key: str = "instance_merged",
+    **kwargs: Any,
+) -> AnnData:
+    region_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for sdata in sdatas]
+    instance_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for sdata in sdatas]
+    regions = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for sdata in sdatas]
+
+    tables = []
+    regions_l = []
+    instance_keys_l = []
+    for k, i, regs, s in zip(region_keys, instance_keys, regions, sdatas):
+        if isinstance(regs, list):
+            for r in regs:
+                table_ = s.table[s.table.obs[k] == r]
+                tables.append(table_)
+                regions_l.append(r)
+                instance_keys_l.append(table_.obs[i].values.flatten())
+        else:
+            tables.append(s.table)
+            regions_l.append(regs)
+            instance_keys_l.append(s.table.obs[i].values.flatten())
+
+    merged_table = anndata.concat(tables, label=region_key, keys=regions_l, **kwargs)
+    merged_table.obs[instance_key] = np.concatenate(instance_keys_l, axis=0)
+    attrs = {
+        TableModel.REGION_KEY: regions_l,
+        TableModel.REGION_KEY_KEY: region_key,
+        TableModel.INSTANCE_KEY: instance_key,
+    }
+    merged_table.uns[TableModel.ATTRS_KEY] = attrs
+
+    return TableModel().validate(merged_table)
+
+
 def concatenate(
     sdatas: list[SpatialData],
     region_key: str = "region_merged",
@@ -314,41 +348,13 @@ def concatenate(
     -------
     The concatenated :class:`spatialdata.SpatialData` object.
     """
-    from spatialdata._core._spatialdata import SpatialData
 
     assert type(sdatas) == list, "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
     if len(sdatas) == 1:
         return sdatas[0]
 
-    region_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for sdata in sdatas]
-    instance_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for sdata in sdatas]
-    regions = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for sdata in sdatas]
-
-    tables = []
-    regions_merge = []
-    instance_keys_merge = []
-    for k, i, regs, s in zip(region_keys, instance_keys, regions, sdatas):
-        if len(regs) > 1:
-            for r in regs:
-                table_ = s.table[s.table.obs[k] == r]
-                tables.append(table_)
-                regions_merge.append(r)
-                instance_keys_merge.append(pd.repeat(i, len(table_)))
-        else:
-            tables.append(s.table)
-            regions_merge.append(regs)
-            instance_keys_merge.append(pd.repeat(i, len(s.table)))
-
-    merged_table = anndata.concat(tables, label=region_key, **kwargs)
-    merged_table.obs[instance_key] = pd.concat(instance_keys_merge)
-    attrs = {
-        TableModel.REGION_KEY: regions_merge,
-        TableModel.REGION_KEY_KEY: region_key,
-        TableModel.INSTANCE_KEY: instance_key,
-    }
-    merged_table.uns[TableModel.ATTRS_KEY] = attrs
-    TableModel().validate(merged_table)
+    merged_table = _concatenate_tables(sdatas, region_key, instance_key, **kwargs)
 
     merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
     if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
