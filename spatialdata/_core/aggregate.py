@@ -25,17 +25,23 @@ def aggregate(
     Parameters
     ----------
     values
-        Values to aggregate
+        Values to aggregate. Currently, only supports Points or Shapes.
     by
-        Shapes to aggregate by
+        Regions to aggregate by. Currently, only supports Shapes.
     id_key
-        Key to group values by. This is the key in the shapes dataframe.
+        Key to group observations in `values` by. E.g. this could be transcript id for points.
     value_key
-        Key to aggregate values by. This is the key in the values dataframe.
-        If nothing is passed here, assumed to be 1.
+        Key to aggregate values by. This is the key in the values object.
+        If nothing is passed here, assumed to be a column of ones.
+
+        For points, this could be probe intensity.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to pandas.DataFrame.groupby.agg.
+
+    Returns
+    -------
+    AnnData of shape (by.shape[0], values[id_key].nunique())])
     """
     # TODO: Check that values are in the same space
     # Dispatch
@@ -99,21 +105,22 @@ def _aggregate(
     agg_func: str = "count",
 ) -> ad.AnnData:
     """
-    Aggregate points by polygons.
+    Inner function to aggregate geopandas objects.
 
-    Params
-    ------
+    See docstring for `aggregate` for semantics.
+
+    Parameters
+    ----------
     value
-        GeoDataFrame of points to aggregate
+        Geopandas dataframe to be aggregated. Must have a geometry column.
     by
-        GeoDataFrame of polygons
+        Geopandas dataframe to group values by. Must have a geometry column.
     id_key
-        Column in values that indicate value type, e.g. probe id or organelle type
+        Column in value dataframe to group values by.
     value_key
-        Column in values that indicate point value, e.g. probe intensity. If not provided, uses a fill value of 1.
+        Column in value dataframe to perform aggregation on.
     agg_func
-        Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-        Passed to pandas.DataFrame.groupby.agg.
+        Aggregation functio to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
     assert pd.api.types.is_categorical_dtype(value[id_key]), f"{id_key} must be categorical"
 
