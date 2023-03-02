@@ -148,8 +148,6 @@ class SpatialData:
         if name in self._images:
             if not overwrite:
                 raise ValueError(f"Image {name} already exists in the dataset.")
-            else:
-                del self._images[name]
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -166,8 +164,6 @@ class SpatialData:
         if name in self._labels:
             if not overwrite:
                 raise ValueError(f"Labels {name} already exists in the dataset.")
-            else:
-                del self._labels[name]
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -182,8 +178,6 @@ class SpatialData:
         if name in self._shapes:
             if not overwrite:
                 raise ValueError(f"Shapes {name} already exists in the dataset.")
-            else:
-                del self._shapes[name]
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
@@ -191,8 +185,6 @@ class SpatialData:
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")
-            else:
-                del self._points[name]
         Point_s.validate(points)
         self._points[name] = points
 
@@ -445,9 +437,6 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _called_from_write
-            Internal flag, to differentiate between an element added by the user and an element saved to disk by
-            write method.
 
         Notes
         -----
@@ -456,13 +445,11 @@ class SpatialData:
         if self.is_backed():
             files = get_backing_files(image)
             assert self.path is not None
-            target_path = os.path.join(self.path, "images", name)
+            target_path = os.path.realpath(os.path.join(self.path, "images", name))
             if target_path in files:
                 raise ValueError(
                     "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
-                    "using for backing. We are considering changing this behavior to allow the overwriting of "
-                    "elements used for backing. If you would like to support this use case please leave a comment on "
-                    "https://github.com/scverse/spatialdata/pull/138"
+                    "using for backing. See more here: https://github.com/scverse/spatialdata/pull/138"
                 )
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
             # old code to support overwriting the backing file
@@ -506,7 +493,7 @@ class SpatialData:
             # from the correct storage
             assert elem_group.path == "images"
             path = Path(elem_group.store.path) / "images" / name
-            image = _read_multiscale(str(path), raster_type="image")
+            image = _read_multiscale(path, raster_type="image")
             self._add_image_in_memory(name=name, image=image, overwrite=True)
         else:
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
@@ -540,7 +527,7 @@ class SpatialData:
         if self.is_backed():
             files = get_backing_files(labels)
             assert self.path is not None
-            target_path = os.path.join(self.path, "labels", name)
+            target_path = os.path.realpath(os.path.join(self.path, "labels", name))
             if target_path in files:
                 raise ValueError(
                     "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
@@ -591,7 +578,7 @@ class SpatialData:
             # just a check to make sure that things go as expected
             assert elem_group.path == ""
             path = Path(elem_group.store.path) / "labels" / name
-            labels = _read_multiscale(str(path), raster_type="labels")
+            labels = _read_multiscale(path, raster_type="labels")
             self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
         else:
             self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
@@ -624,7 +611,7 @@ class SpatialData:
         if self.is_backed():
             files = get_backing_files(points)
             assert self.path is not None
-            target_path = os.path.join(self.path, "points", name, "points.parquet")
+            target_path = os.path.realpath(os.path.join(self.path, "points", name, "points.parquet"))
             if target_path in files:
                 raise ValueError(
                     "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
@@ -673,7 +660,7 @@ class SpatialData:
             assert elem_group.path == "points"
 
             path = Path(elem_group.store.path) / "points" / name
-            points = _read_points(str(path))
+            points = _read_points(path)
             self._add_points_in_memory(name=name, points=points, overwrite=True)
         else:
             self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
@@ -774,7 +761,8 @@ class SpatialData:
                 root.create_group(name="images")
                 # add_image_in_memory will delete and replace the same key in self.images, so we need to make a copy of the
                 # keys. Same for the other elements
-                keys = list(self.images.keys())
+                # keys = list(self.images.keys())
+                keys = self.images.keys()
                 from spatialdata._io.read import _read_multiscale
 
                 for name in keys:
@@ -789,12 +777,13 @@ class SpatialData:
                     # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
                     # from the correct storage
                     element_path = Path(self.path) / "images" / name
-                    image = _read_multiscale(str(element_path), raster_type="image")
+                    image = _read_multiscale(element_path, raster_type="image")
                     self._add_image_in_memory(name=name, image=image, overwrite=True)
 
             if len(self.labels):
                 root.create_group(name="labels")
-                keys = list(self.labels.keys())
+                # keys = list(self.labels.keys())
+                keys = self.labels.keys()
                 from spatialdata._io.read import _read_multiscale
 
                 for name in keys:
@@ -809,12 +798,13 @@ class SpatialData:
                     # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
                     # from the correct storage
                     element_path = Path(self.path) / "labels" / name
-                    labels = _read_multiscale(str(element_path), raster_type="labels")
+                    labels = _read_multiscale(element_path, raster_type="labels")
                     self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
 
             if len(self.points):
                 root.create_group(name="points")
-                keys = list(self.points.keys())
+                # keys = list(self.points.keys())
+                keys = self.points.keys()
                 from spatialdata._io.read import _read_points
 
                 for name in keys:
@@ -828,12 +818,13 @@ class SpatialData:
 
                     # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
                     # from the correct storage
-                    points = _read_points(str(element_path))
+                    points = _read_points(element_path)
                     self._add_points_in_memory(name=name, points=points, overwrite=True)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
-                keys = list(self.shapes.keys())
+                # keys = list(self.shapes.keys())
+                keys = self.shapes.keys()
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
                     write_shapes(

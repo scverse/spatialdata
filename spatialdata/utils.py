@@ -178,7 +178,7 @@ def _get_backing_files_raster(raster: DataArray) -> list[str]:
         if k.startswith("original-from-zarr-"):
             mapping = v.mapping[k]
             path = mapping.store.path
-            files.append(path)
+            files.append(os.path.realpath(path))
     return files
 
 
@@ -208,7 +208,7 @@ def _(element: DaskDataFrame) -> list[str]:
             assert isinstance(t, tuple)
             assert len(t) == 1
             parquet_file = t[0]
-            files.append(parquet_file)
+            files.append(os.path.realpath(parquet_file))
     return files
 
 

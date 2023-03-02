@@ -88,7 +88,9 @@ def test_backing_files_points(points):
         p1 = points1.points["points_0"]
         p2 = dd.concat([p0, p1], axis=0)
         files = get_backing_files(p2)
-        expected_zarr_locations = [os.path.join(f, "points/points_0/points.parquet") for f in [f0, f1]]
+        expected_zarr_locations = [
+            os.path.realpath(os.path.join(f, "points/points_0/points.parquet")) for f in [f0, f1]
+        ]
         assert set(files) == set(expected_zarr_locations)
 
 
@@ -106,7 +108,7 @@ def test_backing_files_images(images):
         im1 = images1.images["image2d"]
         im2 = im0 + im1
         files = get_backing_files(im2)
-        expected_zarr_locations = [os.path.join(f, "images/image2d") for f in [f0, f1]]
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
         # multiscale
@@ -114,7 +116,7 @@ def test_backing_files_images(images):
         im4 = images1.images["image2d_multiscale"]
         im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
         files = get_backing_files(im5)
-        expected_zarr_locations = [os.path.join(f, "images/image2d_multiscale") for f in [f0, f1]]
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
 
@@ -133,7 +135,7 @@ def test_backing_files_labels(labels):
         im1 = labels1.labels["labels2d"]
         im2 = im0 + im1
         files = get_backing_files(im2)
-        expected_zarr_locations = [os.path.join(f, "labels/labels2d") for f in [f0, f1]]
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
         # multiscale
@@ -141,5 +143,5 @@ def test_backing_files_labels(labels):
         im4 = labels1.labels["labels2d_multiscale"]
         im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
         files = get_backing_files(im5)
-        expected_zarr_locations = [os.path.join(f, "labels/labels2d_multiscale") for f in [f0, f1]]
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)

@@ -286,13 +286,13 @@ def test_incremental_io_with_backed_elements(full_sdata):
 
         e = full_sdata.labels.values().__iter__().__next__()
         full_sdata.add_labels("new_labels", e, overwrite=True)
-        # support for overwriting backed images has been temporarily removed
+        # support for overwriting backed labels has been temporarily removed
         with pytest.raises(ValueError):
             full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
 
         e = full_sdata.points.values().__iter__().__next__()
         full_sdata.add_points("new_points", e, overwrite=True)
-        # support for overwriting backed images has been temporarily removed
+        # support for overwriting backed points has been temporarily removed
         with pytest.raises(ValueError):
             full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
 
