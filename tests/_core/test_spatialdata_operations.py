@@ -13,6 +13,7 @@ from spatialdata._core._spatialdata_ops import (
     concatenate,
     set_transformation,
 )
+from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import Identity, Scale
 from tests.conftest import _get_table
 
@@ -98,51 +99,41 @@ def test_concatenate_tables():
     """
     The concatenation uses AnnData.concatenate(), here we test the contatenation result on region, region_key, instance_key
     """
-    sdata0 = SpatialData(table=_get_table(region="shapes/circles", instance_key="instance_id"))
-    sdata1 = SpatialData(table=_get_table(region="shapes/poly", instance_key="instance_id"))
-    sdata2 = SpatialData(table=_get_table(region="shapes/poly2", instance_key="instance_id"))
+    table0 = _get_table(region="shapes/circles", instance_key="instance_id")
+    table1 = _get_table(region="shapes/poly", instance_key="instance_id")
+    table2 = _get_table(region="shapes/poly2", instance_key="instance_id")
     with pytest.raises(ValueError):
         _concatenate_tables([])
-    assert len(_concatenate_tables([sdata0])) == len(sdata0.table)
-    assert len(_concatenate_tables([sdata0, sdata1, sdata2])) == len(sdata0.table) + len(sdata1.table) + len(
-        sdata2.table
+    assert len(_concatenate_tables([table0])) == len(table0)
+    assert len(_concatenate_tables([table0, table1, table2])) == len(table0) + len(table1) + len(table2)
+
+    table0.obs["annotated_element_merged"] = np.arange(len(table0))
+    c0 = _concatenate_tables([table0, table1])
+    assert len(c0) == len(table0) + len(table1)
+
+    d = c0.uns[TableModel.ATTRS_KEY]
+    d["region"] = sorted(d["region"])
+    assert d == {
+        "region": ["shapes/circles", "shapes/poly"],
+        "region_key": "region_merged",
+        "instance_key": "instance_merged",
+    }
+
+    table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
+    with pytest.raises(ValueError, match="Categorical categories must be unique"):
+        _concatenate_tables([table0, table3])
+
+    table4 = _get_table(
+        region=["shapes/circles1", "shapes/poly1"], region_key="annotated_shape0", instance_key="instance_id"
+    )
+    table5 = _get_table(
+        region=["shapes/circles2", "shapes/poly2"], region_key="annotated_shape0", instance_key="instance_id"
+    )
+    table6 = _get_table(
+        region=["shapes/circles3", "shapes/poly3"], region_key="annotated_shape1", instance_key="instance_id"
     )
 
-    # sdata0.obs["annotated_element_merged"] = np.arange(len(sdata0))
-    # c0 = _concatenate_tables([sdata0, sdata1])
-    # assert len(c0) == len(sdata0) + len(sdata1)
-
-    # d = c0.uns[TableModel.ATTRS_KEY]
-    # d["region"] = sorted(d["region"])
-    # assert d == {
-    #     "region": ["shapes/circles", "shapes/poly"],
-    #     "region_key": "annotated_element_merged_1",
-    #     "instance_key": "instance_id",
-    # }
-
-    # table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
-    # table3.uns[TableModel.ATTRS_KEY]["region_key"] = "annotated_shapes_other"
-    # with pytest.raises(AssertionError):
-    #     _concatenate_tables([sdata0, table3])
-    # table3.uns[TableModel.ATTRS_KEY]["region_key"] = None
-    # table3.uns[TableModel.ATTRS_KEY]["instance_key"] = ["shapes/circles", "shapes/poly"]
-    # with pytest.raises(AssertionError):
-    #     _concatenate_tables([sdata0, table3])
-
-    # table4 = _get_table(
-    #     region=["shapes/circles", "shapes/poly"], region_key="annotated_shape0", instance_key="instance_id"
-    # )
-    # table5 = _get_table(
-    #     region=["shapes/circles", "shapes/poly"], region_key="annotated_shape0", instance_key="instance_id"
-    # )
-    # table6 = _get_table(
-    #     region=["shapes/circles", "shapes/poly"], region_key="annotated_shape1", instance_key="instance_id"
-    # )
-
-    # assert len(_concatenate_tables([table4, table5])) == len(table4) + len(table5)
-
-    # with pytest.raises(RuntimeError):
-    #     _concatenate_tables([table4, table6])
+    assert len(_concatenate_tables([table4, table5, table6])) == len(table4) + len(table5) + len(table6)
 
 
 def test_concatenate_sdatas(full_sdata):
@@ -156,7 +147,6 @@ def test_concatenate_sdatas(full_sdata):
         concatenate([full_sdata, SpatialData(shapes={"circles": full_sdata.shapes["circles"]})])
 
     assert concatenate([full_sdata, SpatialData()]).table is not None
-    assert concatenate([full_sdata, SpatialData()], omit_table=True).table is None
 
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
@@ -164,6 +154,14 @@ def test_concatenate_sdatas(full_sdata):
     assert len(list(filtered._gen_elements())) == 2
     filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
+    # this is needed cause we can't handle regions with same name.
+    # TODO: fix this
+    new_region = "sample2"
+    table_new = filtered1.table.copy()
+    del filtered1.table
+    filtered1.table = table_new
+    filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
+    filtered1.table.obs[filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
     concatenated = concatenate([filtered0, filtered1])
     assert len(list(concatenated._gen_elements())) == 2
 

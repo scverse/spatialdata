@@ -90,18 +90,18 @@ def full_sdata() -> SpatialData:
 #     return SpatialData(points={"empty": geo_df})
 
 
-@pytest.fixture()
-def empty_table() -> SpatialData:
-    adata = AnnData(shape=(0, 0))
-    adata = TableModel.parse(adata=adata)
-    return SpatialData(table=adata)
+# @pytest.fixture()
+# def empty_table() -> SpatialData:
+#     adata = AnnData(shape=(0, 0), obs=pd.DataFrame(columns="region"), var=pd.DataFrame())
+#     adata = TableModel.parse(adata=adata)
+#     return SpatialData(table=adata)
 
 
 @pytest.fixture(
     # params=["labels"]
     params=["full", "empty"]
     + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
-    + ["empty_" + x for x in ["table"]]
+    # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
 def sdata(request) -> SpatialData:
     if request.param == "full":

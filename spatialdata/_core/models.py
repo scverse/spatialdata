@@ -674,7 +674,6 @@ class TableModel:
         if region is None:
             raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
         region_ = region if isinstance(region, list) else [region]
-        print(region_)
         if TYPE_CHECKING:
             assert isinstance(region_, list)
         if not adata.obs[region_key].isin(region_).all():

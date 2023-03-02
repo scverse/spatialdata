@@ -288,31 +288,31 @@ def get_transformation_between_coordinate_systems(
 
 
 def _concatenate_tables(
-    sdatas: list[SpatialData],
+    tables: list[AnnData],
     region_key: str = "region_merged",
     instance_key: str = "instance_merged",
     **kwargs: Any,
 ) -> AnnData:
-    region_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for sdata in sdatas]
-    instance_keys = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for sdata in sdatas]
-    regions = [sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for sdata in sdatas]
+    region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
+    instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
+    regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
 
-    tables = []
+    tables_l = []
     regions_l = []
     instance_keys_l = []
-    for k, i, regs, s in zip(region_keys, instance_keys, regions, sdatas):
+    for k, i, regs, table in zip(region_keys, instance_keys, regions, tables):
         if isinstance(regs, list):
             for r in regs:
-                table_ = s.table[s.table.obs[k] == r]
-                tables.append(table_)
+                table_ = table[table.obs[k] == r]
+                tables_l.append(table_)
                 regions_l.append(r)
                 instance_keys_l.append(table_.obs[i].values.flatten())
         else:
-            tables.append(s.table)
+            tables_l.append(table)
             regions_l.append(regs)
-            instance_keys_l.append(s.table.obs[i].values.flatten())
+            instance_keys_l.append(table.obs[i].values.flatten())
 
-    merged_table = anndata.concat(tables, label=region_key, keys=regions_l, **kwargs)
+    merged_table = anndata.concat(tables_l, label=region_key, keys=regions_l, **kwargs)
     merged_table.obs[instance_key] = np.concatenate(instance_keys_l, axis=0)
     attrs = {
         TableModel.REGION_KEY: regions_l,
@@ -354,7 +354,9 @@ def concatenate(
     if len(sdatas) == 1:
         return sdatas[0]
 
-    merged_table = _concatenate_tables(sdatas, region_key, instance_key, **kwargs)
+    merged_table = _concatenate_tables(
+        [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
+    )
 
     merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
     if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
