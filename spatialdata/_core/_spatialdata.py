@@ -733,12 +733,12 @@ class SpatialData:
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r") is None:
                 raise ValueError(
-                    "The target file path specified already exists, and it has been detected not not be "
+                    "The target file path specified already exists, and it has been detected to not be "
                     "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
                     "data loss."
                 )
             if not overwrite and self.path != str(file_path):
-                raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
+                raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
             elif str(file_path) == self.path:
                 raise ValueError(
                     "The file path specified is the same as the one used for backing. "
