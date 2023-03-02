@@ -4,7 +4,9 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
+from spatial_image import SpatialImage
 
 from spatialdata import (
     Image2DModel,
@@ -17,10 +19,9 @@ from spatialdata import (
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
-    _bounding_box_query_image,
-    _bounding_box_query_points,
-    _bounding_box_query_shapes,
+    bounding_box_query,
 )
+from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 
 
 def _make_points_element():
@@ -33,7 +34,12 @@ def _make_points_element():
 
 def test_bounding_box_request_immutable():
     """Test that the bounding box request is immutable."""
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+    request = BoundingBoxRequest(
+        axes=("y", "x"),
+        min_coordinate=np.array([0, 0]),
+        max_coordinate=np.array([10, 10]),
+        target_coordinate_system="global",
+    )
     isinstance(request, BaseSpatialRequest)
 
     # fields should be immutable
@@ -50,27 +56,50 @@ def test_bounding_box_request_immutable():
 def test_bounding_box_request_only_spatial_axes():
     """Requests with axes that are not spatial should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("c", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("c", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_request_wrong_number_of_coordinates():
     """Requests which specify coordinates not consistent with the axes should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10]))
-
-    with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 0]), max_coordinate=np.array([10, 10, 10]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10]),
+            target_coordinate_system="global",
+        )
 
     with pytest.raises(ValueError):
         _ = BoundingBoxRequest(
-            axes=("y", "x"), min_coordinate=np.array([0, 0, 0]), max_coordinate=np.array([10, 10, 10])
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
+        )
+
+    with pytest.raises(ValueError):
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 0, 0]),
+            max_coordinate=np.array([10, 10, 10]),
+            target_coordinate_system="global",
         )
 
 
 def test_bounding_box_request_wrong_coordinate_order():
     """Requests where the min coordinate is greater than the max coordinate should raise an error"""
     with pytest.raises(ValueError):
-        _ = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([0, 10]), max_coordinate=np.array([10, 0]))
+        _ = BoundingBoxRequest(
+            axes=("y", "x"),
+            min_coordinate=np.array([0, 10]),
+            max_coordinate=np.array([10, 0]),
+            target_coordinate_system="global",
+        )
 
 
 def test_bounding_box_points():
@@ -79,17 +108,24 @@ def test_bounding_box_points():
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([18, 25]), max_coordinate=np.array([22, 35]))
-    points_result = _bounding_box_query_points(points_element, request)
-    np.testing.assert_allclose(points_result["x"], [20])
-    np.testing.assert_allclose(points_result["y"], [30])
+    points_result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([18, 25]),
+        max_coordinate=np.array([22, 35]),
+        target_coordinate_system="global",
+    )
+
+    # Check that the correct point was selected
+    np.testing.assert_allclose(points_result["x"].compute(), [20])
+    np.testing.assert_allclose(points_result["y"].compute(), [30])
 
     # result should be valid points element
     PointsModel.validate(points_result)
 
     # original element should be unchanged
-    np.testing.assert_allclose(points_element["x"], original_x)
-    np.testing.assert_allclose(points_element["y"], original_y)
+    np.testing.assert_allclose(points_element["x"].compute(), original_x)
+    np.testing.assert_allclose(points_element["y"].compute(), original_y)
 
 
 def test_bounding_box_points_no_points():
@@ -97,12 +133,14 @@ def test_bounding_box_points_no_points():
     return a points element with length 0.
     """
     points_element = _make_points_element()
-    request = BoundingBoxRequest(axes=("x", "y"), min_coordinate=np.array([40, 50]), max_coordinate=np.array([45, 55]))
-    points_result = _bounding_box_query_points(points_element, request)
-    assert len(points_result) == 0
-
-    # result should be valid points element
-    PointsModel.validate(points_result)
+    request = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([40, 50]),
+        max_coordinate=np.array([45, 55]),
+        target_coordinate_system="global",
+    )
+    assert request is None
 
 
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
@@ -112,64 +150,127 @@ def test_bounding_box_image_2d(n_channels):
     # y: [5, 9], x: [0, 4] has value 1
     image[:, 5::, 0:5] = 1
     image_element = Image2DModel.parse(image)
+    image_element_multiscale = Image2DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
+    for image in [image_element, image_element_multiscale]:
+        # bounding box: y: [5, 10[, x: [0, 5[
+        image_result = bounding_box_query(
+            image,
+            axes=("y", "x"),
+            min_coordinate=np.array([5, 0]),
+            max_coordinate=np.array([10, 5]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
-    image_result = _bounding_box_query_image(image_element, request)
-    expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
-    np.testing.assert_allclose(image_result, expected_image)
 
-
-@pytest.mark.skip(reason="Image3D parser not working")
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 def test_bounding_box_image_3d(n_channels):
     """Apply a bounding box to a 3D image"""
     image = np.zeros((n_channels, 10, 10, 10))
-    # y: [5, 9], x: [0, 4] has value 1
+    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
     image[:, 5::, 0:5, 2:7] = 1
     image_element = Image3DModel.parse(image)
+    image_element_multiscale = Image3DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
-    )
-
-    image_result = _bounding_box_query_image(image_element, request)
-    expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
-    np.testing.assert_allclose(image_result, expected_image)
+    for image in [image_element, image_element_multiscale]:
+        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
+        image_result = bounding_box_query(
+            image,
+            axes=("z", "y", "x"),
+            min_coordinate=np.array([5, 0, 2]),
+            max_coordinate=np.array([10, 5, 7]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 def test_bounding_box_labels_2d():
     """Apply a bounding box to a 2D label image"""
+    # in this test let's try some affine transformations, we could do that also for the other tests
     image = np.zeros((10, 10))
     # y: [5, 9], x: [0, 4] has value 1
     image[5::, 0:5] = 1
     labels_element = Labels2DModel.parse(image)
+    labels_element_multiscale = Labels2DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(axes=("y", "x"), min_coordinate=np.array([5, 0]), max_coordinate=np.array([9, 4]))
-
-    labels_result = _bounding_box_query_image(labels_element, request)
-    expected_image = np.ones((5, 5))
-    np.testing.assert_allclose(labels_result, expected_image)
+    for labels in [labels_element, labels_element_multiscale]:
+        # bounding box: y: [5, 10[, x: [0, 5[
+        labels_result = bounding_box_query(
+            labels,
+            axes=("y", "x"),
+            min_coordinate=np.array([5, 0]),
+            max_coordinate=np.array([10, 5]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((5, 5))
+        if isinstance(labels, SpatialImage):
+            assert isinstance(labels, SpatialImage)
+            np.testing.assert_allclose(labels_result, expected_image)
+        elif isinstance(labels, MultiscaleSpatialImage):
+            assert isinstance(labels_result, MultiscaleSpatialImage)
+            v = labels_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 def test_bounding_box_labels_3d():
     """Apply a bounding box to a 3D label image"""
-    image = np.zeros((10, 10, 10))
-    # y: [5, 9], x: [0, 4] has value 1
+    image = np.zeros((10, 10, 10), dtype=int)
+    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
     image[5::, 0:5, 2:7] = 1
     labels_element = Labels3DModel.parse(image)
+    labels_element_multiscale = Labels3DModel.parse(image, scale_factors=[2, 2])
 
-    # bounding box: z: [5, 9], y: [5, 9], x: [0, 4]
-    request = BoundingBoxRequest(
-        axes=("z", "y", "x"), min_coordinate=np.array([5, 0, 2]), max_coordinate=np.array([9, 4, 6])
-    )
+    for labels in [labels_element, labels_element_multiscale]:
+        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
+        labels_result = bounding_box_query(
+            labels,
+            axes=("z", "y", "x"),
+            min_coordinate=np.array([5, 0, 2]),
+            max_coordinate=np.array([10, 5, 7]),
+            target_coordinate_system="global",
+        )
+        expected_image = np.ones((5, 5, 5))
+        if isinstance(labels, SpatialImage):
+            assert isinstance(labels, SpatialImage)
+            np.testing.assert_allclose(labels_result, expected_image)
+        elif isinstance(labels, MultiscaleSpatialImage):
+            assert isinstance(labels_result, MultiscaleSpatialImage)
+            v = labels_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
-    image_result = _bounding_box_query_image(labels_element, request)
-    expected_image = np.ones((5, 5, 5))
-    np.testing.assert_allclose(image_result, expected_image)
+
+# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:
@@ -199,10 +300,13 @@ def test_bounding_box_polygons():
     cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
     sd_polygons = ShapesModel.parse(cell_polygon_table)
 
-    request = BoundingBoxRequest(
-        axes=("y", "x"), min_coordinate=np.array([40, 40]), max_coordinate=np.array([100, 100])
+    polygons_result = bounding_box_query(
+        sd_polygons,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([40, 40]),
+        max_coordinate=np.array([100, 100]),
     )
-    polygons_result = _bounding_box_query_shapes(sd_polygons, request)
 
     assert len(polygons_result) == 1
     assert polygons_result.index[0] == 3
@@ -213,10 +317,34 @@ def test_bounding_box_circles():
 
     sd_circles = ShapesModel.parse(centroids, geometry=0, radius=10)
 
-    request = BoundingBoxRequest(
-        axes=("y", "x"), min_coordinate=np.array([40, 40]), max_coordinate=np.array([100, 100])
+    circles_result = bounding_box_query(
+        sd_circles,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([40, 40]),
+        max_coordinate=np.array([100, 100]),
     )
-    circles_result = _bounding_box_query_shapes(sd_circles, request)
 
     assert len(circles_result) == 1
     assert circles_result.index[0] == 3
+
+
+def test_bounding_box_spatial_data(full_sdata):
+    request = BoundingBoxRequest(
+        target_coordinate_system="global",
+        axes=("y", "x"),
+        min_coordinate=np.array([2, 1]),
+        max_coordinate=np.array([40, 60]),
+    )
+    result = bounding_box_query(full_sdata, **request.to_dict())
+    result2 = full_sdata.query(request)
+    from tests._core.test_spatialdata_operations import (
+        _assert_spatialdata_objects_seem_identical,
+    )
+
+    _assert_spatialdata_objects_seem_identical(result, result2)
+
+    for element in result._gen_elements_values():
+        d = get_transformation(element, get_all=True)
+        new_d = {k.replace("global", "cropped"): v for k, v in d.items()}
+        set_transformation(element, new_d, set_all=True)

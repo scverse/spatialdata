@@ -5,8 +5,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import scipy.misc
-from dask.dataframe.core import DataFrame as DaskDataFrame
-from geopandas import GeoDataFrame
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -461,51 +459,55 @@ def test_transformations_between_coordinate_systems(images):
         el1 = images.images["image2d_multiscale"]
         set_transformation(el0, {"global0": Identity()}, set_all=True, write_to_sdata=images)
         set_transformation(el1, {"global1": Identity()}, set_all=True, write_to_sdata=images)
-        reference_landmarks_shapes = ShapesModel.parse(
-            np.array([[0, 0], [0, 1], [1, 1], [3, 3]]), geometry=0, radius=10
-        )
-        moving_landmarks_shapes = ShapesModel.parse(np.array([[0, 0], [0, 2], [2, 2], [6, 6]]), geometry=0, radius=10)
-        reference_landmarks_points = PointsModel.parse(np.array([[0, 0], [0, 1], [1, 1], [3, 3]]))
-        moving_landmarks_points = PointsModel.parse(np.array([[0, 0], [0, -2], [2, -2], [6, -6]]))
-        for reference_landmarks, moving_landmarks in [
-            (reference_landmarks_shapes, moving_landmarks_shapes),
-            (reference_landmarks_points, moving_landmarks_points),
-        ]:
-            affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
-            # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
-            if isinstance(reference_landmarks, GeoDataFrame):
-                assert np.allclose(
-                    affine.matrix,
-                    np.array(
-                        [
-                            [0.5, 0, 0],
-                            [0, 0.5, 0],
-                            [0, 0, 1],
-                        ]
-                    ),
-                )
-            elif isinstance(reference_landmarks, DaskDataFrame):
-                assert np.allclose(
-                    affine.matrix,
-                    np.array(
-                        [
-                            [0.5, 0, 0],
-                            [0, -0.5, 0],
-                            [0, 0, 1],
-                        ]
-                    ),
-                )
+        for positive_determinant in [True, False]:
+            reference_landmarks_coords = np.array([[0, 0], [0, 1], [1, 1], [3, 3]])
+            if positive_determinant:
+                moving_landmarks_coords = np.array([[0, 0], [0, 2], [2, 2], [6, 6]])
             else:
-                raise AssertionError()
-            for sdata in [images, None]:
-                align_elements_using_landmarks(
-                    references_coords=reference_landmarks,
-                    moving_coords=moving_landmarks,
-                    reference_element=el0,
-                    moving_element=el1,
-                    reference_coordinate_system="global0",
-                    moving_coordinate_system="global1",
-                    new_coordinate_system="global2",
-                    write_to_sdata=sdata,
-                )
-            assert "global2" in images.coordinate_systems
+                moving_landmarks_coords = np.array([[0, 0], [0, -2], [2, -2], [6, -6]])
+
+            reference_landmarks_shapes = ShapesModel.parse(reference_landmarks_coords, geometry=0, radius=10)
+            moving_landmarks_shapes = ShapesModel.parse(np.array(moving_landmarks_coords), geometry=0, radius=10)
+            reference_landmarks_points = PointsModel.parse(reference_landmarks_coords)
+            moving_landmarks_points = PointsModel.parse(moving_landmarks_coords)
+
+            for reference_landmarks, moving_landmarks in [
+                (reference_landmarks_shapes, moving_landmarks_shapes),
+                (reference_landmarks_points, moving_landmarks_points),
+            ]:
+                affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
+                # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
+                if positive_determinant:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, 0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                else:
+                    assert np.allclose(
+                        affine.matrix,
+                        np.array(
+                            [
+                                [0.5, 0, 0],
+                                [0, -0.5, 0],
+                                [0, 0, 1],
+                            ]
+                        ),
+                    )
+                for sdata in [images, None]:
+                    align_elements_using_landmarks(
+                        references_coords=reference_landmarks,
+                        moving_coords=moving_landmarks,
+                        reference_element=el0,
+                        moving_element=el1,
+                        reference_coordinate_system="global0",
+                        moving_coordinate_system="global1",
+                        new_coordinate_system="global2",
+                        write_to_sdata=sdata,
+                    )
+                assert "global2" in images.coordinate_systems

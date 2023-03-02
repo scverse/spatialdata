@@ -100,9 +100,9 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     -------
     The unpadded raster.
     """
-    from spatialdata._core.models import get_schema
+    from spatialdata._core.core_utils import compute_coordinates, get_dims
 
-    def _unpad_axis(data: DataArray, axis: str) -> tuple[DataArray, float]:
+    def _compute_paddings(data: DataArray, axis: str) -> tuple[int, int]:
         others = list(data.dims)
         others.remove(axis)
         # mypy (luca's pycharm config) can't see the isclose method of dask array
@@ -111,45 +111,65 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         x = s.compute()
         non_zero = np.where(x == 0)[0]
         if len(non_zero) == 0:
-            return data, 0
+            min_coordinate, max_coordinate = data.coords[axis].min().item(), data.coords[axis].max().item()
+            if not min_coordinate != 0:
+                raise ValueError(
+                    f"Expected minimum coordinate for axis {axis} to be 0, but got {min_coordinate}. Please report this bug."
+                )
+            if max_coordinate != data.shape[data.dims.index(axis)] - 1:
+                raise ValueError(
+                    f"Expected maximum coordinate for axis {axis} to be {data.shape[data.dims.index(axis)] - 1}, but got {max_coordinate}. Please report this bug."
+                )
+            return 0, data.shape[data.dims.index(axis)]
         else:
             left_pad = non_zero[0]
             right_pad = non_zero[-1] + 1
-            unpadded = data.isel({axis: slice(left_pad, right_pad)})
-            return unpadded, left_pad
-
-    from spatialdata._core.core_utils import get_dims
+        return left_pad, right_pad
 
     axes = get_dims(raster)
-    if isinstance(raster, SpatialImage):
-        unpadded = raster
-        translation_axes = []
-        translation_values: list[float] = []
+    translation_axes = []
+    translation_values: list[float] = []
+    unpadded = raster
+
+    if isinstance(unpadded, SpatialImage):
         for ax in axes:
             if ax != "c":
-                unpadded, left_pad = _unpad_axis(unpadded, axis=ax)
+                left_pad, right_pad = _compute_paddings(data=unpadded, axis=ax)
+                unpadded = unpadded.isel({ax: slice(left_pad, right_pad)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-        translation = Translation(translation_values, axes=tuple(translation_axes))
-        old_transformations = get_transformation(element=raster, get_all=True)
-        assert isinstance(old_transformations, dict)
-        for target_cs, old_transform in old_transformations.items():
-            assert old_transform is not None
-            sequence = Sequence([translation, old_transform])
-            set_transformation(element=unpadded, transformation=sequence, to_coordinate_system=target_cs)
-        return unpadded
-    elif isinstance(raster, MultiscaleSpatialImage):
-        # let's just operate on the highest resolution. This is not an efficient implementation but we can always optimize later
-        d = dict(raster["scale0"])
-        assert len(d) == 1
-        xdata = d.values().__iter__().__next__()
-        unpadded = unpad_raster(SpatialImage(xdata))
-        # TODO: here I am using some arbitrary scalingfactors, I think that we need an automatic initialization of multiscale. See discussion: https://github.com/scverse/spatialdata/issues/108
-        # mypy thinks that the schema could be a ShapeModel, ... but it's not
-        unpadded_multiscale = get_schema(raster).parse(unpadded, multiscale_factors=[2, 2])  # type: ignore[call-arg]
-        return unpadded_multiscale
+    elif isinstance(unpadded, MultiscaleSpatialImage):
+        for ax in axes:
+            if ax != "c":
+                # let's just operate on the highest resolution. This is not an efficient implementation but we can
+                # always optimize later
+                d = dict(unpadded["scale0"])
+                assert len(d) == 1
+                xdata = d.values().__iter__().__next__()
+
+                left_pad, right_pad = _compute_paddings(data=xdata, axis=ax)
+                unpadded = unpadded.sel({ax: slice(left_pad, right_pad)})
+                translation_axes.append(ax)
+                translation_values.append(left_pad)
+        d = {}
+        for k, v in unpadded.items():
+            assert len(v.values()) == 1
+            xdata = v.values().__iter__().__next__()
+            if 0 not in xdata.shape:
+                d[k] = xdata
+        unpadded = MultiscaleSpatialImage.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
+
+    translation = Translation(translation_values, axes=tuple(translation_axes))
+    old_transformations = get_transformation(element=raster, get_all=True)
+    assert isinstance(old_transformations, dict)
+    for target_cs, old_transform in old_transformations.items():
+        assert old_transform is not None
+        sequence = Sequence([translation, old_transform])
+        set_transformation(element=unpadded, transformation=sequence, to_coordinate_system=target_cs)
+    unpadded = compute_coordinates(unpadded)
+    return unpadded
 
 
 def _get_backing_files_raster(raster: DataArray) -> list[str]:

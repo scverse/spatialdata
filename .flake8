@@ -1,6 +1,6 @@
 # Can't yet be moved to the pyproject.toml due to https://github.com/PyCQA/flake8/issues/234
 [flake8]
-max-line-length = 88
+max-line-length = 120
 ignore =
     # line break before a binary operator -> black does not adhere to PEP8
     W503

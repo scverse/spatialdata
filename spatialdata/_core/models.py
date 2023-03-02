@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from warnings import warn
 
 import dask.dataframe as dd
 import numpy as np
@@ -47,6 +48,7 @@ from spatialdata._core.core_utils import (
     _get_transformations,
     _set_transformations,
     _validate_mapping_to_coordinate_system_type,
+    compute_coordinates,
     get_dims,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity
@@ -110,7 +112,7 @@ class RasterSchema(DataArraySchema):
         data: Union[ArrayLike, DataArray, DaskArray],
         dims: Optional[Sequence[str]] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
-        multiscale_factors: Optional[ScaleFactors_t] = None,
+        scale_factors: Optional[ScaleFactors_t] = None,
         method: Optional[Methods] = None,
         chunks: Optional[Chunks_t] = None,
         **kwargs: Any,
@@ -126,9 +128,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data.
         transformations
             Transformations to apply to the data.
-        multiscale_factors
+        scale_factors
             Scale factors to apply for multiscale.
-            If not None, a :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+            If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
         method
             Method to use for multiscale.
         chunks
@@ -137,24 +139,28 @@ class RasterSchema(DataArraySchema):
         Returns
         -------
         :class:`spatial_image.SpatialImage` or
-        :class:`multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage`.
+        :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
         """
-        # check if dims is specified and if it has correct values
-
+        if "name" in kwargs:
+            raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray) or isinstance(data, SpatialImage):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
-                if dims != data.dims:
+                if set(dims).symmetric_difference(data.dims):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
                 else:
-                    logger.info("`dims` is specified redundantly: found also inside `data`")
+                    logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
-                dims = data.dims  # type: ignore[assignment]
+                dims = data.dims
+            # but if dims don't match the model's dims, throw error
+            if set(dims).symmetric_difference(cls.dims.dims):
+                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
+        # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
@@ -171,58 +177,69 @@ class RasterSchema(DataArraySchema):
         # transpose if possible
         if dims != cls.dims.dims:
             try:
-                assert isinstance(data, DaskArray) or isinstance(data, DataArray)
-                # mypy complains that data has no .transpose but I have asserted right above that data is a DaskArray...
-                data = data.transpose(*[_reindex(d) for d in cls.dims.dims])  # type: ignore[attr-defined]
+                if isinstance(data, DataArray):
+                    data = data.transpose(*list(cls.dims.dims))
+                elif isinstance(data, DaskArray):
+                    data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                else:
+                    raise ValueError(f"Unsupported data type: {type(data)}.")
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError:
                 raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
 
+        # finally convert to spatial image
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
-        assert isinstance(data, SpatialImage)
-        # TODO(giovp): drop coordinates for now until solution with IO.
-        data = data.drop(data.coords.keys())
+        # parse transformations
         _parse_transformations(data, transformations)
-        if multiscale_factors is not None:
-            # check that the image pyramid doesn't contain axes that get collapsed and eventually truncates the list
-            # of downscaling factors to avoid this
-            adjusted_multiscale_factors: list[int] = []
-            assert isinstance(data, DataArray)
-            current_shape: ArrayLike = np.array(data.shape, dtype=float)
-            # multiscale_factors could be a dict, we don't support this case here (in the future this code and the
-            # more general case will be handled by multiscale-spatial-image)
-            assert isinstance(multiscale_factors, list)
-            for factor in multiscale_factors:
-                scale_vector = np.array([1.0 if ax == "c" else factor for ax in data.dims])
-                current_shape /= scale_vector
-                if current_shape.min() < 1:
-                    logger.warning(
-                        f"Detected a multiscale factor that would collapse an axis: truncating list of factors from {multiscale_factors} to {adjusted_multiscale_factors}"
-                    )
-                    break
-                adjusted_multiscale_factors.append(factor)
+        # convert to multiscale if needed
+        if scale_factors is not None:
             parsed_transform = _get_transformations(data)
+            # delete transforms
             del data.attrs["transform"]
             data = to_multiscale(
                 data,
-                scale_factors=adjusted_multiscale_factors,
+                scale_factors=scale_factors,
                 method=method,
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
-            assert isinstance(data, MultiscaleSpatialImage)
+        # recompute coordinates for (multiscale) spatial image
+        data = compute_coordinates(data)
         return data
 
-    def validate(self, data: Union[SpatialImage, MultiscaleSpatialImage]) -> None:
-        if isinstance(data, SpatialImage):
-            super().validate(data)
-        elif isinstance(data, MultiscaleSpatialImage):
-            name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
-            if len(name) > 1:
-                raise ValueError(f"Wrong name for datatree: {name}.")
-            name = list(name)[0]
-            for d in data:
-                super().validate(data[d][name])
+    @singledispatchmethod
+    def validate(self, data: Any) -> None:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            Data to validate.
+
+        Raises
+        ------
+        ValueError
+            If data is not valid.
+        """
+
+        raise ValueError(f"Unsupported data type: {type(data)}.")
+
+    @validate.register(SpatialImage)
+    def _(self, data: SpatialImage) -> None:
+        super().validate(data)
+
+    @validate.register(MultiscaleSpatialImage)
+    def _(self, data: MultiscaleSpatialImage) -> None:
+        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
+            if j != k:
+                raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
+        name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+        if len(name) > 1:
+            raise ValueError(f"Wrong name for datatree: `{name}`.")
+        name = list(name)[0]
+        for d in data:
+            super().validate(data[d][name])
 
 
 class Labels2DModel(RasterSchema):
@@ -234,8 +251,7 @@ class Labels2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -250,8 +266,7 @@ class Labels3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -266,8 +281,7 @@ class Image2DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -282,8 +296,7 @@ class Image3DModel(RasterSchema):
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
-            # suppressing the check of .attrs['transform']; see https://github.com/scverse/spatialdata/issues/115
-            # attrs=self.attrs,
+            attrs=self.attrs,
             *args,
             **kwargs,
         )
@@ -304,6 +317,8 @@ class ShapesModel:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+        if len(data[cls.GEOMETRY_KEY]) == 0:
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
@@ -345,6 +360,8 @@ class ShapesModel:
             In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
         radius
             Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+        index
+            Index of the shapes, must be of type `str`. If None, it's generated automatically.
         transform
             Transform of points.
         kwargs
@@ -364,6 +381,7 @@ class ShapesModel:
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: Optional[tuple[ArrayLike, ...]] = None,
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> GeoDataFrame:
         geometry = GeometryType(geometry)
@@ -373,6 +391,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -384,6 +404,7 @@ class ShapesModel:
         cls,
         data: Union[str, Path],
         radius: Optional[ArrayLike] = None,
+        index: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
@@ -399,6 +420,8 @@ class ShapesModel:
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
+        if index is not None:
+            geo_df.index = index
         _parse_transformations(geo_df, transformations)
         cls.validate(geo_df)
         return geo_df
@@ -445,17 +468,6 @@ class PointsModel:
                     logger.info(
                         f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
                     )
-        # commented out to address this issue: https://github.com/scverse/spatialdata/issues/140
-        # for c in data.columns:
-        #     #  this is not strictly a validation since we are explicitly importing the categories
-        #     #  but it is a convenient way to ensure that the categories are known. It also just changes the state of the
-        #     #  series, so it is not a big deal.
-        #     if is_categorical_dtype(data[c]):
-        #         if not data[c].cat.known:
-        #             try:
-        #                 data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
-        #             except ValueError:
-        #                 logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
     @singledispatchmethod
     @classmethod
@@ -581,6 +593,17 @@ class PointsModel:
             assert instance_key in data.columns
             data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
+        for c in data.columns:
+            #  Here we are explicitly importing the categories
+            #  but it is a convenient way to ensure that the categories are known.
+            # It also just changes the state of the series, so it is not a big deal.
+            if is_categorical_dtype(data[c]):
+                if not data[c].cat.known:
+                    try:
+                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                    except ValueError:
+                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
@@ -648,7 +671,7 @@ class TableModel:
             if not adata.obs[region_key].isin(region).all():
                 raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
             if not is_categorical_dtype(adata.obs[region_key]):
-                logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+                warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
                 adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
             if instance_key is None:
                 raise ValueError("`instance_key` must be provided if `region` is of type `List`.")

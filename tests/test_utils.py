@@ -54,18 +54,24 @@ def test_unpad_raster(images, labels) -> None:
             padded = schema.parse(padded, dims=data.dims)
         elif isinstance(raster, MultiscaleSpatialImage):
             # some arbitrary scaling factors
-            padded = schema.parse(padded, dims=data.dims, multiscale_factors=[2, 2])
+            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2])
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)
         if isinstance(raster, SpatialImage):
-            xarray.testing.assert_equal(raster, unpadded)
+            try:
+                xarray.testing.assert_equal(raster, unpadded)
+            except AssertionError as e:
+                raise e
         elif isinstance(raster, MultiscaleSpatialImage):
             d0 = dict(raster["scale0"])
             assert len(d0) == 1
             d1 = dict(unpadded["scale0"])
             assert len(d1) == 1
-            xarray.testing.assert_equal(d0.values().__iter__().__next__(), d1.values().__iter__().__next__())
+            try:
+                xarray.testing.assert_equal(d0.values().__iter__().__next__(), d1.values().__iter__().__next__())
+            except AssertionError as e:
+                raise e
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
 
