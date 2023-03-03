@@ -95,7 +95,10 @@ def get_transformation(
     element
         The element.
     to_coordinate_system
-        The coordinate system to which the transformation should be returned. If None, all transformations are returned.
+        The coordinate system to which the transformation should be returned.
+
+        * If None and `get_all=False` returns a globally defined default coordinate space.
+        * If None and `get_all=True` returns all transformations.
     get_all
         If True, all transformations are returned. If True, `to_coordinate_system` needs to be None.
 
