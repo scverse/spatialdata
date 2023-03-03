@@ -432,7 +432,7 @@ class ShapesModel:
     ) -> GeoDataFrame:
         if "geometry" not in data.columns:
             raise ValueError("`geometry` column not found in `GeoDataFrame`.")
-        if isinstance(data["geometry"][0], Point):
+        if isinstance(data["geometry"].iloc[0], Point):
             if cls.RADIUS_KEY not in data.columns:
                 raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         _parse_transformations(data, transformations)
