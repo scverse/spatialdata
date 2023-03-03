@@ -115,13 +115,13 @@ def test_concatenate_tables():
     d["region"] = sorted(d["region"])
     assert d == {
         "region": ["shapes/circles", "shapes/poly"],
-        "region_key": "region_merged",
-        "instance_key": "instance_merged",
+        "region_key": "region",
+        "instance_key": "instance_id",
     }
 
     table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
     with pytest.raises(ValueError, match="Categorical categories must be unique"):
-        _concatenate_tables([table0, table3])
+        _concatenate_tables([table0, table3], region_key="region")
 
     table4 = _get_table(
         region=["shapes/circles1", "shapes/poly1"], region_key="annotated_shape0", instance_key="instance_id"
@@ -132,8 +132,11 @@ def test_concatenate_tables():
     table6 = _get_table(
         region=["shapes/circles3", "shapes/poly3"], region_key="annotated_shape1", instance_key="instance_id"
     )
-
-    assert len(_concatenate_tables([table4, table5, table6])) == len(table4) + len(table5) + len(table6)
+    with pytest.raises(ValueError, match="`region_key` must be specified if tables have different region keys"):
+        assert len(_concatenate_tables([table4, table5, table6])) == len(table4) + len(table5) + len(table6)
+    assert len(_concatenate_tables([table4, table5, table6], region_key="region")) == len(table4) + len(table5) + len(
+        table6
+    )
 
 
 def test_concatenate_sdatas(full_sdata):

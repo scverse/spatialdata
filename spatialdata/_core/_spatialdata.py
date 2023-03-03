@@ -901,9 +901,6 @@ class QueryManager:
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata
 
-    # def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
-    # type: ignore[type-arg]
-
     def bounding_box(
         self,
         axes: tuple[str, ...],

@@ -363,6 +363,7 @@ def concatenate(
     -------
     The concatenated :class:`spatialdata.SpatialData` object.
     """
+    from spatialdata import SpatialData
 
     assert type(sdatas) == list, "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
