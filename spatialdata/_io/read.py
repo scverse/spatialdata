@@ -127,9 +127,9 @@ def _get_transformations_from_ngff_dict(
 
 
 def _read_multiscale(
-    store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
+    store: Union[str, Path], raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)
@@ -195,7 +195,7 @@ def _read_multiscale(
 
 def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read shapes from a zarr store."""
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
@@ -220,7 +220,7 @@ def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentPointsFormat()  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     f = zarr.open(store, mode="r")
 
     path = Path(f._store.path) / f.path / "points.parquet"

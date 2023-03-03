@@ -234,7 +234,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,
@@ -294,7 +294,7 @@ def _(
     transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,
@@ -317,20 +317,19 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
     axes = get_dims(data)
     arrays = []
     for ax in axes:
-        arrays.append(data[ax].to_dask_array())
-    xdata = DataArray(np.array(arrays).T, coords={"points": range(len(data)), "dim": list(axes)})
+        arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
+    xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
     xtransformed = transformation._transform_coordinates(xdata)
     transformed = data.drop(columns=list(axes))
     assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax
-        new_ax = xtransformed[:, indices].data.flatten()
-        # mypy says that from_array is not a method of DaskDataFrame, but it is
-        transformed[ax] = da.from_array(np.array(new_ax))  # type: ignore[attr-defined]
+        new_ax = xtransformed[:, indices]
+        transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed, old_transformations, set_all=True)
+    set_transformation(transformed, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed,
         transformation,
@@ -356,7 +355,7 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    set_transformation(transformed_data, old_transformations, set_all=True)
+    set_transformation(transformed_data, old_transformations.copy(), set_all=True)
     _prepend_transformation(
         transformed_data,
         transformation,
