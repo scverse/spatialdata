@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import anndata
 import networkx as nx
 import numpy as np
 from anndata import AnnData
 
-from spatialdata._core._spatialdata import SpatialData
+if TYPE_CHECKING:
+    from spatialdata._core._spatialdata import SpatialData
+
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,
     SpatialElement,
