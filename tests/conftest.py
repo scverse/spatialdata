@@ -226,6 +226,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
     points["radius"] = np.random.normal(size=(len(points), 1))
 
     out["poly"] = ShapesModel.parse(poly)
+    out["poly"].index = ["a", "b", "c", "d", "e"]
     out["multipoly"] = ShapesModel.parse(multipoly)
     out["circles"] = ShapesModel.parse(points)
 
