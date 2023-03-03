@@ -10,10 +10,12 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata import SpatialData
 from spatialdata._core.models import (
     Image2DModel,
+    Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
@@ -52,6 +54,18 @@ def table_single_annotation() -> SpatialData:
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
     return SpatialData(table=_get_table(region=["sample1", "sample2"]))
+
+
+@pytest.fixture()
+def tables() -> list[AnnData]:
+    _tables = []
+    for region, region_key, instance_key in (
+        [None, None, None],
+        ["my_region0", None, "my_instance_key"],
+        [["my_region0", "my_region1"], "my_region_key", "my_instance_key"],
+    ):
+        _tables.append(_get_table(region=region, region_key=region_key, instance_key=instance_key))
+    return _tables
 
 
 @pytest.fixture()
@@ -109,35 +123,25 @@ def sdata(request) -> SpatialData:
 def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
-
-    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), name="image2d", dims=dims_2d)
-    out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), name="image2d_multiscale", multiscale_factors=[2, 2], dims=dims_2d
+    dims_3d = ("z", "y", "x", "c")
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d)
+    out["image2d_multiscale"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d)
+    out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
+    out["image2d_multiscale_xarray"] = Image2DModel.parse(
+        DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
+        scale_factors=[2, 4],
+        dims=None,
     )
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["image2d_xarray"] = Image2DModel.parse(
-    #     DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), name="image2d_xarray", dims=None
-    # )
-    # out["image2d_multiscale_xarray"] = Image2DModel.parse(
-    #     DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
-    #     name="image2d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
-    # # TODO: not supported atm.
-    # out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), name="image3d_numpy", dims=dims_3d)
-    # out["image3d_multiscale_numpy"] = Image3DModel.parse(
-    #     RNG.normal(size=(2, 64, 64, 3)), name="image3d_multiscale_numpy", scale_factors=[2, 4], dims=dims_3d
-    # )
-    # out["image3d_xarray"] = Image3DModel.parse(
-    #     DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), name="image3d_xarray", dims=None
-    # )
-    # out["image3d_multiscale_xarray"] = Image3DModel.parse(
-    #     DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
-    #     name="image3d_multiscale_xarray",
-    #     scale_factors=[2, 4],
-    #     dims=None,
-    # )
+    out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d)
+    out["image3d_multiscale_numpy"] = Image3DModel.parse(
+        RNG.normal(size=(2, 64, 64, 3)), scale_factors=[2], dims=dims_3d
+    )
+    out["image3d_xarray"] = Image3DModel.parse(DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), dims=None)
+    out["image3d_multiscale_xarray"] = Image3DModel.parse(
+        DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
+        scale_factors=[2],
+        dims=None,
+    )
     return out
 
 
@@ -146,35 +150,30 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), name="labels2d", dims=dims_2d)
+    out["labels2d"] = Labels2DModel.parse(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d)
     out["labels2d_multiscale"] = Labels2DModel.parse(
-        RNG.normal(size=(64, 64)), name="labels2d_multiscale", multiscale_factors=[2, 4], dims=dims_2d
+        RNG.integers(0, 100, size=(64, 64)), scale_factors=[2, 4], dims=dims_2d
     )
-
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["labels2d_xarray"] = Labels2DModel.parse(
-    #     DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), name="labels2d_xarray", dims=None
-    # )
-    # out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
-    #     DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
-    #     name="labels2d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
-    out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), name="labels3d_numpy", dims=dims_3d)
+    out["labels2d_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d), dims=None
+    )
+    out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d),
+        scale_factors=[2, 4],
+        dims=None,
+    )
+    out["labels3d_numpy"] = Labels3DModel.parse(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.normal(size=(10, 64, 64)), name="labels3d_multiscale_numpy", multiscale_factors=[2, 4], dims=dims_3d
+        RNG.integers(0, 100, size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
     )
-    # TODO: (BUG) https://github.com/scverse/spatialdata/issues/59
-    # out["labels3d_xarray"] = Labels3DModel.parse(
-    #     DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), name="labels3d_xarray", dims=None
-    # )
-    # out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
-    #     DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
-    #     name="labels3d_multiscale_xarray",
-    #     multiscale_factors=[2, 4],
-    #     dims=None,
-    # )
+    out["labels3d_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d), dims=None
+    )
+    out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d),
+        scale_factors=[2, 4],
+        dims=None,
+    )
     return out
 
 
@@ -187,7 +186,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
                 Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
                 Polygon(((0, 0), (0, 1), (1, 10))),
-                Polygon(((0, 0), (0, 1), (1, 1))),
+                Polygon(((10, 10), (10, 20), (20, 20))),
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
             ]
         }
@@ -253,19 +252,23 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Union[str, list[str]],
+    region: Optional[Union[str, list[str]]],
     region_key: Optional[str] = None,
     instance_key: Optional[str] = None,
 ) -> AnnData:
-    region_key = region_key or "annotated_region"
-    instance_key = instance_key or "instance_id"
+    if region is not None:
+        region_key = region_key or "annotated_region"
+        instance_key = instance_key or "instance_id"
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
-    adata.obs[instance_key] = np.arange(adata.n_obs)
+    if instance_key is not None:
+        adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         return TableModel.parse(adata=adata, region=region, instance_key=instance_key)
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
         adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
         return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+    elif region is None:
+        return TableModel.parse(adata=adata)
     else:
-        raise ValueError("region must be a string or a list of strings")
+        raise ValueError(f"region must be a string or list of strings, not {type(region)}")

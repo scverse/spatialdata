@@ -14,7 +14,7 @@ from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import are_directories_identical
+from spatialdata.utils import _are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 
@@ -26,10 +26,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert images.images.keys() == sdata.images.keys()
         for k in images.images.keys():
-            if isinstance(sdata.images[k], SpatialImage):
-                assert images.images[k].equals(sdata.images[k])
-            elif isinstance(images.images[k], MultiscaleSpatialImage):
-                assert images.images[k].equals(sdata.images[k])
+            assert images.images[k].equals(sdata.images[k])
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
         """Test read/write."""
@@ -38,10 +35,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert labels.labels.keys() == sdata.labels.keys()
         for k in labels.labels.keys():
-            if isinstance(sdata.labels[k], SpatialImage):
-                assert labels.labels[k].equals(sdata.labels[k])
-            elif isinstance(sdata.labels[k], MultiscaleSpatialImage):
-                assert labels.labels[k].equals(sdata.labels[k])
+            assert labels.labels[k].equals(sdata.labels[k])
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         """Test read/write."""
@@ -98,7 +92,7 @@ class TestReadWrite:
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
-        are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
     def test_incremental_io(
         self,
@@ -152,6 +146,27 @@ class TestReadWrite:
                 sdata.add_points(name=f"incremental_{k}", points=v)
             sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
             break
+
+    def test_incremental_io_table(self, table_single_annotation):
+        s = table_single_annotation
+        t = s.table[:10, :].copy()
+        with pytest.raises(ValueError):
+            s.table = t
+        del s.table
+        s.table = t
+
+        with tempfile.TemporaryDirectory() as td:
+            f = os.path.join(td, "data.zarr")
+            s.write(f)
+            s2 = SpatialData.read(f)
+            assert len(s2.table) == len(t)
+            del s2.table
+            s2.table = s.table
+            assert len(s2.table) == len(s.table)
+            f2 = os.path.join(td, "data2.zarr")
+            s2.write(f2)
+            s3 = SpatialData.read(f2)
+            assert len(s3.table) == len(s2.table)
 
 
 def test_io_and_lazy_loading_points(points):
@@ -214,3 +229,84 @@ def test_replace_transformation_on_disk_non_raster(shapes, points):
             set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
             t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
             assert type(t1) == Scale
+
+
+def test_overwrite_files_with_backed_data(full_sdata):
+    # addressing https://github.com/scverse/spatialdata/issues/137
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+        with pytest.raises(ValueError):
+            full_sdata.write(f, overwrite=True)
+
+    # support for overwriting backed sdata has been temporarily removed
+    # with tempfile.TemporaryDirectory() as tmpdir:
+    #     f = os.path.join(tmpdir, "data.zarr")
+    #     full_sdata.write(f)
+    #     full_sdata.write(f, overwrite=True)
+    #     print(full_sdata)
+    #
+    #     sdata2 = SpatialData(
+    #         images=full_sdata.images,
+    #         labels=full_sdata.labels,
+    #         points=full_sdata.points,
+    #         shapes=full_sdata.shapes,
+    #         table=full_sdata.table,
+    #     )
+    #     sdata2.write(f, overwrite=True)
+
+
+def test_overwrite_onto_non_zarr_file(full_sdata):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f0 = os.path.join(tmpdir, "test.txt")
+        with open(f0, "w"):
+            with pytest.raises(ValueError):
+                full_sdata.write(f0)
+            with pytest.raises(ValueError):
+                full_sdata.write(f0, overwrite=True)
+        f1 = os.path.join(tmpdir, "test.zarr")
+        os.mkdir(f1)
+        with pytest.raises(ValueError):
+            full_sdata.write(f1)
+
+
+def test_incremental_io_with_backed_elements(full_sdata):
+    # addressing https://github.com/scverse/spatialdata/issues/137
+    # we test also the non-backed case so that if we switch to the backed version in the future we already have the tests
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        e = full_sdata.images.values().__iter__().__next__()
+        full_sdata.add_image("new_images", e, overwrite=True)
+        # support for overwriting backed images has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
+
+        e = full_sdata.labels.values().__iter__().__next__()
+        full_sdata.add_labels("new_labels", e, overwrite=True)
+        # support for overwriting backed labels has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
+
+        e = full_sdata.points.values().__iter__().__next__()
+        full_sdata.add_points("new_points", e, overwrite=True)
+        # support for overwriting backed points has been temporarily removed
+        with pytest.raises(ValueError):
+            full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
+
+        e = full_sdata.shapes.values().__iter__().__next__()
+        full_sdata.add_shapes("new_shapes", e, overwrite=True)
+        full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
+
+        print(full_sdata)
+
+        f2 = os.path.join(tmpdir, "data2.zarr")
+        sdata2 = SpatialData(table=full_sdata.table.copy())
+        sdata2.write(f2)
+        del full_sdata.table
+        full_sdata.table = sdata2.table
+        full_sdata.write(f2, overwrite=True)
+
+        print(full_sdata)

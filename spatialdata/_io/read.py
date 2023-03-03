@@ -1,4 +1,5 @@
 import logging
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
@@ -21,13 +22,18 @@ from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import (
     MappingToCoordinateSystem_t,
     _set_transformations,
+    compute_coordinates,
 )
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io._utils import ome_zarr_logger
-from spatialdata._io.format import PointsFormat, ShapesFormat, SpatialDataFormatV01
-from spatialdata._logging import logger
+from spatialdata._io.format import (
+    CurrentPointsFormat,
+    CurrentRasterFormat,
+    CurrentShapesFormat,
+    SpatialDataFormatV01,
+)
 
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
@@ -121,9 +127,9 @@ def _get_transformations_from_ngff_dict(
 
 
 def _read_multiscale(
-    store: str, raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = SpatialDataFormatV01()
+    store: Union[str, Path], raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)
@@ -148,16 +154,17 @@ def _read_multiscale(
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
     assert len(multiscales) == 1
+    # checking for multiscales[0]["coordinateTransformations"] would make fail
+    # something that doesn't have coordinateTransformations in top level
+    # which is true for the current version of the spec
+    # and for instance in the xenium example
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
-    name = node.metadata["name"]
-    if type(name) == list:
-        assert len(name) == 1
-        name = name[0]
-        logger.warning(
-            "omero metadata is not fully supported yet, using a workaround. If you encounter bugs related "
-            "to omero metadata please follow the discussion at https://github.com/scverse/spatialdata/issues/60"
-        )
+    name = os.path.basename(node.metadata["name"])
+    # if image, read channels metadata
+    if raster_type == "image":
+        omero = multiscales[0]["omero"]
+        channels: list[Any] = fmt.channels_from_metadata(omero)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -165,32 +172,30 @@ def _read_multiscale(
             data = node.load(Multiscales).array(resolution=d, version=fmt.version)
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
-                # any name
-                name="image",
-                # name=name,
+                name=name,
                 dims=axes,
+                coords={"c": channels} if raster_type == "image" else {},
                 # attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
-        return msi
+        return compute_coordinates(msi)
     else:
         data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
         si = SpatialImage(
             data,
-            # any name
-            name="image",
-            # name=name,
+            name=name,
             dims=axes,
+            coords={"c": channels} if raster_type == "image" else {},
             # attrs={TRANSFORM_KEY: t},
         )
         _set_transformations(si, transformations)
-        return si
+        return compute_coordinates(si)
 
 
-def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = ShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
+def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read shapes from a zarr store."""
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
@@ -212,10 +217,10 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = PointsFormat()  # type: ignore[type-arg]
+    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentPointsFormat()  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, str)
+    assert isinstance(store, str) or isinstance(store, Path)
     f = zarr.open(store, mode="r")
 
     path = Path(f._store.path) / f.path / "points.parquet"

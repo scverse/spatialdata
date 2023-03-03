@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
+import anndata
 import networkx as nx
 import numpy as np
+from anndata import AnnData
 
-from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.models import TableModel
+
+if TYPE_CHECKING:
+    from spatialdata._core._spatialdata import SpatialData
+
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,
     SpatialElement,
@@ -20,6 +26,8 @@ __all__ = [
     "get_transformation",
     "remove_transformation",
     "get_transformation_between_coordinate_systems",
+    "_concatenate_tables",
+    "concatenate",
 ]
 
 
@@ -64,8 +72,8 @@ def set_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, transformation)
     else:
-        if not write_to_sdata.contains_element(element):
-            raise ValueError("The element is not part of the SpatialData object.")
+        if not write_to_sdata.contains_element(element, raise_exception=True):
+            raise RuntimeError("contains_element() failed without raising an exception.")
         if not write_to_sdata.is_backed():
             raise ValueError(
                 "The SpatialData object is not backed. You can either set a transformation to an element "
@@ -105,7 +113,7 @@ def get_transformation(
             to_coordinate_system = DEFAULT_COORDINATE_SYSTEM
         # get a specific transformation
         if to_coordinate_system not in transformations:
-            raise ValueError(f"Transformation to {to_coordinate_system} not found")
+            raise ValueError(f"Transformation to {to_coordinate_system} not found in element {element}.")
         return transformations[to_coordinate_system]
     else:
         assert to_coordinate_system is None
@@ -146,8 +154,8 @@ def remove_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, {})
     else:
-        if not write_to_sdata.contains_element(element):
-            raise ValueError("The element is not part of the SpatialData object.")
+        if not write_to_sdata.contains_element(element, raise_exception=True):
+            raise RuntimeError("contains_element() failed without raising an exception.")
         if not write_to_sdata.is_backed():
             raise ValueError(
                 "The SpatialData object is not backed. You can either remove a transformation from an "
@@ -281,3 +289,175 @@ def get_transformation_between_coordinate_systems(
             transformations.append(g[path[i]][path[i + 1]]["transformation"])
         sequence = Sequence(transformations)
         return sequence
+
+
+def _concatenate_tables(tables: list[AnnData]) -> Optional[AnnData]:
+    """
+    Concatenate a list of tables using AnnData.concatenate() and preserving the validity of region, region_key and instance_key
+
+    Parameters
+    ----------
+    tables
+        A list of tables to concatenate
+
+    Returns
+    -------
+    A table with all the tables concatenated. If the list of tables is empty, None is returned.
+
+    Notes
+    -----
+    Not all tables can be merged, they need to have compatible region, region_key and instance_key values. This function
+    checks this and merges if possible.
+
+    """
+    if len(tables) == 0:
+        return None
+    if len(tables) == 1:
+        return tables[0]
+
+    # 1) if REGION is a list, REGION_KEY is a string and there is a column in the table, with that name, specifying
+    # the "regions element" each key is annotating; 2) if instead REGION is a string, REGION_KEY is not used.
+    #
+    # In case 1), we require that each table has the same value for REGION_KEY (this assumption could be relaxed,
+    # see below) and then we concatenate the table. The new concatenated column is correcly annotating the rows.
+    #
+    # In case 2), we require that each table has no REGION_KEY value. In such a case, contatenating the tables would
+    # not add any "REGION_KEY" column, since no table has it. For this reason we add such column to each table and we
+    # call it "annotated_element_merged". Such a column could be already present in the table (for instance merging a
+    # table that had already been merged), so the for loop before find a unique name. I added an upper bound,
+    # so if the user keeps merging the same table more than 100 times (this is bad practice anyway), then we raise an
+    # exception.
+    #
+    # Final note, as mentioned we could relax the requirement that all the tables have the same REGION_KEY value (
+    # either all the same string, either all None), but I wanted to start simple, since this covers a lot of use
+    # cases already.
+    MERGED_TABLES_REGION_KEY = "annotated_element_merged"
+    MAX_CONCATENTAION_TABLES = 100
+    for i in range(MAX_CONCATENTAION_TABLES):
+        if i == 0:
+            key = MERGED_TABLES_REGION_KEY
+        else:
+            key = f"{MERGED_TABLES_REGION_KEY}_{i}"
+
+        all_without = True
+        for table in tables:
+            if key in table.obs:
+                all_without = False
+                break
+        if all_without:
+            MERGED_TABLES_REGION_KEY = key
+            break
+
+    spatialdata_attrs_found = [TableModel.ATTRS_KEY in table.uns for table in tables]
+    assert all(spatialdata_attrs_found) or not any(spatialdata_attrs_found)
+    if not any(spatialdata_attrs_found):
+        merged_region = None
+        merged_region_key = None
+        merged_instance_key = None
+    else:
+        all_instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
+        assert all(all_instance_keys[0] == instance_key for instance_key in all_instance_keys)
+        merged_instance_key = all_instance_keys[0]
+
+        all_region_keys = []
+        for table in tables:
+            TableModel().validate(table)
+            region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+            region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+            if not (
+                isinstance(region, str)
+                and region_key is None
+                or isinstance(region, list)
+                and isinstance(region_key, str)
+            ):
+                # this code should be never reached because the validate function should have raised an exception, but
+                # let's be extra safe
+                raise RuntimeError("Tables have incompatible region keys")
+            if isinstance(region, list):
+                all_region_keys.append(region_key)
+            else:
+                assert (
+                    len(all_region_keys) == 0
+                    or len(set(all_region_keys)) == 1
+                    and all_region_keys[0] == MERGED_TABLES_REGION_KEY
+                )
+                table.obs[MERGED_TABLES_REGION_KEY] = region
+                all_region_keys.append(MERGED_TABLES_REGION_KEY)
+        if len(set(all_region_keys)) != 1:
+            raise RuntimeError("Tables have incompatible region keys")
+        merged_region_key = all_region_keys[0]
+
+        all_regions = []
+        for table in tables:
+            region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+            if isinstance(region, str):
+                all_regions.append(region)
+            else:
+                all_regions.extend(region)
+        all_regions = list(set(all_regions))
+        merged_region = all_regions
+
+    attr = {"region": merged_region, "region_key": merged_region_key, "instance_key": merged_instance_key}
+    merged_table = anndata.concat(tables, join="outer", uns_merge="same")
+
+    # remove the MERGED_TABLES_REGION_KEY column if it has been added (the code above either adds that column
+    # to all the tables, either it doesn't add it at all)
+    for table in tables:
+        if MERGED_TABLES_REGION_KEY in table.obs:
+            del table.obs[MERGED_TABLES_REGION_KEY]
+
+    merged_table.uns[TableModel.ATTRS_KEY] = attr
+    merged_table.obs[merged_region_key] = merged_table.obs[merged_region_key].astype("category")
+    TableModel().validate(merged_table)
+    return merged_table
+
+
+def concatenate(sdatas: list[SpatialData], omit_table: bool = False) -> SpatialData:
+    """Concatenate a list of spatial data objects.
+
+    Parameters
+    ----------
+    sdatas
+        The spatial data objects to concatenate.
+    omit_table
+        If True, the table is not concatenated. This is useful if the tables are not compatible.
+
+    Returns
+    -------
+    SpatialData
+        The concatenated spatial data object.
+    """
+    from spatialdata._core._spatialdata import SpatialData
+
+    assert type(sdatas) == list
+    assert len(sdatas) > 0
+    if len(sdatas) == 1:
+        return sdatas[0]
+
+    if not omit_table:
+        list_of_tables = [sdata.table for sdata in sdatas if sdata.table is not None]
+        merged_table = _concatenate_tables(list_of_tables)
+    else:
+        merged_table = None
+
+    merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
+    if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
+        raise RuntimeError("Images must have unique names across the SpatialData objects to concatenate")
+    merged_labels = {**{k: v for sdata in sdatas for k, v in sdata.labels.items()}}
+    if len(merged_labels) != np.sum([len(sdata.labels) for sdata in sdatas]):
+        raise RuntimeError("Labels must have unique names across the SpatialData objects to concatenate")
+    merged_points = {**{k: v for sdata in sdatas for k, v in sdata.points.items()}}
+    if len(merged_points) != np.sum([len(sdata.points) for sdata in sdatas]):
+        raise RuntimeError("Points must have unique names across the SpatialData objects to concatenate")
+    merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
+    if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
+        raise RuntimeError("Shapes must have unique names across the SpatialData objects to concatenate")
+
+    sdata = SpatialData(
+        images=merged_images,
+        labels=merged_labels,
+        points=merged_points,
+        shapes=merged_shapes,
+        table=merged_table,
+    )
+    return sdata

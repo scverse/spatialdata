@@ -40,6 +40,7 @@ from spatialdata._core.models import (
     get_schema,
 )
 from spatialdata._core.transformations import Scale
+from spatialdata._types import ArrayLike
 from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,
@@ -143,9 +144,12 @@ class TestModels:
                 model.validate(element_read)
 
     @pytest.mark.parametrize("converter", [lambda _: _, from_array, DataArray, to_spatial_image])
-    @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel])  # TODO: Image3DModel once fixed.
+    @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel, Image3DModel])
     @pytest.mark.parametrize("permute", [True, False])
-    def test_raster_schema(self, converter: Callable[..., Any], model: RasterSchema, permute: bool) -> None:
+    @pytest.mark.parametrize("kwargs", [None, {"name": "test"}])
+    def test_raster_schema(
+        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: Optional[dict[str, str]]
+    ) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
             RNG.shuffle(dims)
@@ -156,9 +160,11 @@ class TestModels:
         elif converter is to_spatial_image:
             converter = partial(converter, dims=model.dims.dims)
         if n_dims == 2:
-            image: np.ndarray = np.random.rand(10, 10)
+            image: ArrayLike = np.random.rand(10, 10)
         elif n_dims == 3:
-            image = np.random.rand(3, 10, 10)
+            image: ArrayLike = np.random.rand(3, 10, 10)
+        elif n_dims == 4:
+            image: ArrayLike = np.random.rand(2, 3, 10, 10)
         image = converter(image)
         self._parse_transformation_from_multiple_places(model, image)
         spatial_image = model.parse(image)
@@ -179,6 +185,9 @@ class TestModels:
             assert set(spatial_image.shape) == set(image.shape)
             assert set(spatial_image.data.shape) == set(image.shape)
         assert spatial_image.data.dtype == image.dtype
+        if kwargs is not None:
+            with pytest.raises(ValueError):
+                model.parse(image, **kwargs)
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])

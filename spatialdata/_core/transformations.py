@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional, Union
+from warnings import warn
 
 import numpy as np
 import xarray as xr
@@ -20,7 +21,6 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
@@ -197,10 +197,46 @@ class BaseTransformation(ABC):
             raise ValueError(f"Invalid axes: {axes}")
         return valid_axes[axes]
 
-    def transform(self, element: SpatialElement) -> SpatialElement:
+    def transform(self, element: SpatialElement, maintain_positioning: bool = False) -> SpatialElement:
+        """
+        Transform a spatial element using this transformation and returns the transformed element.
+
+        Parameters
+        ----------
+        element
+            Spatial element to transform.
+        maintain_positioning
+            If True, in the transformed element, each transformation that was present in the original element will be
+            prepended with the inverse of the transformation used to transform the data (i.e. the current
+            transformation for which .transform() is called). In this way the data is transformed but the
+            positioning (for each coordinate system) is maintained. A use case is changing the orientation/scale/etc. of
+            the data but keeping the alignment of the data within each coordinate system.
+            If False, the data is simply transformed and the positioning (for each coordinate system) changes. For
+            raster data, the translation part of the transformation is prepended to any tranformation already present in
+            the element (see Notes below for more details). Furthermore, again in the case of raster data,
+            if the transformation being applied has a rotation-like component, then the translation that is prepended
+            also takes into account for the fact that the rotated data will have some paddings on each corner, and so
+            it's origin must be shifted accordingly.
+            Please see notes for more details of how this parameter interact with xarray.DataArray for raster data.
+
+        Returns
+        -------
+        SpatialElement: Transformed spatial element.
+
+        Notes
+        -----
+        An affine transformation contains a linear transformation and a translation. For raster types,
+        only the linear transformation is applied to the data (e.g. the data is rotated or resized), but not the
+        translation part.
+        This means that calling Translation(...).transform(raster_element) will have the same effect as pre-pending the
+        translation to each transformation of the raster element.
+        Similarly, Translation(...).transform(raster_element, maintain_positioning=True) will not modify the raster
+        element. We are considering to change this behavior by letting translations modify the coordinates stored with
+        xarray.DataArray. If you are interested in this use case please get in touch by opening a GitHub Issue.
+        """
         from spatialdata._core._transform_elements import _transform
 
-        transformed = _transform(element, self)
+        transformed = _transform(element, self, maintain_positioning=maintain_positioning)
         return transformed
 
     @abstractmethod
@@ -556,10 +592,11 @@ class Affine(BaseTransformation):
                 )
         # asking a representation of the affine transformation that is not using the matrix
         if len(set(input_axes).intersection(self.input_axes)) == 0:
-            logger.warning(
+            warn(
                 "Asking a representation of the affine transformation that is not using the matrix: "
                 f"self.input_axews = {self.input_axes}, self.output_axes = {self.output_axes}, "
-                f"input_axes = {input_axes}, output_axes = {output_axes}"
+                f"input_axes = {input_axes}, output_axes = {output_axes}",
+                UserWarning,
             )
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
@@ -807,9 +844,33 @@ def _get_current_output_axes(
                     )
         return tuple(to_return)
     elif isinstance(transformation, Sequence):
+        for t in transformation.transformations:
+            input_axes = _get_current_output_axes(t, input_axes)
         return input_axes
     else:
         raise ValueError("Unknown transformation type.")
+
+
+def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
+    from spatialdata._core.core_utils import get_dims
+
+    input_axes = get_dims(element)
+    output_axes = _get_current_output_axes(transformation, input_axes)
+    matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
+    return Affine(matrix, input_axes=input_axes, output_axes=output_axes)
+
+
+def _decompose_affine_into_linear_and_translation(affine: Affine) -> tuple[Affine, Translation]:
+    matrix = affine.matrix
+    translation_part = matrix[:-1, -1]
+
+    linear_part = np.zeros_like(matrix)
+    linear_part[:-1, :-1] = matrix[:-1, :-1]
+    linear_part[-1, -1] = 1
+
+    linear_transformation = Affine(linear_part, input_axes=affine.input_axes, output_axes=affine.output_axes)
+    translation_transformation = Translation(translation_part, axes=affine.output_axes)
+    return linear_transformation, translation_transformation
 
 
 TRANSFORMATIONS_MAP[NgffIdentity] = Identity
