@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
@@ -1103,6 +1104,46 @@ class SpatialData:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
+
+    def __getitem__(self, item: str) -> SpatialElement | AnnData:
+        # this regex match the following:
+        # /images/ehi
+        # /images/ehi
+        # /labels/ehi
+        # /table
+        #
+        # but not:
+        # /images/
+        # images/ehi
+        # /iimages/ehi
+        # /images/ehi/
+        # /images/ehi/ehi
+        # table
+        # /ttable
+        # /table/
+        # /table/ehi
+        regex = r"^/(\bimages\b(?=/)|\blabels\b(?=/)|\bpoints\b(?=/)|\bshapes\b(?=/)|\btable\b(?=$))(/[a-zA-Z0-9_]+)?$"
+        match = re.match(regex, item)
+        if match:
+            element_type = match.group(1)
+            if element_type == "table":
+                element_name = None
+            else:
+                element_name = match.group(2)[1:]
+        else:
+            raise ValueError(f"{item} does not match any element in the SpatialData object")
+        if element_type == "table":
+            return self.table
+        elif element_type == "images":
+            return self.images[element_name]
+        elif element_type == "labels":
+            return self.labels[element_name]
+        elif element_type == "points":
+            return self.points[element_name]
+        elif element_type == "shapes":
+            return self.shapes[element_name]
+        else:
+            raise ValueError(f"Unknown element type {element_type}")
 
 
 class QueryManager:

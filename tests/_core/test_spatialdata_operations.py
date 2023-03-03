@@ -179,3 +179,47 @@ def test_locate_spatial_element(full_sdata):
     full_sdata.images["image2d_again"] = im
     with pytest.raises(ValueError):
         full_sdata._locate_spatial_element(im)
+
+
+@pytest.mark.parametrize(
+    "input_string, expected_element_type",
+    [
+        ("/images/image2d", "images"),
+        ("/images/image2d_multiscale", "images"),
+        ("/images/image2d_xarray", "images"),
+        ("/images/image2d_multiscale_xarray", "images"),
+        ("/images/image3d_numpy", "images"),
+        ("/images/image3d_multiscale_numpy", "images"),
+        ("/images/image3d_xarray", "images"),
+        ("/images/image3d_multiscale_xarray", "images"),
+        ("/labels/labels2d", "labels"),
+        ("/labels/labels2d_multiscale", "labels"),
+        ("/labels/labels2d_xarray", "labels"),
+        ("/labels/labels2d_multiscale_xarray", "labels"),
+        ("/labels/labels3d_numpy", "labels"),
+        ("/labels/labels3d_multiscale_numpy", "labels"),
+        ("/labels/labels3d_xarray", "labels"),
+        ("/labels/labels3d_multiscale_xarray", "labels"),
+        ("/points/points_0", "points"),
+        ("/points/points_0_1", "points"),
+        ("/shapes/poly", "shapes"),
+        ("/shapes/multipoly", "shapes"),
+        ("/shapes/circles", "shapes"),
+        ("/table", "table"),
+        ("images/image2d", None),
+        ("/iimages/image2d", None),
+        ("/images/image2d/", None),
+        ("/images/image2d/a", None),
+        ("/table/a", None),
+    ],
+)
+def test_get_item(full_sdata, input_string, expected_element_type):
+    if expected_element_type is None:
+        with pytest.raises(ValueError):
+            _ = full_sdata[input_string]
+    else:
+        element = full_sdata[input_string]
+        if expected_element_type == "table":
+            assert id(element) == id(full_sdata.table)
+        else:
+            assert id(element) == id(full_sdata.__getattribute__(expected_element_type)[input_string.split("/")[-1]])
