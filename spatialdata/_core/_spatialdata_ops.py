@@ -289,13 +289,25 @@ def get_transformation_between_coordinate_systems(
 
 def _concatenate_tables(
     tables: list[AnnData],
-    region_key: str = "region_merged",
-    instance_key: str = "instance_merged",
+    region_key: str | None = None,
+    instance_key: str | None = None,
     **kwargs: Any,
 ) -> AnnData:
     region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
     instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
     regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
+
+    if len(set(region_keys)) == 1:
+        region_key = list(region_keys)[0]
+    else:
+        if region_key is None:
+            raise ValueError("`region_key` must be specified if tables have different region keys")
+
+    if len(set(instance_keys)) == 1:
+        instance_key = list(instance_keys)[0]
+    else:
+        if instance_key is None:
+            raise ValueError("`instance_key` must be specified if tables have different instance keys")
 
     tables_l = []
     regions_l = []
@@ -326,8 +338,8 @@ def _concatenate_tables(
 
 def concatenate(
     sdatas: list[SpatialData],
-    region_key: str = "region_merged",
-    instance_key: str = "instance_merged",
+    region_key: str | None = None,
+    instance_key: str | None = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -339,6 +351,7 @@ def concatenate(
         The spatial data objects to concatenate.
     region_key
         The key to use for the region column in the concatenated object.
+        If all region_keys are the same, the `region_key` is used.
     instance_key
         The key to use for the instance column in the concatenated object.
     kwargs

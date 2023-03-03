@@ -1,6 +1,7 @@
 """This file contains models and schema for SpatialData"""
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
@@ -17,9 +18,7 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
-from numpy.typing import NDArray
 from pandas.api.types import is_categorical_dtype
-from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -679,7 +678,7 @@ class TableModel:
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
         if not is_categorical_dtype(adata.obs[region_key]):
-            logger.warning(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.")
+            warnings.warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
             adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
@@ -687,38 +686,6 @@ class TableModel:
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
         return adata
-
-
-# TODO: consider removing if we settle with geodataframe
-def _sparse_matrix_from_assignment(  # pragma: no cover
-    n_obs: int, var_names: Union[list[str], ArrayLike], assignment: pd.Series
-) -> csr_matrix:
-    """Create a sparse matrix from an assignment array."""
-    from tqdm import tqdm
-
-    data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)
-    row = np.arange(len(assignment))
-    # if type(var_names) == np.ndarray:
-    #     assert len(var_names.shape) == 1
-    #     col = np.array([np.where(var_names == p)[0][0] for p in assignment])
-    if type(var_names) == list:
-        # naive way, slow
-        # values = []
-        # for p in tqdm(assignment, desc='creating sparse matrix'):
-        #     values.append(var_names.index(p))
-        # col = np.array(values)
-
-        # better way, ~10 times faster
-        col = np.full((len(assignment),), np.nan)
-        # tqdm not needed as a dependency if this function is removed
-        for cat in tqdm(assignment.cat.categories, desc="creating sparse matrix"):
-            value = var_names.index(cat)
-            col[assignment == cat] = value
-        assert np.sum(np.isnan(col)) == 0
-    else:
-        raise TypeError(f"var_names must be either np.array or List, but got {type(var_names)}")
-    sparse = csr_matrix((data, (row, col)), shape=(n_obs, len(var_names)))
-    return sparse
 
 
 Schema_t = Union[
