@@ -356,7 +356,7 @@ class ShapesModel:
         offsets
             In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
         radius
-            Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+            Size of the `Circles`. It must be provided if the shapes are `Circles`.
         index
             Index of the shapes, must be of type `str`. If None, it's generated automatically.
         transform
@@ -377,7 +377,7 @@ class ShapesModel:
         data: np.ndarray,  # type: ignore[type-arg]
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: Optional[tuple[ArrayLike, ...]] = None,
-        radius: Optional[ArrayLike] = None,
+        radius: Optional[Union[float, ArrayLike]] = None,
         index: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> GeoDataFrame:
@@ -400,7 +400,7 @@ class ShapesModel:
     def _(
         cls,
         data: Union[str, Path],
-        radius: Optional[ArrayLike] = None,
+        radius: Optional[Union[float, ArrayLike]] = None,
         index: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
