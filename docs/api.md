@@ -15,6 +15,17 @@ The `SpatialData` class.
     SpatialData
 ```
 
+## Functions
+
+Functions that operate on `SpatialData`
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    aggregate
+```
+
 ## Models
 
 The elements (building-blocks) that consitute `SpatialData`.

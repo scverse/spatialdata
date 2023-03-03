@@ -26,9 +26,12 @@ __all__ = [
     "get_dims",
     # --- from spatialdata._io ---
     "read_zarr",
+    # --- from spatialdata._core.aggregate ---
+    "aggregate",
 ]
 
 from spatialdata._core._spatialdata import SpatialData
+from spatialdata._core.aggregate import aggregate
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
