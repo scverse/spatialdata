@@ -31,14 +31,21 @@ from spatialdata._core.transformations import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata.utils import Number, _parse_list_into_array
 
 
-def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLike, axes: tuple[str, ...]) -> DataArray:
+def get_bounding_box_corners(
+    axes: tuple[str, ...],
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
+) -> DataArray:
     """From the min and max coordinates of a bounding box, get the coordinates
     of all corners.
 
     Parameters
     ----------
+    axes
+        The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
         The upper left hand corner of the bounding box (i.e., minimum coordinates
         along all dimensions).
@@ -50,6 +57,8 @@ def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLik
     -------
     (N, D) array of coordinates of the corners. N = 4 for 2D and 8 for 3D.
     """
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     if len(min_coordinate) == 2:
         # 2D bounding box
         assert len(axes) == 2
@@ -85,10 +94,10 @@ def get_bounding_box_corners(min_coordinate: ArrayLike, max_coordinate: ArrayLik
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
-    target_coordinate_system: str,
     axes: tuple[str, ...],
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
+    target_coordinate_system: str,
 ) -> tuple[ArrayLike, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
 
@@ -96,6 +105,8 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     ----------
     element
         The SpatialElement to get the intrinsic coordinate system from.
+    axes
+        The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
         The upper left hand corner of the bounding box (i.e., minimum coordinates
         along all dimensions).
@@ -104,8 +115,6 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
         along all dimensions
     target_coordinate_system
         The coordinate system the bounding box is defined in.
-    axes
-        The axes of the coordinate system the bounding box is defined in.
 
     Returns ------- All the corners of the bounding box in the intrinsic coordinate system of the element. The shape
     is (2, 4) when axes has 2 spatial dimensions, and (2, 8) when axes has 3 spatial dimensions.
@@ -114,6 +123,8 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     """
     from spatialdata._core._spatialdata_ops import get_transformation
 
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     # get the transformation from the element's intrinsic coordinate system
     # to the query coordinate space
     transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
@@ -173,8 +184,8 @@ class BoundingBoxRequest(BaseSpatialRequest):
         of the bounding box
     """
 
-    min_coordinate: np.ndarray  # type: ignore[type-arg]
-    max_coordinate: np.ndarray  # type: ignore[type-arg]
+    min_coordinate: ArrayLike
+    max_coordinate: ArrayLike
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -197,7 +208,10 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
 
 def _bounding_box_mask_points(
-    points: DaskDataFrame, min_coordinate: ArrayLike, max_coordinate: ArrayLike, axes: tuple[str, ...]
+    points: DaskDataFrame,
+    axes: tuple[str, ...],
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
 ) -> da.Array:
     """Compute a mask that is true for the points inside of an axis-aligned bounding box..
 
@@ -205,20 +219,21 @@ def _bounding_box_mask_points(
     ----------
     points
         The points element to perform the query on.
+    axes
+        The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
         The upper left hand corner of the bounding box (i.e., minimum coordinates
         along all dimensions).
     max_coordinate
         The lower right hand corner of the bounding box (i.e., the maximum coordinates
         along all dimensions
-    axes
-        The axes for the min/max coordinates.
 
     Returns
     -------
     The mask for the points inside of the bounding box.
     """
-
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     in_bounding_box_masks = []
     for axis_index, axis_name in enumerate(axes):
         min_value = min_coordinate[axis_index]
@@ -246,23 +261,27 @@ def _dict_query_dispatcher(
 def bounding_box_query(
     element: Union[SpatialElement, SpatialData],
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[Union[SpatialElement, SpatialData]]:
-    raise NotImplementedError()
+    # TODO: the docstring is defined in _spatialdata.py, in QueryManager, maybe we can link it from there to here
+    #  with a decorator or something
+    raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
 
 @bounding_box_query.register(SpatialData)
 def _(
     sdata: SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> SpatialData:
     from spatialdata import SpatialData
 
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
@@ -283,39 +302,30 @@ def _(
 def _(
     image: SpatialImage,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
     """
-
-    Parameters
-    ----------
-    image
-    axes
-    min_coordinate
-    max_coordinate
-    target_coordinate_system
-
-    Returns
-    -------
-
     Notes
     _____
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
-
     """
+    from spatialdata._core._spatialdata_ops import (
+        get_transformation,
+        set_transformation,
+    )
+
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
+
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
         axes=axes,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
-    )
-    from spatialdata._core._spatialdata_ops import (
-        get_transformation,
-        set_transformation,
     )
 
     # get the transformation from the element's intrinsic coordinate system to the query coordinate space
@@ -464,10 +474,15 @@ def _(
 def _(
     points: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[DaskDataFrame]:
+    from spatialdata._core._spatialdata_ops import get_transformation
+
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
+
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -475,7 +490,6 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
-    from spatialdata._core._spatialdata_ops import get_transformation
 
     # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
     (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -533,10 +547,13 @@ def _(
 def _(
     polygons: GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[GeoDataFrame]:
+    min_coordinate = _parse_list_into_array(min_coordinate)
+    max_coordinate = _parse_list_into_array(max_coordinate)
+
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -544,6 +561,7 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
+
     # get the four corners of the bounding box
     (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,

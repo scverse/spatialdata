@@ -202,15 +202,6 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
     _set_transformations_to_dict_container(e.attrs, transformations)
 
 
-@_set_transformations.register(AnnData)
-def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.uns, transformations)
-
-
-def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
-
-
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
 x_axis = NgffAxis(name=X, type="space", unit="unit")
 y_axis = NgffAxis(name=Y, type="space", unit="unit")

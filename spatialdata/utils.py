@@ -19,6 +19,10 @@ from xarray import DataArray
 
 from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.transformations import Sequence, Translation
+from spatialdata._types import ArrayLike
+
+# I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
+Number = Union[int, float]
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData
@@ -243,3 +247,11 @@ def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray
         assert len(v) == 1
         xdata = next(iter(v))
         yield xdata
+
+
+def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+    if isinstance(array, list):
+        array = np.array(array)
+    if array.dtype != float:
+        array = array.astype(float)
+    return array

@@ -219,8 +219,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
-        # TODO: this should work, test better
-        kwargs = {"prefilter": False}
+        kwargs = {"prefilter": False, "order": 0}
     elif schema == Image2DModel or schema == Image3DModel:
         kwargs = {}
     else:
