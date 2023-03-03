@@ -678,7 +678,9 @@ class TableModel:
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
         if not is_categorical_dtype(adata.obs[region_key]):
-            warnings.warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
+            warnings.warn(
+                f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
+            )
             adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
