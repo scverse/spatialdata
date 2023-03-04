@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, Union
 
-import anndata
 import networkx as nx
 import numpy as np
 from anndata import AnnData
@@ -297,7 +296,7 @@ def _concatenate_tables(
 ) -> AnnData:
     region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
     instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
-    regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
+    [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
 
     if len(set(region_keys)) == 1:
         region_key = list(region_keys)[0]
