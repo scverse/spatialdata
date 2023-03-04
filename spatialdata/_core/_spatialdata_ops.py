@@ -311,23 +311,21 @@ def _concatenate_tables(
         if instance_key is None:
             raise ValueError("`instance_key` must be specified if tables have different instance keys")
 
-    tables_l = []
-    regions_l = []
-    instance_keys_l = []
-    for k, i, regs, table in zip(region_keys, instance_keys, regions, tables):
-        if isinstance(regs, list):
-            for r in regs:
-                table_ = table[table.obs[k] == r]
-                tables_l.append(table_)
-                regions_l.append(r)
-                instance_keys_l.append(table_.obs[i].values.flatten())
-        else:
-            tables_l.append(table)
-            regions_l.append(regs)
-            instance_keys_l.append(table.obs[i].values.flatten())
+    from copy import copy  # Should probably go up at the top
 
-    merged_table = anndata.concat(tables_l, label=region_key, keys=regions_l, **kwargs)
-    merged_table.obs[instance_key] = np.concatenate(instance_keys_l, axis=0)
+    tables_l = []
+    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables):
+        rename_dict = {}
+        if table_region_key != region_key:
+            rename_dict[table_region_key] = region_key
+        if table_instance_key != instance_key:
+            rename_dict[table_instance_key] = instance_key
+        if len(rename_dict) > 0:
+            table = copy(table)  # Shallow copy
+            table.obs = table.obs.rename(columns=rename_dict, copy=False)
+        tables_l.append(table)
+
+    merged_table = ad.concat(tables_l, **kwargs)
     attrs = {
         TableModel.REGION_KEY: regions_l,
         TableModel.REGION_KEY_KEY: region_key,
