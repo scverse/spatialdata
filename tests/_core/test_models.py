@@ -286,17 +286,14 @@ class TestModels:
     ) -> None:
         region_key = "reg"
         obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
-        obs["A"] = obs["A"].astype(str)  # instance_key
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
-        if not isinstance(region, str):
-            table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
-            assert region_key in table.obs
-            assert is_categorical_dtype(table.obs[region_key])
-            assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
-            assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key
-        else:
-            table = model.parse(adata, region=region, instance_key="A")
+        table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
+        assert region_key in table.obs
+        assert is_categorical_dtype(table.obs[region_key])
+        assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
         assert TableModel.ATTRS_KEY in table.uns
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
@@ -308,7 +305,7 @@ def test_get_schema():
     labels = _get_labels()
     points = _get_points()
     shapes = _get_shapes()
-    table = _get_table(region="sample1")
+    table = _get_table()
     for k, v in images.items():
         schema = get_schema(v)
         if "2d" in k:
