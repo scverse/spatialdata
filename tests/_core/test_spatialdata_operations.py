@@ -133,20 +133,20 @@ def test_concatenate_tables():
         region=["shapes/circles3", "shapes/poly3"], region_key="annotated_shape1", instance_key="instance_id"
     )
     with pytest.raises(ValueError, match="`region_key` must be specified if tables have different region keys"):
-        assert len(_concatenate_tables([table4, table5, table6])) == len(table4) + len(table5) + len(table6)
+        _concatenate_tables([table4, table5, table6])
     assert len(_concatenate_tables([table4, table5, table6], region_key="region")) == len(table4) + len(table5) + len(
         table6
     )
 
 
 def test_concatenate_sdatas(full_sdata):
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(images={"image2d": full_sdata.images["image2d"]})])
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(labels={"labels2d": full_sdata.labels["labels2d"]})])
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(points={"points_0": full_sdata.points["points_0"]})])
-    with pytest.raises(RuntimeError):
+    with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(shapes={"circles": full_sdata.shapes["circles"]})])
 
     assert concatenate([full_sdata, SpatialData()]).table is not None

@@ -359,8 +359,9 @@ class SpatialData:
 
         if filter_table:
             table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
-            region_key = table_mapping_metadata["region_key"]
+            region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
             table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
         else:
             table = self.table
 

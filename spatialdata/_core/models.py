@@ -617,14 +617,26 @@ class TableModel:
         self,
         data: AnnData,
     ) -> AnnData:
-        if self.ATTRS_KEY in data.uns:
-            attr = data.uns[self.ATTRS_KEY]
-            if "region" not in attr:
-                raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-            if "region_key" not in attr:
-                raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-            if "instance_key" not in attr:
-                raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if self.ATTRS_KEY not in data.uns:
+            raise ValueError(f"`{self.ATTRS_KEY}` not found in `adata.uns`.")
+        attr = data.uns[self.ATTRS_KEY]
+
+        if "region" not in attr:
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "region_key" not in attr:
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "instance_key" not in attr:
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+
+        if attr[self.REGION_KEY_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
+        if attr[self.INSTANCE_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
+        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
+        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
+            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+
         return data
 
     @classmethod
@@ -641,7 +653,7 @@ class TableModel:
         Parameters
         ----------
         adata
-            :class:`anndata.AnnData`.
+            The AnnData object.
         region
             Region(s) to be used.
         region_key
@@ -672,9 +684,7 @@ class TableModel:
             region = region.tolist()
         if region is None:
             raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
-        region_ = region if isinstance(region, list) else [region]
-        if TYPE_CHECKING:
-            assert isinstance(region_, list)
+        region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
         if not is_categorical_dtype(adata.obs[region_key]):

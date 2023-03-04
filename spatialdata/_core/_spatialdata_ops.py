@@ -362,27 +362,25 @@ def concatenate(
     """
     from spatialdata import SpatialData
 
+    merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
+    if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
+        raise KeyError("Images must have unique names across the SpatialData objects to concatenate")
+    merged_labels = {**{k: v for sdata in sdatas for k, v in sdata.labels.items()}}
+    if len(merged_labels) != np.sum([len(sdata.labels) for sdata in sdatas]):
+        raise KeyError("Labels must have unique names across the SpatialData objects to concatenate")
+    merged_points = {**{k: v for sdata in sdatas for k, v in sdata.points.items()}}
+    if len(merged_points) != np.sum([len(sdata.points) for sdata in sdatas]):
+        raise KeyError("Points must have unique names across the SpatialData objects to concatenate")
+    merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
+    if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
+        raise KeyError("Shapes must have unique names across the SpatialData objects to concatenate")
+
     assert type(sdatas) == list, "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
-    if len(sdatas) == 1:
-        return sdatas[0]
 
     merged_table = _concatenate_tables(
         [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
     )
-
-    merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
-    if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
-        raise RuntimeError("Images must have unique names across the SpatialData objects to concatenate")
-    merged_labels = {**{k: v for sdata in sdatas for k, v in sdata.labels.items()}}
-    if len(merged_labels) != np.sum([len(sdata.labels) for sdata in sdatas]):
-        raise RuntimeError("Labels must have unique names across the SpatialData objects to concatenate")
-    merged_points = {**{k: v for sdata in sdatas for k, v in sdata.points.items()}}
-    if len(merged_points) != np.sum([len(sdata.points) for sdata in sdatas]):
-        raise RuntimeError("Points must have unique names across the SpatialData objects to concatenate")
-    merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
-    if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
-        raise RuntimeError("Shapes must have unique names across the SpatialData objects to concatenate")
 
     sdata = SpatialData(
         images=merged_images,
