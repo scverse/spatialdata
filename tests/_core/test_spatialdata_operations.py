@@ -120,7 +120,7 @@ def test_concatenate_tables():
     }
 
     table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
-    with pytest.raises(ValueError, match="Categorical categories must be unique"):
+    with pytest.raises(ValueError):
         _concatenate_tables([table0, table3], region_key="region")
 
     table4 = _get_table(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import copy  # Should probably go up at the top
+from itertools import chain
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import networkx as nx
@@ -294,9 +296,11 @@ def _concatenate_tables(
     instance_key: str | None = None,
     **kwargs: Any,
 ) -> AnnData:
+    import anndata as ad
+
     region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
     instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
-    [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
+    regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
 
     if len(set(region_keys)) == 1:
         region_key = list(region_keys)[0]
@@ -304,13 +308,16 @@ def _concatenate_tables(
         if region_key is None:
             raise ValueError("`region_key` must be specified if tables have different region keys")
 
+    # get unique regions from list of lists or str
+    regions_unique = list(chain(*[[i] if isinstance(i, str) else i for i in regions]))
+    if len(set(regions_unique)) != len(regions_unique):
+        raise ValueError(f"Two or more tables seems to annotate regions with the same name: {regions_unique}")
+
     if len(set(instance_keys)) == 1:
         instance_key = list(instance_keys)[0]
     else:
         if instance_key is None:
             raise ValueError("`instance_key` must be specified if tables have different instance keys")
-
-    from copy import copy  # Should probably go up at the top
 
     tables_l = []
     for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables):
@@ -326,7 +333,7 @@ def _concatenate_tables(
 
     merged_table = ad.concat(tables_l, **kwargs)
     attrs = {
-        TableModel.REGION_KEY: regions_l,
+        TableModel.REGION_KEY: merged_table.obs[TableModel.REGION_KEY].unique().tolist(),
         TableModel.REGION_KEY_KEY: region_key,
         TableModel.INSTANCE_KEY: instance_key,
     }
