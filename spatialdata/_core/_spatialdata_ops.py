@@ -48,8 +48,10 @@ def set_transformation(
     transformation
         The transformation/s to set.
     to_coordinate_system
-        The coordinate system to set the transformation/s to. This needs to be none if multiple transformations are
-        being set.
+        The coordinate system to set the transformation/s to.
+
+        * If None and `set_all=False` sets the transformation to the 'global' coordinate system (default system).
+        * If None and `set_all=True` sets all transformations.
     set_all
         If True, all transformations are set. If False, only the transformation to the specified coordinate system is set.
         If True, `to_coordinate_system` needs to be None.
@@ -97,7 +99,7 @@ def get_transformation(
     to_coordinate_system
         The coordinate system to which the transformation should be returned.
 
-        * If None and `get_all=False` returns a globally defined default coordinate space.
+        * If None and `get_all=False` returns the transformation from the 'global' coordinate system (default system).
         * If None and `get_all=True` returns all transformations.
     get_all
         If True, all transformations are returned. If True, `to_coordinate_system` needs to be None.
@@ -139,6 +141,9 @@ def remove_transformation(
         The element to remove the transformation/s from.
     to_coordinate_system
         The coordinate system to remove the transformation/s from. If None, all transformations are removed.
+
+        * If None and `remove_all=False` removes the transformation from the 'global' coordinate system (default system).
+        * If None and `remove_all=True` removes all transformations.
     remove_all
         If True, all transformations are removed. If True, `to_coordinate_system` needs to be None.
     write_to_sdata
