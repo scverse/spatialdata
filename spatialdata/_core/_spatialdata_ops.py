@@ -405,3 +405,11 @@ def concatenate(
         table=merged_table,
     )
     return sdata
+
+
+def _filter_table_in_coordinate_systems(table: AnnData, coordinate_systems: list[str]) -> AnnData:
+    table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
+    region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
+    new_table = table[table.obs[region_key].isin(coordinate_systems)].copy()
+    new_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_table.obs[region_key].unique().tolist()
+    return new_table
