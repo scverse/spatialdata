@@ -1150,11 +1150,12 @@ class QueryManager:
             filter_table=filter_table,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
         from spatialdata._core._spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
-            # TODO: filter table is on by default, shall we put filter_table inside the request?
-            return self.bounding_box(**request.to_dict(), filter_table=True)
+            # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
+            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")
