@@ -259,6 +259,8 @@ def write_shapes(
     group_type: str = "ngff:shapes",
     fmt: Format = CurrentShapesFormat(),
 ) -> None:
+    import numcodecs
+
     axes = get_dims(shapes)
     t = _get_transformations(shapes)
 
@@ -267,9 +269,12 @@ def write_shapes(
     shapes_group.create_dataset(name="coords", data=coords)
     for i, o in enumerate(offsets):
         shapes_group.create_dataset(name=f"offset{i}", data=o)
-    # index cannot be string
-    # https://github.com/zarr-developers/zarr-python/issues/1090
-    shapes_group.create_dataset(name="Index", data=shapes.index.values)
+    if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
+        shapes_group.create_dataset(
+            name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8()
+        )
+    else:
+        shapes_group.create_dataset(name="Index", data=shapes.index.values)
     if geometry.name == "POINT":
         shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
