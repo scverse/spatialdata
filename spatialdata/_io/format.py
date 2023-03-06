@@ -81,7 +81,7 @@ class RasterFormatV01(SpatialDataFormatV01):
         if channels_metadata is not None:
             if set(channels_metadata.keys()).symmetric_difference(set(channels)):
                 for c in channels:
-                    metadata["channels"].append({"labels": c} | channels_metadata[c])
+                    metadata["channels"].append({"label": c} | channels_metadata[c])
             else:
                 raise ValueError("Channels metadata must contain all channels.")
         else:
