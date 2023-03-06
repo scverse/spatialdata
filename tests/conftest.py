@@ -124,8 +124,10 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
-    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d)
-    out["image2d_multiscale"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d)
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
+    out["image2d_multiscale"] = Image2DModel.parse(
+        RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
+    )
     out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
         DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),

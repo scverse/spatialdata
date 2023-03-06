@@ -341,7 +341,7 @@ def test_bounding_box_spatial_data(full_sdata):
     )
     result = bounding_box_query(full_sdata, **request.to_dict(), filter_table=True)
     # filter table is True by default when calling query(request)
-    result2 = full_sdata.query(request)
+    result2 = full_sdata.query(request, filter_table=True)
     from tests._core.test_spatialdata_operations import (
         _assert_spatialdata_objects_seem_identical,
     )
@@ -355,7 +355,6 @@ def test_bounding_box_spatial_data(full_sdata):
 
 
 def test_bounding_box_filter_table():
-    ##
     coords0 = np.array([[10, 10], [20, 20]])
     coords1 = np.array([[30, 30]])
     circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
@@ -381,4 +380,3 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
-    ##

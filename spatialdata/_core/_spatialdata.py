@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -1045,6 +1046,7 @@ class SpatialData:
                     if attr == "shapes":
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                     elif attr == "points":
+                        length: Optional[int] = None
                         if len(v.dask.layers) == 1:
                             name, layer = v.dask.layers.items().__iter__().__next__()
                             if "read-parquet" in name:
@@ -1055,22 +1057,25 @@ class SpatialData:
                                 table = read_table(parquet_file)
                                 length = len(table)
                             else:
-                                length = len(v)
+                                # length = len(v)
+                                length = None
                         else:
-                            length = len(v)
-                        if length > 0:
-                            n = len(get_dims(v))
-                            dim_string = f"({n}D points)"
-                        else:
-                            dim_string = ""
+                            length = None
+
+                        n = len(get_dims(v))
+                        dim_string = f"({n}D points)"
+
                         assert len(v.shape) == 2
-                        shape_str = f"({length}, {v.shape[1]})"
-                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
-                        # shape_str = (
-                        #     "("
-                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                        #     + ")"
-                        # )
+                        if length is not None:
+                            shape_str = f"({length}, {v.shape[1]})"
+                        else:
+                            shape_str = (
+                                "("
+                                + ", ".join(
+                                    [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
+                                )
+                                + ")"
+                            )
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
@@ -1192,11 +1197,12 @@ class QueryManager:
             filter_table=filter_table,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
         from spatialdata._core._spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
-            # TODO: filter table is on by default, shall we put filter_table inside the request?
-            return self.bounding_box(**request.to_dict(), filter_table=True)
+            # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
+            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")
