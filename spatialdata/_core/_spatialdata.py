@@ -375,7 +375,7 @@ class SpatialData:
                     if element_type not in elements:
                         elements[element_type] = {}
                     elements[element_type][element_name] = element
-                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+                    element_paths_in_coordinate_system.append(element_name)
 
         if filter_table:
             table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]

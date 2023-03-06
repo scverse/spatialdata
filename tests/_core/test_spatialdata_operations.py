@@ -106,14 +106,12 @@ def test_filter_by_coordinate_system(full_sdata):
 def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata._core.models import TableModel
 
-    full_sdata.table.obs["annotated_shapes"] = np.random.choice(
-        ["shapes/circles", "shapes/poly"], size=full_sdata.table.shape[0]
-    )
+    full_sdata.table.obs["annotated_shapes"] = np.random.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
     full_sdata.table = TableModel.parse(
-        adata, region=["shapes/circles", "shapes/poly"], region_key="annotated_shapes", instance_key="instance_id"
+        adata, region=["circles", "poly"], region_key="annotated_shapes", instance_key="instance_id"
     )
 
     scale = Scale([2.0], axes=("x",))
