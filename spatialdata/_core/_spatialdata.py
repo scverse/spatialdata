@@ -37,7 +37,7 @@ from spatialdata._io.write import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import get_backing_files
+from spatialdata.utils import get_backing_files, natural_keys
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest
@@ -100,7 +100,7 @@ class SpatialData:
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
 
@@ -109,10 +109,15 @@ class SpatialData:
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
         self.path = None
+
+        self._validate_unique_element_names(
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+        )
+
         if images is not None:
             self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
@@ -124,7 +129,7 @@ class SpatialData:
                 self._add_labels_in_memory(name=k, labels=v)
 
         if shapes is not None:
-            self._shapes: dict[str, AnnData] = {}
+            self._shapes: dict[str, GeoDataFrame] = {}
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
@@ -143,9 +148,20 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
+    @staticmethod
+    def _validate_unique_element_names(element_names: list[str]) -> None:
+        if len(element_names) != len(set(element_names)):
+            duplicates = {x for x in element_names if element_names.count(x) > 1}
+            raise ValueError(
+                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
+            )
+
     def _add_image_in_memory(
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._images:
             if not overwrite:
                 raise ValueError(f"Image {name} already exists in the dataset.")
@@ -162,6 +178,9 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._labels:
             if not overwrite:
                 raise ValueError(f"Labels {name} already exists in the dataset.")
@@ -176,6 +195,9 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
+        )
         if name in self._shapes:
             if not overwrite:
                 raise ValueError(f"Shapes {name} already exists in the dataset.")
@@ -183,6 +205,9 @@ class SpatialData:
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")
@@ -350,7 +375,7 @@ class SpatialData:
                     if element_type not in elements:
                         elements[element_type] = {}
                     elements[element_type][element_name] = element
-                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+                    element_paths_in_coordinate_system.append(element_name)
 
         if filter_table:
             table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
@@ -1013,7 +1038,9 @@ class SpatialData:
                 descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
-                for k, v in attribute.items():
+                unsorted_elements = attribute.items()
+                sorted_elements = sorted(unsorted_elements, key=lambda x: natural_keys(x[0]))
+                for k, v in sorted_elements:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
@@ -1085,18 +1112,33 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         descr += "\nwith coordinate systems:\n"
-        for cs in self.coordinate_systems:
-            descr += f"▸ {cs}\n"
+        coordinate_systems = self.coordinate_systems.copy()
+        coordinate_systems.sort(key=natural_keys)
+        for i, cs in enumerate(coordinate_systems):
+            descr += f"▸ {cs!r}"
             gen = self._gen_elements()
-            elements_in_cs = []
+            elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
                 transformations = get_transformation(obj, get_all=True)
                 assert isinstance(transformations, dict)
-                coordinate_systems = transformations.keys()
-                if cs in coordinate_systems:
-                    elements_in_cs.append(f"/{k}/{name}")
+                target_css = transformations.keys()
+                if cs in target_css:
+                    if k not in elements_in_cs:
+                        elements_in_cs[k] = []
+                    elements_in_cs[k].append(name)
+            for element_names in elements_in_cs.values():
+                element_names.sort(key=natural_keys)
             if len(elements_in_cs) > 0:
-                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
+                elements = ", ".join(
+                    [
+                        f"{element_name} ({element_type.capitalize()})"
+                        for element_type, element_names in elements_in_cs.items()
+                        for element_name in element_names
+                    ]
+                )
+                descr += f", with elements:\n        {elements}"
+            if i < len(coordinate_systems) - 1:
+                descr += "\n"
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
