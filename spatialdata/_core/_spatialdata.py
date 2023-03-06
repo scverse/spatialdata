@@ -1136,7 +1136,7 @@ class SpatialData:
                         for element_name in element_names
                     ]
                 )
-                descr += f", with elements: {elements}\n"
+                descr += f", with elements:\n        {elements}"
             if i < len(coordinate_systems) - 1:
                 descr += "\n"
         return descr
