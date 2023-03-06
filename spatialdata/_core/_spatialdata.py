@@ -36,7 +36,7 @@ from spatialdata._io.write import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import get_backing_files
+from spatialdata.utils import get_backing_files, natural_keys
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest
@@ -1037,7 +1037,9 @@ class SpatialData:
                 descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
-                for k, v in attribute.items():
+                unsorted_elements = attribute.items()
+                sorted_elements = sorted(unsorted_elements, key=lambda x: natural_keys(x[0]))
+                for k, v in sorted_elements:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
@@ -1105,18 +1107,33 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         descr += "\nwith coordinate systems:\n"
-        for cs in self.coordinate_systems:
-            descr += f"▸ {cs}\n"
+        coordinate_systems = self.coordinate_systems.copy()
+        coordinate_systems.sort(key=natural_keys)
+        for i, cs in enumerate(coordinate_systems):
+            descr += f"▸ {cs!r}"
             gen = self._gen_elements()
-            elements_in_cs = []
+            elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
                 transformations = get_transformation(obj, get_all=True)
                 assert isinstance(transformations, dict)
-                coordinate_systems = transformations.keys()
-                if cs in coordinate_systems:
-                    elements_in_cs.append(f"/{k}/{name}")
+                target_css = transformations.keys()
+                if cs in target_css:
+                    if k not in elements_in_cs:
+                        elements_in_cs[k] = []
+                    elements_in_cs[k].append(name)
+            for element_names in elements_in_cs.values():
+                element_names.sort(key=natural_keys)
             if len(elements_in_cs) > 0:
-                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
+                elements = ", ".join(
+                    [
+                        f"{element_name} ({element_type.capitalize()})"
+                        for element_type, element_names in elements_in_cs.items()
+                        for element_name in element_names
+                    ]
+                )
+                descr += f", with elements: {elements}\n"
+            if i < len(coordinate_systems) - 1:
+                descr += "\n"
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
