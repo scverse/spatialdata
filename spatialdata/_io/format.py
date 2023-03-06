@@ -86,7 +86,7 @@ class RasterFormatV01(SpatialDataFormatV01):
                 raise ValueError("Channels metadata must contain all channels.")
         else:
             for c in channels:
-                metadata["channels"].append({"labels": c})
+                metadata["channels"].append({"label": c})
         return metadata
 
     def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
