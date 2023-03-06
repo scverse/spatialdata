@@ -4,6 +4,7 @@ import tempfile
 
 import dask.dataframe as dd
 import dask_image.ndinterp
+import pytest
 import xarray
 import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -38,6 +39,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
     return transformed
 
 
+@pytest.mark.ci_only
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
         schema = get_schema(raster)

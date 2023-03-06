@@ -1118,14 +1118,22 @@ class QueryManager:
         min_coordinate: ArrayLike,
         max_coordinate: ArrayLike,
         target_coordinate_system: str,
+        filter_table: bool = True,
     ) -> SpatialData:
         """Perform a bounding box query on the SpatialData object.
 
         Parameters
         ----------
-        request
-            The bounding box request.
-
+        axes
+            The axes the bounding box is defined in.
+        min_coordinate
+            The minimum coordinates of the bounding box.
+        max_coordinate
+            The maximum coordinates of the bounding box.
+        target_coordinate_system
+            The coordinate system the bounding box is defined in.
+        filter_table
+            If True, the table is filtered to only contain rows that are annotating regions contained within the bounding box.
         Returns
         -------
         The SpatialData object containing the requested data.
@@ -1139,12 +1147,15 @@ class QueryManager:
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
             target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
         from spatialdata._core._spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
-            return self.bounding_box(**request.to_dict())
+            # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
+            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")
