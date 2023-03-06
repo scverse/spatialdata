@@ -7,6 +7,7 @@ from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
 from spatialdata import SpatialData
+from spatialdata._core._rasterize import rasterize
 from spatialdata._core.core_utils import get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -28,6 +29,9 @@ class ImageTilesDataset(Dataset):
         target_coordinate_system: str = "global",
         data_dict_transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
     ):
+        # TODO: we can extend this code to support:
+        #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
+        #  - use the bounding box query instead of the raster function if the user wants
         self.sdata = sdata
         self.regions_to_images = regions_to_images
         self.tile_dim_in_units = tile_dim_in_units
@@ -63,10 +67,6 @@ class ImageTilesDataset(Dataset):
                 raise ValueError(f"element must be a geodataframe or a spatial image")
         return n_spots_dict
 
-    def _get_centroids_and_metadata(self) -> None:
-        for key in self.spots_element_keys:
-            print(key)
-
     def _get_region_info_for_index(self, index: int) -> tuple[str, int]:
         # TODO: this implmenetation can be improved
         i = 0
@@ -79,12 +79,14 @@ class ImageTilesDataset(Dataset):
     def __len__(self) -> int:
         return self.n_spots
 
-    def __getitem__(self, idx: int) -> SpatialData:
+    def __getitem__(self, idx: int) -> tuple[SpatialImage, str, int]:
+        if idx >= self.n_spots:
+            raise IndexError()
         regions_name, region_index = self._get_region_info_for_index(idx)
         regions = self.sdata[regions_name]
         # TODO: here we just need to compute the centroids, we probably want to move this functionality to a different file
         if isinstance(regions, GeoDataFrame):
-            get_dims(regions)
+            dims = get_dims(regions)
             region = regions.iloc[region_index]
             # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
             # it directly
@@ -95,19 +97,26 @@ class ImageTilesDataset(Dataset):
             raise NotImplementedError("labels not supported yet")
         else:
             raise ValueError(f"element must be shapes or labels")
-        np.array(centroid) - self.tile_dim_in_units / 2
-        np.array(centroid) + self.tile_dim_in_units / 2
+        min_coordinate = np.array(centroid) - self.tile_dim_in_units / 2
+        max_coordinate = np.array(centroid) + self.tile_dim_in_units / 2
 
-        # tile = rasterize
+        raster = self.sdata[self.regions_to_images[regions_name]]
+        tile = rasterize(
+            raster,
+            axes=dims,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=self.target_coordinate_system,
+            target_width=self.tile_dim_in_pixels,
+        )
+        # TODO: as explained in the TODO in the __init__(), we want to let the user also use the bounding box query instaed of the rasterization
+        #  the return function of this function would change, so we need to decide if instead having an extra Tile dataset class
+        # from spatialdata._core._spatial_query import BoundingBoxRequest
         # request = BoundingBoxRequest(
         #     target_coordinate_system=self.target_coordinate_system,
-        #     axes=self.spots_dims,
+        #     axes=dims,
         #     min_coordinate=min_coordinate,
         #     max_coordinate=max_coordinate,
         # )
         # sdata_item = self.sdata.query.bounding_box(**request.to_dict())
-        #
-        # if self.transform is not None:
-        #     sdata_item = self.transform(sdata_item)
-
-        return sdata_item
+        return tile, regions_name, region_index

@@ -7,7 +7,6 @@ from skimage import draw
 
 import spatialdata as sd
 from spatialdata._dl.datasets import ImageTilesDataset
-from spatialdata._dl.transforms import SpatialDataToDataDict
 
 ##
 coordinates = np.array([[10, 10], [20, 20], [50, 30], [90, 70], [20, 80]])
@@ -50,7 +49,7 @@ sdata
 ds = ImageTilesDataset(
     sdata=sdata,
     regions_to_images={"/shapes/spots": "/images/image"},
-    tile_dim_in_units=5,
+    tile_dim_in_units=10,
     tile_dim_in_pixels=32,
     target_coordinate_system="global",
     data_dict_transform=None,
@@ -69,39 +68,37 @@ def plot_sdata_dataset(ds):
     n_samples = len(ds)
     fig, axs = plt.subplots(1, n_samples)
 
-    for index, sample in enumerate(ds):
-        if isinstance(sample, sd.SpatialData):
-            im = sample.images["image"]
-        else:
-            im = sample["image"]
-        axs[index].imshow(im.transpose("y", "x", "c"))
+    for i, (image, region, index) in enumerate(ds):
+        axs[i].imshow(image.transpose("y", "x", "c"))
+    plt.show()
 
 
 plot_sdata_dataset(ds)
 
-##
-# we can also use transforms to automatically extract the relevant data
-# into a datadictionary
-
-# map the SpatialData path to a data dict key
-data_mapping = {"images/image": "image"}
-
-# make the transform
-ds_transform = ImageTilesDataset(
-    sdata=sdata,
-    spots_element_key="spots",
-    transform=SpatialDataToDataDict(data_mapping=data_mapping),
-)
-
-print(f"this dataset as {len(ds_transform)} items")
-
-##
-# now the samples are a dictionary with key "image" and the item is the
-# image array
-# this is useful because it is the expected format for many of the
+# TODO: code to be restored when the transforms will use the bounding box query
+# ##
+# # we can also use transforms to automatically extract the relevant data
+# # into a datadictionary
 #
-ds_transform[0]
-
-##
-# plot of each sample in the dataset
-plot_sdata_dataset(ds_transform)
+# # map the SpatialData path to a data dict key
+# data_mapping = {"images/image": "image"}
+#
+# # make the transform
+# ds_transform = ImageTilesDataset(
+#     sdata=sdata,
+#     spots_element_key="spots",
+#     transform=SpatialDataToDataDict(data_mapping=data_mapping),
+# )
+#
+# print(f"this dataset as {len(ds_transform)} items")
+#
+# ##
+# # now the samples are a dictionary with key "image" and the item is the
+# # image array
+# # this is useful because it is the expected format for many of the
+# #
+# ds_transform[0]
+#
+# ##
+# # plot of each sample in the dataset
+# plot_sdata_dataset(ds_transform)
