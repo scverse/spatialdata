@@ -53,10 +53,10 @@ def test_unpad_raster(images, labels) -> None:
             raise ValueError(f"Unknown type: {type(raster)}")
         padded = _pad_raster(data.data, data.dims)
         if isinstance(raster, SpatialImage):
-            padded = schema.parse(padded, dims=data.dims)
+            padded = schema.parse(padded, dims=data.dims, c_coords=data.coords.get("c", None))
         elif isinstance(raster, MultiscaleSpatialImage):
             # some arbitrary scaling factors
-            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2])
+            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2], c_coords=data.coords.get("c", None))
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)
