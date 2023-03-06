@@ -99,7 +99,7 @@ class SpatialData:
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
 
@@ -108,10 +108,15 @@ class SpatialData:
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
         self.path = None
+
+        self._validate_unique_element_names(
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+        )
+
         if images is not None:
             self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
@@ -123,7 +128,7 @@ class SpatialData:
                 self._add_labels_in_memory(name=k, labels=v)
 
         if shapes is not None:
-            self._shapes: dict[str, AnnData] = {}
+            self._shapes: dict[str, GeoDataFrame] = {}
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
@@ -142,9 +147,20 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
+    @staticmethod
+    def _validate_unique_element_names(element_names: list[str]) -> None:
+        if len(element_names) != len(set(element_names)):
+            duplicates = {x for x in element_names if element_names.count(x) > 1}
+            raise ValueError(
+                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
+            )
+
     def _add_image_in_memory(
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._images:
             if not overwrite:
                 raise ValueError(f"Image {name} already exists in the dataset.")
@@ -161,6 +177,9 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._labels:
             if not overwrite:
                 raise ValueError(f"Labels {name} already exists in the dataset.")
@@ -175,6 +194,9 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
+        )
         if name in self._shapes:
             if not overwrite:
                 raise ValueError(f"Shapes {name} already exists in the dataset.")
@@ -182,6 +204,9 @@ class SpatialData:
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")

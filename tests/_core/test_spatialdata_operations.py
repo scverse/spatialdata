@@ -13,9 +13,42 @@ from spatialdata._core._spatialdata_ops import (
     concatenate,
     set_transformation,
 )
-from spatialdata._core.models import TableModel
+from spatialdata._core.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+)
 from spatialdata._core.transformations import Identity, Scale
 from tests.conftest import _get_table
+
+
+def test_element_names_unique():
+    shapes = ShapesModel.parse(np.array([[0, 0]]), geometry=0, radius=1)
+    points = PointsModel.parse(np.array([[0, 0]]))
+    labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
+    image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
+
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, points={"image": points})
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, shapes={"image": shapes})
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, labels={"image": labels})
+
+    sdata = SpatialData(
+        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+    )
+
+    with pytest.raises(ValueError):
+        sdata.add_image(name="points", image=image)
+    with pytest.raises(ValueError):
+        sdata.add_points(name="image", points=points)
+    with pytest.raises(ValueError):
+        sdata.add_shapes(name="image", shapes=shapes)
+    with pytest.raises(ValueError):
+        sdata.add_labels(name="image", labels=labels)
 
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
