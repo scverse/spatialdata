@@ -355,7 +355,6 @@ def test_bounding_box_spatial_data(full_sdata):
 
 
 def test_bounding_box_filter_table():
-    ##
     coords0 = np.array([[10, 10], [20, 20]])
     coords1 = np.array([[30, 30]])
     circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
@@ -381,4 +380,3 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
-    ##
