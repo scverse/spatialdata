@@ -1133,7 +1133,7 @@ class QueryManager:
         target_coordinate_system
             The coordinate system the bounding box is defined in.
         filter_table
-            If True, the table is filtered to only contain rows that are annotating individual regions contained in the bounding box.
+            If True, the table is filtered to only contain rows that are annotating regions contained within the bounding box.
         Returns
         -------
         The SpatialData object containing the requested data.
