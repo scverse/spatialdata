@@ -1,7 +1,9 @@
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pytest
 import shapely
+from anndata.tests.helpers import assert_equal
 
 from spatialdata._core.aggregate import aggregate
 from spatialdata._core.models import PointsModel, ShapesModel
@@ -34,6 +36,10 @@ def test_aggregate_points_by_polygons():
     assert result_adata.var_names.to_list() == ["a", "b"]
     np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
 
+    # id_key can be implicit for points
+    result_adata_implicit = aggregate(points, shapes, agg_func="sum")
+    assert_equal(result_adata, result_adata_implicit)
+
 
 def test_aggregate_polygons_by_polygons():
     cellular = ShapesModel.parse(
@@ -58,6 +64,9 @@ def test_aggregate_polygons_by_polygons():
     assert result_adata.obs_names.to_list() == ["shape_0", "shape_1"]
     assert result_adata.var_names.to_list() == ["nucleus", "mitochondria"]
     np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
+
+    with pytest.raises(ValueError):
+        aggregate(subcellular, cellular, agg_func="mean")
 
 
 def test_aggregate_circles_by_polygons():

@@ -14,7 +14,7 @@ from spatialdata._core.models import PointsModel, ShapesModel, get_schema
 def aggregate(
     values: ddf.DataFrame | gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None = None,
     *,
     value_key: str | None = None,
     agg_func: str = "mean",
@@ -30,6 +30,8 @@ def aggregate(
         Regions to aggregate by. Currently, only supports Shapes.
     id_key
         Key to group observations in `values` by. E.g. this could be transcript id for points.
+
+        Defaults to `FEATURE_KEY` for points, required for shapes.
     value_key
         Key to aggregate values by. This is the key in the values object.
         If nothing is passed here, assumed to be a column of ones.
@@ -61,23 +63,28 @@ def aggregate(
 def _aggregate_points_by_shapes(
     points: ddf.DataFrame | pd.DataFrame,
     shapes: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None = None,
     *,
     value_key: str | None = None,
     agg_func: str = "count",
 ) -> ad.AnnData:
     # Have to get dims on dask dataframe, can't get from pandas
     dims = sd.get_dims(points)
+    # Default value for id_key
+    if id_key is None:
+        id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+
     if isinstance(points, ddf.DataFrame):
         points = points.compute()
     points = gpd.GeoDataFrame(points, geometry=gpd.points_from_xy(*[points[dim] for dim in dims]))
+
     return _aggregate(points, shapes, id_key, value_key, agg_func)
 
 
 def _aggregate_shapes_by_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None,
     *,
     value_key: str | None = None,
     agg_func: str = "count",
@@ -90,6 +97,9 @@ def _aggregate_shapes_by_shapes(
         elif "Point" in values_geotypes:
             raise TypeError("Geometry contained shapes and polygons.")
         return df
+
+    if id_key is None:
+        raise ValueError("Must pass id_key for shapes.")
 
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
