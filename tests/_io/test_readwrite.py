@@ -168,7 +168,7 @@ class TestReadWrite:
             s3 = SpatialData.read(f2)
             assert len(s3.table) == len(s2.table)
 
-    def test_io_and_lazy_loading_points(points):
+    def test_io_and_lazy_loading_points(self, points):
         elem_name = list(points.points.keys())[0]
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
@@ -178,7 +178,7 @@ class TestReadWrite:
             assert all("read-parquet" not in key for key in dask0.dask.layers)
             assert any("read-parquet" in key for key in dask1.dask.layers)
 
-    def test_io_and_lazy_loading_raster(images, labels):
+    def test_io_and_lazy_loading_raster(self, images, labels):
         # addresses bug https://github.com/scverse/spatialdata/issues/117
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
@@ -192,7 +192,7 @@ class TestReadWrite:
                 assert all("from-zarr" not in key for key in dask0.dask.layers)
                 assert any("from-zarr" in key for key in dask1.dask.layers)
 
-    def test_replace_transformation_on_disk_raster(images, labels):
+    def test_replace_transformation_on_disk_raster(self, images, labels):
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
             d = sdata.__getattribute__(k)
@@ -214,7 +214,7 @@ class TestReadWrite:
                     t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                     assert type(t1) == Scale
 
-    def test_replace_transformation_on_disk_non_raster(shapes, points):
+    def test_replace_transformation_on_disk_non_raster(self, shapes, points):
         sdatas = {"shapes": shapes, "points": points}
         for k, sdata in sdatas.items():
             d = sdata.__getattribute__(k)
@@ -230,7 +230,7 @@ class TestReadWrite:
                 t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t1) == Scale
 
-    def test_overwrite_files_with_backed_data(full_sdata):
+    def test_overwrite_files_with_backed_data(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
@@ -254,7 +254,7 @@ class TestReadWrite:
         #     )
         #     sdata2.write(f, overwrite=True)
 
-    def test_overwrite_onto_non_zarr_file(full_sdata):
+    def test_overwrite_onto_non_zarr_file(self, full_sdata):
         with tempfile.TemporaryDirectory() as tmpdir:
             f0 = os.path.join(tmpdir, "test.txt")
             with open(f0, "w"):
@@ -267,7 +267,7 @@ class TestReadWrite:
             with pytest.raises(ValueError):
                 full_sdata.write(f1)
 
-    def test_incremental_io_with_backed_elements(full_sdata):
+    def test_incremental_io_with_backed_elements(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
         # we test also the non-backed case so that if we switch to the backed version in the future we already have the tests
 
