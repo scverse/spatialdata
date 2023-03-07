@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
@@ -11,6 +10,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -38,7 +38,7 @@ from spatialdata._io.write import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import get_backing_files
+from spatialdata.utils import get_backing_files, natural_keys
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest
@@ -101,7 +101,7 @@ class SpatialData:
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
 
@@ -110,10 +110,15 @@ class SpatialData:
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
         self.path = None
+
+        self._validate_unique_element_names(
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+        )
+
         if images is not None:
             self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
@@ -125,7 +130,7 @@ class SpatialData:
                 self._add_labels_in_memory(name=k, labels=v)
 
         if shapes is not None:
-            self._shapes: dict[str, AnnData] = {}
+            self._shapes: dict[str, GeoDataFrame] = {}
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
@@ -189,12 +194,23 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
+    @staticmethod
+    def _validate_unique_element_names(element_names: list[str]) -> None:
+        if len(element_names) != len(set(element_names)):
+            duplicates = {x for x in element_names if element_names.count(x) > 1}
+            raise ValueError(
+                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
+            )
+
     def _add_image_in_memory(
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._images:
             if not overwrite:
-                raise ValueError(f"Image {name} already exists in the dataset.")
+                raise KeyError(f"Image {name} already exists in the dataset.")
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -208,9 +224,12 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._labels:
             if not overwrite:
-                raise ValueError(f"Labels {name} already exists in the dataset.")
+                raise KeyError(f"Labels {name} already exists in the dataset.")
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -222,21 +241,27 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
+        )
         if name in self._shapes:
             if not overwrite:
-                raise ValueError(f"Shapes {name} already exists in the dataset.")
+                raise KeyError(f"Shapes {name} already exists in the dataset.")
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._points:
             if not overwrite:
-                raise ValueError(f"Points {name} already exists in the dataset.")
+                raise KeyError(f"Points {name} already exists in the dataset.")
         Point_s.validate(points)
         self._points[name] = points
 
     def is_backed(self) -> bool:
-        """Check if the data is backed by a Zarr storage or it is in-memory."""
+        """Check if the data is backed by a Zarr storage or if it is in-memory."""
         return self.path is not None
 
     # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
@@ -396,12 +421,13 @@ class SpatialData:
                     if element_type not in elements:
                         elements[element_type] = {}
                     elements[element_type][element_name] = element
-                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+                    element_paths_in_coordinate_system.append(element_name)
 
         if filter_table:
             table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
-            region_key = table_mapping_metadata["region_key"]
+            region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
             table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
         else:
             table = self.table
 
@@ -1058,12 +1084,15 @@ class SpatialData:
                 descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
-                for k, v in attribute.items():
+                unsorted_elements = attribute.items()
+                sorted_elements = sorted(unsorted_elements, key=lambda x: natural_keys(x[0]))
+                for k, v in sorted_elements:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                     elif attr == "points":
+                        length: Optional[int] = None
                         if len(v.dask.layers) == 1:
                             name, layer = v.dask.layers.items().__iter__().__next__()
                             if "read-parquet" in name:
@@ -1074,22 +1103,25 @@ class SpatialData:
                                 table = read_table(parquet_file)
                                 length = len(table)
                             else:
-                                length = len(v)
+                                # length = len(v)
+                                length = None
                         else:
-                            length = len(v)
-                        if length > 0:
-                            n = len(get_dims(v))
-                            dim_string = f"({n}D points)"
-                        else:
-                            dim_string = ""
+                            length = None
+
+                        n = len(get_dims(v))
+                        dim_string = f"({n}D points)"
+
                         assert len(v.shape) == 2
-                        shape_str = f"({length}, {v.shape[1]})"
-                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
-                        # shape_str = (
-                        #     "("
-                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                        #     + ")"
-                        # )
+                        if length is not None:
+                            shape_str = f"({length}, {v.shape[1]})"
+                        else:
+                            shape_str = (
+                                "("
+                                + ", ".join(
+                                    [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
+                                )
+                                + ")"
+                            )
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
@@ -1126,18 +1158,33 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         descr += "\nwith coordinate systems:\n"
-        for cs in self.coordinate_systems:
-            descr += f"▸ {cs}\n"
+        coordinate_systems = self.coordinate_systems.copy()
+        coordinate_systems.sort(key=natural_keys)
+        for i, cs in enumerate(coordinate_systems):
+            descr += f"▸ {cs!r}"
             gen = self._gen_elements()
-            elements_in_cs = []
+            elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
                 transformations = get_transformation(obj, get_all=True)
                 assert isinstance(transformations, dict)
-                coordinate_systems = transformations.keys()
-                if cs in coordinate_systems:
-                    elements_in_cs.append(f"/{k}/{name}")
+                target_css = transformations.keys()
+                if cs in target_css:
+                    if k not in elements_in_cs:
+                        elements_in_cs[k] = []
+                    elements_in_cs[k].append(name)
+            for element_names in elements_in_cs.values():
+                element_names.sort(key=natural_keys)
             if len(elements_in_cs) > 0:
-                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
+                elements = ", ".join(
+                    [
+                        f"{element_name} ({element_type.capitalize()})"
+                        for element_type, element_names in elements_in_cs.items()
+                        for element_name in element_names
+                    ]
+                )
+                descr += f", with elements:\n        {elements}"
+            if i < len(coordinate_systems) - 1:
+                descr += "\n"
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
@@ -1152,44 +1199,51 @@ class SpatialData:
                 yield element_type, k, v
 
     def __getitem__(self, item: str) -> SpatialElement | AnnData:
-        # this regex match the following:
-        # /images/ehi
-        # /images/ehi
-        # /labels/ehi
-        # /table
-        #
-        # but not:
-        # /images/
-        # images/ehi
-        # /iimages/ehi
-        # /images/ehi/
-        # /images/ehi/ehi
-        # table
-        # /ttable
-        # /table/
-        # /table/ehi
-        regex = r"^/(\bimages\b(?=/)|\blabels\b(?=/)|\bpoints\b(?=/)|\bshapes\b(?=/)|\btable\b(?=$))(/[a-zA-Z0-9_]+)?$"
-        match = re.match(regex, item)
-        if match:
-            element_type = match.group(1)
-            if element_type == "table":
-                element_name = None
-            else:
-                element_name = match.group(2)[1:]
+        """
+        Return the element with the given name.
+
+        Parameters
+        ----------
+        item
+            The name of the element to return.
+        Returns
+        -------
+        The element.
+        """
+        found = []
+        for _, element_name, element in self._gen_elements():
+            if element_name == item:
+                found.append(element)
+        assert len(found) <= 1
+        if len(found) == 1:
+            return found[0]
         else:
-            raise ValueError(f"{item} does not match any element in the SpatialData object")
-        if element_type == "table":
-            return self.table
-        elif element_type == "images":
-            return self.images[element_name]
-        elif element_type == "labels":
-            return self.labels[element_name]
-        elif element_type == "points":
-            return self.points[element_name]
-        elif element_type == "shapes":
-            return self.shapes[element_name]
+            raise KeyError(f"Could not find element with name {item!r}")
+
+    def __setitem__(self, key: str, value: SpatialElement | AnnData) -> None:
+        """
+        Add the element to the SpatialData object.
+
+        Parameters
+        ----------
+        key
+            The name of the element.
+        value
+            The element.
+        """
+        schema = get_schema(value)
+        if schema == Image2DModel or schema == Image3DModel:
+            self.add_image(key, value)
+        elif schema == Labels2DModel or schema == Labels3DModel:
+            self.add_labels(key, value)
+        elif schema == PointsModel:
+            self.add_points(key, value)
+        elif schema == ShapesModel:
+            self.add_shapes(key, value)
+        elif schema == TableModel:
+            raise TypeError("Use the table property to set the table (e.g. sdata.table = value)")
         else:
-            raise ValueError(f"Unknown element type {element_type}")
+            raise TypeError(f"Unknown element type with schema{schema!r}")
 
 
 class QueryManager:
@@ -1198,15 +1252,13 @@ class QueryManager:
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata
 
-    # def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
-    # type: ignore[type-arg]
-
     def bounding_box(
         self,
         axes: tuple[str, ...],
         min_coordinate: ArrayLike,
         max_coordinate: ArrayLike,
         target_coordinate_system: str,
+        filter_table: bool = True,
     ) -> SpatialData:
         """Perform a bounding box query on the SpatialData object.
 
@@ -1220,7 +1272,8 @@ class QueryManager:
             The maximum coordinates of the bounding box.
         target_coordinate_system
             The coordinate system the bounding box is defined in.
-
+        filter_table
+            If True, the table is filtered to only contain rows that are annotating regions contained within the bounding box.
         Returns
         -------
         The SpatialData object containing the requested data.
@@ -1234,12 +1287,15 @@ class QueryManager:
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
             target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
         from spatialdata._core._spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
-            return self.bounding_box(**request.to_dict())
+            # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
+            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")

@@ -64,12 +64,13 @@ print(ds[0])
 
 ##
 # now we plot all of the crops
-def plot_sdata_dataset(ds):
+def plot_sdata_dataset(ds: ImageTilesDataset) -> None:
     n_samples = len(ds)
     fig, axs = plt.subplots(1, n_samples)
 
     for i, (image, region, index) in enumerate(ds):
         axs[i].imshow(image.transpose("y", "x", "c"))
+        axs[i].set_title(f"region: {region}, index: {index}")
     plt.show()
 
 

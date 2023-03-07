@@ -48,9 +48,9 @@ class ImageTilesDataset(Dataset):
             images_element = self.sdata[image_key]
             # we could allow also for points
             if not get_schema(regions_element) in [ShapesModel, Labels2DModel, Labels3DModel]:
-                raise ValueError(f"regions_element must be a shapes element or a labels element")
+                raise ValueError("regions_element must be a shapes element or a labels element")
             if not get_schema(images_element) in [Image2DModel, Image3DModel]:
-                raise ValueError(f"images_element must be an image element")
+                raise ValueError("images_element must be an image element")
 
     def _compute_n_spots_dict(self) -> dict[str, int]:
         n_spots_dict = {}
@@ -64,7 +64,7 @@ class ImageTilesDataset(Dataset):
             elif isinstance(element, MultiscaleSpatialImage):
                 raise NotImplementedError("labels not supported yet")
             else:
-                raise ValueError(f"element must be a geodataframe or a spatial image")
+                raise ValueError("element must be a geodataframe or a spatial image")
         return n_spots_dict
 
     def _get_region_info_for_index(self, index: int) -> tuple[str, int]:
@@ -96,7 +96,7 @@ class ImageTilesDataset(Dataset):
         elif isinstance(regions, MultiscaleSpatialImage):
             raise NotImplementedError("labels not supported yet")
         else:
-            raise ValueError(f"element must be shapes or labels")
+            raise ValueError("element must be shapes or labels")
         min_coordinate = np.array(centroid) - self.tile_dim_in_units / 2
         max_coordinate = np.array(centroid) + self.tile_dim_in_units / 2
 
