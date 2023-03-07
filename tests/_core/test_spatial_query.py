@@ -4,6 +4,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
 from spatial_image import SpatialImage
@@ -15,6 +16,8 @@ from spatialdata import (
     Labels3DModel,
     PointsModel,
     ShapesModel,
+    SpatialData,
+    TableModel,
 )
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
@@ -336,8 +339,9 @@ def test_bounding_box_spatial_data(full_sdata):
         min_coordinate=np.array([2, 1]),
         max_coordinate=np.array([40, 60]),
     )
-    result = bounding_box_query(full_sdata, **request.to_dict())
-    result2 = full_sdata.query(request)
+    result = bounding_box_query(full_sdata, **request.to_dict(), filter_table=True)
+    # filter table is True by default when calling query(request)
+    result2 = full_sdata.query(request, filter_table=True)
     from tests._core.test_spatialdata_operations import (
         _assert_spatialdata_objects_seem_identical,
     )
@@ -348,3 +352,31 @@ def test_bounding_box_spatial_data(full_sdata):
         d = get_transformation(element, get_all=True)
         new_d = {k.replace("global", "cropped"): v for k, v in d.items()}
         set_transformation(element, new_d, set_all=True)
+
+
+def test_bounding_box_filter_table():
+    coords0 = np.array([[10, 10], [20, 20]])
+    coords1 = np.array([[30, 30]])
+    circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
+    circles1 = ShapesModel.parse(coords1, geometry=0, radius=1)
+    table = AnnData(shape=(3, 0))
+    table.obs["region"] = ["circles0", "circles0", "circles1"]
+    table.obs["instance"] = [0, 1, 0]
+    table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
+    sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, table=table)
+    queried0 = sdata.query.bounding_box(
+        axes=("y", "x"),
+        min_coordinate=np.array([15, 15]),
+        max_coordinate=np.array([25, 25]),
+        filter_table=True,
+        target_coordinate_system="global",
+    )
+    queried1 = sdata.query.bounding_box(
+        axes=("y", "x"),
+        min_coordinate=np.array([15, 15]),
+        max_coordinate=np.array([25, 25]),
+        filter_table=False,
+        target_coordinate_system="global",
+    )
+    assert len(queried0.table) == 1
+    assert len(queried1.table) == 3

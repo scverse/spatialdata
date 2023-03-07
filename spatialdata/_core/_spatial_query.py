@@ -22,6 +22,13 @@ from spatialdata._core.core_utils import (
     get_dims,
     get_spatial_axes,
 )
+from spatialdata._core.models import (
+    Labels2DModel,
+    Labels3DModel,
+    ShapesModel,
+    TableModel,
+    get_schema,
+)
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -154,14 +161,6 @@ class BaseSpatialRequest:
     """Base class for spatial queries."""
 
     target_coordinate_system: str
-    axes: tuple[ValidAxis_t, ...]
-
-    def __post_init__(self) -> None:
-        # validate the axes
-        spatial_axes = get_spatial_axes(self.axes)
-        non_spatial_axes = set(self.axes) - set(spatial_axes)
-        if len(non_spatial_axes) > 0:
-            raise ValueError(f"Non-spatial axes specified: {non_spatial_axes}")
 
     @abstractmethod
     def to_dict(self) -> dict[str, Any]:
@@ -186,9 +185,14 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
     min_coordinate: ArrayLike
     max_coordinate: ArrayLike
+    axes: tuple[ValidAxis_t, ...]
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        # validate the axes
+        spatial_axes = get_spatial_axes(self.axes)
+        non_spatial_axes = set(self.axes) - set(spatial_axes)
+        if len(non_spatial_axes) > 0:
+            raise ValueError(f"Non-spatial axes specified: {non_spatial_axes}")
 
         # validate the axes
         if len(self.axes) != len(self.min_coordinate) or len(self.axes) != len(self.max_coordinate):
@@ -264,6 +268,7 @@ def bounding_box_query(
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
+    **kwargs: Any,
 ) -> Optional[Union[SpatialElement, SpatialData]]:
     # TODO: the docstring is defined in _spatialdata.py, in QueryManager, maybe we can link it from there to here
     #  with a decorator or something
@@ -277,6 +282,7 @@ def _(
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
+    filter_table: bool = True,
 ) -> SpatialData:
     from spatialdata import SpatialData
 
@@ -294,7 +300,34 @@ def _(
             target_coordinate_system=target_coordinate_system,
         )
         new_elements[element_type] = queried_elements
-    return SpatialData(**new_elements, table=sdata.table)
+
+    if filter_table:
+        to_keep = np.array([False] * len(sdata.table))
+        region_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        for _, elements in new_elements.items():
+            for name, element in elements.items():
+                if get_schema(element) == Labels2DModel or get_schema(element) == Labels3DModel:
+                    if isinstance(element, SpatialImage):
+                        # get unique labels value (including 0 if present)
+                        instances = da.unique(element.data).compute()
+                    else:
+                        assert isinstance(element, MultiscaleSpatialImage)
+                        v = element["scale0"].values()
+                        assert len(v) == 1
+                        xdata = next(iter(v))
+                        instances = da.unique(xdata.data).compute()
+                elif get_schema(element) == ShapesModel:
+                    instances = element.index.to_numpy()
+                else:
+                    continue
+                indices = (sdata.table.obs[region_key] == name) & (sdata.table.obs[instance_key].isin(instances))
+                to_keep = to_keep | indices
+        table = sdata.table[to_keep, :].copy()
+        table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
+    else:
+        table = sdata.table
+    return SpatialData(**new_elements, table=table)
 
 
 @bounding_box_query.register(SpatialImage)
@@ -494,10 +527,10 @@ def _(
     # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
     (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=points,
+        axes=axes,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
-        axes=axes,
     )
     min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
     max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
@@ -505,9 +538,9 @@ def _(
     # get the points in the intrinsic coordinate bounding box
     in_intrinsic_bounding_box = _bounding_box_mask_points(
         points=points,
+        axes=intrinsic_axes,
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
-        axes=intrinsic_axes,
     )
     points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
 
@@ -533,9 +566,9 @@ def _(
     # get a mask for the points in the bounding box
     bounding_box_mask = _bounding_box_mask_points(
         points=points_query_coordinate_system,
+        axes=axes,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
-        axes=axes,
     )
     if bounding_box_mask.sum() == 0:
         return None
@@ -565,10 +598,10 @@ def _(
     # get the four corners of the bounding box
     (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,
+        axes=axes,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
-        axes=axes,
     )
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)

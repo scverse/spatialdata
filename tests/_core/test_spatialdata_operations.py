@@ -13,9 +13,42 @@ from spatialdata._core._spatialdata_ops import (
     concatenate,
     set_transformation,
 )
-from spatialdata._core.models import TableModel
+from spatialdata._core.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+)
 from spatialdata._core.transformations import Identity, Scale
 from tests.conftest import _get_table
+
+
+def test_element_names_unique():
+    shapes = ShapesModel.parse(np.array([[0, 0]]), geometry=0, radius=1)
+    points = PointsModel.parse(np.array([[0, 0]]))
+    labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
+    image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
+
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, points={"image": points})
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, shapes={"image": shapes})
+    with pytest.raises(ValueError):
+        SpatialData(images={"image": image}, labels={"image": labels})
+
+    sdata = SpatialData(
+        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+    )
+
+    with pytest.raises(ValueError):
+        sdata.add_image(name="points", image=image)
+    with pytest.raises(ValueError):
+        sdata.add_points(name="image", points=points)
+    with pytest.raises(ValueError):
+        sdata.add_shapes(name="image", shapes=shapes)
+    with pytest.raises(ValueError):
+        sdata.add_labels(name="image", labels=labels)
 
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
@@ -73,14 +106,12 @@ def test_filter_by_coordinate_system(full_sdata):
 def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata._core.models import TableModel
 
-    full_sdata.table.obs["annotated_shapes"] = np.random.choice(
-        ["shapes/circles", "shapes/poly"], size=full_sdata.table.shape[0]
-    )
+    full_sdata.table.obs["annotated_shapes"] = np.random.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
     full_sdata.table = TableModel.parse(
-        adata, region=["shapes/circles", "shapes/poly"], region_key="annotated_shapes", instance_key="instance_id"
+        adata, region=["circles", "poly"], region_key="annotated_shapes", instance_key="instance_id"
     )
 
     scale = Scale([2.0], axes=("x",))

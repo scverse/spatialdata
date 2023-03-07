@@ -81,17 +81,17 @@ class RasterFormatV01(SpatialDataFormatV01):
         if channels_metadata is not None:
             if set(channels_metadata.keys()).symmetric_difference(set(channels)):
                 for c in channels:
-                    metadata["channels"].append({"labels": c} | channels_metadata[c])
+                    metadata["channels"].append({"label": c} | channels_metadata[c])
             else:
                 raise ValueError("Channels metadata must contain all channels.")
         else:
             for c in channels:
-                metadata["channels"].append({"labels": c})
+                metadata["channels"].append({"label": c})
         return metadata
 
     def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
         """Convert channels from omero metadata."""
-        return [d["labels"] for d in omero_metadata["channels"]]
+        return [d["label"] for d in omero_metadata["channels"]]
 
 
 class ShapesFormatV01(SpatialDataFormatV01):

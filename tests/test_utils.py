@@ -4,6 +4,7 @@ import tempfile
 
 import dask.dataframe as dd
 import dask_image.ndinterp
+import pytest
 import xarray
 import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -38,6 +39,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
     return transformed
 
 
+@pytest.mark.ci_only
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
         schema = get_schema(raster)
@@ -51,10 +53,10 @@ def test_unpad_raster(images, labels) -> None:
             raise ValueError(f"Unknown type: {type(raster)}")
         padded = _pad_raster(data.data, data.dims)
         if isinstance(raster, SpatialImage):
-            padded = schema.parse(padded, dims=data.dims)
+            padded = schema.parse(padded, dims=data.dims, c_coords=data.coords.get("c", None))
         elif isinstance(raster, MultiscaleSpatialImage):
             # some arbitrary scaling factors
-            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2])
+            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2], c_coords=data.coords.get("c", None))
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)

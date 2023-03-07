@@ -255,3 +255,17 @@ def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
     if array.dtype != float:
         array = array.astype(float)
     return array
+
+
+def atoi(text: str) -> Union[int, str]:
+    return int(text) if text.isdigit() else text
+
+
+# from https://stackoverflow.com/a/5967539/3343783
+def natural_keys(text: str) -> list[Union[int, str]]:
+    """
+    alist.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    """
+    return [atoi(c) for c in re.split(r"(\d+)", text)]
