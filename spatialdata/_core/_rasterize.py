@@ -98,17 +98,17 @@ def _compute_target_dimensions(
             ]
         )
         == 1
-    )
+    ), "you must specify only one of: target_unit_to_pixels, target_width, target_height, target_depth" 
     assert set(spatial_axes) == {"x", "y"} or set(spatial_axes) == {"x", "y", "z"}
     if "z" not in spatial_axes:
-        assert target_depth is None
+        assert target_depth is None, "you cannot specify a target depth for 2D data"
 
     x_index = spatial_axes.index("x")
     y_index = spatial_axes.index("y")
     w_bb = max_coordinate[x_index] - min_coordinate[x_index]
     h_bb = max_coordinate[y_index] - min_coordinate[y_index]
-    assert w_bb > 0
-    assert h_bb > 0
+    assert w_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
+    assert h_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
     w_to_h_bb = w_bb / h_bb
 
     d_bb = None
@@ -116,7 +116,7 @@ def _compute_target_dimensions(
     if "z" in spatial_axes:
         z_index = spatial_axes.index("z")
         d_bb = max_coordinate[z_index] - min_coordinate[z_index]
-        assert d_bb > 0
+        assert d_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
         d_to_h_bb = d_bb / h_bb
 
     if target_unit_to_pixels is not None:
