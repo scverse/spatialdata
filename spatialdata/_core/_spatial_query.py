@@ -102,8 +102,8 @@ def get_bounding_box_corners(
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
+    min_coordinate: Union[list[Number], ArrayLike],
+    max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> tuple[ArrayLike, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
