@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -90,18 +90,18 @@ def full_sdata() -> SpatialData:
 #     return SpatialData(points={"empty": geo_df})
 
 
-@pytest.fixture()
-def empty_table() -> SpatialData:
-    adata = AnnData(shape=(0, 0))
-    adata = TableModel.parse(adata=adata)
-    return SpatialData(table=adata)
+# @pytest.fixture()
+# def empty_table() -> SpatialData:
+#     adata = AnnData(shape=(0, 0), obs=pd.DataFrame(columns="region"), var=pd.DataFrame())
+#     adata = TableModel.parse(adata=adata)
+#     return SpatialData(table=adata)
 
 
 @pytest.fixture(
     # params=["labels"]
     params=["full", "empty"]
     + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
-    + ["empty_" + x for x in ["table"]]
+    # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
 def sdata(request) -> SpatialData:
     if request.param == "full":
@@ -124,8 +124,10 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
-    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d)
-    out["image2d_multiscale"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d)
+    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
+    out["image2d_multiscale"] = Image2DModel.parse(
+        RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
+    )
     out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
         DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
@@ -150,21 +152,27 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), dims=dims_2d)
-    out["labels2d_multiscale"] = Labels2DModel.parse(RNG.normal(size=(64, 64)), scale_factors=[2, 4], dims=dims_2d)
-    out["labels2d_xarray"] = Labels2DModel.parse(DataArray(RNG.normal(size=(64, 64)), dims=dims_2d), dims=None)
+    out["labels2d"] = Labels2DModel.parse(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d)
+    out["labels2d_multiscale"] = Labels2DModel.parse(
+        RNG.integers(0, 100, size=(64, 64)), scale_factors=[2, 4], dims=dims_2d
+    )
+    out["labels2d_xarray"] = Labels2DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d), dims=None
+    )
     out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
-        DataArray(RNG.normal(size=(64, 64)), dims=dims_2d),
+        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d),
         scale_factors=[2, 4],
         dims=None,
     )
-    out["labels3d_numpy"] = Labels3DModel.parse(RNG.normal(size=(10, 64, 64)), dims=dims_3d)
+    out["labels3d_numpy"] = Labels3DModel.parse(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.normal(size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
+        RNG.integers(0, 100, size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
     )
-    out["labels3d_xarray"] = Labels3DModel.parse(DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d), dims=None)
+    out["labels3d_xarray"] = Labels3DModel.parse(
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d), dims=None
+    )
     out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
-        DataArray(RNG.normal(size=(10, 64, 64)), dims=dims_3d),
+        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d),
         scale_factors=[2, 4],
         dims=None,
     )
@@ -180,7 +188,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),
                 Polygon(((0, 0), (0, -1), (-1, -1), (-1, 0))),
                 Polygon(((0, 0), (0, 1), (1, 10))),
-                Polygon(((0, 0), (0, 1), (1, 1))),
+                Polygon(((10, 10), (10, 20), (20, 20))),
                 Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
             ]
         }
@@ -220,6 +228,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
     points["radius"] = np.random.normal(size=(len(points), 1))
 
     out["poly"] = ShapesModel.parse(poly)
+    out["poly"].index = ["a", "b", "c", "d", "e"]
     out["multipoly"] = ShapesModel.parse(multipoly)
     out["circles"] = ShapesModel.parse(points)
 
@@ -246,23 +255,14 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Optional[Union[str, list[str]]],
-    region_key: Optional[str] = None,
-    instance_key: Optional[str] = None,
+    region: Union[str, list[str]] = "sample1",
+    region_key: str = "region",
+    instance_key: str = "instance_id",
 ) -> AnnData:
-    if region is not None:
-        region_key = region_key or "annotated_region"
-        instance_key = instance_key or "instance_id"
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
-    if instance_key is not None:
-        adata.obs[instance_key] = np.arange(adata.n_obs)
+    adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
-        return TableModel.parse(adata=adata, region=region, instance_key=instance_key)
+        adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
-        adata.obs[instance_key] = RNG.integers(0, 10, size=(100,))
-        return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
-    elif region is None:
-        return TableModel.parse(adata=adata)
-    else:
-        raise ValueError(f"region must be a string or list of strings, not {type(region)}")
+    return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)

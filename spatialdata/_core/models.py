@@ -1,11 +1,11 @@
 """This file contains models and schema for SpatialData"""
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
-from warnings import warn
 
 import dask.dataframe as dd
 import numpy as np
@@ -18,15 +18,12 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
-from numpy.typing import NDArray
 from pandas.api.types import is_categorical_dtype
-from scipy.sparse import csr_matrix
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from tqdm import tqdm
 from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
@@ -317,6 +314,8 @@ class ShapesModel:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+        if len(data[cls.GEOMETRY_KEY]) == 0:
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
@@ -357,7 +356,7 @@ class ShapesModel:
         offsets
             In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
         radius
-            Array of size of the `Circles`. It must be provided if the shapes are `Circles`.
+            Size of the `Circles`. It must be provided if the shapes are `Circles`.
         index
             Index of the shapes, must be of type `str`. If None, it's generated automatically.
         transform
@@ -378,7 +377,7 @@ class ShapesModel:
         data: np.ndarray,  # type: ignore[type-arg]
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: Optional[tuple[ArrayLike, ...]] = None,
-        radius: Optional[ArrayLike] = None,
+        radius: Optional[Union[float, ArrayLike]] = None,
         index: Optional[ArrayLike] = None,
         transformations: Optional[MappingToCoordinateSystem_t] = None,
     ) -> GeoDataFrame:
@@ -401,7 +400,7 @@ class ShapesModel:
     def _(
         cls,
         data: Union[str, Path],
-        radius: Optional[ArrayLike] = None,
+        radius: Optional[Union[float, ArrayLike]] = None,
         index: Optional[ArrayLike] = None,
         transformations: Optional[Any] = None,
         **kwargs: Any,
@@ -433,7 +432,7 @@ class ShapesModel:
     ) -> GeoDataFrame:
         if "geometry" not in data.columns:
             raise ValueError("`geometry` column not found in `GeoDataFrame`.")
-        if isinstance(data["geometry"][0], Point):
+        if isinstance(data["geometry"].iloc[0], Point):
             if cls.RADIUS_KEY not in data.columns:
                 raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         _parse_transformations(data, transformations)
@@ -618,21 +617,26 @@ class TableModel:
         self,
         data: AnnData,
     ) -> AnnData:
-        if self.ATTRS_KEY in data.uns:
-            attr = data.uns[self.ATTRS_KEY]
-            if "region" not in attr:
-                raise ValueError("`region` not found in `adata.uns['spatialdata_attr']`.")
-            if isinstance(attr["region"], list):
-                if "region_key" not in attr:
-                    raise ValueError(
-                        "`region` is of type `list` but `region_key` not found in `adata.uns['spatialdata_attr']`."
-                    )
-                if "instance_key" not in attr:
-                    raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
-            elif isinstance(attr["region"], str):
-                assert attr["region_key"] is None
-                if "instance_key" not in attr:
-                    raise ValueError("`instance_key` not found in `adata.uns['spatialdata_attr']`.")
+        if self.ATTRS_KEY not in data.uns:
+            raise ValueError(f"`{self.ATTRS_KEY}` not found in `adata.uns`.")
+        attr = data.uns[self.ATTRS_KEY]
+
+        if "region" not in attr:
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "region_key" not in attr:
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "instance_key" not in attr:
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+
+        if attr[self.REGION_KEY_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
+        if attr[self.INSTANCE_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
+        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
+        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
+            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+
         return data
 
     @classmethod
@@ -643,6 +647,24 @@ class TableModel:
         region_key: Optional[str] = None,
         instance_key: Optional[str] = None,
     ) -> AnnData:
+        """
+        Parse the :class:`anndata.AnnData` to be compatible with the model.
+
+        Parameters
+        ----------
+        adata
+            The AnnData object.
+        region
+            Region(s) to be used.
+        region_key
+            Key in `adata.obs` that specifies the region.
+        instance_key
+            Key in `adata.obs` that specifies the instance.
+
+        Returns
+        -------
+        :class:`anndata.AnnData`.
+        """
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args > 0:
@@ -656,61 +678,26 @@ class TableModel:
             region_key = attr[cls.REGION_KEY_KEY]
             instance_key = attr[cls.INSTANCE_KEY]
 
-        if isinstance(region, str):
-            if region_key is not None:
-                raise ValueError(
-                    f"If `{cls.REGION_KEY}` is of type `str`, `{cls.REGION_KEY_KEY}` must be `None` as it is redundant."
-                )
-            if instance_key is None:
-                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
-        elif isinstance(region, list):
-            if region_key is None:
-                raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided if `{cls.REGION_KEY}` is of type `List`.")
-            if not adata.obs[region_key].isin(region).all():
-                raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-            if not is_categorical_dtype(adata.obs[region_key]):
-                warn(f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning)
-                adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
-            if instance_key is None:
-                raise ValueError("`instance_key` must be provided if `region` is of type `List`.")
-        else:
-            if region is not None:
-                raise ValueError(f"`{cls.REGION_KEY}` must be of type `str` or `List`.")
+        if region_key is None:
+            raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided.")
+        if isinstance(region, np.ndarray):
+            region = region.tolist()
+        if region is None:
+            raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
+        region_: list[str] = region if isinstance(region, list) else [region]
+        if not adata.obs[region_key].isin(region_).all():
+            raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
+        if not is_categorical_dtype(adata.obs[region_key]):
+            warnings.warn(
+                f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
+            )
+            adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
+        if instance_key is None:
+            raise ValueError("`instance_key` must be provided.")
 
-        # TODO: check for `instance_key` values?
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
         return adata
-
-
-# TODO: consider removing if we settle with geodataframe
-def _sparse_matrix_from_assignment(
-    n_obs: int, var_names: Union[list[str], ArrayLike], assignment: pd.Series
-) -> csr_matrix:
-    """Create a sparse matrix from an assignment array."""
-    data: NDArray[np.bool_] = np.ones(len(assignment), dtype=bool)
-    row = np.arange(len(assignment))
-    # if type(var_names) == np.ndarray:
-    #     assert len(var_names.shape) == 1
-    #     col = np.array([np.where(var_names == p)[0][0] for p in assignment])
-    if type(var_names) == list:
-        # naive way, slow
-        # values = []
-        # for p in tqdm(assignment, desc='creating sparse matrix'):
-        #     values.append(var_names.index(p))
-        # col = np.array(values)
-
-        # better way, ~10 times faster
-        col = np.full((len(assignment),), np.nan)
-        # tqdm not needed as a dependency if this function is removed
-        for cat in tqdm(assignment.cat.categories, desc="creating sparse matrix"):
-            value = var_names.index(cat)
-            col[assignment == cat] = value
-        assert np.sum(np.isnan(col)) == 0
-    else:
-        raise TypeError(f"var_names must be either np.array or List, but got {type(var_names)}")
-    sparse = csr_matrix((data, (row, col)), shape=(n_obs, len(var_names)))
-    return sparse
 
 
 Schema_t = Union[

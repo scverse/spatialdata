@@ -52,10 +52,8 @@ from tests.conftest import (
 
 RNG = default_rng()
 
-# should be set to False for pre-commit and CI; useful to set to True for are fixing/debugging tests
-SHORT_TESTS = False
 
-
+@pytest.mark.ci_only
 class TestModels:
     def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs) -> None:
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
@@ -64,8 +62,6 @@ class TestModels:
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
-        if SHORT_TESTS:
-            return
         if any([isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)]):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
@@ -118,8 +114,6 @@ class TestModels:
             raise ValueError(f"Unknown type {type(element)}")
 
     def _passes_validation_after_io(self, model: Any, element: Any, element_type: str) -> None:
-        if SHORT_TESTS:
-            return
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.zarr")
             d = {"element": element}
@@ -286,17 +280,14 @@ class TestModels:
     ) -> None:
         region_key = "reg"
         obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
-        obs["A"] = obs["A"].astype(str)  # instance_key
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
-        if not isinstance(region, str):
-            table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
-            assert region_key in table.obs
-            assert is_categorical_dtype(table.obs[region_key])
-            assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
-            assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key
-        else:
-            table = model.parse(adata, region=region, instance_key="A")
+        table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
+        assert region_key in table.obs
+        assert is_categorical_dtype(table.obs[region_key])
+        assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key
+        assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
         assert TableModel.ATTRS_KEY in table.uns
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
@@ -308,7 +299,7 @@ def test_get_schema():
     labels = _get_labels()
     points = _get_points()
     shapes = _get_shapes()
-    table = _get_table(region="sample1")
+    table = _get_table()
     for k, v in images.items():
         schema = get_schema(v)
         if "2d" in k:

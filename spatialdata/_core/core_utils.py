@@ -202,15 +202,6 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
     _set_transformations_to_dict_container(e.attrs, transformations)
 
 
-@_set_transformations.register(AnnData)
-def _(e: AnnData, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.uns, transformations)
-
-
-def _(e: DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
-
-
 # unit is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
 x_axis = NgffAxis(name=X, type="space", unit="unit")
 y_axis = NgffAxis(name=Y, type="space", unit="unit")
@@ -358,7 +349,7 @@ def compute_coordinates(
 @compute_coordinates.register(SpatialImage)
 def _(data: SpatialImage) -> SpatialImage:
     coords: dict[str, ArrayLike] = {
-        d: np.arange(data.sizes[d], dtype=np.float_) for d in data.sizes.keys() if d in ["x", "y", "z"]
+        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes.keys() if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 
@@ -394,28 +385,35 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    def _compute_coords(max_: int, scale_f: Union[int, float]) -> ArrayLike:
-        return (  # type: ignore[no-any-return]
-            DataArray(np.linspace(0, max_, max_, endpoint=False, dtype=np.float_))
-            .coarsen(dim_0=scale_f, boundary="trim", side="right")
-            .mean()
-            .values
-        )
+    def _compute_coords(n0: int, scale_f: float, n: int) -> ArrayLike:
+        scaled_max = n0 / scale_f
+        if n > 1:
+            offset = scaled_max / (2.0 * (n - 1))
+        else:
+            offset = 0
+        return np.linspace(0, scaled_max, n) + offset
 
-    max_scale0 = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
+    spatial_coords = [ax for ax in get_dims(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
 
     for name, dt in data.items():
-        max_scale = {d: s for d, s in data["scale0"].sizes.items() if d in ["x", "y", "z"]}
         if name == "scale0":
-            coords: dict[str, ArrayLike] = {d: np.arange(max_scale[d], dtype=np.float_) for d in max_scale.keys()}
+            coords: dict[str, ArrayLike] = {
+                d: np.arange(data[name].sizes[d], dtype=np.float_) + 0.5 for d in spatial_coords
+            }
             out[name] = dt[img_name].assign_coords(coords)
         else:
             scale = _get_scale(dt[img_name].attrs["transform"])
             scalef = scale.scale
-            assert len(max_scale.keys()) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
-            new_coords = {k: _compute_coords(max_scale0[k], round(s)) for k, s in zip(max_scale.keys(), scalef)}  # type: ignore[arg-type]
+            assert len(spatial_coords) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
+            new_coords = {}
+            for ax, s in zip(spatial_coords, scalef):
+                new_coords[ax] = _compute_coords(
+                    n0=data["scale0"].sizes[ax],
+                    scale_f=s,
+                    n=data[name].sizes[ax],
+                )
             out[name] = dt[img_name].assign_coords(new_coords)
     msi = MultiscaleSpatialImage.from_dict(d=out)
     # this is to trigger the validation of the dims

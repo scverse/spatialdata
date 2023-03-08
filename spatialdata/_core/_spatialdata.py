@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Generator
+from pathlib import Path
 from types import MappingProxyType
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import zarr
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -16,13 +18,6 @@ from ome_zarr.types import JSONDict
 from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
-from spatialdata._core._spatial_query import (
-    BaseSpatialRequest,
-    BoundingBoxRequest,
-    _bounding_box_query_image_dict,
-    _bounding_box_query_points_dict,
-    _bounding_box_query_shapes_dict,
-)
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -32,6 +27,7 @@ from spatialdata._core.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    get_schema,
 )
 from spatialdata._io.write import (
     write_image,
@@ -41,6 +37,11 @@ from spatialdata._io.write import (
     write_table,
 )
 from spatialdata._logging import logger
+from spatialdata._types import ArrayLike
+from spatialdata.utils import get_backing_files, natural_keys
+
+if TYPE_CHECKING:
+    from spatialdata._core._spatial_query import BaseSpatialRequest
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -100,7 +101,7 @@ class SpatialData:
     _images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _table: Optional[AnnData] = None
     path: Optional[str] = None
 
@@ -109,10 +110,15 @@ class SpatialData:
         images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         table: Optional[AnnData] = None,
     ) -> None:
         self.path = None
+
+        self._validate_unique_element_names(
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+        )
+
         if images is not None:
             self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
             for k, v in images.items():
@@ -124,7 +130,7 @@ class SpatialData:
                 self._add_labels_in_memory(name=k, labels=v)
 
         if shapes is not None:
-            self._shapes: dict[str, AnnData] = {}
+            self._shapes: dict[str, GeoDataFrame] = {}
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
@@ -139,18 +145,72 @@ class SpatialData:
 
         self._query = QueryManager(self)
 
+    @staticmethod
+    def from_elements_dict(elements_dict: dict[str, Union[SpatialElement, AnnData]]) -> SpatialData:
+        """
+        Create a SpatialData object from a dict of elements.
+
+        Parameters
+        ----------
+        elements_dict
+            Dict of elements. The keys are the names of the elements and the values are the elements.
+            A table can be present in the dict, but only at most one; its name is not used and can be anything.
+
+        Returns
+        -------
+            The SpatialData object.
+        """
+        d: dict[str, Union[dict[str, SpatialElement], Optional[AnnData]]] = {
+            "images": {},
+            "labels": {},
+            "points": {},
+            "shapes": {},
+            "table": None,
+        }
+        for k, e in elements_dict.items():
+            schema = get_schema(e)
+            if schema == Image2DModel or schema == Image3DModel:
+                assert isinstance(d["images"], dict)
+                d["images"][k] = e
+            elif schema == Labels2DModel or schema == Labels3DModel:
+                assert isinstance(d["labels"], dict)
+                d["labels"][k] = e
+            elif schema == PointsModel:
+                assert isinstance(d["points"], dict)
+                d["points"][k] = e
+            elif schema == ShapesModel:
+                assert isinstance(d["shapes"], dict)
+                d["shapes"][k] = e
+            elif schema == TableModel:
+                if d["table"] is not None:
+                    raise ValueError("Only one table can be present in the dataset.")
+                d["table"] = e
+            else:
+                raise ValueError(f"Unknown schema {schema}")
+        sdata = SpatialData(**d)  # type: ignore[arg-type]
+        return sdata
+
     @property
     def query(self) -> QueryManager:
         return self._query
 
+    @staticmethod
+    def _validate_unique_element_names(element_names: list[str]) -> None:
+        if len(element_names) != len(set(element_names)):
+            duplicates = {x for x in element_names if element_names.count(x) > 1}
+            raise ValueError(
+                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
+            )
+
     def _add_image_in_memory(
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._images:
             if not overwrite:
                 raise ValueError(f"Image {name} already exists in the dataset.")
-            else:
-                del self._images[name]
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -164,11 +224,12 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._labels:
             if not overwrite:
                 raise ValueError(f"Labels {name} already exists in the dataset.")
-            else:
-                del self._labels[name]
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -180,20 +241,22 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
+        )
         if name in self._shapes:
             if not overwrite:
                 raise ValueError(f"Shapes {name} already exists in the dataset.")
-            else:
-                del self._shapes[name]
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
+        self._validate_unique_element_names(
+            list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
+        )
         if name in self._points:
             if not overwrite:
                 raise ValueError(f"Points {name} already exists in the dataset.")
-            else:
-                del self._points[name]
         Point_s.validate(points)
         self._points[name] = points
 
@@ -358,12 +421,13 @@ class SpatialData:
                     if element_type not in elements:
                         elements[element_type] = {}
                     elements[element_type][element_name] = element
-                    element_paths_in_coordinate_system.append(f"{element_type}/{element_name}")
+                    element_paths_in_coordinate_system.append(element_name)
 
         if filter_table:
             table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
-            region_key = table_mapping_metadata["region_key"]
+            region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
             table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
+            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
         else:
             table = self.table
 
@@ -431,7 +495,6 @@ class SpatialData:
         image: Union[SpatialImage, MultiscaleSpatialImage],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
     ) -> None:
         """
         Add an image to the SpatialData object.
@@ -447,17 +510,49 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
-            Internal flag, to differentiate between an element added by the user and an element saved to disk by
-            write method.
 
         Notes
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
-            self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
         if self.is_backed():
+            files = get_backing_files(image)
+            assert self.path is not None
+            target_path = os.path.realpath(os.path.join(self.path, "images", name))
+            if target_path in files:
+                raise ValueError(
+                    "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
+                    "using for backing. See more here: https://github.com/scverse/spatialdata/pull/138"
+                )
+            self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
+            # old code to support overwriting the backing file
+            # with tempfile.TemporaryDirectory() as tmpdir:
+            #     store = parse_url(Path(tmpdir) / "data.zarr", mode="w").store
+            #     root = zarr.group(store=store)
+            #     write_image(
+            #         image=self.images[name],
+            #         group=root,
+            #         name=name,
+            #         storage_options=storage_options,
+            #     )
+            #     src_element_path = Path(store.path) / name
+            #     assert isinstance(self.path, str)
+            #     tgt_element_path = Path(self.path) / "images" / name
+            #     if os.path.isdir(tgt_element_path) and overwrite:
+            #         element_store = parse_url(tgt_element_path, mode="w").store
+            #         _ = zarr.group(store=element_store, overwrite=True)
+            #         element_store.close()
+            #     pathlib.Path(tgt_element_path).mkdir(parents=True, exist_ok=True)
+            #     for file in os.listdir(str(src_element_path)):
+            #         src_file = src_element_path / file
+            #         tgt_file = tgt_element_path / file
+            #         os.rename(src_file, tgt_file)
+            # from spatialdata._io.read import _read_multiscale
+            #
+            # # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # # from the correct storage
+            # image = _read_multiscale(str(tgt_element_path), raster_type="image")
+            # self._add_image_in_memory(name=name, image=image, overwrite=True)
             elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
             write_image(
                 image=self.images[name],
@@ -465,14 +560,16 @@ class SpatialData:
                 name=name,
                 storage_options=storage_options,
             )
-            # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
-            # from the correct storage
             from spatialdata._io.read import _read_multiscale
 
+            # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # from the correct storage
             assert elem_group.path == "images"
-            path = os.path.join(elem_group.store.path, "images", name)
+            path = Path(elem_group.store.path) / "images" / name
             image = _read_multiscale(path, raster_type="image")
             self._add_image_in_memory(name=name, image=image, overwrite=True)
+        else:
+            self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
 
     def add_labels(
         self,
@@ -480,7 +577,6 @@ class SpatialData:
         labels: Union[SpatialImage, MultiscaleSpatialImage],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
     ) -> None:
         """
         Add labels to the SpatialData object.
@@ -496,17 +592,51 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
-            Internal flag, to differentiate between an element added by the user and an element saved to disk by
-            write method.
 
         Notes
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
-            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
         if self.is_backed():
+            files = get_backing_files(labels)
+            assert self.path is not None
+            target_path = os.path.realpath(os.path.join(self.path, "labels", name))
+            if target_path in files:
+                raise ValueError(
+                    "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
+                    "using for backing. We are considering changing this behavior to allow the overwriting of "
+                    "elements used for backing. If you would like to support this use case please leave a comment on "
+                    "https://github.com/scverse/spatialdata/pull/138"
+                )
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
+            # old code to support overwriting the backing file
+            # with tempfile.TemporaryDirectory() as tmpdir:
+            #     store = parse_url(Path(tmpdir) / "data.zarr", mode="w").store
+            #     root = zarr.group(store=store)
+            #     write_labels(
+            #         labels=self.labels[name],
+            #         group=root,
+            #         name=name,
+            #         storage_options=storage_options,
+            #     )
+            #     src_element_path = Path(store.path) / "labels" / name
+            #     assert isinstance(self.path, str)
+            #     tgt_element_path = Path(self.path) / "labels" / name
+            #     if os.path.isdir(tgt_element_path) and overwrite:
+            #         element_store = parse_url(tgt_element_path, mode="w").store
+            #         _ = zarr.group(store=element_store, overwrite=True)
+            #         element_store.close()
+            #     pathlib.Path(tgt_element_path).mkdir(parents=True, exist_ok=True)
+            #     for file in os.listdir(str(src_element_path)):
+            #         src_file = src_element_path / file
+            #         tgt_file = tgt_element_path / file
+            #         os.rename(src_file, tgt_file)
+            # from spatialdata._io.read import _read_multiscale
+            #
+            # # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # # from the correct storage
+            # labels = _read_multiscale(str(tgt_element_path), raster_type="labels")
+            # self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
             elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
             write_labels(
                 labels=self.labels[name],
@@ -520,16 +650,17 @@ class SpatialData:
 
             # just a check to make sure that things go as expected
             assert elem_group.path == ""
-            path = os.path.join(elem_group.store.path, "labels", name)
+            path = Path(elem_group.store.path) / "labels" / name
             labels = _read_multiscale(path, raster_type="labels")
             self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
+        else:
+            self._add_labels_in_memory(name=name, labels=labels, overwrite=overwrite)
 
     def add_points(
         self,
         name: str,
         points: DaskDataFrame,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
     ) -> None:
         """
         Add points to the SpatialData object.
@@ -545,17 +676,50 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
-            Internal flag, to differentiate between an element added by the user and an element saved to disk by
-            write method.
 
         Notes
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
-            self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
         if self.is_backed():
+            files = get_backing_files(points)
+            assert self.path is not None
+            target_path = os.path.realpath(os.path.join(self.path, "points", name, "points.parquet"))
+            if target_path in files:
+                raise ValueError(
+                    "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
+                    "using for backing. We are considering changing this behavior to allow the overwriting of "
+                    "elements used for backing. If you would like to support this use case please leave a comment on "
+                    "https://github.com/scverse/spatialdata/pull/138"
+                )
+            self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
+            # old code to support overwriting the backing file
+            # with tempfile.TemporaryDirectory() as tmpdir:
+            #     store = parse_url(Path(tmpdir) / "data.zarr", mode="w").store
+            #     root = zarr.group(store=store)
+            #     write_points(
+            #         points=self.points[name],
+            #         group=root,
+            #         name=name,
+            #     )
+            #     src_element_path = Path(store.path) / name
+            #     assert isinstance(self.path, str)
+            #     tgt_element_path = Path(self.path) / "points" / name
+            #     if os.path.isdir(tgt_element_path) and overwrite:
+            #         element_store = parse_url(tgt_element_path, mode="w").store
+            #         _ = zarr.group(store=element_store, overwrite=True)
+            #         element_store.close()
+            #     pathlib.Path(tgt_element_path).mkdir(parents=True, exist_ok=True)
+            #     for file in os.listdir(str(src_element_path)):
+            #         src_file = src_element_path / file
+            #         tgt_file = tgt_element_path / file
+            #         os.rename(src_file, tgt_file)
+            # from spatialdata._io.read import _read_points
+            #
+            # # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
+            # # from the correct storage
+            # points = _read_points(str(tgt_element_path))
+            # self._add_points_in_memory(name=name, points=points, overwrite=True)
             elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
             write_points(
                 points=self.points[name],
@@ -568,16 +732,17 @@ class SpatialData:
 
             assert elem_group.path == "points"
 
-            path = os.path.join(elem_group.store.path, "points", name)
+            path = Path(elem_group.store.path) / "points" / name
             points = _read_points(path)
             self._add_points_in_memory(name=name, points=points, overwrite=True)
+        else:
+            self._add_points_in_memory(name=name, points=points, overwrite=overwrite)
 
     def add_shapes(
         self,
         name: str,
         shapes: AnnData,
         overwrite: bool = False,
-        _add_in_memory: bool = True,
     ) -> None:
         """
         Add shapes to the SpatialData object.
@@ -593,16 +758,12 @@ class SpatialData:
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
         overwrite
             If True, overwrite the element if it already exists.
-        _add_in_memory
-            Internal flag, to differentiate between an element added by the user and an element saved to disk by
-            write method.
 
         Notes
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
-        if _add_in_memory:
-            self._add_shapes_in_memory(name=name, shapes=shapes, overwrite=overwrite)
+        self._add_shapes_in_memory(name=name, shapes=shapes, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
             write_shapes(
@@ -613,61 +774,180 @@ class SpatialData:
             # no reloading of the file storage since the AnnData is not lazy loaded
 
     def write(
-        self, file_path: str, storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None, overwrite: bool = False
+        self,
+        file_path: Union[str, Path],
+        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
+        overwrite: bool = False,
     ) -> None:
         """Write the SpatialData object to Zarr."""
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+        assert isinstance(file_path, Path)
 
-        if self.is_backed():
-            if self.path == file_path:
-                raise ValueError("Can't overwrite the original file")
-            elif self.path != file_path and self.path is not None:
-                logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
+        if self.is_backed() and self.path != file_path:
+            logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
 
-        if not overwrite and parse_url(file_path, mode="r") is not None:
-            raise ValueError("The Zarr store already exists. Use overwrite=True to overwrite the store.")
-        else:
-            store = parse_url(file_path, mode="w").store
-            root = zarr.group(store=store)
-            store.close()
+        # old code to support overwriting the backing file
+        # target_path = None
+        # tmp_zarr_file = None
+        if os.path.exists(file_path):
+            if parse_url(file_path, mode="r") is None:
+                raise ValueError(
+                    "The target file path specified already exists, and it has been detected to not be "
+                    "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
+                    "data loss."
+                )
+            if not overwrite and self.path != str(file_path):
+                raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
+            elif str(file_path) == self.path:
+                raise ValueError(
+                    "The file path specified is the same as the one used for backing. "
+                    "Overwriting the backing file is not supported to prevent accidental data loss."
+                    "We are discussing how to support this use case in the future, if you would like us to "
+                    "support it please leave a comment on https://github.com/scverse/spatialdata/pull/138"
+                )
+                # old code to support overwriting the backing file
+                # else:
+                #     target_path = tempfile.TemporaryDirectory()
+                #     tmp_zarr_file = Path(target_path.name) / "data.zarr"
 
-        self.path = file_path
+        # old code to support overwriting the backing file
+        # if target_path is None:
+        #     store = parse_url(file_path, mode="w").store
+        # else:
+        #     store = parse_url(tmp_zarr_file, mode="w").store
+        # store = parse_url(file_path, mode="w").store
+        # root = zarr.group(store=store)
+        store = parse_url(file_path, mode="w").store
+
+        root = zarr.group(store=store, overwrite=overwrite)
+        store.close()
+
+        # old code to support overwriting the backing file
+        # if target_path is None:
+        #     self.path = str(file_path)
+        # else:
+        #     self.path = str(tmp_zarr_file)
+        self.path = str(file_path)
         try:
             if len(self.images):
                 root.create_group(name="images")
-                # add_image will delete and replace the same key in self.images, so we need to make a copy of the
+                # add_image_in_memory will delete and replace the same key in self.images, so we need to make a copy of the
                 # keys. Same for the other elements
-                keys = list(self.images.keys())
-                for el in keys:
-                    self.add_image(
-                        name=el, image=self.images[el], storage_options=storage_options, _add_in_memory=False
+                # keys = list(self.images.keys())
+                keys = self.images.keys()
+                from spatialdata._io.read import _read_multiscale
+
+                for name in keys:
+                    elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
+                    write_image(
+                        image=self.images[name],
+                        group=elem_group,
+                        name=name,
+                        storage_options=storage_options,
                     )
+
+                    # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+                    # from the correct storage
+                    element_path = Path(self.path) / "images" / name
+                    image = _read_multiscale(element_path, raster_type="image")
+                    self._add_image_in_memory(name=name, image=image, overwrite=True)
 
             if len(self.labels):
                 root.create_group(name="labels")
-                keys = list(self.labels.keys())
-                for el in keys:
-                    self.add_labels(
-                        name=el, labels=self.labels[el], storage_options=storage_options, _add_in_memory=False
+                # keys = list(self.labels.keys())
+                keys = self.labels.keys()
+                from spatialdata._io.read import _read_multiscale
+
+                for name in keys:
+                    elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
+                    write_labels(
+                        labels=self.labels[name],
+                        group=elem_group,
+                        name=name,
+                        storage_options=storage_options,
                     )
+
+                    # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
+                    # from the correct storage
+                    element_path = Path(self.path) / "labels" / name
+                    labels = _read_multiscale(element_path, raster_type="labels")
+                    self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
 
             if len(self.points):
                 root.create_group(name="points")
-                keys = list(self.points.keys())
-                for el in keys:
-                    self.add_points(name=el, points=self.points[el], _add_in_memory=False)
+                # keys = list(self.points.keys())
+                keys = self.points.keys()
+                from spatialdata._io.read import _read_points
+
+                for name in keys:
+                    elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
+                    write_points(
+                        points=self.points[name],
+                        group=elem_group,
+                        name=name,
+                    )
+                    element_path = Path(self.path) / "points" / name
+
+                    # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
+                    # from the correct storage
+                    points = _read_points(element_path)
+                    self._add_points_in_memory(name=name, points=points, overwrite=True)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
-                keys = list(self.shapes.keys())
-                for el in keys:
-                    self.add_shapes(name=el, shapes=self.shapes[el], _add_in_memory=False)
+                # keys = list(self.shapes.keys())
+                keys = self.shapes.keys()
+                for name in keys:
+                    elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
+                    write_shapes(
+                        shapes=self.shapes[name],
+                        group=elem_group,
+                        name=name,
+                    )
+                    # no reloading of the file storage since the AnnData is not lazy loaded
 
             if self.table is not None:
                 elem_group = root.create_group(name="table")
                 write_table(table=self.table, group=elem_group, name="table")
+
         except Exception as e:  # noqa: B902
             self.path = None
             raise e
+
+        # old code to support overwriting the backing file
+        # if target_path is not None:
+        #     if os.path.isdir(file_path):
+        #         assert overwrite is True
+        #         store = parse_url(file_path, mode="w").store
+        #         _ = zarr.group(store=store, overwrite=overwrite)
+        #         store.close()
+        #     for file in os.listdir(str(tmp_zarr_file)):
+        #         assert isinstance(tmp_zarr_file, Path)
+        #         src_file = tmp_zarr_file / file
+        #         tgt_file = file_path / file
+        #         os.rename(src_file, tgt_file)
+        #     target_path.cleanup()
+        #
+        #     self.path = str(file_path)
+        #     # elements that need to be reloaded are: images, labels, points
+        #     # non-backed elements don't need to be reloaded: table, shapes, polygons
+        #
+        #     from spatialdata._io.read import _read_multiscale, _read_points
+        #
+        #     for element_type in ["images", "labels", "points"]:
+        #         names = list(self.__getattribute__(element_type).keys())
+        #         for name in names:
+        #             path = file_path / element_type / name
+        #             if element_type in ["images", "labels"]:
+        #                 raster_type = element_type if element_type == "labels" else "image"
+        #                 element = _read_multiscale(str(path), raster_type=raster_type)  # type: ignore[arg-type]
+        #             elif element_type == "points":
+        #                 element = _read_points(str(path))
+        #             else:
+        #                 raise ValueError(f"Unknown element type {element_type}")
+        #             self.__getattribute__(element_type)[name] = element
+        assert isinstance(self.path, str)
 
     @property
     def table(self) -> AnnData:
@@ -804,12 +1084,15 @@ class SpatialData:
                 descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
-                for k, v in attribute.items():
+                unsorted_elements = attribute.items()
+                sorted_elements = sorted(unsorted_elements, key=lambda x: natural_keys(x[0]))
+                for k, v in sorted_elements:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
                     if attr == "shapes":
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                     elif attr == "points":
+                        length: Optional[int] = None
                         if len(v.dask.layers) == 1:
                             name, layer = v.dask.layers.items().__iter__().__next__()
                             if "read-parquet" in name:
@@ -820,22 +1103,25 @@ class SpatialData:
                                 table = read_table(parquet_file)
                                 length = len(table)
                             else:
-                                length = len(v)
+                                # length = len(v)
+                                length = None
                         else:
-                            length = len(v)
-                        if length > 0:
-                            n = len(get_dims(v))
-                            dim_string = f"({n}D points)"
-                        else:
-                            dim_string = ""
+                            length = None
+
+                        n = len(get_dims(v))
+                        dim_string = f"({n}D points)"
+
                         assert len(v.shape) == 2
-                        shape_str = f"({length}, {v.shape[1]})"
-                        # if the above is slow, use this (this actually doesn't show the length of the dataframe)
-                        # shape_str = (
-                        #     "("
-                        #     + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
-                        #     + ")"
-                        # )
+                        if length is not None:
+                            shape_str = f"({length}, {v.shape[1]})"
+                        else:
+                            shape_str = (
+                                "("
+                                + ", ".join(
+                                    [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
+                                )
+                                + ")"
+                            )
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
                         if isinstance(v, SpatialImage):
@@ -872,18 +1158,33 @@ class SpatialData:
         from spatialdata._core._spatialdata_ops import get_transformation
 
         descr += "\nwith coordinate systems:\n"
-        for cs in self.coordinate_systems:
-            descr += f"▸ {cs}\n"
+        coordinate_systems = self.coordinate_systems.copy()
+        coordinate_systems.sort(key=natural_keys)
+        for i, cs in enumerate(coordinate_systems):
+            descr += f"▸ {cs!r}"
             gen = self._gen_elements()
-            elements_in_cs = []
+            elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
                 transformations = get_transformation(obj, get_all=True)
                 assert isinstance(transformations, dict)
-                coordinate_systems = transformations.keys()
-                if cs in coordinate_systems:
-                    elements_in_cs.append(f"/{k}/{name}")
+                target_css = transformations.keys()
+                if cs in target_css:
+                    if k not in elements_in_cs:
+                        elements_in_cs[k] = []
+                    elements_in_cs[k].append(name)
+            for element_names in elements_in_cs.values():
+                element_names.sort(key=natural_keys)
             if len(elements_in_cs) > 0:
-                descr += f'    with elements: {", ".join(elements_in_cs)}\n'
+                elements = ", ".join(
+                    [
+                        f"{element_name} ({element_type.capitalize()})"
+                        for element_type, element_names in elements_in_cs.items()
+                        for element_name in element_names
+                    ]
+                )
+                descr += f", with elements:\n        {elements}"
+            if i < len(coordinate_systems) - 1:
+                descr += "\n"
         return descr
 
     def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
@@ -904,32 +1205,50 @@ class QueryManager:
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata
 
-    def bounding_box(self, request: BoundingBoxRequest) -> SpatialData:
+    def bounding_box(
+        self,
+        axes: tuple[str, ...],
+        min_coordinate: ArrayLike,
+        max_coordinate: ArrayLike,
+        target_coordinate_system: str,
+        filter_table: bool = True,
+    ) -> SpatialData:
         """Perform a bounding box query on the SpatialData object.
 
         Parameters
         ----------
-        request
-            The bounding box request.
-
+        axes
+            The axes min_coordinate and max_coordinate refer to.
+        min_coordinate
+            The minimum coordinates of the bounding box.
+        max_coordinate
+            The maximum coordinates of the bounding box.
+        target_coordinate_system
+            The coordinate system the bounding box is defined in.
+        filter_table
+            If True, the table is filtered to only contain rows that are annotating regions contained within the bounding box.
         Returns
         -------
         The SpatialData object containing the requested data.
         Elements with no valid data are omitted.
         """
-        requested_points = _bounding_box_query_points_dict(points_dict=self._sdata.points, request=request)
-        requested_images = _bounding_box_query_image_dict(image_dict=self._sdata.images, request=request)
-        requested_shapes = _bounding_box_query_shapes_dict(shapes_dict=self._sdata.shapes, request=request)
+        from spatialdata._core._spatial_query import bounding_box_query
 
-        return SpatialData(
-            points=requested_points,
-            images=requested_images,
-            shapes=requested_shapes,
-            table=self._sdata.table,
+        return bounding_box_query(  # type: ignore[return-value]
+            self._sdata,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
         )
 
-    def __call__(self, request: BaseSpatialRequest) -> SpatialData:
+    def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
+        from spatialdata._core._spatial_query import BoundingBoxRequest
+
         if isinstance(request, BoundingBoxRequest):
-            return self.bounding_box(request)
+            # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
+            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")
