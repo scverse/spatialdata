@@ -1,15 +1,24 @@
 import itertools
+import os
+import tempfile
 
+import dask.dataframe as dd
 import dask_image.ndinterp
+import pytest
 import xarray
 import xarray.testing
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata import read_zarr
 from spatialdata._core.models import get_schema
 from spatialdata._core.transformations import Affine
-from spatialdata.utils import unpad_raster
+from spatialdata.utils import (
+    get_backing_files,
+    multiscale_spatial_image_from_data_tree,
+    unpad_raster,
+)
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
@@ -30,6 +39,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
     return transformed
 
 
+@pytest.mark.ci_only
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
         schema = get_schema(raster)
@@ -43,10 +53,10 @@ def test_unpad_raster(images, labels) -> None:
             raise ValueError(f"Unknown type: {type(raster)}")
         padded = _pad_raster(data.data, data.dims)
         if isinstance(raster, SpatialImage):
-            padded = schema.parse(padded, dims=data.dims)
+            padded = schema.parse(padded, dims=data.dims, c_coords=data.coords.get("c", None))
         elif isinstance(raster, MultiscaleSpatialImage):
             # some arbitrary scaling factors
-            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2])
+            padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2], c_coords=data.coords.get("c", None))
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)
@@ -66,3 +76,74 @@ def test_unpad_raster(images, labels) -> None:
                 raise e
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
+
+
+def test_backing_files_points(points):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "points0.zarr")
+        f1 = os.path.join(tmp_dir, "points1.zarr")
+        points.write(f0)
+        points.write(f1)
+        points0 = read_zarr(f0)
+        points1 = read_zarr(f1)
+        p0 = points0.points["points_0"]
+        p1 = points1.points["points_0"]
+        p2 = dd.concat([p0, p1], axis=0)
+        files = get_backing_files(p2)
+        expected_zarr_locations = [
+            os.path.realpath(os.path.join(f, "points/points_0/points.parquet")) for f in [f0, f1]
+        ]
+        assert set(files) == set(expected_zarr_locations)
+
+
+def test_backing_files_images(images):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "images0.zarr")
+        f1 = os.path.join(tmp_dir, "images1.zarr")
+        images.write(f0)
+        images.write(f1)
+        images0 = read_zarr(f0)
+        images1 = read_zarr(f1)
+
+        # single scale
+        im0 = images0.images["image2d"]
+        im1 = images1.images["image2d"]
+        im2 = im0 + im1
+        files = get_backing_files(im2)
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d")) for f in [f0, f1]]
+        assert set(files) == set(expected_zarr_locations)
+
+        # multiscale
+        im3 = images0.images["image2d_multiscale"]
+        im4 = images1.images["image2d_multiscale"]
+        im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
+        files = get_backing_files(im5)
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d_multiscale")) for f in [f0, f1]]
+        assert set(files) == set(expected_zarr_locations)
+
+
+# TODO: this function here below is very similar to the above, unify the test with the above or delete this todo
+def test_backing_files_labels(labels):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "labels0.zarr")
+        f1 = os.path.join(tmp_dir, "labels1.zarr")
+        labels.write(f0)
+        labels.write(f1)
+        labels0 = read_zarr(f0)
+        labels1 = read_zarr(f1)
+
+        # single scale
+        im0 = labels0.labels["labels2d"]
+        im1 = labels1.labels["labels2d"]
+        im2 = im0 + im1
+        files = get_backing_files(im2)
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d")) for f in [f0, f1]]
+        assert set(files) == set(expected_zarr_locations)
+
+        # multiscale
+        im3 = labels0.labels["labels2d_multiscale"]
+        im4 = labels1.labels["labels2d_multiscale"]
+        im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
+        files = get_backing_files(im5)
+        expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d_multiscale")) for f in [f0, f1]]
+        assert set(files) == set(expected_zarr_locations)

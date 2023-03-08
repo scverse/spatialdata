@@ -52,10 +52,8 @@ from tests.conftest import (
 
 RNG = default_rng()
 
-# should be set to False for pre-commit and CI; useful to set to True for are fixing/debugging tests
-SHORT_TESTS = False
 
-
+@pytest.mark.ci_only
 class TestModels:
     def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs) -> None:
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
@@ -64,8 +62,6 @@ class TestModels:
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
-        if SHORT_TESTS:
-            return
         if any([isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)]):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
@@ -118,8 +114,6 @@ class TestModels:
             raise ValueError(f"Unknown type {type(element)}")
 
     def _passes_validation_after_io(self, model: Any, element: Any, element_type: str) -> None:
-        if SHORT_TESTS:
-            return
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.zarr")
             d = {"element": element}

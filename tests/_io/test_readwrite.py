@@ -168,64 +168,142 @@ class TestReadWrite:
             s3 = SpatialData.read(f2)
             assert len(s3.table) == len(s2.table)
 
-
-def test_io_and_lazy_loading_points(points):
-    elem_name = list(points.points.keys())[0]
-    with tempfile.TemporaryDirectory() as td:
-        f = os.path.join(td, "data.zarr")
-        dask0 = points.points[elem_name]
-        points.write(f)
-        dask1 = points.points[elem_name]
-        assert all("read-parquet" not in key for key in dask0.dask.layers)
-        assert any("read-parquet" in key for key in dask1.dask.layers)
-
-
-def test_io_and_lazy_loading_raster(images, labels):
-    # addresses bug https://github.com/scverse/spatialdata/issues/117
-    sdatas = {"images": images, "labels": labels}
-    for k, sdata in sdatas.items():
-        d = sdata.__getattribute__(k)
-        elem_name = list(d.keys())[0]
+    def test_io_and_lazy_loading_points(self, points):
+        elem_name = list(points.points.keys())[0]
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
-            dask0 = d[elem_name].data
-            sdata.write(f)
-            dask1 = d[elem_name].data
-            assert all("from-zarr" not in key for key in dask0.dask.layers)
-            assert any("from-zarr" in key for key in dask1.dask.layers)
+            dask0 = points.points[elem_name]
+            points.write(f)
+            dask1 = points.points[elem_name]
+            assert all("read-parquet" not in key for key in dask0.dask.layers)
+            assert any("read-parquet" in key for key in dask1.dask.layers)
 
-
-def test_replace_transformation_on_disk_raster(images, labels):
-    sdatas = {"images": images, "labels": labels}
-    for k, sdata in sdatas.items():
-        d = sdata.__getattribute__(k)
-        # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
-        # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
-        for elem_name in d.keys():
-            kwargs = {k: {elem_name: d[elem_name]}}
-            single_sdata = SpatialData(**kwargs)
+    def test_io_and_lazy_loading_raster(self, images, labels):
+        # addresses bug https://github.com/scverse/spatialdata/issues/117
+        sdatas = {"images": images, "labels": labels}
+        for k, sdata in sdatas.items():
+            d = sdata.__getattribute__(k)
+            elem_name = list(d.keys())[0]
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
-                single_sdata.write(f)
+                dask0 = d[elem_name].data
+                sdata.write(f)
+                dask1 = d[elem_name].data
+                assert all("from-zarr" not in key for key in dask0.dask.layers)
+                assert any("from-zarr" in key for key in dask1.dask.layers)
+
+    def test_replace_transformation_on_disk_raster(self, images, labels):
+        sdatas = {"images": images, "labels": labels}
+        for k, sdata in sdatas.items():
+            d = sdata.__getattribute__(k)
+            # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
+            # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
+            for elem_name in d.keys():
+                kwargs = {k: {elem_name: d[elem_name]}}
+                single_sdata = SpatialData(**kwargs)
+                with tempfile.TemporaryDirectory() as td:
+                    f = os.path.join(td, "data.zarr")
+                    single_sdata.write(f)
+                    t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                    assert type(t0) == Identity
+                    set_transformation(
+                        single_sdata.__getattribute__(k)[elem_name],
+                        Scale([2.0], axes=("x",)),
+                        write_to_sdata=single_sdata,
+                    )
+                    t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                    assert type(t1) == Scale
+
+    def test_replace_transformation_on_disk_non_raster(self, shapes, points):
+        sdatas = {"shapes": shapes, "points": points}
+        for k, sdata in sdatas.items():
+            d = sdata.__getattribute__(k)
+            elem_name = list(d.keys())[0]
+            with tempfile.TemporaryDirectory() as td:
+                f = os.path.join(td, "data.zarr")
+                sdata.write(f)
                 t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t0) == Identity
                 set_transformation(
-                    single_sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=single_sdata
+                    sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata
                 )
                 t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t1) == Scale
 
+    def test_overwrite_files_with_backed_data(self, full_sdata):
+        # addressing https://github.com/scverse/spatialdata/issues/137
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = os.path.join(tmpdir, "data.zarr")
+            full_sdata.write(f)
+            with pytest.raises(ValueError):
+                full_sdata.write(f, overwrite=True)
 
-def test_replace_transformation_on_disk_non_raster(shapes, points):
-    sdatas = {"shapes": shapes, "points": points}
-    for k, sdata in sdatas.items():
-        d = sdata.__getattribute__(k)
-        elem_name = list(d.keys())[0]
-        with tempfile.TemporaryDirectory() as td:
-            f = os.path.join(td, "data.zarr")
-            sdata.write(f)
-            t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
-            assert type(t0) == Identity
-            set_transformation(sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
-            t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
-            assert type(t1) == Scale
+        # support for overwriting backed sdata has been temporarily removed
+        # with tempfile.TemporaryDirectory() as tmpdir:
+        #     f = os.path.join(tmpdir, "data.zarr")
+        #     full_sdata.write(f)
+        #     full_sdata.write(f, overwrite=True)
+        #     print(full_sdata)
+        #
+        #     sdata2 = SpatialData(
+        #         images=full_sdata.images,
+        #         labels=full_sdata.labels,
+        #         points=full_sdata.points,
+        #         shapes=full_sdata.shapes,
+        #         table=full_sdata.table,
+        #     )
+        #     sdata2.write(f, overwrite=True)
+
+    def test_overwrite_onto_non_zarr_file(self, full_sdata):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f0 = os.path.join(tmpdir, "test.txt")
+            with open(f0, "w"):
+                with pytest.raises(ValueError):
+                    full_sdata.write(f0)
+                with pytest.raises(ValueError):
+                    full_sdata.write(f0, overwrite=True)
+            f1 = os.path.join(tmpdir, "test.zarr")
+            os.mkdir(f1)
+            with pytest.raises(ValueError):
+                full_sdata.write(f1)
+
+    def test_incremental_io_with_backed_elements(self, full_sdata):
+        # addressing https://github.com/scverse/spatialdata/issues/137
+        # we test also the non-backed case so that if we switch to the backed version in the future we already have the tests
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = os.path.join(tmpdir, "data.zarr")
+            full_sdata.write(f)
+
+            e = full_sdata.images.values().__iter__().__next__()
+            full_sdata.add_image("new_images", e, overwrite=True)
+            # support for overwriting backed images has been temporarily removed
+            with pytest.raises(ValueError):
+                full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
+
+            e = full_sdata.labels.values().__iter__().__next__()
+            full_sdata.add_labels("new_labels", e, overwrite=True)
+            # support for overwriting backed labels has been temporarily removed
+            with pytest.raises(ValueError):
+                full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
+
+            e = full_sdata.points.values().__iter__().__next__()
+            full_sdata.add_points("new_points", e, overwrite=True)
+            # support for overwriting backed points has been temporarily removed
+            with pytest.raises(ValueError):
+                full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
+
+            e = full_sdata.shapes.values().__iter__().__next__()
+            full_sdata.add_shapes("new_shapes", e, overwrite=True)
+            full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
+
+            print(full_sdata)
+
+            f2 = os.path.join(tmpdir, "data2.zarr")
+            sdata2 = SpatialData(table=full_sdata.table.copy())
+            sdata2.write(f2)
+            del full_sdata.table
+            full_sdata.table = sdata2.table
+            full_sdata.write(f2, overwrite=True)
+
+            print(full_sdata)

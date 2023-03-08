@@ -342,7 +342,7 @@ def write_table(
 
 def _iter_multiscale(
     data: MultiscaleSpatialImage,
-    attr: str,
+    attr: Optional[str],
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
     for i in data.keys():
@@ -351,4 +351,7 @@ def _iter_multiscale(
         if len(names) != 1:
             raise ValueError(f"Invalid variable name: `{names}`.")
     name: str = next(iter(names))
-    return [getattr(data[i][name], attr) for i in data.keys()]
+    if attr is not None:
+        return [getattr(data[i][name], attr) for i in data.keys()]
+    else:
+        return [data[i][name] for i in data.keys()]
