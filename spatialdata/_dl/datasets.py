@@ -27,7 +27,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units: float,
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
-        data_dict_transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
+        transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
     ):
         # TODO: we can extend this code to support:
         #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
@@ -36,7 +36,7 @@ class ImageTilesDataset(Dataset):
         self.regions_to_images = regions_to_images
         self.tile_dim_in_units = tile_dim_in_units
         self.tile_dim_in_pixels = tile_dim_in_pixels
-        self.data_dict_transform = data_dict_transform
+        self.transform = transform
         self.target_coordinate_system = target_coordinate_system
 
         self.n_spots_dict = self._compute_n_spots_dict()
@@ -109,6 +109,7 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=self.target_coordinate_system,
             target_width=self.tile_dim_in_pixels,
         )
+
         # TODO: as explained in the TODO in the __init__(), we want to let the user also use the bounding box query instaed of the rasterization
         #  the return function of this function would change, so we need to decide if instead having an extra Tile dataset class
         # from spatialdata._core._spatial_query import BoundingBoxRequest

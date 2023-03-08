@@ -48,7 +48,7 @@ sdata
 ##
 ds = ImageTilesDataset(
     sdata=sdata,
-    regions_to_images={"/shapes/spots": "/images/image"},
+    regions_to_images={"spots": "image"},
     tile_dim_in_units=10,
     tile_dim_in_pixels=32,
     target_coordinate_system="global",
@@ -70,7 +70,7 @@ def plot_sdata_dataset(ds: ImageTilesDataset) -> None:
 
     for i, (image, region, index) in enumerate(ds):
         axs[i].imshow(image.transpose("y", "x", "c"))
-        axs[i].set_title(f"region: {region}, index: {index}")
+        axs[i].set_title(f"{region}, {index}")
     plt.show()
 
 

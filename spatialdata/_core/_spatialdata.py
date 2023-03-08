@@ -741,7 +741,7 @@ class SpatialData:
     def add_shapes(
         self,
         name: str,
-        shapes: AnnData,
+        shapes: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
         """

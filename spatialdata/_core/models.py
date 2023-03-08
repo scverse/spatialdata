@@ -413,7 +413,7 @@ class ShapesModel:
         if not isinstance(gc, GeometryCollection):
             raise ValueError(f"`{data}` does not contain a `GeometryCollection`.")
         geo_df = GeoDataFrame({"geometry": gc.geoms})
-        if isinstance(geo_df["geometry"][0], Point):
+        if isinstance(geo_df["geometry"].iloc[0], Point):
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
