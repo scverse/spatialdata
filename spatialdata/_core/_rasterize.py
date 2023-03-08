@@ -98,7 +98,7 @@ def _compute_target_dimensions(
             ]
         )
         == 1
-    ), "you must specify only one of: target_unit_to_pixels, target_width, target_height, target_depth" 
+    ), "you must specify only one of: target_unit_to_pixels, target_width, target_height, target_depth"
     assert set(spatial_axes) == {"x", "y"} or set(spatial_axes) == {"x", "y", "z"}
     if "z" not in spatial_axes:
         assert target_depth is None, "you cannot specify a target depth for 2D data"
