@@ -25,6 +25,7 @@ from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata._core.core_utils import SpatialElement, ValidAxis_t
+    from spatialdata.utils import Number
 
 __all__ = [
     "BaseTransformation",
@@ -36,8 +37,6 @@ __all__ = [
     "Sequence",
 ]
 
-# I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
-Number = Union[int, float]
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
 
@@ -128,6 +127,10 @@ class BaseTransformation(ABC):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         pass
 
+    def to_affine(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> Affine:
+        affine_matrix = self.to_affine_matrix(input_axes, output_axes)
+        return Affine(affine_matrix, input_axes, output_axes)
+
     # order of the composition: self is applied first, then the transformation passed as argument
     def compose_with(self, transformations: Union[BaseTransformation, list[BaseTransformation]]) -> BaseTransformation:
         if isinstance(transformations, BaseTransformation):
@@ -139,14 +142,6 @@ class BaseTransformation(ABC):
     #     if not isinstance(other, BaseTransformation):
     #         raise NotImplementedError("Cannot compare BaseTransformation with other types")
     #     return self.to_dict() == other.to_dict()
-
-    @staticmethod
-    def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
-        if isinstance(array, list):
-            array = np.array(array)
-        if array.dtype != float:
-            array = array.astype(float)
-        return array
 
     # helper functions to transform coordinates; we use an internal representation based on xarray.DataArray
     #
@@ -391,7 +386,9 @@ class MapAxis(BaseTransformation):
 
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
-        self.translation = self._parse_list_into_array(translation)
+        from spatialdata.utils import _parse_list_into_array
+
+        self.translation = _parse_list_into_array(translation)
         self.validate_axes(axes)
         self.axes = axes
         assert len(self.translation) == len(self.axes)
@@ -476,7 +473,9 @@ class Translation(BaseTransformation):
 
 class Scale(BaseTransformation):
     def __init__(self, scale: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
-        self.scale = self._parse_list_into_array(scale)
+        from spatialdata.utils import _parse_list_into_array
+
+        self.scale = _parse_list_into_array(scale)
         self.validate_axes(axes)
         self.axes = axes
         assert len(self.scale) == len(self.axes)
@@ -561,11 +560,13 @@ class Affine(BaseTransformation):
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:
+        from spatialdata.utils import _parse_list_into_array
+
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)
         self.input_axes = input_axes
         self.output_axes = output_axes
-        self.matrix = self._parse_list_into_array(matrix)
+        self.matrix = _parse_list_into_array(matrix)
         assert self.matrix.dtype == float
         if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
             raise ValueError("Invalid shape for affine matrix.")
