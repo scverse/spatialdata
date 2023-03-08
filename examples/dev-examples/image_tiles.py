@@ -52,7 +52,6 @@ ds = ImageTilesDataset(
     tile_dim_in_units=10,
     tile_dim_in_pixels=32,
     target_coordinate_system="global",
-    data_dict_transform=None,
 )
 
 print(f"this dataset as {len(ds)} items")

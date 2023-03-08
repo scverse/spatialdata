@@ -1,4 +1,5 @@
 import numpy as np
+from spatial_image import SpatialImage
 
 from spatialdata import Labels2DModel
 from spatialdata._core._spatial_query import bounding_box_query
@@ -10,7 +11,7 @@ from spatialdata._core._spatialdata_ops import (
 from spatialdata._core.transformations import Affine, Scale, Sequence
 
 
-def _visualize_crop_affine_labels_2d():
+def _visualize_crop_affine_labels_2d() -> None:
     """
     This examples show how the bounding box spatial query works for data that has been rotated.
 
@@ -96,6 +97,7 @@ def _visualize_crop_affine_labels_2d():
     if labels_result_rotated is not None:
         d["2 cropped_rotated"] = labels_result_rotated
 
+        assert isinstance(labels_result_rotated, SpatialImage)
         transform = labels_result_rotated.attrs["transform"]["rotated"]
         transform_rotated_processed = transform.transform(labels_result_rotated, maintain_positioning=True)
         transform_rotated_processed_recropped = bounding_box_query(

@@ -32,6 +32,7 @@ from spatialdata._core.models import (
     get_schema,
 )
 from spatialdata._core.transformations import (
+    Affine,
     BaseTransformation,
     Scale,
     Sequence,
@@ -335,12 +336,12 @@ def _get_xarray_data_to_rasterize(
 
 
 def _get_corrected_affine_matrix(
-    data: SpatialImage | MultiscaleSpatialImage,
+    data: Union[SpatialImage, MultiscaleSpatialImage],
     axes: tuple[str, ...],
     min_coordinate: ArrayLike,
     max_coordinate: ArrayLike,
     target_coordinate_system: str,
-) -> tuple[ArrayLike, tuple[str, ...]]:
+) -> tuple[Affine, tuple[str, ...]]:
     """
     TODO: docstring
     """
