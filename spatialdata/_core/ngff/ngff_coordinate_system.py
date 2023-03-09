@@ -253,7 +253,7 @@ def _get_spatial_axes(
     coordinate_system
         The coordinate system to get the spatial axes from.
 
-    Return
+    Returns
     -------
     The names of the spatial axes.
     """
