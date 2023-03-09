@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 
 from spatialdata import SpatialData
 from spatialdata._core._rasterize import rasterize
+from spatialdata._core._spatialdata_ops import get_transformation
 from spatialdata._core.core_utils import get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -17,6 +18,8 @@ from spatialdata._core.models import (
     ShapesModel,
     get_schema,
 )
+from spatialdata._core.transformations import BaseTransformation
+from spatialdata.utils import affine_matrix_multiplication
 
 
 class ImageTilesDataset(Dataset):
@@ -90,15 +93,19 @@ class ImageTilesDataset(Dataset):
             region = regions.iloc[region_index]
             # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
             # it directly
-            centroid = region.geometry.coords._coords[0]
+            centroid = np.atleast_2d(region.geometry.coords._coords[0])
+            t = get_transformation(regions, self.target_coordinate_system)
+            assert isinstance(t, BaseTransformation)
+            aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
+            transformed_centroid = np.squeeze(affine_matrix_multiplication(aff, centroid), 0)
         elif isinstance(regions, SpatialImage):
             raise NotImplementedError("labels not supported yet")
         elif isinstance(regions, MultiscaleSpatialImage):
             raise NotImplementedError("labels not supported yet")
         else:
             raise ValueError("element must be shapes or labels")
-        min_coordinate = np.array(centroid) - self.tile_dim_in_units / 2
-        max_coordinate = np.array(centroid) + self.tile_dim_in_units / 2
+        min_coordinate = np.array(transformed_centroid) - self.tile_dim_in_units / 2
+        max_coordinate = np.array(transformed_centroid) + self.tile_dim_in_units / 2
 
         raster = self.sdata[self.regions_to_images[regions_name]]
         tile = rasterize(
