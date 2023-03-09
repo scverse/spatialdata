@@ -127,10 +127,10 @@ class NgffBaseTransformation(ABC):
         Notes
         -------
         Use of this helper function.
-        A transformation is saved to disk as a json string. When loaded this is represented by a dictionary. 
-        We allow transformations to be defined even when the input and output coordinate systems are not 
-        specified (for instance the transformations inside a Sequence transformation don't necessarily 
-        specity the input and output coordinate system). This helper function puts the input and output 
+        A transformation is saved to disk as a json string. When loaded this is represented by a dictionary.
+        We allow transformations to be defined even when the input and output coordinate systems are not
+        specified (for instance the transformations inside a Sequence transformation don't necessarily
+        specity the input and output coordinate system). This helper function puts the input and output
         coordinate system back into the dict.
         """
         if self.input_coordinate_system is not None:
@@ -150,7 +150,7 @@ class NgffBaseTransformation(ABC):
     @abstractmethod
     def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """
-        Get the input and output axes of the coordinate systems specified for the transformation, and check if they are 
+        Get the input and output axes of the coordinate systems specified for the transformation, and check if they are
         compatible with the transformation.
         """
         pass
@@ -162,7 +162,7 @@ class NgffBaseTransformation(ABC):
 
         Notes
         -------
-        This function will check if the dimensionality of the input and output coordinate systems of the 
+        This function will check if the dimensionality of the input and output coordinate systems of the
         transformation are compatible with the given points.
         """
         pass
@@ -774,7 +774,7 @@ class NgffSequence(NgffBaseTransformation):
         One of a series of helper functions to infer the input and output axes of the transformations composing a Sequence NGFF transformation.
 
         The NGFF specification don't require all the input and output coordinate systems of a sequence transformation to be specified.
-        To make the handling of Sequence transformations easier, this function populate such values. When not needed anymore (e.g. right after 
+        To make the handling of Sequence transformations easier, this function populate such values. When not needed anymore (e.g. right after
         applying the transformation) these set of functions remove the added coordinate systems, thus leaving the initial object invariate.
         """
         assert isinstance(t.input_coordinate_system, NgffCoordinateSystem)
