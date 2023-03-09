@@ -333,7 +333,7 @@ def _(
 @bounding_box_query.register(SpatialImage)
 @bounding_box_query.register(MultiscaleSpatialImage)
 def _(
-    image: SpatialImage,
+    image: Union[SpatialImage, MultiscaleSpatialImage],
     axes: tuple[str, ...],
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
