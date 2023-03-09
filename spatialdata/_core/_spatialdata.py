@@ -236,7 +236,8 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
-        """Adds a labels element to the SpatialData object
+        """
+        Adds a labels element to the SpatialData object
 
         Parameters
         ----------
@@ -439,7 +440,8 @@ class SpatialData:
                 return False
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
-        """Write transformations to disk for an element
+        """
+        Write transformations to disk for an element
 
         Parameters
         ----------

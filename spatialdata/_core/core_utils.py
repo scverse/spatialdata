@@ -49,17 +49,17 @@ MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 # mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
-    """Check if the object is an SpatialElement
+    """
+    Check if the object has the type of a SpatialElement
 
     Parameters
     ----------
-    e : Any
+    e
         The input object
 
     Returns
     -------
-    bool
-        Whether the object is an SpatialElement (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
+    Whether the object is a SpatialElement (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
     """
     return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
 
@@ -76,29 +76,31 @@ def _validate_mapping_to_coordinate_system_type(transformations: Optional[Mappin
 
 
 def validate_axis_name(axis: ValidAxis_t) -> None:
-    """Check if the axis name is valid
+    """
+    Check if the axis name is valid
 
     Parameters
     ----------
-    axis : ValidAxis_t
+    axis
         The axis name
 
     Raises
     ------
     TypeError
-        If not in ["c", "x", "y", "z"]
+        If the axis name not in ["c", "x", "y", "z"]
     """
     if axis not in ["c", "x", "y", "z"]:
         raise TypeError(f"Invalid axis: {axis}")
 
 
 def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
-    """Check if the axes' names are valid
+    """
+    Check if the names of the axes are valid
 
     Parameters
     ----------
-    axis : ValidAxis_t
-        List of the axes' names
+    axis
+        The names of the axes
 
     Raises
     ------
@@ -112,17 +114,17 @@ def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
 
 
 def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
-    """Get the spatial axes of interest
+    """
+    Get the spatial axes of interest
 
     Parameters
     ----------
-    axes : tuple[ValidAxis_t, ...]
-        Should be a subset of ['x', 'y', 'z']
+    axes
+        Should be a subset of ['x', 'y', 'z', 'c']
 
     Returns
     -------
-    tuple[ValidAxis_t, ...]
-        The spatial axes
+    The spatial axes, i.e. the input axes but without 'c'
     """
     validate_axes(axes)
     return tuple(ax for ax in axes if ax in [X, Y, Z])
@@ -283,11 +285,12 @@ _DEFAULT_COORDINATE_SYSTEM = {
 
 
 def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem:
-    """Get the default coordinate system
+    """
+    Get the default coordinate system
 
     Parameters
     ----------
-    dims : tuple[str, ...]
+    dims
         The dimension names to get the corresponding axes of the defeault coordinate system for.
         Names should be in ['x', 'y', 'z', 'c'].
 
