@@ -218,10 +218,12 @@ def test_locate_spatial_element(full_sdata):
 def test_get_item(points):
     assert id(points["points_0"]) == id(points.points["points_0"])
 
-    # this should be illegal: https://github.com/scverse/spatialdata/issues/176
-    points.images["points_0"] = Image2DModel.parse(np.array([[[1]]]), dims=("c", "y", "x"))
-    with pytest.raises(AssertionError):
-        _ = points["points_0"]
+    # removed this test after this change: https://github.com/scverse/spatialdata/pull/145#discussion_r1133122720
+    # to be uncommented/removed/modified after this is closed: https://github.com/scverse/spatialdata/issues/186
+    # # this should be illegal: https://github.com/scverse/spatialdata/issues/176
+    # points.images["points_0"] = Image2DModel.parse(np.array([[[1]]]), dims=("c", "y", "x"))
+    # with pytest.raises(AssertionError):
+    #     _ = points["points_0"]
 
     with pytest.raises(KeyError):
         _ = points["not_present"]
