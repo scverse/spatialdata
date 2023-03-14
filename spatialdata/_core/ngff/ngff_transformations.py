@@ -36,7 +36,7 @@ NGFF_TRANSFORMATIONS: dict[str, type[NgffBaseTransformation]] = {}
 
 
 class NgffBaseTransformation(ABC):
-    """Base class for all transformations."""
+    """Base class for all the transformations defined by the NGFF specification."""
 
     input_coordinate_system: Optional[NgffCoordinateSystem] = None
     output_coordinate_system: Optional[NgffCoordinateSystem] = None
@@ -65,7 +65,7 @@ class NgffBaseTransformation(ABC):
 
     @abstractmethod
     def _repr_transformation_description(self, indent: int = 0) -> str:
-        pass
+        """Helper function to compute the __repr__ of the transformation."""
 
     def _repr_indent(self, indent: int = 0) -> str:
         if isinstance(self, NgffIdentity):
@@ -83,8 +83,14 @@ class NgffBaseTransformation(ABC):
 
     @classmethod
     def from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
-        pass
+        """
+        Initialize a transformation from the Python dict of its json representation.
 
+        Parameters
+        ----------
+        d
+            the Python dict representing the transformation.
+        """
         # d = MappingProxyType(d)
         type = d["type"]
         # MappingProxyType is readonly
@@ -103,9 +109,28 @@ class NgffBaseTransformation(ABC):
 
     @abstractmethod
     def to_dict(self) -> Transformation_t:
-        pass
+        """
+        Return the Python dict representation of the transformation.
+        """
 
     def _update_dict_with_input_output_cs(self, d: Transformation_t) -> None:
+        """
+        Update a transformation dictionary with the transformation's input and output coordinate systems.
+
+        Parameters
+        ----------
+        d
+            The dictionary to be updated.
+
+        Notes
+        -------
+        Use of this helper function.
+        A transformation is saved to disk as a json string. When loaded this is represented by a dictionary.
+        We allow transformations to be defined even when the input and output coordinate systems are not
+        specified (for instance the transformations inside a Sequence transformation don't necessarily
+        specity the input and output coordinate system). This helper function puts the input and output
+        coordinate system back into the dict.
+        """
         if self.input_coordinate_system is not None:
             d["input"] = self.input_coordinate_system
             if isinstance(d["input"], NgffCoordinateSystem):
@@ -117,21 +142,41 @@ class NgffBaseTransformation(ABC):
 
     @abstractmethod
     def inverse(self) -> NgffBaseTransformation:
-        pass
+        """Return the inverse of the transformation."""
 
     @abstractmethod
     def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        pass
+        """
+        Get the input and output axes of the coordinate systems specified for the transformation, and check if they are
+        compatible with the transformation.
+        """
 
     @abstractmethod
     def transform_points(self, points: ArrayLike) -> ArrayLike:
-        pass
+        """
+        Transform points (coordinates).
+
+        Notes
+        -------
+        This function will check if the dimensionality of the input and output coordinate systems of the
+        transformation are compatible with the given points.
+        """
 
     @abstractmethod
     def to_affine(self) -> NgffAffine:
-        pass
+        """Convert the transformation to an affine transformation, whenever the conversion can be made."""
 
     def _validate_transform_points_shapes(self, input_size: int, points_shape: tuple[int, ...]) -> None:
+        """
+        Validate if the shape of the points (coordinats to be transformed) are consistent with the input size of the transformation.
+
+        Parameters
+        ----------
+        input_size
+            The input size.
+        points_shape
+            The points' shape
+        """
         if len(points_shape) != 2 or points_shape[1] != input_size:
             raise ValueError(
                 f"points must be a tensor of shape (n, d), where n is the number of points and d is the "
@@ -140,6 +185,22 @@ class NgffBaseTransformation(ABC):
 
     # order of the composition: self is applied first, then the transformation passed as argument
     def compose_with(self, transformation: NgffBaseTransformation) -> NgffBaseTransformation:
+        """
+        Compose the transfomation object with another transformation
+
+        Parameters
+        ----------
+        transformation
+            The transformation to compose with.
+
+        Returns
+        -------
+        The compoesed transformation.
+
+        Notes
+        -------
+        Self is applied first, then the transformation passed as argument.
+        """
         return NgffSequence([self, transformation])
 
     def __eq__(self, other: Any) -> bool:
@@ -150,6 +211,7 @@ class NgffBaseTransformation(ABC):
     def _get_axes_from_coordinate_systems(
         self,
     ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Get the input and output coordinate systems' axes"""
         if not isinstance(self.input_coordinate_system, NgffCoordinateSystem):
             raise ValueError("Input coordinate system not specified")
         if not isinstance(self.output_coordinate_system, NgffCoordinateSystem):
@@ -160,6 +222,7 @@ class NgffBaseTransformation(ABC):
 
     @staticmethod
     def _parse_list_into_array(array: Union[list[Number], list[list[Number]], ArrayLike]) -> ArrayLike:
+        """Parse a list or numbers, or a list of lists of numbers, into a float numpy array."""
         if isinstance(array, list):
             array = np.array(array)
         if array.dtype != float:
@@ -218,11 +281,23 @@ class NgffBaseTransformation(ABC):
 # For a primer you can look here: https://en.wikipedia.org/wiki/Affine_space#Relation_to_projective_spaces
 # For more information please consult a linear algebra textbook.
 class NgffIdentity(NgffBaseTransformation):
+    """The Identity transformation from the NGFF specification."""
+
     def __init__(
         self,
         input_coordinate_system: Optional[NgffCoordinateSystem] = None,
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
+        """
+        Init the NgffIdentity object.
+
+        Parameters
+        ----------
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
+        """
         super().__init__(input_coordinate_system, output_coordinate_system)
 
     # TODO: remove type: ignore[valid-type] when https://github.com/python/mypy/pull/14041 is merged
@@ -271,12 +346,25 @@ class NgffIdentity(NgffBaseTransformation):
 #     def __init__(self) -> None:
 #         raise NotImplementedError()
 class NgffMapAxis(NgffBaseTransformation):
+    """The MapAxis transformation from the NGFF specification."""
+
     def __init__(
         self,
         map_axis: dict[str, str],
         input_coordinate_system: Optional[NgffCoordinateSystem] = None,
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
+        """
+        Init the NgffMapAxis object.
+        Parameters
+        ----------
+        map_axis
+            A dictionary mapping the output axes (keys) to the input axes (values).
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
+        """
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.map_axis = map_axis
 
@@ -349,6 +437,8 @@ class NgffMapAxis(NgffBaseTransformation):
 
 
 class NgffTranslation(NgffBaseTransformation):
+    """The Translation transformation from the NGFF specification."""
+
     def __init__(
         self,
         translation: Union[ArrayLike, list[Number]],
@@ -356,7 +446,15 @@ class NgffTranslation(NgffBaseTransformation):
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
         """
-        class for storing translation transformations.
+        Init the NgffTranslation object.
+        Parameters
+        ----------
+        translation
+            A list of numbers or a vector specifying the translation along each axis.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
         """
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.translation = self._parse_list_into_array(translation)
@@ -406,6 +504,8 @@ class NgffTranslation(NgffBaseTransformation):
 
 
 class NgffScale(NgffBaseTransformation):
+    """The Scale transformation from the NGFF specification."""
+
     def __init__(
         self,
         scale: Union[ArrayLike, list[Number]],
@@ -413,7 +513,15 @@ class NgffScale(NgffBaseTransformation):
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
         """
-        class for storing scale transformations.
+        Init the NgffScale object.
+        Parameters
+        ----------
+        scale
+            A list of numbers or a vector specifying the scale along each axis.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
         """
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.scale = self._parse_list_into_array(scale)
@@ -465,6 +573,8 @@ class NgffScale(NgffBaseTransformation):
 
 
 class NgffAffine(NgffBaseTransformation):
+    """The Affine transformation from the NGFF specification."""
+
     def __init__(
         self,
         affine: Union[ArrayLike, list[list[Number]]],
@@ -472,7 +582,15 @@ class NgffAffine(NgffBaseTransformation):
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
         """
-        class for storing affine transformations.
+        Init the NgffAffine object.
+        Parameters
+        ----------
+        affine
+            A list of lists of numbers or a matrix specifying the affine transformation.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
         """
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.affine = self._parse_list_into_array(affine)
@@ -528,6 +646,16 @@ class NgffAffine(NgffBaseTransformation):
     def _affine_matrix_from_input_and_output_axes(
         cls, input_axes: tuple[str, ...], output_axes: tuple[str, ...]
     ) -> ArrayLike:
+        """
+        computes a permutation matrix to match the input and output axes.
+
+        Parameters
+        ----------
+        input_axes
+            the input axes.
+        output_axes
+            the output axes.
+        """
         from spatialdata._core.core_utils import C, X, Y, Z
 
         assert all([ax in (X, Y, Z, C) for ax in input_axes])
@@ -555,6 +683,8 @@ class NgffAffine(NgffBaseTransformation):
 
 
 class NgffRotation(NgffBaseTransformation):
+    """The Rotation transformation from the NGFF specification."""
+
     def __init__(
         self,
         rotation: Union[ArrayLike, list[Number]],
@@ -562,7 +692,15 @@ class NgffRotation(NgffBaseTransformation):
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
         """
-        class for storing rotation transformations.
+        Init the NgffRotation object.
+        Parameters
+        ----------
+        rotation
+            A list of numbers specifying the rotation transformation.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
         """
         super().__init__(input_coordinate_system, output_coordinate_system)
         self.rotation = self._parse_list_into_array(rotation)
@@ -620,12 +758,26 @@ class NgffRotation(NgffBaseTransformation):
 
 
 class NgffSequence(NgffBaseTransformation):
+    """The Sequence transformation from the NGFF specification."""
+
     def __init__(
         self,
         transformations: list[NgffBaseTransformation],
         input_coordinate_system: Optional[NgffCoordinateSystem] = None,
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
+        """
+        Init the NgffSequence object.
+
+        Parameters
+        ----------
+        transformations
+            The transformations which compose the sequence.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
+        """
         super().__init__(input_coordinate_system, output_coordinate_system)
         # we can decide to treat an empty sequence as an NgffIdentity if we need to
         assert len(transformations) > 0
@@ -684,6 +836,13 @@ class NgffSequence(NgffBaseTransformation):
     def _inferring_cs_infer_output_coordinate_system(
         t: NgffBaseTransformation,
     ) -> Optional[NgffCoordinateSystem]:
+        """
+        One of a series of helper functions to infer the input and output axes of the transformations composing a Sequence NGFF transformation.
+
+        The NGFF specification don't require all the input and output coordinate systems of a sequence transformation to be specified.
+        To make the handling of Sequence transformations easier, this function populate such values. When not needed anymore (e.g. right after
+        applying the transformation) these set of functions remove the added coordinate systems, thus leaving the initial object invariate.
+        """
         assert isinstance(t.input_coordinate_system, NgffCoordinateSystem)
         if isinstance(t, NgffAffine):
             return None
@@ -713,6 +872,7 @@ class NgffSequence(NgffBaseTransformation):
     def _inferring_cs_pre_action(
         t: NgffBaseTransformation, latest_output_cs: NgffCoordinateSystem
     ) -> tuple[NgffCoordinateSystem, Optional[NgffCoordinateSystem], Optional[NgffCoordinateSystem]]:
+        """See _inferring_cs_infer_output_coordinate_system()"""
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
@@ -745,6 +905,7 @@ class NgffSequence(NgffBaseTransformation):
         input_cs: Optional[NgffCoordinateSystem],
         output_cs: Optional[NgffCoordinateSystem],
     ) -> None:
+        """See _inferring_cs_infer_output_coordinate_system()"""
         # if the transformation t was passed without input or output coordinate systems (and so we had to infer
         # them), we now restore the original state of the transformation
         if input_cs is None:
@@ -893,12 +1054,27 @@ class NgffSequence(NgffBaseTransformation):
 #     def inverse(self) -> NgffBaseTransformation:
 #         return self._inverse
 class NgffByDimension(NgffBaseTransformation):
+    """The ByDimension transformation from the NGFF specification."""
+
     def __init__(
         self,
         transformations: list[NgffBaseTransformation],
         input_coordinate_system: Optional[NgffCoordinateSystem] = None,
         output_coordinate_system: Optional[NgffCoordinateSystem] = None,
     ) -> None:
+        """
+        Init the ByDimension object.
+
+        Parameters
+        ----------
+        transformations
+            A list of transformations, whose set of output coordinate systems partition the output coordinate system of
+            the ByDimension transformation.
+        input_coordinate_system
+            The input coordinate system of the transformation.
+        output_coordinate_system
+            The output coordinate system of the transformation.
+        """
         super().__init__(input_coordinate_system, output_coordinate_system)
         assert len(transformations) > 0
         self.transformations = transformations

@@ -205,6 +205,18 @@ class SpatialData:
     def _add_image_in_memory(
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        """
+        Adds an image element to the SpatialData object
+
+        Parameters
+        ----------
+        name
+            name of the image
+        image
+            the image element to be added
+        overwrite
+            whether to overwrite the image if the name already exists.
+        """
         self._validate_unique_element_names(
             list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
         )
@@ -224,6 +236,18 @@ class SpatialData:
     def _add_labels_in_memory(
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
+        """
+        Adds a labels element to the SpatialData object
+
+        Parameters
+        ----------
+        name
+            name of the labels
+        labels
+            the labels element to be added
+        overwrite
+            whether to overwrite the labels if the name already exists.
+        """
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
         )
@@ -241,6 +265,18 @@ class SpatialData:
             raise ValueError(f"Only yx and zyx labels supported, got {ndim} dimensions")
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
+        """
+        Adds a shapes element to the SpatialData object
+
+        Parameters
+        ----------
+        name
+            name of the shapes
+        shapes
+            the shapes element to be added
+        overwrite
+            whether to overwrite the shapes if the name already exists.
+        """
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
         )
@@ -251,6 +287,18 @@ class SpatialData:
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
+        """
+        Adds a points element to the SpatialData object
+
+        Parameters
+        ----------
+        name
+            name of the points element
+        points
+            the points to be added
+        overwrite
+            whether to overwrite the points if the name already exists.
+        """
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
         )
@@ -266,6 +314,20 @@ class SpatialData:
 
     # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
+        """
+        Get the group for an elemnt, creates a new one if the element doesn't exist
+
+        Parameters
+        ----------
+        name
+            name of the element
+        element_type
+            type of the element. Should be in ["images", "labels", "points", "polygons", "shapes"].
+
+        Returns
+        -------
+        either the existing Zarr sub-group or a new one
+        """
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "polygons", "shapes"]
@@ -315,6 +377,24 @@ class SpatialData:
             return root
 
     def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
+        """
+        Find the SpatialElement within the SpatialData object
+
+        Parameters
+        ----------
+        element
+            The queried SpatialElement
+
+
+        Returns
+        -------
+        name and type of the element
+
+        Raises
+        ------
+        ValueError
+            the element is not found or found multiple times in the SpatialData object
+        """
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
         found_element_name: list[str] = []
@@ -360,6 +440,14 @@ class SpatialData:
                 return False
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
+        """
+        Write transformations to disk for an element
+
+        Parameters
+        ----------
+        element
+            The SpatialElement object for which the transformations to be written
+        """
         from spatialdata._core._spatialdata_ops import get_transformation
 
         transformations = get_transformation(element, get_all=True)
