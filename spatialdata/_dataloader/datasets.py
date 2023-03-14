@@ -1,5 +1,3 @@
-from typing import Callable, Optional
-
 import numpy as np
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -30,8 +28,28 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units: float,
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
-        transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
+        # unused at the moment, see
+        # transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
     ):
+        """
+        Torch Dataset that returns image tiles around regions from a SpatialData object.
+
+        Parameters
+        ----------
+        sdata
+            The SpatialData object containing the regions and images from which to extract the tiles from.
+        regions_to_images
+            A dictionary mapping the regions element key we want to extract the tiles around to the images element key
+            we want to get the image data from.
+        tile_dim_in_units
+            The dimension of the requested tile in the units of the target coordinate system. This specifies the extent
+            of the image each tile is querying. This is not related he size in pixel of each returned tile.
+        tile_dim_in_pixels
+            The dimension of the requested tile in pixels. This specifies the size of the output tiles that we will get,
+             independently of which extent of the image the tile is covering.
+        target_coordinate_system
+            The coordinate system in which the tile_dim_in_units is specified.
+        """
         # TODO: we can extend this code to support:
         #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
         #  - use the bounding box query instead of the raster function if the user wants
@@ -39,7 +57,7 @@ class ImageTilesDataset(Dataset):
         self.regions_to_images = regions_to_images
         self.tile_dim_in_units = tile_dim_in_units
         self.tile_dim_in_pixels = tile_dim_in_pixels
-        self.transform = transform
+        # self.transform = transform
         self.target_coordinate_system = target_coordinate_system
 
         self.n_spots_dict = self._compute_n_spots_dict()

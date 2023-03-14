@@ -292,8 +292,6 @@ def _get_xarray_data_to_rasterize(
             corrected_affine, _ = _get_corrected_affine_matrix(
                 data=SpatialImage(xdata),
                 axes=axes,
-                min_coordinate=min_coordinate,
-                max_coordinate=max_coordinate,
                 target_coordinate_system=target_coordinate_system,
             )
             m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
@@ -338,15 +336,20 @@ def _get_xarray_data_to_rasterize(
 def _get_corrected_affine_matrix(
     data: Union[SpatialImage, MultiscaleSpatialImage],
     axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
     target_coordinate_system: str,
 ) -> tuple[Affine, tuple[str, ...]]:
     """
-    TODO: docstring
+    Get the affine matrix that maps the intrinsic coordinates of the data to the target_coordinate_system,
+    with in addition:
+    - restricting the domain to the axes specified in axes (i.e. the axes for which the bounding box is specified), in
+    particular axes never contains c;
+    - restricting the codomain to the spatial axes of the target coordinate system (i.e. excluding c).
+
+    We do this because:
+    - we don't need to consider c
+    - when we create the target rasterized object, we need to have axes in the order that is requires by the schema
     """
     transformation = get_transformation(data, target_coordinate_system)
-    get_dims(data)
     assert isinstance(transformation, BaseTransformation)
     affine = _get_affine_for_element(data, transformation)
     target_axes_unordered = affine.output_axes
@@ -363,8 +366,8 @@ def _get_corrected_affine_matrix(
         else:
             target_axes = ("y", "x")
     target_spatial_axes = get_spatial_axes(target_axes)
-    assert len(target_spatial_axes) == len(min_coordinate)
-    assert len(target_spatial_axes) == len(max_coordinate)
+    assert len(target_spatial_axes) == len(axes)
+    assert len(target_spatial_axes) == len(axes)
     corrected_affine = affine.to_affine(input_axes=axes, output_axes=target_spatial_axes)
     return corrected_affine, target_axes
 
@@ -427,8 +430,6 @@ def _(
     corrected_affine, target_axes = _get_corrected_affine_matrix(
         data=data,
         axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
 
