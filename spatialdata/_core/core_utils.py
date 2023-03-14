@@ -445,36 +445,18 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    def _compute_coords(n0: int, scale_f: float, n: int) -> ArrayLike:
-        scaled_max = n0 / scale_f
-        if n > 1:
-            offset = scaled_max / (2.0 * (n - 1))
-        else:
-            offset = 0
-        return np.linspace(0, scaled_max, n) + offset
-
     spatial_coords = [ax for ax in get_dims(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
-
     for name, dt in data.items():
-        if name == "scale0":
-            coords: dict[str, ArrayLike] = {
-                d: np.arange(data[name].sizes[d], dtype=np.float_) + 0.5 for d in spatial_coords
-            }
-            out[name] = dt[img_name].assign_coords(coords)
-        else:
-            scale = _get_scale(dt[img_name].attrs["transform"])
-            scalef = scale.scale
-            assert len(spatial_coords) == len(scalef), "Mismatch between coordinates and scales."  # type: ignore[arg-type]
-            new_coords = {}
-            for ax, s in zip(spatial_coords, scalef):
-                new_coords[ax] = _compute_coords(
-                    n0=data["scale0"].sizes[ax],
-                    scale_f=s,
-                    n=data[name].sizes[ax],
-                )
-            out[name] = dt[img_name].assign_coords(new_coords)
+        new_coords = {}
+        for ax in spatial_coords:
+            max_dim = data["scale0"].sizes[ax]
+            n = dt.sizes[ax]
+            offset = max_dim / n / 2
+            coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
+            new_coords[ax] = coords
+        out[name] = dt[img_name].assign_coords(new_coords)
     msi = MultiscaleSpatialImage.from_dict(d=out)
     # this is to trigger the validation of the dims
     _ = get_dims(msi)

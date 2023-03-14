@@ -6,7 +6,7 @@ default_stages:
     - push
 minimum_pre_commit_version: 2.16.0
 ci:
-    skip: [mypy]
+    skip: []
 repos:
     - repo: https://github.com/psf/black
       rev: 23.1.0
@@ -28,7 +28,7 @@ repos:
       rev: v1.1.1
       hooks:
           - id: mypy
-            additional_dependencies: [numpy==1.22.0, types-requests]
+            additional_dependencies: [numpy==1.24, types-requests]
             exclude: tests/|docs/|temp/|spatialdata/_core/reader.py
     - repo: https://github.com/asottile/yesqa
       rev: v1.4.0

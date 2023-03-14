@@ -1,4 +1,5 @@
 from importlib.metadata import version
+from typing import Union
 
 __version__ = version("spatialdata")
 
@@ -40,3 +41,10 @@ from spatialdata._core.models import (
     TableModel,
 )
 from spatialdata._io.read import read_zarr
+
+try:
+    from spatialdata._dataloader.datasets import ImageTilesDataset
+except ImportError as e:
+    _error: Union[str, None] = str(e)
+else:
+    _error = None

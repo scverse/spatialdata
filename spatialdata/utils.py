@@ -269,3 +269,13 @@ def natural_keys(text: str) -> list[Union[int, str]]:
     (See Toothy's implementation in the comments)
     """
     return [atoi(c) for c in re.split(r"(\d+)", text)]
+
+
+def affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLike:
+    assert len(data.shape) == 2
+    assert matrix.shape[1] - 1 == data.shape[1]
+    vector_part = matrix[:-1, :-1]
+    offset_part = matrix[:-1, -1]
+    result = data @ vector_part.T + offset_part
+    assert result.shape[0] == data.shape[0]
+    return result  # type: ignore[no-any-return]

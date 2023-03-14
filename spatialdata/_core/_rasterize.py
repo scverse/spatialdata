@@ -247,7 +247,7 @@ def _get_xarray_data_to_rasterize(
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
     target_sizes: dict[str, Optional[float]],
-    corrected_affine: Affine,
+    target_coordinate_system: str,
 ) -> tuple[DataArray, Optional[Scale]]:
     """
     Returns the DataArray to rasterize along with its eventual scale factor (if from a pyramid level) from either a
@@ -289,6 +289,11 @@ def _get_xarray_data_to_rasterize(
             xdata = next(iter(v))
             assert set(get_spatial_axes(tuple(xdata.sizes.keys()))) == set(axes)
 
+            corrected_affine, _ = _get_corrected_affine_matrix(
+                data=SpatialImage(xdata),
+                axes=axes,
+                target_coordinate_system=target_coordinate_system,
+            )
             m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
             m_linear = m[:-1, :-1]
             m_translation = m[:-1, -1]
@@ -300,7 +305,7 @@ def _get_xarray_data_to_rasterize(
             assert tuple(bb_corners.axis.data.tolist()) == axes
             bb_in_xdata = bb_corners.data @ m_linear + m_translation
             bb_in_xdata_sizes = {
-                ax: bb_in_xdata[axes.index(ax)].max() - bb_in_xdata[axes.index(ax)].min() for ax in axes
+                ax: bb_in_xdata[:, axes.index(ax)].max() - bb_in_xdata[:, axes.index(ax)].min() for ax in axes
             }
             for ax in axes:
                 # TLDR; the sqrt selects a pyramid level in which the requested bounding box is a bit larger than the
@@ -311,9 +316,10 @@ def _get_xarray_data_to_rasterize(
                 # inverse-transformed bounding box. The sqrt comes from the ratio of the side of a square,
                 # and the maximum diagonal of a square containing the original square, if the original square is
                 # rotated.
-                if bb_in_xdata_sizes[ax] * np.sqrt(len(axes)) < target_sizes[ax]:
+                if bb_in_xdata_sizes[ax] < target_sizes[ax] * np.sqrt(len(axes)):
                     break
             else:
+                # when this code is reached, latest_scale is selected
                 break
         assert latest_scale is not None
         xdata = next(iter(data[latest_scale].values()))
@@ -325,6 +331,45 @@ def _get_xarray_data_to_rasterize(
     else:
         raise RuntimeError("Should not reach here")
     return xdata, pyramid_scale
+
+
+def _get_corrected_affine_matrix(
+    data: Union[SpatialImage, MultiscaleSpatialImage],
+    axes: tuple[str, ...],
+    target_coordinate_system: str,
+) -> tuple[Affine, tuple[str, ...]]:
+    """
+    Get the affine matrix that maps the intrinsic coordinates of the data to the target_coordinate_system,
+    with in addition:
+    - restricting the domain to the axes specified in axes (i.e. the axes for which the bounding box is specified), in
+    particular axes never contains c;
+    - restricting the codomain to the spatial axes of the target coordinate system (i.e. excluding c).
+
+    We do this because:
+    - we don't need to consider c
+    - when we create the target rasterized object, we need to have axes in the order that is requires by the schema
+    """
+    transformation = get_transformation(data, target_coordinate_system)
+    assert isinstance(transformation, BaseTransformation)
+    affine = _get_affine_for_element(data, transformation)
+    target_axes_unordered = affine.output_axes
+    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
+    target_axes: tuple[str, ...]
+    if "z" in target_axes_unordered:
+        if "c" in target_axes_unordered:
+            target_axes = ("c", "z", "y", "x")
+        else:
+            target_axes = ("z", "y", "x")
+    else:
+        if "c" in target_axes_unordered:
+            target_axes = ("c", "y", "x")
+        else:
+            target_axes = ("y", "x")
+    target_spatial_axes = get_spatial_axes(target_axes)
+    assert len(target_spatial_axes) == len(axes)
+    assert len(target_spatial_axes) == len(axes)
+    corrected_affine = affine.to_affine(input_axes=axes, output_axes=target_spatial_axes)
+    return corrected_affine, target_axes
 
 
 @rasterize.register(SpatialImage)
@@ -359,29 +404,6 @@ def _(
         "z": target_depth,
     }
 
-    # get inverse transformation
-    transformation = get_transformation(data, target_coordinate_system)
-    dims = get_dims(data)
-    assert isinstance(transformation, BaseTransformation)
-    affine = _get_affine_for_element(data, transformation)
-    target_axes_unordered = affine.output_axes
-    assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
-    target_axes: tuple[str, ...]
-    if "z" in target_axes_unordered:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "z", "y", "x")
-        else:
-            target_axes = ("z", "y", "x")
-    else:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "y", "x")
-        else:
-            target_axes = ("y", "x")
-    target_spatial_axes = get_spatial_axes(target_axes)
-    assert len(target_spatial_axes) == len(min_coordinate)
-    assert len(target_spatial_axes) == len(max_coordinate)
-    corrected_affine = affine.to_affine(input_axes=axes, output_axes=target_spatial_axes)
-
     bb_sizes = {ax: max_coordinate[axes.index(ax)] - min_coordinate[axes.index(ax)] for ax in axes}
     scale_vector = [bb_sizes[ax] / target_sizes[ax] for ax in axes]
     scale = Scale(scale_vector, axes=axes)
@@ -395,7 +417,7 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_sizes=target_sizes,
-        corrected_affine=corrected_affine,
+        target_coordinate_system=target_coordinate_system,
     )
 
     if pyramid_scale is not None:
@@ -403,17 +425,25 @@ def _(
     else:
         extra = []
 
+    # get inverse transformation
+    corrected_affine, target_axes = _get_corrected_affine_matrix(
+        data=data,
+        axes=axes,
+        target_coordinate_system=target_coordinate_system,
+    )
+
     half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
     sequence = Sequence(
         [
-            half_pixel_offset.inverse(),
+            # half_pixel_offset.inverse(),
             scale,
             translation,
             corrected_affine.inverse(),
-            half_pixel_offset,
+            # half_pixel_offset,
         ]
         + extra
     )
+    dims = get_dims(data)
     matrix = sequence.to_affine_matrix(input_axes=target_axes, output_axes=dims)
 
     # get output shape
@@ -437,8 +467,6 @@ def _(
     else:
         raise ValueError(f"Unsupported schema {schema}")
 
-    # TODO: adjust matrix
-    # TODO: add c
     # resample the image
     transformed_dask = dask_image.ndinterp.affine_transform(
         xdata.data,
@@ -447,12 +475,28 @@ def _(
         # output_chunks=xdata.data.chunks,
         **kwargs,
     )
+    # ##
+    # # debug code
+    # crop = xdata.sel(
+    #     {
+    #         "x": slice(min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]),
+    #         "y": slice(min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]),
+    #     }
+    # )
+    # import matplotlib.pyplot as plt
+    # plt.figure(figsize=(20, 10))
+    # plt.subplot(1, 2, 1)
+    # plt.imshow(crop.transpose("y", "x", "c").data)
+    # plt.subplot(1, 2, 2)
+    # plt.imshow(DataArray(transformed_dask, dims=xdata.dims).transpose("y", "x", "c").data)
+    # plt.show()
+    # ##
     assert isinstance(transformed_dask, DaskArray)
     transformed_data = schema.parse(transformed_dask, dims=xdata.dims)  # type: ignore[call-arg,arg-type]
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
 
-    sequence = Sequence([half_pixel_offset.inverse(), scale, translation])
+    sequence = Sequence([half_pixel_offset.inverse(), scale, translation, half_pixel_offset])
     set_transformation(transformed_data, sequence, target_coordinate_system)
 
     transformed_data = compute_coordinates(transformed_data)

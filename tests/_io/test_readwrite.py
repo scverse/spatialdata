@@ -115,7 +115,7 @@ class TestReadWrite:
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
             sdata.add_image(name=f"incremental_{k}", image=v)
-            with pytest.raises(ValueError):
+            with pytest.raises(KeyError):
                 sdata.add_image(name=f"incremental_{k}", image=v)
             sdata.add_image(name=f"incremental_{k}", image=v, overwrite=True)
 
@@ -129,20 +129,20 @@ class TestReadWrite:
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
             sdata.add_labels(name=f"incremental_{k}", labels=v)
-            with pytest.raises(ValueError):
+            with pytest.raises(KeyError):
                 sdata.add_labels(name=f"incremental_{k}", labels=v)
             sdata.add_labels(name=f"incremental_{k}", labels=v, overwrite=True)
 
         for k, v in _get_shapes().items():
             sdata.add_shapes(name=f"incremental_{k}", shapes=v)
-            with pytest.raises(ValueError):
+            with pytest.raises(KeyError):
                 sdata.add_shapes(name=f"incremental_{k}", shapes=v)
             sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
             break
 
         for k, v in _get_points().items():
             sdata.add_points(name=f"incremental_{k}", points=v)
-            with pytest.raises(ValueError):
+            with pytest.raises(KeyError):
                 sdata.add_points(name=f"incremental_{k}", points=v)
             sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
             break

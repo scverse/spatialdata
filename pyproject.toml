@@ -58,6 +58,9 @@ test = [
     "pytest",
     "pytest-cov",
 ]
+optional = [
+    "torch"
+]
 
 [tool.coverage.run]
 source = ["spatialdata"]

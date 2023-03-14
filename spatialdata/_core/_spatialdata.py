@@ -222,7 +222,7 @@ class SpatialData:
         )
         if name in self._images:
             if not overwrite:
-                raise ValueError(f"Image {name} already exists in the dataset.")
+                raise KeyError(f"Image {name} already exists in the dataset.")
         ndim = len(get_dims(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -253,7 +253,7 @@ class SpatialData:
         )
         if name in self._labels:
             if not overwrite:
-                raise ValueError(f"Labels {name} already exists in the dataset.")
+                raise KeyError(f"Labels {name} already exists in the dataset.")
         ndim = len(get_dims(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -282,7 +282,7 @@ class SpatialData:
         )
         if name in self._shapes:
             if not overwrite:
-                raise ValueError(f"Shapes {name} already exists in the dataset.")
+                raise KeyError(f"Shapes {name} already exists in the dataset.")
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
@@ -304,12 +304,12 @@ class SpatialData:
         )
         if name in self._points:
             if not overwrite:
-                raise ValueError(f"Points {name} already exists in the dataset.")
+                raise KeyError(f"Points {name} already exists in the dataset.")
         Point_s.validate(points)
         self._points[name] = points
 
     def is_backed(self) -> bool:
-        """Check if the data is backed by a Zarr storage or it is in-memory."""
+        """Check if the data is backed by a Zarr storage or if it is in-memory."""
         return self.path is not None
 
     # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
@@ -829,7 +829,7 @@ class SpatialData:
     def add_shapes(
         self,
         name: str,
-        shapes: AnnData,
+        shapes: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
         """
@@ -1285,6 +1285,49 @@ class SpatialData:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
+
+    def __getitem__(self, item: str) -> SpatialElement | AnnData:
+        """
+        Return the element with the given name.
+
+        Parameters
+        ----------
+        item
+            The name of the element to return.
+        Returns
+        -------
+        The element.
+        """
+        for _, element_name, element in self._gen_elements():
+            if element_name == item:
+                return element
+        else:
+            raise KeyError(f"Could not find element with name {item!r}")
+
+    def __setitem__(self, key: str, value: SpatialElement | AnnData) -> None:
+        """
+        Add the element to the SpatialData object.
+
+        Parameters
+        ----------
+        key
+            The name of the element.
+        value
+            The element.
+        """
+        schema = get_schema(value)
+        if schema == Image2DModel or schema == Image3DModel:
+            self.add_image(key, value)
+        elif schema == Labels2DModel or schema == Labels3DModel:
+            self.add_labels(key, value)
+        elif schema == PointsModel:
+            self.add_points(key, value)
+        elif schema == ShapesModel:
+            self.add_shapes(key, value)
+        elif schema == TableModel:
+            raise TypeError("Use the table property to set the table (e.g. sdata.table = value)")
+        else:
+            raise TypeError(f"Unknown element type with schema{schema!r}")
 
 
 class QueryManager:

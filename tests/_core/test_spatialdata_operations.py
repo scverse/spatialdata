@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -210,3 +213,30 @@ def test_locate_spatial_element(full_sdata):
     full_sdata.images["image2d_again"] = im
     with pytest.raises(ValueError):
         full_sdata._locate_spatial_element(im)
+
+
+def test_get_item(points):
+    assert id(points["points_0"]) == id(points.points["points_0"])
+
+    # removed this test after this change: https://github.com/scverse/spatialdata/pull/145#discussion_r1133122720
+    # to be uncommented/removed/modified after this is closed: https://github.com/scverse/spatialdata/issues/186
+    # # this should be illegal: https://github.com/scverse/spatialdata/issues/176
+    # points.images["points_0"] = Image2DModel.parse(np.array([[[1]]]), dims=("c", "y", "x"))
+    # with pytest.raises(AssertionError):
+    #     _ = points["points_0"]
+
+    with pytest.raises(KeyError):
+        _ = points["not_present"]
+
+
+def test_set_item(full_sdata):
+    for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
+        full_sdata[name + "_again"] = full_sdata[name]
+        with pytest.raises(KeyError):
+            full_sdata[name] = full_sdata[name]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        full_sdata.write(Path(tmpdir) / "test.zarr")
+        for name in ["image2d", "labels2d", "points_0"]:
+            # trying to overwrite the file used for backing (only for images, labels and points)
+            with pytest.raises(ValueError):
+                full_sdata[name] = full_sdata[name]

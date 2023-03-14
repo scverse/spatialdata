@@ -301,7 +301,7 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    if filter_table:
+    if filter_table and sdata.table is not None:
         to_keep = np.array([False] * len(sdata.table))
         region_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
         instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
@@ -333,7 +333,7 @@ def _(
 @bounding_box_query.register(SpatialImage)
 @bounding_box_query.register(MultiscaleSpatialImage)
 def _(
-    image: SpatialImage,
+    image: Union[SpatialImage, MultiscaleSpatialImage],
     axes: tuple[str, ...],
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
