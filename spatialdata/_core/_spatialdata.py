@@ -1210,13 +1210,9 @@ class SpatialData:
         -------
         The element.
         """
-        found = []
         for _, element_name, element in self._gen_elements():
             if element_name == item:
-                found.append(element)
-        assert len(found) <= 1
-        if len(found) == 1:
-            return found[0]
+                return element
         else:
             raise KeyError(f"Could not find element with name {item!r}")
 

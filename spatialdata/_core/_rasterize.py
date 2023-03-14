@@ -415,7 +415,6 @@ def _(
         max_coordinate=max_coordinate,
         target_sizes=target_sizes,
         target_coordinate_system=target_coordinate_system,
-        # corrected_affine=corrected_affine,
     )
 
     if pyramid_scale is not None:
@@ -463,7 +462,6 @@ def _(
     if schema == Labels2DModel or schema == Labels3DModel:
         kwargs = {"prefilter": False, "order": 0}
     elif schema == Image2DModel or schema == Image3DModel:
-        # kwargs = {"prefilter": True}
         kwargs = {}
     else:
         raise ValueError(f"Unsupported schema {schema}")
