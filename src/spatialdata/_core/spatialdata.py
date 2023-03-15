@@ -29,7 +29,7 @@ from spatialdata._core.models import (
     TableModel,
     get_schema,
 )
-from spatialdata._io.write import (
+from spatialdata._io import (
     write_image,
     write_labels,
     write_points,
@@ -458,7 +458,7 @@ class SpatialData:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
             axes = get_axis_names(element)
             if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
-                from spatialdata._io.write import (
+                from spatialdata._io._utils import (
                     overwrite_coordinate_transformations_raster,
                 )
 
@@ -466,7 +466,7 @@ class SpatialData:
             elif (
                 isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData)
             ):
-                from spatialdata._io.write import (
+                from spatialdata._io._utils import (
                     overwrite_coordinate_transformations_non_raster,
                 )
 
@@ -648,7 +648,7 @@ class SpatialData:
                 name=name,
                 storage_options=storage_options,
             )
-            from spatialdata._io.read import _read_multiscale
+            from spatialdata._io.io_raster import _read_multiscale
 
             # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
             # from the correct storage
@@ -734,7 +734,7 @@ class SpatialData:
             )
             # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
             # from the correct storage
-            from spatialdata._io.read import _read_multiscale
+            from spatialdata._io.io_raster import _read_multiscale
 
             # just a check to make sure that things go as expected
             assert elem_group.path == ""
@@ -816,7 +816,7 @@ class SpatialData:
             )
             # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
             # from the correct storage
-            from spatialdata._io.read import _read_points
+            from spatialdata._io.io_points import _read_points
 
             assert elem_group.path == "points"
 
@@ -924,7 +924,7 @@ class SpatialData:
                 # keys. Same for the other elements
                 # keys = list(self.images.keys())
                 keys = self.images.keys()
-                from spatialdata._io.read import _read_multiscale
+                from spatialdata._io.io_raster import _read_multiscale
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
@@ -945,7 +945,7 @@ class SpatialData:
                 root.create_group(name="labels")
                 # keys = list(self.labels.keys())
                 keys = self.labels.keys()
-                from spatialdata._io.read import _read_multiscale
+                from spatialdata._io.io_raster import _read_multiscale
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
@@ -966,7 +966,7 @@ class SpatialData:
                 root.create_group(name="points")
                 # keys = list(self.points.keys())
                 keys = self.points.keys()
-                from spatialdata._io.read import _read_points
+                from spatialdata._io.io_points import _read_points
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
@@ -1084,7 +1084,7 @@ class SpatialData:
 
     @staticmethod
     def read(file_path: str) -> SpatialData:
-        from spatialdata._io.read import read_zarr
+        from spatialdata import read_zarr
 
         sdata = read_zarr(file_path)
         return sdata

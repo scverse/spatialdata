@@ -13,6 +13,7 @@ _check_geopandas_using_shapely()
 __all__ = [
     # --- from spaitaldata._core._spatialdata ---
     "SpatialData",
+    "read_zarr",
     # --- from spatialdata._core.models ---
     "Image3DModel",
     "Image2DModel",
@@ -26,7 +27,6 @@ __all__ = [
     "concatenate",
     "get_axis_names",
     # --- from spatialdata._io ---
-    "read_zarr",
 ]
 
 from spatialdata._core.core_utils import SpatialElement, get_axis_names
@@ -41,7 +41,8 @@ from spatialdata._core.models import (
 )
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.spatialdata_operations import concatenate
-from spatialdata._io.read import read_zarr
+
+from ._io.io_zarr import read_zarr
 
 try:
     from spatialdata._dataloader.datasets import ImageTilesDataset
