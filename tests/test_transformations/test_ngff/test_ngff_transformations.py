@@ -19,7 +19,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
-from tests._core.conftest import (
+from tests.test_transformations.test_ngff.conftest import (
     c_cs,
     cyx_cs,
     x_cs,

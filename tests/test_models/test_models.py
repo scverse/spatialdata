@@ -34,6 +34,7 @@ from spatialdata.models import (
     TableModel,
     get_model,
 )
+from spatialdata.models._utils import validate_axis_name
 from spatialdata.models.models import RasterSchema
 from spatialdata.transformations._utils import (
     _set_transformations,
@@ -44,8 +45,10 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Scale
-from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 from tests.conftest import (
+    MULTIPOLYGON_PATH,
+    POINT_PATH,
+    POLYGON_PATH,
     _get_images,
     _get_labels,
     _get_points,
@@ -54,6 +57,13 @@ from tests.conftest import (
 )
 
 RNG = default_rng()
+
+
+def test_validate_axis_name():
+    for ax in ["c", "x", "y", "z"]:
+        validate_axis_name(ax)
+    with pytest.raises(TypeError):
+        validate_axis_name("invalid")
 
 
 @pytest.mark.ci_only

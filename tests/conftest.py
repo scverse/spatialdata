@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Union
 
 import numpy as np
@@ -24,6 +25,10 @@ from spatialdata.models import (
 )
 
 RNG = default_rng()
+
+POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
+MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
+POINT_PATH = Path(__file__).parent / "data/points.json"
 
 
 @pytest.fixture()

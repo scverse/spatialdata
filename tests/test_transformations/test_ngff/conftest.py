@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from spatialdata.transformations.ngff.ngff_coordinate_system import (
     NgffAxis,
     NgffCoordinateSystem,
@@ -21,8 +19,3 @@ yx_cs = NgffCoordinateSystem(name="yx", axes=[y_axis, x_axis])
 zyx_cs = NgffCoordinateSystem(name="zyx", axes=[z_axis, y_axis, x_axis])
 cyx_cs = NgffCoordinateSystem(name="cyx", axes=[c_axis, y_axis, x_axis])
 czyx_cs = NgffCoordinateSystem(name="czyx", axes=[c_axis, z_axis, y_axis, x_axis])
-
-
-POLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
-MULTIPOLYGON_PATH = Path(__file__).parent.parent / "data/polygon.json"
-POINT_PATH = Path(__file__).parent.parent / "data/points.json"
