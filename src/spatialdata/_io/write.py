@@ -24,7 +24,7 @@ from spatialdata._core.core_utils import (
     _get_transformations,
     _get_transformations_xarray,
     _validate_mapping_to_coordinate_system_type,
-    get_dims,
+    get_axis_names,
 )
 from spatialdata._core.models import ShapesModel
 from spatialdata._core.transformations import _get_current_output_axes
@@ -261,7 +261,7 @@ def write_shapes(
 ) -> None:
     import numcodecs
 
-    axes = get_dims(shapes)
+    axes = get_axis_names(shapes)
     t = _get_transformations(shapes)
 
     shapes_group = group.require_group(name)
@@ -299,7 +299,7 @@ def write_points(
     group_type: str = "ngff:points",
     fmt: Format = CurrentPointsFormat(),
 ) -> None:
-    axes = get_dims(points)
+    axes = get_axis_names(points)
     t = _get_transformations(points)
 
     points_groups = group.require_group(name)

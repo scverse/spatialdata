@@ -12,7 +12,10 @@ from shapely.geometry import Point
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+from spatialdata._core.spatialdata_operations import (
+    get_transformation,
+    set_transformation,
+)
 from spatialdata._core.transformations import Identity, Scale
 from spatialdata.utils import _are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes

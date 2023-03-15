@@ -24,7 +24,10 @@ from spatialdata._core._spatial_query import (
     BoundingBoxRequest,
     bounding_box_query,
 )
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
+from spatialdata._core.spatialdata_operations import (
+    get_transformation,
+    set_transformation,
+)
 
 
 def _make_points_element():

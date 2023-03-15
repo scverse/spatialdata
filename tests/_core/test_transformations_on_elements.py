@@ -10,18 +10,18 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import (
+from spatialdata._core._transform_elements import (
+    align_elements_using_landmarks,
+    get_transformation_between_landmarks,
+)
+from spatialdata._core.core_utils import get_axis_names
+from spatialdata._core.models import Image2DModel, PointsModel, ShapesModel
+from spatialdata._core.spatialdata_operations import (
     get_transformation,
     get_transformation_between_coordinate_systems,
     remove_transformation,
     set_transformation,
 )
-from spatialdata._core._transform_elements import (
-    align_elements_using_landmarks,
-    get_transformation_between_landmarks,
-)
-from spatialdata._core.core_utils import get_dims
-from spatialdata._core.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
 from spatialdata.utils import unpad_raster
 
@@ -44,7 +44,7 @@ class TestElementsTransform:
         # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
         # it from the assertion
         assert isinstance(transform, Scale)
-        axes = get_dims(points.points["points_0"])
+        axes = get_axis_names(points.points["points_0"])
         expected_scale = Scale(transform.to_scale_vector(axes), axes)
         assert get_transformation(new_sdata.points["points_0"]) == expected_scale
 
@@ -69,7 +69,7 @@ class TestElementsTransform:
         # when the points are 2d and we have a scale 3d, the 3rd dimension is not saved to disk, so we have to remove
         # it from the assertion
         assert isinstance(transform, Scale)
-        axes = get_dims(new_sdata.shapes["circles"])
+        axes = get_axis_names(new_sdata.shapes["circles"])
         expected_scale = Scale(transform.to_scale_vector(axes), axes)
         assert loaded_transform1 == expected_scale
         assert loaded_transform2 == expected_scale
@@ -170,8 +170,8 @@ def test_transform_points(points: SpatialData):
     for k in keys0:
         p0 = points.points[k]
         p1 = new_points.points[k]
-        axes0 = get_dims(p0)
-        axes1 = get_dims(p1)
+        axes0 = get_axis_names(p0)
+        axes1 = get_axis_names(p1)
         assert axes0 == axes1
         for ax in axes0:
             x0 = p0[ax].to_dask_array().compute()

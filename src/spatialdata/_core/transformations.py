@@ -853,9 +853,9 @@ def _get_current_output_axes(
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata._core.core_utils import get_dims
+    from spatialdata._core.core_utils import get_axis_names
 
-    input_axes = get_dims(element)
+    input_axes = get_axis_names(element)
     output_axes = _get_current_output_axes(transformation, input_axes)
     matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
     return Affine(matrix, input_axes=input_axes, output_axes=output_axes)

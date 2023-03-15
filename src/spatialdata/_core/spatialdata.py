@@ -18,7 +18,7 @@ from ome_zarr.types import JSONDict
 from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import SpatialElement, get_dims
+from spatialdata._core.core_utils import SpatialElement, get_axis_names
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -223,7 +223,7 @@ class SpatialData:
         if name in self._images:
             if not overwrite:
                 raise KeyError(f"Image {name} already exists in the dataset.")
-        ndim = len(get_dims(image))
+        ndim = len(get_axis_names(image))
         if ndim == 3:
             Image2D_s.validate(image)
             self._images[name] = image
@@ -254,7 +254,7 @@ class SpatialData:
         if name in self._labels:
             if not overwrite:
                 raise KeyError(f"Labels {name} already exists in the dataset.")
-        ndim = len(get_dims(labels))
+        ndim = len(get_axis_names(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
             self._labels[name] = labels
@@ -448,7 +448,7 @@ class SpatialData:
         element
             The SpatialElement object for which the transformations to be written
         """
-        from spatialdata._core._spatialdata_ops import get_transformation
+        from spatialdata._core.spatialdata_operations import get_transformation
 
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
@@ -456,7 +456,7 @@ class SpatialData:
 
         if self.path is not None:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-            axes = get_dims(element)
+            axes = get_axis_names(element)
             if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
                 from spatialdata._io.write import (
                     overwrite_coordinate_transformations_raster,
@@ -495,7 +495,7 @@ class SpatialData:
         -------
         The filtered SpatialData.
         """
-        from spatialdata._core._spatialdata_ops import get_transformation
+        from spatialdata._core.spatialdata_operations import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
         element_paths_in_coordinate_system = []
@@ -538,7 +538,7 @@ class SpatialData:
         -------
         The transformed element.
         """
-        from spatialdata._core._spatialdata_ops import (
+        from spatialdata._core.spatialdata_operations import (
             get_transformation_between_coordinate_systems,
         )
 
@@ -1111,7 +1111,7 @@ class SpatialData:
 
     @property
     def coordinate_systems(self) -> list[str]:
-        from spatialdata._core._spatialdata_ops import get_transformation
+        from spatialdata._core.spatialdata_operations import get_transformation
 
         all_cs = set()
         gen = self._gen_elements_values()
@@ -1196,7 +1196,7 @@ class SpatialData:
                         else:
                             length = None
 
-                        n = len(get_dims(v))
+                        n = len(get_axis_names(v))
                         dim_string = f"({n}D points)"
 
                         assert len(v.shape) == 2
@@ -1243,7 +1243,7 @@ class SpatialData:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
 
-        from spatialdata._core._spatialdata_ops import get_transformation
+        from spatialdata._core.spatialdata_operations import get_transformation
 
         descr += "\nwith coordinate systems:\n"
         coordinate_systems = self.coordinate_systems.copy()

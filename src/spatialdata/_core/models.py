@@ -46,7 +46,7 @@ from spatialdata._core.core_utils import (
     _set_transformations,
     _validate_mapping_to_coordinate_system_type,
     compute_coordinates,
-    get_dims,
+    get_axis_names,
 )
 from spatialdata._core.transformations import BaseTransformation, Identity
 from spatialdata._logging import logger
@@ -722,7 +722,7 @@ def get_schema(
         return schema
 
     if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
-        axes = get_dims(e)
+        axes = get_axis_names(e)
         if "c" in axes:
             if "z" in axes:
                 return _validate_and_return(Image3DModel, e)

@@ -23,12 +23,13 @@ __all__ = [
     "TableModel",
     # --- from spatialdata._core.core_utils ---
     "SpatialElement",
-    "get_dims",
+    "concatenate",
+    "get_axis_names",
     # --- from spatialdata._io ---
     "read_zarr",
 ]
 
-from spatialdata._core.core_utils import SpatialElement, get_dims
+from spatialdata._core.core_utils import SpatialElement, get_axis_names
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -39,6 +40,7 @@ from spatialdata._core.models import (
     TableModel,
 )
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core.spatialdata_operations import concatenate
 from spatialdata._io.read import read_zarr
 
 try:

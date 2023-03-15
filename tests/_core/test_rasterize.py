@@ -3,7 +3,7 @@ import pytest
 from spatial_image import SpatialImage
 
 from spatialdata._core._rasterize import rasterize
-from spatialdata._core.core_utils import get_dims, get_spatial_axes
+from spatialdata._core.core_utils import get_axis_names, get_spatial_axes
 from spatialdata._io.write import _iter_multiscale
 from tests.conftest import _get_images, _get_labels
 
@@ -20,7 +20,7 @@ def test_rasterize_raster(_get_raster):
 
     rasters = _get_raster()
     for raster in rasters.values():
-        dims = get_dims(raster)
+        dims = get_axis_names(raster)
         all_slices = {"c": slice(0, 1000), "z": slice(0, 1000), "y": slice(5, 20), "x": slice(0, 5)}
         slices = [all_slices[d] for d in dims]
 

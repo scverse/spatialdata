@@ -19,7 +19,7 @@ from spatialdata import SpatialData, SpatialElement
 from spatialdata._core.core_utils import (
     ValidAxis_t,
     compute_coordinates,
-    get_dims,
+    get_axis_names,
     get_spatial_axes,
 )
 from spatialdata._core.models import (
@@ -128,7 +128,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     The axes of the intrinsic coordinate system.
     """
-    from spatialdata._core._spatialdata_ops import get_transformation
+    from spatialdata._core.spatialdata_operations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -144,7 +144,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     ).data
 
     # transform the coordinates to the intrinsic coordinate system
-    intrinsic_axes = get_dims(element)
+    intrinsic_axes = get_axis_names(element)
     transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
         input_axes=axes, output_axes=intrinsic_axes
     )
@@ -345,7 +345,7 @@ def _(
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
-    from spatialdata._core._spatialdata_ops import (
+    from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
     )
@@ -511,7 +511,7 @@ def _(
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[DaskDataFrame]:
-    from spatialdata._core._spatialdata_ops import get_transformation
+    from spatialdata._core.spatialdata_operations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)

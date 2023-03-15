@@ -23,7 +23,6 @@ from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.core_utils import (
     _set_transformations,
     _set_transformations_xarray,
@@ -38,6 +37,10 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
     get_schema,
+)
+from spatialdata._core.spatialdata_operations import (
+    get_transformation,
+    set_transformation,
 )
 from spatialdata._core.transformations import Scale
 from spatialdata._types import ArrayLike

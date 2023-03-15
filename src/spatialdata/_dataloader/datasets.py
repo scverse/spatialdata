@@ -6,8 +6,7 @@ from torch.utils.data import Dataset
 
 from spatialdata import SpatialData
 from spatialdata._core._rasterize import rasterize
-from spatialdata._core._spatialdata_ops import get_transformation
-from spatialdata._core.core_utils import get_dims
+from spatialdata._core.core_utils import get_axis_names
 from spatialdata._core.models import (
     Image2DModel,
     Image3DModel,
@@ -16,6 +15,7 @@ from spatialdata._core.models import (
     ShapesModel,
     get_schema,
 )
+from spatialdata._core.spatialdata_operations import get_transformation
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata.utils import affine_matrix_multiplication
 
@@ -107,7 +107,7 @@ class ImageTilesDataset(Dataset):
         regions = self.sdata[regions_name]
         # TODO: here we just need to compute the centroids, we probably want to move this functionality to a different file
         if isinstance(regions, GeoDataFrame):
-            dims = get_dims(regions)
+            dims = get_axis_names(regions)
             region = regions.iloc[region_index]
             # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
             # it directly

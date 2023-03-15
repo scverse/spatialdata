@@ -16,15 +16,18 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import get_transformation, set_transformation
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,
     SpatialElement,
     _get_scale,
     compute_coordinates,
-    get_dims,
+    get_axis_names,
 )
 from spatialdata._core.models import get_schema
+from spatialdata._core.spatialdata_operations import (
+    get_transformation,
+    set_transformation,
+)
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
@@ -146,7 +149,7 @@ def _prepend_transformation(
         the eventual raster_translation). This is useful when the user wants to transform the actual data,
         but maintain the positioning of the element in the various coordinate systems.
     """
-    from spatialdata._core._spatialdata_ops import (
+    from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
     )
@@ -206,15 +209,15 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 @_transform.register(SpatialImage)
 def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool) -> SpatialImage:
     schema = get_schema(data)
-    from spatialdata._core._spatialdata_ops import (
-        get_transformation,
-        set_transformation,
-    )
     from spatialdata._core.models import (
         Image2DModel,
         Image3DModel,
         Labels2DModel,
         Labels3DModel,
+    )
+    from spatialdata._core.spatialdata_operations import (
+        get_transformation,
+        set_transformation,
     )
 
     # labels need to be preserved after the resizing of the image
@@ -225,7 +228,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     else:
         raise ValueError(f"Unsupported schema {schema}")
 
-    axes = get_dims(data)
+    axes = get_axis_names(data)
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
     )
@@ -250,15 +253,15 @@ def _(
     data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool
 ) -> MultiscaleSpatialImage:
     schema = get_schema(data)
-    from spatialdata._core._spatialdata_ops import (
-        get_transformation,
-        set_transformation,
-    )
     from spatialdata._core.models import (
         Image2DModel,
         Image3DModel,
         Labels2DModel,
         Labels3DModel,
+    )
+    from spatialdata._core.spatialdata_operations import (
+        get_transformation,
+        set_transformation,
     )
     from spatialdata._core.transformations import BaseTransformation, Sequence
 
@@ -271,7 +274,7 @@ def _(
     else:
         raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
 
-    get_dims(data)
+    get_axis_names(data)
     transformed_dict = {}
     for k, v in data.items():
         assert len(v) == 1
@@ -307,13 +310,13 @@ def _(
 
 @_transform.register(DaskDataFrame)
 def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> DaskDataFrame:
-    from spatialdata._core._spatialdata_ops import (
+    from spatialdata._core.models import PointsModel
+    from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
     )
-    from spatialdata._core.models import PointsModel
 
-    axes = get_dims(data)
+    axes = get_axis_names(data)
     arrays = []
     for ax in axes:
         arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
@@ -341,10 +344,10 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
 @_transform.register(GeoDataFrame)
 def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> GeoDataFrame:
-    from spatialdata._core._spatialdata_ops import get_transformation
     from spatialdata._core.models import ShapesModel
+    from spatialdata._core.spatialdata_operations import get_transformation
 
-    ndim = len(get_dims(data))
+    ndim = len(get_axis_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
     matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
     shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
@@ -398,8 +401,8 @@ def get_transformation_between_landmarks(
     """
     from spatialdata._core.transformations import Affine, BaseTransformation, Sequence
 
-    assert get_dims(references_coords) == ("x", "y")
-    assert get_dims(moving_coords) == ("x", "y")
+    assert get_axis_names(references_coords) == ("x", "y")
+    assert get_axis_names(moving_coords) == ("x", "y")
 
     if isinstance(references_coords, GeoDataFrame):
         references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)

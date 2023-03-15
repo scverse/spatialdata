@@ -27,7 +27,7 @@ __all__ = [
     "_get_transformations",
     "_set_transformations",
     "get_default_coordinate_system",
-    "get_dims",
+    "get_axis_names",
     "C",
     "Z",
     "Y",
@@ -215,7 +215,7 @@ def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
 @_set_transformations.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
-    dims = get_dims(e)
+    dims = get_axis_names(e)
     from spatialdata._core.transformations import Scale, Sequence
 
     i = 0
@@ -319,7 +319,7 @@ def _validate_dims(dims: tuple[str, ...]) -> None:
 
 
 @singledispatch
-def get_dims(e: SpatialElement) -> tuple[str, ...]:
+def get_axis_names(e: SpatialElement) -> tuple[str, ...]:
     """
     Get the dimensions of a spatial element.
 
@@ -335,7 +335,7 @@ def get_dims(e: SpatialElement) -> tuple[str, ...]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_dims.register(SpatialImage)
+@get_axis_names.register(SpatialImage)
 def _(e: SpatialImage) -> tuple[str, ...]:
     dims = e.dims
     # dims_sizes = tuple(list(e.sizes.keys()))
@@ -346,7 +346,7 @@ def _(e: SpatialImage) -> tuple[str, ...]:
     return dims  # type: ignore
 
 
-@get_dims.register(MultiscaleSpatialImage)
+@get_axis_names.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     if "scale0" in e:
         # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
@@ -370,7 +370,7 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
         # return tuple(i for i in e.dims.keys())
 
 
-@get_dims.register(GeoDataFrame)
+@get_axis_names.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
     all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
@@ -379,7 +379,7 @@ def _(e: GeoDataFrame) -> tuple[str, ...]:
     return dims
 
 
-@get_dims.register(DaskDataFrame)
+@get_axis_names.register(DaskDataFrame)
 def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = tuple([c for c in valid_dims if c in e.columns])
@@ -445,7 +445,7 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    spatial_coords = [ax for ax in get_dims(data) if ax in ["x", "y", "z"]]
+    spatial_coords = [ax for ax in get_axis_names(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
     for name, dt in data.items():
@@ -459,7 +459,7 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         out[name] = dt[img_name].assign_coords(new_coords)
     msi = MultiscaleSpatialImage.from_dict(d=out)
     # this is to trigger the validation of the dims
-    _ = get_dims(msi)
+    _ = get_axis_names(msi)
     return msi
 
 

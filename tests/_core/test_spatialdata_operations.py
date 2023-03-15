@@ -11,17 +11,17 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import (
-    _concatenate_tables,
-    concatenate,
-    set_transformation,
-)
 from spatialdata._core.models import (
     Image2DModel,
     Labels2DModel,
     PointsModel,
     ShapesModel,
     TableModel,
+)
+from spatialdata._core.spatialdata_operations import (
+    _concatenate_tables,
+    concatenate,
+    set_transformation,
 )
 from spatialdata._core.transformations import Identity, Scale
 from tests.conftest import _get_table

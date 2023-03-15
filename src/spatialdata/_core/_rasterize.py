@@ -12,16 +12,11 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core._spatialdata_ops import (
-    get_transformation,
-    remove_transformation,
-    set_transformation,
-)
 from spatialdata._core.core_utils import (
     SpatialElement,
     _get_scale,
     compute_coordinates,
-    get_dims,
+    get_axis_names,
     get_spatial_axes,
 )
 from spatialdata._core.models import (
@@ -30,6 +25,11 @@ from spatialdata._core.models import (
     Labels2DModel,
     Labels3DModel,
     get_schema,
+)
+from spatialdata._core.spatialdata_operations import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
 )
 from spatialdata._core.transformations import (
     Affine,
@@ -443,7 +443,7 @@ def _(
         ]
         + extra
     )
-    dims = get_dims(data)
+    dims = get_axis_names(data)
     matrix = sequence.to_affine_matrix(input_axes=target_axes, output_axes=dims)
 
     # get output shape
