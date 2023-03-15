@@ -10,14 +10,10 @@ from shapely import linearrings, polygons
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core._spatial_query import (
+from spatialdata._core.operations.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,
-)
-from spatialdata._core.spatialdata_operations import (
-    get_transformation,
-    set_transformation,
 )
 from spatialdata.models import (
     Image2DModel,
@@ -27,6 +23,10 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+)
+from spatialdata.transformations.operations import (
+    get_transformation,
+    set_transformation,
 )
 
 

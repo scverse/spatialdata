@@ -11,16 +11,23 @@ _check_geopandas_using_shapely()
 
 
 __all__ = [
-    "SpatialData",
-    "read_zarr",
-    # --- from spatialdata._core.core_utils ---
     "concatenate",
-    # --- from spatialdata._io ---
+    "rasterize",
+    "bounding_box_query",
+    "transform",
+    "SpatialData",
     "element_utils",
+    "models",
+    "transformations",
+    "read_zarr",
 ]
-from spatialdata import element_utils, models
+
+from spatialdata import element_utils, models, transformations
+from spatialdata._core.concatenate import concatenate
+from spatialdata._core.operations.rasterize import rasterize
+from spatialdata._core.operations.spatial_query import bounding_box_query
+from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._core.spatialdata_operations import concatenate
 
 from ._io.io_zarr import read_zarr
 

@@ -8,7 +8,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"

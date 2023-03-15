@@ -13,14 +13,14 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.spatialdata_operations import (
-    get_transformation,
-    set_transformation,
-)
-from spatialdata._core.transformations import Sequence, Translation
 from spatialdata.element_utils._utils import _validate_dims
 from spatialdata.models import X, Y, Z
 from spatialdata.models._utils import get_axis_names
+from spatialdata.transformations.operations import (
+    get_transformation,
+    set_transformation,
+)
+from spatialdata.transformations.transformations import Sequence, Translation
 
 
 def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[SpatialImage, MultiscaleSpatialImage]:

@@ -15,14 +15,7 @@ from shapely.geometry import Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData
-from spatialdata._core.transformations import (
-    Affine,
-    BaseTransformation,
-    Sequence,
-    Translation,
-    _get_affine_for_element,
-)
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
@@ -37,6 +30,13 @@ from spatialdata.models import (
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.transformations._utils import compute_coordinates
+from spatialdata.transformations.transformations import (
+    Affine,
+    BaseTransformation,
+    Sequence,
+    Translation,
+    _get_affine_for_element,
+)
 
 
 def get_bounding_box_corners(
@@ -126,7 +126,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     The axes of the intrinsic coordinate system.
     """
-    from spatialdata._core.spatialdata_operations import get_transformation
+    from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -343,10 +343,7 @@ def _(
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
-    from spatialdata._core.spatialdata_operations import (
-        get_transformation,
-        set_transformation,
-    )
+    from spatialdata.transformations import get_transformation, set_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -509,7 +506,8 @@ def _(
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[DaskDataFrame]:
-    from spatialdata._core.spatialdata_operations import get_transformation
+    from spatialdata import transform
+    from spatialdata.transformations import BaseTransformation, get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -559,7 +557,10 @@ def _(
 
     # transform the element to the query coordinate system
     transform_to_query_space = get_transformation(points, to_coordinate_system=target_coordinate_system)
-    points_query_coordinate_system = transform_to_query_space.transform(points_in_intrinsic_bounding_box)  # type: ignore[union-attr]
+    assert isinstance(transform_to_query_space, BaseTransformation)
+    points_query_coordinate_system = transform(
+        points_in_intrinsic_bounding_box, transform_to_query_space, maintain_positioning=False
+    )  # type: ignore[union-attr]
 
     # get a mask for the points in the bounding box
     bounding_box_mask = _bounding_box_mask_points(

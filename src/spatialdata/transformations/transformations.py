@@ -28,16 +28,6 @@ if TYPE_CHECKING:
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import ValidAxis_t
 
-__all__ = [
-    "BaseTransformation",
-    "Identity",
-    "MapAxis",
-    "Translation",
-    "Scale",
-    "Affine",
-    "Sequence",
-]
-
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
 
@@ -194,48 +184,6 @@ class BaseTransformation(ABC):
         if axes not in valid_axes:
             raise ValueError(f"Invalid axes: {axes}")
         return valid_axes[axes]
-
-    def transform(self, element: SpatialElement, maintain_positioning: bool = False) -> SpatialElement:
-        """
-        Transform a spatial element using this transformation and returns the transformed element.
-
-        Parameters
-        ----------
-        element
-            Spatial element to transform.
-        maintain_positioning
-            If True, in the transformed element, each transformation that was present in the original element will be
-            prepended with the inverse of the transformation used to transform the data (i.e. the current
-            transformation for which .transform() is called). In this way the data is transformed but the
-            positioning (for each coordinate system) is maintained. A use case is changing the orientation/scale/etc. of
-            the data but keeping the alignment of the data within each coordinate system.
-            If False, the data is simply transformed and the positioning (for each coordinate system) changes. For
-            raster data, the translation part of the transformation is prepended to any tranformation already present in
-            the element (see Notes below for more details). Furthermore, again in the case of raster data,
-            if the transformation being applied has a rotation-like component, then the translation that is prepended
-            also takes into account for the fact that the rotated data will have some paddings on each corner, and so
-            it's origin must be shifted accordingly.
-            Please see notes for more details of how this parameter interact with xarray.DataArray for raster data.
-
-        Returns
-        -------
-        SpatialElement: Transformed spatial element.
-
-        Notes
-        -----
-        An affine transformation contains a linear transformation and a translation. For raster types,
-        only the linear transformation is applied to the data (e.g. the data is rotated or resized), but not the
-        translation part.
-        This means that calling Translation(...).transform(raster_element) will have the same effect as pre-pending the
-        translation to each transformation of the raster element.
-        Similarly, Translation(...).transform(raster_element, maintain_positioning=True) will not modify the raster
-        element. We are considering to change this behavior by letting translations modify the coordinates stored with
-        xarray.DataArray. If you are interested in this use case please get in touch by opening a GitHub Issue.
-        """
-        from spatialdata._core._transform_elements import _transform
-
-        transformed = _transform(element, self, maintain_positioning=maintain_positioning)
-        return transformed
 
     @abstractmethod
     def __eq__(self, other: Any) -> bool:

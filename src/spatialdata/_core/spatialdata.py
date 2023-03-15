@@ -43,7 +43,7 @@ from spatialdata.models import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata._core._spatial_query import BaseSpatialRequest
+    from spatialdata._core.operations.spatial_query import BaseSpatialRequest
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -450,7 +450,7 @@ class SpatialData:
         element
             The SpatialElement object for which the transformations to be written
         """
-        from spatialdata._core.spatialdata_operations import get_transformation
+        from spatialdata.transformations.operations import get_transformation
 
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
@@ -497,7 +497,7 @@ class SpatialData:
         -------
         The filtered SpatialData.
         """
-        from spatialdata._core.spatialdata_operations import get_transformation
+        from spatialdata.transformations.operations import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
         element_paths_in_coordinate_system = []
@@ -540,12 +540,13 @@ class SpatialData:
         -------
         The transformed element.
         """
-        from spatialdata._core.spatialdata_operations import (
+        from spatialdata import transform
+        from spatialdata.transformations.operations import (
             get_transformation_between_coordinate_systems,
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
-        transformed = t.transform(element)
+        transformed = transform(element, t)
         return transformed
 
     def transform_to_coordinate_system(
@@ -1107,13 +1108,13 @@ class SpatialData:
         return self._points
 
     @property
-    def shapes(self) -> dict[str, AnnData]:
+    def shapes(self) -> dict[str, GeoDataFrame]:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
 
     @property
     def coordinate_systems(self) -> list[str]:
-        from spatialdata._core.spatialdata_operations import get_transformation
+        from spatialdata.transformations.operations import get_transformation
 
         all_cs = set()
         gen = self._gen_elements_values()
@@ -1245,7 +1246,7 @@ class SpatialData:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
 
-        from spatialdata._core.spatialdata_operations import get_transformation
+        from spatialdata.transformations.operations import get_transformation
 
         descr += "\nwith coordinate systems:\n"
         coordinate_systems = self.coordinate_systems.copy()
@@ -1365,7 +1366,7 @@ class QueryManager:
         The SpatialData object containing the requested data.
         Elements with no valid data are omitted.
         """
-        from spatialdata._core._spatial_query import bounding_box_query
+        from spatialdata._core.operations.spatial_query import bounding_box_query
 
         return bounding_box_query(  # type: ignore[return-value]
             self._sdata,
@@ -1377,7 +1378,7 @@ class QueryManager:
         )
 
     def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
-        from spatialdata._core._spatial_query import BoundingBoxRequest
+        from spatialdata._core.operations.spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
             # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set

@@ -33,7 +33,6 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
-from spatialdata._core.transformations import BaseTransformation, Identity
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import C, X, Y, Z
@@ -50,6 +49,7 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
+from spatialdata.transformations.transformations import BaseTransformation, Identity
 
 # Types
 Chunks_t = Union[

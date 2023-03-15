@@ -11,20 +11,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData
-from spatialdata._core.spatialdata_operations import (
-    get_transformation,
-    remove_transformation,
-    set_transformation,
-)
-from spatialdata._core.transformations import (
-    Affine,
-    BaseTransformation,
-    Scale,
-    Sequence,
-    Translation,
-    _get_affine_for_element,
-)
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
@@ -38,6 +25,19 @@ from spatialdata.models import (
 )
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations._utils import _get_scale, compute_coordinates
+from spatialdata.transformations.operations import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
+from spatialdata.transformations.transformations import (
+    Affine,
+    BaseTransformation,
+    Scale,
+    Sequence,
+    Translation,
+    _get_affine_for_element,
+)
 
 
 def _compute_target_dimensions(
@@ -294,7 +294,9 @@ def _get_xarray_data_to_rasterize(
             m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
             m_linear = m[:-1, :-1]
             m_translation = m[:-1, -1]
-            from spatialdata._core._spatial_query import get_bounding_box_corners
+            from spatialdata._core.operations.spatial_query import (
+                get_bounding_box_corners,
+            )
 
             bb_corners = get_bounding_box_corners(
                 min_coordinate=min_coordinate, max_coordinate=max_coordinate, axes=axes

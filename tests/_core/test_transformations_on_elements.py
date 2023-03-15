@@ -9,20 +9,25 @@ from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
-from spatialdata import SpatialData
-from spatialdata._core._transform_elements import (
+from spatialdata import SpatialData, transform
+from spatialdata._core.operations.transform import (
     align_elements_using_landmarks,
     get_transformation_between_landmarks,
 )
-from spatialdata._core.spatialdata_operations import (
+from spatialdata.element_utils.element_utils import unpad_raster
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axis_names
+from spatialdata.transformations.operations import (
     get_transformation,
     get_transformation_between_coordinate_systems,
     remove_transformation,
     set_transformation,
 )
-from spatialdata._core.transformations import Affine, Identity, Scale, Translation
-from spatialdata.element_utils.element_utils import unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axis_names
+from spatialdata.transformations.transformations import (
+    Affine,
+    Identity,
+    Scale,
+    Translation,
+)
 
 
 class TestElementsTransform:
@@ -126,7 +131,9 @@ def test_transform_image_spatial_image(images: SpatialData):
         sdata.images["face"] = im_element
 
     affine = _get_affine(small_translation=False)
-    padded = affine.inverse().transform(affine.transform(sdata))
+    padded = transform(
+        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     _unpad_rasters(padded)
     # raise NotImplementedError("TODO: plot the images")
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -135,7 +142,9 @@ def test_transform_image_spatial_image(images: SpatialData):
 def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
     affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
+    padded = transform(
+        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     _unpad_rasters(padded)
     # TODO: unpad the image
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -144,7 +153,9 @@ def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
 def test_transform_labels_spatial_image(labels: SpatialData):
     sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
     affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
+    padded = transform(
+        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     _unpad_rasters(padded)
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -153,7 +164,9 @@ def test_transform_labels_spatial_image(labels: SpatialData):
 def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
     sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
     affine = _get_affine()
-    padded = affine.inverse().transform(affine.transform(sdata))
+    padded = transform(
+        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     _unpad_rasters(padded)
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -162,7 +175,9 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
-    new_points = affine.inverse().transform(affine.transform(points))
+    new_points = transform(
+        transform(points, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     keys0 = list(points.points.keys())
     keys1 = list(new_points.points.keys())
     assert keys0 == keys1
@@ -180,7 +195,9 @@ def test_transform_points(points: SpatialData):
 
 def test_transform_shapes(shapes: SpatialData):
     affine = _get_affine()
-    new_shapes = affine.inverse().transform(affine.transform(shapes))
+    new_shapes = transform(
+        transform(shapes, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    )
     keys0 = list(shapes.shapes.keys())
     keys1 = list(new_shapes.shapes.keys())
     assert keys0 == keys1

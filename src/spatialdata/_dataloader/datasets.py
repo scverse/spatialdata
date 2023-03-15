@@ -5,9 +5,7 @@ from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
 from spatialdata import SpatialData
-from spatialdata._core._rasterize import rasterize
-from spatialdata._core.spatialdata_operations import get_transformation
-from spatialdata._core.transformations import BaseTransformation
+from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,
@@ -18,6 +16,8 @@ from spatialdata.models import (
     get_axis_names,
     get_model,
 )
+from spatialdata.transformations.operations import get_transformation
+from spatialdata.transformations.transformations import BaseTransformation
 
 
 class ImageTilesDataset(Dataset):

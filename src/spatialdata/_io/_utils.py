@@ -18,10 +18,6 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.transformations import (
-    BaseTransformation,
-    _get_current_output_axes,
-)
 from spatialdata.element_utils.element_utils import iterate_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -29,6 +25,10 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
+from spatialdata.transformations.transformations import (
+    BaseTransformation,
+    _get_current_output_axes,
+)
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData

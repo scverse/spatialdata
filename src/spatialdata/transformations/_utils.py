@@ -11,14 +11,16 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._types import ArrayLike
-from spatialdata.models import SpatialElement, get_axis_names
-from spatialdata.models._utils import TRANSFORM_KEY, MappingToCoordinateSystem_t
 
 if TYPE_CHECKING:
-    from spatialdata._core.transformations import BaseTransformation, Scale
+    from spatialdata.models import SpatialElement
+    from spatialdata.models._utils import MappingToCoordinateSystem_t
+    from spatialdata.transformations.transformations import BaseTransformation, Scale
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
     if TRANSFORM_KEY in dict_container:
         d = dict_container[TRANSFORM_KEY]
         return d  # type: ignore[no-any-return]
@@ -36,6 +38,8 @@ def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSyste
 
 
 def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
     if TRANSFORM_KEY not in dict_container:
         dict_container[TRANSFORM_KEY] = {}
     dict_container[TRANSFORM_KEY] = transformations
@@ -73,6 +77,8 @@ def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
 
 @_get_transformations.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
     if TRANSFORM_KEY in e.attrs:
         raise ValueError(
             "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
@@ -97,9 +103,11 @@ def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
 
 @_set_transformations.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+    from spatialdata.models import get_axis_names
+
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
     dims = get_axis_names(e)
-    from spatialdata._core.transformations import Scale, Sequence
+    from spatialdata.transformations.transformations import Scale, Sequence
 
     i = 0
     old_shape: Optional[ArrayLike] = None
@@ -155,7 +163,7 @@ def compute_coordinates(
 
 
 def _get_scale(transforms: dict[str, Any]) -> Scale:
-    from spatialdata._core.transformations import Scale, Sequence
+    from spatialdata.transformations.transformations import Scale, Sequence
 
     all_scale_vectors = []
     all_scale_axes = []
@@ -193,6 +201,8 @@ def _(data: SpatialImage) -> SpatialImage:
 
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+    from spatialdata.models import get_axis_names
+
     spatial_coords = [ax for ax in get_axis_names(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
