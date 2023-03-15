@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
+from spatialdata.transformations.ngff.ngff_coordinate_system import (
+    NgffAxis,
+    NgffCoordinateSystem,
+)
 
 x_axis = NgffAxis(name="x", type="space", unit="micrometer")
 y_axis = NgffAxis(name="y", type="space", unit="micrometer")

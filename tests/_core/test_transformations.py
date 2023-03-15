@@ -5,18 +5,6 @@ import pytest
 import xarray.testing
 from xarray import DataArray
 
-from spatialdata._core.ngff._utils import get_default_coordinate_system
-from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata._core.ngff.ngff_transformations import (
-    NgffAffine,
-    NgffBaseTransformation,
-    NgffByDimension,
-    NgffIdentity,
-    NgffMapAxis,
-    NgffScale,
-    NgffSequence,
-    NgffTranslation,
-)
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -30,6 +18,18 @@ from spatialdata._core.transformations import (
 )
 from spatialdata.models import Image2DModel, PointsModel
 from spatialdata.models._utils import ValidAxis_t
+from spatialdata.transformations.ngff._utils import get_default_coordinate_system
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
+from spatialdata.transformations.ngff.ngff_transformations import (
+    NgffAffine,
+    NgffBaseTransformation,
+    NgffByDimension,
+    NgffIdentity,
+    NgffMapAxis,
+    NgffScale,
+    NgffSequence,
+    NgffTranslation,
+)
 
 
 def test_identity():

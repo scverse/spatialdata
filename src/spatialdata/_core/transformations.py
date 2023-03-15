@@ -8,11 +8,12 @@ import numpy as np
 import xarray as xr
 from xarray import DataArray
 
-from spatialdata._core.ngff.ngff_coordinate_system import (
+from spatialdata._types import ArrayLike
+from spatialdata.transformations.ngff.ngff_coordinate_system import (
     NgffCoordinateSystem,
     _get_spatial_axes,
 )
-from spatialdata._core.ngff.ngff_transformations import (
+from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
     NgffBaseTransformation,
     NgffIdentity,
@@ -21,7 +22,6 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
-from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata._utils import Number
@@ -101,7 +101,9 @@ class BaseTransformation(ABC):
         name: Optional[str] = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
-        from spatialdata._core.ngff._utils import get_default_coordinate_system
+        from spatialdata.transformations.ngff._utils import (
+            get_default_coordinate_system,
+        )
 
         cs = get_default_coordinate_system(axes)
         if unit is not None:

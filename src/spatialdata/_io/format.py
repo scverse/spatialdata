@@ -30,7 +30,7 @@ class RasterFormatV01(SpatialDataFormatV01):
         for shape in shapes:
             assert len(shape) == len(data_shape)
             scale = [full / level for full, level in zip(data_shape, shape)]
-            from spatialdata._core.ngff.ngff_transformations import NgffScale
+            from spatialdata.transformations.ngff.ngff_transformations import NgffScale
 
             coordinate_transformations.append([NgffScale(scale=scale).to_dict()])
         return coordinate_transformations
@@ -62,7 +62,7 @@ class RasterFormatV01(SpatialDataFormatV01):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata._core.ngff.ngff_transformations import (
+            from spatialdata.transformations.ngff.ngff_transformations import (
                 NgffBaseTransformation,
             )
 

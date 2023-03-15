@@ -4,9 +4,11 @@ import json
 import numpy as np
 import pytest
 
-from spatialdata._core.ngff._utils import get_default_coordinate_system
-from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata._core.ngff.ngff_transformations import (
+from spatialdata._types import ArrayLike
+from spatialdata.models import C, X, Y, Z
+from spatialdata.transformations.ngff._utils import get_default_coordinate_system
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
+from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
     NgffBaseTransformation,
     NgffByDimension,
@@ -17,8 +19,6 @@ from spatialdata._core.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
-from spatialdata._types import ArrayLike
-from spatialdata.models import C, X, Y, Z
 from tests._core.conftest import (
     c_cs,
     cyx_cs,

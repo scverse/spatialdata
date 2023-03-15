@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import copy
 
-from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 from spatialdata.models import C, X, Y, Z
+from spatialdata.transformations.ngff.ngff_coordinate_system import (
+    NgffAxis,
+    NgffCoordinateSystem,
+)
+
+__all__ = "get_default_coordinate_system"
 
 # "unit" is a default placeholder value. This is not suported by NGFF so the user should replace it before saving
 x_axis = NgffAxis(name=X, type="space", unit="unit")

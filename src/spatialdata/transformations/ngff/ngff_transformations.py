@@ -8,8 +8,8 @@ from typing import Any, Optional, Union
 import numpy as np
 from typing_extensions import Self
 
-from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._types import ArrayLike
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 __all__ = [
     "NgffBaseTransformation",

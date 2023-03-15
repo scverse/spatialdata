@@ -3,7 +3,10 @@ import json
 
 import pytest
 
-from spatialdata._core.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
+from spatialdata.transformations.ngff.ngff_coordinate_system import (
+    NgffAxis,
+    NgffCoordinateSystem,
+)
 
 input_dict = {
     "name": "volume_micrometers",

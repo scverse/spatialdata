@@ -18,7 +18,6 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import (
     BaseTransformation,
     _get_current_output_axes,
@@ -29,6 +28,7 @@ from spatialdata.models._utils import (
     ValidAxis_t,
     _validate_mapping_to_coordinate_system_type,
 )
+from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData
