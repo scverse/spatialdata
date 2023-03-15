@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 # from https://stackoverflow.com/a/24860799/3343783
-import filecmp
-import os.path
 import re
-import tempfile
 from collections.abc import Generator
-from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 import dask.array as da
 import numpy as np
-from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -28,70 +23,7 @@ from spatialdata._types import ArrayLike
 Number = Union[int, float]
 
 if TYPE_CHECKING:
-    from spatialdata import SpatialData
-
-
-class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
-    """
-    Compare the content of dir1 and dir2. In contrast with filecmp.dircmp, this
-    subclass compares the content of files with the same path.
-    """
-
-    def phase3(self) -> None:
-        """
-        Find out differences between common files.
-        Ensure we are using content comparison with shallow=False.
-        """
-        fcomp = filecmp.cmpfiles(self.left, self.right, self.common_files, shallow=False)
-        self.same_files, self.diff_files, self.funny_files = fcomp
-
-
-def _are_directories_identical(
-    dir1: Any,
-    dir2: Any,
-    exclude_regexp: Optional[str] = None,
-    _root_dir1: Optional[str] = None,
-    _root_dir2: Optional[str] = None,
-) -> bool:
-    """
-    Compare two directory trees content.
-    Return False if they differ, True is they are the same.
-    """
-    if _root_dir1 is None:
-        _root_dir1 = dir1
-    if _root_dir2 is None:
-        _root_dir2 = dir2
-    if exclude_regexp is not None:
-        if re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1)) or re.match(
-            rf"{_root_dir2}/" + exclude_regexp, str(dir2)
-        ):
-            return True
-
-    compared = dircmp(dir1, dir2)
-    if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
-        return False
-    for subdir in compared.common_dirs:
-        if not _are_directories_identical(
-            os.path.join(dir1, subdir),
-            os.path.join(dir2, subdir),
-            exclude_regexp=exclude_regexp,
-            _root_dir1=_root_dir1,
-            _root_dir2=_root_dir2,
-        ):
-            return False
-    return True
-
-
-def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
-    from spatialdata import SpatialData
-
-    if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
-        return False
-    # TODO: if the sdata object is backed on disk, don't create a new zarr file
-    with tempfile.TemporaryDirectory() as tmpdir:
-        a.write(os.path.join(tmpdir, "a.zarr"))
-        b.write(os.path.join(tmpdir, "b.zarr"))
-        return _are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))
+    pass
 
 
 def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[SpatialImage, MultiscaleSpatialImage]:
@@ -179,46 +111,6 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     return unpadded
 
 
-def _get_backing_files_raster(raster: DataArray) -> list[str]:
-    files = []
-    for k, v in raster.data.dask.layers.items():
-        if k.startswith("original-from-zarr-"):
-            mapping = v.mapping[k]
-            path = mapping.store.path
-            files.append(os.path.realpath(path))
-    return files
-
-
-@singledispatch
-def get_backing_files(element: Union[SpatialImage, MultiscaleSpatialImage, DaskDataFrame]) -> list[str]:
-    raise TypeError(f"Unsupported type: {type(element)}")
-
-
-@get_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
-    return _get_backing_files_raster(element)
-
-
-@get_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
-    xdata0 = next(iter(iterate_pyramid_levels(element)))
-    return _get_backing_files_raster(xdata0)
-
-
-@get_backing_files.register(DaskDataFrame)
-def _(element: DaskDataFrame) -> list[str]:
-    files = []
-    layers = element.dask.layers
-    for k, v in layers.items():
-        if k.startswith("read-parquet-"):
-            t = v.creation_info["args"]
-            assert isinstance(t, tuple)
-            assert len(t) == 1
-            parquet_file = t[0]
-            files.append(os.path.realpath(parquet_file))
-    return files
-
-
 # TODO: probably we want this method to live in multiscale_spatial_image
 def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSpatialImage:
     d = {}
@@ -230,6 +122,8 @@ def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSp
     return MultiscaleSpatialImage.from_dict(d)
 
 
+# TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
+#  Use only one and expose it to the user in this file
 def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray, None, None]:
     """
     Iterate over the pyramid levels of a multiscale spatial image.
@@ -274,7 +168,7 @@ def natural_keys(text: str) -> list[Union[int, str]]:
     return [atoi(c) for c in re.split(r"(\d+)", text)]
 
 
-def affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLike:
+def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLike:
     assert len(data.shape) == 2
     assert matrix.shape[1] - 1 == data.shape[1]
     vector_part = matrix[:-1, :-1]

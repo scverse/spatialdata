@@ -17,7 +17,7 @@ from spatialdata._core.models import (
 )
 from spatialdata._core.spatialdata_operations import get_transformation
 from spatialdata._core.transformations import BaseTransformation
-from spatialdata.utils import affine_matrix_multiplication
+from spatialdata.utils import _affine_matrix_multiplication
 
 
 class ImageTilesDataset(Dataset):
@@ -115,7 +115,7 @@ class ImageTilesDataset(Dataset):
             t = get_transformation(regions, self.target_coordinate_system)
             assert isinstance(t, BaseTransformation)
             aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
-            transformed_centroid = np.squeeze(affine_matrix_multiplication(aff, centroid), 0)
+            transformed_centroid = np.squeeze(_affine_matrix_multiplication(aff, centroid), 0)
         elif isinstance(regions, SpatialImage):
             raise NotImplementedError("labels not supported yet")
         elif isinstance(regions, MultiscaleSpatialImage):

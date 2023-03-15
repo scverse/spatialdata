@@ -36,9 +36,10 @@ from spatialdata._io import (
     write_shapes,
     write_table,
 )
+from spatialdata._io._utils import get_backing_files
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import get_backing_files, natural_keys
+from spatialdata.utils import natural_keys
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest

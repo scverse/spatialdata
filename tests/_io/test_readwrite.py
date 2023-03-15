@@ -17,7 +17,7 @@ from spatialdata._core.spatialdata_operations import (
     set_transformation,
 )
 from spatialdata._core.transformations import Identity, Scale
-from spatialdata.utils import _are_directories_identical
+from spatialdata._io._utils import _are_directories_identical
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 
