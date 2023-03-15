@@ -16,20 +16,15 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import (
-    DEFAULT_COORDINATE_SYSTEM,
-    SpatialElement,
-    _get_scale,
-    compute_coordinates,
-    get_axis_names,
-)
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     set_transformation,
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import get_model
+from spatialdata.models import SpatialElement, get_axis_names, get_model
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.transformations._utils import _get_scale, compute_coordinates
 
 if TYPE_CHECKING:
     from spatialdata._core.transformations import (

@@ -656,7 +656,7 @@ class NgffAffine(NgffBaseTransformation):
         output_axes
             the output axes.
         """
-        from spatialdata._core.core_utils import C, X, Y, Z
+        from spatialdata.models import C, X, Y, Z
 
         assert all([ax in (X, Y, Z, C) for ax in input_axes])
         assert all([ax in (X, Y, Z, C) for ax in output_axes])

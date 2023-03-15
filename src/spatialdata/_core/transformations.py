@@ -24,8 +24,9 @@ from spatialdata._core.ngff.ngff_transformations import (
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
-    from spatialdata._core.core_utils import SpatialElement, ValidAxis_t
     from spatialdata._utils import Number
+    from spatialdata.models import SpatialElement
+    from spatialdata.models._utils import ValidAxis_t
 
 __all__ = [
     "BaseTransformation",
@@ -46,7 +47,7 @@ class BaseTransformation(ABC):
     @staticmethod
     def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
         """This function is to allow to call validate_axes() from this file in multiple places while avoiding circular imports."""
-        from spatialdata._core.core_utils import validate_axes
+        from spatialdata.models._utils import validate_axes
 
         validate_axes(axes)
 
@@ -100,7 +101,7 @@ class BaseTransformation(ABC):
         name: Optional[str] = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
-        from spatialdata._core.core_utils import get_default_coordinate_system
+        from spatialdata._core.ngff._utils import get_default_coordinate_system
 
         cs = get_default_coordinate_system(axes)
         if unit is not None:
@@ -110,7 +111,7 @@ class BaseTransformation(ABC):
         if name is not None:
             cs.name = name
         elif default_to_global:
-            from spatialdata._core.core_utils import DEFAULT_COORDINATE_SYSTEM
+            from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
             cs.name = DEFAULT_COORDINATE_SYSTEM
         return cs
@@ -294,7 +295,7 @@ class Identity(BaseTransformation):
 class MapAxis(BaseTransformation):
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
         # to avoid circular imports
-        from spatialdata._core.core_utils import validate_axis_name
+        from spatialdata.models import validate_axis_name
 
         assert isinstance(map_axis, dict)
         for des_ax, src_ax in map_axis.items():
@@ -853,7 +854,7 @@ def _get_current_output_axes(
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata._core.core_utils import get_axis_names
+    from spatialdata.models import get_axis_names
 
     input_axes = get_axis_names(element)
     output_axes = _get_current_output_axes(transformation, input_axes)

@@ -1,3 +1,16 @@
+from __future__ import annotations
+
+from spatialdata.models._utils import (
+    C,
+    SpatialElement,
+    X,
+    Y,
+    Z,
+    get_axis_names,
+    get_spatial_axes,
+    validate_axes,
+    validate_axis_name,
+)
 from spatialdata.models.models import (
     Image2DModel,
     Image3DModel,
@@ -18,4 +31,13 @@ __all__ = [
     "PointsModel",
     "TableModel",
     "get_model",
+    "SpatialElement",
+    "get_axis_names",
+    "get_spatial_axes",
+    "validate_axes",
+    "validate_axis_name",
+    "X",
+    "Y",
+    "Z",
+    "C",
 ]

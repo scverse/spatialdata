@@ -3,8 +3,9 @@ import pytest
 from spatial_image import SpatialImage
 
 from spatialdata._core._rasterize import rasterize
-from spatialdata._core.core_utils import get_axis_names, get_spatial_axes
 from spatialdata._io._utils import _iter_multiscale
+from spatialdata.models import get_axis_names
+from spatialdata.models._utils import get_spatial_axes
 from tests.conftest import _get_images, _get_labels
 
 

@@ -11,15 +11,17 @@ from anndata import AnnData
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
 
-from spatialdata._core.core_utils import (
-    DEFAULT_COORDINATE_SYSTEM,
-    SpatialElement,
-    _get_transformations,
-    _set_transformations,
-    has_type_spatial_element,
-)
 from spatialdata._core.transformations import BaseTransformation, Identity, Sequence
 from spatialdata.models import TableModel
+from spatialdata.models._utils import (
+    DEFAULT_COORDINATE_SYSTEM,
+    SpatialElement,
+    has_type_spatial_element,
+)
+from spatialdata.transformations._utils import (
+    _get_transformations,
+    _set_transformations,
+)
 
 __all__ = [
     "set_transformation",

@@ -18,7 +18,6 @@ from ome_zarr.types import JSONDict
 from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
-from spatialdata._core.core_utils import SpatialElement, get_axis_names
 from spatialdata._io import (
     write_image,
     write_labels,
@@ -37,7 +36,9 @@ from spatialdata.models import (
     Labels3DModel,
     PointsModel,
     ShapesModel,
+    SpatialElement,
     TableModel,
+    get_axis_names,
     get_model,
 )
 

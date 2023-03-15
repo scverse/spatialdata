@@ -1,6 +1,6 @@
 import pytest
 
-from spatialdata._core.core_utils import validate_axis_name
+from spatialdata.models._utils import validate_axis_name
 
 
 def test_validate_axis_name():

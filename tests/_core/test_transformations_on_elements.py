@@ -14,7 +14,6 @@ from spatialdata._core._transform_elements import (
     align_elements_using_landmarks,
     get_transformation_between_landmarks,
 )
-from spatialdata._core.core_utils import get_axis_names
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     get_transformation_between_coordinate_systems,
@@ -22,8 +21,8 @@ from spatialdata._core.spatialdata_operations import (
     set_transformation,
 )
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
-from spatialdata.element_utils._utils import unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel
+from spatialdata.element_utils.element_utils import unpad_raster
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axis_names
 
 
 class TestElementsTransform:

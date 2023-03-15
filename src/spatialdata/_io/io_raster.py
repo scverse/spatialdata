@@ -17,12 +17,6 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.core_utils import (
-    _get_transformations,
-    _get_transformations_xarray,
-    _set_transformations,
-    compute_coordinates,
-)
 from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -30,6 +24,12 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import CurrentRasterFormat
+from spatialdata.transformations._utils import (
+    _get_transformations,
+    _get_transformations_xarray,
+    _set_transformations,
+    compute_coordinates,
+)
 
 
 def _read_multiscale(

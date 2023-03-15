@@ -7,8 +7,6 @@ from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defin
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
-from spatialdata import get_axis_names
-from spatialdata._core.core_utils import _get_transformations, _set_transformations
 from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -16,6 +14,11 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat
+from spatialdata.models import get_axis_names
+from spatialdata.transformations._utils import (
+    _get_transformations,
+    _set_transformations,
+)
 
 
 def _read_points(

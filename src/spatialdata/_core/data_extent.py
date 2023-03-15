@@ -4,8 +4,8 @@ import numpy as np
 from geopandas import GeoDataFrame
 from shapely import Point
 
-from spatialdata._core.core_utils import get_axis_names
 from spatialdata._types import ArrayLike
+from spatialdata.models import get_axis_names
 
 
 def _get_bounding_box_of_circle_elements(shapes: GeoDataFrame) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:

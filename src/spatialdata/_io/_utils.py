@@ -18,17 +18,17 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.core_utils import (
-    MappingToCoordinateSystem_t,
-    ValidAxis_t,
-    _validate_mapping_to_coordinate_system_type,
-)
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata._core.transformations import (
     BaseTransformation,
     _get_current_output_axes,
 )
-from spatialdata.element_utils._utils import iterate_pyramid_levels
+from spatialdata.element_utils.element_utils import iterate_pyramid_levels
+from spatialdata.models._utils import (
+    MappingToCoordinateSystem_t,
+    ValidAxis_t,
+    _validate_mapping_to_coordinate_system_type,
+)
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData
@@ -240,3 +240,33 @@ def _(element: DaskDataFrame) -> list[str]:
             parquet_file = t[0]
             files.append(os.path.realpath(parquet_file))
     return files
+
+
+@singledispatch
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data.
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+    """
+    raise ValueError(f"Cannot get channels from {type(data)}")
+
+
+@get_channels.register
+def _(data: SpatialImage) -> list[Any]:
+    return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
+
+
+@get_channels.register
+def _(data: MultiscaleSpatialImage) -> list[Any]:
+    name = list({list(data[i].data_vars.keys())[0] for i in data.keys()})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
+    if len(channels) > 1:
+        raise ValueError("TODO")
+    return list(next(iter(channels)))

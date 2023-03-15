@@ -23,10 +23,6 @@ from spatial_image import SpatialImage, to_spatial_image
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import (
-    _set_transformations,
-    _set_transformations_xarray,
-)
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     set_transformation,
@@ -44,6 +40,10 @@ from spatialdata.models import (
     get_model,
 )
 from spatialdata.models.models import RasterSchema
+from spatialdata.transformations._utils import (
+    _set_transformations,
+    _set_transformations_xarray,
+)
 from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,

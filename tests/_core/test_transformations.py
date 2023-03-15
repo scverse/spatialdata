@@ -5,7 +5,7 @@ import pytest
 import xarray.testing
 from xarray import DataArray
 
-from spatialdata._core.core_utils import ValidAxis_t, get_default_coordinate_system
+from spatialdata._core.ngff._utils import get_default_coordinate_system
 from spatialdata._core.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata._core.ngff.ngff_transformations import (
     NgffAffine,
@@ -29,6 +29,7 @@ from spatialdata._core.transformations import (
     _get_affine_for_element,
 )
 from spatialdata.models import Image2DModel, PointsModel
+from spatialdata.models._utils import ValidAxis_t
 
 
 def test_identity():

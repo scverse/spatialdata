@@ -14,14 +14,11 @@ __all__ = [
     "SpatialData",
     "read_zarr",
     # --- from spatialdata._core.core_utils ---
-    "SpatialElement",
     "concatenate",
-    "get_axis_names",
     # --- from spatialdata._io ---
     "element_utils",
 ]
 from spatialdata import element_utils, models
-from spatialdata._core.core_utils import SpatialElement, get_axis_names
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.spatialdata_operations import concatenate
 

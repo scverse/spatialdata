@@ -33,24 +33,23 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
-from spatialdata._core.core_utils import (
-    DEFAULT_COORDINATE_SYSTEM,
-    TRANSFORM_KEY,
-    C,
-    MappingToCoordinateSystem_t,
-    SpatialElement,
-    X,
-    Y,
-    Z,
-    _get_transformations,
-    _set_transformations,
-    _validate_mapping_to_coordinate_system_type,
-    compute_coordinates,
-    get_axis_names,
-)
 from spatialdata._core.transformations import BaseTransformation, Identity
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata.models import C, X, Y, Z
+from spatialdata.models._utils import (
+    DEFAULT_COORDINATE_SYSTEM,
+    TRANSFORM_KEY,
+    MappingToCoordinateSystem_t,
+    SpatialElement,
+    _validate_mapping_to_coordinate_system_type,
+    get_axis_names,
+)
+from spatialdata.transformations._utils import (
+    _get_transformations,
+    _set_transformations,
+    compute_coordinates,
+)
 
 # Types
 Chunks_t = Union[

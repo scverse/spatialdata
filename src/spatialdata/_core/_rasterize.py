@@ -12,13 +12,6 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.core_utils import (
-    SpatialElement,
-    _get_scale,
-    compute_coordinates,
-    get_axis_names,
-    get_spatial_axes,
-)
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     remove_transformation,
@@ -39,8 +32,12 @@ from spatialdata.models import (
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
+    SpatialElement,
+    get_axis_names,
     get_model,
 )
+from spatialdata.models._utils import get_spatial_axes
+from spatialdata.transformations._utils import _get_scale, compute_coordinates
 
 
 def _compute_target_dimensions(

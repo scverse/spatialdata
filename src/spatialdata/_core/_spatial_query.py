@@ -15,13 +15,7 @@ from shapely.geometry import Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData, SpatialElement
-from spatialdata._core.core_utils import (
-    ValidAxis_t,
-    compute_coordinates,
-    get_axis_names,
-    get_spatial_axes,
-)
+from spatialdata import SpatialData
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -36,9 +30,13 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     ShapesModel,
+    SpatialElement,
     TableModel,
+    get_axis_names,
     get_model,
 )
+from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
+from spatialdata.transformations._utils import compute_coordinates
 
 
 def get_bounding_box_corners(
