@@ -67,3 +67,21 @@ class ErrorFormatterABC(ABC):
 # https://github.com/napari/napari/blob/9ea0159ad2b690556fe56ce480886d8f0b79ffae/napari/utils/misc.py#L300-L319
 class ModeEnum(str, ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):
     """Enum which prints available values when invalid value has been passed."""
+
+
+# example usage:
+# from enum import unique
+#
+# from spatialdata._constants._enum import ModeEnum
+#
+#
+# @unique
+# class RasterType(ModeEnum):
+#     IMAGE = "Image"
+#     LABEL = "Label"
+#
+#
+# @unique
+# class ShapeType(ModeEnum):
+#     CIRCLE = "Circle"
+#     SQUARE = "Square"

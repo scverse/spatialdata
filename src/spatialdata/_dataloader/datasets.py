@@ -17,7 +17,7 @@ from spatialdata._core.models import (
 )
 from spatialdata._core.spatialdata_operations import get_transformation
 from spatialdata._core.transformations import BaseTransformation
-from spatialdata.utils import _affine_matrix_multiplication
+from spatialdata._utils import _affine_matrix_multiplication
 
 
 class ImageTilesDataset(Dataset):

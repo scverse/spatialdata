@@ -23,7 +23,7 @@ from spatialdata._core.spatialdata_operations import (
     set_transformation,
 )
 from spatialdata._core.transformations import Affine, Identity, Scale, Translation
-from spatialdata.utils import unpad_raster
+from spatialdata.element_utils._utils import unpad_raster
 
 
 class TestElementsTransform:

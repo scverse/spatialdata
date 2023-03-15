@@ -15,7 +15,10 @@ from spatialdata import read_zarr
 from spatialdata._core.models import get_schema
 from spatialdata._core.transformations import Affine
 from spatialdata._io._utils import get_backing_files
-from spatialdata.utils import multiscale_spatial_image_from_data_tree, unpad_raster
+from spatialdata.element_utils._utils import (
+    multiscale_spatial_image_from_data_tree,
+    unpad_raster,
+)
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:

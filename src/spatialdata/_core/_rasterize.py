@@ -40,7 +40,7 @@ from spatialdata._core.transformations import (
     _get_affine_for_element,
 )
 from spatialdata._types import ArrayLike
-from spatialdata.utils import Number, _parse_list_into_array
+from spatialdata._utils import Number, _parse_list_into_array
 
 
 def _compute_target_dimensions(

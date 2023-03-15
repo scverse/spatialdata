@@ -38,7 +38,7 @@ from spatialdata._core.transformations import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import Number, _parse_list_into_array
+from spatialdata._utils import Number, _parse_list_into_array
 
 
 def get_bounding_box_corners(

@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import zarr
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -18,7 +18,6 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata import SpatialData
 from spatialdata._core.core_utils import (
     MappingToCoordinateSystem_t,
     ValidAxis_t,
@@ -29,7 +28,10 @@ from spatialdata._core.transformations import (
     BaseTransformation,
     _get_current_output_axes,
 )
-from spatialdata.utils import iterate_pyramid_levels
+from spatialdata.element_utils._utils import iterate_pyramid_levels
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 # suppress logger debug from ome_zarr with context manager

@@ -25,7 +25,7 @@ from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata._core.core_utils import SpatialElement, ValidAxis_t
-    from spatialdata.utils import Number
+    from spatialdata._utils import Number
 
 __all__ = [
     "BaseTransformation",
@@ -386,7 +386,7 @@ class MapAxis(BaseTransformation):
 
 class Translation(BaseTransformation):
     def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
-        from spatialdata.utils import _parse_list_into_array
+        from spatialdata._utils import _parse_list_into_array
 
         self.translation = _parse_list_into_array(translation)
         self.validate_axes(axes)
@@ -473,7 +473,7 @@ class Translation(BaseTransformation):
 
 class Scale(BaseTransformation):
     def __init__(self, scale: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
-        from spatialdata.utils import _parse_list_into_array
+        from spatialdata._utils import _parse_list_into_array
 
         self.scale = _parse_list_into_array(scale)
         self.validate_axes(axes)
@@ -560,7 +560,7 @@ class Affine(BaseTransformation):
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:
-        from spatialdata.utils import _parse_list_into_array
+        from spatialdata._utils import _parse_list_into_array
 
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)

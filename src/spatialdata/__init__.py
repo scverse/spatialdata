@@ -27,8 +27,9 @@ __all__ = [
     "concatenate",
     "get_axis_names",
     # --- from spatialdata._io ---
+    "element_utils",
 ]
-
+from spatialdata import element_utils
 from spatialdata._core.core_utils import SpatialElement, get_axis_names
 from spatialdata._core.models import (
     Image2DModel,

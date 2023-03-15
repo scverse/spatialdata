@@ -39,7 +39,7 @@ from spatialdata._io import (
 from spatialdata._io._utils import get_backing_files
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.utils import natural_keys
+from spatialdata._utils import _natural_keys
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest
@@ -1174,7 +1174,7 @@ class SpatialData:
                 descr = rreplace(descr, h("level1.0"), "    └── ", 1)
             else:
                 unsorted_elements = attribute.items()
-                sorted_elements = sorted(unsorted_elements, key=lambda x: natural_keys(x[0]))
+                sorted_elements = sorted(unsorted_elements, key=lambda x: _natural_keys(x[0]))
                 for k, v in sorted_elements:
                     descr += f"{h('empty_line')}"
                     descr_class = v.__class__.__name__
@@ -1248,7 +1248,7 @@ class SpatialData:
 
         descr += "\nwith coordinate systems:\n"
         coordinate_systems = self.coordinate_systems.copy()
-        coordinate_systems.sort(key=natural_keys)
+        coordinate_systems.sort(key=_natural_keys)
         for i, cs in enumerate(coordinate_systems):
             descr += f"▸ {cs!r}"
             gen = self._gen_elements()
@@ -1262,7 +1262,7 @@ class SpatialData:
                         elements_in_cs[k] = []
                     elements_in_cs[k].append(name)
             for element_names in elements_in_cs.values():
-                element_names.sort(key=natural_keys)
+                element_names.sort(key=_natural_keys)
             if len(elements_in_cs) > 0:
                 elements = ", ".join(
                     [
