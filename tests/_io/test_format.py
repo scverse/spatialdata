@@ -3,8 +3,8 @@ from typing import Any, Optional
 import pytest
 from shapely import GeometryType
 
-from spatialdata._core.models import PointsModel, ShapesModel
 from spatialdata._io.format import CurrentPointsFormat, CurrentShapesFormat
+from spatialdata.models import PointsModel, ShapesModel
 
 Points_f = CurrentPointsFormat()
 Shapes_f = CurrentShapesFormat()

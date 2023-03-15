@@ -18,8 +18,8 @@ from spatialdata._core.core_utils import (
     _set_transformations,
     has_type_spatial_element,
 )
-from spatialdata._core.models import TableModel
 from spatialdata._core.transformations import BaseTransformation, Identity, Sequence
+from spatialdata.models import TableModel
 
 __all__ = [
     "set_transformation",

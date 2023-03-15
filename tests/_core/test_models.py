@@ -27,23 +27,23 @@ from spatialdata._core.core_utils import (
     _set_transformations,
     _set_transformations_xarray,
 )
-from spatialdata._core.models import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    PointsModel,
-    RasterSchema,
-    ShapesModel,
-    TableModel,
-    get_schema,
-)
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     set_transformation,
 )
 from spatialdata._core.transformations import Scale
 from spatialdata._types import ArrayLike
+from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+    get_schema,
+)
+from spatialdata.models.models import RasterSchema
 from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
 from tests.conftest import (
     _get_images,

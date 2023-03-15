@@ -11,19 +11,19 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-)
 from spatialdata._core.spatialdata_operations import (
     _concatenate_tables,
     concatenate,
     set_transformation,
 )
 from spatialdata._core.transformations import Identity, Scale
+from spatialdata.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+)
 from tests.conftest import _get_table
 
 
@@ -107,7 +107,7 @@ def test_filter_by_coordinate_system(full_sdata):
 
 
 def test_filter_by_coordinate_system_also_table(full_sdata):
-    from spatialdata._core.models import TableModel
+    from spatialdata.models import TableModel
 
     full_sdata.table.obs["annotated_shapes"] = np.random.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table

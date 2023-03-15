@@ -9,16 +9,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
 from spatial_image import SpatialImage
 
-from spatialdata import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    PointsModel,
-    ShapesModel,
-    SpatialData,
-    TableModel,
-)
+from spatialdata import SpatialData
 from spatialdata._core._spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
@@ -27,6 +18,15 @@ from spatialdata._core._spatial_query import (
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     set_transformation,
+)
+from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
 )
 
 

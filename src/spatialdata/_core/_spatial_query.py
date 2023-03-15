@@ -22,13 +22,6 @@ from spatialdata._core.core_utils import (
     get_axis_names,
     get_spatial_axes,
 )
-from spatialdata._core.models import (
-    Labels2DModel,
-    Labels3DModel,
-    ShapesModel,
-    TableModel,
-    get_schema,
-)
 from spatialdata._core.transformations import (
     Affine,
     BaseTransformation,
@@ -39,6 +32,13 @@ from spatialdata._core.transformations import (
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata.models import (
+    Labels2DModel,
+    Labels3DModel,
+    ShapesModel,
+    TableModel,
+    get_schema,
+)
 
 
 def get_bounding_box_corners(

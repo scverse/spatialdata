@@ -8,7 +8,7 @@ from geopandas import GeoDataFrame
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
 
-from spatialdata import ShapesModel, get_axis_names
+from spatialdata import get_axis_names
 from spatialdata._core.core_utils import _get_transformations, _set_transformations
 from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
@@ -17,6 +17,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentShapesFormat
+from spatialdata.models import ShapesModel
 
 
 def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]

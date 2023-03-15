@@ -19,16 +19,6 @@ from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import SpatialElement, get_axis_names
-from spatialdata._core.models import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-    get_schema,
-)
 from spatialdata._io import (
     write_image,
     write_labels,
@@ -40,6 +30,16 @@ from spatialdata._io._utils import get_backing_files
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _natural_keys
+from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+    get_schema,
+)
 
 if TYPE_CHECKING:
     from spatialdata._core._spatial_query import BaseSpatialRequest

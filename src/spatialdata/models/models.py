@@ -64,18 +64,6 @@ ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 Transform_s = AttrSchema(BaseTransformation, None)
 
 
-__all__ = [
-    "Labels2DModel",
-    "Labels3DModel",
-    "Image2DModel",
-    "Image3DModel",
-    "ShapesModel",
-    "PointsModel",
-    "TableModel",
-    "get_schema",
-]
-
-
 def _parse_transformations(
     element: SpatialElement, transformations: Optional[MappingToCoordinateSystem_t] = None
 ) -> None:

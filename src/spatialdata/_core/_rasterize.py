@@ -19,13 +19,6 @@ from spatialdata._core.core_utils import (
     get_axis_names,
     get_spatial_axes,
 )
-from spatialdata._core.models import (
-    Image2DModel,
-    Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
-    get_schema,
-)
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     remove_transformation,
@@ -41,6 +34,13 @@ from spatialdata._core.transformations import (
 )
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    get_schema,
+)
 
 
 def _compute_target_dimensions(

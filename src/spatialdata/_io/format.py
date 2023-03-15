@@ -8,7 +8,7 @@ from shapely import GeometryType
 from spatial_image import SpatialImage
 
 from spatialdata._core.core_utils import get_channels
-from spatialdata._core.models import PointsModel, ShapesModel
+from spatialdata.models import PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
 

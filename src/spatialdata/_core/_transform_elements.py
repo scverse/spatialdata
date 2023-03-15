@@ -23,13 +23,13 @@ from spatialdata._core.core_utils import (
     compute_coordinates,
     get_axis_names,
 )
-from spatialdata._core.models import get_schema
 from spatialdata._core.spatialdata_operations import (
     get_transformation,
     set_transformation,
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata.models import get_schema
 
 if TYPE_CHECKING:
     from spatialdata._core.transformations import (
@@ -209,15 +209,15 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 @_transform.register(SpatialImage)
 def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool) -> SpatialImage:
     schema = get_schema(data)
-    from spatialdata._core.models import (
+    from spatialdata._core.spatialdata_operations import (
+        get_transformation,
+        set_transformation,
+    )
+    from spatialdata.models import (
         Image2DModel,
         Image3DModel,
         Labels2DModel,
         Labels3DModel,
-    )
-    from spatialdata._core.spatialdata_operations import (
-        get_transformation,
-        set_transformation,
     )
 
     # labels need to be preserved after the resizing of the image
@@ -253,17 +253,17 @@ def _(
     data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool
 ) -> MultiscaleSpatialImage:
     schema = get_schema(data)
-    from spatialdata._core.models import (
-        Image2DModel,
-        Image3DModel,
-        Labels2DModel,
-        Labels3DModel,
-    )
     from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
     )
     from spatialdata._core.transformations import BaseTransformation, Sequence
+    from spatialdata.models import (
+        Image2DModel,
+        Image3DModel,
+        Labels2DModel,
+        Labels3DModel,
+    )
 
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
@@ -310,11 +310,11 @@ def _(
 
 @_transform.register(DaskDataFrame)
 def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> DaskDataFrame:
-    from spatialdata._core.models import PointsModel
     from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
     )
+    from spatialdata.models import PointsModel
 
     axes = get_axis_names(data)
     arrays = []
@@ -344,8 +344,8 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
 @_transform.register(GeoDataFrame)
 def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool) -> GeoDataFrame:
-    from spatialdata._core.models import ShapesModel
     from spatialdata._core.spatialdata_operations import get_transformation
+    from spatialdata.models import ShapesModel
 
     ndim = len(get_axis_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this

@@ -13,7 +13,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata import SpatialData
-from spatialdata._core.models import (
+from spatialdata.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
