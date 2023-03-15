@@ -10,7 +10,7 @@ from shapely import linearrings, polygons
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
-from spatialdata._core.operations.spatial_query import (
+from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,

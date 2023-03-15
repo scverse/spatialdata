@@ -25,8 +25,8 @@ __all__ = [
 from spatialdata import element_utils, models, transformations
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.operations.rasterize import rasterize
-from spatialdata._core.operations.spatial_query import bounding_box_query
 from spatialdata._core.operations.transform import transform
+from spatialdata._core.query.spatial_query import bounding_box_query
 from spatialdata._core.spatialdata import SpatialData
 
 from ._io.io_zarr import read_zarr

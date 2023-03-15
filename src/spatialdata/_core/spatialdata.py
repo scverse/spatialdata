@@ -43,7 +43,7 @@ from spatialdata.models import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata._core.operations.spatial_query import BaseSpatialRequest
+    from spatialdata._core.query.spatial_query import BaseSpatialRequest
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -1366,7 +1366,7 @@ class QueryManager:
         The SpatialData object containing the requested data.
         Elements with no valid data are omitted.
         """
-        from spatialdata._core.operations.spatial_query import bounding_box_query
+        from spatialdata._core.query.spatial_query import bounding_box_query
 
         return bounding_box_query(  # type: ignore[return-value]
             self._sdata,
@@ -1378,7 +1378,7 @@ class QueryManager:
         )
 
     def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
-        from spatialdata._core.operations.spatial_query import BoundingBoxRequest
+        from spatialdata._core.query.spatial_query import BoundingBoxRequest
 
         if isinstance(request, BoundingBoxRequest):
             # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
