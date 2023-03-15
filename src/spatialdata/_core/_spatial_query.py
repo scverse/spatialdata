@@ -37,7 +37,7 @@ from spatialdata.models import (
     Labels3DModel,
     ShapesModel,
     TableModel,
-    get_schema,
+    get_model,
 )
 
 
@@ -307,7 +307,7 @@ def _(
         instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
         for _, elements in new_elements.items():
             for name, element in elements.items():
-                if get_schema(element) == Labels2DModel or get_schema(element) == Labels3DModel:
+                if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
                     if isinstance(element, SpatialImage):
                         # get unique labels value (including 0 if present)
                         instances = da.unique(element.data).compute()
@@ -317,7 +317,7 @@ def _(
                         assert len(v) == 1
                         xdata = next(iter(v))
                         instances = da.unique(xdata.data).compute()
-                elif get_schema(element) == ShapesModel:
+                elif get_model(element) == ShapesModel:
                     instances = element.index.to_numpy()
                 else:
                     continue

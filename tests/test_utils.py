@@ -18,7 +18,7 @@ from spatialdata.element_utils._utils import (
     multiscale_spatial_image_from_data_tree,
     unpad_raster,
 )
-from spatialdata.models import get_schema
+from spatialdata.models import get_model
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
@@ -42,7 +42,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
 @pytest.mark.ci_only
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
-        schema = get_schema(raster)
+        schema = get_model(raster)
         if isinstance(raster, SpatialImage):
             data = raster
         elif isinstance(raster, MultiscaleSpatialImage):

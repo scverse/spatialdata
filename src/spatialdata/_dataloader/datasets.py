@@ -16,7 +16,7 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     ShapesModel,
-    get_schema,
+    get_model,
 )
 
 
@@ -68,9 +68,9 @@ class ImageTilesDataset(Dataset):
             regions_element = self.sdata[region_key]
             images_element = self.sdata[image_key]
             # we could allow also for points
-            if not get_schema(regions_element) in [ShapesModel, Labels2DModel, Labels3DModel]:
+            if not get_model(regions_element) in [ShapesModel, Labels2DModel, Labels3DModel]:
                 raise ValueError("regions_element must be a shapes element or a labels element")
-            if not get_schema(images_element) in [Image2DModel, Image3DModel]:
+            if not get_model(images_element) in [Image2DModel, Image3DModel]:
                 raise ValueError("images_element must be an image element")
 
     def _compute_n_spots_dict(self) -> dict[str, int]:

@@ -38,7 +38,7 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    get_schema,
+    get_model,
 )
 
 if TYPE_CHECKING:
@@ -169,7 +169,7 @@ class SpatialData:
             "table": None,
         }
         for k, e in elements_dict.items():
-            schema = get_schema(e)
+            schema = get_model(e)
             if schema == Image2DModel or schema == Image3DModel:
                 assert isinstance(d["images"], dict)
                 d["images"][k] = e
@@ -1316,7 +1316,7 @@ class SpatialData:
         value
             The element.
         """
-        schema = get_schema(value)
+        schema = get_model(value)
         if schema == Image2DModel or schema == Image3DModel:
             self.add_image(key, value)
         elif schema == Labels2DModel or schema == Labels3DModel:

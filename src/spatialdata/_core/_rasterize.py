@@ -39,7 +39,7 @@ from spatialdata.models import (
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
-    get_schema,
+    get_model,
 )
 
 
@@ -458,7 +458,7 @@ def _(
     output_shape = tuple(output_shape_)
 
     # get kwargs and schema
-    schema = get_schema(data)
+    schema = get_model(data)
     # labels need to be preserved after the resizing of the image
     if schema == Labels2DModel or schema == Labels3DModel:
         kwargs = {"prefilter": False, "order": 0}

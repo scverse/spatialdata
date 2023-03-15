@@ -41,7 +41,7 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    get_schema,
+    get_model,
 )
 from spatialdata.models.models import RasterSchema
 from tests._core.conftest import MULTIPOLYGON_PATH, POINT_PATH, POLYGON_PATH
@@ -304,7 +304,7 @@ def test_get_schema():
     shapes = _get_shapes()
     table = _get_table()
     for k, v in images.items():
-        schema = get_schema(v)
+        schema = get_model(v)
         if "2d" in k:
             assert schema == Image2DModel
         elif "3d" in k:
@@ -312,7 +312,7 @@ def test_get_schema():
         else:
             raise ValueError(f"Unexpected key: {k}")
     for k, v in labels.items():
-        schema = get_schema(v)
+        schema = get_model(v)
         if "2d" in k:
             assert schema == Labels2DModel
         elif "3d" in k:
@@ -320,10 +320,10 @@ def test_get_schema():
         else:
             raise ValueError(f"Unexpected key: {k}")
     for v in points.values():
-        schema = get_schema(v)
+        schema = get_model(v)
         assert schema == PointsModel
     for v in shapes.values():
-        schema = get_schema(v)
+        schema = get_model(v)
         assert schema == ShapesModel
-    schema = get_schema(table)
+    schema = get_model(table)
     assert schema == TableModel

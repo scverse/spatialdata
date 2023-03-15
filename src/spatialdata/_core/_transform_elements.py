@@ -29,7 +29,7 @@ from spatialdata._core.spatialdata_operations import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import get_schema
+from spatialdata.models import get_model
 
 if TYPE_CHECKING:
     from spatialdata._core.transformations import (
@@ -208,7 +208,7 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 
 @_transform.register(SpatialImage)
 def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool) -> SpatialImage:
-    schema = get_schema(data)
+    schema = get_model(data)
     from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,
@@ -252,7 +252,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
 def _(
     data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool
 ) -> MultiscaleSpatialImage:
-    schema = get_schema(data)
+    schema = get_model(data)
     from spatialdata._core.spatialdata_operations import (
         get_transformation,
         set_transformation,

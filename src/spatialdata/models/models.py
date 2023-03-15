@@ -699,7 +699,7 @@ Schema_t = Union[
 ]
 
 
-def get_schema(
+def get_model(
     e: SpatialElement,
 ) -> Schema_t:
     def _validate_and_return(

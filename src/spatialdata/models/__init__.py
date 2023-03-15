@@ -6,7 +6,7 @@ from spatialdata.models.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    get_schema,
+    get_model,
 )
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "ShapesModel",
     "PointsModel",
     "TableModel",
-    "get_schema",
+    "get_model",
 ]
