@@ -18,7 +18,6 @@ from shapely.io import from_ragged_array
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import (
     MappingToCoordinateSystem_t,
     _set_transformations,
@@ -26,6 +25,7 @@ from spatialdata._core.core_utils import (
 )
 from spatialdata._core.models import TableModel
 from spatialdata._core.ngff.ngff_transformations import NgffBaseTransformation
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.transformations import BaseTransformation
 from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.format import (

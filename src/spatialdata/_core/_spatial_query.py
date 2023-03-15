@@ -270,7 +270,7 @@ def bounding_box_query(
     target_coordinate_system: str,
     **kwargs: Any,
 ) -> Optional[Union[SpatialElement, SpatialData]]:
-    # TODO: the docstring is defined in _spatialdata.py, in QueryManager, maybe we can link it from there to here
+    # TODO: the docstring is defined in spatialdata.py, in QueryManager, maybe we can link it from there to here
     #  with a decorator or something
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 

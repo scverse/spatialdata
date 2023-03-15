@@ -9,7 +9,7 @@ import numpy as np
 from anndata import AnnData
 
 if TYPE_CHECKING:
-    from spatialdata._core._spatialdata import SpatialData
+    from spatialdata._core.spatialdata import SpatialData
 
 from spatialdata._core.core_utils import (
     DEFAULT_COORDINATE_SYSTEM,

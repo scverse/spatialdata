@@ -20,7 +20,6 @@ __all__ = [
     "Labels3DModel",
     "PointsModel",
     "ShapesModel",
-    "ShapesModel",
     "TableModel",
     # --- from spatialdata._core.core_utils ---
     "SpatialElement",
@@ -29,7 +28,6 @@ __all__ = [
     "read_zarr",
 ]
 
-from spatialdata._core._spatialdata import SpatialData
 from spatialdata._core.core_utils import SpatialElement, get_dims
 from spatialdata._core.models import (
     Image2DModel,
@@ -40,6 +38,7 @@ from spatialdata._core.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.read import read_zarr
 
 try:
