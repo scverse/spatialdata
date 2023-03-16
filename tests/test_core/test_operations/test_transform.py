@@ -9,13 +9,13 @@ from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
-from spatialdata import SpatialData, transform
+from spatialdata import SpatialData, get_axis_names, transform
 from spatialdata._core.operations.transform import (
     align_elements_using_landmarks,
     get_transformation_between_landmarks,
 )
-from spatialdata.element_utils.element_utils import unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axis_names
+from spatialdata._utils import unpad_raster
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations.operations import (
     get_transformation,
     get_transformation_between_coordinate_systems,

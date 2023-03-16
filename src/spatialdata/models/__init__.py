@@ -32,7 +32,6 @@ __all__ = [
     "TableModel",
     "get_model",
     "SpatialElement",
-    "get_axis_names",
     "get_spatial_axes",
     "validate_axes",
     "validate_axis_name",
@@ -40,4 +39,5 @@ __all__ = [
     "Y",
     "Z",
     "C",
+    "get_axis_names",
 ]

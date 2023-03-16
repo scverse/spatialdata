@@ -7,7 +7,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata.element_utils import unpad_raster
+from spatialdata._utils import unpad_raster
 from spatialdata.models import get_model
 from spatialdata.transformations import Affine
 

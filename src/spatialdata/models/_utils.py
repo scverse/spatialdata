@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import Any, Optional, Union
 
+from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -121,3 +122,63 @@ def get_axis_names(e: SpatialElement) -> tuple[str, ...]:
     Dimensions of the spatial element (e.g. ("z", "y", "x"))
     """
     raise TypeError(f"Unsupported type: {type(e)}")
+
+
+@get_axis_names.register(SpatialImage)
+def _(e: SpatialImage) -> tuple[str, ...]:
+    dims = e.dims
+    # dims_sizes = tuple(list(e.sizes.keys()))
+    # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
+    # if dims != dims_sizes:
+    #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
+    _validate_dims(dims)
+    return dims  # type: ignore
+
+
+@get_axis_names.register(MultiscaleSpatialImage)
+def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
+    if "scale0" in e:
+        # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
+
+        assert len(e["scale0"].values()) == 1
+        xdata = e["scale0"].values().__iter__().__next__()
+        dims_data = xdata.dims
+        assert isinstance(dims_data, tuple)
+
+        # dims_sizes = tuple(list(xdata.sizes.keys()))
+
+        # # we check that all the following values are the same otherwise we could incur in subtle bugs downstreams
+        # if dims_coordinates != dims_data or dims_coordinates != dims_sizes:
+        #     raise ValueError(
+        #         f"MultiscaleSpatialImage has inconsistent dimensions: {dims_coordinates}, {dims_data}, {dims_sizes}"
+        #     )
+        _validate_dims(dims_data)
+        return dims_data
+    else:
+        raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
+        # return tuple(i for i in e.dims.keys())
+
+
+@get_axis_names.register(GeoDataFrame)
+def _(e: GeoDataFrame) -> tuple[str, ...]:
+    all_dims = (X, Y, Z)
+    n = e.geometry.iloc[0]._ndim
+    dims = all_dims[:n]
+    _validate_dims(dims)
+    return dims
+
+
+@get_axis_names.register(DaskDataFrame)
+def _(e: AnnData) -> tuple[str, ...]:
+    valid_dims = (X, Y, Z)
+    dims = tuple([c for c in valid_dims if c in e.columns])
+    _validate_dims(dims)
+    return dims
+
+
+def _validate_dims(dims: tuple[str, ...]) -> None:
+    for c in dims:
+        if c not in (X, Y, Z, C):
+            raise ValueError(f"Invalid dimension: {c}")
+    if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
+        raise ValueError(f"Invalid dimensions: {dims}")

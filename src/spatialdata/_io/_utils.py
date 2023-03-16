@@ -18,7 +18,7 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata.element_utils.element_utils import iterate_pyramid_levels
+from spatialdata._utils import iterate_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     ValidAxis_t,
@@ -145,6 +145,7 @@ class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
     subclass compares the content of files with the same path.
     """
 
+    # from https://stackoverflow.com/a/24860799/3343783
     def phase3(self) -> None:
         """
         Find out differences between common files.
