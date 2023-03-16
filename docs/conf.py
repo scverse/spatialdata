@@ -58,6 +58,7 @@ extensions = [
 ]
 
 autosummary_generate = True
+autodoc_process_signature = True
 autodoc_member_order = "groupwise"
 default_role = "literal"
 napoleon_google_docstring = False
@@ -105,8 +106,6 @@ exclude_patterns = [
     "tutorials/notebooks/index.md",
     "tutorials/notebooks/README.md",
     "tutorials/notebooks/references.md",
-    "generated/spatialdata.models.ShapesModel.rst",
-    "generated/spatialdata.models.PointsModel.rst",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.

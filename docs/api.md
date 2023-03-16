@@ -21,7 +21,6 @@ The elements (building-blocks) that consitute `SpatialData`.
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.models
-
 .. autosummary::
     :toctree: generated
 
@@ -32,4 +31,23 @@ The elements (building-blocks) that consitute `SpatialData`.
     ShapesModel
     PointsModel
     TableModel
+```
+
+### Transformations
+
+The transformations that can be defined between elements and coordinate systems in `SpatialData`.
+
+```{eval-rst}
+.. currentmodule:: spatialdata.transformations
+
+.. autosummary::
+    :toctree: generated
+
+    BaseTransformation
+    Identity
+    MapAxis
+    Translation
+    Scale
+    Affine
+    Sequence
 ```
