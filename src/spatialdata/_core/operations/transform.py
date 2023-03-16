@@ -213,7 +213,7 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
     translation part.
     This means that calling Translation(...).transform(raster_element) will have the same effect as pre-pending the
     translation to each transformation of the raster element.
-    Similarly, Translation(...).transform(raster_element, maintain_positioning=True) will not modify the raster
+    Similarly, `Translation(...).transform(raster_element, maintain_positioning=True)` will not modify the raster
     element. We are considering to change this behavior by letting translations modify the coordinates stored with
     xarray.DataArray. If you are interested in this use case please get in touch by opening a GitHub Issue.
     """

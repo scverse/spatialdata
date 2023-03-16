@@ -15,6 +15,20 @@ The `SpatialData` class.
     SpatialData
 ```
 
+### Operations
+
+Operations in `SpatialData`.
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    bounding_box_query
+    transform
+    rasterize
+    concatenate
+```
+
 ### Models
 
 The elements (building-blocks) that consitute `SpatialData`.
@@ -50,4 +64,16 @@ The transformations that can be defined between elements and coordinate systems 
     Scale
     Affine
     Sequence
+```
+
+### Misc
+
+```{eval-rst}
+.. currentmodule:: spatialdata.dataloader
+
+.. autosummary::
+    :toctree: generated
+
+    datasets.ImageTilesDataset
+    utils.SpatialDataToDataDict
 ```
