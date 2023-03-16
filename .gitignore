@@ -25,7 +25,6 @@ __pycache__/
 .vscode
 
 # data
-spatialdata-sandbox
 *.zarr/
 
 # temp files
@@ -38,6 +37,8 @@ docs/generated
 napari-spatialdata
 spatialdata-io
 spatialdata-notebooks
+spatialdata-plot
+spatialdata-sandbox
 
 # notebooks
 *.ipynb
