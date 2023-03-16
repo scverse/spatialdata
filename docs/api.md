@@ -15,56 +15,21 @@ The `SpatialData` class.
     SpatialData
 ```
 
-## Models
+### Models
 
 The elements (building-blocks) that consitute `SpatialData`.
 
-### Regions
-
-#### Raster
-
 ```{eval-rst}
+.. currentmodule:: spatialdata.models
+
 .. autosummary::
     :toctree: generated
 
     Image2DModel
     Image3DModel
     Labels2DModel
-    Labels2DModel
-```
-
-#### Polygons
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    PolygonsModel
-```
-
-#### Shapes
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
+    Labels3DModel
     ShapesModel
-```
-
-### Points
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
     PointsModel
-```
-
-### Table
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
     TableModel
 ```
