@@ -546,7 +546,7 @@ class SpatialData:
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
-        transformed = transform(element, t)
+        transformed = transform(element, t, maintain_positioning=False)
         return transformed
 
     def transform_to_coordinate_system(

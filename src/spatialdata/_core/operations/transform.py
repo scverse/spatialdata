@@ -180,7 +180,7 @@ def _prepend_transformation(
 
 
 @singledispatch
-def transform(data: Any, transformation: BaseTransformation, maintain_positioning: bool = True) -> Any:
+def transform(data: Any, transformation: BaseTransformation, maintain_positioning: bool = False) -> Any:
     """
     Transform a spatial element using this transformation and returns the transformed element.
 
