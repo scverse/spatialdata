@@ -36,5 +36,3 @@ from spatialdata._utils import (
     multiscale_spatial_image_from_data_tree,
     unpad_raster,
 )
-
-from .models._utils import get_axis_names

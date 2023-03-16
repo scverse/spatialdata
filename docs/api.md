@@ -1,70 +1,13 @@
 # API
 
-```{eval-rst}
-.. module:: spatialdata
-```
+Welcome to the SpatialData API documentation!
 
-## SpatialData
+## Table of Contents
 
-The `SpatialData` class.
+```{toctree}
+:maxdepth: 2
 
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    SpatialData
-```
-
-## Models
-
-The elements (building-blocks) that consitute `SpatialData`.
-
-### Regions
-
-#### Raster
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    Image2DModel
-    Image3DModel
-    Labels2DModel
-    Labels2DModel
-```
-
-#### Polygons
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    PolygonsModel
-```
-
-#### Shapes
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    ShapesModel
-```
-
-### Points
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    PointsModel
-```
-
-### Table
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    TableModel
+spatialdata
+spatialdata_models
+spatialdata_transformations
 ```
