@@ -13,6 +13,7 @@ python:
           path: .
           extra_requirements:
               - doc
+              - optional
 submodules:
     include:
         - "docs/tutorials/notebooks"

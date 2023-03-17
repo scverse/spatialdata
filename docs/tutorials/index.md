@@ -3,5 +3,5 @@
 Tutorials and examples for `SpatialData`
 
 ```{toctree}
-notebooks/notebooks/example.ipynb
+notebooks/notebooks/transformations.ipynb
 ```

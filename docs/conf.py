@@ -58,6 +58,7 @@ extensions = [
 ]
 
 autosummary_generate = True
+autodoc_process_signature = True
 autodoc_member_order = "groupwise"
 default_role = "literal"
 napoleon_google_docstring = False
@@ -133,7 +134,7 @@ pygments_style = "default"
 nitpick_ignore = [
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
-    #     ("py:class", "igraph.Graph"),
+    ("py:class", "igraph.Graph"),
 ]
 
 

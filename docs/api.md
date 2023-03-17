@@ -15,56 +15,65 @@ The `SpatialData` class.
     SpatialData
 ```
 
-## Models
+### Operations
+
+Operations in `SpatialData`.
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    bounding_box_query
+    transform
+    rasterize
+    concatenate
+```
+
+### Models
 
 The elements (building-blocks) that consitute `SpatialData`.
 
-### Regions
-
-#### Raster
-
 ```{eval-rst}
+.. currentmodule:: spatialdata.models
 .. autosummary::
     :toctree: generated
 
     Image2DModel
     Image3DModel
     Labels2DModel
-    Labels2DModel
-```
-
-#### Polygons
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    PolygonsModel
-```
-
-#### Shapes
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
+    Labels3DModel
     ShapesModel
-```
-
-### Points
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
     PointsModel
+    TableModel
 ```
 
-### Table
+### Transformations
+
+The transformations that can be defined between elements and coordinate systems in `SpatialData`.
 
 ```{eval-rst}
+.. currentmodule:: spatialdata.transformations
+
 .. autosummary::
     :toctree: generated
 
-    TableModel
+    BaseTransformation
+    Identity
+    MapAxis
+    Translation
+    Scale
+    Affine
+    Sequence
+```
+
+### Misc
+
+```{eval-rst}
+.. currentmodule:: spatialdata.dataloader
+
+.. autosummary::
+    :toctree: generated
+
+    datasets.ImageTilesDataset
+    utils.SpatialDataToDataDict
 ```

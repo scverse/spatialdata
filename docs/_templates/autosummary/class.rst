@@ -45,9 +45,6 @@ Attributes
 
 {% for item in attributes %}
 
-{{ item }}
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
 .. autoattribute:: {{ [objname, item] | join(".") }}
 
 {%- endfor %}
@@ -62,9 +59,6 @@ Methods
 
 {% for item in methods %}
 {%- if item != '__init__' %}
-
-{{ item }}
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. automethod:: {{ [objname, item] | join(".") }}
 
