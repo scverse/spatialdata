@@ -271,10 +271,10 @@ One region table can refer to multiple sets of Regions. But each row can map to 
     * 'type': str: `ngff:regions_table`
     * `region: str | list[str]`: Regions or list of regions this table refers to
     * `region_key: str`: Key in obs which says which Regions container
-           this obs exists in ("library_id"). Must be present if `region` is a
-           list.
+           this obs exists in ("library_id")..
     * `instance_key: str`: Key in obs that says which instance the obs
            represents.
+If any of `region`, region_key` and `instance_key` are defined, they all MUST be defined.
 
 ### Graphs (representation to be refined)
 
