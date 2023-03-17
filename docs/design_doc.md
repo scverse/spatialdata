@@ -274,7 +274,8 @@ One region table can refer to multiple sets of Regions. But each row can map to 
            this obs exists in ("library_id")..
     * `instance_key: str`: Key in obs that says which instance the obs
            represents.
-If any of `region`, region_key` and `instance_key` are defined, they all MUST be defined.
+
+If any of `region`, region_key`and`instance_key` are defined, they all MUST be defined.
 
 ### Graphs (representation to be refined)
 
