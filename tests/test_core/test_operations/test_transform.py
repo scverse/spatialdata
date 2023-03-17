@@ -10,15 +10,13 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData, get_axis_names, transform
-from spatialdata._core.operations.transform import (
-    align_elements_using_landmarks,
-    get_transformation_between_landmarks,
-)
 from spatialdata._utils import unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations.operations import (
+    align_elements_using_landmarks,
     get_transformation,
     get_transformation_between_coordinate_systems,
+    get_transformation_between_landmarks,
     remove_transformation,
     set_transformation,
 )
