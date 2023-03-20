@@ -1,6 +1,9 @@
-from typing import Any
+from __future__ import annotations
 
-from spatialdata import SpatialData
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 class SpatialDataToDataDict:

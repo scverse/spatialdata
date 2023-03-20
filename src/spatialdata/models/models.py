@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import dask.dataframe as dd
 import numpy as np
@@ -296,6 +296,18 @@ class ShapesModel:
 
     @classmethod
     def validate(cls, data: GeoDataFrame) -> None:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            :class:`geopandas.GeoDataFrame` to validate.
+
+        Returns
+        -------
+        None
+        """
         if cls.GEOMETRY_KEY not in data:
             raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
@@ -317,20 +329,18 @@ class ShapesModel:
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
         """
-        Validate (or parse) shapes data.
+        Parse shapes data.
 
         Parameters
         ----------
         data
             Data to parse:
 
-                - If :np:class:`numpy.ndarray`, it assumes the shapes are parsed as ragged array,
-                therefore additional arguments `offsets` and `geometry` must be provided
-                in case of (Multi)`Polygons`.
+                - If :class:`numpy.ndarray`, it assumes the shapes are parsed as
+                  ragged arrays, in case of (Multi)`Polygons`.
+                  Therefore additional arguments `offsets` and `geometry` must be provided
                 - if `Path` or `str`, it's read as a GeoJSON file.
                 - If :class:`geopandas.GeoDataFrame`, it's validated.
-
-            A `radius` array can also be passed to store the radius of the `Circles`.
 
         geometry
             Geometry type of the shapes. The following geometries are supported:
@@ -392,8 +402,6 @@ class ShapesModel:
         **kwargs: Any,
     ) -> GeoDataFrame:
         data = Path(data) if isinstance(data, str) else data
-        if TYPE_CHECKING:
-            assert isinstance(data, Path)
 
         gc: GeometryCollection = from_geojson(data.read_bytes(), **kwargs)
         if not isinstance(gc, GeometryCollection):
@@ -435,6 +443,18 @@ class PointsModel:
 
     @classmethod
     def validate(cls, data: DaskDataFrame) -> None:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            :class:`dask.dataframe.core.DataFrame` to validate.
+
+        Returns
+        -------
+        None
+        """
         for ax in [X, Y, Z]:
             if ax in data.columns:
                 assert data[ax].dtype in [np.float32, np.float64, np.int64]
@@ -463,15 +483,15 @@ class PointsModel:
         data
             Data to parse:
 
-                - If :np:class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
-                must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
-                :np:class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
-                "x", "y" and optionally "z".
+                - If :class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
+                  must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                  :class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
+                  "x", "y" and optionally "z".
                 - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
-                with key as *valid axes* and value as column names in dataframe.
+                  with key as *valid axes* and value as column names in dataframe.
 
         annotation
-            Annotation dataframe. Only if `data` is :np:class:`numpy.ndarray`.
+            Annotation dataframe. Only if `data` is :class:`numpy.ndarray`.
         coordinates
             Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
         feature_key
