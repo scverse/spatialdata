@@ -11,6 +11,7 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
 
@@ -367,6 +368,21 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
     transformed_data.geometry = transformed_geometry
+
+    if isinstance(transformed_geometry.iloc[0], Point) and "radius" in transformed_data.columns:
+        old_radius = transformed_data["radius"]
+        eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
+        modules = np.absolute(eigenvalues)
+        if not np.allclose(modules, modules[0]):
+            logger.warning(
+                "The transformation matrix is not isotropic, the radius will be scaled by the average of the "
+                "eigenvalues of the affine transformation matrix"
+            )
+            scale_factor = np.mean(modules)
+        else:
+            scale_factor = modules[0]
+        new_radius = old_radius * scale_factor
+        transformed_data["radius"] = new_radius
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)

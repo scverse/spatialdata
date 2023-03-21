@@ -541,16 +541,23 @@ class SpatialData:
         The transformed element.
         """
         from spatialdata import transform
+        from spatialdata.transformations import Identity
         from spatialdata.transformations.operations import (
             get_transformation_between_coordinate_systems,
+            remove_transformation,
+            set_transformation,
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         transformed = transform(element, t, maintain_positioning=False)
+        remove_transformation(transformed, remove_all=True)
+        set_transformation(transformed, Identity(), target_coordinate_system)
+
         return transformed
 
     def transform_to_coordinate_system(
-        self, target_coordinate_system: str, filter_by_coordinate_system: bool = True
+        self,
+        target_coordinate_system: str,
     ) -> SpatialData:
         """
         Transform the SpatialData to a given coordinate system.
@@ -559,19 +566,12 @@ class SpatialData:
         ----------
         target_coordinate_system
             The target coordinate system.
-        filter_by_coordinate_system
-            Whether to filter the SpatialData by the target coordinate system before transforming.
-            If set to True, only elements with a coordinate transforming to the specified coordinate system
-            will be present in the returned SpatialData object. Default value is True.
 
         Returns
         -------
         The transformed SpatialData.
         """
-        if filter_by_coordinate_system:
-            sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
-        else:
-            sdata = self
+        sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in sdata._gen_elements():
             transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
