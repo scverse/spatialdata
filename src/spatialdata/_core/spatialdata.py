@@ -1074,7 +1074,8 @@ class SpatialData:
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
-            write_table(table=self.table, group=root, name="table")
+            elem_group = root.require_group(name="table")
+            write_table(table=self.table, group=elem_group, name="table")
 
     @table.deleter
     def table(self) -> None:
@@ -1083,7 +1084,7 @@ class SpatialData:
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
-            del root["table"]
+            del root["table/table"]
 
     @staticmethod
     def read(file_path: str) -> SpatialData:

@@ -2,8 +2,10 @@ import os
 import tempfile
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
@@ -13,6 +15,7 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._io._utils import _are_directories_identical
+from spatialdata.models import TableModel
 from spatialdata.transformations.operations import (
     get_transformation,
     set_transformation,
@@ -310,3 +313,25 @@ class TestReadWrite:
             full_sdata.write(f2, overwrite=True)
 
             print(full_sdata)
+
+
+def test_io_table(shapes):
+    adata = AnnData(X=np.random.rand(5, 10))
+    adata.obs["region"] = "circles"
+    adata.obs["instance"] = shapes.shapes["circles"].index
+    adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")
+    shapes.table = adata
+    del shapes.table
+    shapes.table = adata
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        shapes.write(f)
+        shapes2 = SpatialData.read(f)
+        assert shapes2.table is not None
+        assert shapes2.table.shape == (5, 10)
+
+        del shapes2.table
+        assert shapes2.table is None
+        shapes2.table = adata
+        assert shapes2.table is not None
+        assert shapes2.table.shape == (5, 10)

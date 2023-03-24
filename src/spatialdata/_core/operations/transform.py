@@ -217,7 +217,7 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
 
 
 @transform.register(SpatialData)
-def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool = True) -> SpatialData:
+def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialData:
     new_elements: dict[str, dict[str, Any]] = {}
     for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
@@ -230,7 +230,7 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 
 
 @transform.register(SpatialImage)
-def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = True) -> SpatialImage:
+def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialImage:
     schema = get_model(data)
     from spatialdata.models import (
         Image2DModel,
@@ -270,7 +270,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
 
 @transform.register(MultiscaleSpatialImage)
 def _(
-    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool = True
+    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False
 ) -> MultiscaleSpatialImage:
     schema = get_model(data)
     from spatialdata.models import (
@@ -326,7 +326,7 @@ def _(
 
 
 @transform.register(DaskDataFrame)
-def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool = True) -> DaskDataFrame:
+def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> DaskDataFrame:
     from spatialdata.models import PointsModel
     from spatialdata.transformations import get_transformation, set_transformation
 
@@ -357,7 +357,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
 
 @transform.register(GeoDataFrame)
-def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool = True) -> GeoDataFrame:
+def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> GeoDataFrame:
     from spatialdata.models import ShapesModel
     from spatialdata.transformations import get_transformation
 
