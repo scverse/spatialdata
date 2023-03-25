@@ -9,6 +9,7 @@
 [![Tests][badge-tests]][link-tests]
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
+[![DOI](https://zenodo.org/badge/487366481.svg)](https://zenodo.org/badge/latestdoi/487366481)
 
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
