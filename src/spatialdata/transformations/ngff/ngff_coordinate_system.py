@@ -91,11 +91,10 @@ class NgffCoordinateSystem:
                 raise ValueError("Each axis MUST have a name.")
             if "type" not in axis.keys():
                 raise ValueError("Each axis MUST have a type.")
-            if "unit" not in axis.keys():
-                if not axis["type"] in ["channel", "array"]:
-                    raise ValueError("Each axis is either of type channel either MUST have a unit.")
+            if "unit" not in axis.keys() and axis["type"] not in ["channel", "array"]:
+                raise ValueError("Each axis is either of type channel either MUST have a unit.")
             kw = {}
-            if "unit" in axis.keys():
+            if "unit" in axis:
                 kw = {"unit": axis["unit"]}
             axes.append(NgffAxis(name=axis["name"], type=axis["type"], **kw))
         return NgffCoordinateSystem(name=name, axes=axes)
@@ -162,16 +161,16 @@ class NgffCoordinateSystem:
 
     @property
     def axes_names(self) -> tuple[str, ...]:
-        """Get axes' names"""
+        """Get axes' names."""
         return tuple([ax.name for ax in self._axes])
 
     @property
     def axes_types(self) -> tuple[str, ...]:
-        """Get axes' types"""
+        """Get axes' types."""
         return tuple([ax.type for ax in self._axes])
 
     def __hash__(self) -> int:
-        """compute a hash the object"""
+        """compute a hash the object."""
         return hash(frozenset(self.to_dict()))
 
     def has_axis(self, name: str) -> bool:
@@ -183,13 +182,10 @@ class NgffCoordinateSystem:
         name
             name of the axis.
         """
-        for axis in self._axes:
-            if axis.name == name:
-                return True
-        return False
+        return any(axis.name == name for axis in self._axes)
 
     def get_axis(self, name: str) -> NgffAxis:
-        """Get the axis by name"""
+        """Get the axis by name."""
         for axis in self._axes:
             if axis.name == name:
                 return axis
@@ -200,7 +196,7 @@ class NgffCoordinateSystem:
         coord_sys1: NgffCoordinateSystem, coord_sys2: NgffCoordinateSystem, new_name: Optional[str] = None
     ) -> NgffCoordinateSystem:
         """
-        Merge two coordinate systems
+        Merge two coordinate systems.
 
         Parameters
         ----------
@@ -226,7 +222,7 @@ class NgffCoordinateSystem:
 
     def set_unit(self, axis_name: str, unit: str) -> None:
         """
-        set new units for an axis
+        set new units for an axis.
 
         Parameters
         ----------
@@ -261,7 +257,7 @@ def _get_spatial_axes(
 
 
 def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
-    """helper function to make a yx or zyx coordinate system"""
+    """helper function to make a yx or zyx coordinate system."""
     if ndim == 2:
         axes = [
             NgffAxis(name="y", type="space", unit=unit),

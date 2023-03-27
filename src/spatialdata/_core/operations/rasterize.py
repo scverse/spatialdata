@@ -353,10 +353,7 @@ def _get_corrected_affine_matrix(
     assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
     target_axes: tuple[str, ...]
     if "z" in target_axes_unordered:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "z", "y", "x")
-        else:
-            target_axes = ("z", "y", "x")
+        target_axes = ("c", "z", "y", "x") if "c" in target_axes_unordered else ("z", "y", "x")
     else:
         if "c" in target_axes_unordered:
             target_axes = ("c", "y", "x")
@@ -417,10 +414,7 @@ def _(
         target_coordinate_system=target_coordinate_system,
     )
 
-    if pyramid_scale is not None:
-        extra = [pyramid_scale.inverse()]
-    else:
-        extra = []
+    extra = [pyramid_scale.inverse()] if pyramid_scale is not None else []
 
     # get inverse transformation
     corrected_affine, target_axes = _get_corrected_affine_matrix(
@@ -446,10 +440,7 @@ def _(
     # get output shape
     output_shape_ = []
     for ax in dims:
-        if ax == "c":
-            f = xdata.sizes[ax]
-        else:
-            f = target_sizes[ax]
+        f = xdata.sizes[ax] if ax == "c" else target_sizes[ax]
         if f is not None:
             output_shape_.append(int(f))
     output_shape = tuple(output_shape_)
@@ -457,9 +448,9 @@ def _(
     # get kwargs and schema
     schema = get_model(data)
     # labels need to be preserved after the resizing of the image
-    if schema == Labels2DModel or schema == Labels3DModel:
+    if schema in (Labels2DModel, Labels3DModel):
         kwargs = {"prefilter": False, "order": 0}
-    elif schema == Image2DModel or schema == Image3DModel:
+    elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
     else:
         raise ValueError(f"Unsupported schema {schema}")

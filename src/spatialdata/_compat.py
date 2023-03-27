@@ -1,7 +1,5 @@
 def _check_geopandas_using_shapely() -> None:
-    """
-    Checking that geopandas is using shapely, until it becomes the default.
-    """
+    """Checking that geopandas is using shapely, until it becomes the default."""
     import warnings
 
     with warnings.catch_warnings():

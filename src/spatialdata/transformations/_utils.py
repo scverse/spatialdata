@@ -53,12 +53,13 @@ def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordina
 def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
     """
     Set the transformation of a spatial element *only in memory*.
+
     Parameters
     ----------
     e
         spatial element
     t
-        transformation
+        transformation.
 
     Notes
     -----
@@ -194,7 +195,7 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 @compute_coordinates.register(SpatialImage)
 def _(data: SpatialImage) -> SpatialImage:
     coords: dict[str, ArrayLike] = {
-        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes.keys() if d in ["x", "y", "z"]
+        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 

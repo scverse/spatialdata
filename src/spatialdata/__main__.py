@@ -9,6 +9,8 @@ import os
 
 import click
 
+from spatialdata._logging import logger as logg
+
 
 @click.command(help="Peek inside the SpatialData .zarr file")
 @click.argument("path", default=False, type=str)
@@ -25,7 +27,7 @@ def peek(path: str) -> None:
         The path to the .zarr file to be inspected.
     """
     if not os.path.isdir(path):
-        print(
+        logg.info(
             f"Error: .zarr storage not found at {path}. Please specify a valid OME-NGFF spatial data (.zarr) file. "
             "Example "
             '"python -m '
@@ -35,7 +37,7 @@ def peek(path: str) -> None:
         import spatialdata as sd
 
         sdata = sd.SpatialData.read(path)
-        print(sdata)
+        logg.info(sdata)
 
 
 @click.group()

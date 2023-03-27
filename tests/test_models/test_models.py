@@ -20,8 +20,6 @@ from numpy.random import default_rng
 from pandas.api.types import is_categorical_dtype
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from xarray import DataArray
-
 from spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
@@ -45,6 +43,8 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Scale
+from xarray import DataArray
+
 from tests.conftest import (
     MULTIPOLYGON_PATH,
     POINT_PATH,
@@ -144,7 +144,8 @@ class TestModels:
             sdata_read = SpatialData.read(path)
             group_name = element_type if element_type != "image" else "images"
             element_read = sdata_read.__getattribute__(group_name)["element"]
-            # TODO: raster models have validate as a method (for non-raster it's a class method), probably because they call the xarray schema validation in the superclass. Can we make it consistent?
+            # TODO: raster models have validate as a method (for non-raster it's a class method),
+            # probably because they call the xarray schema validation in the superclass. Can we make it consistent?
             if element_type == "image" or element_type == "labels":
                 model().validate(element_read)
             else:
@@ -167,11 +168,11 @@ class TestModels:
         elif converter is to_spatial_image:
             converter = partial(converter, dims=model.dims.dims)
         if n_dims == 2:
-            image: ArrayLike = np.random.rand(10, 10)
+            image: ArrayLike = RNG.rand(10, 10)
         elif n_dims == 3:
-            image: ArrayLike = np.random.rand(3, 10, 10)
+            image: ArrayLike = RNG.rand(3, 10, 10)
         elif n_dims == 4:
-            image: ArrayLike = np.random.rand(2, 3, 10, 10)
+            image: ArrayLike = RNG.rand(2, 3, 10, 10)
         image = converter(image)
         self._parse_transformation_from_multiple_places(model, image)
         spatial_image = model.parse(image)
@@ -199,10 +200,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
-        if path.name == "points.json":
-            radius = np.random.normal(size=(2,))
-        else:
-            radius = None
+        radius = RNG.normal(size=(2,)) if path.name == "points.json" else None
         self._parse_transformation_from_multiple_places(model, path)
         poly = model.parse(path, radius=radius)
         self._passes_validation_after_io(model, poly, "shapes")

@@ -24,7 +24,7 @@ from spatialdata.transformations._utils import (
 
 def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
     """Read shapes from a zarr store."""
-    assert isinstance(store, str) or isinstance(store, Path)
+    assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
 
     coords = np.array(f["coords"])
@@ -35,7 +35,7 @@ def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: Spati
         geometry = from_ragged_array(typ, coords)
         geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
     else:
-        offsets_keys = [k for k in f.keys() if k.startswith("offset")]
+        offsets_keys = [k for k in f if k.startswith("offset")]
         offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
         geometry = from_ragged_array(typ, coords, offsets)
         geo_df = GeoDataFrame({"geometry": geometry}, index=index)

@@ -10,7 +10,6 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import Point
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.transformations.operations import (
@@ -18,6 +17,7 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
+
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 
@@ -28,7 +28,7 @@ class TestReadWrite:
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert images.images.keys() == sdata.images.keys()
-        for k in images.images.keys():
+        for k in images.images:
             assert images.images[k].equals(sdata.images[k])
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
@@ -37,7 +37,7 @@ class TestReadWrite:
         labels.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert labels.labels.keys() == sdata.labels.keys()
-        for k in labels.labels.keys():
+        for k in labels.labels:
             assert labels.labels[k].equals(sdata.labels[k])
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
@@ -46,7 +46,7 @@ class TestReadWrite:
         shapes.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert shapes.shapes.keys() == sdata.shapes.keys()
-        for k in shapes.shapes.keys():
+        for k in shapes.shapes:
             assert isinstance(sdata.shapes[k], GeoDataFrame)
             assert shapes.shapes[k].equals(sdata.shapes[k])
             if "radius" in shapes.shapes["circles"].columns:
@@ -59,7 +59,7 @@ class TestReadWrite:
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert points.points.keys() == sdata.points.keys()
-        for k in points.points.keys():
+        for k in points.points:
             assert isinstance(sdata.points[k], DaskDataFrame)
             assert assert_eq(points.points[k], sdata.points[k], check_divisions=False)
             assert points.points[k].attrs == points.points[k].attrs
@@ -201,7 +201,7 @@ class TestReadWrite:
             d = sdata.__getattribute__(k)
             # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
             # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
-            for elem_name in d.keys():
+            for elem_name in d:
                 kwargs = {k: {elem_name: d[elem_name]}}
                 single_sdata = SpatialData(**kwargs)
                 with tempfile.TemporaryDirectory() as td:

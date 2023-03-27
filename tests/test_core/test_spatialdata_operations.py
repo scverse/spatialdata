@@ -9,7 +9,6 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata.models import (
@@ -21,6 +20,7 @@ from spatialdata.models import (
 )
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
+
 from tests.conftest import _get_table
 
 
@@ -56,7 +56,7 @@ def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: S
         elements = sdata1.__getattribute__(element_type)
         assert element_name in elements
         element1 = elements[element_name]
-        if isinstance(element, AnnData) or isinstance(element, SpatialImage) or isinstance(element, GeoDataFrame):
+        if isinstance(element, (AnnData, SpatialImage, GeoDataFrame)):
             assert element.shape == element1.shape
         elif isinstance(element, DaskDataFrame):
             for s0, s1 in zip(element.shape, element1.shape):

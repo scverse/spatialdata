@@ -172,10 +172,7 @@ class BaseTransformation(ABC):
     @staticmethod
     def _xarray_coords_reorder_axes(data: DataArray) -> DataArray:
         axes = BaseTransformation._xarray_coords_get_coords(data)
-        if "z" in axes:
-            data = data.sel(dim=["x", "y", "z"])
-        else:
-            data = data.sel(dim=["x", "y"])
+        data = data.sel(dim=["x", "y", "z"]) if "z" in axes else data.sel(dim=["x", "y"])
         BaseTransformation._xarray_coords_validate_axes(data)
         return data
 
@@ -265,9 +262,8 @@ class MapAxis(BaseTransformation):
         # if an ax is in output_axes, then:
         #    if it is in self.keys, then the corresponding value must be in input_axes
         for ax in output_axes:
-            if ax in self.map_axis:
-                if self.map_axis[ax] not in input_axes:
-                    raise ValueError("Output axis is mapped to an input axis that is not in input_axes.")
+            if ax in self.map_axis and self.map_axis[ax] not in input_axes:
+                raise ValueError("Output axis is mapped to an input axis that is not in input_axes.")
         # validation logic:
         # if an ax is in input_axes, then it is either in self.values or in output_axes
         for ax in input_axes:
@@ -381,8 +377,7 @@ class Translation(BaseTransformation):
         translation_adjusted = self.to_translation_vector(axes=output_axes)
         translation = DataArray(translation_adjusted, coords={"dim": list(output_axes)})
         transformed = data + translation
-        to_return = self._xarray_coords_reorder_axes(transformed)
-        return to_return
+        return self._xarray_coords_reorder_axes(transformed)
 
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
@@ -409,10 +404,9 @@ class Translation(BaseTransformation):
             default_to_global=True,
         )
         new_translation_vector = self.to_translation_vector(axes=input_axes)
-        ngff_transformation = NgffTranslation(
+        return NgffTranslation(
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=new_translation_vector
         )
-        return ngff_transformation
 
     def __eq__(self, other: Any) -> bool:
         return (
@@ -443,10 +437,7 @@ class Scale(BaseTransformation):
         for i_out, ax_out in enumerate(output_axes):
             for i_in, ax_in in enumerate(input_axes):
                 if ax_in == ax_out:
-                    if ax_out in self.axes:
-                        scale_factor = self.scale[self.axes.index(ax_out)]
-                    else:
-                        scale_factor = 1
+                    scale_factor = self.scale[self.axes.index(ax_out)] if ax_out in self.axes else 1
                     m[i_out, i_in] = scale_factor
         return m
 
@@ -470,8 +461,7 @@ class Scale(BaseTransformation):
         scale_adjusted = self.to_scale_vector(axes=output_axes)
         scale = DataArray(scale_adjusted, coords={"dim": list(output_axes)})
         transformed = data * scale
-        to_return = self._xarray_coords_reorder_axes(transformed)
-        return to_return
+        return self._xarray_coords_reorder_axes(transformed)
 
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
@@ -756,11 +746,7 @@ class Sequence(BaseTransformation):
 def _get_current_output_axes(
     transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
 ) -> tuple[ValidAxis_t, ...]:
-    if (
-        isinstance(transformation, Identity)
-        or isinstance(transformation, Translation)
-        or isinstance(transformation, Scale)
-    ):
+    if isinstance(transformation, (Identity, Translation, Scale)):
         return input_axes
     elif isinstance(transformation, MapAxis):
         map_axis_input_axes = set(transformation.map_axis.values())

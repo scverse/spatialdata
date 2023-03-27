@@ -41,7 +41,7 @@ _DEFAULT_COORDINATE_SYSTEM = {
 
 def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem:
     """
-    Get the default coordinate system
+    Get the default coordinate system.
 
     Parameters
     ----------

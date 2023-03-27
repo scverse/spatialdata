@@ -49,10 +49,7 @@ def _transform_raster(
     inverse_matrix = transformation.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
     new_v = (matrix @ v.T).T
     c_shape: tuple[int, ...]
-    if "c" in axes:
-        c_shape = (data.shape[0],)
-    else:
-        c_shape = ()
+    c_shape = (data.shape[0],) if "c" in axes else ()
     new_spatial_shape = tuple(
         int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
     )
@@ -143,14 +140,14 @@ def _prepend_transformation(
     from spatialdata.transformations.transformations import Identity, Sequence
 
     to_prepend: Optional[BaseTransformation] = None
-    if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
+    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
 
-    elif isinstance(element, GeoDataFrame) or isinstance(element, DaskDataFrame):
+    elif isinstance(element, (GeoDataFrame, DaskDataFrame)):
         assert raster_translation is None
         if maintain_positioning:
             to_prepend = transformation.inverse()
@@ -167,10 +164,7 @@ def _prepend_transformation(
         d = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     for cs, t in d.items():
         new_t: BaseTransformation
-        if to_prepend is not None:
-            new_t = Sequence([to_prepend, t])
-        else:
-            new_t = t
+        new_t = Sequence([to_prepend, t]) if to_prepend is not None else t
         set_transformation(element, new_t, to_coordinate_system=cs)
 
 
@@ -240,9 +234,9 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     from spatialdata.transformations import get_transformation, set_transformation
 
     # labels need to be preserved after the resizing of the image
-    if schema == Labels2DModel or schema == Labels3DModel:
+    if schema in (Labels2DModel, Labels3DModel):
         kwargs = {"prefilter": False, "order": 0}
-    elif schema == Image2DModel or schema == Image3DModel:
+    elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
     else:
         raise ValueError(f"Unsupported schema {schema}")
@@ -282,10 +276,10 @@ def _(
     from spatialdata.transformations.transformations import BaseTransformation, Sequence
 
     # labels need to be preserved after the resizing of the image
-    if schema == Labels2DModel or schema == Labels3DModel:
+    if schema in (Labels2DModel, Labels3DModel):
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
-    elif schema == Image2DModel or schema == Image3DModel:
+    elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
     else:
         raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")

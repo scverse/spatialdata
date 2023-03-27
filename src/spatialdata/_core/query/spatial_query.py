@@ -359,6 +359,7 @@ def _(
 ) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
     """
     Notes
+    -----
     _____
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.

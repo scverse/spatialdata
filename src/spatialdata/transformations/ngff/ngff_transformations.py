@@ -53,10 +53,7 @@ class NgffBaseTransformation(ABC):
         return " " * indent * 4
 
     def _repr_transformation_signature(self, indent: int = 0) -> str:
-        if self.input_coordinate_system is not None:
-            domain = ", ".join(self.input_coordinate_system.axes_names)
-        else:
-            domain = ""
+        domain = ", ".join(self.input_coordinate_system.axes_names) if self.input_coordinate_system is not None else ""
         if self.output_coordinate_system is not None:
             codomain = ", ".join(self.output_coordinate_system.axes_names)
         else:
@@ -109,9 +106,7 @@ class NgffBaseTransformation(ABC):
 
     @abstractmethod
     def to_dict(self) -> Transformation_t:
-        """
-        Return the Python dict representation of the transformation.
-        """
+        """Return the Python dict representation of the transformation."""
 
     def _update_dict_with_input_output_cs(self, d: Transformation_t) -> None:
         """
@@ -123,7 +118,7 @@ class NgffBaseTransformation(ABC):
             The dictionary to be updated.
 
         Notes
-        -------
+        -----
         Use of this helper function.
         A transformation is saved to disk as a json string. When loaded this is represented by a dictionary.
         We allow transformations to be defined even when the input and output coordinate systems are not
@@ -157,7 +152,7 @@ class NgffBaseTransformation(ABC):
         Transform points (coordinates).
 
         Notes
-        -------
+        -----
         This function will check if the dimensionality of the input and output coordinate systems of the
         transformation are compatible with the given points.
         """
@@ -186,7 +181,7 @@ class NgffBaseTransformation(ABC):
     # order of the composition: self is applied first, then the transformation passed as argument
     def compose_with(self, transformation: NgffBaseTransformation) -> NgffBaseTransformation:
         """
-        Compose the transfomation object with another transformation
+        Compose the transfomation object with another transformation.
 
         Parameters
         ----------
@@ -198,7 +193,7 @@ class NgffBaseTransformation(ABC):
         The compoesed transformation.
 
         Notes
-        -------
+        -----
         Self is applied first, then the transformation passed as argument.
         """
         return NgffSequence([self, transformation])
@@ -211,7 +206,7 @@ class NgffBaseTransformation(ABC):
     def _get_axes_from_coordinate_systems(
         self,
     ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        """Get the input and output coordinate systems' axes"""
+        """Get the input and output coordinate systems' axes."""
         if not isinstance(self.input_coordinate_system, NgffCoordinateSystem):
             raise ValueError("Input coordinate system not specified")
         if not isinstance(self.output_coordinate_system, NgffCoordinateSystem):
@@ -356,6 +351,7 @@ class NgffMapAxis(NgffBaseTransformation):
     ) -> None:
         """
         Init the NgffMapAxis object.
+
         Parameters
         ----------
         map_axis
@@ -447,6 +443,7 @@ class NgffTranslation(NgffBaseTransformation):
     ) -> None:
         """
         Init the NgffTranslation object.
+
         Parameters
         ----------
         translation
@@ -514,6 +511,7 @@ class NgffScale(NgffBaseTransformation):
     ) -> None:
         """
         Init the NgffScale object.
+
         Parameters
         ----------
         scale
@@ -583,6 +581,7 @@ class NgffAffine(NgffBaseTransformation):
     ) -> None:
         """
         Init the NgffAffine object.
+
         Parameters
         ----------
         affine
@@ -693,6 +692,7 @@ class NgffRotation(NgffBaseTransformation):
     ) -> None:
         """
         Init the NgffRotation object.
+
         Parameters
         ----------
         rotation
@@ -846,12 +846,7 @@ class NgffSequence(NgffBaseTransformation):
         assert isinstance(t.input_coordinate_system, NgffCoordinateSystem)
         if isinstance(t, NgffAffine):
             return None
-        elif (
-            isinstance(t, NgffTranslation)
-            or isinstance(t, NgffScale)
-            or isinstance(t, NgffRotation)
-            or isinstance(t, NgffIdentity)
-        ):
+        elif isinstance(t, (NgffTranslation, NgffScale, NgffRotation, NgffIdentity)):
             return t.input_coordinate_system
         elif isinstance(t, NgffMapAxis):
             return None
@@ -872,7 +867,7 @@ class NgffSequence(NgffBaseTransformation):
     def _inferring_cs_pre_action(
         t: NgffBaseTransformation, latest_output_cs: NgffCoordinateSystem
     ) -> tuple[NgffCoordinateSystem, Optional[NgffCoordinateSystem], Optional[NgffCoordinateSystem]]:
-        """See _inferring_cs_infer_output_coordinate_system()"""
+        """See _inferring_cs_infer_output_coordinate_system()."""
         input_cs = t.input_coordinate_system
         if input_cs is None:
             t.input_coordinate_system = latest_output_cs
@@ -905,7 +900,7 @@ class NgffSequence(NgffBaseTransformation):
         input_cs: Optional[NgffCoordinateSystem],
         output_cs: Optional[NgffCoordinateSystem],
     ) -> None:
-        """See _inferring_cs_infer_output_coordinate_system()"""
+        """See _inferring_cs_infer_output_coordinate_system()."""
         # if the transformation t was passed without input or output coordinate systems (and so we had to infer
         # them), we now restore the original state of the transformation
         if input_cs is None:
