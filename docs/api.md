@@ -15,16 +15,7 @@ The `SpatialData` class.
     SpatialData
 ```
 
-### IO functions
-
-```{eval-rst}
-.. autosummary::
-    :toctree: generated
-
-    read_zarr
-```
-
-### Operations
+## Operations
 
 Operations on `SpatialData` objects.
 
@@ -33,9 +24,9 @@ Operations on `SpatialData` objects.
     :toctree: generated
 
     bounding_box_query
-    transform
-    rasterize
     concatenate
+    rasterize
+    transform
 ```
 
 ### Utilities
@@ -44,8 +35,6 @@ Operations on `SpatialData` objects.
 .. autosummary::
     :toctree: generated
 
-    multiscale_spatial_image_from_data_tree
-    iterate_pyramid_levels
     unpad_raster
 ```
 
@@ -110,9 +99,7 @@ The transformations that can be defined between elements and coordinate systems 
     get_transformation_between_coordinate_systems
 ```
 
-### Misc
-
-#### Generating image tiles
+## DataLoader
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.dataloader
@@ -121,5 +108,15 @@ The transformations that can be defined between elements and coordinate systems 
     :toctree: generated
 
     ImageTilesDataset
-    SpatialDataToDataDict
+```
+
+## Readers
+
+```{eval-rst}
+.. currentmodule:: spatialdata
+
+.. autosummary::
+    :toctree: generated
+
+    read_zarr
 ```

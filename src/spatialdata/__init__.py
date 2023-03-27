@@ -31,8 +31,4 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.spatial_query import bounding_box_query
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.io_zarr import read_zarr
-from spatialdata._utils import (
-    iterate_pyramid_levels,
-    multiscale_spatial_image_from_data_tree,
-    unpad_raster,
-)
+from spatialdata._utils import unpad_raster

@@ -353,7 +353,7 @@ Classes inheriting from `BaseTransformation` are: `Identity`, `MapAxis`, `Transl
 
 The conversion between the two transformation is still not 100% supported; it will be finalized when the NGFF specifications are approaved; [this issue](https://github.com/scverse/spatialdata/issues/114) keeps track of this.
 
-#### Reasons for having two sets of classes
+### Reasons for having two sets of classes
 
 The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation MUST be compatible with the input coordinate system and output coordinate system (full description in the NGFF specification) and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second.
 
@@ -375,7 +375,7 @@ This document will be udpated with the precise description of each transformatio
 
 See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks/transformations.ipynb) for extensive examples on the transformations.
 
-## Legacy examples
+### Legacy examples
 
 _The text down below may not reflect the latest version of the code and will be eventually replaced by notebooks_
 
@@ -550,7 +550,7 @@ sdata1 = sdata.query.polygon("/polygons/annotations")
 sdata1 = sdata.query.table(...)
 ```
 
-## Related notes/issues/PRs
+#### Related notes/issues/PRs
 
 -   [Issue discussing SpatialData layout](https://github.com/scverse/spatialdata/issues/12)
 -   [Notes from Basel Hackathon](https://hackmd.io/MPeMr2mbSRmeIzOCgwKbxw)

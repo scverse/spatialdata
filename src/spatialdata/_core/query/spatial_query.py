@@ -268,12 +268,13 @@ def bounding_box_query(
     target_coordinate_system: str,
     **kwargs: Any,
 ) -> Optional[Union[SpatialElement, SpatialData]]:
-    """Perform a bounding box query on the SpatialData object.
+    """
+    Perform a bounding box query on the SpatialData object.
 
     Parameters
     ----------
     axes
-        The axes min_coordinate and max_coordinate refer to.
+        The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
         The minimum coordinates of the bounding box.
     max_coordinate
@@ -281,7 +282,9 @@ def bounding_box_query(
     target_coordinate_system
         The coordinate system the bounding box is defined in.
     filter_table
-        If True, the table is filtered to only contain rows that are annotating regions contained within the bounding box.
+        If `True`, the table is filtered to only contain rows that are annotating regions
+        contained within the bounding box.
+
     Returns
     -------
     The SpatialData object containing the requested data.

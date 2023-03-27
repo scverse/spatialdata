@@ -41,15 +41,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # dev version generation
     "bump2version",
 ]
-doc = [
+docs = [
     "sphinx>=4.5",
     "sphinx-book-theme>=0.3.3",
     "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
     "sphinx-autodoc-typehints",
+    "sphinx-design",
     # For notebooks
     "ipython>=8.6.0",
     "sphinx-copybutton",
@@ -58,8 +58,13 @@ test = [
     "pytest",
     "pytest-cov",
 ]
-optional = [
+torch = [
     "torch"
+]
+extra  = [
+    "napari-spatialdata",
+    "spatialdata-plot",
+    "spatialdata-io",
 ]
 
 [tool.coverage.run]
