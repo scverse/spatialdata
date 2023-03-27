@@ -17,7 +17,7 @@ from xarray import DataArray
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import SpatialElement, get_axis_names, get_model
+from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations._utils import _get_scale, compute_coordinates
 from spatialdata.transformations.operations import set_transformation
@@ -247,7 +247,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     else:
         raise ValueError(f"Unsupported schema {schema}")
 
-    axes = get_axis_names(data)
+    axes = get_axes_names(data)
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
     )
@@ -290,7 +290,7 @@ def _(
     else:
         raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
 
-    get_axis_names(data)
+    get_axes_names(data)
     transformed_dict = {}
     for k, v in data.items():
         assert len(v) == 1
@@ -329,7 +329,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
     from spatialdata.models import PointsModel
     from spatialdata.transformations import get_transformation, set_transformation
 
-    axes = get_axis_names(data)
+    axes = get_axes_names(data)
     arrays = []
     for ax in axes:
         arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
@@ -360,7 +360,7 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
     from spatialdata.models import ShapesModel
     from spatialdata.transformations import get_transformation
 
-    ndim = len(get_axis_names(data))
+    ndim = len(get_axes_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
     matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
     shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()

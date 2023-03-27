@@ -38,7 +38,7 @@ from spatialdata.models import (
     ShapesModel,
     SpatialElement,
     TableModel,
-    get_axis_names,
+    get_axes_names,
     get_model,
 )
 
@@ -225,7 +225,7 @@ class SpatialData:
         if name in self._images:
             if not overwrite:
                 raise KeyError(f"Image {name} already exists in the dataset.")
-        ndim = len(get_axis_names(image))
+        ndim = len(get_axes_names(image))
         if ndim == 3:
             Image2D_s.validate(image)
             self._images[name] = image
@@ -256,7 +256,7 @@ class SpatialData:
         if name in self._labels:
             if not overwrite:
                 raise KeyError(f"Labels {name} already exists in the dataset.")
-        ndim = len(get_axis_names(labels))
+        ndim = len(get_axes_names(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
             self._labels[name] = labels
@@ -458,7 +458,7 @@ class SpatialData:
 
         if self.path is not None:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-            axes = get_axis_names(element)
+            axes = get_axes_names(element)
             if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
                 from spatialdata._io._utils import (
                     overwrite_coordinate_transformations_raster,
@@ -1199,7 +1199,7 @@ class SpatialData:
                         else:
                             length = None
 
-                        n = len(get_axis_names(v))
+                        n = len(get_axes_names(v))
                         dim_string = f"({n}D points)"
 
                         assert len(v.shape) == 2

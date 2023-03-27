@@ -35,7 +35,7 @@ from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import C, X, Y, Z, get_axis_names
+from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
     TRANSFORM_KEY,
@@ -728,7 +728,7 @@ def get_model(
         return schema
 
     if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
-        axes = get_axis_names(e)
+        axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:
                 return _validate_and_return(Image3DModel, e)

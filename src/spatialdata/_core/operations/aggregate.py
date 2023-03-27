@@ -8,34 +8,38 @@ import pandas as pd
 from scipy import sparse
 
 from spatialdata._core.models import PointsModel, ShapesModel, get_schema
-from spatialdata.models._utils import get_axis_names
+from spatialdata.models._utils import get_axes_names
 
 
 def aggregate(
     values: ddf.DataFrame | gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None = None,
     *,
     value_key: str | None = None,
     agg_func: str = "mean",
 ) -> ad.AnnData:
     """
     Aggregate values by given shapes
-
     Parameters
     ----------
     values
-        Values to aggregate
+        Values to aggregate. Currently, only supports Points or Shapes.
     by
-        Shapes to aggregate by
+        Regions to aggregate by. Currently, only supports Shapes.
     id_key
-        Key to group values by. This is the key in the shapes dataframe.
+        Key to group observations in `values` by. E.g. this could be transcript id for points.
+        Defaults to `FEATURE_KEY` for points, required for shapes.
     value_key
-        Key to aggregate values by. This is the key in the values dataframe.
-        If nothing is passed here, assumed to be 1.
+        Key to aggregate values by. This is the key in the values object.
+        If nothing is passed here, assumed to be a column of ones.
+        For points, this could be probe intensity.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to pandas.DataFrame.groupby.agg.
+    Returns
+    -------
+    AnnData of shape (by.shape[0], values[id_key].nunique())])
     """
     # TODO: Check that values are in the same space
     # Dispatch
@@ -55,23 +59,28 @@ def aggregate(
 def _aggregate_points_by_shapes(
     points: ddf.DataFrame | pd.DataFrame,
     shapes: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None = None,
     *,
     value_key: str | None = None,
     agg_func: str = "count",
 ) -> ad.AnnData:
     # Have to get dims on dask dataframe, can't get from pandas
-    dims = get_axis_names(points)
+    dims = get_axes_names(points)
+    # Default value for id_key
+    if id_key is None:
+        id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+
     if isinstance(points, ddf.DataFrame):
         points = points.compute()
     points = gpd.GeoDataFrame(points, geometry=gpd.points_from_xy(*[points[dim] for dim in dims]))
+
     return _aggregate(points, shapes, id_key, value_key, agg_func)
 
 
 def _aggregate_shapes_by_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str,
+    id_key: str | None,
     *,
     value_key: str | None = None,
     agg_func: str = "count",
@@ -80,10 +89,13 @@ def _aggregate_shapes_by_shapes(
         # We should only be buffering points, not polygons. Unfortunately this is an expensive check.
         values_geotypes = list(values.geom_type.unique())
         if values_geotypes == ["Point"]:
-            df = df.buffer(df[ShapesModel.RADIUS_KEY])
+            df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY]))
         elif "Point" in values_geotypes:
             raise TypeError("Geometry contained shapes and polygons.")
         return df
+
+    if id_key is None:
+        raise ValueError("Must pass id_key for shapes.")
 
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
@@ -99,21 +111,20 @@ def _aggregate(
     agg_func: str = "count",
 ) -> ad.AnnData:
     """
-    Aggregate points by polygons.
-
-    Params
-    ------
+    Inner function to aggregate geopandas objects.
+    See docstring for `aggregate` for semantics.
+    Parameters
+    ----------
     value
-        GeoDataFrame of points to aggregate
+        Geopandas dataframe to be aggregated. Must have a geometry column.
     by
-        GeoDataFrame of polygons
+        Geopandas dataframe to group values by. Must have a geometry column.
     id_key
-        Column in values that indicate value type, e.g. probe id or organelle type
+        Column in value dataframe to group values by.
     value_key
-        Column in values that indicate point value, e.g. probe intensity. If not provided, uses a fill value of 1.
+        Column in value dataframe to perform aggregation on.
     agg_func
-        Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-        Passed to pandas.DataFrame.groupby.agg.
+        Aggregation functio to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
     assert pd.api.types.is_categorical_dtype(value[id_key]), f"{id_key} must be categorical"
 

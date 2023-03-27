@@ -14,7 +14,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat
-from spatialdata.models import get_axis_names
+from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
@@ -48,7 +48,7 @@ def write_points(
     group_type: str = "ngff:points",
     fmt: Format = CurrentPointsFormat(),
 ) -> None:
-    axes = get_axis_names(points)
+    axes = get_axes_names(points)
     t = _get_transformations(points)
 
     points_groups = group.require_group(name)

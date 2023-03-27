@@ -108,7 +108,7 @@ def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
 
 
 @singledispatch
-def get_axis_names(e: SpatialElement) -> tuple[str, ...]:
+def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
     """
     Get the dimensions of a spatial element.
 
@@ -124,7 +124,7 @@ def get_axis_names(e: SpatialElement) -> tuple[str, ...]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_axis_names.register(SpatialImage)
+@get_axes_names.register(SpatialImage)
 def _(e: SpatialImage) -> tuple[str, ...]:
     dims = e.dims
     # dims_sizes = tuple(list(e.sizes.keys()))
@@ -135,7 +135,7 @@ def _(e: SpatialImage) -> tuple[str, ...]:
     return dims  # type: ignore
 
 
-@get_axis_names.register(MultiscaleSpatialImage)
+@get_axes_names.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
     if "scale0" in e:
         # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
@@ -159,7 +159,7 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
         # return tuple(i for i in e.dims.keys())
 
 
-@get_axis_names.register(GeoDataFrame)
+@get_axes_names.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
     all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
@@ -168,7 +168,7 @@ def _(e: GeoDataFrame) -> tuple[str, ...]:
     return dims
 
 
-@get_axis_names.register(DaskDataFrame)
+@get_axes_names.register(DaskDataFrame)
 def _(e: AnnData) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = tuple([c for c in valid_dims if c in e.columns])

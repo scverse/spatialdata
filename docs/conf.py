@@ -94,6 +94,7 @@ intersphinx_mapping = {
     "geopandas": ("https://geopandas.org/en/stable/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "dask": ("https://docs.dask.org/en/latest/", None),
 }
 
 

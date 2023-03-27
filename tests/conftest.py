@@ -1,3 +1,9 @@
+# isort: off
+import os
+
+os.environ["USE_PYGEOS"] = "0"
+# isort:on
+
 from pathlib import Path
 from typing import Union
 
@@ -23,12 +29,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-
-# isort: off
-import os
-
-os.environ["USE_PYGEOS"] = "0"
-# isort:on
 
 RNG = default_rng()
 

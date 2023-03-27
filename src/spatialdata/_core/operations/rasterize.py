@@ -20,7 +20,7 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     SpatialElement,
-    get_axis_names,
+    get_axes_names,
     get_model,
 )
 from spatialdata.models._utils import get_spatial_axes
@@ -440,7 +440,7 @@ def _(
         ]
         + extra
     )
-    dims = get_axis_names(data)
+    dims = get_axes_names(data)
     matrix = sequence.to_affine_matrix(input_axes=target_axes, output_axes=dims)
 
     # get output shape

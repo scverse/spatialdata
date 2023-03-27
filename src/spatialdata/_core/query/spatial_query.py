@@ -25,7 +25,7 @@ from spatialdata.models import (
     ShapesModel,
     SpatialElement,
     TableModel,
-    get_axis_names,
+    get_axes_names,
     get_model,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
@@ -142,7 +142,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     ).data
 
     # transform the coordinates to the intrinsic coordinate system
-    intrinsic_axes = get_axis_names(element)
+    intrinsic_axes = get_axes_names(element)
     transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
         input_axes=axes, output_axes=intrinsic_axes
     )
