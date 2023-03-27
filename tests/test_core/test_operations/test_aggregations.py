@@ -5,8 +5,8 @@ import pytest
 import shapely
 from anndata.tests.helpers import assert_equal
 
-from spatialdata._core.aggregate import aggregate
-from spatialdata._core.models import PointsModel, ShapesModel
+from spatialdata._core.operations.aggregate import aggregate
+from spatialdata.models import PointsModel, ShapesModel
 
 
 def test_aggregate_points_by_polygons():

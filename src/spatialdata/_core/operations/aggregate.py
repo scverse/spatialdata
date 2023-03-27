@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from spatialdata._core.models import PointsModel, ShapesModel, get_schema
+from spatialdata.models import PointsModel, ShapesModel, get_model
 from spatialdata.models._utils import get_axes_names
 
 
@@ -43,8 +43,8 @@ def aggregate(
     """
     # TODO: Check that values are in the same space
     # Dispatch
-    by_type = get_schema(by)
-    values_type = get_schema(values)
+    by_type = get_model(by)
+    values_type = get_model(values)
     if by_type is ShapesModel:
         if values_type is PointsModel:
             return _aggregate_points_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
@@ -113,6 +113,7 @@ def _aggregate(
     """
     Inner function to aggregate geopandas objects.
     See docstring for `aggregate` for semantics.
+
     Parameters
     ----------
     value
