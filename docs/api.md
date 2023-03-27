@@ -15,21 +15,30 @@ The `SpatialData` class.
     SpatialData
 ```
 
-### Operations
+## Operations
 
-Operations in `SpatialData`.
+Operations on `SpatialData` objects.
 
 ```{eval-rst}
 .. autosummary::
     :toctree: generated
 
     bounding_box_query
-    transform
-    rasterize
     concatenate
+    rasterize
+    transform
 ```
 
-### Models
+### Utilities
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    unpad_raster
+```
+
+## Models
 
 The elements (building-blocks) that consitute `SpatialData`.
 
@@ -47,7 +56,19 @@ The elements (building-blocks) that consitute `SpatialData`.
     TableModel
 ```
 
-### Transformations
+### Utilities
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    get_model
+    SpatialElement
+    get_axis_names
+    get_spatial_axes
+```
+
+## Transformations
 
 The transformations that can be defined between elements and coordinate systems in `SpatialData`.
 
@@ -66,7 +87,19 @@ The transformations that can be defined between elements and coordinate systems 
     Sequence
 ```
 
-### Misc
+### Utilities
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    get_transformation
+    set_transformation
+    remove_transformation
+    get_transformation_between_coordinate_systems
+```
+
+## DataLoader
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.dataloader
@@ -74,6 +107,16 @@ The transformations that can be defined between elements and coordinate systems 
 .. autosummary::
     :toctree: generated
 
-    datasets.ImageTilesDataset
-    utils.SpatialDataToDataDict
+    ImageTilesDataset
+```
+
+## Readers
+
+```{eval-rst}
+.. currentmodule:: spatialdata
+
+.. autosummary::
+    :toctree: generated
+
+    read_zarr
 ```

@@ -54,6 +54,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.mathjax",
     "IPython.sphinxext.ipython_console_highlighting",
+    "sphinx_design",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 

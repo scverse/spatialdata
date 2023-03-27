@@ -12,8 +12,7 @@ python:
         - method: pip
           path: .
           extra_requirements:
-              - doc
-              - optional
+              - docs
 submodules:
     include:
         - "docs/tutorials/notebooks"

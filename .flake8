@@ -48,6 +48,3 @@ per-file-ignores =
     */__init__.py: F401
     # Ignore for compat checks at top of file
     src/spatialdata/__init__.py: E402
-    # TODO: this file is weird, but it's not actually causing a bug and fixing it is
-    # signifigantly harder than ignoring it
-    src/spatialdata/_constants/_enum.py: B024
