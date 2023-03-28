@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     pass
 
 
-def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike: #type: ignore[return-value]
+def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:  # type: ignore[return-value]
     if isinstance(array, list):
         return np.array(array)
     if array.dtype != float:

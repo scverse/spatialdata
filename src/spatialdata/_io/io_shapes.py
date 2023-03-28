@@ -23,7 +23,7 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: Union[str, Path, MutableMapping, zarr.Group], # type: ignore[type-arg]
+    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
     fmt: SpatialDataFormatV01 = CurrentShapesFormat(),
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
