@@ -3,6 +3,7 @@ import pytest
 from spatial_image import SpatialImage
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
+from spatialdata._logging import logger as logg
 from spatialdata.models import get_axis_names
 from spatialdata.models._utils import get_spatial_axes
 
@@ -13,11 +14,9 @@ from tests.conftest import _get_images, _get_labels
 def test_rasterize_raster(_get_raster):
     def _get_data_of_largest_scale(raster):
         if isinstance(raster, SpatialImage):
-            data = raster.data.compute()
-        else:
-            xdata = next(iter(_iter_multiscale(raster, None)))
-            data = xdata.data.compute()
-        return data
+            return raster.data.compute()
+        xdata = next(iter(_iter_multiscale(raster, None)))
+        return xdata.data.compute()
 
     rasters = _get_raster()
     for raster in rasters.values():
@@ -49,8 +48,8 @@ def test_rasterize_raster(_get_raster):
             result_data = _get_data_of_largest_scale(result)
             n_equal = result_data[tuple(slices)] == 1
             ratio = np.sum(n_equal) / np.prod(n_equal.shape)
-            if "z" in dims:
-                if "target_unit_to_pixels" in kwargs:
+            if "z" in dims:  # noqa[SIM108]
+                if "target_unit_to_pixels" in kwargs:  # noqa[SIM108]
                     # the z dim of the data is 2, the z dim of the target image is 20, because target_unit_to_pixels
                     # is 2 and the boundigbox is a square with size 10 x 10
                     target_ratio = 0.1
@@ -72,12 +71,13 @@ def test_rasterize_raster(_get_raster):
 
             EPS = 0.01
             if ratio < target_ratio - EPS:
-                print(f"ratio = {ratio}")
-                print(
-                    f"dims: {dims}, element: {type(raster)}, type data: {type(data)}, type result: {type(result_data)}, "
+                logg.info(f"ratio = {ratio}")
+                logg.info(
+                    f"dims: {dims}, element: {type(raster)}, type data: {type(data)},"
+                    f"type result: {type(result_data)}, "
                     f"shape data: {data.shape}, shape result: {result_data.shape}"
                 )
-                print(f"kwargs = {kwargs}")
+                logg.info(f"kwargs = {kwargs}")
                 raise AssertionError(
                     "ratio is too small; ideally this number would be 100% but there is an offset error that needs "
                     "to be addressed. Also to get 100% we need to disable interpolation"

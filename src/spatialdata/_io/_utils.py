@@ -148,8 +148,9 @@ class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
     # from https://stackoverflow.com/a/24860799/3343783
     def phase3(self) -> None:
         """
-        Find out differences between common files.
-        Ensure we are using content comparison with shallow=False.
+                Find out differences between common files
+        .
+                Ensure we are using content comparison with shallow=False.
         """
         fcomp = filecmp.cmpfiles(self.left, self.right, self.common_files, shallow=False)
         self.same_files, self.diff_files, self.funny_files = fcomp
@@ -164,6 +165,7 @@ def _are_directories_identical(
 ) -> bool:
     """
     Compare two directory trees content.
+
     Return False if they differ, True is they are the same.
     """
     if _root_dir1 is None:

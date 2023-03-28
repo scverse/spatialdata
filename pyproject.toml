@@ -172,7 +172,12 @@ target-version = "py39"
     "tests/*" = ["D", "PT", "B024"]
     "*/__init__.py" = ["F401", "D104", "D107", "E402"]
     "docs/*" = ["D","B","E","A"]
-    "src/spatialdata/transformations/transformations.py" = ["D101","D102", "D106", "B024"]
+    "src/spatialdata/transformations/transformations.py" = ["D101","D102", "D106", "B024", "T201", "RET504"]
+    "src/spatialdata/transformations/operations.py" = ["D101","D102", "D106", "B024","D401", "T201", "RET504", "RET506", "RET505", "RET504"]
+    "src/spatialdata/transformations/ngff/*.py" = ["D101","D102", "D106", "D401", "E501","RET506", "RET505", "RET504"]
+    "src/spatialdata/transformations/*" = ["RET", "D"]
+    "src/spatialdata/models/models.py" = ["D101", "B026"]
+    "src/spatialdata/dataloader/datasets.py" = ["D101"]
 [tool.ruff.pydocstyle]
 convention = "numpy"
 [tool.ruff.pyupgrade]

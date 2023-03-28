@@ -8,6 +8,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from numpy.random import default_rng
 from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
@@ -22,6 +23,8 @@ from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
 
 from tests.conftest import _get_table
+
+RNG = default_rng(0)
 
 
 def test_element_names_unique():
@@ -106,7 +109,7 @@ def test_filter_by_coordinate_system(full_sdata):
 def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata.models import TableModel
 
-    full_sdata.table.obs["annotated_shapes"] = np.random.choice(["circles", "poly"], size=full_sdata.table.shape[0])
+    full_sdata.table.obs["annotated_shapes"] = RNG.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
@@ -128,7 +131,8 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
 
 def test_concatenate_tables():
     """
-    The concatenation uses AnnData.concatenate(), here we test the contatenation result on region, region_key, instance_key
+    The concatenation uses AnnData.concatenate(), here we test the contatenation result on
+    region, region_key, instance_key.
     """
     table0 = _get_table(region="shapes/circles", instance_key="instance_id")
     table1 = _get_table(region="shapes/poly", instance_key="instance_id")

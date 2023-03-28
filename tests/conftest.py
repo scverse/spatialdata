@@ -121,7 +121,7 @@ def sdata(request) -> SpatialData:
     else:
         s = request.getfixturevalue(request.param)
     # print(f"request.param = {request.param}")
-    return s
+    return s  # noqa: [RET504]
 
 
 def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:

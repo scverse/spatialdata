@@ -36,7 +36,7 @@ class BaseTransformation(ABC):
 
     @staticmethod
     def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
-        """This function is to allow to call validate_axes() from this file in multiple places while avoiding circular imports."""
+        """Allow to call validate_axes() from this file in multiple places while avoiding circular imports."""
         from spatialdata.models._utils import validate_axes
 
         validate_axes(axes)
@@ -128,8 +128,7 @@ class BaseTransformation(ABC):
     def compose_with(self, transformations: Union[BaseTransformation, list[BaseTransformation]]) -> BaseTransformation:
         if isinstance(transformations, BaseTransformation):
             return Sequence([self, transformations])
-        else:
-            return Sequence([self, *transformations])
+        return Sequence([self, *transformations])
 
     # def __eq__(self, other: Any) -> bool:
     #     if not isinstance(other, BaseTransformation):
@@ -748,7 +747,7 @@ def _get_current_output_axes(
 ) -> tuple[ValidAxis_t, ...]:
     if isinstance(transformation, (Identity, Translation, Scale)):
         return input_axes
-    elif isinstance(transformation, MapAxis):
+    if isinstance(transformation, MapAxis):
         map_axis_input_axes = set(transformation.map_axis.values())
         set(transformation.map_axis.keys())
         to_return = []
@@ -761,7 +760,7 @@ def _get_current_output_axes(
                 assert all([ax_out not in to_return for ax_out in mapped])
                 to_return.extend(mapped)
         return tuple(to_return)
-    elif isinstance(transformation, Affine):
+    if isinstance(transformation, Affine):
         to_return = []
         add_affine_output_axes = False
         for ax in input_axes:
@@ -781,12 +780,11 @@ def _get_current_output_axes(
                         f"matrix representation being queried"
                     )
         return tuple(to_return)
-    elif isinstance(transformation, Sequence):
+    if isinstance(transformation, Sequence):
         for t in transformation.transformations:
             input_axes = _get_current_output_axes(t, input_axes)
         return input_axes
-    else:
-        raise ValueError("Unknown transformation type.")
+    raise ValueError("Unknown transformation type.")
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:

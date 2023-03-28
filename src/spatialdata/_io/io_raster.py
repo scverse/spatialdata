@@ -128,14 +128,12 @@ def _write_raster(
     def _get_group_for_writing_data() -> zarr.Group:
         if raster_type == "image":
             return group.require_group(name)
-        else:
-            return group
+        return group
 
     def _get_group_for_writing_transformations() -> zarr.Group:
         if raster_type == "image":
             return group.require_group(name)
-        else:
-            return group["labels"][name]
+        return group["labels"][name]
 
     # convert channel names to channel metadata
     if raster_type == "image":

@@ -26,12 +26,11 @@ if TYPE_CHECKING:
     pass
 
 
-def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike: #type: ignore[return-value]
     if isinstance(array, list):
-        array = np.array(array)
+        return np.array(array)
     if array.dtype != float:
-        array = array.astype(float)
-    return array
+        return array.astype(float)
 
 
 def _atoi(text: str) -> Union[int, str]:
@@ -41,6 +40,8 @@ def _atoi(text: str) -> Union[int, str]:
 # from https://stackoverflow.com/a/5967539/3343783
 def _natural_keys(text: str) -> list[Union[int, str]]:
     """
+    Sort.
+
     alist.sort(key=natural_keys) sorts in human order
     http://nedbatchelder.com/blog/200712/human_sorting.html
     (See Toothy's implementation in the comments).
@@ -86,16 +87,17 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
             min_coordinate, max_coordinate = data.coords[axis].min().item(), data.coords[axis].max().item()
             if not min_coordinate != 0:
                 raise ValueError(
-                    f"Expected minimum coordinate for axis {axis} to be 0, but got {min_coordinate}. Please report this bug."
+                    f"Expected minimum coordinate for axis {axis} to be 0, but got {min_coordinate}."
+                    f"Please report this bug."
                 )
             if max_coordinate != data.shape[data.dims.index(axis)] - 1:
                 raise ValueError(
-                    f"Expected maximum coordinate for axis {axis} to be {data.shape[data.dims.index(axis)] - 1}, but got {max_coordinate}. Please report this bug."
+                    f"Expected maximum coordinate for axis {axis} to be {data.shape[data.dims.index(axis)] - 1}",
+                    f"but got {max_coordinate}. Please report this bug.",
                 )
             return 0, data.shape[data.dims.index(axis)]
-        else:
-            left_pad = non_zero[0]
-            right_pad = non_zero[-1] + 1
+        left_pad = non_zero[0]
+        right_pad = non_zero[-1] + 1
         return left_pad, right_pad
 
     axes = get_axis_names(raster)
@@ -103,8 +105,9 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     translation_values: list[float] = []
     unpadded = raster
 
-    # TODO: this "if else" will be unnecessary once we remove the concept of intrinsic coordinate systems and we make the
-    #  transformations and xarray coordinates more interoperable
+    # TODO: this "if else" will be unnecessary once
+    # we remove the concept of intrinsic coordinate systems and we make the
+    # transformations and xarray coordinates more interoperable
     if isinstance(unpadded, SpatialImage):
         for ax in axes:
             if ax != "c":

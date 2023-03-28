@@ -489,7 +489,8 @@ def test_transformations_between_coordinate_systems(images):
                 (reference_landmarks_points, moving_landmarks_points),
             ]:
                 affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
-                # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
+                # testing a transformation with determinant > 0 for shapes
+                # and a transformation with determinant < 0 for points
                 if positive_determinant:
                     assert np.allclose(
                         affine.matrix,

@@ -1,4 +1,4 @@
-"""This file contains models and schema for SpatialData."""
+"""Models and schema for SpatialData."""
 from __future__ import annotations
 
 import warnings
@@ -77,7 +77,7 @@ def _parse_transformations(
             "Transformations are both specified for the element and also passed as an argument to the parser. Please "
             "specify the transformations only once."
         )
-    elif transformations_in_element is not None and len(transformations_in_element) > 0:
+    if transformations_in_element is not None and len(transformations_in_element) > 0:
         parsed_transformations = transformations_in_element
     elif transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
@@ -135,8 +135,7 @@ class RasterSchema(DataArraySchema):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
-                else:
-                    logger.info("`dims` is specified redundantly: found also inside `data`.")
+                logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
                 dims = data.dims
             # but if dims don't match the model's dims, throw error
@@ -167,8 +166,10 @@ class RasterSchema(DataArraySchema):
                 else:
                     raise ValueError(f"Unsupported data type: {type(data)}.")
                 logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
-            except ValueError:
-                raise ValueError(f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`.")
+            except ValueError as e:
+                raise ValueError(
+                    f"Cannot transpose arrays to match `dims`: {dims}. Try to reshape `data` or `dims`."
+                ) from e
 
         # finally convert to spatial image
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
@@ -316,7 +317,8 @@ class ShapesModel:
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
-                f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes, but it contains {type(geom_)}."
+                f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
+                f"but it contains {type(geom_)}."
             )
         if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
             raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
@@ -559,7 +561,7 @@ class PointsModel:
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
             )
             if feature_key is not None:
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)  # type: ignore[attr-defined]
+                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)  # type: ignore[attr-defined] #noqa: E501
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]
@@ -618,6 +620,18 @@ class TableModel:
         self,
         data: AnnData,
     ) -> AnnData:
+        """
+        Validate data.
+
+        Parameters
+        ----------
+        data
+            :class:`anndata.AnnData` to validate.
+
+        Returns
+        -------
+        None
+        """
         if self.ATTRS_KEY not in data.uns:
             raise ValueError(f"`{self.ATTRS_KEY}` not found in `adata.uns`.")
         attr = data.uns[self.ATTRS_KEY]
@@ -671,7 +685,8 @@ class TableModel:
         if n_args > 0:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
-                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}` as arguments or have them in `adata.uns[{cls.ATTRS_KEY!r}]`."
+                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}`"
+                    f"as arguments or have them in `adata.uns[{cls.ATTRS_KEY!r}]`."
                 )
         elif cls.ATTRS_KEY in adata.uns:
             attr = adata.uns[cls.ATTRS_KEY]
@@ -715,6 +730,19 @@ Schema_t = Union[
 def get_model(
     e: SpatialElement,
 ) -> Schema_t:
+    """
+    Get the model for the given element.
+
+    Parameters
+    ----------
+    e
+        The element.
+
+    Returns
+    -------
+    The schema
+    """
+
     def _validate_and_return(
         schema: Schema_t,
         e: Union[SpatialElement],
@@ -727,18 +755,14 @@ def get_model(
         if "c" in axes:
             if "z" in axes:
                 return _validate_and_return(Image3DModel, e)
-            else:
-                return _validate_and_return(Image2DModel, e)
-        else:
-            if "z" in axes:
-                return _validate_and_return(Labels3DModel, e)
-            else:
-                return _validate_and_return(Labels2DModel, e)
-    elif isinstance(e, GeoDataFrame):
+            return _validate_and_return(Image2DModel, e)
+        if "z" in axes:
+            return _validate_and_return(Labels3DModel, e)
+        return _validate_and_return(Labels2DModel, e)
+    if isinstance(e, GeoDataFrame):
         return _validate_and_return(ShapesModel, e)
-    elif isinstance(e, DaskDataFrame):
+    if isinstance(e, DaskDataFrame):
         return _validate_and_return(PointsModel, e)
-    elif isinstance(e, AnnData):
+    if isinstance(e, AnnData):
         return _validate_and_return(TableModel, e)
-    else:
-        raise TypeError(f"Unsupported type {type(e)}")
+    raise TypeError(f"Unsupported type {type(e)}")

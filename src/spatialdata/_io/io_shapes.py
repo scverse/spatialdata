@@ -22,7 +22,10 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_shapes(store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentShapesFormat()) -> GeoDataFrame:  # type: ignore[type-arg]
+def _read_shapes(
+    store: Union[str, Path, MutableMapping, zarr.Group], # type: ignore[type-arg]
+    fmt: SpatialDataFormatV01 = CurrentShapesFormat(),
+) -> GeoDataFrame:
     """Read shapes from a zarr store."""
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")

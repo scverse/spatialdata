@@ -43,7 +43,7 @@ def peek(path: str) -> None:
 @click.group()
 def cli() -> None:
     """
-    The main Click command group.
+    Click command group.
 
     This function serves as the main entry point for the command-line interface. It creates a Click command
     group and adds the various cli commands to it.
@@ -55,7 +55,7 @@ cli.add_command(peek)
 
 def main() -> None:
     """
-    The main function that initializes and runs the command-line interface.
+    Initializes and runs the command-line interface.
 
     This function initializes the Click command group and runs the command-line interface, processing user
     input and executing the appropriate commands.

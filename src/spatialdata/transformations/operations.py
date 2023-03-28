@@ -42,7 +42,8 @@ def set_transformation(
         * If None and `set_all=False` sets the transformation to the 'global' coordinate system (default system).
         * If None and `set_all=True` sets all transformations.
     set_all
-        If True, all transformations are set. If False, only the transformation to the specified coordinate system is set.
+        If True, all transformations are set. If False, only the transformation to
+        the specified coordinate system is set.
         If True, `to_coordinate_system` needs to be None.
     write_to_sdata
         The SpatialData object to set the transformation/s to. If None, the transformation/s are set in-memory. If not
@@ -136,13 +137,16 @@ def remove_transformation(
     to_coordinate_system
         The coordinate system to remove the transformation/s from. If None, all transformations are removed.
 
-        * If None and `remove_all=False` removes the transformation from the 'global' coordinate system (default system).
+        * If None and `remove_all=False` removes the transformation from the 'global'
+          coordinate system (default system).
         * If None and `remove_all=True` removes all transformations.
     remove_all
         If True, all transformations are removed. If True, `to_coordinate_system` needs to be None.
     write_to_sdata
-        The SpatialData object to remove the transformation/s from. If None, the transformation/s are removed in-memory.
-        If not None, the element needs to belong to the SpatialData object, and the SpatialData object needs to be backed.
+        The SpatialData object to remove the transformation/s from.
+        If None, the transformation/s are removed in-memory.
+        If not None, the element needs to belong to the SpatialData object,
+        and the SpatialData object needs to be backed.
     """
     from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
@@ -181,7 +185,7 @@ def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
         assert isinstance(transformations, dict)
         for cs, t in transformations.items():
             g.add_edge(id(e), cs, transformation=t)
-            try:
+            try:  # noqa:[SIM105]
                 g.add_edge(cs, id(e), transformation=t.inverse())
             except np.linalg.LinAlgError:
                 pass
@@ -238,63 +242,59 @@ def get_transformation_between_coordinate_systems(
         or id(source_coordinate_system) == id(target_coordinate_system)
     ):
         return Identity()
+    g = _build_transformations_graph(sdata)
+    src_node: Union[int, str]
+    if has_type_spatial_element(source_coordinate_system):
+        src_node = id(source_coordinate_system)
     else:
-        g = _build_transformations_graph(sdata)
-        src_node: Union[int, str]
-        if has_type_spatial_element(source_coordinate_system):
-            src_node = id(source_coordinate_system)
-        else:
-            assert isinstance(source_coordinate_system, str)
-            src_node = source_coordinate_system
-        tgt_node: Union[int, str]
-        if has_type_spatial_element(target_coordinate_system):
-            tgt_node = id(target_coordinate_system)
-        else:
-            assert isinstance(target_coordinate_system, str)
-            tgt_node = target_coordinate_system
-        paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
-        if len(paths) == 0:
-            # error 0 (we refer to this in the tests)
-            raise RuntimeError("No path found between the two coordinate systems")
-        elif len(paths) > 1:
-            if intermediate_coordinate_systems is None:
-                # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
-                # an expection and ask the user to be more specific
-                paths_with_length_1 = [p for p in paths if len(p) == 2]
-                if len(paths_with_length_1) == 1:
-                    path = paths_with_length_1[0]
-                else:
-                    # error 1
-                    s = _describe_paths(paths)
-                    raise RuntimeError(
-                        "Multiple paths found between the two coordinate systems. Please specify an intermediate "
-                        f"coordinate system. Available paths are:{s}"
-                    )
+        assert isinstance(source_coordinate_system, str)
+        src_node = source_coordinate_system
+    tgt_node: Union[int, str]
+    if has_type_spatial_element(target_coordinate_system):
+        tgt_node = id(target_coordinate_system)
+    else:
+        assert isinstance(target_coordinate_system, str)
+        tgt_node = target_coordinate_system
+    paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
+    if len(paths) == 0:
+        # error 0 (we refer to this in the tests)
+        raise RuntimeError("No path found between the two coordinate systems")
+    if len(paths) > 1:
+        if intermediate_coordinate_systems is None:
+            # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
+            # an expection and ask the user to be more specific
+            paths_with_length_1 = [p for p in paths if len(p) == 2]
+            if len(paths_with_length_1) == 1:
+                path = paths_with_length_1[0]
             else:
-                if has_type_spatial_element(intermediate_coordinate_systems):
-                    intermediate_coordinate_systems = id(intermediate_coordinate_systems)
-                paths = [p for p in paths if intermediate_coordinate_systems in p]
-                if len(paths) == 0:
-                    # error 2
-                    raise RuntimeError(
-                        "No path found between the two coordinate systems passing through the intermediate"
-                    )
-                elif len(paths) > 1:
-                    # error 3
-                    s = _describe_paths(paths)
-                    raise RuntimeError(
-                        "Multiple paths found between the two coordinate systems passing through the intermediate. "
-                        f"Avaliable paths are:{s}"
-                    )
-                else:
-                    path = paths[0]
+                # error 1
+                s = _describe_paths(paths)
+                raise RuntimeError(
+                    "Multiple paths found between the two coordinate systems. Please specify an intermediate "
+                    f"coordinate system. Available paths are:{s}"
+                )
         else:
+            if has_type_spatial_element(intermediate_coordinate_systems):
+                intermediate_coordinate_systems = id(intermediate_coordinate_systems)
+            paths = [p for p in paths if intermediate_coordinate_systems in p]
+            if len(paths) == 0:
+                # error 2
+                raise RuntimeError("No path found between the two coordinate systems passing through the intermediate")
+            if len(paths) > 1:
+                # error 3
+                s = _describe_paths(paths)
+                raise RuntimeError(
+                    "Multiple paths found between the two coordinate systems passing through the intermediate. "
+                    f"Avaliable paths are:{s}"
+                )
             path = paths[0]
-        transformations = []
-        for i in range(len(path) - 1):
-            transformations.append(g[path[i]][path[i + 1]]["transformation"])
-        sequence = Sequence(transformations)
-        return sequence
+    else:
+        path = paths[0]
+    transformations = []
+    for i in range(len(path) - 1):
+        transformations.append(g[path[i]][path[i + 1]]["transformation"])
+    sequence = Sequence(transformations)
+    return sequence
 
 
 def get_transformation_between_landmarks(
@@ -302,7 +302,9 @@ def get_transformation_between_landmarks(
     moving_coords: Union[GeoDataFrame, DaskDataFrame],
 ) -> Affine:
     """
-    Get a similarity transformation between two lists of (n >= 3) landmarks. Landmarks are assumed to be in the same space.
+    Get a similarity transformation between two lists of (n >= 3) landmarks.
+
+    Landmarks are assumed to be in the same space.
 
     Parameters
     ----------
@@ -379,12 +381,11 @@ def get_transformation_between_landmarks(
         model = estimate_transform("similarity", src=moving_xy, dst=references_xy)
         final = Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))
 
-    affine = Affine(
+    return Affine(
         final.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
         input_axes=("x", "y"),
         output_axes=("x", "y"),
     )
-    return affine
 
 
 def align_elements_using_landmarks(
@@ -398,8 +399,10 @@ def align_elements_using_landmarks(
     write_to_sdata: Optional[SpatialData] = None,
 ) -> BaseTransformation:
     """
-    Maps a moving object into a reference object using two lists of (n >= 3) landmarks; returns the transformations that enable this
-    mapping and optinally saves them, to map to a new shared coordinate system.
+    Map a moving object into a reference object using two lists of (n >= 3) landmarks.
+
+    Returns the transformations that enable this mapping
+    and optinally saves them, to map to a new shared coordinate system.
 
     Parameters
     ----------
