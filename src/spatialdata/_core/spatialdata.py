@@ -146,6 +146,7 @@ class SpatialData:
             self._table = table
 
         self._query = QueryManager(self)
+        self._aggregate = AggregateManager(self)
 
     @staticmethod
     def from_elements_dict(elements_dict: dict[str, Union[SpatialElement, AnnData]]) -> SpatialData:
@@ -195,6 +196,10 @@ class SpatialData:
     @property
     def query(self) -> QueryManager:
         return self._query
+
+    @property
+    def aggregate(self) -> AggregateManager:
+        return self._aggregate
 
     @staticmethod
     def _validate_unique_element_names(element_names: list[str]) -> None:
@@ -1388,3 +1393,16 @@ class QueryManager:
             return self.bounding_box(**request.to_dict(), **kwargs)
         else:
             raise TypeError("unknown request type")
+
+class AggregateManager:
+    """Perform aggregation on SpatialData objects"""
+
+    def __init__(self, sdata: SpatialData):
+        self._sdata = sdata
+
+    def aggregate(self,)
+        return
+
+    def __call__(self, , **kwargs) -> SpatialData:
+        from spatialdata._core.operations.aggregate import aggregate
+
