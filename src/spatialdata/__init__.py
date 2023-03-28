@@ -16,6 +16,7 @@ __all__ = [
     "concatenate",
     "rasterize",
     "transform",
+    "aggregate",
     "bounding_box_query",
     "SpatialData",
     "read_zarr",
