@@ -160,7 +160,7 @@ class SpatialData:
 
         Returns
         -------
-            The SpatialData object.
+        The SpatialData object.
         """
         d: dict[str, Union[dict[str, SpatialElement], Optional[AnnData]]] = {
             "images": {},
@@ -430,7 +430,6 @@ class SpatialData:
         Returns
         -------
         True if the element is found; False otherwise (if raise_exception is False).
-
         """
         try:
             self._locate_spatial_element(element)

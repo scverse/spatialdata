@@ -20,7 +20,8 @@ def aggregate(
     agg_func: str = "mean",
 ) -> ad.AnnData:
     """
-    Aggregate values by given shapes
+    Aggregate values by given shapes.
+
     Parameters
     ----------
     values
@@ -37,6 +38,7 @@ def aggregate(
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to pandas.DataFrame.groupby.agg.
+
     Returns
     -------
     AnnData of shape (by.shape[0], values[id_key].nunique())])
