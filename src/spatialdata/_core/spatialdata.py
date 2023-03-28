@@ -1405,4 +1405,3 @@ class AggregateManager:
 
     def __call__(self, , **kwargs) -> SpatialData:
         from spatialdata._core.operations.aggregate import aggregate
-
