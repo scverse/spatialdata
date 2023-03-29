@@ -127,16 +127,16 @@ def _iter_multiscale(
     attr: Optional[str],
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
-    for i in data.keys():
+    for i in data:
         variables = set(data[i].variables.keys())
         names: set[str] = variables.difference({"c", "z", "y", "x"})
         if len(names) != 1:
             raise ValueError(f"Invalid variable name: `{names}`.")
     name: str = next(iter(names))
     if attr is not None:
-        return [getattr(data[i][name], attr) for i in data.keys()]
+        return [getattr(data[i][name], attr) for i in data]
     else:
-        return [data[i][name] for i in data.keys()]
+        return [data[i][name] for i in data]
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
@@ -170,11 +170,11 @@ def _are_directories_identical(
         _root_dir1 = dir1
     if _root_dir2 is None:
         _root_dir2 = dir2
-    if exclude_regexp is not None:
-        if re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1)) or re.match(
-            rf"{_root_dir2}/" + exclude_regexp, str(dir2)
-        ):
-            return True
+    if exclude_regexp is not None and (
+        re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1))
+        or re.match(rf"{_root_dir2}/" + exclude_regexp, str(dir2))
+    ):
+        return True
 
     compared = dircmp(dir1, dir2)
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
@@ -266,8 +266,8 @@ def _(data: SpatialImage) -> list[Any]:
 
 @get_channels.register
 def _(data: MultiscaleSpatialImage) -> list[Any]:
-    name = list({list(data[i].data_vars.keys())[0] for i in data.keys()})[0]
-    channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
+    name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data}
     if len(channels) > 1:
         raise ValueError("TODO")
     return list(next(iter(channels)))

@@ -20,8 +20,6 @@ from numpy.random import default_rng
 from pandas.api.types import is_categorical_dtype
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from xarray import DataArray
-
 from spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
@@ -45,6 +43,8 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Scale
+from xarray import DataArray
+
 from tests.conftest import (
     MULTIPOLYGON_PATH,
     POINT_PATH,
@@ -199,10 +199,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
-        if path.name == "points.json":
-            radius = np.random.normal(size=(2,))
-        else:
-            radius = None
+        radius = np.random.normal(size=(2,)) if path.name == "points.json" else None
         self._parse_transformation_from_multiple_places(model, path)
         poly = model.parse(path, radius=radius)
         self._passes_validation_after_io(model, poly, "shapes")

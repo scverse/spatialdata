@@ -1,4 +1,4 @@
-"""This file contains models and schema for SpatialData"""
+"""This file contains models and schema for SpatialData."""
 from __future__ import annotations
 
 import warnings
@@ -127,7 +127,7 @@ class RasterSchema(DataArraySchema):
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, DataArray) or isinstance(data, SpatialImage):
+        if isinstance(data, (DataArray, SpatialImage)):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -144,7 +144,7 @@ class RasterSchema(DataArraySchema):
                 raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
         # if there are no dims in the data, use the model's dims or provided dims
-        elif isinstance(data, np.ndarray) or isinstance(data, DaskArray):
+        elif isinstance(data, (np.ndarray, DaskArray)):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
             if dims is None:
@@ -205,7 +205,6 @@ class RasterSchema(DataArraySchema):
         ValueError
             If data is not valid.
         """
-
         raise ValueError(f"Unsupported data type: {type(data)}.")
 
     @validate.register(SpatialImage)
@@ -217,7 +216,7 @@ class RasterSchema(DataArraySchema):
         for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
-        name = {list(data[i].data_vars.keys())[0] for i in data.keys()}
+        name = {list(data[i].data_vars.keys())[0] for i in data}
         if len(name) > 1:
             raise ValueError(f"Wrong name for datatree: `{name}`.")
         name = list(name)[0]
@@ -319,9 +318,8 @@ class ShapesModel:
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes, but it contains {type(geom_)}."
             )
-        if isinstance(geom_, Point):
-            if cls.RADIUS_KEY not in data.columns:
-                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
+            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
@@ -426,9 +424,8 @@ class ShapesModel:
     ) -> GeoDataFrame:
         if "geometry" not in data.columns:
             raise ValueError("`geometry` column not found in `GeoDataFrame`.")
-        if isinstance(data["geometry"].iloc[0], Point):
-            if cls.RADIUS_KEY not in data.columns:
-                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(data["geometry"].iloc[0], Point) and cls.RADIUS_KEY not in data.columns:
+            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         _parse_transformations(data, transformations)
         cls.validate(data)
         return data
@@ -567,9 +564,8 @@ class PointsModel:
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None:
-                if data[feature_key].dtype.name != "category":
-                    table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None and data[feature_key].dtype.name != "category":
+                table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
@@ -600,12 +596,11 @@ class PointsModel:
             #  Here we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known.
             # It also just changes the state of the series, so it is not a big deal.
-            if is_categorical_dtype(data[c]):
-                if not data[c].cat.known:
-                    try:
-                        data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
-                    except ValueError:
-                        logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+            if is_categorical_dtype(data[c]) and not data[c].cat.known:
+                try:
+                    data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                except ValueError:
+                    logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
         _parse_transformations(data, transformations)
         cls.validate(data)
@@ -727,7 +722,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, SpatialImage) or isinstance(e, MultiscaleSpatialImage):
+    if isinstance(e, (SpatialImage, MultiscaleSpatialImage)):
         axes = get_axis_names(e)
         if "c" in axes:
             if "z" in axes:

@@ -3,7 +3,6 @@ import json
 
 import numpy as np
 import pytest
-
 from spatialdata._types import ArrayLike
 from spatialdata.models import C, X, Y, Z
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
@@ -19,6 +18,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
     NgffSequence,
     NgffTranslation,
 )
+
 from tests.test_transformations.test_ngff.conftest import (
     c_cs,
     cyx_cs,

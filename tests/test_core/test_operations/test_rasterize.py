@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
 from spatial_image import SpatialImage
-
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import get_axis_names
 from spatialdata.models._utils import get_spatial_axes
+
 from tests.conftest import _get_images, _get_labels
 
 

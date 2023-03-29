@@ -8,7 +8,6 @@ import scipy.misc
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData, transform
 from spatialdata._utils import unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axis_names

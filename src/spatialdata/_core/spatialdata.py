@@ -171,10 +171,10 @@ class SpatialData:
         }
         for k, e in elements_dict.items():
             schema = get_model(e)
-            if schema == Image2DModel or schema == Image3DModel:
+            if schema in (Image2DModel, Image3DModel):
                 assert isinstance(d["images"], dict)
                 d["images"][k] = e
-            elif schema == Labels2DModel or schema == Labels3DModel:
+            elif schema in (Labels2DModel, Labels3DModel):
                 assert isinstance(d["labels"], dict)
                 d["labels"][k] = e
             elif schema == PointsModel:
@@ -208,7 +208,7 @@ class SpatialData:
         self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
         """
-        Adds an image element to the SpatialData object
+        Adds an image element to the SpatialData object.
 
         Parameters
         ----------
@@ -222,9 +222,8 @@ class SpatialData:
         self._validate_unique_element_names(
             list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
         )
-        if name in self._images:
-            if not overwrite:
-                raise KeyError(f"Image {name} already exists in the dataset.")
+        if name in self._images and not overwrite:
+            raise KeyError(f"Image {name} already exists in the dataset.")
         ndim = len(get_axis_names(image))
         if ndim == 3:
             Image2D_s.validate(image)
@@ -239,7 +238,7 @@ class SpatialData:
         self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
     ) -> None:
         """
-        Adds a labels element to the SpatialData object
+        Adds a labels element to the SpatialData object.
 
         Parameters
         ----------
@@ -253,9 +252,8 @@ class SpatialData:
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
         )
-        if name in self._labels:
-            if not overwrite:
-                raise KeyError(f"Labels {name} already exists in the dataset.")
+        if name in self._labels and not overwrite:
+            raise KeyError(f"Labels {name} already exists in the dataset.")
         ndim = len(get_axis_names(labels))
         if ndim == 2:
             Label2D_s.validate(labels)
@@ -268,7 +266,7 @@ class SpatialData:
 
     def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame, overwrite: bool = False) -> None:
         """
-        Adds a shapes element to the SpatialData object
+        Adds a shapes element to the SpatialData object.
 
         Parameters
         ----------
@@ -282,15 +280,14 @@ class SpatialData:
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
         )
-        if name in self._shapes:
-            if not overwrite:
-                raise KeyError(f"Shapes {name} already exists in the dataset.")
+        if name in self._shapes and not overwrite:
+            raise KeyError(f"Shapes {name} already exists in the dataset.")
         Shape_s.validate(shapes)
         self._shapes[name] = shapes
 
     def _add_points_in_memory(self, name: str, points: DaskDataFrame, overwrite: bool = False) -> None:
         """
-        Adds a points element to the SpatialData object
+        Adds a points element to the SpatialData object.
 
         Parameters
         ----------
@@ -304,9 +301,8 @@ class SpatialData:
         self._validate_unique_element_names(
             list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
         )
-        if name in self._points:
-            if not overwrite:
-                raise KeyError(f"Points {name} already exists in the dataset.")
+        if name in self._points and not overwrite:
+            raise KeyError(f"Points {name} already exists in the dataset.")
         Point_s.validate(points)
         self._points[name] = points
 
@@ -317,7 +313,7 @@ class SpatialData:
     # TODO: from a commennt from Giovanni: consolite somewhere in a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
         """
-        Get the group for an elemnt, creates a new one if the element doesn't exist
+        Get the group for an elemnt, creates a new one if the element doesn't exist.
 
         Parameters
         ----------
@@ -350,14 +346,10 @@ class SpatialData:
         assert element_type in ["images", "labels", "points", "shapes"]
         # not need to create the group for labels as it is already handled by ome-zarr-py
         if element_type != "labels":
-            if element_type not in root:
-                elem_group = root.create_group(name=element_type)
-            else:
-                elem_group = root[element_type]
+            elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
         if overwrite:
-            if element_type == "labels":
-                if element_type in root:
-                    elem_group = root[element_type]
+            if element_type == "labels" and element_type in root:
+                elem_group = root[element_type]
             if name in elem_group:
                 del elem_group[name]
         else:
@@ -369,9 +361,8 @@ class SpatialData:
                     elem_group = root[element_type]
                 else:
                     bypass = True
-            if not bypass:
-                if name in elem_group:
-                    raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
+            if not bypass and name in elem_group:
+                raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
 
         if element_type != "labels":
             return elem_group
@@ -380,7 +371,7 @@ class SpatialData:
 
     def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
         """
-        Find the SpatialElement within the SpatialData object
+        Find the SpatialElement within the SpatialData object.
 
         Parameters
         ----------
@@ -443,7 +434,7 @@ class SpatialData:
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         """
-        Write transformations to disk for an element
+        Write transformations to disk for an element.
 
         Parameters
         ----------
@@ -459,15 +450,13 @@ class SpatialData:
         if self.path is not None:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
             axes = get_axis_names(element)
-            if isinstance(element, SpatialImage) or isinstance(element, MultiscaleSpatialImage):
+            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
                 from spatialdata._io._utils import (
                     overwrite_coordinate_transformations_raster,
                 )
 
                 overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif (
-                isinstance(element, DaskDataFrame) or isinstance(element, GeoDataFrame) or isinstance(element, AnnData)
-            ):
+            elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
                 from spatialdata._io._utils import (
                     overwrite_coordinate_transformations_non_raster,
                 )
@@ -1148,6 +1137,7 @@ class SpatialData:
     ) -> str:
         """
         Generate a string representation of the SpatialData object.
+
         Returns
         -------
             The string representation of the SpatialData object.
@@ -1165,7 +1155,7 @@ class SpatialData:
         non_empty_elements = self._non_empty_elements()
         last_element_index = len(non_empty_elements) - 1
         for attr_index, attr in enumerate(non_empty_elements):
-            last_attr = True if (attr_index == last_element_index) else False
+            last_attr = attr_index == last_element_index
             attribute = getattr(self, attr)
 
             descr += f"\n{h('level0')}{attr.capitalize()}"
@@ -1220,7 +1210,7 @@ class SpatialData:
                         elif isinstance(v, MultiscaleSpatialImage):
                             shapes = []
                             dims: Optional[str] = None
-                            for pyramid_level in v.keys():
+                            for pyramid_level in v:
                                 dataset_names = list(v[pyramid_level].keys())
                                 assert len(dataset_names) == 1
                                 dataset_name = dataset_names[0]
@@ -1297,6 +1287,7 @@ class SpatialData:
         ----------
         item
             The name of the element to return.
+
         Returns
         -------
         The element.
@@ -1319,9 +1310,9 @@ class SpatialData:
             The element.
         """
         schema = get_model(value)
-        if schema == Image2DModel or schema == Image3DModel:
+        if schema in (Image2DModel, Image3DModel):
             self.add_image(key, value)
-        elif schema == Labels2DModel or schema == Labels3DModel:
+        elif schema in (Labels2DModel, Labels3DModel):
             self.add_labels(key, value)
         elif schema == PointsModel:
             self.add_points(key, value)
@@ -1334,7 +1325,7 @@ class SpatialData:
 
 
 class QueryManager:
-    """Perform queries on SpatialData objects"""
+    """Perform queries on SpatialData objects."""
 
     def __init__(self, sdata: SpatialData):
         self._sdata = sdata

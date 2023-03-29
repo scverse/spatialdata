@@ -1,5 +1,6 @@
 """This file contains functions to compute the bounding box describing the extent of a spatial element,
-or of a specific region in the SpatialElement object."""
+or of a specific region in the SpatialElement object.
+"""
 import numpy as np
 from geopandas import GeoDataFrame
 from shapely import Point

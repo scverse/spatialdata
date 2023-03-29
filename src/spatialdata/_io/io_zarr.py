@@ -30,7 +30,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     images_store = store / "images"
     if images_store.exists():
         f = zarr.open(images_store, mode="r")
-        for k in f.keys():
+        for k in f:
             f_elem = f[k].name
             f_elem_store = f"{images_store}{f_elem}"
             images[k] = _read_multiscale(f_elem_store, raster_type="image")
@@ -40,7 +40,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         labels_store = store / "labels"
         if labels_store.exists():
             f = zarr.open(labels_store, mode="r")
-            for k in f.keys():
+            for k in f:
                 f_elem = f[k].name
                 f_elem_store = f"{labels_store}{f_elem}"
                 labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
@@ -49,7 +49,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     points_store = store / "points"
     if points_store.exists():
         f = zarr.open(points_store, mode="r")
-        for k in f.keys():
+        for k in f:
             f_elem = f[k].name
             f_elem_store = f"{points_store}{f_elem}"
             points[k] = _read_points(f_elem_store)
@@ -57,7 +57,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     shapes_store = store / "shapes"
     if shapes_store.exists():
         f = zarr.open(shapes_store, mode="r")
-        for k in f.keys():
+        for k in f:
             f_elem = f[k].name
             f_elem_store = f"{shapes_store}{f_elem}"
             shapes[k] = _read_shapes(f_elem_store)
@@ -65,7 +65,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     table_store = store / "table"
     if table_store.exists():
         f = zarr.open(table_store, mode="r")
-        for k in f.keys():
+        for k in f:
             f_elem = f[k].name
             f_elem_store = f"{table_store}{f_elem}"
             table = read_anndata_zarr(f_elem_store)
