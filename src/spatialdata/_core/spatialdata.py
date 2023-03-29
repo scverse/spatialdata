@@ -912,9 +912,8 @@ class SpatialData:
         try:
             if len(self.images):
                 root.create_group(name="images")
-                # add_image_in_memory will delete and replace the same key in self.images, so we need to make a copy of the
-                # keys. Same for the other elements
-                # keys = list(self.images.keys())
+                # add_image_in_memory will delete and replace the same key in self.images, so we need to make a copy
+                # of keys. Same for the other elements
                 keys = self.images.keys()
                 from spatialdata._io.io_raster import _read_multiscale
 
@@ -927,7 +926,7 @@ class SpatialData:
                         storage_options=storage_options,
                     )
 
-                    # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
+                    # reload the image from the Zarr storage so that now the element is lazy loaded, and
                     # from the correct storage
                     element_path = Path(self.path) / "images" / name
                     image = _read_multiscale(element_path, raster_type="image")
@@ -969,8 +968,8 @@ class SpatialData:
                     )
                     element_path = Path(self.path) / "points" / name
 
-                    # reload the points from the Zarr storage so that now the element is lazy loaded, and most importantly,
-                    # from the correct storage
+                    # reload the points from the Zarr storage so that now the element is lazy loaded,
+                    # and from the correct storage
                     points = _read_points(element_path)
                     self._add_points_in_memory(name=name, points=points, overwrite=True)
 
@@ -1078,8 +1077,7 @@ class SpatialData:
     def read(file_path: str) -> SpatialData:
         from spatialdata import read_zarr
 
-        sdata = read_zarr(file_path)
-        return sdata
+        return read_zarr(file_path)
 
     @property
     def images(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
@@ -1376,7 +1374,7 @@ class QueryManager:
 
         if isinstance(request, BoundingBoxRequest):
             # TODO: request doesn't contain filter_table. If the user doesn't specify this in kwargs, it will be set
-            #  to it's default value. This could be a bit unintuitive and we may want to change make things more explicit.
+            #  to it's default value.
+            # This could be a bit unintuitive and we may want to change make things more explicit.
             return self.bounding_box(**request.to_dict(), **kwargs)
-        else:
-            raise TypeError("unknown request type")
+        raise TypeError("unknown request type")

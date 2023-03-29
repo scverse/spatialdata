@@ -561,7 +561,10 @@ class PointsModel:
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
             )
             if feature_key is not None:
-                feature_categ = dd.from_pandas(data[feature_key].astype(str).astype("category"), **kwargs)  # type: ignore[attr-defined] #noqa: E501
+                feature_categ = dd.from_pandas(
+                    data[feature_key].astype(str).astype("category"),
+                    **kwargs,
+                )  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]

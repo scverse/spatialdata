@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from dask import array as da
@@ -26,11 +26,12 @@ if TYPE_CHECKING:
     pass
 
 
-def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:  # type: ignore[return-value]
+def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> Optional[ArrayLike]:
     if isinstance(array, list):
         return np.array(array)
     if array.dtype != float:
         return array.astype(float)
+    return None
 
 
 def _atoi(text: str) -> Union[int, str]:

@@ -86,17 +86,16 @@ def _read_multiscale(
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
-    else:
-        data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-        si = SpatialImage(
-            data,
-            name=name,
-            dims=axes,
-            coords={"c": channels} if raster_type == "image" else {},
-            # attrs={TRANSFORM_KEY: t},
-        )
-        _set_transformations(si, transformations)
-        return compute_coordinates(si)
+    data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
+    si = SpatialImage(
+        data,
+        name=name,
+        dims=axes,
+        coords={"c": channels} if raster_type == "image" else {},
+        # attrs={TRANSFORM_KEY: t},
+    )
+    _set_transformations(si, transformations)
+    return compute_coordinates(si)
 
 
 def _write_raster(

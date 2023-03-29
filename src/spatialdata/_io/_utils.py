@@ -135,22 +135,22 @@ def _iter_multiscale(
     name: str = next(iter(names))
     if attr is not None:
         return [getattr(data[i][name], attr) for i in data]
-    else:
-        return [data[i][name] for i in data]
+    return [data[i][name] for i in data]
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
     """
-    Compare the content of dir1 and dir2. In contrast with filecmp.dircmp, this
-    subclass compares the content of files with the same path.
+    Compare the content of dir1 and dir2.
+
+    In contrast with filecmp.dircmp, this subclass compares the content of files with the same path.
     """
 
     # from https://stackoverflow.com/a/24860799/3343783
     def phase3(self) -> None:
         """
-                Find out differences between common files
-        .
-                Ensure we are using content comparison with shallow=False.
+        Find out differences between common files.
+
+        Ensure we are using content comparison with shallow=False.
         """
         fcomp = filecmp.cmpfiles(self.left, self.right, self.common_files, shallow=False)
         self.same_files, self.diff_files, self.funny_files = fcomp
