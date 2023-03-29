@@ -116,7 +116,8 @@ def _write_metadata(
 
     group.attrs["encoding-type"] = group_type
     group.attrs["axes"] = axes
-    # we write empty coordinateTransformations and then overwrite them with overwrite_coordinate_transformations_non_raster()
+    # we write empty coordinateTransformations and then overwrite them
+    # with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
     # group.attrs["coordinateTransformations"] = coordinate_transformations
     group.attrs["spatialdata_attrs"] = attrs

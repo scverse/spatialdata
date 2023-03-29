@@ -604,15 +604,15 @@ def _(
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[GeoDataFrame]:
-    min_coordinate = _parse_list_into_array(min_coordinate)
-    max_coordinate = _parse_list_into_array(max_coordinate)
+    min_coordinate = _parse_list_into_array(min_coordinate)  # type: ignore[assignment]
+    max_coordinate = _parse_list_into_array(max_coordinate)  # type: ignore[assignemnt]
 
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
         axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
+        min_coordinate=min_coordinate,  # type: ignore[arg-type]
+        max_coordinate=max_coordinate,  # type: ignore[arg-type]
     )
 
     # get the four corners of the bounding box

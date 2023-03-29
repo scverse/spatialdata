@@ -399,9 +399,10 @@ class SpatialData:
                     found_element_name.append(element_name)
         if len(found) == 0:
             raise ValueError("Element not found in the SpatialData object.")
-        elif len(found) > 1:
+        if len(found) > 1:
             raise ValueError(
-                f"Element found multiple times in the SpatialData object. Found {len(found)} elements with names: {found_element_name}, and types: {found_element_type}"
+                "Element found multiple times in the SpatialData object."
+                f"Found {len(found)} elements with names: {found_element_name}, and types: {found_element_type}"
             )
         assert len(found_element_name) == 1
         assert len(found_element_type) == 1
@@ -479,8 +480,8 @@ class SpatialData:
         coordinate_system
             The coordinate system(s) to filter by.
         filter_table
-            If True (default), the table will be filtered to only contain regions of an element belonging to the specified
-            coordinate system(s).
+            If True (default), the table will be filtered to only contain regions
+            of an element belonging to the specified coordinate system(s).
 
         Returns
         -------
@@ -535,8 +536,7 @@ class SpatialData:
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
-        transformed = transform(element, t, maintain_positioning=False)
-        return transformed
+        return transform(element, t, maintain_positioning=False)
 
     def transform_to_coordinate_system(
         self, target_coordinate_system: str, filter_by_coordinate_system: bool = True
@@ -584,7 +584,7 @@ class SpatialData:
         name
             Key to the element inside the SpatialData object.
         image
-            The image to add, the object needs to pass validation (see :class:`~spatialdata.Image2DModel` and :class:`~spatialdata.Image3DModel`).
+            The image to add, the object needs to pass validation.
         storage_options
             Storage options for the Zarr storage.
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
@@ -666,7 +666,7 @@ class SpatialData:
         name
             Key to the element inside the SpatialData object.
         labels
-            The labels (masks) to add, the object needs to pass validation (see :class:`~spatialdata.Labels2DModel` and :class:`~spatialdata.Labels3DModel`).
+            The labels (masks) to add, the object needs to pass validation.
         storage_options
             Storage options for the Zarr storage.
             See https://zarr.readthedocs.io/en/stable/api/storage.html for more details.
@@ -879,7 +879,7 @@ class SpatialData:
                 )
             if not overwrite and self.path != str(file_path):
                 raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
-            elif str(file_path) == self.path:
+            if str(file_path) == self.path:
                 raise ValueError(
                     "The file path specified is the same as the one used for backing. "
                     "Overwriting the backing file is not supported to prevent accidental data loss."
@@ -947,8 +947,8 @@ class SpatialData:
                         storage_options=storage_options,
                     )
 
-                    # reload the labels from the Zarr storage so that now the element is lazy loaded, and most importantly,
-                    # from the correct storage
+                    # reload the labels from the Zarr storage so that now the element is lazy loaded,
+                    # and from the correct storage
                     element_path = Path(self.path) / "labels" / name
                     labels = _read_multiscale(element_path, raster_type="labels")
                     self._add_labels_in_memory(name=name, labels=labels, overwrite=True)
