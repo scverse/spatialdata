@@ -23,7 +23,10 @@ Y = "y"
 X = "x"
 
 
-# mypy says that we can't do isinstance(something, SpatialElement), even if the code works fine in my machine. Since the solution described here don't work: https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6, I am just using the function below
+# mypy says that we can't do isinstance(something, SpatialElement),
+# even if the code works fine in my machine. Since the solution described here don't work:
+# https://stackoverflow.com/questions/45957615/check-a-variable-against-union-type-at-runtime-in-python-3-6,
+# I am just using the function below
 def has_type_spatial_element(e: Any) -> bool:
     """
     Check if the object has the type of a SpatialElement.
@@ -35,7 +38,8 @@ def has_type_spatial_element(e: Any) -> bool:
 
     Returns
     -------
-    Whether the object is a SpatialElement (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
+    Whether the object is a SpatialElement
+    (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
     """
     return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
 
@@ -154,9 +158,8 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
         #     )
         _validate_dims(dims_data)
         return dims_data
-    else:
-        raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
-        # return tuple(i for i in e.dims.keys())
+    raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
+    # return tuple(i for i in e.dims.keys())
 
 
 @get_axis_names.register(GeoDataFrame)
