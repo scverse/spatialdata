@@ -2,7 +2,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
@@ -10,6 +9,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from numpy.random import default_rng
 from shapely.geometry import Point
 from spatial_image import SpatialImage
 
@@ -22,6 +22,8 @@ from spatialdata.transformations.operations import (
 )
 from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
+
+RNG = default_rng()
 
 
 class TestReadWrite:
@@ -316,7 +318,7 @@ class TestReadWrite:
 
 
 def test_io_table(shapes):
-    adata = AnnData(X=np.random.rand(5, 10))
+    adata = AnnData(X=RNG.normal(5, 10))
     adata.obs["region"] = "circles"
     adata.obs["instance"] = shapes.shapes["circles"].index
     adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")
