@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import json
 
@@ -65,13 +66,11 @@ def _test_transformation(
 
     # wrong output coordinate system
     transformation.output_coordinate_system = wrong_output_cs
-    try:
+    with contextlib.suppress(ValueError):
+        # covers the case in which the transformation failed because of an incompatible output coordinate system
         # if the output coordinate system still allows to compute the transformation, it will give points different
         # from the one we expect
         assert not np.allclose(copy.deepcopy(transformation).transform_points(original), transformed)
-    except ValueError:
-        # covers the case in which the transformation failed because of an incompatible output coordinate system
-        pass
 
     # wrong points shapes
     transformation.output_coordinate_system = output_cs
@@ -446,4 +445,3 @@ def test_get_affine_form_input_output_coordinate_systems():
 
             transformed_data = a.transform_points(input_data)
             assert np.allclose(transformed_data, output_data)
-            print(a.affine)

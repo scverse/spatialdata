@@ -85,7 +85,11 @@ def test_repr():
             NgffAxis("T", "time"),
         ],
     )
-    expected = """NgffCoordinateSystem('some coordinate system', [NgffAxis('X', 'space', 'micrometers'), NgffAxis('Y', 'space', 'meters'), NgffAxis('T', 'time')])"""
+    expected = (
+        "NgffCoordinateSystem('some coordinate system',"
+        + " [NgffAxis('X', 'space', 'micrometers'),"
+        + " NgffAxis('Y', 'space', 'meters'), NgffAxis('T', 'time')])"
+    )
     as_str = repr(cs)
 
     assert as_str == expected
