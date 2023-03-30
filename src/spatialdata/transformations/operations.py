@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Optional, Union
 
 import networkx as nx
@@ -42,11 +43,12 @@ def set_transformation(
         * If None and `set_all=False` sets the transformation to the 'global' coordinate system (default system).
         * If None and `set_all=True` sets all transformations.
     set_all
-        If True, all transformations are set. If False, only the transformation to the specified coordinate system is set.
-        If True, `to_coordinate_system` needs to be None.
+        If True, all transformations are set. If False, only the transformation
+        to the specified coordinate system is set. If True, `to_coordinate_system` needs to be None.
     write_to_sdata
-        The SpatialData object to set the transformation/s to. If None, the transformation/s are set in-memory. If not
-        None, the element needs to belong to the SpatialData object, and the SpatialData object needs to be backed.
+        The SpatialData object to set the transformation/s to.
+        If None, the transformation/s are set in-memory. If not None, the element needs to belong
+        to the SpatialData object, and the SpatialData object needs to be backed.
 
     """
     from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
@@ -136,13 +138,16 @@ def remove_transformation(
     to_coordinate_system
         The coordinate system to remove the transformation/s from. If None, all transformations are removed.
 
-        * If None and `remove_all=False` removes the transformation from the 'global' coordinate system (default system).
+        * If None and `remove_all=False` removes the transformation from the
+        'global' coordinate system (default system).
         * If None and `remove_all=True` removes all transformations.
     remove_all
         If True, all transformations are removed. If True, `to_coordinate_system` needs to be None.
     write_to_sdata
-        The SpatialData object to remove the transformation/s from. If None, the transformation/s are removed in-memory.
-        If not None, the element needs to belong to the SpatialData object, and the SpatialData object needs to be backed.
+        The SpatialData object to remove the transformation/s from.
+        If None, the transformation/s are removed in-memory.
+        If not None, the element needs to belong to the SpatialData object,
+        and the SpatialData object needs to be backed.
     """
     from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
@@ -181,10 +186,8 @@ def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
         assert isinstance(transformations, dict)
         for cs, t in transformations.items():
             g.add_edge(id(e), cs, transformation=t)
-            try:
+            with contextlib.suppress(np.linalg.LinAlgError):
                 g.add_edge(cs, id(e), transformation=t.inverse())
-            except np.linalg.LinAlgError:
-                pass
     return g
 
 
@@ -302,7 +305,9 @@ def get_transformation_between_landmarks(
     moving_coords: Union[GeoDataFrame, DaskDataFrame],
 ) -> Affine:
     """
-    Get a similarity transformation between two lists of (n >= 3) landmarks. Landmarks are assumed to be in the same space.
+    Get a similarity transformation between two lists of (n >= 3) landmarks.
+
+    Note that landmarks are assumed to be in the same space.
 
     Parameters
     ----------
@@ -398,8 +403,10 @@ def align_elements_using_landmarks(
     write_to_sdata: Optional[SpatialData] = None,
 ) -> BaseTransformation:
     """
-    Maps a moving object into a reference object using two lists of (n >= 3) landmarks; returns the transformations that enable this
-    mapping and optinally saves them, to map to a new shared coordinate system.
+    Maps a moving object into a reference object using two lists of (n >= 3) landmarks.
+
+    This returns the transformations that enable this mapping and optionally saves them,
+    to map to a new shared coordinate system.
 
     Parameters
     ----------
