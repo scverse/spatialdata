@@ -12,9 +12,7 @@ class SpatialDataToDataDict:
 
     @staticmethod
     def _parse_spatial_data_path(sdata_path: str) -> tuple[str, str]:
-        """Convert a path in a SpatialData object to
-        the element type and element name.
-        """
+        """Convert a path in a SpatialData object to the element type and element name."""
         path_components = sdata_path.split("/")
         assert len(path_components) == 2
 
