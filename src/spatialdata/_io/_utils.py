@@ -116,7 +116,8 @@ def _write_metadata(
 
     group.attrs["encoding-type"] = group_type
     group.attrs["axes"] = axes
-    # we write empty coordinateTransformations and then overwrite them with overwrite_coordinate_transformations_non_raster()
+    # we write empty coordinateTransformations and then overwrite
+    # them with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
     # group.attrs["coordinateTransformations"] = coordinate_transformations
     group.attrs["spatialdata_attrs"] = attrs
@@ -135,20 +136,22 @@ def _iter_multiscale(
     name: str = next(iter(names))
     if attr is not None:
         return [getattr(data[i][name], attr) for i in data]
-    else:
-        return [data[i][name] for i in data]
+    return [data[i][name] for i in data]
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
     """
-    Compare the content of dir1 and dir2. In contrast with filecmp.dircmp, this
+    Compare the content of dir1 and dir2.
+
+    In contrast with filecmp.dircmp, this
     subclass compares the content of files with the same path.
     """
 
     # from https://stackoverflow.com/a/24860799/3343783
     def phase3(self) -> None:
         """
-        Find out differences between common files.
+        Differences between common files.
+
         Ensure we are using content comparison with shallow=False.
         """
         fcomp = filecmp.cmpfiles(self.left, self.right, self.common_files, shallow=False)
@@ -164,6 +167,7 @@ def _are_directories_identical(
 ) -> bool:
     """
     Compare two directory trees content.
+
     Return False if they differ, True is they are the same.
     """
     if _root_dir1 is None:

@@ -42,9 +42,10 @@ class RasterFormatV01(SpatialDataFormatV01):
         coordinate_transformations: Optional[list[list[dict[str, Any]]]] = None,
     ) -> None:
         """
-        Validates that a list of dicts contains a 'scale' transformation
+        Validate that a list of dicts contains a 'scale' transformation.
+
         Raises ValueError if no 'scale' found or doesn't match ndim
-        :param ndim:       Number of image dimensions.
+        :param ndim:Number of image dimensions.
         """
         if coordinate_transformations is None:
             raise ValueError("coordinate_transformations must be provided")

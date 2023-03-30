@@ -22,7 +22,8 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group], fmt: SpatialDataFormatV01 = CurrentPointsFormat()  # type: ignore[type-arg]
+    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
+    fmt: SpatialDataFormatV01 = CurrentPointsFormat(),
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     assert isinstance(store, (str, Path))
