@@ -318,7 +318,7 @@ class TestReadWrite:
 
 
 def test_io_table(shapes):
-    adata = AnnData(X=RNG.normal(5, 10))
+    adata = AnnData(X=RNG.normal(size=(5, 10)))
     adata.obs["region"] = "circles"
     adata.obs["instance"] = shapes.shapes["circles"].index
     adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")

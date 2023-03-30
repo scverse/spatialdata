@@ -571,7 +571,7 @@ class SpatialData:
         -------
         The transformed SpatialData.
         """
-        sdata = self.filter_by_coordinate_system(target_coordinate_system)
+        sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in sdata._gen_elements():
             transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
