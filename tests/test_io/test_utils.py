@@ -2,7 +2,6 @@ import os
 import tempfile
 
 import dask.dataframe as dd
-
 from spatialdata import read_zarr
 from spatialdata._io._utils import get_backing_files
 from spatialdata._utils import multiscale_spatial_image_from_data_tree
