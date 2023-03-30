@@ -2,6 +2,7 @@ import copy
 import json
 
 import pytest
+
 from spatialdata.transformations.ngff.ngff_coordinate_system import (
     NgffAxis,
     NgffCoordinateSystem,
@@ -85,7 +86,11 @@ def test_repr():
             NgffAxis("T", "time"),
         ],
     )
-    expected = """NgffCoordinateSystem('some coordinate system', [NgffAxis('X', 'space', 'micrometers'), NgffAxis('Y', 'space', 'meters'), NgffAxis('T', 'time')])"""
+    expected = (
+        "NgffCoordinateSystem('some coordinate system',"
+        + " [NgffAxis('X', 'space', 'micrometers'),"
+        + " NgffAxis('Y', 'space', 'meters'), NgffAxis('T', 'time')])"
+    )
     as_str = repr(cs)
 
     assert as_str == expected
