@@ -9,6 +9,7 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
+
 from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata.models import (
@@ -20,7 +21,6 @@ from spatialdata.models import (
 )
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
-
 from tests.conftest import _get_table
 
 
@@ -106,9 +106,8 @@ def test_filter_by_coordinate_system(full_sdata):
 def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata.models import TableModel
 
-    full_sdata.table.obs["annotated_shapes"] = np.random.Generator.choice(
-        ["circles", "poly"], size=full_sdata.table.shape[0]
-    )
+    rng = np.random.default_rng(seed=0)
+    full_sdata.table.obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
