@@ -3,6 +3,8 @@ from copy import deepcopy
 import numpy as np
 import pytest
 import xarray.testing
+from xarray import DataArray
+
 from spatialdata.models import Image2DModel, PointsModel
 from spatialdata.models._utils import ValidAxis_t
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
@@ -28,7 +30,6 @@ from spatialdata.transformations.transformations import (
     _decompose_affine_into_linear_and_translation,
     _get_affine_for_element,
 )
-from xarray import DataArray
 
 
 def test_identity():
@@ -242,7 +243,8 @@ def test_affine():
             ]
         ),
     )
-    # checking that permuting the axes of an affine matrix and inverting it are operations that commute (the order doesn't matter)
+    # checking that permuting the axes of an affine matrix and
+    # inverting it are operations that commute (the order doesn't matter)
     inverse0 = t0.inverse().to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
     t1 = Affine(
         t0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")),
@@ -434,7 +436,6 @@ def test_sequence():
     sequence2 = Sequence([translation, Sequence([map_axis, affine_2d_to_3d, Identity()]), Identity()])
     matrix0 = sequence0.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
     matrix1 = sequence1.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
-    print("test with error:")
     matrix2 = sequence2.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y", "z"))
     assert np.allclose(matrix0, matrix1)
     assert np.allclose(matrix0, matrix2)
@@ -449,7 +450,6 @@ def test_sequence():
             ]
         ),
     )
-    print(sequence0)
 
 
 def test_sequence_reorder_axes():
@@ -483,7 +483,9 @@ def test_sequence_reorder_axes():
 
 
 def test_sequence_reduce_dimensionality_of_last_transformation():
-    # from a bug that I found, this was raising an expection in Identity when calling to_affine_matrix() since the input_axes contained 'c' but the output_axes didn't
+    # from a bug that I found, this was raising an expection in
+    # Identity when calling to_affine_matrix() since the input_axes
+    # contained 'c' but the output_axes didn't
     affine = Affine(
         [
             [1, 2, 3, 4],
