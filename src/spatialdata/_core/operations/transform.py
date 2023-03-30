@@ -11,6 +11,7 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
 
@@ -216,7 +217,7 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
 
 
 @transform.register(SpatialData)
-def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool = True) -> SpatialData:
+def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialData:
     new_elements: dict[str, dict[str, Any]] = {}
     for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
@@ -229,7 +230,7 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 
 
 @transform.register(SpatialImage)
-def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = True) -> SpatialImage:
+def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialImage:
     schema = get_model(data)
     from spatialdata.models import (
         Image2DModel,
@@ -269,7 +270,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
 
 @transform.register(MultiscaleSpatialImage)
 def _(
-    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool = True
+    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False
 ) -> MultiscaleSpatialImage:
     schema = get_model(data)
     from spatialdata.models import (
@@ -325,7 +326,7 @@ def _(
 
 
 @transform.register(DaskDataFrame)
-def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool = True) -> DaskDataFrame:
+def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> DaskDataFrame:
     from spatialdata.models import PointsModel
     from spatialdata.transformations import get_transformation, set_transformation
 
@@ -356,7 +357,7 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
 
 @transform.register(GeoDataFrame)
-def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool = True) -> GeoDataFrame:
+def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> GeoDataFrame:
     from spatialdata.models import ShapesModel
     from spatialdata.transformations import get_transformation
 
@@ -367,6 +368,21 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
     transformed_data.geometry = transformed_geometry
+
+    if isinstance(transformed_geometry.iloc[0], Point) and "radius" in transformed_data.columns:
+        old_radius = transformed_data["radius"]
+        eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
+        modules = np.absolute(eigenvalues)
+        if not np.allclose(modules, modules[0]):
+            logger.warning(
+                "The transformation matrix is not isotropic, the radius will be scaled by the average of the "
+                "eigenvalues of the affine transformation matrix"
+            )
+            scale_factor = np.mean(modules)
+        else:
+            scale_factor = modules[0]
+        new_radius = old_radius * scale_factor
+        transformed_data["radius"] = new_radius
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
