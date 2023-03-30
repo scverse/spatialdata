@@ -246,9 +246,9 @@ def _get_xarray_data_to_rasterize(
     target_sizes: dict[str, Optional[float]],
     target_coordinate_system: str,
 ) -> tuple[DataArray, Optional[Scale]]:
-    """
-    Returns the DataArray to rasterize along with its eventual scale factor (if from a pyramid level) from either a
-    SpatialImage or a MultiscaleSpatialImage.
+    """Make the DataArray to rasterize from either a SpatialImage or a MultiscaleSpatialImage.
+
+    If from a pyramid level, computes scale factor.
 
     Parameters
     ----------
@@ -335,9 +335,9 @@ def _get_corrected_affine_matrix(
     axes: tuple[str, ...],
     target_coordinate_system: str,
 ) -> tuple[Affine, tuple[str, ...]]:
-    """
-    Get the affine matrix that maps the intrinsic coordinates of the data to the target_coordinate_system,
-    with in addition:
+    """Get the affine matrix that maps the intrinsic coordinates of the data to the target_coordinate_system.
+
+    In addition:
     - restricting the domain to the axes specified in axes (i.e. the axes for which the bounding box is specified), in
     particular axes never contains c;
     - restricting the codomain to the spatial axes of the target coordinate system (i.e. excluding c).
