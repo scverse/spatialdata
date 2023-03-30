@@ -11,6 +11,8 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
+
 from spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
@@ -21,7 +23,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-from xarray import DataArray
 
 RNG = default_rng()
 
@@ -109,19 +110,16 @@ def full_sdata() -> SpatialData:
 )
 def sdata(request) -> SpatialData:
     if request.param == "full":
-        s = SpatialData(
+        return SpatialData(
             images=_get_images(),
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
             table=_get_table("sample1"),
         )
-    elif request.param == "empty":
-        s = SpatialData()
-    else:
-        s = request.getfixturevalue(request.param)
-    # print(f"request.param = {request.param}")
-    return s
+    if request.param == "empty":
+        return SpatialData()
+    return request.getfixturevalue(request.param)
 
 
 def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
@@ -229,7 +227,8 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
             ]
         }
     )
-    points["radius"] = np.random.normal(size=(len(points), 1))
+    rng = np.random.default_rng(seed=0)
+    points["radius"] = rng.normal(size=(len(points), 1))
 
     out["poly"] = ShapesModel.parse(poly)
     out["poly"].index = ["a", "b", "c", "d", "e"]
