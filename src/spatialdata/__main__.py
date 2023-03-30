@@ -25,7 +25,7 @@ def peek(path: str) -> None:
         The path to the .zarr file to be inspected.
     """
     if not os.path.isdir(path):
-        print(
+        print(  # noqa: T201
             f"Error: .zarr storage not found at {path}. Please specify a valid OME-NGFF spatial data (.zarr) file. "
             "Example "
             '"python -m '
@@ -35,13 +35,12 @@ def peek(path: str) -> None:
         import spatialdata as sd
 
         sdata = sd.SpatialData.read(path)
-        print(sdata)
+        print(sdata)  # noqa: T201
 
 
 @click.group()
 def cli() -> None:
-    """
-    The main Click command group.
+    """Provide the main Click command group.
 
     This function serves as the main entry point for the command-line interface. It creates a Click command
     group and adds the various cli commands to it.
@@ -52,8 +51,7 @@ cli.add_command(peek)
 
 
 def main() -> None:
-    """
-    The main function that initializes and runs the command-line interface.
+    """Initialize and run the command-line interface.
 
     This function initializes the Click command group and runs the command-line interface, processing user
     input and executing the appropriate commands.
