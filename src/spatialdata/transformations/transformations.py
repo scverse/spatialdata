@@ -36,7 +36,11 @@ class BaseTransformation(ABC):
 
     @staticmethod
     def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
-        """This function is to allow to call validate_axes() from this file in multiple places while avoiding circular imports."""
+        """Validate the axes.
+
+        This function is to allow to call validate_axes() from this file
+        in multiple places while avoiding circular imports.
+        """
         from spatialdata.models._utils import validate_axes
 
         validate_axes(axes)
