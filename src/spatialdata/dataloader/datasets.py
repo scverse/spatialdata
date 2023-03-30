@@ -1,10 +1,13 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
-from spatialdata import SpatialData
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
@@ -18,6 +21,9 @@ from spatialdata.models import (
 )
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 class ImageTilesDataset(Dataset):
