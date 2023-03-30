@@ -272,7 +272,8 @@ class TestReadWrite:
 
     def test_incremental_io_with_backed_elements(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
-        # we test also the non-backed case so that if we switch to the backed version in the future we already have the tests
+        # we test also the non-backed case so that if we switch to the
+        # backed version in the future we already have the tests
 
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
@@ -300,13 +301,9 @@ class TestReadWrite:
             full_sdata.add_shapes("new_shapes", e, overwrite=True)
             full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
 
-            print(full_sdata)
-
             f2 = os.path.join(tmpdir, "data2.zarr")
             sdata2 = SpatialData(table=full_sdata.table.copy())
             sdata2.write(f2)
             del full_sdata.table
             full_sdata.table = sdata2.table
             full_sdata.write(f2, overwrite=True)
-
-            print(full_sdata)
