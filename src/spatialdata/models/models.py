@@ -715,6 +715,19 @@ Schema_t = Union[
 def get_model(
     e: SpatialElement,
 ) -> Schema_t:
+    """
+    Get the model for the given element.
+
+    Parameters
+    ----------
+    e
+        The element.
+
+    Returns
+    -------
+    The SpatialData model.
+    """
+
     def _validate_and_return(
         schema: Schema_t,
         e: Union[SpatialElement],
@@ -727,18 +740,14 @@ def get_model(
         if "c" in axes:
             if "z" in axes:
                 return _validate_and_return(Image3DModel, e)
-            else:
-                return _validate_and_return(Image2DModel, e)
-        else:
-            if "z" in axes:
-                return _validate_and_return(Labels3DModel, e)
-            else:
-                return _validate_and_return(Labels2DModel, e)
-    elif isinstance(e, GeoDataFrame):
+            return _validate_and_return(Image2DModel, e)
+        if "z" in axes:
+            return _validate_and_return(Labels3DModel, e)
+        return _validate_and_return(Labels2DModel, e)
+    if isinstance(e, GeoDataFrame):
         return _validate_and_return(ShapesModel, e)
-    elif isinstance(e, DaskDataFrame):
+    if isinstance(e, DaskDataFrame):
         return _validate_and_return(PointsModel, e)
-    elif isinstance(e, AnnData):
+    if isinstance(e, AnnData):
         return _validate_and_return(TableModel, e)
-    else:
-        raise TypeError(f"Unsupported type {type(e)}")
+    raise TypeError(f"Unsupported type {type(e)}")
