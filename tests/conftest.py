@@ -11,6 +11,8 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
+
 from spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
@@ -21,7 +23,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-from xarray import DataArray
 
 RNG = default_rng()
 

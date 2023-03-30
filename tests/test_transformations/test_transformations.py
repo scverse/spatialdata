@@ -3,6 +3,8 @@ from copy import deepcopy
 import numpy as np
 import pytest
 import xarray.testing
+from xarray import DataArray
+
 from spatialdata.models import Image2DModel, PointsModel
 from spatialdata.models._utils import ValidAxis_t
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
@@ -28,7 +30,6 @@ from spatialdata.transformations.transformations import (
     _decompose_affine_into_linear_and_translation,
     _get_affine_for_element,
 )
-from xarray import DataArray
 
 
 def test_identity():

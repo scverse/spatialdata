@@ -20,6 +20,8 @@ from numpy.random import default_rng
 from pandas.api.types import is_categorical_dtype
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
+from xarray import DataArray
+
 from spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
@@ -43,8 +45,6 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Scale
-from xarray import DataArray
-
 from tests.conftest import (
     MULTIPOLYGON_PATH,
     POINT_PATH,

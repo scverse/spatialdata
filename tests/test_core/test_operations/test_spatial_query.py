@@ -8,6 +8,7 @@ from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
 from spatial_image import SpatialImage
+
 from spatialdata import SpatialData
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
