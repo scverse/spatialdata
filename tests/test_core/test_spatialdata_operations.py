@@ -9,7 +9,6 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata.models import (
@@ -21,6 +20,7 @@ from spatialdata.models import (
 )
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
+
 from tests.conftest import _get_table
 
 
