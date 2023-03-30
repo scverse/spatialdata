@@ -401,9 +401,13 @@ def test_map_coordinate_systems_non_invertible_transformations(full_sdata):
     )
     with pytest.raises(RuntimeError):
         # error 0 (no path between source and target because the affine matrix is not invertible)
-        get_transformation_between_coordinate_systems(
-            full_sdata, source_coordinate_system="global", target_coordinate_system=im
-        )
+        try:
+            get_transformation_between_coordinate_systems(
+                full_sdata, source_coordinate_system="global", target_coordinate_system=im
+            )
+        except RuntimeError as e:
+            assert str(e) == "No path found between the two coordinate systems"
+            raise e
 
 
 def test_map_coordinate_systems_long_path(full_sdata):
