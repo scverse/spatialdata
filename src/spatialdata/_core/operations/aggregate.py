@@ -50,12 +50,10 @@ def aggregate(
     if by_type is ShapesModel:
         if values_type is PointsModel:
             return _aggregate_points_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
-        elif values_type is ShapesModel:
+        if values_type is ShapesModel:
             return _aggregate_shapes_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
-        else:
-            raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
-    else:
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
+    raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
 
 def _aggregate_points_by_shapes(
@@ -114,6 +112,7 @@ def _aggregate(
 ) -> ad.AnnData:
     """
     Inner function to aggregate geopandas objects.
+
     See docstring for `aggregate` for semantics.
 
     Parameters
@@ -162,10 +161,8 @@ def _aggregate(
         shape=(len(obs_id_categorical.categories), len(joined[id_key].cat.categories)),
     ).tocsr()
 
-    adata = ad.AnnData(
+    return ad.AnnData(
         X,
         obs=pd.DataFrame(index=obs_id_categorical.categories),
         var=pd.DataFrame(index=joined[id_key].cat.categories),
     )
-
-    return adata
