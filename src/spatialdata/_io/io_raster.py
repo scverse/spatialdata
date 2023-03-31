@@ -69,7 +69,7 @@ def _read_multiscale(
     name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     if raster_type == "image":
-        omero = multiscales[0]["omero"]
+        omero = node["omero"]
         channels: list[Any] = fmt.channels_from_metadata(omero)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
@@ -124,19 +124,12 @@ def _write_raster(
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
 
-    def _get_group_for_writing_data() -> zarr.Group:
-        if raster_type == "image":
-            return group.require_group(name)
-        return group
-
-    def _get_group_for_writing_transformations() -> zarr.Group:
-        if raster_type == "image":
-            return group.require_group(name)
-        return group["labels"][name]
+    group_data = group.require_group(name) if raster_type == "image" else group
+    group_transform = group.require_group(name) if raster_type == "image" else group["labels"][name]
 
     # convert channel names to channel metadata
     if raster_type == "image":
-        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+        group_data["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
@@ -154,7 +147,7 @@ def _write_raster(
         # write_labels_ngff is called label.
         metadata[raster_type] = data
         write_single_scale_ngff(
-            group=_get_group_for_writing_data(),
+            group=group_data,
             scaler=None,
             fmt=fmt,
             axes=parsed_axes,
@@ -164,7 +157,7 @@ def _write_raster(
         )
         assert transformations is not None
         overwrite_coordinate_transformations_raster(
-            group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
+            group=group_transform, transformations=transformations, axes=input_axes
         )
     elif isinstance(raster_data, MultiscaleSpatialImage):
         data = _iter_multiscale(raster_data, "data")
@@ -184,7 +177,7 @@ def _write_raster(
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
             pyramid=data,
-            group=_get_group_for_writing_data(),
+            group=group_data,
             fmt=fmt,
             axes=parsed_axes,
             coordinate_transformations=None,
@@ -193,7 +186,7 @@ def _write_raster(
         )
         assert transformations is not None
         overwrite_coordinate_transformations_raster(
-            group=_get_group_for_writing_transformations(), transformations=transformations, axes=tuple(input_axes)
+            group=group_transform, transformations=transformations, axes=tuple(input_axes)
         )
     else:
         raise ValueError("Not a valid labels object")
