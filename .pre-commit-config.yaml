@@ -26,26 +26,6 @@ repos:
           - id: mypy
             additional_dependencies: [numpy, types-requests]
             exclude: tests/|docs/|temp/
-    - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v4.4.0
-      hooks:
-          - id: detect-private-key
-          - id: check-ast
-          - id: end-of-file-fixer
-          - id: mixed-line-ending
-            args: [--fix=lf]
-          - id: trailing-whitespace
-          - id: check-case-conflict
-          - id: check-docstring-first
-    - repo: https://github.com/pre-commit/pygrep-hooks
-      rev: v1.10.0
-      hooks:
-          - id: python-no-eval
-          - id: python-use-type-annotations
-          - id: python-check-blanket-noqa
-          - id: rst-backticks
-          - id: rst-directive-colons
-          - id: rst-inline-touching-normal
     - repo: https://github.com/charliermarsh/ruff-pre-commit
       rev: v0.0.250
       hooks:
