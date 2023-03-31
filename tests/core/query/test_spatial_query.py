@@ -345,7 +345,7 @@ def test_bounding_box_spatial_data(full_sdata):
     result = bounding_box_query(full_sdata, **request.to_dict(), filter_table=True)
     # filter table is True by default when calling query(request)
     result2 = full_sdata.query(request, filter_table=True)
-    from tests.test_core.test_spatialdata_operations import (
+    from tests.core.operations.test_spatialdata_operations import (
         _assert_spatialdata_objects_seem_identical,
     )
 
