@@ -91,11 +91,10 @@ class NgffCoordinateSystem:
                 raise ValueError("Each axis MUST have a name.")
             if "type" not in axis.keys():
                 raise ValueError("Each axis MUST have a type.")
-            if "unit" not in axis.keys():
-                if not axis["type"] in ["channel", "array"]:
-                    raise ValueError("Each axis is either of type channel either MUST have a unit.")
+            if "unit" not in axis.keys() and axis["type"] not in ["channel", "array"]:
+                raise ValueError("Each axis is either of type channel either MUST have a unit.")
             kw = {}
-            if "unit" in axis.keys():
+            if "unit" in axis:
                 kw = {"unit": axis["unit"]}
             axes.append(NgffAxis(name=axis["name"], type=axis["type"], **kw))
         return NgffCoordinateSystem(name=name, axes=axes)
@@ -183,10 +182,7 @@ class NgffCoordinateSystem:
         name
             name of the axis.
         """
-        for axis in self._axes:
-            if axis.name == name:
-                return True
-        return False
+        return any(axis.name == name for axis in self._axes)
 
     def get_axis(self, name: str) -> NgffAxis:
         """Get the axis by name"""

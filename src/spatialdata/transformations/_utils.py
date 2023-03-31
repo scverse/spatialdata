@@ -194,7 +194,7 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 @compute_coordinates.register(SpatialImage)
 def _(data: SpatialImage) -> SpatialImage:
     coords: dict[str, ArrayLike] = {
-        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes.keys() if d in ["x", "y", "z"]
+        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 

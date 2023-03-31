@@ -42,11 +42,11 @@ class RasterFormatV01(SpatialDataFormatV01):
         coordinate_transformations: Optional[list[list[dict[str, Any]]]] = None,
     ) -> None:
         """
-        Validates that a list of dicts contains a 'scale' transformation
-        Raises ValueError if no 'scale' found or doesn't match ndim
-        :param ndim:       Number of image dimensions
-        """
+        Validate that a list of dicts contains a 'scale' transformation.
 
+        Raises ValueError if no 'scale' found or doesn't match ndim
+        :param ndim:Number of image dimensions.
+        """
         if coordinate_transformations is None:
             raise ValueError("coordinate_transformations must be provided")
         ct_count = len(coordinate_transformations)
@@ -164,14 +164,12 @@ class TablesFormatV01(SpatialDataFormatV01):
     ) -> None:
         if not isinstance(table, AnnData):
             raise TypeError(f"`tables` must be `anndata.AnnData`, was {type(table)}.")
-        if region_key is not None:
-            if not is_categorical_dtype(table.obs[region_key]):
-                raise ValueError(
-                    f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
-                )
-        if instance_key is not None:
-            if table.obs[instance_key].isnull().values.any():
-                raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
+        if region_key is not None and not is_categorical_dtype(table.obs[region_key]):
+            raise ValueError(
+                f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
+            )
+        if instance_key is not None and table.obs[instance_key].isnull().values.any():
+            raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
 
 
 CurrentRasterFormat = RasterFormatV01

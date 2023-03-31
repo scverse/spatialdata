@@ -8,7 +8,6 @@ import scipy.misc
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData, transform
 from spatialdata._utils import unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
@@ -402,9 +401,13 @@ def test_map_coordinate_systems_non_invertible_transformations(full_sdata):
     )
     with pytest.raises(RuntimeError):
         # error 0 (no path between source and target because the affine matrix is not invertible)
-        get_transformation_between_coordinate_systems(
-            full_sdata, source_coordinate_system="global", target_coordinate_system=im
-        )
+        try:
+            get_transformation_between_coordinate_systems(
+                full_sdata, source_coordinate_system="global", target_coordinate_system=im
+            )
+        except RuntimeError as e:
+            assert str(e) == "No path found between the two coordinate systems"
+            raise e
 
 
 def test_map_coordinate_systems_long_path(full_sdata):
@@ -456,7 +459,8 @@ def test_map_coordinate_systems_long_path(full_sdata):
 
 
 def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
-    # TODO: we are just applying the transformation, we are not checking it is correct. We could improve this test
+    # TODO: we are just applying the transformation,
+    #  we are not checking it is correct. We could improve this test
     scale = Scale([2], axes=("x",))
     for element in sdata._gen_elements_values():
         set_transformation(element, scale, "my_space")
@@ -490,7 +494,8 @@ def test_transformations_between_coordinate_systems(images):
                 (reference_landmarks_points, moving_landmarks_points),
             ]:
                 affine = get_transformation_between_landmarks(reference_landmarks, moving_landmarks)
-                # testing a transformation with determinant > 0 for shapes and a transformation with determinant < 0 for points
+                # testing a transformation with determinant > 0 for shapes
+                # and a transformation with determinant < 0 for points
                 if positive_determinant:
                     assert np.allclose(
                         affine.matrix,

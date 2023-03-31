@@ -8,7 +8,6 @@ from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
 from spatial_image import SpatialImage
-
 from spatialdata import SpatialData
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
@@ -276,7 +275,8 @@ def test_bounding_box_labels_3d():
             raise ValueError("Unexpected type")
 
 
-# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
+# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented
+#  (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:
@@ -345,7 +345,7 @@ def test_bounding_box_spatial_data(full_sdata):
     result = bounding_box_query(full_sdata, **request.to_dict(), filter_table=True)
     # filter table is True by default when calling query(request)
     result2 = full_sdata.query(request, filter_table=True)
-    from tests.test_core.test_spatialdata_operations import (
+    from tests.core.operations.test_spatialdata_operations import (
         _assert_spatialdata_objects_seem_identical,
     )
 

@@ -1,5 +1,4 @@
-"""This file contains functions to compute the bounding box describing the extent of a spatial element,
-or of a specific region in the SpatialElement object."""
+"""Functions to compute the bounding box describing the extent of a spatial element or region."""
 import numpy as np
 from geopandas import GeoDataFrame
 from shapely import Point
@@ -9,7 +8,9 @@ from spatialdata.models import get_axes_names
 
 
 def _get_bounding_box_of_circle_elements(shapes: GeoDataFrame) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
-    """Get the coordinates for the corners of the bounding box of that encompasses a circle element, for all the circles.
+    """Get the coordinates for the corners of the bounding box of that encompasses a circle element.
+
+    This computes the bounding box around all circles in the element.
 
     Returns
     -------
