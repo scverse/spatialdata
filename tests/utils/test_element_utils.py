@@ -5,11 +5,10 @@ import pytest
 import xarray
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from xarray import DataArray
-
 from spatialdata._utils import unpad_raster
 from spatialdata.models import get_model
 from spatialdata.transformations import Affine
+from xarray import DataArray
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
@@ -26,8 +25,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
         output_axes=("x", "y"),
     )
     matrix = affine.to_affine_matrix(input_axes=axes, output_axes=axes)
-    transformed = dask_image.ndinterp.affine_transform(data, matrix, output_shape=new_shape)
-    return transformed
+    return dask_image.ndinterp.affine_transform(data, matrix, output_shape=new_shape)
 
 
 @pytest.mark.ci_only

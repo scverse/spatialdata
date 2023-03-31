@@ -116,14 +116,13 @@ def concatenate(
         [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
     )
 
-    sdata = SpatialData(
+    return SpatialData(
         images=merged_images,
         labels=merged_labels,
         points=merged_points,
         shapes=merged_shapes,
         table=merged_table,
     )
-    return sdata
 
 
 def _filter_table_in_coordinate_systems(table: AnnData, coordinate_systems: list[str]) -> AnnData:

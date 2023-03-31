@@ -35,7 +35,7 @@ from spatialdata.transformations._utils import (
 def _read_multiscale(
     store: Union[str, Path], raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    assert isinstance(store, str) or isinstance(store, Path)
+    assert isinstance(store, (str, Path))
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)
@@ -86,17 +86,16 @@ def _read_multiscale(
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
-    else:
-        data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-        si = SpatialImage(
-            data,
-            name=name,
-            dims=axes,
-            coords={"c": channels} if raster_type == "image" else {},
-            # attrs={TRANSFORM_KEY: t},
-        )
-        _set_transformations(si, transformations)
-        return compute_coordinates(si)
+    data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
+    si = SpatialImage(
+        data,
+        name=name,
+        dims=axes,
+        coords={"c": channels} if raster_type == "image" else {},
+        # attrs={TRANSFORM_KEY: t},
+    )
+    _set_transformations(si, transformations)
+    return compute_coordinates(si)
 
 
 def _write_raster(
@@ -128,14 +127,12 @@ def _write_raster(
     def _get_group_for_writing_data() -> zarr.Group:
         if raster_type == "image":
             return group.require_group(name)
-        else:
-            return group
+        return group
 
     def _get_group_for_writing_transformations() -> zarr.Group:
         if raster_type == "image":
             return group.require_group(name)
-        else:
-            return group["labels"][name]
+        return group["labels"][name]
 
     # convert channel names to channel metadata
     if raster_type == "image":

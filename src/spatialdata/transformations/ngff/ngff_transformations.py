@@ -53,10 +53,7 @@ class NgffBaseTransformation(ABC):
         return " " * indent * 4
 
     def _repr_transformation_signature(self, indent: int = 0) -> str:
-        if self.input_coordinate_system is not None:
-            domain = ", ".join(self.input_coordinate_system.axes_names)
-        else:
-            domain = ""
+        domain = ", ".join(self.input_coordinate_system.axes_names) if self.input_coordinate_system is not None else ""
         if self.output_coordinate_system is not None:
             codomain = ", ".join(self.output_coordinate_system.axes_names)
         else:
@@ -846,12 +843,7 @@ class NgffSequence(NgffBaseTransformation):
         assert isinstance(t.input_coordinate_system, NgffCoordinateSystem)
         if isinstance(t, NgffAffine):
             return None
-        elif (
-            isinstance(t, NgffTranslation)
-            or isinstance(t, NgffScale)
-            or isinstance(t, NgffRotation)
-            or isinstance(t, NgffIdentity)
-        ):
+        elif isinstance(t, (NgffTranslation, NgffScale, NgffRotation, NgffIdentity)):
             return t.input_coordinate_system
         elif isinstance(t, NgffMapAxis):
             return None

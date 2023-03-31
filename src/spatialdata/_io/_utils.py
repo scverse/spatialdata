@@ -116,7 +116,8 @@ def _write_metadata(
 
     group.attrs["encoding-type"] = group_type
     group.attrs["axes"] = axes
-    # we write empty coordinateTransformations and then overwrite them with overwrite_coordinate_transformations_non_raster()
+    # we write empty coordinateTransformations and then overwrite
+    # them with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
     # group.attrs["coordinateTransformations"] = coordinate_transformations
     group.attrs["spatialdata_attrs"] = attrs
@@ -127,28 +128,30 @@ def _iter_multiscale(
     attr: Optional[str],
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
-    for i in data.keys():
+    for i in data:
         variables = set(data[i].variables.keys())
         names: set[str] = variables.difference({"c", "z", "y", "x"})
         if len(names) != 1:
             raise ValueError(f"Invalid variable name: `{names}`.")
     name: str = next(iter(names))
     if attr is not None:
-        return [getattr(data[i][name], attr) for i in data.keys()]
-    else:
-        return [data[i][name] for i in data.keys()]
+        return [getattr(data[i][name], attr) for i in data]
+    return [data[i][name] for i in data]
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
     """
-    Compare the content of dir1 and dir2. In contrast with filecmp.dircmp, this
+    Compare the content of dir1 and dir2.
+
+    In contrast with filecmp.dircmp, this
     subclass compares the content of files with the same path.
     """
 
     # from https://stackoverflow.com/a/24860799/3343783
     def phase3(self) -> None:
         """
-        Find out differences between common files.
+        Differences between common files.
+
         Ensure we are using content comparison with shallow=False.
         """
         fcomp = filecmp.cmpfiles(self.left, self.right, self.common_files, shallow=False)
@@ -164,17 +167,18 @@ def _are_directories_identical(
 ) -> bool:
     """
     Compare two directory trees content.
+
     Return False if they differ, True is they are the same.
     """
     if _root_dir1 is None:
         _root_dir1 = dir1
     if _root_dir2 is None:
         _root_dir2 = dir2
-    if exclude_regexp is not None:
-        if re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1)) or re.match(
-            rf"{_root_dir2}/" + exclude_regexp, str(dir2)
-        ):
-            return True
+    if exclude_regexp is not None and (
+        re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1))
+        or re.match(rf"{_root_dir2}/" + exclude_regexp, str(dir2))
+    ):
+        return True
 
     compared = dircmp(dir1, dir2)
     if compared.left_only or compared.right_only or compared.diff_files or compared.funny_files:
@@ -266,8 +270,8 @@ def _(data: SpatialImage) -> list[Any]:
 
 @get_channels.register
 def _(data: MultiscaleSpatialImage) -> list[Any]:
-    name = list({list(data[i].data_vars.keys())[0] for i in data.keys()})[0]
-    channels = {tuple(data[i][name].coords["c"].values) for i in data.keys()}
+    name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data}
     if len(channels) > 1:
         raise ValueError("TODO")
     return list(next(iter(channels)))
