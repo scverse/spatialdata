@@ -106,7 +106,8 @@ def test_filter_by_coordinate_system(full_sdata):
 def test_filter_by_coordinate_system_also_table(full_sdata):
     from spatialdata.models import TableModel
 
-    full_sdata.table.obs["annotated_shapes"] = np.random.choice(["circles", "poly"], size=full_sdata.table.shape[0])
+    rng = np.random.default_rng(seed=0)
+    full_sdata.table.obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata.table.shape[0])
     adata = full_sdata.table
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.table
@@ -128,7 +129,8 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
 
 def test_concatenate_tables():
     """
-    The concatenation uses AnnData.concatenate(), here we test the contatenation result on region, region_key, instance_key
+    The concatenation uses AnnData.concatenate(), here we test the
+    concatenation result on region, region_key, instance_key
     """
     table0 = _get_table(region="shapes/circles", instance_key="instance_id")
     table1 = _get_table(region="shapes/poly", instance_key="instance_id")

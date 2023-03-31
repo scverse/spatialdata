@@ -25,8 +25,7 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
         output_axes=("x", "y"),
     )
     matrix = affine.to_affine_matrix(input_axes=axes, output_axes=axes)
-    transformed = dask_image.ndinterp.affine_transform(data, matrix, output_shape=new_shape)
-    return transformed
+    return dask_image.ndinterp.affine_transform(data, matrix, output_shape=new_shape)
 
 
 @pytest.mark.ci_only

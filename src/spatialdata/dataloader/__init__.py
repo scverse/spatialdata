@@ -1,8 +1,8 @@
+import contextlib
+
 from spatialdata.dataloader._utils import SpatialDataToDataDict
 
-try:
+with contextlib.suppress(ImportError):
     from spatialdata.dataloader.datasets import ImageTilesDataset
-except ImportError:
-    pass
 
 __all__ = ["ImageTilesDataset", "SpatialDataToDataDict"]

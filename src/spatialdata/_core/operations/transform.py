@@ -64,9 +64,8 @@ def _transform_raster(
         ]
     ).to_affine_matrix(input_axes=axes, output_axes=axes)
 
-    # fix chunk shape, it should be possible for the user to specify them, and by default we could reuse the chunk shape of the input
-    # output_chunks = data.chunks
-    ##
+    # fix chunk shape, it should be possible for the user to specify them,
+    # and by default we could reuse the chunk shape of the input
     transformed_dask = dask_image.ndinterp.affine_transform(
         data,
         matrix=inverse_matrix_adjusted,
@@ -114,7 +113,8 @@ def _prepend_transformation(
     raster_translation: Optional[Translation],
     maintain_positioning: bool,
 ) -> None:
-    """
+    """Prepend a transformation to an element.
+
     After an element has been transformed, this method is called to eventually prepend a particular transformation to
     the existing transformations of the element. The transformation to prepend depends on the type of the element (
     raster vs non-raster) and on the maintain_positioning flag.
@@ -158,7 +158,8 @@ def _prepend_transformation(
     assert isinstance(d, dict)
     if len(d) == 0:
         logger.info(
-            f"No transformations found in the element, adding a default identity transformation to the coordinate system "
+            f"No transformations found in the element,"
+            f"adding a default identity transformation to the coordinate system "
             f"{DEFAULT_COORDINATE_SYSTEM}"
         )
         d = {DEFAULT_COORDINATE_SYSTEM: Identity()}
@@ -218,8 +219,7 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
             new_elements[element_type] = {}
         for k, v in d.items():
             new_elements[element_type][k] = transform(v, transformation, maintain_positioning=maintain_positioning)
-    new_sdata = SpatialData(**new_elements)
-    return new_sdata
+    return SpatialData(**new_elements)
 
 
 @transform.register(SpatialImage)
@@ -355,7 +355,8 @@ def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioni
     from spatialdata.transformations import get_transformation
 
     ndim = len(get_axis_names(data))
-    # TODO: nitpick, mypy expects a listof literals and here we have a list of strings. I ignored but we may want to fix this
+    # TODO: nitpick, mypy expects a listof literals and
+    #  here we have a list of strings. I ignored but we may want to fix this
     matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
     shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
     transformed_geometry = data.geometry.affine_transform(shapely_notation)

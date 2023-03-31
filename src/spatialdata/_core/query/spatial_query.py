@@ -44,8 +44,7 @@ def get_bounding_box_corners(
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
 ) -> DataArray:
-    """From the min and max coordinates of a bounding box, get the coordinates
-    of all corners.
+    """Get the coordinates of the corners of a bounding box from the min/max values.
 
     Parameters
     ----------
@@ -64,6 +63,10 @@ def get_bounding_box_corners(
     """
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
+
+    if len(min_coordinate) not in (2, 3):
+        raise ValueError("bounding box must be 2D or 3D")
+
     if len(min_coordinate) == 2:
         # 2D bounding box
         assert len(axes) == 2
@@ -77,24 +80,21 @@ def get_bounding_box_corners(
             coords={"corner": range(4), "axis": list(axes)},
         )
 
-    elif len(min_coordinate) == 3:
-        # 3D bounding cube
-        assert len(axes) == 3
-        return DataArray(
-            [
-                [min_coordinate[0], min_coordinate[1], min_coordinate[2]],
-                [min_coordinate[0], min_coordinate[1], max_coordinate[2]],
-                [min_coordinate[0], max_coordinate[1], max_coordinate[2]],
-                [min_coordinate[0], max_coordinate[1], min_coordinate[2]],
-                [max_coordinate[0], min_coordinate[1], min_coordinate[2]],
-                [max_coordinate[0], min_coordinate[1], max_coordinate[2]],
-                [max_coordinate[0], max_coordinate[1], max_coordinate[2]],
-                [max_coordinate[0], max_coordinate[1], min_coordinate[2]],
-            ],
-            coords={"corner": range(8), "axis": list(axes)},
-        )
-    else:
-        raise ValueError("bounding box must be 2D or 3D")
+    # 3D bounding cube
+    assert len(axes) == 3
+    return DataArray(
+        [
+            [min_coordinate[0], min_coordinate[1], min_coordinate[2]],
+            [min_coordinate[0], min_coordinate[1], max_coordinate[2]],
+            [min_coordinate[0], max_coordinate[1], max_coordinate[2]],
+            [min_coordinate[0], max_coordinate[1], min_coordinate[2]],
+            [max_coordinate[0], min_coordinate[1], min_coordinate[2]],
+            [max_coordinate[0], min_coordinate[1], max_coordinate[2]],
+            [max_coordinate[0], max_coordinate[1], max_coordinate[2]],
+            [max_coordinate[0], max_coordinate[1], min_coordinate[2]],
+        ],
+        coords={"corner": range(8), "axis": list(axes)},
+    )
 
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -357,7 +357,8 @@ def _(
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
 ) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
-    """
+    """Implement bounding box query for SpatialImage.
+
     Notes
     -----
     _____
@@ -410,9 +411,12 @@ def _(
         raise RuntimeError("This should not happen")
 
     if case in [3, 4]:
-        raise ValueError(
-            f"This case is not supported (data with dimension {data_dim} but transformation with rank {transform_dimension}. Please open a GitHub issue if you want to discuss a case."
+        error_message = (
+            f"This case is not supported (data with dimension"
+            f"{data_dim} but transformation with rank {transform_dimension}."
+            f"Please open a GitHub issue if you want to discuss a case."
         )
+        raise ValueError(error_message)
 
     if set(axes) != set(output_axes_without_c):
         if set(axes).issubset(output_axes_without_c):
@@ -422,10 +426,13 @@ def _(
                 f"please open a GitHub issue."
             )
             return None
-        else:
-            raise ValueError(
-                f"Invalid case. The bounding box axes are {axes}, the spatial axes in {target_coordinate_system} are {output_axes_without_c}"
-            )
+        error_messeage = (
+            f"Invalid case. The bounding box axes are {axes},"
+            f"the spatial axes in {target_coordinate_system} are"
+            f"{output_axes_without_c}"
+        )
+        raise ValueError(error_messeage)
+
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     spatial_transform_bb_axes = Affine(
         spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
@@ -592,8 +599,7 @@ def _(
     )
     if bounding_box_mask.sum() == 0:
         return None
-    else:
-        return points_in_intrinsic_bounding_box.loc[bounding_box_mask]
+    return points_in_intrinsic_bounding_box.loc[bounding_box_mask]
 
 
 @bounding_box_query.register(GeoDataFrame)

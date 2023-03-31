@@ -144,7 +144,8 @@ class TestModels:
             sdata_read = SpatialData.read(path)
             group_name = element_type if element_type != "image" else "images"
             element_read = sdata_read.__getattribute__(group_name)["element"]
-            # TODO: raster models have validate as a method (for non-raster it's a class method), probably because they call the xarray schema validation in the superclass. Can we make it consistent?
+            # TODO: raster models have validate as a method (for non-raster it's a class method),
+            #  probably because they call the xarray schema validation in the superclass. Can we make it consistent?
             if element_type == "image" or element_type == "labels":
                 model().validate(element_read)
             else:

@@ -86,9 +86,7 @@ class ImageTilesDataset(Dataset):
             # we could allow also points
             if isinstance(element, GeoDataFrame):
                 n_spots_dict[region_key] = len(element)
-            elif isinstance(element, SpatialImage):
-                raise NotImplementedError("labels not supported yet")
-            elif isinstance(element, MultiscaleSpatialImage):
+            elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
                 raise NotImplementedError("labels not supported yet")
             else:
                 raise ValueError("element must be a geodataframe or a spatial image")
@@ -111,7 +109,8 @@ class ImageTilesDataset(Dataset):
             raise IndexError()
         regions_name, region_index = self._get_region_info_for_index(idx)
         regions = self.sdata[regions_name]
-        # TODO: here we just need to compute the centroids, we probably want to move this functionality to a different file
+        # TODO: here we just need to compute the centroids,
+        #  we probably want to move this functionality to a different file
         if isinstance(regions, GeoDataFrame):
             dims = get_axis_names(regions)
             region = regions.iloc[region_index]
@@ -122,9 +121,7 @@ class ImageTilesDataset(Dataset):
             assert isinstance(t, BaseTransformation)
             aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
             transformed_centroid = np.squeeze(_affine_matrix_multiplication(aff, centroid), 0)
-        elif isinstance(regions, SpatialImage):
-            raise NotImplementedError("labels not supported yet")
-        elif isinstance(regions, MultiscaleSpatialImage):
+        elif isinstance(regions, (SpatialImage, MultiscaleSpatialImage)):
             raise NotImplementedError("labels not supported yet")
         else:
             raise ValueError("element must be shapes or labels")
@@ -141,8 +138,10 @@ class ImageTilesDataset(Dataset):
             target_width=self.tile_dim_in_pixels,
         )
 
-        # TODO: as explained in the TODO in the __init__(), we want to let the user also use the bounding box query instaed of the rasterization
-        #  the return function of this function would change, so we need to decide if instead having an extra Tile dataset class
+        # TODO: as explained in the TODO in the __init__(), we want to let the
+        #  user also use the bounding box query instaed of the rasterization
+        #  the return function of this function would change, so we need to
+        #  decide if instead having an extra Tile dataset class
         # from spatialdata._core._spatial_query import BoundingBoxRequest
         # request = BoundingBoxRequest(
         #     target_coordinate_system=self.target_coordinate_system,
