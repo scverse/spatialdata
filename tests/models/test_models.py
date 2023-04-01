@@ -252,7 +252,7 @@ class TestModels:
             )
             self._passes_validation_after_io(model, points, "points")
         elif typ == pd.DataFrame:
-            coordinates = {k: v for k, v in zip(axes, coords)}
+            coordinates = {k: v for k, v in zip(axes, coords)}  # noqa: C416
             self._parse_transformation_from_multiple_places(model, data)
             points = model.parse(
                 data,
@@ -262,7 +262,7 @@ class TestModels:
             )
             self._passes_validation_after_io(model, points, "points")
         elif typ == dd.DataFrame:
-            coordinates = {k: v for k, v in zip(axes, coords)}
+            coordinates = {k: v for k, v in zip(axes, coords)}  # noqa: C416
             dd_data = dd.from_pandas(data, npartitions=2)
             self._parse_transformation_from_multiple_places(model, dd_data, coordinates=coordinates)
             points = model.parse(

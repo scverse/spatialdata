@@ -36,7 +36,8 @@ dependencies = [
     "pyarrow",
     "typing_extensions>=4.0.0",
     "dask-image",
-    "networkx"
+    "networkx",
+    "xarray-spatial>=0.3.5",
 ]
 
 [project.optional-dependencies]

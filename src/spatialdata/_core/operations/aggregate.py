@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 import anndata as ad
+import dask as da
 import dask.dataframe as ddf
 import geopandas as gpd
 import numpy as np
@@ -8,8 +11,17 @@ import pandas as pd
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
 from spatial_image import SpatialImage
+from xrspatial import zonal_stats
 
-from spatialdata.models import PointsModel, ShapesModel, get_model
+from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    ShapesModel,
+    get_model,
+)
 from spatialdata.models._utils import get_axes_names
 
 
@@ -19,7 +31,8 @@ def aggregate(
     id_key: str | None = None,
     *,
     value_key: str | None = None,
-    agg_func: str = "mean",
+    agg_func: str | list[str] = "mean",
+    **kwargs: Any,
 ) -> ad.AnnData:
     """
     Aggregate values by given shapes.
@@ -27,9 +40,9 @@ def aggregate(
     Parameters
     ----------
     values
-        Values to aggregate. Currently, only supports Points or Shapes.
+        Values to aggregate.
     by
-        Regions to aggregate by. Currently, only supports Shapes.
+        Regions to aggregate by.
     id_key
         Key to group observations in `values` by. E.g. this could be transcript id for points.
         Defaults to `FEATURE_KEY` for points, required for shapes.
@@ -39,7 +52,10 @@ def aggregate(
         For points, this could be probe intensity.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-        Passed to pandas.DataFrame.groupby.agg.
+        Passed to :func:`pandas.DataFrame.groupby.agg` or from :func:`xrspatial.zonal_stats`
+        according to the type of `values`.
+    kwargs
+        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
     Returns
     -------
@@ -55,6 +71,10 @@ def aggregate(
         if values_type is ShapesModel:
             return _aggregate_shapes_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
+    if (by_type is Labels2DModel or by_type is Labels3DModel) and (
+        values_type is Image2DModel or values_type is Image3DModel
+    ):
+        return _aggregate_image_by_labels(values, by, agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
 
@@ -64,7 +84,7 @@ def _aggregate_points_by_shapes(
     id_key: str | None = None,
     *,
     value_key: str | None = None,
-    agg_func: str = "count",
+    agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     # Have to get dims on dask dataframe, can't get from pandas
     dims = get_axes_names(points)
@@ -76,7 +96,7 @@ def _aggregate_points_by_shapes(
         points = points.compute()
     points = gpd.GeoDataFrame(points, geometry=gpd.points_from_xy(*[points[dim] for dim in dims]))
 
-    return _aggregate(points, shapes, id_key, value_key, agg_func)
+    return _aggregate_shapes(points, shapes, id_key, value_key, agg_func)
 
 
 def _aggregate_shapes_by_shapes(
@@ -85,7 +105,7 @@ def _aggregate_shapes_by_shapes(
     id_key: str | None,
     *,
     value_key: str | None = None,
-    agg_func: str = "count",
+    agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     def circles_to_polygons(df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         # We should only be buffering points, not polygons. Unfortunately this is an expensive check.
@@ -102,15 +122,67 @@ def _aggregate_shapes_by_shapes(
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
 
-    return _aggregate(values, by, id_key, value_key, agg_func)
+    return _aggregate_shapes(values, by, id_key, value_key, agg_func)
 
 
-def _aggregate(
+def _aggregate_image_by_labels(
+    values: SpatialImage | MultiscaleSpatialImage,
+    by: SpatialImage | MultiscaleSpatialImage,
+    agg_func: str | list[str] = "mean",
+    **kwargs: Any,
+) -> ad.AnnData:
+    """
+    Aggregate values by given labels.
+
+    Parameters
+    ----------
+    values
+        Values to aggregate.
+    by
+        Regions to aggregate by.
+    agg_func
+        Aggregation function to apply over point values, e.g. "mean", "sum", "count"
+        from :func:`xrspatial.zonal_stats`.
+    kwargs
+        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+
+    Returns
+    -------
+    AnnData of shape `(by.shape[0], len(agg_func)]`.
+    """
+    if isinstance(by, MultiscaleSpatialImage):
+        key = next(iter(by))
+        by = by[key]["image"]
+    if isinstance(values, MultiscaleSpatialImage):
+        key = next(iter(values))
+        values = values[key]["image"]
+
+    agg_func = [agg_func] if isinstance(agg_func, str) else agg_func
+    outs = []
+    for i, c in enumerate(values.coords["c"].values):
+        out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
+        out.columns = [f"channel_{c}_{col}" for col in out.columns]
+        outs.append(out)
+    df = pd.concat(outs, axis=1)
+
+    X = sparse.csr_matrix(df.values)
+
+    index = kwargs.get("zone_ids", None)  # `zone_ids` allows the user to select specific labels to aggregate by
+    if index is None:
+        index = np.array(da.array.unique(by.data))
+    return ad.AnnData(
+        X,
+        obs=pd.DataFrame(index=index),
+        var=pd.DataFrame(index=df.columns),
+    )
+
+
+def _aggregate_shapes(
     value: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
     id_key: str,
     value_key: str | None = None,
-    agg_func: str = "count",
+    agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     """
     Inner function to aggregate geopandas objects.

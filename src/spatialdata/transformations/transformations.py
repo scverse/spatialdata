@@ -546,6 +546,7 @@ class Affine(BaseTransformation):
                 f"self.input_axews = {self.input_axes}, self.output_axes = {self.output_axes}, "
                 f"input_axes = {input_axes}, output_axes = {output_axes}",
                 UserWarning,
+                stacklevel=2,
             )
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
