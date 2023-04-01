@@ -59,6 +59,7 @@ def _read_multiscale(
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
+    channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
     # something that doesn't have coordinateTransformations in top level
@@ -68,9 +69,8 @@ def _read_multiscale(
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
     name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
-    if raster_type == "image":
-        omero = multiscales[0]["omero"]
-        channels: list[Any] = fmt.channels_from_metadata(omero)
+    if raster_type == "image" and channels_metadata is not None:
+        channels: list[Any] = fmt.channels_from_metadata(channels_metadata)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -81,7 +81,6 @@ def _read_multiscale(
                 name=name,
                 dims=axes,
                 coords={"c": channels} if raster_type == "image" else {},
-                # attrs={"transform": t},
             )
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
@@ -92,7 +91,6 @@ def _read_multiscale(
         name=name,
         dims=axes,
         coords={"c": channels} if raster_type == "image" else {},
-        # attrs={TRANSFORM_KEY: t},
     )
     _set_transformations(si, transformations)
     return compute_coordinates(si)
@@ -124,10 +122,7 @@ def _write_raster(
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
 
-    def _get_group_for_writing_data() -> zarr.Group:
-        if raster_type == "image":
-            return group.require_group(name)
-        return group
+    group_data = group.require_group(name) if raster_type == "image" else group
 
     def _get_group_for_writing_transformations() -> zarr.Group:
         if raster_type == "image":
@@ -136,7 +131,7 @@ def _write_raster(
 
     # convert channel names to channel metadata
     if raster_type == "image":
-        metadata["omero"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+        group_data.attrs["channels_metadata"] = fmt.channels_to_metadata(raster_data, channels_metadata)
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
@@ -154,7 +149,7 @@ def _write_raster(
         # write_labels_ngff is called label.
         metadata[raster_type] = data
         write_single_scale_ngff(
-            group=_get_group_for_writing_data(),
+            group=group_data,
             scaler=None,
             fmt=fmt,
             axes=parsed_axes,
@@ -184,7 +179,7 @@ def _write_raster(
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
             pyramid=data,
-            group=_get_group_for_writing_data(),
+            group=group_data,
             fmt=fmt,
             axes=parsed_axes,
             coordinate_transformations=None,

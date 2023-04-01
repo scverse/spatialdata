@@ -73,7 +73,9 @@ class RasterFormatV01(SpatialDataFormatV01):
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
 
     def channels_to_metadata(
-        self, data: Union[SpatialImage, MultiscaleSpatialImage], channels_metadata: Optional[dict[str, Any]] = None
+        self,
+        data: Union[SpatialImage, MultiscaleSpatialImage],
+        channels_metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Union[int, str]]:
         """Convert channels to omero metadata."""
         channels = get_channels(data)
