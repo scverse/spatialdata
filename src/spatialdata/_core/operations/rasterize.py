@@ -460,25 +460,8 @@ def _(
         xdata.data,
         matrix=matrix,
         output_shape=output_shape,
-        # output_chunks=xdata.data.chunks,
         **kwargs,
     )
-    # ##
-    # # debug code
-    # crop = xdata.sel(
-    #     {
-    #         "x": slice(min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]),
-    #         "y": slice(min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]),
-    #     }
-    # )
-    # import matplotlib.pyplot as plt
-    # plt.figure(figsize=(20, 10))
-    # plt.subplot(1, 2, 1)
-    # plt.imshow(crop.transpose("y", "x", "c").data)
-    # plt.subplot(1, 2, 2)
-    # plt.imshow(DataArray(transformed_dask, dims=xdata.dims).transpose("y", "x", "c").data)
-    # plt.show()
-    # ##
     assert isinstance(transformed_dask, DaskArray)
     transformed_data = schema.parse(transformed_dask, dims=xdata.dims)  # type: ignore[call-arg,arg-type]
     if target_coordinate_system != "global":

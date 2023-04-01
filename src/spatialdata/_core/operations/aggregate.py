@@ -5,15 +5,17 @@ import dask.dataframe as ddf
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
+from spatial_image import SpatialImage
 
 from spatialdata.models import PointsModel, ShapesModel, get_model
 from spatialdata.models._utils import get_axes_names
 
 
 def aggregate(
-    values: ddf.DataFrame | gpd.GeoDataFrame,
-    by: gpd.GeoDataFrame,
+    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
+    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
     id_key: str | None = None,
     *,
     value_key: str | None = None,
