@@ -165,6 +165,7 @@ select = [
     "BLE", # flake8-blind-except
     "T20",  # flake8-print
     "RET", # flake8-raise
+    "PGH", # pygrep-hooks
 ]
 unfixable = ["B", "UP", "C4", "BLE", "T20", "RET"]
 target-version = "py39"

@@ -136,7 +136,7 @@ def _(e: SpatialImage) -> tuple[str, ...]:
     # if dims != dims_sizes:
     #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
     _validate_dims(dims)
-    return dims  # type: ignore
+    return dims  # type: ignore[no-any-return]
 
 
 @get_axes_names.register(MultiscaleSpatialImage)
