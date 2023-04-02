@@ -13,6 +13,7 @@ from scipy import sparse
 from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
+from spatialdata._core.operations.transform import transform
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -22,6 +23,7 @@ from spatialdata.models import (
     get_model,
 )
 from spatialdata.models._utils import get_axes_names
+from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 
 def aggregate(
@@ -31,6 +33,7 @@ def aggregate(
     *,
     value_key: str | None = None,
     agg_func: str | list[str] = "mean",
+    target_coordinate_system: str = "global",
     **kwargs: Any,
 ) -> ad.AnnData:
     """
@@ -53,6 +56,8 @@ def aggregate(
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to :func:`pandas.DataFrame.groupby.agg` or from :func:`xrspatial.zonal_stats`
         according to the type of `values`.
+    target_coordinate_system
+        Coordinate system to transform to before aggregating.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -60,10 +65,21 @@ def aggregate(
     -------
     AnnData of shape (by.shape[0], values[id_key].nunique())])
     """
-    # TODO: Check that values are in the same space
-    # Dispatch
+    # get schema
     by_type = get_model(by)
     values_type = get_model(values)
+
+    # get transformation between coordinate systems
+    by_transform: BaseTransformation = get_transformation(by, target_coordinate_system)  # type: ignore[assignment]
+    values_transform: BaseTransformation = get_transformation(
+        values,
+        target_coordinate_system,  # type: ignore[assignment]
+    )
+    if not ((by_transform == values_transform) and (values_transform is Identity)):
+        by = transform(by, by_transform)
+        values = transform(values, values_transform)
+
+    # dispatch
     if by_type is ShapesModel:
         if values_type is PointsModel:
             return _aggregate_points_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
