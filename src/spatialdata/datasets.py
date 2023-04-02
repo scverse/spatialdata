@@ -20,7 +20,7 @@ from spatialdata.models import (
     TableModel,
 )
 
-rng = default_rng(42)
+RNG = default_rng(42)
 
 __all__ = ["blobs"]
 
@@ -79,7 +79,7 @@ def _blobs(length: int = 512) -> SpatialImage:
     from scipy.ndimage import watershed_ift
 
     # from skimage
-    mask = _generate_blobs(rng, length=length)
+    mask = _generate_blobs(RNG, length=length)
     threshold = np.percentile(mask, 100 * (1 - 0.3))
     inputs = np.logical_not(mask < threshold).astype(np.uint8)
     # use wastershed from scipy
@@ -113,10 +113,10 @@ def _generate_blobs(rng: Any, length: int = 512) -> ArrayLike:
 
 
 def _points_blobs(length: int = 512, n_points: int = 200) -> DaskDataFrame:
-    arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
+    arr = RNG.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
     # randomly assign some values from v to the points
-    points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int_)
-    genes = rng.choice(["a", "b"], size=arr.shape[0])
+    points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+    genes = RNG.choice(["a", "b"], size=arr.shape[0])
     annotation = pd.DataFrame(
         {
             "genes": genes,

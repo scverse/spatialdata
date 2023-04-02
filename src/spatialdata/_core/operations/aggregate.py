@@ -25,6 +25,8 @@ from spatialdata.models import (
 from spatialdata.models._utils import get_axes_names
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
+__all__ = ["aggregate"]
+
 
 def aggregate(
     values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
