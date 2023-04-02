@@ -274,3 +274,36 @@ def _get_table(
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+
+
+@pytest.fixture()
+def blobs():
+    """Create a 2D labels."""
+    from scipy.ndimage import gaussian_filter, watershed_ift
+
+    # from skimage
+    length = 512
+    rs = np.random.default_rng(42)
+    shape = tuple([length] * 2)
+    mask = np.zeros(shape)
+    n_pts = max(int(1.0 / 0.1) ** 2, 1)
+    points = (length * rs.random((2, n_pts))).astype(int)
+    mask[tuple(indices for indices in points)] = 1
+    mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
+    threshold = np.percentile(mask, 100 * (1 - 0.3))
+    inputs = np.logical_not(mask < threshold).astype(np.uint8)
+    # use wastershed from scipy
+    xm, ym = np.ogrid[0:length:10, 0:length:10]
+    markers = np.zeros_like(inputs).astype(np.int16)
+    markers[xm, ym] = np.arange(xm.size * ym.size).reshape((xm.size, ym.size))
+    out = watershed_ift(inputs, markers)
+    out[xm, ym] = out[xm - 1, ym - 1]  # remove the isolate seeds
+    # reindex by frequency
+    val, counts = np.unique(out, return_counts=True)
+    sorted_idx = np.argsort(counts)
+    for i, idx in enumerate(sorted_idx[::-1]):
+        if (not i % 7) or (i == 0):
+            out[out == val[idx]] = 0
+        else:
+            out[out == val[idx]] = i
+    return out

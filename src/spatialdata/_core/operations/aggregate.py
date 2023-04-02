@@ -13,11 +13,10 @@ from scipy import sparse
 from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
+from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
-    Image3DModel,
     Labels2DModel,
-    Labels3DModel,
     PointsModel,
     ShapesModel,
     get_model,
@@ -71,9 +70,7 @@ def aggregate(
         if values_type is ShapesModel:
             return _aggregate_shapes_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
-    if (by_type is Labels2DModel or by_type is Labels3DModel) and (
-        values_type is Image2DModel or values_type is Image3DModel
-    ):
+    if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values, by, agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
@@ -161,8 +158,10 @@ def _aggregate_image_by_labels(
     outs = []
     for i, c in enumerate(values.coords["c"].values):
         out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
-        out.columns = [f"channel_{c}_{col}" for col in out.columns]
-        outs.append(out)
+        out.columns = [f"channel_{c}_{col}" if col != "zone" else col for col in out.columns]
+        out = out.iloc[1:]
+        zones: ArrayLike = out["zone"].values
+        outs.append(out.drop(columns=["zone"]))  # remove the 0 (background)
     df = pd.concat(outs, axis=1)
 
     X = sparse.csr_matrix(df.values)
@@ -170,9 +169,10 @@ def _aggregate_image_by_labels(
     index = kwargs.get("zone_ids", None)  # `zone_ids` allows the user to select specific labels to aggregate by
     if index is None:
         index = np.array(da.array.unique(by.data))
+        assert np.array(index == np.insert(zones, 0, 0)).all(), "Index mismatch between zonal stats and labels."
     return ad.AnnData(
         X,
-        obs=pd.DataFrame(index=index),
+        obs=pd.DataFrame(index=zones),
         var=pd.DataFrame(index=df.columns),
     )
 
