@@ -214,7 +214,8 @@ class SpatialData:
         self,
         values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
         by: str,
-        *args: Any,
+        region_key: str = "region",
+        instance_key: str = "instance_id",
         **kwargs: Any,
     ) -> SpatialData:
         """
@@ -239,6 +240,12 @@ class SpatialData:
             according to the type of `values`.
         target_coordinate_system
             Coordinate system to transform to before aggregating.
+        region_name
+            Name of the region `by`.
+        region_key
+            Key to use for the region column in the aggregated table.
+        instance_key
+            Key to use for the instance id column in the aggregated table.
         kwargs
             Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -248,19 +255,22 @@ class SpatialData:
         """
         from spatialdata._core.operations.aggregate import aggregate
 
-        # get schema
         if by in self.labels:
-            adata = aggregate(values, self.labels[by], *args, **kwargs)
-            sdata = SpatialData(labels={by: self.labels[by]})
+            by_ = self.labels[by]
         elif by in self.shapes:
-            adata = aggregate(values, self.shapes[by], *args, **kwargs)
-            sdata = SpatialData(shapes={by: self.shapes[by]})
+            by_ = self.shapes[by]
         else:
             raise ValueError(f"Unknown region  `{by}`.")
-        adata.obs["instance_id"] = adata.obs_names.copy()
 
-        table = TableModel.parse(adata, region=by, region_key="region", instance_key="instance_id")
-        sdata.table = table
+        adata = aggregate(values, by_, **kwargs)
+        adata.obs[instance_key] = adata.obs_names.copy()
+        adata.obs[region_key] = by
+        table = TableModel.parse(adata, region=by, region_key=region_key, instance_key=instance_key)
+
+        if by in self.labels:
+            sdata = SpatialData(labels={by: self.labels[by]}, table=table)
+        elif by in self.shapes:
+            sdata = SpatialData(shapes={by: self.shapes[by].iloc[table.obs_names].copy()}, table=table)
 
         values_type = get_model(values)
         if values_type is Image2DModel:
