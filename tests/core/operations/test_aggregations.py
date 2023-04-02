@@ -114,3 +114,6 @@ def test_aggregate_image_by_labels(blobs, image_schema, labels_schema):
 
     out = aggregate(image, labels, agg_func=["mean", "sum", "count"])
     assert len(out) + 1 == len(np.unique(blobs))
+
+    out = aggregate(image, labels, zone_ids=[1, 2, 3])
+    assert len(out) == 3

@@ -159,7 +159,7 @@ def _aggregate_image_by_labels(
     for i, c in enumerate(values.coords["c"].values):
         out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
         out.columns = [f"channel_{c}_{col}" if col != "zone" else col for col in out.columns]
-        out = out.iloc[1:]
+        out = out.loc[out["zone"] != 0].copy()
         zones: ArrayLike = out["zone"].values
         outs.append(out.drop(columns=["zone"]))  # remove the 0 (background)
     df = pd.concat(outs, axis=1)
