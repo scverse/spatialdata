@@ -28,8 +28,9 @@ from spatialdata.models import (
     TableModel,
 )
 from xarray import DataArray
+from spatialdata.datasets import _blobs
 
-RNG = default_rng()
+rng = default_rng()
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -131,23 +132,23 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
-    out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
+    out["image2d"] = Image2DModel.parse(rng.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
+        rng.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
     )
-    out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
+    out["image2d_xarray"] = Image2DModel.parse(DataArray(rng.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
-        DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d),
+        DataArray(rng.normal(size=(3, 64, 64)), dims=dims_2d),
         scale_factors=[2, 4],
         dims=None,
     )
-    out["image3d_numpy"] = Image3DModel.parse(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d)
+    out["image3d_numpy"] = Image3DModel.parse(rng.normal(size=(2, 64, 64, 3)), dims=dims_3d)
     out["image3d_multiscale_numpy"] = Image3DModel.parse(
-        RNG.normal(size=(2, 64, 64, 3)), scale_factors=[2], dims=dims_3d
+        rng.normal(size=(2, 64, 64, 3)), scale_factors=[2], dims=dims_3d
     )
-    out["image3d_xarray"] = Image3DModel.parse(DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d), dims=None)
+    out["image3d_xarray"] = Image3DModel.parse(DataArray(rng.normal(size=(2, 64, 64, 3)), dims=dims_3d), dims=None)
     out["image3d_multiscale_xarray"] = Image3DModel.parse(
-        DataArray(RNG.normal(size=(2, 64, 64, 3)), dims=dims_3d),
+        DataArray(rng.normal(size=(2, 64, 64, 3)), dims=dims_3d),
         scale_factors=[2],
         dims=None,
     )
@@ -159,27 +160,27 @@ def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
 
-    out["labels2d"] = Labels2DModel.parse(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d)
+    out["labels2d"] = Labels2DModel.parse(rng.integers(0, 100, size=(64, 64)), dims=dims_2d)
     out["labels2d_multiscale"] = Labels2DModel.parse(
-        RNG.integers(0, 100, size=(64, 64)), scale_factors=[2, 4], dims=dims_2d
+        rng.integers(0, 100, size=(64, 64)), scale_factors=[2, 4], dims=dims_2d
     )
     out["labels2d_xarray"] = Labels2DModel.parse(
-        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d), dims=None
+        DataArray(rng.integers(0, 100, size=(64, 64)), dims=dims_2d), dims=None
     )
     out["labels2d_multiscale_xarray"] = Labels2DModel.parse(
-        DataArray(RNG.integers(0, 100, size=(64, 64)), dims=dims_2d),
+        DataArray(rng.integers(0, 100, size=(64, 64)), dims=dims_2d),
         scale_factors=[2, 4],
         dims=None,
     )
-    out["labels3d_numpy"] = Labels3DModel.parse(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d)
+    out["labels3d_numpy"] = Labels3DModel.parse(rng.integers(0, 100, size=(10, 64, 64)), dims=dims_3d)
     out["labels3d_multiscale_numpy"] = Labels3DModel.parse(
-        RNG.integers(0, 100, size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
+        rng.integers(0, 100, size=(10, 64, 64)), scale_factors=[2, 4], dims=dims_3d
     )
     out["labels3d_xarray"] = Labels3DModel.parse(
-        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d), dims=None
+        DataArray(rng.integers(0, 100, size=(10, 64, 64)), dims=dims_3d), dims=None
     )
     out["labels3d_multiscale_xarray"] = Labels3DModel.parse(
-        DataArray(RNG.integers(0, 100, size=(10, 64, 64)), dims=dims_3d),
+        DataArray(rng.integers(0, 100, size=(10, 64, 64)), dims=dims_3d),
         scale_factors=[2, 4],
         dims=None,
     )
@@ -248,10 +249,10 @@ def _get_points() -> dict[str, DaskDataFrame]:
     out = {}
     for i in range(2):
         name = f"{name}_{i}"
-        arr = RNG.normal(size=(100, 2))
+        arr = rng.normal(size=(100, 2))
         # randomly assign some values from v to the points
-        points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
-        genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+        genes = rng.choice(["a", "b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
                 "genes": genes,
@@ -267,43 +268,16 @@ def _get_table(
     region_key: str = "region",
     instance_key: str = "instance_id",
 ) -> AnnData:
-    adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    adata = AnnData(rng.normal(size=(100, 10)), obs=pd.DataFrame(rng.normal(size=(100, 3)), columns=["a", "b", "c"]))
     adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         adata.obs[region_key] = region
     elif isinstance(region, list):
-        adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
+        adata.obs[region_key] = rng.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
 
 
 @pytest.fixture()
 def blobs():
     """Create a 2D labels."""
-    from scipy.ndimage import gaussian_filter, watershed_ift
-
-    # from skimage
-    length = 512
-    rs = np.random.default_rng(42)
-    shape = tuple([length] * 2)
-    mask = np.zeros(shape)
-    n_pts = max(int(1.0 / 0.1) ** 2, 1)
-    points = (length * rs.random((2, n_pts))).astype(int)
-    mask[tuple(indices for indices in points)] = 1
-    mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
-    threshold = np.percentile(mask, 100 * (1 - 0.3))
-    inputs = np.logical_not(mask < threshold).astype(np.uint8)
-    # use wastershed from scipy
-    xm, ym = np.ogrid[0:length:10, 0:length:10]
-    markers = np.zeros_like(inputs).astype(np.int16)
-    markers[xm, ym] = np.arange(xm.size * ym.size).reshape((xm.size, ym.size))
-    out = watershed_ift(inputs, markers)
-    out[xm, ym] = out[xm - 1, ym - 1]  # remove the isolate seeds
-    # reindex by frequency
-    val, counts = np.unique(out, return_counts=True)
-    sorted_idx = np.argsort(counts)
-    for i, idx in enumerate(sorted_idx[::-1]):
-        if (not i % 7) or (i == 0):
-            out[out == val[idx]] = 0
-        else:
-            out[out == val[idx]] = i
-    return out
+    return _blobs()

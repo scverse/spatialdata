@@ -161,7 +161,6 @@ class SpatialData:
             self._table = table
 
         self._query = QueryManager(self)
-        self._aggregate = AggregateManager(self)
 
     @staticmethod
     def from_elements_dict(elements_dict: dict[str, Union[SpatialElement, AnnData]]) -> SpatialData:
@@ -211,9 +210,69 @@ class SpatialData:
     def query(self) -> QueryManager:
         return self._query
 
-    @property
-    def aggregate(self) -> AggregateManager:
-        return self._aggregate
+    def aggregate(
+        self,
+        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
+        by: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> SpatialData:
+        """
+        Aggregate values by given region.
+
+        Parameters
+        ----------
+        values
+            Values to aggregate.
+        by
+            Regions to aggregate by.
+        id_key
+            Key to group observations in `values` by. E.g. this could be transcript id for points.
+            Defaults to `FEATURE_KEY` for points, required for shapes.
+        value_key
+            Key to aggregate values by. This is the key in the values object.
+            If nothing is passed here, assumed to be a column of ones.
+            For points, this could be probe intensity.
+        agg_func
+            Aggregation function to apply over point values, e.g. "mean", "sum", "count".
+            Passed to :func:`pandas.DataFrame.groupby.agg` or from :func:`xrspatial.zonal_stats`
+            according to the type of `values`.
+        target_coordinate_system
+            Coordinate system to transform to before aggregating.
+        kwargs
+            Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+
+        Returns
+        -------
+        SpatialData with aggregated results
+        """
+        from spatialdata._core.operations.aggregate import aggregate
+
+        # get schema
+        if by in self.labels:
+            adata = aggregate(values, self.labels[by], *args, **kwargs)
+            sdata = SpatialData(labels={by: self.labels[by]})
+        elif by in self.shapes:
+            adata = aggregate(values, self.shapes[by], *args, **kwargs)
+            sdata = SpatialData(shapes={by: self.shapes[by]})
+        else:
+            raise ValueError(f"Unknown region  `{by}`.")
+        adata.obs["instance_id"] = adata.obs_names.copy()
+
+        table = TableModel.parse(adata, region=by, region_key="region", instance_key="instance_id")
+        sdata.table = table
+
+        values_type = get_model(values)
+        if values_type is Image2DModel:
+            sdata.add_image("image", values)
+            return sdata
+        if values_type is ShapesModel:
+            sdata.add_shapes("shapes", values)
+            return sdata
+        if values_type is PointsModel:
+            sdata.add_points("points", values)
+            return sdata
+        raise ValueError(f"Unknown values type `{values_type}`.")
 
     @staticmethod
     def _validate_unique_element_names(element_names: list[str]) -> None:
@@ -332,7 +391,7 @@ class SpatialData:
     #  a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
         """
-        Get the group for an elemnt, creates a new one if the element doesn't exist.
+        Get the group for an element, creates a new one if the element doesn't exist.
 
         Parameters
         ----------
@@ -1397,18 +1456,3 @@ class QueryManager:
         #  to it's default value. This could be a bit unintuitive and
         #  we may want to change make things more explicit.
         return self.bounding_box(**request.to_dict(), **kwargs)
-
-
-class AggregateManager:
-    """Perform aggregation on SpatialData objects."""
-
-    def __init__(self, sdata: SpatialData):
-        self._sdata = sdata
-
-    def aggregate(
-        self,
-    ) -> Any:
-        return
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return

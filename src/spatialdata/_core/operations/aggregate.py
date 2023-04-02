@@ -37,7 +37,7 @@ def aggregate(
     **kwargs: Any,
 ) -> ad.AnnData:
     """
-    Aggregate values by given shapes.
+    Aggregate values by given region.
 
     Parameters
     ----------
