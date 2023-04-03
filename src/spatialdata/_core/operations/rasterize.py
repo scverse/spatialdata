@@ -142,7 +142,7 @@ def _compute_target_dimensions(
     assert isinstance(target_width, float)
     assert target_height is not None
     assert isinstance(target_height, float)
-    return target_width, target_height, target_depth
+    return np.round(target_width), np.round(target_height), np.round(target_depth) if target_depth is not None else None
 
 
 @singledispatch
