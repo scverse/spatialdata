@@ -1,3 +1,11 @@
 .wy-side-nav-search {
     background-color: #eeeeee;
 }
+
+.wy-side-nav-search a {
+    color: black;
+}
+
+div.version {
+    color: black !important;
+}
