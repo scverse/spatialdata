@@ -91,14 +91,13 @@ class SpatialData:
     -----
     The spatial elements are stored with standard types:
 
-        - images and labels are stored as :class:`spatial_image.SpatialImage`
-        or :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects,
-        which are respectively equivalent to
-        :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
+        - images and labels are stored as :class:`spatial_image.SpatialImage` or
+            :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to
+            :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
-        - the table are stored as :class:`anndata.AnnData` objects,
-        with the spatial coordinates stored in the obsm slot.
+        - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
+            slot.
 
     The table can annotate regions (shapesor labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
@@ -106,13 +105,15 @@ class SpatialData:
 
     The elements need to pass a validation step. To construct valid elements you can use the parsers that we
     provide:
-        :class:`~spatialdata.Image2DModel`,
-        :class:`~spatialdata.Image3DModel`,
-        :class:`~spatialdata.Labels2DModel`,
-        :class:`~spatialdata.Labels3DModel`,
-        :class:`~spatialdata.PointsModel`,
-        :class:`~spatialdata.ShapesModel`,
-        :class:`~spatialdata.TableModel`
+
+        - :class:`~spatialdata.Image2DModel`,
+        - :class:`~spatialdata.Image3DModel`,
+        - :class:`~spatialdata.Labels2DModel`,
+        - :class:`~spatialdata.Labels3DModel`,
+        - :class:`~spatialdata.PointsModel`,
+        - :class:`~spatialdata.ShapesModel`,
+        - :class:`~spatialdata.TableModel`
+
     """
 
     _images: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]

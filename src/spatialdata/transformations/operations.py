@@ -42,6 +42,7 @@ def set_transformation(
 
         * If None and `set_all=False` sets the transformation to the 'global' coordinate system (default system).
         * If None and `set_all=True` sets all transformations.
+
     set_all
         If True, all transformations are set. If False, only the transformation
         to the specified coordinate system is set. If True, `to_coordinate_system` needs to be None.
@@ -95,14 +96,14 @@ def get_transformation(
 
         * If None and `get_all=False` returns the transformation from the 'global' coordinate system (default system).
         * If None and `get_all=True` returns all transformations.
+
     get_all
         If True, all transformations are returned. If True, `to_coordinate_system` needs to be None.
 
     Returns
     -------
-    transformation
-        The transformation, if `to_coordinate_system` is not None, otherwise a dictionary of transformations to all
-        the coordinate systems.
+    The transformation, if `to_coordinate_system` is not None, otherwise a dictionary of transformations to all
+    the coordinate systems.
     """
     from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
@@ -138,9 +139,10 @@ def remove_transformation(
     to_coordinate_system
         The coordinate system to remove the transformation/s from. If None, all transformations are removed.
 
-        * If None and `remove_all=False` removes the transformation from the
-        'global' coordinate system (default system).
+        * If None and `remove_all=False` removes the transformation from the 'global' coordinate system
+            (default system).
         * If None and `remove_all=True` removes all transformations.
+
     remove_all
         If True, all transformations are removed. If True, `to_coordinate_system` needs to be None.
     write_to_sdata

@@ -15,27 +15,35 @@ Infrastructure for spatial omics data in Python.
 
     Find a detailed documentation of ``spatialdata``.
 
+.. card:: Tutorials
+    :link: tutorials/index
+    :link-type: doc
+
+    Tutorials for ``spatialdata``.
+
 .. card:: Design document
     :link: design_doc
     :link-type: doc
 
     The design document of ``spatialdata``.
 
-.. card:: Tutorials
-    :link: tutorials/index
+.. card:: Contributing
+    :link: contributing
     :link-type: doc
 
-    Tutorials for ``spatialdata``.
+    Learn how to contribute to ``spatialdata``.
+
 ```
 
 ```{toctree}
 :hidden: true
 :maxdepth: 1
 
+installation.md
 api.md
 tutorials/index.md
-changelog.md
 design_doc.md
-installation.md
+contributing.md
+changelog.md
 references.md
 ```

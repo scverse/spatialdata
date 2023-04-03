@@ -21,7 +21,7 @@ project_name = info["Name"]
 author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}."
 version = info["Version"]
-repository_url = f"https://github.com/scverse/{project_name}"
+# repository_url = f"https://github.com/scverse/{project_name}"
 
 # The full version, including alpha/beta/rc tags
 release = info["Version"]
@@ -121,14 +121,16 @@ nitpicky = False  # TODO: solve upstream.
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_book_theme"
+# html_theme = "sphinx_book_theme"
+html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_title = project_name
+html_logo = "_static/img/spatialdata_horizontal.png"
 
-html_theme_options = {
-    "repository_url": repository_url,
-    "use_repository_button": True,
-}
+# html_theme_options = {
+# "repository_url": repository_url,
+# "use_repository_button": True,
+# }
 
 pygments_style = "default"
 
@@ -152,3 +154,4 @@ def setup(app):
         },
         True,
     )
+    app.add_css_file("css/custom.css")

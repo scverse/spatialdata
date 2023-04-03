@@ -188,10 +188,9 @@ def rasterize(
 
     Returns
     -------
-    SpatialData or SpatialImage
-        The rasterized SpatialData object or SpatialImage. Each SpatialElement will be rasterized into a
-        SpatialImage. So if a SpatialData object with elements is passed, a SpatialData object with images will be
-        returned.
+    The rasterized SpatialData object or SpatialImage. Each SpatialElement will be rasterized into a
+    SpatialImage. So if a SpatialData object with elements is passed, a SpatialData object with images will be
+    returned.
     """
     raise RuntimeError("Unsupported type: {type(data)}")
 
@@ -338,13 +337,16 @@ def _get_corrected_affine_matrix(
     """Get the affine matrix that maps the intrinsic coordinates of the data to the target_coordinate_system.
 
     In addition:
-    - restricting the domain to the axes specified in axes (i.e. the axes for which the bounding box is specified), in
-    particular axes never contains c;
-    - restricting the codomain to the spatial axes of the target coordinate system (i.e. excluding c).
+
+        - restricting the domain to the axes specified in axes (i.e. the axes for which the bounding box is specified),
+            in particular axes never contains c;
+        - restricting the codomain to the spatial axes of the target coordinate system (i.e. excluding c).
 
     We do this because:
-    - we don't need to consider c
-    - when we create the target rasterized object, we need to have axes in the order that is requires by the schema
+
+        - we don't need to consider c
+        - when we create the target rasterized object, we need to have axes in the order that is requires by the schema
+
     """
     transformation = get_transformation(data, target_coordinate_system)
     assert isinstance(transformation, BaseTransformation)

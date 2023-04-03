@@ -2,11 +2,11 @@
 
 This documents defines the specifications and design of SpatialData: a FAIR framework for storage and processing of multi-modal spatial omics data. It also describes the initial implementation plan. This is meant to be a living document that can be updated as the project evolves.
 
-# Motivation and Scope
+## Motivation and Scope
 
 Recent advances in molecular profiling technologies allow to measure abundance of RNA and proteins in tissue, at high throughput, multiplexing and resolution. The variety of experimental techniques poses unique challenges in data handling and processing, in particular around data types and size. _SpatialData_ aims at implementing a performant in-memory representation in Python and an on-disk representation based on the Zarr data format and following the OME-NGFF specifications. By maximing interoperability, performant implementations and efficient (cloud-based) IO, _SpatialData_ aims at laying the foundations for new methods and pipelines for the analysis of spatial omics data.
 
-# Goals
+### Goals
 
 The goals define _what_ SpatialData will be able to do (as opposed to _how_). Goals can have the following priority levels:
 
@@ -74,7 +74,7 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
 -   [ ] P1. Points specification
 -   [ ] P1. Polygons specification
 
-## Non-goals
+### Non-goals
 
 -   _SpatialData_ is not an analysis library. Instead, analysis libraries should depend on SpatialData for IO and query.
 -   _SpatialData_ is not a format converter. We should not support converting to/from too many formats and instead use OME-NGFF as the interchange format.
@@ -100,9 +100,9 @@ We strongly encourage collaborations and community supports in all of these proj
 [squidpy]: https://github.com/scverse/squidpy
 [spatialdata-sandbox]: https://github.com/giovp/spatialdata-sandbox
 
-# Detailed description
+## Detailed description
 
-## Terminology
+### Terminology
 
 _SpatialData_ is both the name of the Python library as well as of the in-memory python object `SpatialData`. To distinguish between the two, we use the _italics_ formatting for the _SpatialData_ library and the `code` formatting for the `SpatialData` object.
 
@@ -124,7 +124,7 @@ The `SpatialData` object contains a set of Elements to be used for analysis. Ele
     Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files. A `SpatialData` object can be instantiated from a `NGFFStore`.
     The implementation of the `NGFFStore` has low priority since we can get around it by loading and saving our data in multiple `.zarr` files and combine them in memory, but it will be important for reading arbitrary `.zarr` files when the NGFF specifications will be updated to support the various elements.
 
-## Elements
+### Elements
 
 We model a spatial dataset as a composition of distinct element types. The elements correspond to:
 
@@ -140,7 +140,7 @@ Each of these elements should be useful by itself, and in combination with other
 
 By decomposing the data model into building blocks (i.e. Elements) we support the storage of any arbitrary combinations of elements, which can be added and modified independently at any moment.
 
-## Assumptions
+#### Assumptions
 
 _SpatialData_ closely follows the OME-NGFF specifications and therefore much of its assumptions are inherited from it. Extra assumptions will be discussed with the OME-NGFF community and adapted to the community-agreed design. The key assumptions are the following:
 
@@ -151,7 +151,7 @@ _SpatialData_ closely follows the OME-NGFF specifications and therefore much of 
 -   `Points` CAN NOT be annotated with `Tables`, but they can contain annotations within themselves (e.g. intensity of point spread function of a each point, gene id).
 -   `Tables` CAN NOT be annotated by other `Tables`.
 
-### Images
+#### Images
 
 Images of a sample. Should conform to the [OME-NGFF concept of an image](https://ngff.openmicroscopy.org/latest/#image-layout).
 Images are n-dimensional arrays where each element of an array is a pixel of an image. These arrays have labelled dimensions which correspond to:
@@ -180,7 +180,7 @@ The coordinate systems and transforms are stored in `spatial_image.SpatialImage.
 [spatial-image library]: https://github.com/spatial-image/spatial-image
 [multiscale-spatial-image libary]: https://github.com/spatial-image/multiscale-spatial-image
 
-### Regions of interest
+#### Regions of interest
 
 Regions of interest define distinct regions of space that can be used to select and aggregate observations. For instance, regions can correspond to
 
@@ -200,7 +200,7 @@ As an example, regions can be used for:
 
 Regions can be defined in multiple ways.
 
-#### Labels (pixel mask)
+##### Labels (pixel mask)
 
 Labels are a pixel mask representation of regions. This is an array of integers where each integer value corresponds to a region of space. This is commonly used along side pixel based imaging techniques, where the label array will share dimensionality with the image array. These may also be hierarchichal.
 Should conform to the [OME-NGFF definition](https://ngff.openmicroscopy.org/latest/#image-layout).
@@ -209,7 +209,7 @@ The Python data structures used for Labels are the same one that we discussed fo
 
 The coordinate systems and transforms are stored in `spatial_image.SpatialImage.attrs` or in `multiscale_spatial_image.MultiscaleSpatialImage.attrs`.
 
-#### Shapes
+##### Shapes
 
 A set of (multi-)polygons or points (circles) associated with a set of observations. Each set of polygons is associated with a coordinate system. Shapes can be used to represent a variety of regions of interests, such as clinical annotations and user-defined regions of interest. Shapes can also be used to represent most of array-based spatial omics technologies such as 10X Genomics Visium, BGI Stereo-seq and DBiT-seq.
 
@@ -235,7 +235,7 @@ SpatialData
 
 ```
 
-### Points
+#### Points
 
 ```{note}
 This representation is still under discussion and it might change. What is described here is the current implementation.
@@ -258,7 +258,7 @@ Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialda
 
 The points representation is anyway still being under [discussion](https://github.com/scverse/spatialdata/issues/46).
 
-### Region Table (table of annotations for regions)
+#### Region Table (table of annotations for regions)
 
 Annotations of regions of interest. Each row in this table corresponds to a single region on the coordinate space. This is represented as an `AnnData` object to allow for complex annotations on the data. This includes:
 
@@ -277,7 +277,7 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 If any of `region`, region_key`and`instance_key` are defined, they all MUST be defined.
 
-### Graphs (representation to be refined)
+#### Graphs (representation to be refined)
 
 Graphs are stored in the annotating table for a Regions element. Graphs represent relationships between observations. Coordinates MAY be stored redundantly in the `obsm` slot of the annotating table, and are assumed to be in the intrinsic coordinate system of the label image.
 Features on edges would just be separate obsp.
@@ -286,7 +286,7 @@ Features or annotation on nodes coincide with the information stored in the anno
 -   Graphs on Points and Shapes could be stored in AnnData `obsp` directly, but we likely will not be using `AnnData` for Points and Shapes anymore.
 -   Graphs in general (on Points, Labels, Shapes, Polygons) are stored in `obsp` of the associated label table. Coordinates are stored in `obsm` and are assumed to be in the intrinsic coordinate system of the label image. After a transformation the coordinates could get out of sync, [see this issue](https://github.com/scverse/spatialdata/issues/123).
 
-## Summary
+### Summary
 
 -   Image `type: Image`
 -   Regions `type: Union[Labels, Shapes]`
@@ -295,20 +295,20 @@ Features or annotation on nodes coincide with the information stored in the anno
 -   Points `type: Points`
 -   Tables `type: Table`
 
-### Open discussions
+#### Open discussions
 
 -   Multiple tables [discussion](https://github.com/scverse/spatialdata/issues/43)
 -   Feature annotations and spatial coordinates in the same table [discussion](https://github.com/scverse/spatialdata/issues/45)
 -   Points vs Circles [discussion](https://github.com/scverse/spatialdata/issues/46)
 
-## Transforms and coordinate systems
+### Transforms and coordinate systems
 
 In the following we refer to the NGFF proposal for transformations and coordinate systems.
 You can find the [current transformations and coordinate systems specs proposal here](http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs), **# TODO update reference once proposal accepted**; [discussion on the proposal is here](https://github.com/ome/ngff/pull/138)).
 
 The NGFF specifications introduces the concepts of coordiante systems and axes. Coordinate sytems are sets of axes that have a name, and where each axis is an object that has a name, a type and eventually a unit information. The set of operations required to transform elements between coordinate systems are stored as coordinate transformations. A table MUST not have a coordinate system since it annotates Region Elements (which already have one or more coordinate systems).
 
-### NGFF approach
+#### NGFF approach
 
 There are two types of coordinate systems: intrinsic (called also implicit) and extrinsic (called also explicit). Intrinsic coordinate systems are tied to the data structure of the element and decribe it (for NGFF, an image without an intrinsic coordinate system would have no information on the axes). The intrinsic coordinate system of an image is the set of axes of the array containing the image. Extrinsic coordinate systems are not anchored to a specific element.
 
@@ -323,7 +323,7 @@ Furthermore, acoording to NGFF, a coordinate system:
 -   MUST have a name;
 -   MUST specify all the axes.
 
-### SpatialData approach
+#### SpatialData approach
 
 In SpatialData we extend the concept of coordiante systems also for the other types of spatial elements (Points, Shapes, Polygons).
 Since elements are allowed to have only (a subset of the) c, x, y, z axes and must follow a specific schema, we can relax some restrictions of the NGFF coordinate systems and provide less verbose APIs. The framework still reads and writes to valid NGFF, converting to the SpatialData coordinate system if possible or raising an error.
@@ -343,7 +343,7 @@ We also have a constraint (that we may relax in the future):
 -   a transformation MAY be defined only between an intrinsic coordinate system and an extrinsic coordinate system
 -   each element MUST be mapped at least to an extrinsic coordinate system. When no mapping is specified, we define a mapping to the "global" coordinate system via an "Identity" transformation.
 
-### In-memory representation
+#### In-memory representation
 
 We define classes that follow the NGFF specifications to represent the coordinate systems (class `NgffCoordinateSystem`) and coordinate transformations (classes inheriting from `NgffBaseTransformations`). Anyway, these classes are used only during input and ouput. For operations we define new classes (inheriting from `BaseTransformation`).
 
@@ -353,7 +353,7 @@ Classes inheriting from `BaseTransformation` are: `Identity`, `MapAxis`, `Transl
 
 The conversion between the two transformation is still not 100% supported; it will be finalized when the NGFF specifications are approaved; [this issue](https://github.com/scverse/spatialdata/issues/114) keeps track of this.
 
-### Reasons for having two sets of classes
+#### Reasons for having two sets of classes
 
 The `NgffBaseTransformations` require full specification of the input and output coordinate system for each transformation. A transformation MUST be compatible with the input coordinate system and output coordinate system (full description in the NGFF specification) and two transformations can be chained together only if the output coordinate system of the first coincides with the input coordinate system of the second.
 
@@ -369,13 +369,13 @@ To know more about the separation between the two set of classes see [this issue
 
 This document will be udpated with the precise description of each transformation, for the moment please refer to `transformations.py` to see the exact implementation.
 
-## Examples
+### Examples
 
-### Transformations
+#### Transformations
 
 See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks/transformations.ipynb) for extensive examples on the transformations.
 
-### Legacy examples
+#### Legacy examples
 
 _The text down below may not reflect the latest version of the code and will be eventually replaced by notebooks_
 
@@ -395,7 +395,7 @@ sdata = sd.transform(sdata, tgt="tgt_space")
 The transfromation object should not have a method to apply itself to an element.
 `SpatialData` can have a `transform` method, that can be applied to either a `SpatialData` object or an element.
 
-#### Layout of a SpatialData object
+##### Layout of a SpatialData object
 
 The layout of some common datasets.
 
@@ -418,7 +418,7 @@ The layout of some common datasets.
 -   (optional) cell segmentation labels can be derived from the H&E images;
 -   (optional) the cell segmentation can be annotated with image-derived features (image features/statistics).
 
-#### Code/pseudo-code workflows
+##### Code/pseudo-code workflows
 
 **Workflows to show**
 
@@ -428,7 +428,7 @@ The layout of some common datasets.
 -   [x] accumulation with multiple types of elements
 -   [x] subsetting/querying by coordinate system, bounding box, spatial region, table rows
 
-#### Loading multiple Visium samples from the SpaceRanger output and saving them to NGFF using the SpatialData APIs
+##### Loading multiple Visium samples from the SpaceRanger output and saving them to NGFF using the SpatialData APIs
 
 ```python
 import spatialdata as sd
@@ -445,7 +445,7 @@ sdata = sd.SpatialData.concatenate(sdatas, merge_tables=True)
 sdata.write("data.zarr")
 ```
 
-#### Loading multiple Visium samples from a generic NGFF storage with arbitrary folder structure (i.e. a NGFF file that was not created with the SpatialData APIs).
+##### Loading multiple Visium samples from a generic NGFF storage with arbitrary folder structure (i.e. a NGFF file that was not created with the SpatialData APIs).
 
 This is the multislide Visium use case.
 
@@ -503,7 +503,7 @@ SpatialData object with:
     obs: "in_tissue", "array_row", "array_col", "library_id", "visium_spot_id", "library"'
 ```
 
-#### Aggregating spatial information from an element into a set of regions
+##### Aggregating spatial information from an element into a set of regions
 
 ```python
 sdata = from_zarr("data.zarr")
@@ -512,7 +512,7 @@ table = spatialdata.aggregate(
 )
 ```
 
-#### Subsetting/querying by coordinate system, bounding box, spatial region, table rows
+##### Subsetting/querying by coordinate system, bounding box, spatial region, table rows
 
 ```python
 """
@@ -550,7 +550,7 @@ sdata1 = sdata.query.polygon("/polygons/annotations")
 sdata1 = sdata.query.table(...)
 ```
 
-#### Related notes/issues/PRs
+##### Related notes/issues/PRs
 
 -   [Issue discussing SpatialData layout](https://github.com/scverse/spatialdata/issues/12)
 -   [Notes from Basel Hackathon](https://hackmd.io/MPeMr2mbSRmeIzOCgwKbxw)
