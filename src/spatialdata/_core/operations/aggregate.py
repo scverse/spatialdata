@@ -258,5 +258,4 @@ def _aggregate_shapes(
         X,
         obs=pd.DataFrame(index=obs_id_categorical.categories),
         var=pd.DataFrame(index=joined[id_key].cat.categories),
-        dtype=X.dtype,
     )

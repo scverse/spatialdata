@@ -103,7 +103,7 @@ class BlobsDataset:
 
         adata = aggregate(image, labels)
         adata.obs["region"] = "blobs_labels"
-        adata.obs["instance_id"] = adata.obs_names
+        adata.obs["instance_id"] = adata.obs_names.astype(int)
         table = TableModel.parse(adata, region="blobs_labels", region_key="region", instance_key="instance_id")
 
         return SpatialData(

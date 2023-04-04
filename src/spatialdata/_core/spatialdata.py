@@ -268,6 +268,10 @@ class SpatialData:
         table = TableModel.parse(adata, region=by, region_key=region_key, instance_key=instance_key)
 
         if by in self.labels:
+            try:
+                table.obs[instance_key] = table.obs[instance_key].astype(int)
+            except ValueError as e:
+                raise ValueError("Could not convert `instance_id` to `int`.") from e
             sdata = SpatialData(labels={by: self.labels[by]}, table=table)
         elif by in self.shapes:
             sdata = SpatialData(shapes={by: self.shapes[by].iloc[table.obs_names].copy()}, table=table)
