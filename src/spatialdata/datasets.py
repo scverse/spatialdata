@@ -24,7 +24,7 @@ from spatialdata.models import (
 
 RNG = default_rng(42)
 
-__all__ = ["blobs", "raccon"]
+__all__ = ["blobs", "raccoon"]
 
 
 def blobs(length: int = 512, n_points: int = 200, n_shapes: int = 5) -> SpatialData:
@@ -49,18 +49,18 @@ def blobs(length: int = 512, n_points: int = 200, n_shapes: int = 5) -> SpatialD
     return BlobsDataset(length=length, n_points=n_points, n_shapes=n_shapes).blobs()
 
 
-def raccon() -> SpatialData:
+def raccoon() -> SpatialData:
     """Raccoon dataset."""
-    return RaccoonDataset().raccon()
+    return RaccoonDataset().raccoon()
 
 
 class RaccoonDataset:
-    """Blobs dataset."""
+    """Raccoon dataset."""
 
     def __init__(self) -> None:
         """Raccoon dataset."""
 
-    def raccon(
+    def raccoon(
         self,
     ) -> SpatialData:
         """Raccoon dataset."""
