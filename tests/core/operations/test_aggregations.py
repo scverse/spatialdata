@@ -6,13 +6,14 @@ import shapely
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from numpy.random import default_rng
+from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel
 
 RNG = default_rng(42)
 
 
-def test_aggregate_points_by_polygons():
+def test_aggregate_points_by_polygons() -> None:
     points = PointsModel.parse(
         pd.DataFrame(
             {
@@ -44,7 +45,7 @@ def test_aggregate_points_by_polygons():
     assert_equal(result_adata, result_adata_implicit)
 
 
-def test_aggregate_polygons_by_polygons():
+def test_aggregate_polygons_by_polygons() -> None:
     cellular = ShapesModel.parse(
         gpd.GeoDataFrame(
             geometry=[
@@ -72,7 +73,7 @@ def test_aggregate_polygons_by_polygons():
         aggregate(subcellular, cellular, agg_func="mean")
 
 
-def test_aggregate_circles_by_polygons():
+def test_aggregate_circles_by_polygons() -> None:
     # Basically the same as above, but not buffering explicitly
     cellular = ShapesModel.parse(
         gpd.GeoDataFrame(
@@ -101,7 +102,7 @@ def test_aggregate_circles_by_polygons():
 
 @pytest.mark.parametrize("image_schema", [Image2DModel])
 @pytest.mark.parametrize("labels_schema", [Labels2DModel])
-def test_aggregate_image_by_labels(blobs, image_schema, labels_schema):
+def test_aggregate_image_by_labels(blobs, image_schema, labels_schema) -> None:
     image = RNG.normal(size=(3,) + blobs.shape)
 
     image = image_schema.parse(image)
@@ -117,3 +118,11 @@ def test_aggregate_image_by_labels(blobs, image_schema, labels_schema):
 
     out = aggregate(image, labels, zone_ids=[1, 2, 3])
     assert len(out) == 3
+
+
+def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
+    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_shapes")
+    assert isinstance(sdata, SpatialData)
+    assert len(sdata.shapes["blobs_shapes"]) == 3
+    assert sdata.table.shape == (3, 2)
+    assert len(sdata.points["points"].compute()) == 300

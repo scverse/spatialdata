@@ -6,7 +6,7 @@ os.environ["USE_PYGEOS"] = "0"
 
 from pathlib import Path
 from typing import Union
-
+from spatialdata._types import ArrayLike
 import numpy as np
 import pandas as pd
 import pytest
@@ -278,6 +278,15 @@ def _get_table(
 
 
 @pytest.fixture()
-def blobs():
+def blobs() -> ArrayLike:
     """Create a 2D labels."""
     return _blobs()
+
+
+@pytest.fixture()
+def sdata_blobs() -> SpatialData:
+    """Create a 2D labels."""
+    from copy import deepcopy
+    from spatialdata.datasets import blobs
+
+    return deepcopy(blobs(256, 300, 3))
