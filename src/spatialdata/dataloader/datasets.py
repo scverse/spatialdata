@@ -163,6 +163,7 @@ class ImageTilesDataset(Dataset):
             assert regions_name in region
         else:
             raise ValueError("region must be a string or a list of strings")
-        table_subset = table[table.obs[region_key] == regions_name]
-        row = table_subset[table_subset.obs[instance_key] == region_index].copy()
+        # TODO: maybe slow, we should check if there is a better way to do this
+        instance = self.sdata[regions_name].iloc[region_index].name
+        row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
         return tile, row
