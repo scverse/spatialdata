@@ -102,19 +102,19 @@ def test_aggregate_circles_by_polygons() -> None:
 
 @pytest.mark.parametrize("image_schema", [Image2DModel])
 @pytest.mark.parametrize("labels_schema", [Labels2DModel])
-def test_aggregate_image_by_labels(blobs, image_schema, labels_schema) -> None:
-    image = RNG.normal(size=(3,) + blobs.shape)
+def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) -> None:
+    image = RNG.normal(size=(3,) + labels_blobs.shape)
 
     image = image_schema.parse(image)
-    labels = labels_schema.parse(blobs)
+    labels = labels_schema.parse(labels_blobs)
 
     out = aggregate(image, labels)
-    assert len(out) + 1 == len(np.unique(blobs))
+    assert len(out) + 1 == len(np.unique(labels_blobs))
     assert isinstance(out, AnnData)
     np.testing.assert_array_equal(out.var_names, [f"channel_{i}_mean" for i in image.coords["c"].values])
 
     out = aggregate(image, labels, agg_func=["mean", "sum", "count"])
-    assert len(out) + 1 == len(np.unique(blobs))
+    assert len(out) + 1 == len(np.unique(labels_blobs))
 
     out = aggregate(image, labels, zone_ids=[1, 2, 3])
     assert len(out) == 3

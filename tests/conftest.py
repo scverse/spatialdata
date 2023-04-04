@@ -28,7 +28,7 @@ from spatialdata.models import (
     TableModel,
 )
 from xarray import DataArray
-from spatialdata.datasets import _blobs
+from spatialdata.datasets import BlobsDataset
 
 RNG = default_rng()
 
@@ -278,9 +278,9 @@ def _get_table(
 
 
 @pytest.fixture()
-def blobs() -> ArrayLike:
+def labels_blobs() -> ArrayLike:
     """Create a 2D labels."""
-    return _blobs()
+    return BlobsDataset()._labels_blobs()
 
 
 @pytest.fixture()
