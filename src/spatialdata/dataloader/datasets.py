@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
+from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -104,7 +105,7 @@ class ImageTilesDataset(Dataset):
     def __len__(self) -> int:
         return self.n_spots
 
-    def __getitem__(self, idx: int) -> tuple[SpatialImage, str, int]:
+    def __getitem__(self, idx: int) -> tuple[SpatialImage, AnnData]:
         if idx >= self.n_spots:
             raise IndexError()
         regions_name, region_index = self._get_region_info_for_index(idx)
@@ -152,4 +153,16 @@ class ImageTilesDataset(Dataset):
         #     max_coordinate=max_coordinate,
         # )
         # sdata_item = self.sdata.query.bounding_box(**request.to_dict())
-        return tile, regions_name, region_index
+        table = self.sdata.table
+        region = table.uns["spatialdata_attrs"]["region"]
+        region_key = table.uns["spatialdata_attrs"]["region_key"]
+        instance_key = table.uns["spatialdata_attrs"]["instance_key"]
+        if isinstance(region, str):
+            assert regions_name == region
+        elif isinstance(region, list):
+            assert regions_name in region
+        else:
+            raise ValueError("region must be a string or a list of strings")
+        table_subset = table[table.obs[region_key] == regions_name]
+        row = table_subset[table_subset.obs[instance_key] == region_index].copy()
+        return tile, row
