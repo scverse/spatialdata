@@ -1,5 +1,5 @@
 """SpatialData datasets."""
-from typing import Any
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -21,8 +21,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-
-RNG = default_rng(42)
 
 __all__ = ["blobs", "raccoon"]
 
@@ -119,8 +117,7 @@ class BlobsDataset:
     def _image_blobs(self, length: int = 512) -> SpatialImage:
         masks = []
         for i in range(3):
-            rng = default_rng(i)
-            mask = self._generate_blobs(rng, length=length)
+            mask = self._generate_blobs(length=length, seed=i)
             mask = (mask - mask.min()) / mask.ptp()
             masks.append(mask)
 
@@ -131,7 +128,7 @@ class BlobsDataset:
         from scipy.ndimage import watershed_ift
 
         # from skimage
-        mask = self._generate_blobs(RNG, length=length)
+        mask = self._generate_blobs(length=length)
         threshold = np.percentile(mask, 100 * (1 - 0.3))
         inputs = np.logical_not(mask < threshold).astype(np.uint8)
         # use wastershed from scipy
@@ -150,9 +147,10 @@ class BlobsDataset:
                 out[out == val[idx]] = i
         return Labels2DModel.parse(out)
 
-    def _generate_blobs(self, rng: Any, length: int = 512) -> ArrayLike:
+    def _generate_blobs(self, length: int = 512, seed: Optional[int] = None) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
 
+        rng = default_rng(42) if seed is None else default_rng(seed)
         # from skimage
         shape = tuple([length] * 2)
         mask = np.zeros(shape)
@@ -163,10 +161,11 @@ class BlobsDataset:
         return mask
 
     def _points_blobs(self, length: int = 512, n_points: int = 200) -> DaskDataFrame:
-        arr = RNG.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
+        rng = default_rng(42)
+        arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
         # randomly assign some values from v to the points
-        points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
-        genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+        genes = rng.choice(["a", "b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
                 "genes": genes,
