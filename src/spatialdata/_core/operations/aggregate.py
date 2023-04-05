@@ -69,10 +69,10 @@ def aggregate(
     AnnData of shape (by.shape[0], values[id_key].nunique())])
 
     Notes
-    -------
-    When aggregation points by shapes, the current implementation loads all the points into 
-    memory and thus could lead to a large memory usage. This Github issue 
-    https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to 
+    -----
+    When aggregation points by shapes, the current implementation loads all the points into
+    memory and thus could lead to a large memory usage. This Github issue
+    https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to
     address this behavior.
     """
     # get schema
@@ -114,7 +114,9 @@ def _aggregate_points_by_shapes(
     if id_key is None:
         id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
         if id_key is None:
-            raise ValueError('FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify FEATURE_KEY for the points.')
+            raise ValueError(
+                "FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify FEATURE_KEY for the points."
+            )
 
     if isinstance(points, ddf.DataFrame):
         points = points.compute()
