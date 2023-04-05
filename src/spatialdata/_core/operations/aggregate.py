@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import anndata as ad
@@ -77,7 +78,7 @@ def aggregate(
         values,
         target_coordinate_system,  # type: ignore[assignment]
     )
-    if not ((by_transform == values_transform) and (values_transform is Identity)):
+    if not (by_transform == values_transform and isinstance(values_transform, Identity)):
         by = transform(by, by_transform)
         values = transform(values, values_transform)
 
@@ -174,8 +175,14 @@ def _aggregate_image_by_labels(
 
     agg_func = [agg_func] if isinstance(agg_func, str) else agg_func
     outs = []
+
     for i, c in enumerate(values.coords["c"].values):
-        out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
+        with warnings.catch_warnings():  # ideally fix upstream
+            warnings.filterwarnings(
+                "ignore",
+                message=".*unknown divisions.*",
+            )
+            out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
         out.columns = [f"channel_{c}_{col}" if col != "zone" else col for col in out.columns]
         out = out.loc[out["zone"] != 0].copy()
         zones: ArrayLike = out["zone"].values
@@ -190,7 +197,7 @@ def _aggregate_image_by_labels(
         assert np.array(index == np.insert(zones, 0, 0)).all(), "Index mismatch between zonal stats and labels."
     return ad.AnnData(
         X,
-        obs=pd.DataFrame(index=zones),
+        obs=pd.DataFrame(index=zones.astype(str)),
         var=pd.DataFrame(index=df.columns),
         dtype=X.dtype,
     )

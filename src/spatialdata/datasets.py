@@ -100,9 +100,8 @@ class BlobsDataset:
         labels = self._labels_blobs(self.length)
         points = self._points_blobs(self.length, self.n_points)
         shapes = self._shapes_blobs(self.length, self.n_shapes)
-
         adata = aggregate(image, labels)
-        adata.obs["region"] = "blobs_labels"
+        adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
         table = TableModel.parse(adata, region="blobs_labels", region_key="region", instance_key="instance_id")
 
@@ -121,7 +120,7 @@ class BlobsDataset:
             mask = (mask - mask.min()) / mask.ptp()
             masks.append(mask)
 
-        return Image2DModel.parse(np.stack(masks, axis=0))
+        return Image2DModel.parse(np.stack(masks, axis=0), dims=["c", "y", "x"])
 
     def _labels_blobs(self, length: int = 512) -> SpatialImage:
         """Create a 2D labels."""
@@ -131,7 +130,7 @@ class BlobsDataset:
         mask = self._generate_blobs(length=length)
         threshold = np.percentile(mask, 100 * (1 - 0.3))
         inputs = np.logical_not(mask < threshold).astype(np.uint8)
-        # use wastershed from scipy
+        # use watershed from scipy
         xm, ym = np.ogrid[0:length:10, 0:length:10]
         markers = np.zeros_like(inputs).astype(np.int16)
         markers[xm, ym] = np.arange(xm.size * ym.size).reshape((xm.size, ym.size))
@@ -145,7 +144,7 @@ class BlobsDataset:
                 out[out == val[idx]] = 0
             else:
                 out[out == val[idx]] = i
-        return Labels2DModel.parse(out)
+        return Labels2DModel.parse(out, dims=["y", "x"])
 
     def _generate_blobs(self, length: int = 512, seed: Optional[int] = None) -> ArrayLike:
         from scipy.ndimage import gaussian_filter

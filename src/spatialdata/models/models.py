@@ -157,7 +157,7 @@ class RasterSchema(DataArraySchema):
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
-        if dims != cls.dims.dims:
+        if tuple(dims) != cls.dims.dims:
             try:
                 if isinstance(data, DataArray):
                     data = data.transpose(*list(cls.dims.dims))
@@ -460,17 +460,10 @@ class PointsModel:
                 assert data[ax].dtype in [np.float32, np.float64, np.int64]
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
-        if cls.ATTRS_KEY in data.attrs:
-            if "feature_key" in data.attrs[cls.ATTRS_KEY]:
-                feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-                if not is_categorical_dtype(data[feature_key]):
-                    logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
-            if "instance_key" in data.attrs[cls.ATTRS_KEY]:
-                instance_key = data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY]
-                if not is_categorical_dtype(data[instance_key]):
-                    logger.info(
-                        f"Instance key `{instance_key}` could be of type `pd.Categorical`. Consider casting it."
-                    )
+        if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
+            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+            if not is_categorical_dtype(data[feature_key]):
+                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
 
     @singledispatchmethod
     @classmethod
