@@ -115,7 +115,8 @@ def _aggregate_points_by_shapes(
         id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
         if id_key is None:
             raise ValueError(
-                "FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify FEATURE_KEY for the points."
+                "FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify "
+                "FEATURE_KEY for the points."
             )
 
     if isinstance(points, ddf.DataFrame):
