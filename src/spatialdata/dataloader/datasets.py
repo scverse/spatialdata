@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 from geopandas import GeoDataFrame
@@ -35,7 +35,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
         # unused at the moment, see
-        # transform: Optional[Callable[[SpatialData], dict[str, SpatialImage]]] = None,
+        transform: Optional[Callable[[Any], Any]] = None,
     ):
         """
         Torch Dataset that returns image tiles around regions from a SpatialData object.
@@ -63,7 +63,7 @@ class ImageTilesDataset(Dataset):
         self.regions_to_images = regions_to_images
         self.tile_dim_in_units = tile_dim_in_units
         self.tile_dim_in_pixels = tile_dim_in_pixels
-        # self.transform = transform
+        self.transform = transform
         self.target_coordinate_system = target_coordinate_system
 
         self.n_spots_dict = self._compute_n_spots_dict()
@@ -137,6 +137,8 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=self.target_coordinate_system,
             target_width=self.tile_dim_in_pixels,
         )
+        if self.transform is not None:
+            tile = self.transform(tile)
 
         # TODO: as explained in the TODO in the __init__(), we want to let the
         #  user also use the bounding box query instaed of the rasterization

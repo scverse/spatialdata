@@ -142,7 +142,7 @@ def _compute_target_dimensions(
     assert isinstance(target_width, float)
     assert target_height is not None
     assert isinstance(target_height, float)
-    return target_width, target_height, target_depth
+    return np.round(target_width), np.round(target_height), np.round(target_depth) if target_depth is not None else None
 
 
 @singledispatch
@@ -216,7 +216,7 @@ def _(
     new_images = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         if element_type in ["points", "shapes"]:
-            warn("Rasterizing points and shapes is not supported yet. Skipping.", stacklevel=2)
+            warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
             continue
         elements = getattr(sdata, element_type)
         for name, element in elements:
