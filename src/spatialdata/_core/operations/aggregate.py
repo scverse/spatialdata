@@ -57,7 +57,7 @@ def aggregate(
         For points, this could be probe intensity.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-        Passed to :func:`pandas.DataFrame.groupby.agg` or from :func:`xrspatial.zonal_stats`
+        Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
         according to the type of `values`.
     target_coordinate_system
         Coordinate system to transform to before aggregating.
@@ -67,6 +67,13 @@ def aggregate(
     Returns
     -------
     AnnData of shape (by.shape[0], values[id_key].nunique())])
+
+    Notes
+    -------
+    When aggregation points by shapes, the current implementation loads all the points into 
+    memory and thus could lead to a large memory usage. This Github issue 
+    https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to 
+    address this behavior.
     """
     # get schema
     by_type = get_model(by)
@@ -88,7 +95,6 @@ def aggregate(
             return _aggregate_points_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
         if values_type is ShapesModel:
             return _aggregate_shapes_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
-        raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
     if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values, by, agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
@@ -107,6 +113,8 @@ def _aggregate_points_by_shapes(
     # Default value for id_key
     if id_key is None:
         id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+        if id_key is None:
+            raise ValueError('FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify FEATURE_KEY for the points.')
 
     if isinstance(points, ddf.DataFrame):
         points = points.compute()
@@ -226,7 +234,7 @@ def _aggregate_shapes(
     value_key
         Column in value dataframe to perform aggregation on.
     agg_func
-        Aggregation functio to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
+        Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
     assert pd.api.types.is_categorical_dtype(value[id_key]), f"{id_key} must be categorical"
 
