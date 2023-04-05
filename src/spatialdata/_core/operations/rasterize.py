@@ -216,7 +216,7 @@ def _(
     new_images = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         if element_type in ["points", "shapes"]:
-            warn("Rasterizing points and shapes is not supported yet. Skipping.")
+            warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
             continue
         elements = getattr(sdata, element_type)
         for name, element in elements:
