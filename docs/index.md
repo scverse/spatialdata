@@ -15,11 +15,11 @@ Infrastructure for spatial omics data in Python.
 
     Find a detailed documentation of ``spatialdata``.
 
-.. card:: Code examples and tutorials
+.. card:: Tutorials
     :link: tutorials/notebooks/notebooks
     :link-type: doc
 
-    Code examples and tutorials for ``spatialdata``.
+    Tutorials for ``spatialdata``.
 
 .. card:: Design document
     :link: design_doc
