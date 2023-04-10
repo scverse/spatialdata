@@ -97,6 +97,8 @@ The transformations that can be defined between elements and coordinate systems 
     set_transformation
     remove_transformation
     get_transformation_between_coordinate_systems
+    get_transformation_between_landmarks
+    align_elements_using_landmarks
 ```
 
 ## DataLoader
