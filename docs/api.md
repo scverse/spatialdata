@@ -112,7 +112,7 @@ The transformations that can be defined between elements and coordinate systems 
     ImageTilesDataset
 ```
 
-## Readers
+## Input/output
 
 ```{eval-rst}
 .. currentmodule:: spatialdata
@@ -121,4 +121,5 @@ The transformations that can be defined between elements and coordinate systems 
     :toctree: generated
 
     read_zarr
+    save_transformations
 ```

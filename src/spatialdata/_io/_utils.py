@@ -275,3 +275,17 @@ def _(data: MultiscaleSpatialImage) -> list[Any]:
     if len(channels) > 1:
         raise ValueError("TODO")
     return list(next(iter(channels)))
+
+
+def save_transformations(sdata: SpatialData) -> None:
+    """
+    Save all the transformations of a SpatialData object to disk.
+
+    sdata
+        The SpatialData object
+    """
+    from spatialdata.transformations import get_transformation, set_transformation
+
+    for element in sdata._gen_elements_values():
+        transformations = get_transformation(element, get_all=True)
+        set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
