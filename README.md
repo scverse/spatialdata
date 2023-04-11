@@ -4,6 +4,8 @@
 -   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/SpatialData.20meetings).
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
 
+<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+
 # spatialdata
 
 [![Tests][badge-tests]][link-tests]
@@ -56,11 +58,3 @@ You can cite the scverse publication as follows:
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
 
-<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
-
-### Remove once contributing docs are in place
-
-link repo to notebok repo:
-
--   git submodule add https://github.com/scverse/spatialdata-notebooks notebooks
--   fetch and pull to update from main directly in the submodule
