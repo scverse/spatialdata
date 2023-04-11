@@ -57,4 +57,3 @@ You can cite the scverse publication as follows:
 [link-docs]: https://spatialdata.scverse.org/en/latest/
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
-
