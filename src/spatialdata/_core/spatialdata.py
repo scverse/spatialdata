@@ -214,6 +214,10 @@ class SpatialData:
         self,
         values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
         by: str,
+        agg_func: str | list[str] = "mean",
+        target_coordinate_system: str = "global",
+        id_key: str | None = None,
+        value_key: str | None = None,
         region_key: str = "region",
         instance_key: str = "instance_id",
         **kwargs: Any,
@@ -227,21 +231,19 @@ class SpatialData:
             Values to aggregate.
         by
             Regions to aggregate by.
-        id_key
-            Key to group observations in `values` by. E.g. this could be transcript id for points.
-            Defaults to `FEATURE_KEY` for points, required for shapes.
-        value_key
-            Key to aggregate values by. This is the key in the values object.
-            If nothing is passed here, assumed to be a column of ones.
-            For points, this could be probe intensity.
         agg_func
             Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-            Passed to :func:`pandas.DataFrame.groupby.agg` or from :func:`xrspatial.zonal_stats`
+            Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
             according to the type of `values`.
         target_coordinate_system
             Coordinate system to transform to before aggregating.
-        region_name
-            Name of the region `by`.
+        id_key
+            Key to group observations in `values` by. E.g. this could be transcript id for points.
+            Defaults to `FEATURE_KEY` for points, required for shapes. Valid for points aggregation.
+        value_key
+            Key to aggregate values by. This is the key in the values object.
+            If nothing is passed here, assumed to be a column of ones.
+            For points, this could be probe intensity. Valid for points aggregation.
         region_key
             Name that will be given to the new region column in the returned aggregated table.
         instance_key
@@ -262,7 +264,15 @@ class SpatialData:
         else:
             raise ValueError(f"Unknown region  `{by}`.")
 
-        adata = aggregate(values, by_, **kwargs)
+        adata = aggregate(
+            values,
+            by_,
+            agg_func=agg_func,
+            target_coordinate_system=target_coordinate_system,
+            id_key=id_key,
+            value_key=value_key,
+            **kwargs,
+        )
         adata.obs[instance_key] = adata.obs_names.copy()
         adata.obs[region_key] = by
         table = TableModel.parse(adata, region=by, region_key=region_key, instance_key=instance_key)

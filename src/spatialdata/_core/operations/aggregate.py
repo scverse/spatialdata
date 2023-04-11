@@ -54,7 +54,7 @@ def aggregate(
     value_key
         Key to aggregate values by. This is the key in the values object.
         If nothing is passed here, assumed to be a column of ones.
-        For points, this could be probe intensity.
+        For points, this could be probe intensity or other continuous annotations.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
@@ -115,8 +115,8 @@ def _aggregate_points_by_shapes(
         id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
         if id_key is None:
             raise ValueError(
-                "FEATURE_KEY is not specified for points, please pass `id_key` to the aggregation call, or specify "
-                "FEATURE_KEY for the points."
+                "`FEATURE_KEY` is not specified for points, please pass `id_key` to the aggregation call, or specify "
+                "`FEATURE_KEY` for the points."
             )
 
     if isinstance(points, ddf.DataFrame):
@@ -244,7 +244,6 @@ def _aggregate_shapes(
     if by.index.name is None:
         by.index.name = "cell"
     by_id_key = by.index.name
-
     joined = by.sjoin(value)
 
     if value_key is None:
@@ -252,7 +251,6 @@ def _aggregate_shapes(
         value_key = "count"
     else:
         point_values = joined[value_key]
-
     to_agg = pd.DataFrame(
         {
             by_id_key: joined.index,
@@ -260,7 +258,6 @@ def _aggregate_shapes(
             value_key: point_values,
         }
     )
-
     aggregated = to_agg.groupby([by_id_key, id_key]).agg(agg_func).reset_index()
     obs_id_categorical = pd.Categorical(aggregated[by_id_key])
 
@@ -271,9 +268,9 @@ def _aggregate_shapes(
         ),
         shape=(len(obs_id_categorical.categories), len(joined[id_key].cat.categories)),
     ).tocsr()
-
     return ad.AnnData(
         X,
         obs=pd.DataFrame(index=obs_id_categorical.categories),
         var=pd.DataFrame(index=joined[id_key].cat.categories),
+        dtype=X.dtype,
     )
