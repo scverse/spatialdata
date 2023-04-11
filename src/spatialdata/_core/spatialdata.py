@@ -243,9 +243,9 @@ class SpatialData:
         region_name
             Name of the region `by`.
         region_key
-            Key to use for the region column in the aggregated table.
+            Name that will be given to the new region column in the returned aggregated table.
         instance_key
-            Key to use for the instance id column in the aggregated table.
+            Name that will be given to the new instance id column in the returned aggregated table.
         kwargs
             Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
