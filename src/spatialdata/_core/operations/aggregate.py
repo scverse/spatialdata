@@ -178,11 +178,11 @@ def _aggregate_image_by_labels(
     AnnData of shape `(by.shape[0], len(agg_func)]`.
     """
     if isinstance(by, MultiscaleSpatialImage):
-        key = next(iter(by))
-        by = by[key]["image"]
+        assert len(by['scale0']) == 1
+        by = next(iter(by['scale0'].values()))
     if isinstance(values, MultiscaleSpatialImage):
-        key = next(iter(values))
-        values = values[key]["image"]
+        assert len(values['scale0']) == 1
+        values = next(iter(values['scale0'].values()))
 
     agg_func = [agg_func] if isinstance(agg_func, str) else agg_func
     outs = []
