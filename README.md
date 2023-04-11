@@ -14,6 +14,8 @@
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
 
+<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+
 ## Getting started
 
 Please refer to the [documentation][link-docs]. In particular, the
@@ -38,6 +40,14 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 > t.b.a
 
+You can cite the scverse publication as follows:
+
+> **The scverse project provides a computational ecosystem for single-cell omics data analysis**
+>
+> Isaac Virshup, Danila Bredikhin, Lukas Heumos, Giovanni Palla, Gregor Sturm, Adam Gayoso, Ilia Kats, Mikaela Koutrouli, Scverse Community, Bonnie Berger, Dana Pe’er, Aviv Regev, Sarah A. Teichmann, Francesca Finotello, F. Alexander Wolf, Nir Yosef, Oliver Stegle & Fabian J. Theis
+>
+> _Nat Biotechnol._ 2022 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).
+
 <!-- Links -->
 
 [scverse-discourse]: https://discourse.scverse.org/
@@ -47,12 +57,3 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 [link-docs]: https://spatialdata.scverse.org/en/latest/
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
-
-<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
-
-### Remove once contributing docs are in place
-
-link repo to notebok repo:
-
--   git submodule add https://github.com/scverse/spatialdata-notebooks notebooks
--   fetch and pull to update from main directly in the submodule
