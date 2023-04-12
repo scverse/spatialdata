@@ -16,6 +16,7 @@ __all__ = [
     "concatenate",
     "rasterize",
     "transform",
+    "aggregate",
     "bounding_box_query",
     "SpatialData",
     "read_zarr",
@@ -26,6 +27,7 @@ __all__ = [
 
 from spatialdata import dataloader, models, transformations
 from spatialdata._core.concatenate import concatenate
+from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.spatial_query import bounding_box_query

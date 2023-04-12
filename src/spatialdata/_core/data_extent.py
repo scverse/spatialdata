@@ -4,7 +4,7 @@ from geopandas import GeoDataFrame
 from shapely import Point
 
 from spatialdata._types import ArrayLike
-from spatialdata.models import get_axis_names
+from spatialdata.models import get_axes_names
 
 
 def _get_bounding_box_of_circle_elements(shapes: GeoDataFrame) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
@@ -22,7 +22,7 @@ def _get_bounding_box_of_circle_elements(shapes: GeoDataFrame) -> tuple[ArrayLik
     circle_element = shapes
     if not isinstance(circle_element.geometry.iloc[0], Point):
         raise NotImplementedError("Only circles (shapely Point) are currently supported (not Polygon or MultiPolygon).")
-    circle_dims = get_axis_names(circle_element)
+    circle_dims = get_axes_names(circle_element)
 
     centroids = []
     for dim_name in circle_dims:

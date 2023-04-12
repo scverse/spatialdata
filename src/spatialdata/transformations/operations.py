@@ -334,15 +334,15 @@ def get_transformation_between_landmarks(
     >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
     """
     from spatialdata import transform
-    from spatialdata.models import get_axis_names
+    from spatialdata.models import get_axes_names
     from spatialdata.transformations.transformations import (
         Affine,
         BaseTransformation,
         Sequence,
     )
 
-    assert get_axis_names(references_coords) == ("x", "y")
-    assert get_axis_names(moving_coords) == ("x", "y")
+    assert get_axes_names(references_coords) == ("x", "y")
+    assert get_axes_names(moving_coords) == ("x", "y")
 
     if isinstance(references_coords, GeoDataFrame):
         references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)

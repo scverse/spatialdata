@@ -15,7 +15,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentShapesFormat
-from spatialdata.models import ShapesModel, get_axis_names
+from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
@@ -57,7 +57,7 @@ def write_shapes(
 ) -> None:
     import numcodecs
 
-    axes = get_axis_names(shapes)
+    axes = get_axes_names(shapes)
     t = _get_transformations(shapes)
 
     shapes_group = group.require_group(name)
