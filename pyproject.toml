@@ -20,7 +20,7 @@ requires-python = ">=3.9"
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
-    "anndata",
+    "anndata>=0.9.1",
     "numpy",
     "xarray",
     "zarr",
