@@ -16,10 +16,11 @@
 
 ## Getting started
 
-Please refer to the [documentation][link-docs]. In particular, the
+Please refer to the [documentation][link-docs]. In particular:
 
 -   [API documentation][link-api].
 -   [Design doc][link-design-doc].
+-   [Example notebooks][link-notebooks].
 
 ## Installation
 
@@ -47,6 +48,7 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 [link-docs]: https://spatialdata.scverse.org/en/latest/
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
+[link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
 
 <img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
 
