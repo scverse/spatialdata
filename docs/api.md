@@ -64,7 +64,7 @@ The elements (building-blocks) that consitute `SpatialData`.
 
     get_model
     SpatialElement
-    get_axis_names
+    get_axes_names
     get_spatial_axes
 ```
 

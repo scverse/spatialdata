@@ -1,15 +1,3 @@
-.wy-side-nav-search {
-    background-color: #eeeeee;
-}
-
-.wy-side-nav-search a {
-    color: black;
-}
-
-div.version {
-    color: black !important;
-}
-
 /* TODO: this is class a dupliace of the code from tutorials/notebooks/_static/css/custom.css; ideally we remove the following code and we import from such path */
 .custom-card {
     border: 1px solid #dfe2e5;
