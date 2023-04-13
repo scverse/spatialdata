@@ -72,7 +72,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
     -------
     The unpadded raster.
     """
-    from spatialdata.models import get_axis_names
+    from spatialdata.models import get_axes_names
     from spatialdata.transformations._utils import compute_coordinates
 
     def _compute_paddings(data: DataArray, axis: str) -> tuple[int, int]:
@@ -102,7 +102,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         right_pad = non_zero[-1] + 1
         return left_pad, right_pad
 
-    axes = get_axis_names(raster)
+    axes = get_axes_names(raster)
     translation_axes = []
     translation_values: list[float] = []
     unpadded = raster

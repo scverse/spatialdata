@@ -103,10 +103,10 @@ def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
 
 @_set_transformations.register(MultiscaleSpatialImage)
 def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
-    from spatialdata.models import get_axis_names
+    from spatialdata.models import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
-    dims = get_axis_names(e)
+    dims = get_axes_names(e)
     from spatialdata.transformations.transformations import Scale, Sequence
 
     i = 0
@@ -201,9 +201,9 @@ def _(data: SpatialImage) -> SpatialImage:
 
 @compute_coordinates.register(MultiscaleSpatialImage)
 def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    from spatialdata.models import get_axis_names
+    from spatialdata.models import get_axes_names
 
-    spatial_coords = [ax for ax in get_axis_names(data) if ax in ["x", "y", "z"]]
+    spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
     out = {}
     for name, dt in data.items():
@@ -217,5 +217,5 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         out[name] = dt[img_name].assign_coords(new_coords)
     msi = MultiscaleSpatialImage.from_dict(d=out)
     # this is to trigger the validation of the dims
-    _ = get_axis_names(msi)
+    _ = get_axes_names(msi)
     return msi
