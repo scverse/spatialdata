@@ -18,10 +18,11 @@
 
 ## Getting started
 
-Please refer to the [documentation][link-docs]. In particular, the
+Please refer to the [documentation][link-docs]. In particular:
 
 -   [API documentation][link-api].
 -   [Design doc][link-design-doc].
+-   [Example notebooks][link-notebooks].
 
 ## Installation
 
@@ -57,3 +58,4 @@ You can cite the scverse publication as follows:
 [link-docs]: https://spatialdata.scverse.org/en/latest/
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
+[link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html

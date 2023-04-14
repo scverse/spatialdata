@@ -64,7 +64,7 @@ The elements (building-blocks) that consitute `SpatialData`.
 
     get_model
     SpatialElement
-    get_axis_names
+    get_axes_names
     get_spatial_axes
 ```
 
@@ -97,6 +97,8 @@ The transformations that can be defined between elements and coordinate systems 
     set_transformation
     remove_transformation
     get_transformation_between_coordinate_systems
+    get_transformation_between_landmarks
+    align_elements_using_landmarks
 ```
 
 ## DataLoader
@@ -110,7 +112,7 @@ The transformations that can be defined between elements and coordinate systems 
     ImageTilesDataset
 ```
 
-## Readers
+## Input/output
 
 ```{eval-rst}
 .. currentmodule:: spatialdata
@@ -119,4 +121,5 @@ The transformations that can be defined between elements and coordinate systems 
     :toctree: generated
 
     read_zarr
+    save_transformations
 ```

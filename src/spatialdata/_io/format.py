@@ -152,7 +152,7 @@ class PointsFormatV01(SpatialDataFormatV01):
 
 
 class TablesFormatV01(SpatialDataFormatV01):
-    """Formatter for tables."""
+    """Formatter for the table."""
 
     @property
     def version(self) -> str:
@@ -165,13 +165,13 @@ class TablesFormatV01(SpatialDataFormatV01):
         instance_key: Optional[str] = None,
     ) -> None:
         if not isinstance(table, AnnData):
-            raise TypeError(f"`tables` must be `anndata.AnnData`, was {type(table)}.")
+            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
         if region_key is not None and not is_categorical_dtype(table.obs[region_key]):
             raise ValueError(
-                f"`tables.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
+                f"`table.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
             )
         if instance_key is not None and table.obs[instance_key].isnull().values.any():
-            raise ValueError("`tables.obs[instance_key]` must not contain null values, but it does.")
+            raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
 
 CurrentRasterFormat = RasterFormatV01
