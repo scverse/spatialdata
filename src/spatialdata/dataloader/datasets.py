@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
-from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
@@ -36,7 +35,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
         # unused at the moment, see
-        transform: Optional[Callable[[Any], Any]] = None,
+        transform: Optional[Callable[[SpatialData], Any]] = None,
     ):
         """
         Torch Dataset that returns image tiles around regions from a SpatialData object.
@@ -105,7 +104,9 @@ class ImageTilesDataset(Dataset):
     def __len__(self) -> int:
         return self.n_spots
 
-    def __getitem__(self, idx: int) -> tuple[SpatialImage, AnnData]:
+    def __getitem__(self, idx: int) -> Any | SpatialData:
+        from spatialdata import SpatialData
+
         if idx >= self.n_spots:
             raise IndexError()
         regions_name, region_index = self._get_region_info_for_index(idx)
@@ -138,9 +139,6 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=self.target_coordinate_system,
             target_width=self.tile_dim_in_pixels,
         )
-        if self.transform is not None:
-            tile = self.transform(tile)
-
         # TODO: as explained in the TODO in the __init__(), we want to let the
         #  user also use the bounding box query instaed of the rasterization
         #  the return function of this function would change, so we need to
@@ -166,4 +164,7 @@ class ImageTilesDataset(Dataset):
         # TODO: maybe slow, we should check if there is a better way to do this
         instance = self.sdata[regions_name].iloc[region_index].name
         row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
-        return tile, row
+        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=row)
+        if self.transform is not None:
+            return self.transform(tile_sdata)
+        return tile_sdata
