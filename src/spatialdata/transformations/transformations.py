@@ -546,6 +546,7 @@ class Affine(BaseTransformation):
                 f"self.input_axews = {self.input_axes}, self.output_axes = {self.output_axes}, "
                 f"input_axes = {input_axes}, output_axes = {output_axes}",
                 UserWarning,
+                stacklevel=2,
             )
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
@@ -797,9 +798,9 @@ def _get_current_output_axes(
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata.models import get_axis_names
+    from spatialdata.models import get_axes_names
 
-    input_axes = get_axis_names(element)
+    input_axes = get_axes_names(element)
     output_axes = _get_current_output_axes(transformation, input_axes)
     matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
     return Affine(matrix, input_axes=input_axes, output_axes=output_axes)

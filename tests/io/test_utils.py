@@ -2,9 +2,12 @@ import os
 import tempfile
 
 import dask.dataframe as dd
-from spatialdata import read_zarr
+import numpy as np
+import pytest
+from spatialdata import read_zarr, save_transformations
 from spatialdata._io._utils import get_backing_files
 from spatialdata._utils import multiscale_spatial_image_from_data_tree
+from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 
 def test_backing_files_points(points):
@@ -76,3 +79,18 @@ def test_backing_files_labels(labels):
         files = get_backing_files(im5)
         expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
+
+
+def test_save_transformations(labels):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "labels0.zarr")
+        scale = Scale([2, 2], axes=("x", "y"))
+        set_transformation(labels.labels["labels2d"], scale)
+        with pytest.raises(ValueError):
+            save_transformations(labels)
+        labels.write(f0)
+        save_transformations(labels)
+        labels0 = read_zarr(f0)
+        scale0 = get_transformation(labels0.labels["labels2d"])
+        assert isinstance(scale0, Scale)
+        assert np.array_equal(scale.scale, scale0.scale)

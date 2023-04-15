@@ -6,7 +6,7 @@ from spatialdata.models._utils import (
     X,
     Y,
     Z,
-    get_axis_names,
+    get_axes_names,
     get_spatial_axes,
     validate_axes,
     validate_axis_name,
@@ -39,5 +39,5 @@ __all__ = [
     "Y",
     "Z",
     "C",
-    "get_axis_names",
+    "get_axes_names",
 ]

@@ -20,7 +20,7 @@ requires-python = ">=3.9"
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
-    "anndata",
+    "anndata>=0.9.1",
     "numpy",
     "xarray",
     "zarr",
@@ -37,7 +37,7 @@ dependencies = [
     "typing_extensions>=4.0.0",
     "dask-image",
     "networkx",
-    "xarray-spatial"
+    "xarray-spatial>=0.3.5",
 ]
 
 [project.optional-dependencies]
@@ -87,12 +87,6 @@ addopts = [
 filterwarnings = [
     #     "ignore:.*U.*mode is deprecated:DeprecationWarning",
 ]
-
-[tool.isort]
-include_trailing_comma = true
-multi_line_output = 3
-profile = "black"
-skip_glob = ["docs/*"]
 
 [tool.black]
 line-length = 120
@@ -182,6 +176,7 @@ target-version = "py39"
     "src/spatialdata/models/models.py" = ["D101", "B026"]
     "src/spatialdata/dataloader/datasets.py" = ["D101"]
     "tests/test_models/test_models.py" = ["NPY002"]
+    "tests/conftest.py"= ["E402"]
 [tool.ruff.pydocstyle]
 convention = "numpy"
 [tool.ruff.pyupgrade]

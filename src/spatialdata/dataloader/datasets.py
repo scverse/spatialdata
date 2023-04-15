@@ -16,7 +16,7 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     ShapesModel,
-    get_axis_names,
+    get_axes_names,
     get_model,
 )
 from spatialdata.transformations.operations import get_transformation
@@ -114,7 +114,7 @@ class ImageTilesDataset(Dataset):
         # TODO: here we just need to compute the centroids,
         #  we probably want to move this functionality to a different file
         if isinstance(regions, GeoDataFrame):
-            dims = get_axis_names(regions)
+            dims = get_axes_names(regions)
             region = regions.iloc[region_index]
             # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
             # it directly

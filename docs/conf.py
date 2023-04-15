@@ -94,6 +94,7 @@ intersphinx_mapping = {
     "geopandas": ("https://geopandas.org/en/stable/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "dask": ("https://docs.dask.org/en/latest/", None),
 }
 
 
@@ -121,8 +122,8 @@ nitpicky = False  # TODO: solve upstream.
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-# html_theme = "sphinx_book_theme"
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"
+# html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_title = project_name
 html_logo = "_static/img/spatialdata_horizontal.png"

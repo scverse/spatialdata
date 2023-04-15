@@ -1,6 +1,12 @@
+# isort: off
+import os
+
+os.environ["USE_PYGEOS"] = "0"
+# isort:on
+
 from pathlib import Path
 from typing import Union
-
+from spatialdata._types import ArrayLike
 import numpy as np
 import pandas as pd
 import pytest
@@ -22,6 +28,7 @@ from spatialdata.models import (
     TableModel,
 )
 from xarray import DataArray
+from spatialdata.datasets import BlobsDataset
 
 RNG = default_rng()
 
@@ -268,3 +275,18 @@ def _get_table(
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+
+
+@pytest.fixture()
+def labels_blobs() -> ArrayLike:
+    """Create a 2D labels."""
+    return BlobsDataset()._labels_blobs()
+
+
+@pytest.fixture()
+def sdata_blobs() -> SpatialData:
+    """Create a 2D labels."""
+    from copy import deepcopy
+    from spatialdata.datasets import blobs
+
+    return deepcopy(blobs(256, 300, 3))

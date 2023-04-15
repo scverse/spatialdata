@@ -20,7 +20,7 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     SpatialElement,
-    get_axis_names,
+    get_axes_names,
     get_model,
 )
 from spatialdata.models._utils import get_spatial_axes
@@ -215,7 +215,7 @@ def _(
     new_images = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         if element_type in ["points", "shapes"]:
-            warn("Rasterizing points and shapes is not supported yet. Skipping.")
+            warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
             continue
         elements = getattr(sdata, element_type)
         for name, element in elements:
@@ -436,7 +436,7 @@ def _(
         ]
         + extra
     )
-    dims = get_axis_names(data)
+    dims = get_axes_names(data)
     matrix = sequence.to_affine_matrix(input_axes=target_axes, output_axes=dims)
 
     # get output shape
@@ -462,25 +462,8 @@ def _(
         xdata.data,
         matrix=matrix,
         output_shape=output_shape,
-        # output_chunks=xdata.data.chunks,
         **kwargs,
     )
-    # ##
-    # # debug code
-    # crop = xdata.sel(
-    #     {
-    #         "x": slice(min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]),
-    #         "y": slice(min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]),
-    #     }
-    # )
-    # import matplotlib.pyplot as plt
-    # plt.figure(figsize=(20, 10))
-    # plt.subplot(1, 2, 1)
-    # plt.imshow(crop.transpose("y", "x", "c").data)
-    # plt.subplot(1, 2, 2)
-    # plt.imshow(DataArray(transformed_dask, dims=xdata.dims).transpose("y", "x", "c").data)
-    # plt.show()
-    # ##
     assert isinstance(transformed_dask, DaskArray)
     transformed_data = schema.parse(transformed_dask, dims=xdata.dims)  # type: ignore[call-arg,arg-type]
     if target_coordinate_system != "global":
