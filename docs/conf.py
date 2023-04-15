@@ -108,6 +108,7 @@ exclude_patterns = [
     "tutorials/notebooks/index.md",
     "tutorials/notebooks/README.md",
     "tutorials/notebooks/references.md",
+    "tutorials/notebooks/notebooks/paper_reproducibility/*",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.

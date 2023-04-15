@@ -67,7 +67,7 @@ class RaccoonDataset:
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
         labels = Labels2DModel.parse(labels_data, dims=["y", "x"])
         coords = np.array([[610, 450], [730, 325], [575, 300], [480, 90]])
-        circles = ShapesModel.parse(coords, geometry=0, radius=np.array([30, 30, 30, 80]))
+        circles = ShapesModel.parse(coords, geometry=0, radius=np.array([30, 30, 30, 50]))
         return SpatialData(images={"raccoon": im}, labels={"segmentation": labels}, shapes={"circles": circles})
 
 

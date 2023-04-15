@@ -16,10 +16,16 @@ Infrastructure for spatial omics data in Python.
     Find a detailed documentation of ``spatialdata``.
 
 .. card:: Tutorials
-    :link: tutorials/notebooks/index
+    :link: tutorials/notebooks/notebooks
     :link-type: doc
 
     Tutorials for ``spatialdata``.
+
+.. card:: Datasets
+    :link: tutorials/notebooks/datasets/README
+    :link-type: doc
+
+    NGFF datasets hosted in the cloud.
 
 .. card:: Design document
     :link: design_doc
@@ -41,7 +47,8 @@ Infrastructure for spatial omics data in Python.
 
 installation.md
 api.md
-tutorials/notebooks/index.md
+tutorials/notebooks/notebooks.md
+tutorials/notebooks/datasets/README.md
 design_doc.md
 contributing.md
 changelog.md
