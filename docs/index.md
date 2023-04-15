@@ -16,7 +16,7 @@ Infrastructure for spatial omics data in Python.
     Find a detailed documentation of ``spatialdata``.
 
 .. card:: Tutorials
-    :link: tutorials/notebooks/notebooks
+    :link: tutorials/notebooks/index
     :link-type: doc
 
     Tutorials for ``spatialdata``.
@@ -41,7 +41,7 @@ Infrastructure for spatial omics data in Python.
 
 installation.md
 api.md
-tutorials/notebooks/notebooks.md
+tutorials/notebooks/index.md
 design_doc.md
 contributing.md
 changelog.md
