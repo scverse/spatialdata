@@ -218,9 +218,9 @@ def _(
             warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
             continue
         elements = getattr(sdata, element_type)
-        for name, element in elements:
+        for name, element in elements.items():
             rasterized = rasterize(
-                data=element,
+                element,
                 axes=axes,
                 min_coordinate=min_coordinate,
                 max_coordinate=max_coordinate,
