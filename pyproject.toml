@@ -15,8 +15,10 @@ maintainers = [
 urls.Documentation = "https://spatialdata.readthedocs.io/"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-version = "0.0.1.dev1"
 requires-python = ">=3.9"
+dynamic= [
+  "version" # allow version to be set by git tags
+]
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
@@ -114,6 +116,12 @@ formats = "ipynb,md"
 
 [tool.hatch.build.targets.wheel]
 packages = ['src/spatialdata']
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
