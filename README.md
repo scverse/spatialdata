@@ -26,10 +26,10 @@ Please refer to the [documentation][link-docs]. In particular:
 
 ## Installation
 
-Check out the docs for more complete installation instructions. For now you can install `spatialdata` with:
+Check out the docs for more complete installation instructions. To get started with the "batteries included" installation, you can install via pip:
 
 ```bash
-pip install git+https://github.com/scverse/spatialdata.git@main
+pip install "spatialdata[extra]"
 ```
 
 ## Contact
@@ -41,13 +41,6 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 > t.b.a
 
-You can cite the scverse publication as follows:
-
-> **The scverse project provides a computational ecosystem for single-cell omics data analysis**
->
-> Isaac Virshup, Danila Bredikhin, Lukas Heumos, Giovanni Palla, Gregor Sturm, Adam Gayoso, Ilia Kats, Mikaela Koutrouli, Scverse Community, Bonnie Berger, Dana Pe’er, Aviv Regev, Sarah A. Teichmann, Francesca Finotello, F. Alexander Wolf, Nir Yosef, Oliver Stegle & Fabian J. Theis
->
-> _Nat Biotechnol._ 2022 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).
 
 <!-- Links -->
 
