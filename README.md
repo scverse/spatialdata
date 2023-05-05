@@ -14,7 +14,7 @@
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
 
-<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+<img src='https://user-images.githubusercontent.com/1120672/236395765-2a4fc420-c7fb-4937-8a54-5036adc87760.png'/>
 
 ## Getting started
 
