@@ -41,7 +41,6 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 > t.b.a
 
-
 <!-- Links -->
 
 [scverse-discourse]: https://discourse.scverse.org/
