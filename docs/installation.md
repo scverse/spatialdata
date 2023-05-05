@@ -21,7 +21,7 @@ The SpatialData ecosystem is designed to work with the following packages:
 They can be installed with:
 
 ```bash
-pip install spatialdata[extra]
+pip install "spatialdata[extra]"
 ```
 
 ## Additional dependencies
@@ -29,7 +29,7 @@ pip install spatialdata[extra]
 To use the dataloader in `spatialdata`, torch needs to be installed. This can be done with:
 
 ```bash
-pip install spatialdata[torch]
+pip install "spatialdata[torch]"
 ```
 
 ## Development version
