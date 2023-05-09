@@ -246,6 +246,10 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame) -> DaskDataFrame:
     ddf["y"] = gdf.geometry.y
     # parse
     if "z" in ddf.columns:
+        logger.warning(
+            "Constructing the Dask DataFrame using the x and y coordinates from the geometry and the z from an "
+            "additional column."
+        )
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
     else:
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})

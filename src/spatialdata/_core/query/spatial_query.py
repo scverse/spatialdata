@@ -7,12 +7,14 @@ from typing import Any, Callable, Optional, Union
 
 import dask.array as da
 import numpy as np
+import pandas as pd
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import Polygon
 from spatial_image import SpatialImage
+from tqdm import tqdm
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
@@ -635,3 +637,127 @@ def _(
     if len(queried) == 0:
         return None
     return queried
+
+
+def _polygon_query(
+    sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, shapes: bool, points: bool
+) -> SpatialData:
+    from spatialdata.models import PointsModel, points_dask_dataframe_to_geopandas, points_geopandas_to_dask_dataframe
+    from spatialdata.transformations import get_transformation, set_transformation
+
+    new_shapes = {}
+    if shapes:
+        for shapes_name, s in sdata.shapes.items():
+            if "__old_index" in s.columns:
+                assert np.all(s["__old_index"] == s.index)
+            else:
+                s["__old_index"] = s.index
+            indices = s.geometry.apply(lambda x: x.intersects(polygon))
+            if np.sum(indices) == 0:
+                raise ValueError("we expect at least one shape")
+            queried_shapes = s[indices]
+            queried_shapes.index = queried_shapes["__old_index"]
+            queried_shapes.index.name = None
+            del s["__old_index"]
+            del queried_shapes["__old_index"]
+            transformation = get_transformation(s, target_coordinate_system)
+            queried_shapes = ShapesModel.parse(queried_shapes)
+            set_transformation(queried_shapes, transformation, target_coordinate_system)
+            new_shapes[shapes_name] = queried_shapes
+
+    new_points = {}
+    if points:
+        for points_name, p in sdata.points.items():
+            points_gdf = points_dask_dataframe_to_geopandas(p)
+            indices = points_gdf.geometry.intersects(polygon)
+            if np.sum(indices) == 0:
+                raise ValueError("we expect at least one point")
+            queried_points = points_gdf[indices]
+            ddf = points_geopandas_to_dask_dataframe(queried_points)
+            transformation = get_transformation(p, target_coordinate_system)
+            ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+            set_transformation(ddf, transformation, target_coordinate_system)
+            new_points[points_name] = ddf
+
+    return SpatialData(shapes=new_shapes, points=new_points, table=sdata.table)
+
+
+# this function is currently excluded from the API documentation. TODO: add it after the refactoring
+def polygon_query(
+    sdata: SpatialData,
+    polygons: Union[Polygon, list[Polygon]],
+    target_coordinate_system: str,
+    shapes: bool = True,
+    points: bool = True,
+) -> SpatialData:
+    """
+    Query a spatial data object by a polygon, filtering shapes and points.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to query
+    polygon
+        The polygon (or list of polygons) to query by
+    target_coordinate_system
+        The coordinate system of the polygon
+    shapes
+        Whether to filter shapes
+    points
+        Whether to filter points
+    Returns
+    -------
+    The queried SpatialData object with filtered shapes and points.
+
+    Notes
+    -----
+    This function will be refactored to be more general.
+    The table is not filtered by this function, but is passed as is, this will also changed during the refactoring
+    making this function more general and ergonomic.
+
+    """
+    if isinstance(polygons, Polygon):
+        polygons = [polygons]
+
+    if len(polygons) == 1:
+        return _polygon_query(
+            sdata=sdata,
+            polygon=polygons[0],
+            target_coordinate_system=target_coordinate_system,
+            shapes=shapes,
+            points=points,
+        )
+    # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
+    #  in a loop as done preliminarily here
+    if points:
+        raise NotImplementedError(
+            "points=True is not implemented when querying by multiple polygons. If you encounter this error, please"
+            " open an issue on GitHub and we will prioritize the implementation."
+        )
+    sdatas = []
+    for polygon in tqdm(polygons):
+        try:
+            queried_sdata = _polygon_query(
+                sdata=sdata,
+                polygon=polygon,
+                target_coordinate_system=target_coordinate_system,
+                shapes=shapes,
+                points=points,
+            )
+            sdatas.append(queried_sdata)
+        except ValueError as e:
+            if str(e) != "we expect at least one shape":
+                raise e
+            # print("skipping", end="")
+    geodataframe_pieces: dict[str, GeoDataFrame] = {}
+
+    for sdata in sdatas:
+        for shapes_name, shapes in sdata.shapes.items():
+            if shapes_name not in geodataframe_pieces:
+                geodataframe_pieces[shapes_name] = []
+            geodataframe_pieces[shapes_name].append(shapes)
+
+    geodataframes = {}
+    for k, v in geodataframe_pieces.items():
+        geodataframes[k] = pd.concat(v)
+    return SpatialData(shapes=geodataframes, table=sdatas[0].table)
