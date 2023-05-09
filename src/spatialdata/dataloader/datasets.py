@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
@@ -116,9 +117,18 @@ class ImageTilesDataset(Dataset):
         if isinstance(regions, GeoDataFrame):
             dims = get_axes_names(regions)
             region = regions.iloc[region_index]
-            # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
-            # it directly
-            centroid = np.atleast_2d(region.geometry.coords._coords[0])
+            shape = regions.geometry.iloc[0]
+            if isinstance(shape, Polygon):
+                centroid = np.atleast_2d(region.geometry.centroid.coords._coords[0])
+            elif isinstance(shape, MultiPolygon):
+                raise NotImplementedError("MultiPolygon not supported yet")
+            elif isinstance(shape, Point):
+                # the function coords.xy is just accessing _coords, and wrapping it with extra information,
+                # so we access it directly
+                centroid = np.atleast_2d(region.geometry.coords._coords[0])
+            else:
+                raise RuntimeError(f"Unsupported type: {type(shape)}")
+
             t = get_transformation(regions, self.target_coordinate_system)
             assert isinstance(t, BaseTransformation)
             aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
