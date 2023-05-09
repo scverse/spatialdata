@@ -8,6 +8,8 @@ from spatialdata.models._utils import (
     Z,
     get_axes_names,
     get_spatial_axes,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
     validate_axes,
     validate_axis_name,
 )
@@ -40,4 +42,6 @@ __all__ = [
     "Z",
     "C",
     "get_axes_names",
+    "points_geopandas_to_dask_dataframe",
+    "points_dask_dataframe_to_geopandas",
 ]
