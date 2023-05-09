@@ -1,5 +1,10 @@
 # SpatialData
 
+```{eval-rst}
+.. note::
+   This library is currently under review. We expect to make changes as the community provides feedback.
+```
+
 Infrastructure for spatial omics data in Python.
 
 ```{eval-rst}

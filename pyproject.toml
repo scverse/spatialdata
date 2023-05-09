@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 
 
 [project]
@@ -15,8 +15,10 @@ maintainers = [
 urls.Documentation = "https://spatialdata.readthedocs.io/"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-version = "0.0.1.dev1"
 requires-python = ">=3.9"
+dynamic= [
+  "version" # allow version to be set by git tags
+]
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
@@ -24,8 +26,7 @@ dependencies = [
     "numpy",
     "xarray",
     "zarr",
-#    "ome_zarr",
-    "ome_zarr@git+https://github.com/ome/ome-zarr-py.git",
+    "ome_zarr>=0.7.0",
     "spatial_image>=0.3.0",
     "multiscale_spatial_image>=0.11.2",
     "xarray-schema",
@@ -111,6 +112,15 @@ exclude = '''
 
 [tool.jupytext]
 formats = "ipynb,md"
+
+[tool.hatch.build.targets.wheel]
+packages = ['src/spatialdata']
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true

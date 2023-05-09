@@ -1,6 +1,6 @@
-# Work in progress ⚠
+# In review ⚠
 
--   **The library is not ready.** We aim at a beta release in the following months. If interested in a demo/early beta, please reach out to us.
+-   **The library is currently under review.** We expect there to be changes as the community provides feedback.
 -   To get involved in the discussion you are welcome to join our Zulip workspace and/or our community meetings every second week; [more info here](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/SpatialData.20meetings).
 -   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
 
@@ -11,10 +11,7 @@
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 [![DOI](https://zenodo.org/badge/487366481.svg)](https://zenodo.org/badge/latestdoi/487366481)
 
-[badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
-[link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
-
-<img src='https://github.com/giovp/spatialdata-sandbox/raw/main/graphics/overview.png'/>
+<img src='https://user-images.githubusercontent.com/1120672/236395765-2a4fc420-c7fb-4937-8a54-5036adc87760.png'/>
 
 ## Getting started
 
@@ -26,10 +23,10 @@ Please refer to the [documentation][link-docs]. In particular:
 
 ## Installation
 
-Check out the docs for more complete installation instructions. For now you can install `spatialdata` with:
+Check out the docs for more complete installation instructions. To get started with the "batteries included" installation, you can install via pip:
 
 ```bash
-pip install git+https://github.com/scverse/spatialdata.git@main
+pip install "spatialdata[extra]"
 ```
 
 ## Contact
@@ -39,15 +36,7 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 ## Citation
 
-> t.b.a
-
-You can cite the scverse publication as follows:
-
-> **The scverse project provides a computational ecosystem for single-cell omics data analysis**
->
-> Isaac Virshup, Danila Bredikhin, Lukas Heumos, Giovanni Palla, Gregor Sturm, Adam Gayoso, Ilia Kats, Mikaela Koutrouli, Scverse Community, Bonnie Berger, Dana Pe’er, Aviv Regev, Sarah A. Teichmann, Francesca Finotello, F. Alexander Wolf, Nir Yosef, Oliver Stegle & Fabian J. Theis
->
-> _Nat Biotechnol._ 2022 Apr 10. doi: [10.1038/s41587-023-01733-8](https://doi.org/10.1038/s41587-023-01733-8).
+[L Marconato*, G Palla*, KA Yamauchi*, I Virshup*, E Heidari, T Treis, M Toth, R Shrestha, H Vöhringer, W Huber, M Gerstung, J Moore, FJ Theis, O Stegle, bioRxiv, 2023](https://www.biorxiv.org/content/10.1101/2023.05.05.539647v1). \* = equal contribution
 
 <!-- Links -->
 
@@ -59,3 +48,5 @@ You can cite the scverse publication as follows:
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
 [link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
+[badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test_and_deploy.yaml/badge.svg
+[link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test_and_deplot.yaml
