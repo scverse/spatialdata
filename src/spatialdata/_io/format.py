@@ -55,7 +55,7 @@ class RasterFormatV01(SpatialDataFormatV01):
         for transformations in coordinate_transformations:
             assert isinstance(transformations, list)
             types = [t.get("type", None) for t in transformations]
-            if any([t is None for t in types]):
+            if any(t is None for t in types):
                 raise ValueError("Missing type in: %s" % transformations)
 
             # new validation
