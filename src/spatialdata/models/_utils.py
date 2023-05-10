@@ -3,12 +3,15 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import Any, Optional, Union
 
+import dask.dataframe as dd
+import geopandas
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
@@ -185,3 +188,69 @@ def _validate_dims(dims: tuple[str, ...]) -> None:
             raise ValueError(f"Invalid dimension: {c}")
     if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
         raise ValueError(f"Invalid dimensions: {dims}")
+
+
+def points_dask_dataframe_to_geopandas(points: DaskDataFrame) -> GeoDataFrame:
+    """
+    Convert a Dask DataFrame to a GeoDataFrame.
+
+    Parameters
+    ----------
+    points
+        Dask DataFrame with columns "x" and "y". Eventually, it can contain a column "z" that will be not included in
+        the geometry column.
+
+    Returns
+    -------
+    The GeoDataFrame with the geometry column constructed from the "x" and "y" columns and, if present, the rest of the
+    columns.
+
+    Notes
+    -----
+    The "z" column is not included in the geometry column because it is not supported by GeoPandas.
+    The resulting GeoDataFrame does not currenlty passes the validation of the SpatialData models. In fact currently
+    points need to be saved as a Dask DataFrame. We will be restructuring the models to allow for GeoDataFrames soon.
+
+    """
+    if "z" in points.columns:
+        logger.warning("Constructing the GeoDataFrame without considering the z coordinate in the geometry.")
+
+    points_gdf = GeoDataFrame(geometry=geopandas.points_from_xy(points["x"], points["y"]))
+    for c in points.columns:
+        points_gdf[c] = points[c]
+    return points_gdf
+
+
+def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame) -> DaskDataFrame:
+    """
+    Convert a GeoDataFrame which represents 2D or 3D points to a Dask DataFrame that passes the schema validation.
+
+    Parameters
+    ----------
+    gdf
+        GeoDataFrame with a geometry column that contains 2D or 3D points.
+
+    Returns
+    -------
+    The Dask DataFrame converted from the GeoDataFrame. The Dask DataFrame passes the schema validation.
+
+    Notes
+    -----
+    The returned Dask DataFrame gets the 'x' and 'y' columns from the geometry column, and eventually the 'z' column
+    (and the rest of the columns), from the remaining columns of the GeoDataFrame.
+    """
+    from spatialdata.models import PointsModel
+
+    ddf = dd.from_pandas(gdf[gdf.columns.drop("geometry")], npartitions=1)
+    ddf["x"] = gdf.geometry.x
+    ddf["y"] = gdf.geometry.y
+    # parse
+    if "z" in ddf.columns:
+        logger.warning(
+            "Constructing the Dask DataFrame using the x and y coordinates from the geometry and the z from an "
+            "additional column."
+        )
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+    else:
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+    return ddf
