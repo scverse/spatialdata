@@ -15,6 +15,7 @@ from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations.transform import transform
+from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -70,6 +71,9 @@ def aggregate(
 
     Notes
     -----
+    This function returns an AnnData object. Use :func:`spatialdata.SpatialData.aggregate` to return a `SpatialData`
+    object instead (with the table already referring to the regions passed in `by`).
+
     When aggregation points by shapes, the current implementation loads all the points into
     memory and thus could lead to a large memory usage. This Github issue
     https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to
@@ -134,15 +138,6 @@ def _aggregate_shapes_by_shapes(
     value_key: str | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
-    def circles_to_polygons(df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        # We should only be buffering points, not polygons. Unfortunately this is an expensive check.
-        values_geotypes = list(values.geom_type.unique())
-        if values_geotypes == ["Point"]:
-            df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY]))
-        elif "Point" in values_geotypes:
-            raise TypeError("Geometry contained shapes and polygons.")
-        return df
-
     if id_key is None:
         raise ValueError("Must pass id_key for shapes.")
 

@@ -642,25 +642,34 @@ def _(
 def _polygon_query(
     sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, shapes: bool, points: bool
 ) -> SpatialData:
-    from spatialdata.models import PointsModel, points_dask_dataframe_to_geopandas, points_geopandas_to_dask_dataframe
+    from spatialdata._core.query._utils import circles_to_polygons
+    from spatialdata.models import (
+        PointsModel,
+        ShapesModel,
+        points_dask_dataframe_to_geopandas,
+        points_geopandas_to_dask_dataframe,
+    )
     from spatialdata.transformations import get_transformation, set_transformation
 
     new_shapes = {}
     if shapes:
         for shapes_name, s in sdata.shapes.items():
-            if "__old_index" in s.columns:
-                assert np.all(s["__old_index"] == s.index)
+            buffered = circles_to_polygons(s) if ShapesModel.RADIUS_KEY in s.columns else s
+
+            if "__old_index" in buffered.columns:
+                assert np.all(s["__old_index"] == buffered.index)
             else:
-                s["__old_index"] = s.index
-            indices = s.geometry.apply(lambda x: x.intersects(polygon))
+                buffered["__old_index"] = buffered.index
+            indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
             if np.sum(indices) == 0:
                 raise ValueError("we expect at least one shape")
             queried_shapes = s[indices]
-            queried_shapes.index = queried_shapes["__old_index"]
+            queried_shapes.index = buffered[indices]["__old_index"]
             queried_shapes.index.name = None
-            del s["__old_index"]
-            del queried_shapes["__old_index"]
-            transformation = get_transformation(s, target_coordinate_system)
+            del buffered["__old_index"]
+            if "__old_index" in queried_shapes.columns:
+                del queried_shapes["__old_index"]
+            transformation = get_transformation(buffered, target_coordinate_system)
             queried_shapes = ShapesModel.parse(queried_shapes)
             set_transformation(queried_shapes, transformation, target_coordinate_system)
             new_shapes[shapes_name] = queried_shapes
@@ -675,7 +684,10 @@ def _polygon_query(
             queried_points = points_gdf[indices]
             ddf = points_geopandas_to_dask_dataframe(queried_points)
             transformation = get_transformation(p, target_coordinate_system)
-            ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+            if "z" in ddf.columns:
+                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+            else:
+                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
             set_transformation(ddf, transformation, target_coordinate_system)
             new_points[points_name] = ddf
 
@@ -759,5 +771,7 @@ def polygon_query(
 
     geodataframes = {}
     for k, v in geodataframe_pieces.items():
-        geodataframes[k] = pd.concat(v)
+        vv = pd.concat(v)
+        vv = vv[~vv.index.duplicated(keep="first")]
+        geodataframes[k] = vv
     return SpatialData(shapes=geodataframes, table=sdatas[0].table)
