@@ -22,13 +22,8 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
-    Labels2DModel,
-    Labels3DModel,
-    ShapesModel,
     SpatialElement,
-    TableModel,
     get_axes_names,
-    get_model,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.transformations._utils import compute_coordinates
@@ -305,6 +300,7 @@ def _(
     filter_table: bool = True,
 ) -> SpatialData:
     from spatialdata import SpatialData
+    from spatialdata._core.query.relational_query import _filter_table_by_elements
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -321,32 +317,7 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    if filter_table and sdata.table is not None:
-        to_keep = np.array([False] * len(sdata.table))
-        region_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-        instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-        for _, elements in new_elements.items():
-            for name, element in elements.items():
-                if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
-                    if isinstance(element, SpatialImage):
-                        # get unique labels value (including 0 if present)
-                        instances = da.unique(element.data).compute()
-                    else:
-                        assert isinstance(element, MultiscaleSpatialImage)
-                        v = element["scale0"].values()
-                        assert len(v) == 1
-                        xdata = next(iter(v))
-                        instances = da.unique(xdata.data).compute()
-                elif get_model(element) == ShapesModel:
-                    instances = element.index.to_numpy()
-                else:
-                    continue
-                indices = (sdata.table.obs[region_key] == name) & (sdata.table.obs[instance_key].isin(instances))
-                to_keep = to_keep | indices
-        table = sdata.table[to_keep, :].copy()
-        table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
-    else:
-        table = sdata.table
+    table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
     return SpatialData(**new_elements, table=table)
 
 
@@ -640,9 +611,10 @@ def _(
 
 
 def _polygon_query(
-    sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, shapes: bool, points: bool
+    sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, filter_table: bool, shapes: bool, points: bool
 ) -> SpatialData:
     from spatialdata._core.query._utils import circles_to_polygons
+    from spatialdata._core.query.relational_query import _filter_table_by_elements
     from spatialdata.models import (
         PointsModel,
         ShapesModel,
@@ -691,7 +663,11 @@ def _polygon_query(
             set_transformation(ddf, transformation, target_coordinate_system)
             new_points[points_name] = ddf
 
-    return SpatialData(shapes=new_shapes, points=new_points, table=sdata.table)
+    if filter_table:
+        table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
+    else:
+        table = sdata.table
+    return SpatialData(shapes=new_shapes, points=new_points, table=table)
 
 
 # this function is currently excluded from the API documentation. TODO: add it after the refactoring
@@ -699,6 +675,7 @@ def polygon_query(
     sdata: SpatialData,
     polygons: Union[Polygon, list[Polygon]],
     target_coordinate_system: str,
+    filter_table: bool = True,
     shapes: bool = True,
     points: bool = True,
 ) -> SpatialData:
@@ -728,6 +705,8 @@ def polygon_query(
     making this function more general and ergonomic.
 
     """
+    from spatialdata._core.query.relational_query import _filter_table_by_elements
+
     if isinstance(polygons, Polygon):
         polygons = [polygons]
 
@@ -736,6 +715,7 @@ def polygon_query(
             sdata=sdata,
             polygon=polygons[0],
             target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
             shapes=shapes,
             points=points,
         )
@@ -749,10 +729,12 @@ def polygon_query(
     sdatas = []
     for polygon in tqdm(polygons):
         try:
+            # not filtering now, we filter below
             queried_sdata = _polygon_query(
                 sdata=sdata,
                 polygon=polygon,
                 target_coordinate_system=target_coordinate_system,
+                filter_table=False,
                 shapes=shapes,
                 points=points,
             )
@@ -761,7 +743,7 @@ def polygon_query(
             if str(e) != "we expect at least one shape":
                 raise e
             # print("skipping", end="")
-    geodataframe_pieces: dict[str, GeoDataFrame] = {}
+    geodataframe_pieces: dict[str, list[GeoDataFrame]] = {}
 
     for sdata in sdatas:
         for shapes_name, shapes in sdata.shapes.items():
@@ -774,4 +756,7 @@ def polygon_query(
         vv = pd.concat(v)
         vv = vv[~vv.index.duplicated(keep="first")]
         geodataframes[k] = vv
-    return SpatialData(shapes=geodataframes, table=sdatas[0].table)
+
+    table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
+
+    return SpatialData(shapes=geodataframes, table=table)

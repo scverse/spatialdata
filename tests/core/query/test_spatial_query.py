@@ -34,9 +34,10 @@ from spatialdata.transformations.operations import (
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
     """Helper function to make a Points element."""
-    return PointsModel.parse(
-        coordinates, annotation=pd.DataFrame({"genes": np.repeat("a", len(coordinates))}), feature_key="genes"
-    )
+    k0 = int(len(coordinates) / 3)
+    k1 = len(coordinates) - k0
+    genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))
+    return PointsModel.parse(coordinates, annotation=pd.DataFrame({"genes": genes}), feature_key="genes")
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:
@@ -459,6 +460,16 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
         sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
         plt.show()
         ##
+
+    # generate table
+    x = np.ones((21, 2)) * np.array([1, 2])
+    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    instance_id = np.array(list(range(9)) + list(range(12)))
+    table = AnnData(x, obs=pd.DataFrame({"region": region, "instance_id": instance_id}))
+    table = TableModel.parse(
+        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+    )
+    sdata.table = table
     return sdata
 
 
@@ -468,6 +479,7 @@ def test_polygon_query_points():
     queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
     points = queried["points"].compute()
     assert len(points) == 6
+    assert len(queried.table) == 0
 
     # TODO: the case of querying points with multiple polygons is not currently implemented
 
@@ -475,7 +487,8 @@ def test_polygon_query_points():
 def test_polygon_query_shapes():
     sdata = _make_sdata_for_testing_querying_and_aggretation()
     values_sdata = SpatialData(
-        shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]}
+        shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
+        table=sdata.table,
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -486,18 +499,21 @@ def test_polygon_query_shapes():
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
 
     queried = polygon_query(
         values_sdata, polygons=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
     )
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
+    assert len(queried.table) == 16
 
     queried = polygon_query(
         values_sdata, polygons=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
 
     PLOT = False
     if PLOT:
@@ -516,7 +532,22 @@ def test_polygon_query_shapes():
 
 
 def test_polygon_query_spatial_data():
-    pass
+    sdata = _make_sdata_for_testing_querying_and_aggretation()
+    values_sdata = SpatialData(
+        shapes={
+            "values_polygons": sdata["values_polygons"],
+            "values_circles": sdata["values_circles"],
+        },
+        points={"points": sdata["points"]},
+        table=sdata.table,
+    )
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    queried = polygon_query(values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=True)
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried["points"]) == 6
+    assert len(queried.table) == 8
+    # TODO: when the query is implemented also for images and labels, update this test by adding those cases
 
 
 # def test_polygon_query_filter_table():

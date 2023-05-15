@@ -587,6 +587,7 @@ class SpatialData:
         -------
         The filtered SpatialData.
         """
+        from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
         from spatialdata.transformations.operations import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
@@ -604,10 +605,7 @@ class SpatialData:
                     element_paths_in_coordinate_system.append(element_name)
 
         if filter_table:
-            table_mapping_metadata = self.table.uns[TableModel.ATTRS_KEY]
-            region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
-            table = self.table[self.table.obs[region_key].isin(element_paths_in_coordinate_system)].copy()
-            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
+            table = _filter_table_by_coordinate_system(self.table, element_paths_in_coordinate_system)
         else:
             table = self.table
 
