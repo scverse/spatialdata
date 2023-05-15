@@ -655,8 +655,8 @@ class NgffAffine(NgffBaseTransformation):
         """
         from spatialdata.models import C, X, Y, Z
 
-        assert all([ax in (X, Y, Z, C) for ax in input_axes])
-        assert all([ax in (X, Y, Z, C) for ax in output_axes])
+        assert all(ax in (X, Y, Z, C) for ax in input_axes)
+        assert all(ax in (X, Y, Z, C) for ax in output_axes)
         m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
         for output_ax in output_axes:
             for input_ax in input_axes:

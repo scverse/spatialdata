@@ -195,7 +195,7 @@ class Identity(BaseTransformation):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)
-        if not all([ax in output_axes for ax in input_axes]):
+        if not all(ax in output_axes for ax in input_axes):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
@@ -350,7 +350,7 @@ class Translation(BaseTransformation):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)
-        if not all([ax in output_axes for ax in input_axes]):
+        if not all(ax in output_axes for ax in input_axes):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
@@ -437,7 +437,7 @@ class Scale(BaseTransformation):
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)
-        if not all([ax in output_axes for ax in input_axes]):
+        if not all(ax in output_axes for ax in input_axes):
             raise ValueError("Input axes must be a subset of output axes.")
         m = self._empty_affine_matrix(input_axes, output_axes)
         for i_out, ax_out in enumerate(output_axes):
@@ -633,7 +633,7 @@ class Sequence(BaseTransformation):
         DEBUG_SEQUENCE = False
         self.validate_axes(input_axes)
         self.validate_axes(output_axes)
-        if not all([ax in output_axes for ax in input_axes]):
+        if not all(ax in output_axes for ax in input_axes):
             raise ValueError("Input axes must be a subset of output axes.")
 
         current_input_axes = input_axes
@@ -766,7 +766,7 @@ def _get_current_output_axes(
                 to_return.append(ax)
             else:
                 mapped = [ax_out for ax_out, ax_in in transformation.map_axis.items() if ax_in == ax]
-                assert all([ax_out not in to_return for ax_out in mapped])
+                assert all(ax_out not in to_return for ax_out in mapped)
                 to_return.extend(mapped)
         return tuple(to_return)
     elif isinstance(transformation, Affine):
