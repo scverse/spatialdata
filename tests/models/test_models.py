@@ -75,7 +75,7 @@ class TestModels:
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
-        if any([isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)]):
+        if any(isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
             if isinstance(element_erased, DataArray) and not isinstance(element_erased, SpatialImage):
@@ -108,17 +108,15 @@ class TestModels:
                     set_transformation(element_copy3, t, "global")
                 model.parse(element_copy3, transformations={"global": t}, **kwargs)
         elif any(
-            [
-                isinstance(element, t)
-                for t in (
-                    MultiscaleSpatialImage,
-                    str,
-                    np.ndarray,
-                    dask.array.core.Array,
-                    pathlib.PosixPath,
-                    pd.DataFrame,
-                )
-            ]
+            isinstance(element, t)
+            for t in (
+                MultiscaleSpatialImage,
+                str,
+                np.ndarray,
+                dask.array.core.Array,
+                pathlib.PosixPath,
+                pd.DataFrame,
+            )
         ):
             # no need to apply this function since the parser always creates a new object and the transformation is not
             # part of the object passed as input
