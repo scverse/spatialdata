@@ -5,6 +5,7 @@
 [![Tests][badge-tests]][link-tests]
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
+[![documentation badge](https://readthedocs.org/projects/scverse-spatialdata/badge/?version=latest)](https://spatialdata.scverse.org/en/latest/)
 
 <img src='https://user-images.githubusercontent.com/1120672/236395765-2a4fc420-c7fb-4937-8a54-5036adc87760.png'/>
 
