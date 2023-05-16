@@ -1,11 +1,11 @@
 # SpatialData
 
+SpatialData is an open and universal framework for processing spatial omics data.
+
 ```{eval-rst}
 .. note::
-   This library is currently under review. We expect to make changes as the community provides feedback.
+   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
 ```
-
-Infrastructure for spatial omics data in Python.
 
 ```{eval-rst}
 .. card:: Installation
