@@ -1,10 +1,14 @@
-# SpatialData
+# SpatialData: an open and universal framework for processing spatial omics data.
 
-SpatialData is an open and universal framework for processing spatial omics data.
+SpatialData is a data framework that provides infrastructure for storing, accessing, integrating, and processing spatial omics data. Please see the links below to learn more about other packages in the SpatialData ecosystem.
+
+-   [spatialdata-io][]: load data from common spatial omics technologies into `spatialdata`.
+-   [spatialdata-plot][]: Static plotting library for `spatialdata`.
+-   [napari-spatialdata][]: napari plugin for interactive exploration and annotation of `spatialdata`.
 
 ```{eval-rst}
 .. note::
-   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
+   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against. SpatialData comprises a FAIR storage format
 ```
 
 ```{eval-rst}
@@ -30,7 +34,7 @@ SpatialData is an open and universal framework for processing spatial omics data
     :link: tutorials/notebooks/datasets/README
     :link-type: doc
 
-    Sample datasets from 8 different technologies.
+    Example datasets from 8 different technologies.
 
 .. card:: Design document
     :link: design_doc
@@ -59,3 +63,9 @@ contributing.md
 changelog.md
 references.md
 ```
+
+<!-- Links -->
+
+[napari-spatialdata]: https://github.com/scverse/napari-spatialdata
+[spatialdata-io]: https://github.com/scverse/spatialdata-io
+[spatialdata-plot]: https://github.com/scverse/spatialdata-plot
