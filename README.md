@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 [![documentation badge](https://readthedocs.org/projects/scverse-spatialdata/badge/?version=latest)](https://spatialdata.scverse.org/en/latest/)
 
-<img src='https://user-images.githubusercontent.com/1120672/236395765-2a4fc420-c7fb-4937-8a54-5036adc87760.png'/>
+![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
 -   **The library is currently under review.** We expect there to be changes as the community provides feedback.
 -   To get involved in the discussion, or if you need help to get started, you are welcome to join our [`scverse` Zulip chat](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) and our [scverse discourse forum](https://discourse.scverse.org/).
