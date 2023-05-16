@@ -1,3 +1,5 @@
+<img src="static/img/spatialdata_horizontal.png" alt="spatialdata banner">
+
 ```{eval-rst}
 .. image:: _static/img/spatialdata_horizontal.png
   :width: 400
