@@ -1,3 +1,5 @@
+![SpatialData banner](_static/img/spatialdata_horizontal.png)
+
 # SpatialData: an open and universal framework for processing spatial omics data.
 
 SpatialData is a data framework that provides infrastructure for storing, accessing, integrating, and processing spatial omics data. Please see the links below to learn more about other packages in the SpatialData ecosystem.
