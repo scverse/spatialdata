@@ -1,16 +1,17 @@
-# In review
+![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.png?raw=true)
 
--   **The library is currently under review.** We expect there to be changes as the community provides feedback.
--   To get involved in the discussion, or if you need help to get started, you are welcome to join our [`scverse` Zulip chat](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) and our [scverse discourse forum](ttps://discourse.scverse.org/).
--   Links to the OME-NGFF specification: [0.4](https://ngff.openmicroscopy.org/latest/), [0.5-dev (tables)](https://github.com/ome/ngff/pull/64), [0.5-dev (transformations and coordinate systems)](https://github.com/ome/ngff/pull/138)
-
-# spatialdata
+# SpatialData: an open and universal framework for processing spatial omics data.
 
 [![Tests][badge-tests]][link-tests]
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
+[![documentation badge](https://readthedocs.org/projects/scverse-spatialdata/badge/?version=latest)](https://spatialdata.scverse.org/en/latest/)
 
 <img src='https://user-images.githubusercontent.com/1120672/236395765-2a4fc420-c7fb-4937-8a54-5036adc87760.png'/>
+
+-   **The library is currently under review.** We expect there to be changes as the community provides feedback.
+-   To get involved in the discussion, or if you need help to get started, you are welcome to join our [`scverse` Zulip chat](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) and our [scverse discourse forum](https://discourse.scverse.org/).
+-   The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
 
@@ -22,7 +23,7 @@ Please refer to the [documentation][link-docs]. In particular:
 
 ## Installation
 
-Check out the docs for more complete installation instructions. To get started with the "batteries included" installation, you can install via pip:
+Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/latest/installation.html). To get started with the "batteries included" installation, you can install via pip:
 
 ```bash
 pip install "spatialdata[extra]"
