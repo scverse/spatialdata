@@ -14,29 +14,29 @@ SpatialData is an open and universal framework for processing spatial omics data
 
     Learn how to install ``spatialdata``.
 
+.. card:: Tutorials
+    :link: tutorials/notebooks/notebooks
+    :link-type: doc
+
+    Learn how to use ``spatialdata`` with hands-on examples.
+
 .. card:: API
     :link: api
     :link-type: doc
 
     Find a detailed documentation of ``spatialdata``.
 
-.. card:: Tutorials
-    :link: tutorials/notebooks/notebooks
-    :link-type: doc
-
-    Tutorials for ``spatialdata``.
-
 .. card:: Datasets
     :link: tutorials/notebooks/datasets/README
     :link-type: doc
 
-    NGFF datasets hosted in the cloud.
+    Sample datasets from 8 different technologies.
 
 .. card:: Design document
     :link: design_doc
     :link-type: doc
 
-    The design document of ``spatialdata``.
+    Learn about the design approach behind ``spatialdata``.
 
 .. card:: Contributing
     :link: contributing
