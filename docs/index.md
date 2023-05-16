@@ -1,21 +1,22 @@
 ```{eval-rst}
 .. image:: _static/img/spatialdata_horizontal.png
+  :width: 600
   :class: dark-light p-2
   :alt: SpatialData banner
 ```
 
-# SpatialData: an open and universal framework for processing spatial omics data.
-
-```{eval-rst}
-.. note::
-   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
-```
+# An open and universal framework for processing spatial omics data.
 
 SpatialData is a data framework that comprises a FAIR storage format and a collection of python libraries for performant access, alignment, and processing of uni- and multi-modal spatial omics datasets. This page provides documentation on how to install, use, and extend the core `spatialdata` library. See the links below to learn more about other packages in the SpatialData ecosystem.
 
 -   [spatialdata-io][]: load data from common spatial omics technologies into `spatialdata`.
 -   [spatialdata-plot][]: Static plotting library for `spatialdata`.
 -   [napari-spatialdata][]: napari plugin for interactive exploration and annotation of `spatialdata`.
+
+```{eval-rst}
+.. note::
+   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
+```
 
 ```{eval-rst}
 .. card:: Installation
