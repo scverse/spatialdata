@@ -1,11 +1,3 @@
-<img src="static/img/spatialdata_horizontal.png" alt="spatialdata banner">
-
-```{eval-rst}
-.. image:: _static/img/spatialdata_horizontal.png
-  :width: 400
-  :alt: Alternative text
-```
-
 # SpatialData: an open and universal framework for processing spatial omics data.
 
 ```{eval-rst}
