@@ -9,10 +9,9 @@
 
 SpatialData is a data framework that comprises a FAIR storage format and a collection of python libraries for performant access, alignment, and processing of uni- and multi-modal spatial omics datasets. This contains the core spatialdata library. See the links below to learn more about other packages in the SpatialData ecosystem.
 
-- [spatialdata-io](https://github.com/scverse/spatialdata-io): load data from common spatial omics technologies into spatialdata.
-- [spatialdata-plot](https://github.com/scverse/spatialdata-plot): Static plotting library for spatialdata.
-- [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatialdata.
-
+-   [spatialdata-io](https://github.com/scverse/spatialdata-io): load data from common spatial omics technologies into spatialdata.
+-   [spatialdata-plot](https://github.com/scverse/spatialdata-plot): Static plotting library for spatialdata.
+-   [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatialdata.
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
