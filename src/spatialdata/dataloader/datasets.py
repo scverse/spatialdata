@@ -119,13 +119,13 @@ class ImageTilesDataset(Dataset):
             region = regions.iloc[region_index]
             shape = regions.geometry.iloc[0]
             if isinstance(shape, Polygon):
-                centroid = np.atleast_2d(region.geometry.centroid.coords._coords[0])
+                xy = region.geometry.centroid.coords.xy
+                centroid = np.array([[xy[0][0], xy[1][0]]])
             elif isinstance(shape, MultiPolygon):
                 raise NotImplementedError("MultiPolygon not supported yet")
             elif isinstance(shape, Point):
-                # the function coords.xy is just accessing _coords, and wrapping it with extra information,
-                # so we access it directly
-                centroid = np.atleast_2d(region.geometry.coords._coords[0])
+                xy = region.geometry.coords.xy
+                centroid = np.array([[xy[0][0], xy[1][0]]])
             else:
                 raise RuntimeError(f"Unsupported type: {type(shape)}")
 

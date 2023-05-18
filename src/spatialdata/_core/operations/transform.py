@@ -55,7 +55,6 @@ def _transform_raster(
         int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
     )
     output_shape = c_shape + new_spatial_shape
-    ##
     translation_vector = np.min(new_v[:, :-1], axis=0)
     translation = Translation(translation_vector, axes=axes)
     inverse_matrix_adjusted = Sequence(
@@ -75,11 +74,9 @@ def _transform_raster(
         # , output_chunks=output_chunks
     )
     assert isinstance(transformed_dask, DaskArray)
-    ##
 
     if DEBUG_WITH_PLOTS:
         if n_spatial_dims == 2:
-            ##
             import matplotlib.pyplot as plt
 
             plt.figure()
@@ -101,7 +98,6 @@ def _transform_raster(
                 new_v_inverse[:, start_index:-1][:, 1] - 0.5, new_v_inverse[:, start_index:-1][:, 0] - 0.5, c="k"
             )
             plt.show()
-            ##
         else:
             assert n_spatial_dims == 3
             # raise NotImplementedError()
