@@ -42,3 +42,6 @@ spatialdata-sandbox
 
 # notebooks
 *.ipynb
+
+# version file
+_version.py

@@ -289,4 +289,13 @@ def sdata_blobs() -> SpatialData:
     from copy import deepcopy
     from spatialdata.datasets import blobs
 
-    return deepcopy(blobs(256, 300, 3))
+    sdata = deepcopy(blobs(256, 300, 3))
+    from spatialdata._utils import multiscale_spatial_image_from_data_tree
+
+    sdata.images["blobs_multiscale_image"] = multiscale_spatial_image_from_data_tree(
+        sdata.images["blobs_multiscale_image"]
+    )
+    sdata.labels["blobs_multiscale_labels"] = multiscale_spatial_image_from_data_tree(
+        sdata.labels["blobs_multiscale_labels"]
+    )
+    return sdata

@@ -162,19 +162,27 @@ class ImageTilesDataset(Dataset):
         # )
         # sdata_item = self.sdata.query.bounding_box(**request.to_dict())
         table = self.sdata.table
-        region = table.uns["spatialdata_attrs"]["region"]
-        region_key = table.uns["spatialdata_attrs"]["region_key"]
-        instance_key = table.uns["spatialdata_attrs"]["instance_key"]
-        if isinstance(region, str):
-            assert regions_name == region
-        elif isinstance(region, list):
-            assert regions_name in region
-        else:
-            raise ValueError("region must be a string or a list of strings")
+        filter_table = False
+        if table is not None:
+            region = table.uns["spatialdata_attrs"]["region"]
+            region_key = table.uns["spatialdata_attrs"]["region_key"]
+            instance_key = table.uns["spatialdata_attrs"]["instance_key"]
+            if isinstance(region, str):
+                if regions_name == region:
+                    filter_table = True
+            elif isinstance(region, list):
+                if regions_name in region:
+                    filter_table = True
+            else:
+                raise ValueError("region must be a string or a list of strings")
         # TODO: maybe slow, we should check if there is a better way to do this
-        instance = self.sdata[regions_name].iloc[region_index].name
-        row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
-        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=row)
+        if filter_table:
+            instance = self.sdata[regions_name].iloc[region_index].name
+            row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
+            tile_table = row
+        else:
+            tile_table = None
+        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=tile_table)
         if self.transform is not None:
             return self.transform(tile_sdata)
         return tile_sdata
