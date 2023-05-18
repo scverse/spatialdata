@@ -9,9 +9,12 @@ from spatialdata.models import TableModel
 
 
 @pytest.mark.parametrize("image_element", ["blobs_image", "blobs_multiscale_image"])
-@pytest.mark.parametrize("regions_element", ["blobs_labels", "blobs_circles", "blobs_polygons", "blobs_multipolygons"])
+@pytest.mark.parametrize(
+    "regions_element",
+    ["blobs_labels", "blobs_multiscale_labels", "blobs_circles", "blobs_polygons", "blobs_multipolygons"],
+)
 def test_tiles_dataset(sdata_blobs, image_element, regions_element):
-    if regions_element in ["blobs_labels", "blobs_multipolygons"]:
+    if regions_element in ["blobs_labels", "blobs_multipolygons", "blobs_multiscale_labels"]:
         cm = pytest.raises(NotImplementedError)
     else:
         cm = contextlib.nullcontext()
