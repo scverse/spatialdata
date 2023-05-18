@@ -448,7 +448,6 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     # to visualize the cases considered in the test, much more immediate than reading them as text as done above
     PLOT = False
     if PLOT:
-        ##
         import matplotlib.pyplot as plt
 
         ax = plt.gca()
@@ -459,7 +458,6 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
         sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
         sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
         plt.show()
-        ##
 
     # generate table
     x = np.ones((21, 2)) * np.array([1, 2])
@@ -517,18 +515,17 @@ def test_polygon_query_shapes():
 
     PLOT = False
     if PLOT:
-        ##
         import matplotlib.pyplot as plt
 
         ax = plt.gca()
         queried.pl.render_shapes("values_polygons").pl.show(ax=ax)
         queried.pl.render_shapes("values_circles").pl.show(ax=ax)
         plt.show()
-        ##
 
 
-# def test_polygon_query_multipolygons():
-#     pass
+@pytest.mark.skip
+def test_polygon_query_multipolygons():
+    pass
 
 
 def test_polygon_query_spatial_data():
@@ -547,28 +544,28 @@ def test_polygon_query_spatial_data():
     assert len(queried["values_circles"]) == 4
     assert len(queried["points"]) == 6
     assert len(queried.table) == 8
-    # TODO: when the query is implemented also for images and labels, update this test by adding those cases
 
 
-# def test_polygon_query_filter_table():
-#     pass
-#
-# def test_polygon_query_image2d():
-#     # single image case
-#     # multiscale case
-#     pass
-#
-# def test_polygon_query_image3d():
-#     # single image case
-#     # multiscale case
-#     pass
-#
-# def test_polygon_query_labels2d():
-#     # single image case
-#     # multiscale case
-#     pass
-#
-# def test_polygon_query_labels3d():
-#     # single image case
-#     # multiscale case
-#     pass
+@pytest.mark.skip
+def test_polygon_query_image2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_image3d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_labels2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_labels3d():
+    # single image case
+    # multiscale case
+    pass
