@@ -24,9 +24,11 @@ Operations on `SpatialData` objects.
     :toctree: generated
 
     bounding_box_query
+    polygon_query
     concatenate
     rasterize
     transform
+    aggregate
 ```
 
 ### Utilities

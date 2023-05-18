@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import linearrings, polygons
 from spatial_image import SpatialImage
@@ -13,6 +15,7 @@ from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,
+    polygon_query,
 )
 from spatialdata.models import (
     Image2DModel,
@@ -29,12 +32,41 @@ from spatialdata.transformations.operations import (
 )
 
 
-def _make_points_element():
+def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
     """Helper function to make a Points element."""
-    coordinates = np.array([[10, 10], [20, 20], [20, 30]], dtype=float)
-    return PointsModel.parse(
-        coordinates, annotation=pd.DataFrame({"genes": np.repeat("a", len(coordinates))}), feature_key="genes"
-    )
+    k0 = int(len(coordinates) / 3)
+    k1 = len(coordinates) - k0
+    genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))
+    return PointsModel.parse(coordinates, annotation=pd.DataFrame({"genes": genes}), feature_key="genes")
+
+
+def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:
+    linear_rings = []
+    for centroid, half_width in zip(centroid_coordinates, half_widths):
+        min_coords = centroid - half_width
+        max_coords = centroid + half_width
+
+        linear_rings.append(
+            linearrings(
+                [
+                    [min_coords[0], min_coords[1]],
+                    [min_coords[0], max_coords[1]],
+                    [max_coords[0], max_coords[1]],
+                    [max_coords[0], min_coords[1]],
+                ]
+            )
+        )
+    s = polygons(linear_rings)
+    polygon_series = gpd.GeoSeries(s)
+    cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
+    return ShapesModel.parse(cell_polygon_table)
+
+
+def _make_circles(centroid_coordinates: np.ndarray, radius: list[float]) -> GeoDataFrame:
+    return ShapesModel.parse(centroid_coordinates, geometry=0, radius=radius)
+
+
+# ---------------- test bounding box queries ---------------[
 
 
 def test_bounding_box_request_immutable():
@@ -109,7 +141,7 @@ def test_bounding_box_request_wrong_coordinate_order():
 
 def test_bounding_box_points():
     """test the points bounding box_query"""
-    points_element = _make_points_element()
+    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
@@ -137,7 +169,7 @@ def test_bounding_box_points_no_points():
     """Points bounding box query with no points in range should
     return a points element with length 0.
     """
-    points_element = _make_points_element()
+    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
     request = bounding_box_query(
         points_element,
         axes=("x", "y"),
@@ -279,32 +311,10 @@ def test_bounding_box_labels_3d():
 #  (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 
 
-def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:
-    linear_rings = []
-    for centroid in centroid_coordinates:
-        min_coords = centroid - half_width
-        max_coords = centroid + half_width
-
-        linear_rings.append(
-            linearrings(
-                [
-                    [min_coords[0], min_coords[1]],
-                    [min_coords[0], max_coords[1]],
-                    [max_coords[0], max_coords[1]],
-                    [max_coords[0], min_coords[1]],
-                ]
-            )
-        )
-    return polygons(linear_rings)
-
-
 def test_bounding_box_polygons():
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
-    cell_outline_polygons = _make_squares(centroid_coordinates=centroids, half_width=6)
-
-    polygon_series = gpd.GeoSeries(cell_outline_polygons)
-    cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
-    sd_polygons = ShapesModel.parse(cell_polygon_table)
+    half_widths = [6] * 4
+    sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
 
     polygons_result = bounding_box_query(
         sd_polygons,
@@ -383,3 +393,179 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
+
+
+# ----------------- test polygon query -----------------
+def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
+    """
+    Creates a SpatialData object with many edge cases for testing querying and aggregation.
+
+    Returns
+    -------
+    The SpatialData object.
+
+    Notes
+    -----
+    Description of what is tested (for a quick visualization, plot the returned SpatialData object):
+    - values to query/aggregate: polygons, points, circles
+    - values to query by: polygons, circles
+    - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or outside
+     the query region)
+
+    Additional cases:
+    - concave shape intersecting multiple times the same shape; used both as query and as value
+    - shape intersecting multiple shapes; used both as query and as value
+    """
+    values_centroids_squares = np.array([[x * 18, 0] for x in range(8)] + [[8 * 18 + 7, 0]] + [[0, 90], [50, 90]])
+    values_centroids_circles = np.array([[x * 18, 30] for x in range(8)] + [[8 * 18 + 7, 30]])
+    by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90]])
+    by_centroids_circles = np.array([[24, 15]])
+    values_points = _make_points(np.vstack((values_centroids_squares, values_centroids_circles)))
+    values_squares = _make_squares(values_centroids_squares, half_widths=[6] * 9 + [15, 15])
+    values_circles = _make_circles(values_centroids_circles, radius=[6] * 9)
+    by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15])
+    by_circles = _make_circles(by_centroids_circles, radius=[30])
+
+    from shapely.geometry import Polygon
+
+    polygon = Polygon([(100, 90 - 10), (100 + 30, 90), (100, 90 + 10), (150, 90)])
+    values_squares.loc[len(values_squares)] = [polygon]
+    ShapesModel.validate(values_squares)
+
+    polygon = Polygon([(0, 90 - 10), (0 + 30, 90), (0, 90 + 10), (50, 90)])
+    by_squares.loc[len(by_squares)] = [polygon]
+    ShapesModel.validate(by_squares)
+
+    sdata = SpatialData(
+        points={"points": values_points},
+        shapes={
+            "values_polygons": values_squares,
+            "values_circles": values_circles,
+            "by_polygons": by_squares,
+            "by_circles": by_circles,
+        },
+    )
+    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
+    PLOT = False
+    if PLOT:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
+        sdata.pl.render_shapes(element="values_polygons", na_color=(0.5, 0.2, 0.5, 0.5)).pl.render_points().pl.show(
+            ax=ax
+        )
+        sdata.pl.render_shapes(element="values_circles", na_color=(0.5, 0.2, 0.5, 0.5)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        plt.show()
+
+    # generate table
+    x = np.ones((21, 2)) * np.array([1, 2])
+    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    instance_id = np.array(list(range(9)) + list(range(12)))
+    table = AnnData(x, obs=pd.DataFrame({"region": region, "instance_id": instance_id}))
+    table = TableModel.parse(
+        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+    )
+    sdata.table = table
+    return sdata
+
+
+def test_polygon_query_points():
+    sdata = _make_sdata_for_testing_querying_and_aggretation()
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
+    points = queried["points"].compute()
+    assert len(points) == 6
+    assert len(queried.table) == 0
+
+    # TODO: the case of querying points with multiple polygons is not currently implemented
+
+
+def test_polygon_query_shapes():
+    sdata = _make_sdata_for_testing_querying_and_aggretation()
+    values_sdata = SpatialData(
+        shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
+        table=sdata.table,
+    )
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    circle = sdata["by_circles"].geometry.iloc[0]
+    circle_pol = circle.buffer(sdata["by_circles"].radius.iloc[0])
+
+    queried = polygon_query(
+        values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
+
+    queried = polygon_query(
+        values_sdata, polygons=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 8
+    assert len(queried["values_circles"]) == 8
+    assert len(queried.table) == 16
+
+    queried = polygon_query(
+        values_sdata, polygons=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
+
+    PLOT = False
+    if PLOT:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
+        queried.pl.render_shapes("values_polygons").pl.show(ax=ax)
+        queried.pl.render_shapes("values_circles").pl.show(ax=ax)
+        plt.show()
+
+
+@pytest.mark.skip
+def test_polygon_query_multipolygons():
+    pass
+
+
+def test_polygon_query_spatial_data():
+    sdata = _make_sdata_for_testing_querying_and_aggretation()
+    values_sdata = SpatialData(
+        shapes={
+            "values_polygons": sdata["values_polygons"],
+            "values_circles": sdata["values_circles"],
+        },
+        points={"points": sdata["points"]},
+        table=sdata.table,
+    )
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    queried = polygon_query(values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=True)
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried["points"]) == 6
+    assert len(queried.table) == 8
+
+
+@pytest.mark.skip
+def test_polygon_query_image2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_image3d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_labels2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+def test_polygon_query_labels3d():
+    # single image case
+    # multiscale case
+    pass
