@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
@@ -35,7 +36,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
         # unused at the moment, see
-        transform: Optional[Callable[[Any], Any]] = None,
+        transform: Optional[Callable[[SpatialData], Any]] = None,
     ):
         """
         Torch Dataset that returns image tiles around regions from a SpatialData object.
@@ -104,7 +105,9 @@ class ImageTilesDataset(Dataset):
     def __len__(self) -> int:
         return self.n_spots
 
-    def __getitem__(self, idx: int) -> tuple[SpatialImage, str, int]:
+    def __getitem__(self, idx: int) -> Any | SpatialData:
+        from spatialdata import SpatialData
+
         if idx >= self.n_spots:
             raise IndexError()
         regions_name, region_index = self._get_region_info_for_index(idx)
@@ -114,9 +117,18 @@ class ImageTilesDataset(Dataset):
         if isinstance(regions, GeoDataFrame):
             dims = get_axes_names(regions)
             region = regions.iloc[region_index]
-            # the function coords.xy is just accessing _coords, and wrapping it with extra information, so we access
-            # it directly
-            centroid = np.atleast_2d(region.geometry.coords._coords[0])
+            shape = regions.geometry.iloc[0]
+            if isinstance(shape, Polygon):
+                xy = region.geometry.centroid.coords.xy
+                centroid = np.array([[xy[0][0], xy[1][0]]])
+            elif isinstance(shape, MultiPolygon):
+                raise NotImplementedError("MultiPolygon not supported yet")
+            elif isinstance(shape, Point):
+                xy = region.geometry.coords.xy
+                centroid = np.array([[xy[0][0], xy[1][0]]])
+            else:
+                raise RuntimeError(f"Unsupported type: {type(shape)}")
+
             t = get_transformation(regions, self.target_coordinate_system)
             assert isinstance(t, BaseTransformation)
             aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
@@ -137,9 +149,6 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=self.target_coordinate_system,
             target_width=self.tile_dim_in_pixels,
         )
-        if self.transform is not None:
-            tile = self.transform(tile)
-
         # TODO: as explained in the TODO in the __init__(), we want to let the
         #  user also use the bounding box query instaed of the rasterization
         #  the return function of this function would change, so we need to
@@ -152,4 +161,28 @@ class ImageTilesDataset(Dataset):
         #     max_coordinate=max_coordinate,
         # )
         # sdata_item = self.sdata.query.bounding_box(**request.to_dict())
-        return tile, regions_name, region_index
+        table = self.sdata.table
+        filter_table = False
+        if table is not None:
+            region = table.uns["spatialdata_attrs"]["region"]
+            region_key = table.uns["spatialdata_attrs"]["region_key"]
+            instance_key = table.uns["spatialdata_attrs"]["instance_key"]
+            if isinstance(region, str):
+                if regions_name == region:
+                    filter_table = True
+            elif isinstance(region, list):
+                if regions_name in region:
+                    filter_table = True
+            else:
+                raise ValueError("region must be a string or a list of strings")
+        # TODO: maybe slow, we should check if there is a better way to do this
+        if filter_table:
+            instance = self.sdata[regions_name].iloc[region_index].name
+            row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
+            tile_table = row
+        else:
+            tile_table = None
+        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=tile_table)
+        if self.transform is not None:
+            return self.transform(tile_sdata)
+        return tile_sdata

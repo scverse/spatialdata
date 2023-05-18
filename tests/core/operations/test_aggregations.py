@@ -121,8 +121,8 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 
 
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
-    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_shapes")
+    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_polygons")
     assert isinstance(sdata, SpatialData)
-    assert len(sdata.shapes["blobs_shapes"]) == 2
+    assert len(sdata.shapes["blobs_polygons"]) == 2
     assert sdata.table.shape == (2, 2)
     assert len(sdata.points["points"].compute()) == 300
