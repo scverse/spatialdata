@@ -48,7 +48,7 @@ pip install -e .
 
 This is the reccommended way to install the package in case in which you want to contribute to the code. To update the package you can use `git pull`.
 
-Important: if you perform an editable install of `spatialdata` and then install `spatialdata-plot`, `spatialdata-io` or `napari-spatialdata`, they may automatically override the installation of `spatialdata`. To check if this happened you can run `python -c "import spatialdata; print(spatialdata.__path__)"`: if you get a path that contains `site-packages`, then your editable installation has been overridden and you need to reinstall the package by rerunning `pip install -e .` in the cloned `spatialdata` repo.
+Important: if you perform an editable install of `spatialdata` and then install `spatialdata-plot`, `spatialdata-io` or `napari-spatialdata`, they may automatically override the installation of `spatialdata` with the version from PyPI. To check if this happened you can run `python -c "import spatialdata; print(spatialdata.__path__)"`: if you get a path that contains `site-packages`, then your editable installation has been overridden and you need to reinstall the package by rerunning `pip install -e .` in the cloned `spatialdata` repo.
 
 <!-- Links -->
 
