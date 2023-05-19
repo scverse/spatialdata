@@ -359,13 +359,13 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     """
     values_centroids_squares = np.array([[x * 18, 0] for x in range(8)] + [[8 * 18 + 7, 0]] + [[0, 90], [50, 90]])
     values_centroids_circles = np.array([[x * 18, 30] for x in range(8)] + [[8 * 18 + 7, 30]])
-    by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90]])
-    by_centroids_circles = np.array([[24, 15]])
+    by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90], [210, 15]])
+    by_centroids_circles = np.array([[24, 15], [290, 15]])
     values_points = _make_points(np.vstack((values_centroids_squares, values_centroids_circles)))
     values_squares = _make_squares(values_centroids_squares, half_widths=[6] * 9 + [15, 15])
     values_circles = _make_circles(values_centroids_circles, radius=[6] * 9)
-    by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15])
-    by_circles = _make_circles(by_centroids_circles, radius=[30])
+    by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15, 30])
+    by_circles = _make_circles(by_centroids_circles, radius=[30, 30])
 
     from shapely.geometry import Polygon
 
