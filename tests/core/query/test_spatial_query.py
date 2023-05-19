@@ -553,18 +553,21 @@ def test_polygon_query_image2d():
     pass
 
 
+@pytest.mark.skip
 def test_polygon_query_image3d():
     # single image case
     # multiscale case
     pass
 
 
+@pytest.mark.skip
 def test_polygon_query_labels2d():
     # single image case
     # multiscale case
     pass
 
 
+@pytest.mark.skip
 def test_polygon_query_labels3d():
     # single image case
     # multiscale case
