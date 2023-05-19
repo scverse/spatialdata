@@ -1,6 +1,6 @@
 # Installation
 
-`spatialdata` requires Python version >= 3.9 to run.
+`spatialdata` requires Python version >= 3.9 to run and the installation time requires a few minutes on a standard desktop computer.
 
 ## PyPI
 
