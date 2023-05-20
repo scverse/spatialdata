@@ -31,6 +31,8 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
     get_model,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import validate_axis_name
 from spatialdata.models.models import RasterSchema
@@ -333,3 +335,31 @@ def test_get_schema():
         assert schema == ShapesModel
     schema = get_model(table)
     assert schema == TableModel
+
+
+def test_points_and_shapes_conversions(shapes, points):
+    from spatialdata.transformations import get_transformation
+
+    circles0 = shapes["circles"]
+    circles1 = points_geopandas_to_dask_dataframe(circles0)
+    circles2 = points_dask_dataframe_to_geopandas(circles1)
+    circles0 = circles0[circles2.columns]
+    assert np.all(circles0.values == circles2.values)
+
+    t0 = get_transformation(circles0, get_all=True)
+    t1 = get_transformation(circles1, get_all=True)
+    t2 = get_transformation(circles2, get_all=True)
+    assert t0 == t1
+    assert t0 == t2
+
+    points0 = points["points_0"]
+    points1 = points_dask_dataframe_to_geopandas(points0)
+    points2 = points_geopandas_to_dask_dataframe(points1)
+    points0 = points0[points2.columns]
+    assert np.all(points0.values == points2.values)
+
+    t0 = get_transformation(points0, get_all=True)
+    t1 = get_transformation(points1, get_all=True)
+    t2 = get_transformation(points2, get_all=True)
+    assert t0 == t1
+    assert t0 == t2

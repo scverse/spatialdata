@@ -251,10 +251,16 @@ def _get_points() -> dict[str, DaskDataFrame]:
     out = {}
     for i in range(2):
         name = f"{name}_{i}"
-        arr = RNG.normal(size=(100, 2))
+        arr = RNG.normal(size=(300, 2))
         # randomly assign some values from v to the points
         points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
-        genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        if i == 0:
+            genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        else:
+            # we need to test the case in which we have a categorical column with more than 127 categories, see full
+            # explanation in write_points() (the parser will convert this column to a categorical since
+            # feature_key="genes")
+            genes = np.tile(np.array(list(map(str, range(280)))), 2)[:300]
         annotation = pd.DataFrame(
             {
                 "genes": genes,
@@ -389,6 +395,7 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     # to visualize the cases considered in the test, much more immediate than reading them as text as done above
     PLOT = False
     if PLOT:
+        ##
         import matplotlib.pyplot as plt
 
         ax = plt.gca()
@@ -399,6 +406,7 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
         sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
         sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
         plt.show()
+        ##
 
     # generate table
     x = np.ones((21, 2)) * np.array([1, 2])
