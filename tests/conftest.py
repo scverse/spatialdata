@@ -4,6 +4,7 @@ import os
 os.environ["USE_PYGEOS"] = "0"
 # isort:on
 
+from shapely import linearrings, polygons
 from pathlib import Path
 from typing import Union
 from spatialdata._types import ArrayLike
@@ -29,6 +30,7 @@ from spatialdata.models import (
 )
 from xarray import DataArray
 from spatialdata.datasets import BlobsDataset
+import geopandas as gpd
 
 RNG = default_rng()
 
@@ -249,10 +251,16 @@ def _get_points() -> dict[str, DaskDataFrame]:
     out = {}
     for i in range(2):
         name = f"{name}_{i}"
-        arr = RNG.normal(size=(100, 2))
+        arr = RNG.normal(size=(300, 2))
         # randomly assign some values from v to the points
         points_assignment0 = RNG.integers(0, 10, size=arr.shape[0]).astype(np.int_)
-        genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        if i == 0:
+            genes = RNG.choice(["a", "b"], size=arr.shape[0])
+        else:
+            # we need to test the case in which we have a categorical column with more than 127 categories, see full
+            # explanation in write_points() (the parser will convert this column to a categorical since
+            # feature_key="genes")
+            genes = np.tile(np.array(list(map(str, range(280)))), 2)[:300]
         annotation = pd.DataFrame(
             {
                 "genes": genes,
@@ -298,4 +306,115 @@ def sdata_blobs() -> SpatialData:
     sdata.labels["blobs_multiscale_labels"] = multiscale_spatial_image_from_data_tree(
         sdata.labels["blobs_multiscale_labels"]
     )
+    return sdata
+
+
+def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
+    """Helper function to make a Points element."""
+    k0 = int(len(coordinates) / 3)
+    k1 = len(coordinates) - k0
+    genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))
+    return PointsModel.parse(coordinates, annotation=pd.DataFrame({"genes": genes}), feature_key="genes")
+
+
+def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:
+    linear_rings = []
+    for centroid, half_width in zip(centroid_coordinates, half_widths):
+        min_coords = centroid - half_width
+        max_coords = centroid + half_width
+
+        linear_rings.append(
+            linearrings(
+                [
+                    [min_coords[0], min_coords[1]],
+                    [min_coords[0], max_coords[1]],
+                    [max_coords[0], max_coords[1]],
+                    [max_coords[0], min_coords[1]],
+                ]
+            )
+        )
+    s = polygons(linear_rings)
+    polygon_series = gpd.GeoSeries(s)
+    cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
+    return ShapesModel.parse(cell_polygon_table)
+
+
+def _make_circles(centroid_coordinates: np.ndarray, radius: list[float]) -> GeoDataFrame:
+    return ShapesModel.parse(centroid_coordinates, geometry=0, radius=radius)
+
+
+def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
+    """
+    Creates a SpatialData object with many edge cases for testing querying and aggregation.
+
+    Returns
+    -------
+    The SpatialData object.
+
+    Notes
+    -----
+    Description of what is tested (for a quick visualization, plot the returned SpatialData object):
+    - values to query/aggregate: polygons, points, circles
+    - values to query by: polygons, circles
+    - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or outside
+     the query region)
+
+    Additional cases:
+    - concave shape intersecting multiple times the same shape; used both as query and as value
+    - shape intersecting multiple shapes; used both as query and as value
+    """
+    values_centroids_squares = np.array([[x * 18, 0] for x in range(8)] + [[8 * 18 + 7, 0]] + [[0, 90], [50, 90]])
+    values_centroids_circles = np.array([[x * 18, 30] for x in range(8)] + [[8 * 18 + 7, 30]])
+    by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90], [210, 15]])
+    by_centroids_circles = np.array([[24, 15], [290, 15]])
+    values_points = _make_points(np.vstack((values_centroids_squares, values_centroids_circles)))
+    values_squares = _make_squares(values_centroids_squares, half_widths=[6] * 9 + [15, 15])
+    values_circles = _make_circles(values_centroids_circles, radius=[6] * 9)
+    by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15, 30])
+    by_circles = _make_circles(by_centroids_circles, radius=[30, 30])
+
+    from shapely.geometry import Polygon
+
+    polygon = Polygon([(100, 90 - 10), (100 + 30, 90), (100, 90 + 10), (150, 90)])
+    values_squares.loc[len(values_squares)] = [polygon]
+    ShapesModel.validate(values_squares)
+
+    polygon = Polygon([(0, 90 - 10), (0 + 30, 90), (0, 90 + 10), (50, 90)])
+    by_squares.loc[len(by_squares)] = [polygon]
+    ShapesModel.validate(by_squares)
+
+    sdata = SpatialData(
+        points={"points": values_points},
+        shapes={
+            "values_polygons": values_squares,
+            "values_circles": values_circles,
+            "by_polygons": by_squares,
+            "by_circles": by_circles,
+        },
+    )
+    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
+    PLOT = False
+    if PLOT:
+        ##
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
+        sdata.pl.render_shapes(element="values_polygons", na_color=(0.5, 0.2, 0.5, 0.5)).pl.render_points().pl.show(
+            ax=ax
+        )
+        sdata.pl.render_shapes(element="values_circles", na_color=(0.5, 0.2, 0.5, 0.5)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        plt.show()
+        ##
+
+    # generate table
+    x = np.ones((21, 2)) * np.array([1, 2])
+    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    instance_id = np.array(list(range(9)) + list(range(12)))
+    table = AnnData(x, obs=pd.DataFrame({"region": region, "instance_id": instance_id}))
+    table = TableModel.parse(
+        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+    )
+    sdata.table = table
     return sdata

@@ -190,7 +190,7 @@ def _validate_dims(dims: tuple[str, ...]) -> None:
         raise ValueError(f"Invalid dimensions: {dims}")
 
 
-def points_dask_dataframe_to_geopandas(points: DaskDataFrame) -> GeoDataFrame:
+def points_dask_dataframe_to_geopandas(points: DaskDataFrame, suppress_z_warning: bool = False) -> GeoDataFrame:
     """
     Convert a Dask DataFrame to a GeoDataFrame.
 
@@ -212,16 +212,25 @@ def points_dask_dataframe_to_geopandas(points: DaskDataFrame) -> GeoDataFrame:
     points need to be saved as a Dask DataFrame. We will be restructuring the models to allow for GeoDataFrames soon.
 
     """
-    if "z" in points.columns:
+    from spatialdata.transformations import get_transformation, set_transformation
+
+    if "z" in points.columns and not suppress_z_warning:
         logger.warning("Constructing the GeoDataFrame without considering the z coordinate in the geometry.")
 
-    points_gdf = GeoDataFrame(geometry=geopandas.points_from_xy(points["x"], points["y"]))
-    for c in points.columns:
-        points_gdf[c] = points[c]
+    transformations = get_transformation(points, get_all=True)
+    assert isinstance(transformations, dict)
+    assert len(transformations) > 0
+    points = points.compute()
+    points_gdf = GeoDataFrame(points, geometry=geopandas.points_from_xy(points["x"], points["y"]))
+    points_gdf.reset_index(drop=True, inplace=True)
+    # keep the x and y either in the geometry either as columns: we don't duplicate because having this redundancy could
+    # lead to subtle bugs when coverting back to dask dataframes
+    points_gdf.drop(columns=["x", "y"], inplace=True)
+    set_transformation(points_gdf, transformations, set_all=True)
     return points_gdf
 
 
-def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame) -> DaskDataFrame:
+def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bool = False) -> DaskDataFrame:
     """
     Convert a GeoDataFrame which represents 2D or 3D points to a Dask DataFrame that passes the schema validation.
 
@@ -241,15 +250,20 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame) -> DaskDataFrame:
     """
     from spatialdata.models import PointsModel
 
+    # transformations are transferred automatically
     ddf = dd.from_pandas(gdf[gdf.columns.drop("geometry")], npartitions=1)
+    # we don't want redundancy in the columns since this could lead to subtle bugs when converting back to geopandas
+    assert "x" not in ddf.columns
+    assert "y" not in ddf.columns
     ddf["x"] = gdf.geometry.x
     ddf["y"] = gdf.geometry.y
     # parse
     if "z" in ddf.columns:
-        logger.warning(
-            "Constructing the Dask DataFrame using the x and y coordinates from the geometry and the z from an "
-            "additional column."
-        )
+        if not suppress_z_warning:
+            logger.warning(
+                "Constructing the Dask DataFrame using the x and y coordinates from the geometry and the z from an "
+                "additional column."
+            )
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
     else:
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})

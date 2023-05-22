@@ -24,7 +24,6 @@ from spatialdata.models import (
     ShapesModel,
     get_model,
 )
-from spatialdata.models._utils import get_axes_names
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 __all__ = ["aggregate"]
@@ -112,8 +111,8 @@ def _aggregate_points_by_shapes(
     value_key: str | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
-    # Have to get dims on dask dataframe, can't get from pandas
-    dims = get_axes_names(points)
+    from spatialdata.models import points_dask_dataframe_to_geopandas
+
     # Default value for id_key
     if id_key is None:
         id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
@@ -123,9 +122,8 @@ def _aggregate_points_by_shapes(
                 "`FEATURE_KEY` for the points."
             )
 
-    if isinstance(points, ddf.DataFrame):
-        points = points.compute()
-    points = gpd.GeoDataFrame(points, geometry=gpd.points_from_xy(*[points[dim] for dim in dims]))
+    points = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
+    shapes = circles_to_polygons(shapes)
 
     return _aggregate_shapes(points, shapes, id_key, value_key, agg_func)
 
@@ -253,8 +251,12 @@ def _aggregate_shapes(
             value_key: point_values,
         }
     )
+    ##
     aggregated = to_agg.groupby([by_id_key, id_key]).agg(agg_func).reset_index()
-    obs_id_categorical = pd.Categorical(aggregated[by_id_key])
+
+    # this is for only shapes in "by" that intersect with something in "value"
+    obs_id_categorical_categories = by.index.tolist()
+    obs_id_categorical = pd.Categorical(aggregated[by_id_key], categories=obs_id_categorical_categories)
 
     X = sparse.coo_matrix(
         (
@@ -265,7 +267,7 @@ def _aggregate_shapes(
     ).tocsr()
     return ad.AnnData(
         X,
-        obs=pd.DataFrame(index=obs_id_categorical.categories),
+        obs=pd.DataFrame(index=pd.Categorical(obs_id_categorical_categories).categories),
         var=pd.DataFrame(index=joined[id_key].cat.categories),
         dtype=X.dtype,
     )

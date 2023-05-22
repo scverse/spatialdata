@@ -247,12 +247,18 @@ def _bounding_box_mask_points(
 def _dict_query_dispatcher(
     elements: dict[str, SpatialElement], query_function: Callable[[SpatialElement], SpatialElement], **kwargs: Any
 ) -> dict[str, SpatialElement]:
+    from spatialdata.transformations import get_transformation
+
     queried_elements = {}
     for key, element in elements.items():
-        result = query_function(element, **kwargs)
-        if result is not None:
-            # query returns None if it is empty
-            queried_elements[key] = result
+        target_coordinate_system = kwargs["target_coordinate_system"]
+        d = get_transformation(element, get_all=True)
+        assert isinstance(d, dict)
+        if target_coordinate_system in d:
+            result = query_function(element, **kwargs)
+            if result is not None:
+                # query returns None if it is empty
+                queried_elements[key] = result
     return queried_elements
 
 
@@ -649,12 +655,12 @@ def _polygon_query(
     new_points = {}
     if points:
         for points_name, p in sdata.points.items():
-            points_gdf = points_dask_dataframe_to_geopandas(p)
+            points_gdf = points_dask_dataframe_to_geopandas(p, suppress_z_warning=True)
             indices = points_gdf.geometry.intersects(polygon)
             if np.sum(indices) == 0:
                 raise ValueError("we expect at least one point")
             queried_points = points_gdf[indices]
-            ddf = points_geopandas_to_dask_dataframe(queried_points)
+            ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
             transformation = get_transformation(p, target_coordinate_system)
             if "z" in ddf.columns:
                 ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
