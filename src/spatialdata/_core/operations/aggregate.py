@@ -267,8 +267,7 @@ def _aggregate_shapes(
     ).tocsr()
     return ad.AnnData(
         X,
-        # obs=pd.DataFrame(index=obs_id_categorical.categories),
-        obs=pd.DataFrame(index=pd.Categorical(by.index.tolist()).categories),
+        obs=pd.DataFrame(index=pd.Categorical(obs_id_categorical_categories).categories),
         var=pd.DataFrame(index=joined[id_key].cat.categories),
         dtype=X.dtype,
     )
