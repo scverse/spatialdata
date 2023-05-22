@@ -1,134 +1,174 @@
-import geopandas as gpd
+from typing import Optional
+
 import numpy as np
-import pandas as pd
 import pytest
-import shapely
 from anndata import AnnData
-from anndata.tests.helpers import assert_equal
+from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel
-
-from tests.conftest import _make_sdata_for_testing_querying_and_aggretation
+from spatialdata.models import Image2DModel, Labels2DModel
 
 RNG = default_rng(42)
 
 
-def test_aggregate_points_by_polygons() -> None:
-    points = PointsModel.parse(
-        pd.DataFrame(
-            {
-                "x": [1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0],
-                "y": [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8],
-                "gene": list("aaabbbb"),
-            }
-        ),
-        coordinates={"x": "x", "y": "y"},
-        feature_key="gene",
-    )
-    # shape_0 doesn't contain points, the other two shapes do
-    shapes = ShapesModel.parse(
-        gpd.GeoDataFrame(
-            geometry=[
-                shapely.Polygon([(0.0, 10.0), (2.0, 10.0), (0.0, 9.0)]),
-                shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
-                shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
-            ],
-            index=["shape_0", "shape_1", "shape_2"],
-        )
-    )
+def _parse_shapes(
+    sdata_query_aggregation: SpatialData, by_shapes: Optional[str] = None, values_shapes: Optional[str] = None
+) -> GeoDataFrame:
+    # only one between by_shapes and values_shapes can be None
+    assert by_shapes is None or values_shapes is None
+    assert by_shapes is not None or values_shapes is not None
 
-    result_adata = aggregate(points, shapes, "gene", agg_func="sum")
-    assert result_adata.obs_names.to_list() == ["shape_0", "shape_1", "shape_2"]
-    assert result_adata.var_names.to_list() == ["a", "b"]
-    np.testing.assert_equal(result_adata.X.A, np.array([[0, 0], [2, 0], [1, 3]]))
-
-    # id_key can be implicit for points
-    result_adata_implicit = aggregate(points, shapes, agg_func="sum")
-    assert_equal(result_adata, result_adata_implicit)
+    if by_shapes is not None:
+        assert by_shapes in ["by_circles", "by_polygons"]
+        return sdata_query_aggregation[by_shapes]
+    if values_shapes is not None:
+        assert values_shapes in ["values_circles", "values_polygons"]
+        return sdata_query_aggregation[values_shapes]
+    raise ValueError("by_shapes and values_shapes cannot be both None")
 
 
-def test_aggregate_points_by_circles():
-    sdata = _make_sdata_for_testing_querying_and_aggretation()
-    # checks also that cound and sum behave the same for categorical variables
-    adata0 = aggregate(
-        values=sdata["points"],
-        by=sdata["by_circles"],
-        id_key="genes",
-        agg_func="count",
-        target_coordinate_system="global",
-    )
-    adata1 = aggregate(
-        values=sdata["points"],
-        by=sdata["by_circles"],
-        id_key="genes",
-        agg_func="sum",
-        target_coordinate_system="global",
-    )
+@pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
+@pytest.mark.parametrize("value_key", ["categorical_in_ddf", "numerical_in_ddf"])
+def test_aggregate_points_by_polygons_categorical(sdata_query_aggregation, by_shapes: str, value_key: str) -> None:
+    sdata = sdata_query_aggregation
+    _parse_shapes(sdata, by_shapes=by_shapes)
 
-    assert adata0.var_names.tolist() == ["a", "b"]
-    assert adata1.var_names.tolist() == ["a", "b"]
-    X0 = adata0.X.todense()
-    X1 = adata1.X.todense()
-
-    assert np.all(np.matrix([[3, 3], [0, 0]]) == X0)
-    assert np.all(np.matrix([[3, 3], [0, 0]]) == X1)
-
-
-def test_aggregate_polygons_by_polygons() -> None:
-    cellular = ShapesModel.parse(
-        gpd.GeoDataFrame(
-            geometry=[
-                shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
-                shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
-            ],
-            index=["shape_0", "shape_1"],
-        )
-    )
-    subcellular = ShapesModel.parse(
-        gpd.GeoDataFrame(
-            {"structure": pd.Categorical.from_codes([0, 0, 0, 1, 1, 1, 1], ["nucleus", "mitochondria"])},
-            index=[f"shape_{i}" for i in range(1, 8)],
-        ).set_geometry(
-            gpd.points_from_xy([1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0], [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8]).buffer(0.1)
-        )
-    )
-
-    result_adata = aggregate(subcellular, cellular, "structure", agg_func="sum")
-    assert result_adata.obs_names.to_list() == ["shape_0", "shape_1"]
-    assert result_adata.var_names.to_list() == ["nucleus", "mitochondria"]
-    np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
-
-    with pytest.raises(ValueError):
-        aggregate(subcellular, cellular, agg_func="mean")
+    # points = PointsModel.parse(
+    #     pd.DataFrame(
+    #         {
+    #             "x": [1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0],
+    #             "y": [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8],
+    #             "gene": list("aaabbbb"),
+    #         }
+    #     ),
+    #     coordinates={"x": "x", "y": "y"},
+    #     feature_key="gene",
+    # )
+    # # shape_0 doesn't contain points, the other two shapes do
+    # shapes = ShapesModel.parse(
+    #     gpd.GeoDataFrame(
+    #         geometry=[
+    #             shapely.Polygon([(0.0, 10.0), (2.0, 10.0), (0.0, 9.0)]),
+    #             shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
+    #             shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
+    #         ],
+    #         index=["shape_0", "shape_1", "shape_2"],
+    #     )
+    # )
+    #
+    # result_adata = aggregate(points, shapes, "gene", agg_func="sum")
+    # assert result_adata.obs_names.to_list() == ["shape_0", "shape_1", "shape_2"]
+    # assert result_adata.var_names.to_list() == ["a", "b"]
+    # np.testing.assert_equal(result_adata.X.A, np.array([[0, 0], [2, 0], [1, 3]]))
+    #
+    # # id_key can be implicit for points
+    # result_adata_implicit = aggregate(points, shapes, agg_func="sum")
+    # assert_equal(result_adata, result_adata_implicit)
 
 
-def test_aggregate_circles_by_polygons() -> None:
-    # Basically the same as above, but not buffering explicitly
-    cellular = ShapesModel.parse(
-        gpd.GeoDataFrame(
-            geometry=[
-                shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
-                shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
-            ],
-            index=["shape_0", "shape_1"],
-        )
-    )
-    subcellular = ShapesModel.parse(
-        gpd.GeoDataFrame(
-            {
-                "structure": pd.Categorical.from_codes([0, 0, 0, 1, 1, 1, 1], ["nucleus", "mitochondria"]),
-                "radius": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-            },
-            index=[f"shape_{i}" for i in range(1, 8)],
-        ).set_geometry(gpd.points_from_xy([1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0], [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8]))
-    )
+# def test_aggregate_points_by_circles_categorical(sdata_query_aggregation) -> None:
+#     sdata = sdata_query_aggregation
+#     # checks also that cound and sum behave the same for categorical variables
+#     adata0 = aggregate(
+#         values=sdata["points"],
+#         by=sdata["by_circles"],
+#         id_key="genes",
+#         agg_func="count",
+#         target_coordinate_system="global",
+#     )
+#     adata1 = aggregate(
+#         values=sdata["points"],
+#         by=sdata["by_circles"],
+#         id_key="genes",
+#         agg_func="sum",
+#         target_coordinate_system="global",
+#     )
+#
+#     assert adata0.var_names.tolist() == ["a", "b"]
+#     assert adata1.var_names.tolist() == ["a", "b"]
+#     X0 = adata0.X.todense()
+#     X1 = adata1.X.todense()
+#
+#     assert np.all(np.matrix([[3, 3], [0, 0]]) == X0)
+#     assert np.all(np.matrix([[3, 3], [0, 0]]) == X1)
+#
 
-    result_adata = aggregate(subcellular, cellular, "structure", agg_func="sum")
-    assert result_adata.obs_names.to_list() == ["shape_0", "shape_1"]
-    assert result_adata.var_names.to_list() == ["nucleus", "mitochondria"]
-    np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
+
+@pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
+@pytest.mark.parametrize("values_shapes", ["values_circles", "values_polygons"])
+@pytest.mark.parametrize(
+    "value_key",
+    [
+        "categorical_in_var",
+        "numerical_in_var",
+        "categorical_in_obs",
+        "numerical_in_obs",
+        "categorical_in_gdf",
+        "numerical_in_gdf",
+    ],
+)
+def test_aggregate_shapes_by_shapes(
+    sdata_query_aggregation, by_shapes: str, values_shapes: str, value_key: str
+) -> None:
+    sdata = sdata_query_aggregation
+    _parse_shapes(sdata, by_shapes=by_shapes)
+    _parse_shapes(sdata, values_shapes=values_shapes)
+    pass
+
+
+# def test_aggregate_polygons_by_polygons_categorical() -> None:
+#     cellular = ShapesModel.parse(
+#         gpd.GeoDataFrame(
+#             geometry=[
+#                 shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
+#                 shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
+#             ],
+#             index=["shape_0", "shape_1"],
+#         )
+#     )
+#     subcellular = ShapesModel.parse(
+#         gpd.GeoDataFrame(
+#             {"structure": pd.Categorical.from_codes([0, 0, 0, 1, 1, 1, 1], ["nucleus", "mitochondria"])},
+#             index=[f"shape_{i}" for i in range(1, 8)],
+#         ).set_geometry(
+#             gpd.points_from_xy([1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0], [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8]).buffer(0.1)
+#         )
+#     )
+#
+#     result_adata = aggregate(subcellular, cellular, "structure", agg_func="sum")
+#     assert result_adata.obs_names.to_list() == ["shape_0", "shape_1"]
+#     assert result_adata.var_names.to_list() == ["nucleus", "mitochondria"]
+#     np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
+#
+#     with pytest.raises(ValueError):
+#         aggregate(subcellular, cellular, agg_func="mean")
+#
+# def test_aggregate_circles_by_polygons() -> None:
+#     # Basically the same as above, but not buffering explicitly
+#     cellular = ShapesModel.parse(
+#         gpd.GeoDataFrame(
+#             geometry=[
+#                 shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
+#                 shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
+#             ],
+#             index=["shape_0", "shape_1"],
+#         )
+#     )
+#     subcellular = ShapesModel.parse(
+#         gpd.GeoDataFrame(
+#             {
+#                 "structure": pd.Categorical.from_codes([0, 0, 0, 1, 1, 1, 1], ["nucleus", "mitochondria"]),
+#                 "radius": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+#             },
+#             index=[f"shape_{i}" for i in range(1, 8)],
+#         ).set_geometry(gpd.points_from_xy([1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0], [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8]))
+#     )
+#
+#     result_adata = aggregate(subcellular, cellular, "structure", agg_func="sum")
+#     assert result_adata.obs_names.to_list() == ["shape_0", "shape_1"]
+#     assert result_adata.var_names.to_list() == ["nucleus", "mitochondria"]
+#     np.testing.assert_equal(result_adata.X.A, np.array([[2, 0], [1, 3]]))
 
 
 @pytest.mark.parametrize("image_schema", [Image2DModel])

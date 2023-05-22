@@ -229,9 +229,9 @@ class SpatialData:
         Parameters
         ----------
         values
-            Values to aggregate.
+            Spatial element object with values to aggregate.
         by
-            Regions to aggregate by.
+            Name of the spatial element describing the regions to aggregate by.
         agg_func
             Aggregation function to apply over point values, e.g. "mean", "sum", "count".
             Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
@@ -286,6 +286,8 @@ class SpatialData:
             sdata = SpatialData(labels={by: self.labels[by]}, table=table)
         elif by in self.shapes:
             sdata = SpatialData(shapes={by: self.shapes[by].iloc[table.obs_names].copy()}, table=table)
+        else:
+            raise ValueError(f"Unknown region  `{by}`.")
 
         values_type = get_model(values)
         if values_type is Image2DModel:

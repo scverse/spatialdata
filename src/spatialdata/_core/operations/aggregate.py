@@ -32,9 +32,8 @@ __all__ = ["aggregate"]
 def aggregate(
     values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
     by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
-    id_key: str | None = None,
     *,
-    value_key: str | None = None,
+    value_key: list[str] | str | None = None,
     agg_func: str | list[str] = "mean",
     target_coordinate_system: str = "global",
     **kwargs: Any,
@@ -48,13 +47,18 @@ def aggregate(
         Values to aggregate.
     by
         Regions to aggregate by.
-    id_key
-        Key to group observations in `values` by. E.g. this could be transcript id for points.
-        Defaults to `FEATURE_KEY` for points, required for shapes.
     value_key
-        Key to aggregate values by. This is the key in the values object.
-        If nothing is passed here, assumed to be a column of ones.
-        For points, this could be probe intensity or other continuous annotations.
+        Name (or list of names) of the columns containing the values to aggregate; can refer both to numerical or
+        categorical values. If the values are categorical, value_key can't be a list.
+
+        The key can be:
+
+             - the name of a column(s) in the dataframe (Dask DataFrame for points or GeoDataFrame for shapes);
+             - the name of obs column(s) in the associated AnnData table (for shapes and labels);
+             - the name of a var(s), referring to the column(s) of the X matrix in the table (for shapes and labels).
+
+        If nothing is passed here, it defaults to the equivalent of a column of ones.
+        Defaults to `FEATURE_KEY` for points (if present).
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count".
         Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
@@ -66,6 +70,7 @@ def aggregate(
 
     Returns
     -------
+    If value_key refers to a categorical variable, returns an AnnData of shape (by.shape[0], <n categories>).
     AnnData of shape (by.shape[0], values[id_key].nunique())])
 
     Notes
@@ -95,9 +100,9 @@ def aggregate(
     # dispatch
     if by_type is ShapesModel:
         if values_type is PointsModel:
-            return _aggregate_points_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
+            return _aggregate_points_by_shapes(values, by, value_key=value_key, agg_func=agg_func)
         if values_type is ShapesModel:
-            return _aggregate_shapes_by_shapes(values, by, id_key, value_key=value_key, agg_func=agg_func)
+            return _aggregate_shapes_by_shapes(values, by, value_key=value_key, agg_func=agg_func)
     if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values, by, agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
@@ -106,43 +111,33 @@ def aggregate(
 def _aggregate_points_by_shapes(
     points: ddf.DataFrame | pd.DataFrame,
     shapes: gpd.GeoDataFrame,
-    id_key: str | None = None,
     *,
     value_key: str | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
-    # Default value for id_key
-    if id_key is None:
-        id_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
-        if id_key is None:
-            raise ValueError(
-                "`FEATURE_KEY` is not specified for points, please pass `id_key` to the aggregation call, or specify "
-                "`FEATURE_KEY` for the points."
-            )
+    # Default value for value_key is ATTRS_KEY for points (if present)
+    if value_key is None and PointsModel.ATTRS_KEY in points.attrs:
+        value_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
 
     points = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
     shapes = circles_to_polygons(shapes)
 
-    return _aggregate_shapes(points, shapes, id_key, value_key, agg_func)
+    return _aggregate_shapes(values=points, by=shapes, value_key=value_key, agg_func=agg_func)
 
 
 def _aggregate_shapes_by_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str | None,
     *,
     value_key: str | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
-    if id_key is None:
-        raise ValueError("Must pass id_key for shapes.")
-
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
 
-    return _aggregate_shapes(values, by, id_key, value_key, agg_func)
+    return _aggregate_shapes(values=values, by=by, value_key=value_key, agg_func=agg_func)
 
 
 def _aggregate_image_by_labels(
@@ -208,9 +203,8 @@ def _aggregate_image_by_labels(
 
 
 def _aggregate_shapes(
-    value: gpd.GeoDataFrame,
+    values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    id_key: str,
     value_key: str | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
@@ -221,19 +215,15 @@ def _aggregate_shapes(
 
     Parameters
     ----------
-    value
+    values
         Geopandas dataframe to be aggregated. Must have a geometry column.
     by
         Geopandas dataframe to group values by. Must have a geometry column.
-    id_key
-        Column in value dataframe to group values by.
     value_key
         Column in value dataframe to perform aggregation on.
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
-    assert pd.api.types.is_categorical_dtype(value[id_key]), f"{id_key} must be categorical"
-
     if by.index.name is None:
         by.index.name = "cell"
     by_id_key = by.index.name

@@ -19,6 +19,8 @@ __all__ = [
     "aggregate",
     "bounding_box_query",
     "polygon_query",
+    "locate_value",
+    "get_values",
     "SpatialData",
     "read_zarr",
     "unpad_raster",
@@ -30,6 +32,7 @@ from spatialdata._core.concatenate import concatenate
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform
+from spatialdata._core.query.relational_query import get_values, locate_value
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import save_transformations

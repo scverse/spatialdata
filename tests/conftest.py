@@ -31,6 +31,7 @@ from spatialdata.models import (
 from xarray import DataArray
 from spatialdata.datasets import BlobsDataset
 import geopandas as gpd
+import dask.dataframe as dd
 
 RNG = default_rng()
 
@@ -343,7 +344,7 @@ def _make_circles(centroid_coordinates: np.ndarray, radius: list[float]) -> GeoD
     return ShapesModel.parse(centroid_coordinates, geometry=0, radius=radius)
 
 
-def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
+def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> SpatialData:
     """
     Creates a SpatialData object with many edge cases for testing querying and aggregation.
 
@@ -368,8 +369,13 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90], [210, 15]])
     by_centroids_circles = np.array([[24, 15], [290, 15]])
     values_points = _make_points(np.vstack((values_centroids_squares, values_centroids_circles)))
+
     values_squares = _make_squares(values_centroids_squares, half_widths=[6] * 9 + [15, 15])
+
     values_circles = _make_circles(values_centroids_circles, radius=[6] * 9)
+    values_circles["categorical_in_gdf"] = pd.Categorical(["a"] * 9)
+    values_circles["numerical_in_gdf"] = np.arange(9)
+
     by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15, 30])
     by_circles = _make_circles(by_centroids_circles, radius=[30, 30])
 
@@ -379,9 +385,17 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     values_squares.loc[len(values_squares)] = [polygon]
     ShapesModel.validate(values_squares)
 
+    values_squares["categorical_in_gdf"] = pd.Categorical(["a"] * 9 + ["b"] * 3)
+    values_squares["numerical_in_gdf"] = np.arange(12)
+
     polygon = Polygon([(0, 90 - 10), (0 + 30, 90), (0, 90 + 10), (50, 90)])
     by_squares.loc[len(by_squares)] = [polygon]
     ShapesModel.validate(by_squares)
+
+    s = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
+    values_points["categorical_in_ddf"] = dd.from_pandas(s, npartitions=1)
+    s = pd.Series(RNG.random(20))
+    values_points["numerical_in_ddf"] = dd.from_pandas(s, npartitions=1)
 
     sdata = SpatialData(
         points={"points": values_points},
@@ -392,29 +406,49 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
             "by_circles": by_circles,
         },
     )
-    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
-    PLOT = False
-    if PLOT:
-        ##
-        import matplotlib.pyplot as plt
-
-        ax = plt.gca()
-        sdata.pl.render_shapes(element="values_polygons", na_color=(0.5, 0.2, 0.5, 0.5)).pl.render_points().pl.show(
-            ax=ax
-        )
-        sdata.pl.render_shapes(element="values_circles", na_color=(0.5, 0.2, 0.5, 0.5)).pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
-        plt.show()
-        ##
 
     # generate table
-    x = np.ones((21, 2)) * np.array([1, 2])
+    x = RNG.random((21, 1))
     region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
     instance_id = np.array(list(range(9)) + list(range(12)))
-    table = AnnData(x, obs=pd.DataFrame({"region": region, "instance_id": instance_id}))
+    categorical_obs = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3))
+    numerical_obs = pd.Series(RNG.random(21))
+    table = AnnData(
+        x,
+        obs=pd.DataFrame(
+            {
+                "region": region,
+                "instance_id": instance_id,
+                "categorical_in_obs": categorical_obs,
+                "numerical_in_obs": numerical_obs,
+            }
+        ),
+        var=pd.DataFrame(index=["numerical_in_var"]),
+    )
     table = TableModel.parse(
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
     sdata.table = table
+    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
+    if plot:
+        ##
+        import matplotlib.pyplot as plt
+        import spatialdata_plot
+
+        # otherwise pre-commits will remove the "unused" import
+        _ = spatialdata_plot
+
+        ax = plt.gca()
+        sdata.pl.render_shapes(element="values_polygons", color="categorical_in_obs").pl.show(ax=ax)
+        sdata.pl.render_points(color="categorical_in_ddf", size=10.0, palette="tab10").pl.show(ax=ax)
+        sdata.pl.render_shapes(element="values_circles", color="categorical_in_obs").pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
+        plt.show()
+        ##
     return sdata
+
+
+@pytest.fixture()
+def sdata_query_aggregation() -> SpatialData:
+    return _make_sdata_for_testing_querying_and_aggretation()

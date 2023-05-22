@@ -26,7 +26,7 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 
-from tests.conftest import _make_points, _make_sdata_for_testing_querying_and_aggretation, _make_squares
+from tests.conftest import _make_points, _make_squares
 
 
 # ---------------- test bounding box queries ---------------[
@@ -357,8 +357,8 @@ def test_bounding_box_filter_table():
 
 
 # ----------------- test polygon query -----------------
-def test_polygon_query_points():
-    sdata = _make_sdata_for_testing_querying_and_aggretation()
+def test_polygon_query_points(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
     polygon = sdata["by_polygons"].geometry.iloc[0]
     queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
     points = queried["points"].compute()
@@ -368,8 +368,8 @@ def test_polygon_query_points():
     # TODO: the case of querying points with multiple polygons is not currently implemented
 
 
-def test_polygon_query_shapes():
-    sdata = _make_sdata_for_testing_querying_and_aggretation()
+def test_polygon_query_shapes(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
         table=sdata.table,
@@ -414,8 +414,8 @@ def test_polygon_query_multipolygons():
     pass
 
 
-def test_polygon_query_spatial_data():
-    sdata = _make_sdata_for_testing_querying_and_aggretation()
+def test_polygon_query_spatial_data(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={
             "values_polygons": sdata["values_polygons"],
