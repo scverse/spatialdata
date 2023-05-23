@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from urlpath import URL
 from typing import Optional, Union
 
 import numpy as np
@@ -14,12 +15,15 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata.models import TableModel
 
+from spatialdata._logging import logger
+
 
 def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
-    if isinstance(store, str):
-        store = Path(store)
+    if isinstance(store, zarr.Group):
+        f = store
+    else:
+        f = zarr.open(store, mode="r")
 
-    f = zarr.open(store, mode="r")
     images = {}
     labels = {}
     points = {}
@@ -27,47 +31,47 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     shapes = {}
 
     # read multiscale images
-    images_store = store / "images"
-    if images_store.exists():
-        f = zarr.open(images_store, mode="r")
-        for k in f:
-            f_elem = f[k].name
-            f_elem_store = f"{images_store}{f_elem}"
-            images[k] = _read_multiscale(f_elem_store, raster_type="image")
+    if 'images' in f:
+        images_store = f["images"]
+        for k in images_store:
+            f_elem = images_store[k]
+            f_elem_store = Path(images_store._store.path) / f_elem.path
+            logger.debug(f"Store path for multiscale {f_elem}")
+            element = _read_multiscale(f_elem_store, raster_type="image")
+            print(element)
+            images[k] = element
 
     # read multiscale labels
     with ome_zarr_logger(logging.ERROR):
-        labels_store = store / "labels"
-        if labels_store.exists():
-            f = zarr.open(labels_store, mode="r")
-            for k in f:
-                f_elem = f[k].name
-                f_elem_store = f"{labels_store}{f_elem}"
+        if 'labels' in f:
+            labels_store = f["labels"]
+            for k in labels_store:
+                f_elem = labels_store[k]
+                f_elem_store = Path(labels_store._store.path) / f_elem.path
+                logger.debug(f"Store path for multiscale {f_elem}")
                 labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
 
     # now read rest of the data
-    points_store = store / "points"
-    if points_store.exists():
-        f = zarr.open(points_store, mode="r")
-        for k in f:
-            f_elem = f[k].name
-            f_elem_store = f"{points_store}{f_elem}"
+    if 'points' in f:
+        points_store = f["points"]
+        for k in points_store:
+            f_elem = points_store[k]
+            f_elem_store = Path(points_store._store.path) / f_elem.path
+            logger.debug(f"Store path for points {f_elem_store}")
             points[k] = _read_points(f_elem_store)
 
-    shapes_store = store / "shapes"
-    if shapes_store.exists():
-        f = zarr.open(shapes_store, mode="r")
-        for k in f:
-            f_elem = f[k].name
-            f_elem_store = f"{shapes_store}{f_elem}"
+    if 'shapes' in f:
+        shapes_store = f["shapes"]
+        for k in shapes_store:
+            f_elem = shapes_store[k]
+            f_elem_store = Path(shapes_store._store.path) / f_elem.path
             shapes[k] = _read_shapes(f_elem_store)
 
-    table_store = store / "table"
-    if table_store.exists():
-        f = zarr.open(table_store, mode="r")
-        for k in f:
-            f_elem = f[k].name
-            f_elem_store = f"{table_store}{f_elem}"
+    if 'table' in f:
+        table_store = f["table"]
+        for k in table_store:
+            f_elem = table_store[k]
+            f_elem_store = Path(table_store._store.path) / f_elem.path
             table = read_anndata_zarr(f_elem_store)
             if TableModel.ATTRS_KEY in table.uns:
                 # fill out eventual missing attributes that has been omitted because their value was None
