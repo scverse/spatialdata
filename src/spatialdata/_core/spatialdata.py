@@ -961,6 +961,7 @@ class SpatialData:
         file_path: Union[str, Path],
         storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
         overwrite: bool = False,
+        consolidate_metadata: bool = True,
     ) -> None:
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
@@ -1095,6 +1096,10 @@ class SpatialData:
         except Exception as e:  # noqa: B902
             self.path = None
             raise e
+        
+        if consolidate_metadata:
+            # consolidate metadata to more easily support remote reading
+            zarr.consolidate_metadata(store)
 
         # old code to support overwriting the backing file
         # if target_path is not None:
