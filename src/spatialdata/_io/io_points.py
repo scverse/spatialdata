@@ -1,6 +1,7 @@
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Union
+import os
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defined]
@@ -29,7 +30,7 @@ def _read_points(
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
 
-    path = Path(f._store.path) / f.path / "points.parquet"
+    path = os.path.join(f._store.path, f.path, points.parquet)
     table = read_parquet(path)
     assert isinstance(table, DaskDataFrame)
 
