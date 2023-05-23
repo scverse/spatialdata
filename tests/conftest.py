@@ -33,7 +33,7 @@ from spatialdata.datasets import BlobsDataset
 import geopandas as gpd
 import dask.dataframe as dd
 
-RNG = default_rng()
+RNG = default_rng(seed=0)
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"

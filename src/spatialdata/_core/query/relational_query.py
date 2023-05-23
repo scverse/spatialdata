@@ -7,10 +7,19 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
-from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, ShapesModel, TableModel, get_model
+from spatialdata.models import (
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    ShapesModel,
+    SpatialElement,
+    TableModel,
+    get_model,
+)
 
 if TYPE_CHECKING:
     from spatialdata import SpatialData
@@ -26,13 +35,16 @@ def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: Union[
     return table
 
 
-def _filter_table_by_elements(table: AnnData, elements_dict: dict[str, dict[str, Any]]) -> Optional[AnnData]:
+def _filter_table_by_elements(
+    table: AnnData, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
+) -> Optional[AnnData]:
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
     if table is None:
         return None
     to_keep = np.zeros(len(table), dtype=bool)
     region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    instances = None
     for _, elements in elements_dict.items():
         for name, element in elements.items():
             if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
@@ -50,35 +62,79 @@ def _filter_table_by_elements(table: AnnData, elements_dict: dict[str, dict[str,
                 instances = element.index.to_numpy()
             else:
                 continue
-            indices = (table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))
+            indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
             to_keep = to_keep | indices
-    table = table[to_keep, :].copy()
+    table = table[to_keep, :]
+    if match_rows:
+        assert instances is not None
+        assert isinstance(instances, np.ndarray)
+        assert np.sum(to_keep) != 0, "No row matches in the table annotates the element"
+        assert np.sum(to_keep) == len(instances), (
+            "Sorting is not supported when filtering by multiple elements or when no elements match to rows in the "
+            "table"
+        )
+        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
+        table_df = pd.DataFrame({"instance_id": table.obs[instance_key], "position": np.arange(len(instances))})
+        merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
+        matched_positions = merged["position"].to_numpy()
+        table = table[matched_positions, :]
+    table = table.copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
 
 
+def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
+    """
+    Filter the table and reorders the rows to match the instances (rows/labels) of the spatial element specified.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object
+    element_name
+        Name of the element to match the table to
+
+    Returns
+    -------
+    Table with the rows matching the instances of the element
+    """
+    assert sdata.table is not None, "No table found in the SpatialData"
+    element_type, _, element = sdata._find_element(element_name)
+    assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
+    elements_dict = {element_type: {element_name: element}}
+    return _filter_table_by_elements(sdata.table, elements_dict, match_rows=True)
+
+
 @dataclass
 class _ValueOrigin:
-    name: str
     origin: str
     is_categorical: bool
     value_key: str
 
 
-def locate_value(sdata: SpatialData, element_name: str, value_key: str) -> list[_ValueOrigin]:
+def _locate_value(
+    value_key: str,
+    element: Optional[SpatialElement] = None,
+    sdata: Optional[SpatialData] = None,
+    element_name: Optional[str] = None,
+) -> list[_ValueOrigin]:
+    assert (element is None) ^ (sdata is None and element_name is None)
+    el = element if element is not None else sdata[element_name]
     origins = []
-    model = get_model(sdata[element_name])
+    # one important usage of locate_values() is from _aggregate_shapes(), which converts the points into GeoDataFrames,
+    # so if we detect a GeoDataFrame, without the radius, let's not call get_models (which otherwise would call the
+    # validation and would fail) and treat it a points object
+    model = PointsModel if isinstance(el, GeoDataFrame) and "radius" not in el.columns else get_model(el)
     if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel]:
         raise ValueError(f"Cannot get value from {model}")
-    el = sdata[element_name]
     # adding from the dataframe columns
     if model in [PointsModel, ShapesModel] and value_key in el.columns:
         value = el[value_key]
         is_categorical = pd.api.types.is_categorical_dtype(value)
-        origins.append(_ValueOrigin(name=element_name, origin="df", is_categorical=is_categorical, value_key=value_key))
+        origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
 
     # adding from the obs columns or var
-    if model in [ShapesModel, Labels2DModel, Labels3DModel]:
+    if model in [ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
         table = sdata.table
         if table is not None:
             # check if the table is annotating the element
@@ -88,33 +144,60 @@ def locate_value(sdata: SpatialData, element_name: str, value_key: str) -> list[
                 if value_key in table.obs.columns:
                     value = table.obs[value_key]
                     is_categorical = pd.api.types.is_categorical_dtype(value)
-                    origins.append(
-                        _ValueOrigin(
-                            name=element_name, origin="obs", is_categorical=is_categorical, value_key=value_key
-                        )
-                    )
+                    origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
                 # check if the value_key is in the var
                 elif value_key in table.var_names:
-                    origins.append(
-                        _ValueOrigin(name=element_name, origin="var", is_categorical=False, value_key=value_key)
-                    )
+                    origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+
+    # adding from the channel names of images
+    # TODO
     return origins
 
 
-def get_values(sdata: SpatialData, element_name: str, value_key: str | list[str]) -> pd.DataFrame | np.ndarray:
+def get_values(
+    value_key: str | list[str],
+    element: Optional[SpatialElement] = None,
+    sdata: Optional[SpatialData] = None,
+    element_name: Optional[str] = None,
+) -> pd.DataFrame | np.ndarray:
+    """
+    Get the values of the element, either from the dataframe columns, or from the table obs or var columns, or from the
+    channel names of images.
+
+    Parameters
+    ----------
+    value_key
+        Name of the column/channel name to get the values from
+    element
+        SpatialElement object; either element or (sdata, element_name) must be provided
+    sdata
+        SpatialData object; either element or (sdata, element_name) must be provided
+    element_name
+        Name of the element; either element or (sdata, element_name) must be provided
+
+    Returns
+    -------
+    DataFrame or ndarray with the values requested.
+
+    """
+    assert (element is None) ^ (sdata is None and element_name is None)
+    el = element if element is not None else sdata[element_name]
     value_keys = [value_key] if isinstance(value_key, str) else value_key
     locations = []
     for vk in value_keys:
-        origins = locate_value(sdata, element_name, vk)
+        origins = _locate_value(value_key=vk, element=element, sdata=sdata, element_name=element_name)
         if len(origins) > 1:
-            raise ValueError(f"{vk} has been found in multiple locations of {element_name}: {origins}")
+            raise ValueError(
+                f"{vk} has been found in multiple locations of (element, sdata, element_name) = "
+                f"{(element, sdata, element_name)}: {origins}"
+            )
         if len(origins) == 0:
-            raise ValueError(f"{vk} has not been found in {element_name}")
+            raise ValueError(
+                f"{vk} has not been found in (element, sdata, element_name) = {(element, sdata, element_name)}"
+            )
         locations.append(origins[0])
     categorical_values = {x.is_categorical for x in locations}
     origin_values = {x.origin for x in locations}
-    name_values = {x.name for x in locations}
-    assert len(name_values) == 1
     value_key_values = [x.value_key for x in locations]
     if len(categorical_values) == 2:
         raise ValueError("Cannot mix categorical and non-categorical values. Please call aggregate() multiple times.")
@@ -128,10 +211,11 @@ def get_values(sdata: SpatialData, element_name: str, value_key: str | list[str]
         )
     origin = origin_values.__iter__().__next__()
     if origin == "df":
-        el = sdata[element_name]
         return el[value_key_values]
-    if origin == "obs":
-        return sdata.table.obs[value_key_values]
-    if origin == "var":
-        return sdata.table[:, value_key_values].X
+    if sdata is not None:
+        matched_table = match_table_to_element(sdata=sdata, element_name=element_name)
+        if origin == "obs":
+            return matched_table.obs[value_key_values]
+        if origin == "var":
+            return matched_table[:, value_key_values].X
     raise ValueError(f"Unknown origin {origin}")

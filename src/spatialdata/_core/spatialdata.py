@@ -1380,7 +1380,14 @@ class SpatialData:
             for k, v in d.items():
                 yield element_type, k, v
 
-    def __getitem__(self, item: str) -> SpatialElement | AnnData:
+    def _find_element(self, element_name) -> tuple[str, str, SpatialElement]:
+        for element_type, element_name_, element in self._gen_elements():
+            if element_name_ == element_name:
+                return element_type, element_name_, element
+        else:
+            raise KeyError(f"Could not find element with name {element_name!r}")
+
+    def __getitem__(self, item: str) -> SpatialElement:
         """
         Return the element with the given name.
 
@@ -1393,11 +1400,8 @@ class SpatialData:
         -------
         The element.
         """
-        for _, element_name, element in self._gen_elements():
-            if element_name == item:
-                return element
-        else:
-            raise KeyError(f"Could not find element with name {item!r}")
+        _, _, element = self._find_element(item)
+        return element
 
     def __setitem__(self, key: str, value: SpatialElement | AnnData) -> None:
         """

@@ -25,8 +25,8 @@ Operations on `SpatialData` objects.
 
     bounding_box_query
     polygon_query
-    locate_value
     get_values
+    match_table_to_element
     concatenate
     rasterize
     transform

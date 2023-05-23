@@ -3,11 +3,12 @@ from typing import Optional
 import numpy as np
 import pytest
 from anndata import AnnData
+from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
-from spatialdata.models import Image2DModel, Labels2DModel
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel
 
 RNG = default_rng(42)
 
@@ -29,42 +30,53 @@ def _parse_shapes(
 
 
 @pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
-@pytest.mark.parametrize("value_key", ["categorical_in_ddf", "numerical_in_ddf"])
-def test_aggregate_points_by_polygons_categorical(sdata_query_aggregation, by_shapes: str, value_key: str) -> None:
+# @pytest.mark.parametrize("value_key", ["categorical_in_ddf", "numerical_in_ddf"])
+@pytest.mark.parametrize("value_key", ["numerical_in_ddf"])
+def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, value_key: str) -> None:
     sdata = sdata_query_aggregation
     _parse_shapes(sdata, by_shapes=by_shapes)
+    points = sdata["points"]
+    shapes = sdata[by_shapes]
+    result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum")
 
-    # points = PointsModel.parse(
-    #     pd.DataFrame(
-    #         {
-    #             "x": [1.2, 2.3, 4.1, 6.0, 6.1, 8.0, 9.0],
-    #             "y": [3.5, 4.8, 7.5, 4.0, 9.0, 5.5, 9.8],
-    #             "gene": list("aaabbbb"),
-    #         }
-    #     ),
-    #     coordinates={"x": "x", "y": "y"},
-    #     feature_key="gene",
-    # )
-    # # shape_0 doesn't contain points, the other two shapes do
-    # shapes = ShapesModel.parse(
-    #     gpd.GeoDataFrame(
-    #         geometry=[
-    #             shapely.Polygon([(0.0, 10.0), (2.0, 10.0), (0.0, 9.0)]),
-    #             shapely.Polygon([(0.5, 7.0), (4.0, 2.0), (5.0, 8.0)]),
-    #             shapely.Polygon([(3.0, 8.0), (7.0, 2.0), (10.0, 6.0), (7.0, 10.0)]),
-    #         ],
-    #         index=["shape_0", "shape_1", "shape_2"],
-    #     )
-    # )
-    #
-    # result_adata = aggregate(points, shapes, "gene", agg_func="sum")
-    # assert result_adata.obs_names.to_list() == ["shape_0", "shape_1", "shape_2"]
-    # assert result_adata.var_names.to_list() == ["a", "b"]
-    # np.testing.assert_equal(result_adata.X.A, np.array([[0, 0], [2, 0], [1, 3]]))
-    #
-    # # id_key can be implicit for points
-    # result_adata_implicit = aggregate(points, shapes, agg_func="sum")
-    # assert_equal(result_adata, result_adata_implicit)
+    if by_shapes == "by_circles":
+        assert result_adata.obs_names.to_list() == ["0", "1"]
+    else:
+        assert result_adata.obs_names.to_list() == ["0", "1", "2", "3", "4"]
+
+    if value_key == "categorical_in_ddf":
+        assert result_adata.var_names.to_list() == ["a", "b", "c"]
+        if by_shapes == "by_circles":
+            np.testing.assert_equal(result_adata.X.A, np.array([[3, 3, 0], [0, 0, 0]]))
+        else:
+            np.testing.assert_equal(result_adata.X.A, np.array([[3, 2, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 1, 0]]))
+    else:
+        assert result_adata.var_names.to_list() == ["numerical_in_ddf"]
+        if by_shapes == "by_circles":
+            np.testing.assert_equal(result_adata.X.A, np.array([[1.841450277084701], [0]]))
+        else:
+            np.testing.assert_equal(
+                result_adata.X.A, np.array([[3.579436217876709], [0], [0], [0], [0.440377154715784]])
+            )
+
+    # id_key can be implicit for points
+    points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
+    result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum")
+    assert_equal(result_adata, result_adata_implicit)
+
+    # in the categorical case, check that sum and count behave the same
+    result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count")
+    assert_equal(result_adata, result_adata_count)
+
+    # querying multiple values at the same time
+    points["another_" + value_key] = points[value_key]
+    new_value_key = [value_key, "another_" + value_key]
+    if value_key == "categorical_in_ddf":
+        with pytest.raises(ValueError):
+            aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
+    else:
+        with pytest.raises(ValueError):
+            aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
 
 
 # def test_aggregate_points_by_circles_categorical(sdata_query_aggregation) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import anndata as ad
 import dask as da
@@ -16,6 +16,7 @@ from xrspatial import zonal_stats
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query._utils import circles_to_polygons
+from spatialdata._core.query.relational_query import get_values
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -26,16 +27,20 @@ from spatialdata.models import (
 )
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
+
 __all__ = ["aggregate"]
 
 
 def aggregate(
-    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
-    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
-    *,
+    values_sdata: Optional[SpatialData] = None,
+    values: Optional[ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str] = None,
+    by: Optional[gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage] = None,
     value_key: list[str] | str | None = None,
     agg_func: str | list[str] = "mean",
     target_coordinate_system: str = "global",
+    fractions: bool = True,
     **kwargs: Any,
 ) -> ad.AnnData:
     """
@@ -83,6 +88,15 @@ def aggregate(
     https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to
     address this behavior.
     """
+    assert by is not None
+    if not ((values_sdata is not None and isinstance(values, str)) ^ (not isinstance(values, str))):
+        raise ValueError(
+            "To specify the spatial element element with the values to aggregate, please do one of the following: "
+            "- either pass a SpatialElement to the `values` parameter (and keep `values_sdata` = None);"
+            "- either `values_sdata` needs to be a SpatialData object, and `values` needs to be the string nane of "
+            "the element."
+        )
+    values = values_sdata[values] if values_sdata is not None else values
     # get schema
     by_type = get_model(by)
     values_type = get_model(values)
@@ -104,15 +118,15 @@ def aggregate(
         if values_type is ShapesModel:
             return _aggregate_shapes_by_shapes(values, by, value_key=value_key, agg_func=agg_func)
     if by_type is Labels2DModel and values_type is Image2DModel:
-        return _aggregate_image_by_labels(values, by, agg_func, **kwargs)
+        return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
 
 def _aggregate_points_by_shapes(
     points: ddf.DataFrame | pd.DataFrame,
     shapes: gpd.GeoDataFrame,
-    *,
-    value_key: str | None = None,
+    values_sdata: Optional[SpatialData] = None,
+    value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     from spatialdata.models import points_dask_dataframe_to_geopandas
@@ -124,20 +138,22 @@ def _aggregate_points_by_shapes(
     points = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
     shapes = circles_to_polygons(shapes)
 
-    return _aggregate_shapes(values=points, by=shapes, value_key=value_key, agg_func=agg_func)
+    return _aggregate_shapes(
+        values=points, by=shapes, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
+    )
 
 
 def _aggregate_shapes_by_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    *,
-    value_key: str | None = None,
+    values_sdata: Optional[SpatialData] = None,
+    value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
 
-    return _aggregate_shapes(values=values, by=by, value_key=value_key, agg_func=agg_func)
+    return _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
 
 
 def _aggregate_image_by_labels(
@@ -205,7 +221,8 @@ def _aggregate_image_by_labels(
 def _aggregate_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    value_key: str | None = None,
+    values_sdata: Optional[SpatialData] = None,
+    value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     """
@@ -224,40 +241,107 @@ def _aggregate_shapes(
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
-    if by.index.name is None:
-        by.index.name = "cell"
-    by_id_key = by.index.name
-    joined = by.sjoin(value)
-
-    if value_key is None:
-        point_values = np.broadcast_to(True, joined.shape[0])
-        value_key = "count"
+    if values_sdata is not None:
+        element_name = values_sdata._locate_spatial_element(values)[0]
+        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=element_name)
     else:
-        point_values = joined[value_key]
-    to_agg = pd.DataFrame(
-        {
-            by_id_key: joined.index,
-            id_key: joined[id_key].values,
-            value_key: point_values,
-        }
-    )
-    ##
-    aggregated = to_agg.groupby([by_id_key, id_key]).agg(agg_func).reset_index()
+        assert value_key is not None
+        actual_values = get_values(value_key=value_key, element=values)
+
+    categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
+
+    ONES_COLUMN = "__ones_column"
+    AREAS_COLUMN = "__areas_column"
+
+    assert (
+        ONES_COLUMN not in by.columns
+        and AREAS_COLUMN not in by.columns
+        and ONES_COLUMN not in actual_values.columns
+        and AREAS_COLUMN not in actual_values.columns
+    ), f"Column names {ONES_COLUMN} and {AREAS_COLUMN} are reserved for internal use. Please rename your columns."
+    by[ONES_COLUMN] = 1
+    by[AREAS_COLUMN] = by.geometry.area
+    values[ONES_COLUMN] = 1
+    values[AREAS_COLUMN] = values.geometry.area
+
+    if isinstance(value_key, str):
+        value_key = [value_key]
+    assert not (any(vk in values.columns for vk in value_key) and not all(vk in values.columns for vk in value_key))
+    to_remove = []
+    for vk in value_key:
+        if vk not in values.columns:
+            values[vk] = actual_values[vk]
+            to_remove.append(vk)
+
+    joined = by.sjoin(values)
+    assert "__index" not in joined
+    joined["__index"] = joined.index
+
+    if categorical:
+        assert len(value_key) == 1
+        vk = value_key[0]
+        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg("sum").reset_index()
+        aggregated_values = aggregated[ONES_COLUMN + "_right"].values
+        # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
+    else:
+        aggregated = joined.groupby(["__index"])[vk].agg("sum").reset_index()
+        aggregated_values = aggregated[vk].values
+        # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
 
     # this is for only shapes in "by" that intersect with something in "value"
-    obs_id_categorical_categories = by.index.tolist()
-    obs_id_categorical = pd.Categorical(aggregated[by_id_key], categories=obs_id_categorical_categories)
+    # rows_categories
+    # columns_categories
+    # rows_nodes
+    # columns_nodes
+    rows_categories = by.index.tolist()
+    rows_nodes = pd.Categorical(aggregated["__index"], categories=rows_categories)
+    if categorical:
+        columns_categories = values[vk].cat.categories.tolist()
+        columns_nodes = pd.Categorical(aggregated[vk], categories=columns_categories)
+    else:
+        columns_categories = value_key
+        assert len(aggregated_values) % len(columns_categories) == 0
+        columns_nodes = pd.Categorical(
+            columns_categories * (len(aggregated_values) // len(columns_categories)), categories=columns_categories
+        )
 
+    ##
     X = sparse.coo_matrix(
         (
-            aggregated[value_key].values,
-            (obs_id_categorical.codes, aggregated[id_key].cat.codes),
+            aggregated_values,
+            (rows_nodes.codes, columns_nodes.codes),
         ),
-        shape=(len(obs_id_categorical.categories), len(joined[id_key].cat.categories)),
+        shape=(len(rows_categories), len(columns_categories)),
     ).tocsr()
-    return ad.AnnData(
+
+    print(X.todense())
+
+    ##
+    anndata = ad.AnnData(
         X,
-        obs=pd.DataFrame(index=pd.Categorical(obs_id_categorical_categories).categories),
-        var=pd.DataFrame(index=joined[id_key].cat.categories),
+        obs=pd.DataFrame(index=pd.Categorical(rows_categories).categories),
+        var=pd.DataFrame(index=pd.Categorical(columns_categories).categories),
         dtype=X.dtype,
     )
+    print(anndata)
+    print(anndata.obs_names)
+    print(anndata.var_names)
+    print(anndata.X.todense())
+    ##
+    with pd.option_context(
+        "display.max_rows",
+        None,
+        "display.max_columns",
+        None,
+        "display.precision",
+        3,
+    ):
+        print(joined)
+    print(value_key)
+    ##
+
+    # cleanup: remove columns previously added
+    by.drop(columns=[ONES_COLUMN, AREAS_COLUMN], inplace=True)
+    values.drop(columns=[ONES_COLUMN, AREAS_COLUMN] + to_remove, inplace=True)
+
+    return anndata
