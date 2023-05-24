@@ -1,8 +1,7 @@
-from pathlib import Path
 import logging
-from typing import Optional, Union
-
 import os
+from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import zarr

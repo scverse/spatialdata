@@ -1,7 +1,7 @@
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Union
-import os
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defined]
@@ -30,8 +30,9 @@ def _read_points(
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
 
-    path = os.path.join(f._store.path, f.path, points.parquet)
-    table = read_parquet(path)
+    path = os.path.join(f._store.path, f.path, "points.parquet")
+    # cache on remote file needed for parquet reader to work
+    table = read_parquet("simplecache::" + path if "http" in path else path)
     assert isinstance(table, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])

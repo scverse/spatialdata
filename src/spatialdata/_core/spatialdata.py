@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import zarr
 from anndata import AnnData
+from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
-from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
 from spatialdata._io import (
@@ -1096,7 +1096,7 @@ class SpatialData:
         except Exception as e:  # noqa: B902
             self.path = None
             raise e
-        
+
         if consolidate_metadata:
             # consolidate metadata to more easily support remote reading
             zarr.consolidate_metadata(store)
@@ -1287,7 +1287,7 @@ class SpatialData:
                                 assert isinstance(t, tuple)
                                 assert len(t) == 1
                                 parquet_file = t[0]
-                                table = read_table(parquet_file)
+                                table = read_parquet(parquet_file)
                                 length = len(table)
                             else:
                                 # length = len(v)
