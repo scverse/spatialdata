@@ -135,7 +135,7 @@ class BlobsDataset:
 
     def _image_blobs(
         self,
-        transforms: dict[str, Any],
+        transforms: Optional[dict[str, Any]] = None,
         length: int = 512,
         multiscale: bool = False,
     ) -> Union[SpatialImage, MultiscaleSpatialImage]:
@@ -152,7 +152,7 @@ class BlobsDataset:
         return Image2DModel.parse(x, transformations=transforms, dims=dims, scale_factors=[2, 2])
 
     def _labels_blobs(
-        self, transforms: dict[str, Any], length: int = 512, multiscale: bool = False
+        self, transforms: Optional[dict[str, Any]] = None, length: int = 512, multiscale: bool = False
     ) -> Union[SpatialImage, MultiscaleSpatialImage]:
         """Create a 2D labels."""
         from scipy.ndimage import watershed_ift
@@ -193,7 +193,9 @@ class BlobsDataset:
         mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
         return mask
 
-    def _points_blobs(self, transforms: dict[str, Any], length: int = 512, n_points: int = 200) -> DaskDataFrame:
+    def _points_blobs(
+        self, transforms: Optional[dict[str, Any]] = None, length: int = 512, n_points: int = 200
+    ) -> DaskDataFrame:
         rng = default_rng(42)
         arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
@@ -209,7 +211,9 @@ class BlobsDataset:
             arr, transformations=transforms, annotation=annotation, feature_key="genes", instance_key="instance_id"
         )
 
-    def _circles_blobs(self, transforms: dict[str, Any], length: int = 512, n_shapes: int = 5) -> GeoDataFrame:
+    def _circles_blobs(
+        self, transforms: Optional[dict[str, Any]] = None, length: int = 512, n_shapes: int = 5
+    ) -> GeoDataFrame:
         midpoint = length // 2
         halfmidpoint = midpoint // 2
         radius = length // 10
@@ -223,7 +227,7 @@ class BlobsDataset:
 
     def _polygons_blobs(
         self,
-        transforms: dict[str, Any],
+        transforms: Optional[dict[str, Any]] = None,
         length: int = 512,
         n_shapes: int = 5,
         multipolygons: bool = False,
