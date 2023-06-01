@@ -3,7 +3,7 @@ from spatialdata.datasets import blobs, raccoon
 
 def test_datasets() -> None:
     extra_cs = "test"
-    sdata_blobs = blobs(extra_coord_space=extra_cs)
+    sdata_blobs = blobs(extra_coord_system=extra_cs)
 
     assert len(sdata_blobs.table) == 26
     assert len(sdata_blobs.shapes["blobs_circles"]) == 5
