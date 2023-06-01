@@ -45,6 +45,9 @@ def blobs(
     n_shapes
         Number of max shapes to generate.
         At most, as if overlapping they will be discarded
+    extra_coord_space
+            Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+
 
     Returns
     -------
@@ -98,7 +101,7 @@ class BlobsDataset:
         n_shapes
             Number of max shapes to generate.
             At most, as if overlapping they will be discarded
-        extra_space
+        extra_coord_space
             Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
         """
         self.length = length
