@@ -173,9 +173,9 @@ class BlobsDataset:
 
     def _points_blobs(self, length: int = 512, n_points: int = 200) -> DaskDataFrame:
         rng = default_rng(42)
-        arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
+        arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
-        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int64)
         genes = rng.choice(["a", "b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
