@@ -2,7 +2,8 @@ from spatialdata.datasets import blobs, raccoon
 
 
 def test_datasets() -> None:
-    sdata_blobs = blobs()
+    extra_cs = "test"
+    sdata_blobs = blobs(extra_coord_space=extra_cs)
 
     assert len(sdata_blobs.table) == 26
     assert len(sdata_blobs.shapes["blobs_circles"]) == 5
@@ -13,6 +14,7 @@ def test_datasets() -> None:
     assert len(sdata_blobs.images["blobs_multiscale_image"]) == 3
     assert sdata_blobs.labels["blobs_labels"].shape == (512, 512)
     assert len(sdata_blobs.labels["blobs_multiscale_labels"]) == 3
+    assert extra_cs in sdata_blobs.coordinate_systems
     # this catches this bug: https://github.com/scverse/spatialdata/issues/269
     _ = str(sdata_blobs)
 
