@@ -1,6 +1,5 @@
 """SpatialData datasets."""
-from abc import ABC
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -24,8 +23,6 @@ from spatialdata.models import (
     TableModel,
 )
 from spatialdata.transformations import Identity
-
-T = TypeVar("T", bound=ABC)
 
 __all__ = ["blobs", "raccoon"]
 
