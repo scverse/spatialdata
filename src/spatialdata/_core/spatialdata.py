@@ -266,8 +266,8 @@ class SpatialData:
             raise ValueError(f"Unknown region  `{by}`.")
 
         adata = aggregate(
-            values,
-            by_,
+            values=values,
+            by=by_,
             agg_func=agg_func,
             target_coordinate_system=target_coordinate_system,
             id_key=id_key,

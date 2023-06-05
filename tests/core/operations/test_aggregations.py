@@ -211,15 +211,15 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     image = image_schema.parse(image)
     labels = labels_schema.parse(labels_blobs)
 
-    out = aggregate(image, labels)
+    out = aggregate(values=image, by=labels)
     assert len(out) + 1 == len(np.unique(labels_blobs))
     assert isinstance(out, AnnData)
     np.testing.assert_array_equal(out.var_names, [f"channel_{i}_mean" for i in image.coords["c"].values])
 
-    out = aggregate(image, labels, agg_func=["mean", "sum", "count"])
+    out = aggregate(values=image, by=labels, agg_func=["mean", "sum", "count"])
     assert len(out) + 1 == len(np.unique(labels_blobs))
 
-    out = aggregate(image, labels, zone_ids=[1, 2, 3])
+    out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3])
     assert len(out) == 3
 
 
