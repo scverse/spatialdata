@@ -8,9 +8,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
-from shapely import Point
 from spatial_image import SpatialImage
 
 from spatialdata._types import ArrayLike
@@ -129,14 +127,7 @@ def _locate_value(
         assert element_name is not None
         el = sdata[element_name]
     origins = []
-    # one important usage of locate_values() is from _aggregate_shapes(), which converts the points into GeoDataFrames,
-    # so if we detect a GeoDataFrame, without the radius, let's not call get_models (which otherwise would call the
-    # validation and would fail) and treat it a points object
-    model = (
-        PointsModel
-        if isinstance(el, GeoDataFrame) and isinstance(el.geometry.iloc[0], Point) and "radius" not in el.columns
-        else get_model(el)
-    )
+    model = get_model(el)
     if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel]:
         raise ValueError(f"Cannot get value from {model}")
     # adding from the dataframe columns
