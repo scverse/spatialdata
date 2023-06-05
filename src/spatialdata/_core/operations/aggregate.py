@@ -96,7 +96,10 @@ def aggregate(
             "- either `values_sdata` needs to be a SpatialData object, and `values` needs to be the string nane of "
             "the element."
         )
-    values = values_sdata[values] if values_sdata is not None else values
+    if values_sdata is not None:
+        assert isinstance(values, str)
+        values = values_sdata[values]
+
     # get schema
     by_type = get_model(by)
     values_type = get_model(values)
@@ -241,11 +244,11 @@ def _aggregate_shapes(
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
+    assert value_key is not None
     if values_sdata is not None:
         element_name = values_sdata._locate_spatial_element(values)[0]
         actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=element_name)
     else:
-        assert value_key is not None
         actual_values = get_values(value_key=value_key, element=values)
     assert isinstance(actual_values, pd.DataFrame)
 
@@ -254,12 +257,12 @@ def _aggregate_shapes(
     ONES_COLUMN = "__ones_column"
     AREAS_COLUMN = "__areas_column"
 
-    assert (
-        ONES_COLUMN not in by.columns
-        and AREAS_COLUMN not in by.columns
-        and ONES_COLUMN not in actual_values.columns
-        and AREAS_COLUMN not in actual_values.columns
-    ), f"Column names {ONES_COLUMN} and {AREAS_COLUMN} are reserved for internal use. Please rename your columns."
+    e = f"Column names {ONES_COLUMN} and {AREAS_COLUMN} are reserved for internal use. Please rename your columns."
+    assert ONES_COLUMN not in by.columns, e
+    assert AREAS_COLUMN not in by.columns, e
+    assert ONES_COLUMN not in actual_values.columns, e
+    assert AREAS_COLUMN not in actual_values.columns, e
+
     by[ONES_COLUMN] = 1
     by[AREAS_COLUMN] = by.geometry.area
     values[ONES_COLUMN] = 1
@@ -324,7 +327,7 @@ def _aggregate_shapes(
         shape=(len(rows_categories), len(columns_categories)),
     ).tocsr()
 
-    print(X.todense())
+    # print(X.todense())
 
     ##
     anndata = ad.AnnData(
@@ -333,21 +336,21 @@ def _aggregate_shapes(
         var=pd.DataFrame(index=columns_categories),
         dtype=X.dtype,
     )
-    print(anndata)
-    print(anndata.obs_names)
-    print(anndata.var_names)
-    print(anndata.X.todense())
+    # print(anndata)
+    # print(anndata.obs_names)
+    # print(anndata.var_names)
+    # print(anndata.X.todense())
     ##
-    with pd.option_context(
-        "display.max_rows",
-        None,
-        "display.max_columns",
-        None,
-        "display.precision",
-        3,
-    ):
-        print(joined)
-    print(value_key)
+    # with pd.option_context(
+    #     "display.max_rows",
+    #     None,
+    #     "display.max_columns",
+    #     None,
+    #     "display.precision",
+    #     3,
+    # ):
+    #     print(joined)
+    # print(value_key)
     ##
 
     # cleanup: remove columns previously added

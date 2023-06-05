@@ -11,6 +11,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
@@ -119,7 +120,12 @@ def _locate_value(
     element_name: Optional[str] = None,
 ) -> list[_ValueOrigin]:
     assert (element is None) ^ (sdata is None and element_name is None)
-    el = element if element is not None else sdata[element_name]
+    if element is not None:
+        el = element
+    else:
+        assert sdata is not None
+        assert element_name is not None
+        el = sdata[element_name]
     origins = []
     # one important usage of locate_values() is from _aggregate_shapes(), which converts the points into GeoDataFrames,
     # so if we detect a GeoDataFrame, without the radius, let's not call get_models (which otherwise would call the
@@ -159,10 +165,9 @@ def get_values(
     element: Optional[SpatialElement] = None,
     sdata: Optional[SpatialData] = None,
     element_name: Optional[str] = None,
-) -> pd.DataFrame | np.ndarray:
+) -> pd.DataFrame | ArrayLike:
     """
-    Get the values of the element, either from the dataframe columns, or from the table obs or var columns, or from the
-    channel names of images.
+    Get the values from the element, from any location: df columns, obs or var columns (table), channel of the image.
 
     Parameters
     ----------
@@ -181,7 +186,12 @@ def get_values(
 
     """
     assert (element is None) ^ (sdata is None and element_name is None)
-    el = element if element is not None else sdata[element_name]
+    if element is not None:
+        el = element
+    else:
+        assert sdata is not None
+        assert element_name is not None
+        el = sdata[element_name]
     value_keys = [value_key] if isinstance(value_key, str) else value_key
     locations = []
     for vk in value_keys:
@@ -213,6 +223,7 @@ def get_values(
     if origin == "df":
         return el[value_key_values]
     if sdata is not None:
+        assert element_name is not None
         matched_table = match_table_to_element(sdata=sdata, element_name=element_name)
         if origin == "obs":
             return matched_table.obs[value_key_values]
