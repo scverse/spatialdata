@@ -9,6 +9,8 @@ import dask.dataframe as ddf
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+from dask.dataframe.core import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
 from spatial_image import SpatialImage
@@ -117,47 +119,20 @@ def aggregate(
     # dispatch
     if by_type is ShapesModel:
         if values_type is PointsModel:
-            return _aggregate_points_by_shapes(
+            # Default value for value_key is ATTRS_KEY for values (if present)
+            assert isinstance(values, DaskDataFrame)
+            if value_key is None and PointsModel.ATTRS_KEY in values.attrs:
+                value_key = values.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+            return _aggregate_shapes(
                 values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
             )
         if values_type is ShapesModel:
-            return _aggregate_shapes_by_shapes(
+            return _aggregate_shapes(
                 values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
             )
     if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
-
-
-def _aggregate_points_by_shapes(
-    values: ddf.DataFrame | pd.DataFrame,
-    by: gpd.GeoDataFrame,
-    values_sdata: Optional[SpatialData] = None,
-    value_key: str | list[str] | None = None,
-    agg_func: str | list[str] = "count",
-) -> ad.AnnData:
-    from spatialdata.models import points_dask_dataframe_to_geopandas
-
-    # Default value for value_key is ATTRS_KEY for values (if present)
-    if value_key is None and PointsModel.ATTRS_KEY in values.attrs:
-        value_key = values.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
-
-    values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
-    by = circles_to_polygons(by)
-
-    return _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
-
-
-def _aggregate_shapes_by_shapes(
-    values: gpd.GeoDataFrame,
-    by: gpd.GeoDataFrame,
-    values_sdata: Optional[SpatialData] = None,
-    value_key: str | list[str] | None = None,
-    agg_func: str | list[str] = "count",
-) -> ad.AnnData:
-    values = circles_to_polygons(values)
-    by = circles_to_polygons(by)
-    return _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
 
 
 def _aggregate_image_by_labels(
@@ -245,13 +220,24 @@ def _aggregate_shapes(
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     """
+    from spatialdata.models import points_dask_dataframe_to_geopandas
+
     assert value_key is not None
     if values_sdata is not None:
         element_name = values_sdata._locate_spatial_element(values)[0]
         actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=element_name)
     else:
         actual_values = get_values(value_key=value_key, element=values)
-    assert isinstance(actual_values, pd.DataFrame)
+    assert isinstance(actual_values, pd.DataFrame), f"Expected pd.DataFrame, got {type(actual_values)}"
+
+    assert not isinstance(values, str)
+    if isinstance(values, DaskDataFrame):
+        values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
+    elif isinstance(values, GeoDataFrame):
+        values = circles_to_polygons(values)
+    else:
+        raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
+    by = circles_to_polygons(by)
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 

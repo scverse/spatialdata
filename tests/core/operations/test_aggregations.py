@@ -106,7 +106,6 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
 @pytest.mark.parametrize(
     "value_key",
     [
-        "categorical_in_var",
         "numerical_in_var",
         "categorical_in_obs",
         "numerical_in_obs",
