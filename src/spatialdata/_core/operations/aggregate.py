@@ -247,6 +247,7 @@ def _aggregate_shapes(
     else:
         assert value_key is not None
         actual_values = get_values(value_key=value_key, element=values)
+    assert isinstance(actual_values, pd.DataFrame)
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 
@@ -266,7 +267,11 @@ def _aggregate_shapes(
 
     if isinstance(value_key, str):
         value_key = [value_key]
+    # either all the values of value_key are in the GeoDataFrame values, either none of them are (and in such a case
+    # value_key refer to either obs or var of the table)
     assert not (any(vk in values.columns for vk in value_key) and not all(vk in values.columns for vk in value_key))
+    # if the values of value_key are from the table, add them to values, but then remove them after the aggregation is
+    # done
     to_remove = []
     for vk in value_key:
         if vk not in values.columns:
@@ -278,37 +283,42 @@ def _aggregate_shapes(
     joined["__index"] = joined.index
 
     if categorical:
+        # we only allow the aggregation of one categorical column at the time, because each categorical column would
+        # give a different table as result of the aggregation, and we only support single tables
         assert len(value_key) == 1
         vk = value_key[0]
         aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg("sum").reset_index()
         aggregated_values = aggregated[ONES_COLUMN + "_right"].values
         # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
     else:
-        aggregated = joined.groupby(["__index"])[vk].agg("sum").reset_index()
-        aggregated_values = aggregated[vk].values
+        aggregated = joined.groupby(["__index"])[value_key].agg("sum").reset_index()
+        aggregated_values = aggregated[value_key].values
         # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
 
-    # this is for only shapes in "by" that intersect with something in "value"
-    # rows_categories
-    # columns_categories
-    # rows_nodes
-    # columns_nodes
+    # Here we prepare some variables to construct a sparse matrix in the coo format (edges + nodes)
     rows_categories = by.index.tolist()
-    rows_nodes = pd.Categorical(aggregated["__index"], categories=rows_categories)
+    indices_of_aggregated_rows = np.array(aggregated["__index"])
+    # In the categorical case len(value_key) == 1 so np.repeat does nothing, in the non-categorical case len(value_key)
+    # can be > 1, so the aggregated table len(value_key) columns. This table will be flattened to a vector, so when
+    # constructing the sparse matrix we need to repeat each row index len(value_key) times.
+    # Example: the rows indices [0, 1, 2] in the case of len(value_key) == 2, will become [0, 0, 1, 1, 2, 2]
+    indices_of_aggregated_rows = np.repeat(indices_of_aggregated_rows, len(value_key))
+    rows_nodes = pd.Categorical(indices_of_aggregated_rows, categories=rows_categories, ordered=True)
     if categorical:
         columns_categories = values[vk].cat.categories.tolist()
-        columns_nodes = pd.Categorical(aggregated[vk], categories=columns_categories)
+        columns_nodes = pd.Categorical(aggregated[vk], categories=columns_categories, ordered=True)
     else:
         columns_categories = value_key
-        assert len(aggregated_values) % len(columns_categories) == 0
+        numel = np.prod(aggregated_values.shape)
+        assert numel % len(columns_categories) == 0
         columns_nodes = pd.Categorical(
-            columns_categories * (len(aggregated_values) // len(columns_categories)), categories=columns_categories
+            columns_categories * (numel // len(columns_categories)), categories=columns_categories
         )
 
     ##
     X = sparse.coo_matrix(
         (
-            aggregated_values,
+            aggregated_values.ravel(),
             (rows_nodes.codes, columns_nodes.codes),
         ),
         shape=(len(rows_categories), len(columns_categories)),
@@ -319,8 +329,8 @@ def _aggregate_shapes(
     ##
     anndata = ad.AnnData(
         X,
-        obs=pd.DataFrame(index=pd.Categorical(rows_categories).categories),
-        var=pd.DataFrame(index=pd.Categorical(columns_categories).categories),
+        obs=pd.DataFrame(index=rows_categories),
+        var=pd.DataFrame(index=columns_categories),
         dtype=X.dtype,
     )
     print(anndata)

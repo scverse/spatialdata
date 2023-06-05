@@ -30,8 +30,7 @@ def _parse_shapes(
 
 
 @pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
-# @pytest.mark.parametrize("value_key", ["categorical_in_ddf", "numerical_in_ddf"])
-@pytest.mark.parametrize("value_key", ["numerical_in_ddf"])
+@pytest.mark.parametrize("value_key", ["categorical_in_ddf", "numerical_in_ddf"])
 def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, value_key: str) -> None:
     sdata = sdata_query_aggregation
     _parse_shapes(sdata, by_shapes=by_shapes)
@@ -53,11 +52,12 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     else:
         assert result_adata.var_names.to_list() == ["numerical_in_ddf"]
         if by_shapes == "by_circles":
-            np.testing.assert_equal(result_adata.X.A, np.array([[1.841450277084701], [0]]))
+            s = points.compute().iloc[[0, 1, 2, 11, 12, 13]]["numerical_in_ddf"].sum()
+            assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
         else:
-            np.testing.assert_equal(
-                result_adata.X.A, np.array([[3.579436217876709], [0], [0], [0], [0.440377154715784]])
-            )
+            s0 = points.compute().iloc[[5, 6, 7, 16, 17, 18]]["numerical_in_ddf"].sum()
+            s4 = points.compute().iloc[10]["numerical_in_ddf"]
+            assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [s4]])))
 
     # id_key can be implicit for points
     points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
@@ -69,14 +69,34 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
-    points["another_" + value_key] = points[value_key]
     new_value_key = [value_key, "another_" + value_key]
     if value_key == "categorical_in_ddf":
         with pytest.raises(ValueError):
             aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
     else:
-        with pytest.raises(ValueError):
-            aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
+        points["another_" + value_key] = points[value_key] + 10
+        result_adata_multiple = aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
+        assert result_adata_multiple.var_names.to_list() == new_value_key
+        if by_shapes == "by_circles":
+            row = (
+                points.compute()
+                .iloc[[0, 1, 2, 11, 12, 13]][["numerical_in_ddf", "another_numerical_in_ddf"]]
+                .sum()
+                .tolist()
+            )
+            assert np.all(np.isclose(result_adata_multiple.X.A, np.array([row, [0, 0]])))
+        else:
+            row0 = (
+                points.compute()
+                .iloc[[5, 6, 7, 16, 17, 18]][["numerical_in_ddf", "another_numerical_in_ddf"]]
+                .sum()
+                .tolist()
+            )
+            row1 = np.zeros(2)
+            row2 = np.zeros(2)
+            row3 = np.zeros(2)
+            row4 = points.compute().iloc[10][["numerical_in_ddf", "another_numerical_in_ddf"]].tolist()
+            assert np.all(np.isclose(result_adata_multiple.X.A, np.array([row0, row1, row2, row3, row4])))
 
 
 # def test_aggregate_points_by_circles_categorical(sdata_query_aggregation) -> None:
