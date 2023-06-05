@@ -37,6 +37,8 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     points = sdata["points"]
     shapes = sdata[by_shapes]
     result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum")
+    result_adata_bis = aggregate(values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum")
+    np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
     if by_shapes == "by_circles":
         assert result_adata.obs_names.to_list() == ["0", "1"]
@@ -116,8 +118,16 @@ def test_aggregate_shapes_by_shapes(
     sdata_query_aggregation, by_shapes: str, values_shapes: str, value_key: str
 ) -> None:
     sdata = sdata_query_aggregation
-    _parse_shapes(sdata, by_shapes=by_shapes)
-    _parse_shapes(sdata, values_shapes=values_shapes)
+    by = _parse_shapes(sdata, by_shapes=by_shapes)
+    values = _parse_shapes(sdata, values_shapes=values_shapes)
+
+    result_adata = aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum")
+
+    # if the values to aggregate are in the shapes element (i.e. in the shapes dataframe), then check that the
+    # alternative signature is equivalent
+    if value_key.endswith("_in_gdf"):
+        result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum")
+        np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
     pass
 
 

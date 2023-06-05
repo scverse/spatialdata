@@ -117,33 +117,35 @@ def aggregate(
     # dispatch
     if by_type is ShapesModel:
         if values_type is PointsModel:
-            return _aggregate_points_by_shapes(values, by, value_key=value_key, agg_func=agg_func)
+            return _aggregate_points_by_shapes(
+                values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
+            )
         if values_type is ShapesModel:
-            return _aggregate_shapes_by_shapes(values, by, value_key=value_key, agg_func=agg_func)
+            return _aggregate_shapes_by_shapes(
+                values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
+            )
     if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
 
 def _aggregate_points_by_shapes(
-    points: ddf.DataFrame | pd.DataFrame,
-    shapes: gpd.GeoDataFrame,
+    values: ddf.DataFrame | pd.DataFrame,
+    by: gpd.GeoDataFrame,
     values_sdata: Optional[SpatialData] = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
 ) -> ad.AnnData:
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
-    # Default value for value_key is ATTRS_KEY for points (if present)
-    if value_key is None and PointsModel.ATTRS_KEY in points.attrs:
-        value_key = points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+    # Default value for value_key is ATTRS_KEY for values (if present)
+    if value_key is None and PointsModel.ATTRS_KEY in values.attrs:
+        value_key = values.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
 
-    points = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
-    shapes = circles_to_polygons(shapes)
+    values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
+    by = circles_to_polygons(by)
 
-    return _aggregate_shapes(
-        values=points, by=shapes, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
-    )
+    return _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
 
 
 def _aggregate_shapes_by_shapes(
@@ -155,7 +157,6 @@ def _aggregate_shapes_by_shapes(
 ) -> ad.AnnData:
     values = circles_to_polygons(values)
     by = circles_to_polygons(by)
-
     return _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
 
 
