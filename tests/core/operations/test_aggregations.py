@@ -36,15 +36,19 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     _parse_shapes(sdata, by_shapes=by_shapes)
     points = sdata["points"]
     shapes = sdata[by_shapes]
+
+    # testing that we can call aggregate with the two equivalent syntaxes for the values argument
     result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum")
     result_adata_bis = aggregate(values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum")
     np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
+    # check that the obs of aggregated values are correct
     if by_shapes == "by_circles":
         assert result_adata.obs_names.to_list() == ["0", "1"]
     else:
         assert result_adata.obs_names.to_list() == ["0", "1", "2", "3", "4"]
 
+    # check that the aggregated values are correct
     if value_key == "categorical_in_ddf":
         assert result_adata.var_names.to_list() == ["a", "b", "c"]
         if by_shapes == "by_circles":
@@ -107,10 +111,10 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     "value_key",
     [
         "numerical_in_var",
-        "categorical_in_obs",
         "numerical_in_obs",
-        "categorical_in_gdf",
         "numerical_in_gdf",
+        "categorical_in_obs",
+        "categorical_in_gdf",
     ],
 )
 def test_aggregate_shapes_by_shapes(
@@ -122,12 +126,116 @@ def test_aggregate_shapes_by_shapes(
 
     result_adata = aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum")
 
-    # if the values to aggregate are in the shapes element (i.e. in the shapes dataframe), then check that the
-    # alternative signature is equivalent
+    # testing that we can call aggregate with the two equivalent syntaxes for the values argument (only relevant when
+    # the values to aggregate are not in the table, for which only one of the two syntaxes is possible)
     if value_key.endswith("_in_gdf"):
         result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum")
         np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
-    pass
+
+    # check that the obs of the aggregated values are correct
+    if by_shapes == "by_circles":
+        assert result_adata.obs_names.tolist() == ["0", "1"]
+    else:
+        assert result_adata.obs_names.tolist() == ["0", "1", "2", "3", "4"]
+
+    # check that the aggregated values are correct
+    if value_key == "numerical_in_var":
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                s = sdata.table[np.array([0, 1, 2, 3]), "numerical_in_var"].X.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = sdata.table[np.array([5, 6, 7, 8]), "numerical_in_var"].X.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
+        else:
+            if by_shapes == "by_circles":
+                s = sdata.table[np.array([9, 10, 11, 12]), "numerical_in_var"].X.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = sdata.table[np.array([14, 15, 16, 17]), "numerical_in_var"].X.sum()
+                s1 = sdata.table[np.array([20]), "numerical_in_var"].X.sum()
+                s2 = sdata.table[np.array([20]), "numerical_in_var"].X.sum()
+                s3 = 0
+                s4 = sdata.table[np.array([18, 19]), "numerical_in_var"].X.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
+    elif value_key == "numerical_in_obs":
+        # these cases are basically identically to the one above
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                s = sdata.table[np.array([0, 1, 2, 3]), :].obs["numerical_in_obs"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = sdata.table[np.array([5, 6, 7, 8]), :].obs["numerical_in_obs"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
+        else:
+            if by_shapes == "by_circles":
+                s = sdata.table[np.array([9, 10, 11, 12]), :].obs["numerical_in_obs"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = sdata.table[np.array([14, 15, 16, 17]), :].obs["numerical_in_obs"].sum()
+                s1 = sdata.table[np.array([20]), :].obs["numerical_in_obs"].sum()
+                s2 = sdata.table[np.array([20]), :].obs["numerical_in_obs"].sum()
+                s3 = 0
+                s4 = sdata.table[np.array([18, 19]), :].obs["numerical_in_obs"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
+    elif value_key == "numerical_in_gdf":
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                s = values.iloc[np.array([0, 1, 2, 3])]["numerical_in_gdf"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = values.iloc[np.array([5, 6, 7, 8])]["numerical_in_gdf"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
+        else:
+            if by_shapes == "by_circles":
+                s = values.iloc[np.array([0, 1, 2, 3])]["numerical_in_gdf"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = values.iloc[np.array([5, 6, 7, 8]), :]["numerical_in_gdf"].sum()
+                s1 = values.iloc[np.array([11]), :]["numerical_in_gdf"].sum()
+                s2 = values.iloc[np.array([11]), :]["numerical_in_gdf"].sum()
+                s3 = 0
+                s4 = values.iloc[np.array([9, 10]), :]["numerical_in_gdf"].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
+    elif value_key == "categorical_in_obs":
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A, np.array([[4.0, 0, 0], [0, 0, 0]])))
+            else:
+                assert np.all(
+                    np.isclose(result_adata.X.A, np.array([[4.0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]))
+                )
+        else:
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A, np.array([[0, 4.0, 0], [0, 0, 0]])))
+            else:
+                assert np.all(
+                    np.isclose(
+                        result_adata.X.A, np.array([[0, 4.0, 0], [0, 0, 1.0], [0, 0, 1.0], [0, 0, 0], [0, 0, 2.0]])
+                    )
+                )
+    elif value_key == "categorical_in_gdf":
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A, np.array([[4.0], [0]])))
+            else:
+                assert np.all(np.isclose(result_adata.X.A, np.array([[4.0], [0], [0], [0], [0]])))
+        else:
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A, np.array([[4.0, 0], [0, 0]])))
+            else:
+                assert np.all(np.isclose(result_adata.X.A, np.array([[4.0, 0], [0, 1.0], [0, 1.0], [0, 0], [0, 2.0]])))
+    else:
+        raise ValueError("Unexpected value key")
+
+    # in the categorical case, check that sum and count behave the same
+    result_adata_count = aggregate(
+        values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
+    )
+    assert_equal(result_adata, result_adata_count)
+
+    # querying multiple values at the same time
+    # TODO
 
 
 @pytest.mark.parametrize("image_schema", [Image2DModel])

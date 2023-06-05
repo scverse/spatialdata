@@ -5,6 +5,8 @@ from collections.abc import Generator
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
+import pandas as pd
+from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -184,3 +186,26 @@ def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray
         assert len(v) == 1
         xdata = next(iter(v))
         yield xdata
+
+
+def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
+    """
+    Fix categorical obs columns of subset_adata to match the categories of original_adata.
+
+    Parameters
+    ----------
+    subset_adata
+        The subset AnnData object
+    original_adata
+        The original AnnData object
+
+    Notes
+    -----
+    See discussion here: https://github.com/scverse/anndata/issues/997
+    """
+    obs = subset_adata.obs
+    for column in obs.columns:
+        is_categorical = pd.api.types.is_categorical_dtype(obs[column])
+        if is_categorical:
+            c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
+            obs[column] = c

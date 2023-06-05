@@ -12,6 +12,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
@@ -65,6 +66,7 @@ def _filter_table_by_elements(
                 continue
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
             to_keep = to_keep | indices
+    original_table = table
     table = table[to_keep, :]
     if match_rows:
         assert instances is not None
@@ -79,6 +81,7 @@ def _filter_table_by_elements(
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
         matched_positions = merged["position"].to_numpy()
         table = table[matched_positions, :]
+    _inplace_fix_subset_categorical_obs(subset_adata=table, original_adata=original_table)
     table = table.copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table

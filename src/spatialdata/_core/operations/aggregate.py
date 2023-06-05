@@ -265,7 +265,9 @@ def _aggregate_shapes(
     to_remove = []
     for vk in value_key:
         if vk not in values.columns:
-            values[vk] = actual_values[vk]
+            s = actual_values[vk]
+            s.index = values.index
+            values[vk] = s
             to_remove.append(vk)
 
     joined = by.sjoin(values)
