@@ -388,10 +388,8 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     assert np.allclose(out0.X.A, out3.X.A)
 
 
-# @pytest.mark.parametrize("by_name", ["by_circles"])
-# @pytest.mark.parametrize("values_name", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize("by_name", ["by_circles", "by_polygons"])
-@pytest.mark.parametrize("values_name", ["values_circles", "values_polygons", "points"])
+@pytest.mark.parametrize("values_name", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize(
     "value_key_prefix",
     [
@@ -416,6 +414,11 @@ def test_aggregate_considering_fractions(
         pass
     else:
         pass
+
+    # TODO: raise error with points
+    # TODO: test multiple values
+
+    # not adding these as tests because would need to change the mark.parametrize etc.
     # TODO: the image by labels case and the labels by labels case is not supported yet
     # TODO: the mixed cases raster by vector are not supported yet
 
