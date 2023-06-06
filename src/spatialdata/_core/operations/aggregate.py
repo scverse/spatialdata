@@ -101,6 +101,15 @@ def aggregate(
     if values_sdata is not None:
         assert isinstance(values, str)
         values = values_sdata[values]
+    assert values is not None
+
+    if id(values) == id(by):
+        # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relavant edge case so
+        # skipping it for now
+        raise NotImplementedError(
+            "Aggregating an element by itself is not currenlty supported. If you have an use case for this please open "
+            "an issue and we will implement this case."
+        )
 
     # get schema
     by_type = get_model(by)
@@ -117,19 +126,30 @@ def aggregate(
         values = transform(values, values_transform)
 
     # dispatch
-    if by_type is ShapesModel:
+    if by_type is ShapesModel and values_type in [PointsModel, ShapesModel]:
+        # Default value for value_key is ATTRS_KEY for values (if present)
         if values_type is PointsModel:
-            # Default value for value_key is ATTRS_KEY for values (if present)
             assert isinstance(values, DaskDataFrame)
             if value_key is None and PointsModel.ATTRS_KEY in values.attrs:
                 value_key = values.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
-            return _aggregate_shapes(
-                values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
-            )
-        if values_type is ShapesModel:
-            return _aggregate_shapes(
-                values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func
-            )
+
+        # if value_key is not specified, add a columns on ones
+        ONES_KEY = None
+        if value_key is None:
+            ONES_KEY = "__ones_column_aggregate"
+            assert (
+                ONES_KEY not in values.columns
+            ), f"Column {ONES_KEY} is reserved for internal use and cannot be already present in values"
+            values[ONES_KEY] = 1
+            value_key = ONES_KEY
+
+        out = _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
+
+        # eventually remove the colum of ones if it was added
+        if ONES_KEY is not None:
+            del values[ONES_KEY]
+        return out
+
     if by_type is Labels2DModel and values_type is Image2DModel:
         return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")

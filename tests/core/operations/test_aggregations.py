@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Optional
 
 import numpy as np
@@ -7,9 +8,9 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
-from spatialdata import SpatialData
-from spatialdata._core.operations.aggregate import aggregate
+from spatialdata import SpatialData, aggregate
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel
+from spatialdata.transformations import Affine, Identity, set_transformation
 
 RNG = default_rng(42)
 
@@ -285,27 +286,19 @@ def test_aggregate_shapes_by_shapes(
 
         # test can't aggregate multiple values from mixed sources
         with pytest.raises(ValueError):
-            aggregate(
-                values_sdata=sdata,
-                values=values_shapes,
-                by=by,
-                value_key=["numerical_values_in_obs", "numerical_values_in_var"],
-                agg_func="sum",
-            )
-            aggregate(
-                values_sdata=sdata,
-                values=values_shapes,
-                by=by,
-                value_key=["numerical_values_in_obs", "numerical_values_in_gdf"],
-                agg_func="sum",
-            )
-            aggregate(
-                values_sdata=sdata,
-                values=values_shapes,
-                by=by,
-                value_key=["numerical_values_in_var", "numerical_values_in_gdf"],
-                agg_func="sum",
-            )
+            value_keys = [
+                ["numerical_values_in_obs", "numerical_values_in_var"],
+                ["numerical_values_in_obs", "numerical_values_in_gdf"],
+                ["numerical_values_in_var", "numerical_values_in_gdf"],
+            ]
+            for value_key in value_keys:
+                aggregate(
+                    values_sdata=sdata,
+                    values=values_shapes,
+                    by=by,
+                    value_key=value_key,
+                    agg_func="sum",
+                )
     # test we can't aggregate from mixed categorical and numerical sources (let's just test one case)
     with pytest.raises(ValueError):
         aggregate(
@@ -335,6 +328,64 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 
     out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3])
     assert len(out) == 3
+
+
+# @pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
+# @pytest.mark.parametrize("by", ["blobs_labels", "blobs_circles", "blobs_polygons"])
+@pytest.mark.parametrize("values", ["blobs_circles"])
+@pytest.mark.parametrize("by", ["blobs_circles"])
+def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> None:
+    if values == "blobs_image" or by == "blobs_labels" and not (values == "blobs_image" and by == "blobs_labels"):
+        raise pytest.skip("Aggregation mixing raster and vector data is not currently supported.")
+    values = sdata_blobs[values]
+    by = sdata_blobs[by]
+    if id(values) == id(by):
+        # warning: this will give problems when aggregation labels by labels (not supported yet), because of this: https://github.com/scverse/spatialdata/issues/269
+        by = deepcopy(by)
+
+        # temporary fix for https://github.com/scverse/spatialdata/issues/286
+        by.attrs["transform"] = deepcopy(values.attrs["transform"])
+        assert by.attrs["transform"] is not values.attrs["transform"]
+
+    ##
+    sdata = SpatialData.init_from_elements({"values": values, "by": by})
+    out0 = aggregate(values=values, by=by)
+
+    theta = np.pi / 7
+    affine = Affine(
+        np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 120],
+                [np.sin(theta), np.cos(theta), -213],
+                [0, 0, 1],
+            ]
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+
+    # by doesn't map to the "other" coordinate system
+    set_transformation(values, affine, "other")
+    with pytest.raises(ValueError):
+        _ = aggregate(values=values, by=by, target_coordinate_system="other")
+
+    # both values and by map to the "other" coordinate system, but they are not aligned
+    set_transformation(by, Identity(), "other")
+    out1 = aggregate(values=values, by=by, target_coordinate_system="other")
+    assert not np.allclose(out0.X.A, out1.X.A)
+
+    # both values and by map to the "other" coordinate system, and they are aligned
+    set_transformation(by, affine, "other")
+    out2 = aggregate(values=values, by=by, target_coordinate_system="other")
+    assert np.allclose(out0.X.A, out2.X.A)
+
+    # actually transforming the data still lead to a correct the result
+    transformed_sdata = sdata.transform_to_coordinate_system("other")
+    sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
+    # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
+    # transformed sdata
+    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other")
+    assert np.allclose(out0.X.A, out3.X.A)
 
 
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:

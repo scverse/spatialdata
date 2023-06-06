@@ -1387,6 +1387,37 @@ class SpatialData:
         else:
             raise KeyError(f"Could not find element with name {element_name!r}")
 
+    @classmethod
+    def init_from_elements(cls, elements: dict[str, SpatialElement], table: AnnData | None = None) -> SpatialData:
+        """
+        Create a SpatialData object from a dict of named elements and an optional table.
+
+        Parameters
+        ----------
+        elements
+            A dict of named elements.
+        table
+            An optional table.
+
+        Returns
+        -------
+        The SpatialData object.
+        """
+        elements_dict: dict[str, SpatialElement] = {}
+        for name, element in elements.items():
+            model = get_model(element)
+            if model in [Image2DModel, Image3DModel]:
+                element_type = "images"
+            elif model in [Labels2DModel, Labels3DModel]:
+                element_type = "labels"
+            elif model == PointsModel:
+                element_type = "points"
+            else:
+                assert model == ShapesModel
+                element_type = "shapes"
+            elements_dict.setdefault(element_type, {})[name] = element
+        return cls(**elements_dict, table=table)
+
     def __getitem__(self, item: str) -> SpatialElement:
         """
         Return the element with the given name.
