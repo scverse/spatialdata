@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Generator
+from copy import deepcopy
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
@@ -9,6 +10,7 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -209,3 +211,23 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
         if is_categorical:
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c
+
+
+def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
+    """
+    temporary fix for https://github.com/scverse/spatialdata/issues/286.
+
+    Parameters
+    ----------
+    gdf
+        The GeoDataFrame to deepcopy
+
+    Returns
+    -------
+    A deepcopy of the GeoDataFrame
+    """
+    #
+    new_gdf = deepcopy(gdf)
+    new_attrs = deepcopy(gdf.attrs)
+    new_gdf.attrs = new_attrs
+    return new_gdf

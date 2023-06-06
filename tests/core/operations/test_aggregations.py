@@ -6,9 +6,11 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from spatialdata import SpatialData, aggregate
+from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
@@ -73,8 +75,9 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     assert_equal(result_adata, result_adata_implicit)
 
     # in the categorical case, check that sum and count behave the same
-    result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count")
-    assert_equal(result_adata, result_adata_count)
+    if value_key == "categorical_in_ddf":
+        result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count")
+        assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
     new_value_key = [value_key, "another_" + value_key]
@@ -241,10 +244,11 @@ def test_aggregate_shapes_by_shapes(
         raise ValueError("Unexpected value key")
 
     # in the categorical case, check that sum and count behave the same
-    result_adata_count = aggregate(
-        values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
-    )
-    assert_equal(result_adata, result_adata_count)
+    if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
+        result_adata_count = aggregate(
+            values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
+        )
+        assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
     new_value_key = [value_key, "another_" + value_key]
@@ -330,10 +334,8 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     assert len(out) == 3
 
 
-# @pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
-# @pytest.mark.parametrize("by", ["blobs_labels", "blobs_circles", "blobs_polygons"])
-@pytest.mark.parametrize("values", ["blobs_circles"])
-@pytest.mark.parametrize("by", ["blobs_circles"])
+@pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
+@pytest.mark.parametrize("by", ["blobs_labels", "blobs_circles", "blobs_polygons"])
 def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> None:
     if values == "blobs_image" or by == "blobs_labels" and not (values == "blobs_image" and by == "blobs_labels"):
         raise pytest.skip("Aggregation mixing raster and vector data is not currently supported.")
@@ -342,9 +344,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     if id(values) == id(by):
         # warning: this will give problems when aggregation labels by labels (not supported yet), because of this: https://github.com/scverse/spatialdata/issues/269
         by = deepcopy(by)
-
-        # temporary fix for https://github.com/scverse/spatialdata/issues/286
-        by.attrs["transform"] = deepcopy(values.attrs["transform"])
+        by = _deepcopy_geodataframe(by)
         assert by.attrs["transform"] is not values.attrs["transform"]
 
     ##
@@ -386,6 +386,36 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     # transformed sdata
     out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other")
     assert np.allclose(out0.X.A, out3.X.A)
+
+
+@pytest.mark.parametrize("by_name", ["by_circles", "by_polygons"])
+@pytest.mark.parametrize("values_name", ["values_circles", "values_polygons", "points"])
+@pytest.mark.parametrize(
+    "value_key_prefix",
+    [
+        "numerical",
+        "categorical",
+    ],
+)
+def test_aggregate_considering_fractions(
+    sdata_query_aggregation: SpatialData, by_name, values_name, value_key_prefix
+) -> None:
+    sdata = sdata_query_aggregation
+    values = sdata[values_name]
+    by = sdata[by_name]
+    if isinstance(values, GeoDataFrame):
+        value_key = f"{value_key_prefix}_in_gdf"
+    else:
+        assert isinstance(values, DaskDataFrame)
+        value_key = f"{value_key_prefix}_in_ddf"
+
+    aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True)
+    if value_key_prefix == "numerical":
+        pass
+    else:
+        pass
+    # TODO: the image by labels case and the labels by labels case is not supported yet
+    # TODO: the mixed cases raster by vector are not supported yet
 
 
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:

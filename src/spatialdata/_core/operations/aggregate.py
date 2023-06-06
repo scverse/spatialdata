@@ -42,7 +42,7 @@ def aggregate(
     value_key: list[str] | str | None = None,
     agg_func: str | list[str] = "mean",
     target_coordinate_system: str = "global",
-    fractions: bool = True,
+    fractions: bool = False,
     **kwargs: Any,
 ) -> ad.AnnData:
     """
@@ -72,6 +72,22 @@ def aggregate(
         according to the type of `values`.
     target_coordinate_system
         Coordinate system to transform to before aggregating.
+    fractions
+        Adjusts for partial areas overlap between regions in values and by.
+        More precisely: in the case in which a region in by partially overlaps with a region in values, this setting
+        specifies whether the value to aggregate should be consider as it is (fractions = False) or is it to be
+        multiplied by the following ratio: "area of the intersection between the two regions" / "area of the region in
+        values".
+
+        Additional details:
+
+             - default is fractions = False.
+             - when aggregating points this values shuold be left to False, as the points don't have area, thus
+             otherwise a table of zeros will be obtained;
+             - for categorical values count and sum are equivalent when fractions = False, but when fractions = True
+             count and sum are different: count behaves like if fractions = False, while sum actually sums the values
+             of the intersecting regions, and should thus be used.
+
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -143,7 +159,9 @@ def aggregate(
             values[ONES_KEY] = 1
             value_key = ONES_KEY
 
-        out = _aggregate_shapes(values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func)
+        out = _aggregate_shapes(
+            values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func, fractions=fractions
+        )
 
         # eventually remove the colum of ones if it was added
         if ONES_KEY is not None:
@@ -151,6 +169,8 @@ def aggregate(
         return out
 
     if by_type is Labels2DModel and values_type is Image2DModel:
+        if fractions is True:
+            raise NotImplementedError("fractions = True is not yet supported for raster aggregation")
         return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
     raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
@@ -223,6 +243,7 @@ def _aggregate_shapes(
     values_sdata: Optional[SpatialData] = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
+    fractions: bool = False,
 ) -> ad.AnnData:
     """
     Inner function to aggregate geopandas objects.
@@ -299,11 +320,14 @@ def _aggregate_shapes(
         # give a different table as result of the aggregation, and we only support single tables
         assert len(value_key) == 1
         vk = value_key[0]
-        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg("sum").reset_index()
+        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg(agg_func).reset_index()
         aggregated_values = aggregated[ONES_COLUMN + "_right"].values
         # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
     else:
-        aggregated = joined.groupby(["__index"])[value_key].agg("sum").reset_index()
+        ##
+        # joined
+        ##
+        aggregated = joined.groupby(["__index"])[value_key].agg(agg_func).reset_index()
         aggregated_values = aggregated[value_key].values
         # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
 

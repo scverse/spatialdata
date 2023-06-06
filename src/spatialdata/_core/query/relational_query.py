@@ -27,7 +27,23 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
 
 
-def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: Union[str, list[str]]) -> Optional[AnnData]:
+def _filter_table_by_coordinate_system(
+    table: AnnData | None, coordinate_system: Union[str, list[str]]
+) -> AnnData | None:
+    """
+    Filter an AnnData table to keep only the rows that are in the coordinate system.
+
+    Parameters
+    ----------
+    table
+        The table to filter; if None, returns None
+    coordinate_system
+        The coordinate system to keep
+
+    Returns
+    -------
+    The filtered table, or None if the input table was None
+    """
     if table is None:
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
@@ -38,8 +54,24 @@ def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: Union[
 
 
 def _filter_table_by_elements(
-    table: AnnData, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
-) -> Optional[AnnData]:
+    table: AnnData | None, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
+) -> AnnData | None:
+    """
+    Filter an AnnData table to keep only the rows that are in the elements.
+
+    Parameters
+    ----------
+    table
+        The table to filter; if None, returns None
+    elements_dict
+        The elements to use to filter the table
+    match_rows
+        If True, reorder the table rows to match the order of the elements
+
+    Returns
+    -------
+    The filtered table (eventually with reordered rows), or None if the input table was None.
+    """
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
     if table is None:
         return None
