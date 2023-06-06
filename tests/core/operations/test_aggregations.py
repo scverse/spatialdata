@@ -1,6 +1,7 @@
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
@@ -77,6 +78,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     # querying multiple values at the same time
     new_value_key = [value_key, "another_" + value_key]
     if value_key == "categorical_in_ddf":
+        # can't aggregate multiple categorical values
         with pytest.raises(ValueError):
             aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
     else:
@@ -103,6 +105,15 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
             row3 = np.zeros(2)
             row4 = points.compute().iloc[10][["numerical_in_ddf", "another_numerical_in_ddf"]].tolist()
             assert np.all(np.isclose(result_adata_multiple.X.A, np.array([row0, row1, row2, row3, row4])))
+
+    # test we can't aggregate from mixed categorical and numerical sources
+    with pytest.raises(ValueError):
+        aggregate(
+            values=points,
+            by=shapes,
+            value_key=["numerical_in_ddf", "categorical_in_ddf"],
+            agg_func="sum",
+        )
 
 
 @pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
@@ -235,7 +246,75 @@ def test_aggregate_shapes_by_shapes(
     assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
-    # TODO
+    new_value_key = [value_key, "another_" + value_key]
+    if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
+        # can't aggregate multiple categorical values
+        with pytest.raises(ValueError):
+            aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum")
+    else:
+        if value_key == "numerical_in_obs":
+            sdata.table.obs["another_numerical_in_obs"] = 1.0
+        elif value_key == "numerical_in_gdf":
+            values["another_numerical_in_gdf"] = 1.0
+        else:
+            assert value_key == "numerical_in_var"
+            new_var = pd.concat((sdata.table.var, pd.DataFrame(index=["another_numerical_in_var"])))
+            new_x = np.concatenate((sdata.table.X, np.ones_like(sdata.table.X[:, :1])), axis=1)
+            new_table = AnnData(X=new_x, obs=sdata.table.obs, var=new_var, uns=sdata.table.uns)
+            del sdata.table
+            sdata.table = new_table
+
+        result_adata = aggregate(
+            values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum"
+        )
+        assert result_adata.var_names.to_list() == new_value_key
+
+        # since we added only columns of 1., we just have 4 cases to check all the aggregations, and not 12 like before
+        # (4 cases: 2 options for "values" and 2 options for "by")
+        # (12 cases: as above and 3 options for "value_key")
+        if values_shapes == "values_circles":
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A[:, 1], np.array([4.0, 0])))
+            else:
+                assert np.all(np.isclose(result_adata.X.A[:, 1], np.array([4.0, 0, 0, 0, 0])))
+        else:
+            if by_shapes == "by_circles":
+                assert np.all(np.isclose(result_adata.X.A[:, 1], np.array([4.0, 0])))
+            else:
+                assert np.all(np.isclose(result_adata.X.A[:, 1], np.array([4.0, 1, 1, 0, 2])))
+
+        # test can't aggregate multiple values from mixed sources
+        with pytest.raises(ValueError):
+            aggregate(
+                values_sdata=sdata,
+                values=values_shapes,
+                by=by,
+                value_key=["numerical_values_in_obs", "numerical_values_in_var"],
+                agg_func="sum",
+            )
+            aggregate(
+                values_sdata=sdata,
+                values=values_shapes,
+                by=by,
+                value_key=["numerical_values_in_obs", "numerical_values_in_gdf"],
+                agg_func="sum",
+            )
+            aggregate(
+                values_sdata=sdata,
+                values=values_shapes,
+                by=by,
+                value_key=["numerical_values_in_var", "numerical_values_in_gdf"],
+                agg_func="sum",
+            )
+    # test we can't aggregate from mixed categorical and numerical sources (let's just test one case)
+    with pytest.raises(ValueError):
+        aggregate(
+            values_sdata=sdata,
+            values=values_shapes,
+            by=by,
+            value_key=["numerical_values_in_obs", "categorical_values_in_obs"],
+            agg_func="sum",
+        )
 
 
 @pytest.mark.parametrize("image_schema", [Image2DModel])
