@@ -13,6 +13,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
+from shapely import Point
 from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
@@ -284,6 +285,7 @@ def _aggregate_shapes(
 
     ONES_COLUMN = "__ones_column"
     AREAS_COLUMN = "__areas_column"
+    JOINED_AREAS_COLUMN = "__joined_areas_column"
 
     e = f"Column names {ONES_COLUMN} and {AREAS_COLUMN} are reserved for internal use. Please rename your columns."
     assert ONES_COLUMN not in by.columns, e
@@ -311,10 +313,52 @@ def _aggregate_shapes(
             values[vk] = s
             to_remove.append(vk)
 
-    joined = by.sjoin(values)
-    assert "__index" not in joined
-    joined["__index"] = joined.index
+    ##
+    by["__index"] = by.index
+    values["__index"] = values.index
 
+    # when values are points, we need to use sjoin(); when they are polygons and fractions is True, we need to use
+    # overlay() also, we use sjoin() when fractions is False and values are polygons, because they are equivalent and
+    # I think that sjoin() is faster
+    if fractions is False or isinstance(values.iloc[0].geometry, Point):
+        joined = by.sjoin(values)
+
+        assert "__index" not in joined
+        joined["__index"] = joined.index
+        joined[JOINED_AREAS_COLUMN] = joined.geometry.area
+    else:
+        overlayed = gpd.overlay(by, values, how="intersection")
+
+        assert "__index" not in overlayed
+        overlayed.rename(
+            columns={
+                "__index_1": "__index_left",
+                "__index_2": "__index_right",
+                ONES_COLUMN + "_1": ONES_COLUMN + "_left",
+                ONES_COLUMN + "_2": ONES_COLUMN + "_right",
+                AREAS_COLUMN + "_1": AREAS_COLUMN + "_left",
+                AREAS_COLUMN + "_2": AREAS_COLUMN + "_right",
+            },
+            inplace=True,
+        )
+        overlayed["__index"] = overlayed["__index_left"]
+        overlayed[JOINED_AREAS_COLUMN] = overlayed.geometry.area
+
+        joined = overlayed
+    ##
+    # with pd.option_context(
+    #     "display.max_rows",
+    #     None,
+    #     "display.max_columns",
+    #     None,
+    #     "display.precision",
+    #     3,
+    # ):
+    #     print("joined:")
+    #     print(joined)
+    #     print("overlayed:")
+    #     print(overlayed)
+    ##
     if categorical:
         # we only allow the aggregation of one categorical column at the time, because each categorical column would
         # give a different table as result of the aggregation, and we only support single tables
@@ -325,7 +369,12 @@ def _aggregate_shapes(
         # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
     else:
         ##
+        # agg_func
         # joined
+        # by
+        # values
+        # joined.iloc[3]
+        # overlayed.iloc[3]
         ##
         aggregated = joined.groupby(["__index"])[value_key].agg(agg_func).reset_index()
         aggregated_values = aggregated[value_key].values
@@ -373,17 +422,6 @@ def _aggregate_shapes(
     # print(anndata.obs_names)
     # print(anndata.var_names)
     # print(anndata.X.todense())
-    ##
-    # with pd.option_context(
-    #     "display.max_rows",
-    #     None,
-    #     "display.max_columns",
-    #     None,
-    #     "display.precision",
-    #     3,
-    # ):
-    #     print(joined)
-    # print(value_key)
     ##
 
     # cleanup: remove columns previously added

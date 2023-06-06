@@ -388,6 +388,8 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     assert np.allclose(out0.X.A, out3.X.A)
 
 
+# @pytest.mark.parametrize("by_name", ["by_circles"])
+# @pytest.mark.parametrize("values_name", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize("by_name", ["by_circles", "by_polygons"])
 @pytest.mark.parametrize("values_name", ["values_circles", "values_polygons", "points"])
 @pytest.mark.parametrize(
