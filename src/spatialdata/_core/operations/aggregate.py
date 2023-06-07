@@ -41,7 +41,7 @@ def aggregate(
     values: Optional[ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str] = None,
     by: Optional[gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage] = None,
     value_key: list[str] | str | None = None,
-    agg_func: str | list[str] = "mean",
+    agg_func: str | list[str] = "sum",
     target_coordinate_system: str = "global",
     fractions: bool = False,
     **kwargs: Any,
@@ -86,8 +86,9 @@ def aggregate(
              - when aggregating points this values must be left to False, as the points don't have area, thus
              otherwise a table of zeros will be obtained;
              - for categorical values count and sum are equivalent when fractions = False, but when fractions = True
-             count and sum are different: count would give unmeaningful results, while sum actually sums the values
-             of the intersecting regions, and should thus be used.
+             count and sum are different: count would give unmeaningful results and so it's not allowed, while sum
+             actually sums the values of the intersecting regions, and should thus be used.
+             - aggregating categorical values with agg_func = 'mean' is not allowed as it give unmeaningful results
 
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
@@ -283,15 +284,27 @@ def _aggregate_shapes(
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 
+    # deal with edge cases
+    if fractions:
+        assert not (categorical and agg_func == "count"), (
+            "Aggregating categorical values using fractions=True and agg_func='count' will most likely give "
+            "unmeaningful results. Please consider using a different aggregation function, for instance "
+            "agg_func='sum' instead."
+        )
+        assert not isinstance(values.iloc[0].geometry, Point), (
+            "Fractions cannot be computed when values are points. " "Please use fractions=False."
+        )
+    assert not (categorical and agg_func == "mean"), (
+        "Incompatible choice: aggregating a categorical column with " "agg_func='mean'"
+    )
+
     ONES_COLUMN = "__ones_column"
     AREAS_COLUMN = "__areas_column"
-    JOINED_AREAS_COLUMN = "__joined_areas_column"
 
     e = f"Column names {ONES_COLUMN} and {AREAS_COLUMN} are reserved for internal use. Please rename your columns."
     assert ONES_COLUMN not in by.columns, e
     assert AREAS_COLUMN not in by.columns, e
     assert ONES_COLUMN not in actual_values.columns, e
-    assert AREAS_COLUMN not in actual_values.columns, e
 
     by[ONES_COLUMN] = 1
     by[AREAS_COLUMN] = by.geometry.area
@@ -325,7 +338,6 @@ def _aggregate_shapes(
 
         assert "__index" not in joined
         joined["__index"] = joined.index
-        joined[JOINED_AREAS_COLUMN] = joined.geometry.area
     else:
         overlayed = gpd.overlay(by, values, how="intersection")
 
@@ -342,24 +354,11 @@ def _aggregate_shapes(
             inplace=True,
         )
         overlayed["__index"] = overlayed["__index_left"]
-        overlayed[JOINED_AREAS_COLUMN] = overlayed.geometry.area
-
         joined = overlayed
 
+    fractions_of_values = None
     if fractions:
-        if categorical and agg_func == "count":
-            logger.warning(
-                "Aggregating categorical values using fractions=True and agg_func='count' will most likely give "
-                "unmeaningful results. Please consider using a differnt aggregation function, for instance "
-                "agg_func='sum' instead."
-            )
-        if isinstance(values.iloc[0].geometry, Point):
-            raise ValueError("Fractions cannot be computed when values are points. Please use fractions=False.")
-        # TODO::::::::::::::::::::::::::::::::::::::::::::::::::: most recent todoe
-        # TODO: this code works for numerical, but it's not good for categorical; maybe use a lambda finction  instead
-        # TODO: dissallow mean for categorical and explain this in the docstring
-        fractions_of_values = joined[JOINED_AREAS_COLUMN] / joined[AREAS_COLUMN + "_right"]
-        joined[value_key] = joined[value_key].to_numpy() * fractions_of_values.to_numpy().reshape(-1, 1)
+        fractions_of_values = joined.geometry.area / joined[AREAS_COLUMN + "_right"]
     ##
     # with pd.option_context(
     #     "display.max_rows",
@@ -379,20 +378,15 @@ def _aggregate_shapes(
         # give a different table as result of the aggregation, and we only support single tables
         assert len(value_key) == 1
         vk = value_key[0]
+        if fractions_of_values is not None:
+            joined[ONES_COLUMN + "_right"] = fractions_of_values
         aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg(agg_func).reset_index()
         aggregated_values = aggregated[ONES_COLUMN + "_right"].values
-        # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
     else:
-        ##
-        agg_func
-        joined
-        by
-        values
-        joined.iloc[0]
-        ##
+        if fractions_of_values is not None:
+            joined[value_key] = joined[value_key].to_numpy() * fractions_of_values.to_numpy().reshape(-1, 1)
         aggregated = joined.groupby(["__index"])[value_key].agg(agg_func).reset_index()
         aggregated_values = aggregated[value_key].values
-        # joined.groupby([joined.index, vk])[[ONES_COLUMN + '_right', AREAS_COLUMN + '_right']].agg("sum")
 
     # Here we prepare some variables to construct a sparse matrix in the coo format (edges + nodes)
     rows_categories = by.index.tolist()

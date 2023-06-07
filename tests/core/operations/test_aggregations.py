@@ -1,15 +1,16 @@
 from copy import deepcopy
 from typing import Optional
 
+import geopandas
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
-from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from spatialdata import SpatialData, aggregate
+from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel
 from spatialdata.transformations import Affine, Identity, set_transformation
@@ -322,7 +323,7 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     image = image_schema.parse(image)
     labels = labels_schema.parse(labels_blobs)
 
-    out = aggregate(values=image, by=labels)
+    out = aggregate(values=image, by=labels, agg_func="mean")
     assert len(out) + 1 == len(np.unique(labels_blobs))
     assert isinstance(out, AnnData)
     np.testing.assert_array_equal(out.var_names, [f"channel_{i}_mean" for i in image.coords["c"].values])
@@ -349,7 +350,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
 
     ##
     sdata = SpatialData.init_from_elements({"values": values, "by": by})
-    out0 = aggregate(values=values, by=by)
+    out0 = aggregate(values=values, by=by, agg_func="sum")
 
     theta = np.pi / 7
     affine = Affine(
@@ -367,16 +368,16 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     # by doesn't map to the "other" coordinate system
     set_transformation(values, affine, "other")
     with pytest.raises(ValueError):
-        _ = aggregate(values=values, by=by, target_coordinate_system="other")
+        _ = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum")
 
     # both values and by map to the "other" coordinate system, but they are not aligned
     set_transformation(by, Identity(), "other")
-    out1 = aggregate(values=values, by=by, target_coordinate_system="other")
+    out1 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum")
     assert not np.allclose(out0.X.A, out1.X.A)
 
     # both values and by map to the "other" coordinate system, and they are aligned
     set_transformation(by, affine, "other")
-    out2 = aggregate(values=values, by=by, target_coordinate_system="other")
+    out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum")
     assert np.allclose(out0.X.A, out2.X.A)
 
     # actually transforming the data still lead to a correct the result
@@ -384,47 +385,155 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
     # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
     # transformed sdata
-    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other")
+    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum")
     assert np.allclose(out0.X.A, out3.X.A)
 
 
 @pytest.mark.parametrize("by_name", ["by_circles", "by_polygons"])
 @pytest.mark.parametrize("values_name", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize(
-    "value_key_prefix",
+    "value_key",
     [
-        "numerical",
-        "categorical",
+        "numerical_in_gdf",
+        "categorical_in_gdf",
     ],
 )
-def test_aggregate_considering_fractions(
-    sdata_query_aggregation: SpatialData, by_name, values_name, value_key_prefix
+def test_aggregate_considering_fractions_single_values(
+    sdata_query_aggregation: SpatialData, by_name, values_name, value_key
 ) -> None:
     sdata = sdata_query_aggregation
     values = sdata[values_name]
     by = sdata[by_name]
-    if isinstance(values, GeoDataFrame):
-        value_key = f"{value_key_prefix}_in_gdf"
+    result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True)
+    # to manually compute the fractions of overlap that we use to test that aggregate() works
+    values = circles_to_polygons(values)
+    values["__index"] = values.index
+    by = circles_to_polygons(by)
+    by["__index"] = by.index
+    overlayed = geopandas.overlay(by, values, how="intersection")
+    ##
+    # with pd.option_context(
+    #     "display.max_rows",
+    #     None,
+    #     "display.max_columns",
+    #     None,
+    #     "display.precision",
+    #     3,
+    # ):
+    #     print(overlayed)
+    ##
+    overlayed.index = overlayed["__index_2"]
+    overlaps = overlayed.geometry.area
+    full_areas = values.geometry.area
+    overlaps = (overlaps / full_areas).dropna()
+    if value_key == "numerical_in_gdf":
+        if values_name == "values_circles":
+            if by_name == "by_circles":
+                s = (values.iloc[np.array([0, 1, 2, 3])]["numerical_in_gdf"] * overlaps).sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = (values.iloc[np.array([5, 6, 7, 8])]["numerical_in_gdf"] * overlaps).sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
+        else:
+            if by_name == "by_circles":
+                s = (values.iloc[np.array([0, 1, 2, 3])]["numerical_in_gdf"] * overlaps).sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
+            else:
+                s0 = (values.iloc[np.array([5, 6, 7, 8]), :]["numerical_in_gdf"] * overlaps).dropna().sum()
+                # I manually computed and verified the following two values (in the aggregation code they are handled by
+                # the .groupby logic). s1 and s2 are the values of two distinct shapes in "by" that intersect with the
+                # same shape in "values", so the code above "* ovrelaps" would not work as there are non-unique indices
+                s1 = (values.iloc[np.array([11]), :]["numerical_in_gdf"] * 0.15).dropna().sum()
+                s2 = (values.iloc[np.array([11]), :]["numerical_in_gdf"] * 0.225).dropna().sum()
+                s3 = 0
+                s4 = (values.iloc[np.array([9, 10]), :]["numerical_in_gdf"] * overlaps).dropna().sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
     else:
-        assert isinstance(values, DaskDataFrame)
-        value_key = f"{value_key_prefix}_in_ddf"
-
-    aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True)
-    if value_key_prefix == "numerical":
-        pass
-    else:
-        pass
-
-    # TODO: raise error with points
-    # TODO: test multiple values
-
+        assert value_key == "categorical_in_gdf"
+        if values_name == "values_circles":
+            if by_name == "by_circles":
+                s0 = overlaps.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0]])))
+            else:
+                s0 = overlaps.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
+        else:
+            if by_name == "by_circles":
+                s0 = overlaps.sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0, 0], [0, 0]])))
+            else:
+                s0 = overlaps[[5, 6, 7, 8]].sum()
+                s4 = overlaps[[9, 10]].sum()
+                assert np.all(np.isclose(result_adata.X.A, np.array([[s0, 0], [0, 0.15], [0, 0.225], [0, 0], [0, s4]])))
     # not adding these as tests because would need to change the mark.parametrize etc.
     # TODO: the image by labels case and the labels by labels case is not supported yet
     # TODO: the mixed cases raster by vector are not supported yet
 
 
+@pytest.mark.parametrize("by_name", ["by_circles", "by_polygons"])
+@pytest.mark.parametrize("values_name", ["values_circles", "values_polygons"])
+@pytest.mark.parametrize(
+    "value_key",
+    [
+        "numerical_in_gdf",
+        "categorical_in_gdf",
+    ],
+)
+def test_aggregate_considering_fractions_multiple_values(
+    sdata_query_aggregation: SpatialData, by_name, values_name, value_key
+) -> None:
+    sdata = sdata_query_aggregation
+    new_var = pd.concat((sdata.table.var, pd.DataFrame(index=["another_numerical_in_var"])))
+    new_x = np.concatenate((sdata.table.X, np.ones_like(sdata.table.X[:, :1])), axis=1)
+    new_table = AnnData(X=new_x, obs=sdata.table.obs, var=new_var, uns=sdata.table.uns)
+    del sdata.table
+    sdata.table = new_table
+    out = aggregate(
+        values_sdata=sdata,
+        values="values_circles",
+        by=sdata["by_circles"],
+        value_key=["numerical_in_var", "another_numerical_in_var"],
+        agg_func="sum",
+        fractions=True,
+    )
+    overlaps = np.array([0.655781239649211, 1.0000000000000002, 1.0000000000000004, 0.1349639285777728])
+    row0 = np.sum(sdata.table.X[[0, 1, 2, 3], :] * overlaps.reshape(-1, 1), axis=0)
+    assert np.all(np.isclose(out.X.A, np.array([row0, [0, 0]])))
+
+
+def test_aggregation_invalid_cases(sdata_query_aggregation):
+    # invalid case: categorical points / shapes by shapes with agg_func = "mean"
+    with pytest.raises(AssertionError):
+        aggregate(
+            values=sdata_query_aggregation["values_circles"],
+            by=sdata_query_aggregation["by_circles"],
+            value_key="categorical_in_gdf",
+            agg_func="mean",
+        )
+
+    # invalid case: numerical points by shapes with fractions = True
+    with pytest.raises(AssertionError):
+        aggregate(
+            values=sdata_query_aggregation["points"],
+            by=sdata_query_aggregation["by_circles"],
+            value_key="numerical_in_ddf",
+            agg_func="sum",
+            fractions=True,
+        )
+
+    # invalid case: categorical shapes by shapes with fractions = True and agg_func = "count"
+    with pytest.raises(AssertionError):
+        aggregate(
+            values=sdata_query_aggregation["values_circles"],
+            by=sdata_query_aggregation["by_circles"],
+            value_key="categorical_in_gdf",
+            agg_func="count",
+            fractions=True,
+        )
+
+
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
-    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_polygons")
+    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_polygons", agg_func="sum")
     assert isinstance(sdata, SpatialData)
     assert len(sdata.shapes["blobs_polygons"]) == 3
     assert sdata.table.shape == (3, 2)
