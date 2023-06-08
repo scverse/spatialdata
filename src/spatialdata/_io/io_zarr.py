@@ -30,13 +30,14 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     if "images" in f:
         group = f["images"]
         count = 0
-        for k in group:
-            if Path(k).name.startswith("."):
+        for subgroup_name in group:
+            if Path(subgroup_name).name.startswith("."):
+                # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem = group[k]
+            f_elem = group[subgroup_name]
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             element = _read_multiscale(f_elem_store, raster_type="image")
-            images[k] = element
+            images[subgroup_name] = element
             count += 1
         logger.debug(f"Found {count} elements in {group}")
 
@@ -45,40 +46,44 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
         if "labels" in f:
             group = f["labels"]
             count = 0
-            for k in group:
-                if Path(k).name.startswith("."):
+            for subgroup_name in group:
+                if Path(subgroup_name).name.startswith("."):
+                    # skip hidden files like .zgroup or .zmetadata
                     continue
-                f_elem = group[k]
+                f_elem = group[subgroup_name]
                 f_elem_store = os.path.join(group._store.path, f_elem.path)
-                labels[k] = _read_multiscale(f_elem_store, raster_type="labels")
+                labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                 count += 1
             logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
     if "points" in f:
         group = f["points"]
-        for k in group:
-            f_elem = group[k]
-            if Path(k).name.startswith("."):
+        for subgroup_name in group:
+            f_elem = group[subgroup_name]
+            if Path(subgroup_name).name.startswith("."):
+                # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem_store = os.path.join(group._store.path, f_elem.path)
-            points[k] = _read_points(f_elem_store)
+            points[subgroup_name] = _read_points(f_elem_store)
 
     if "shapes" in f:
         group = f["shapes"]
-        for k in group:
-            if Path(k).name.startswith("."):
+        for subgroup_name in group:
+            if Path(subgroup_name).name.startswith("."):
+                # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem = group[k]
+            f_elem = group[subgroup_name]
             f_elem_store = os.path.join(group._store.path, f_elem.path)
-            shapes[k] = _read_shapes(f_elem_store)
+            shapes[subgroup_name] = _read_shapes(f_elem_store)
 
     if "table" in f:
         group = f["table"]
-        for k in group:
-            if Path(k).name.startswith("."):
+        for subgroup_name in group:
+            if Path(subgroup_name).name.startswith("."):
+                # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem = group[k]
+            f_elem = group[subgroup_name]
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             table = read_anndata_zarr(f_elem_store)
             if TableModel.ATTRS_KEY in table.uns:
