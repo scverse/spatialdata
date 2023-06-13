@@ -120,9 +120,10 @@ class BlobsDataset:
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
         multipolygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes, multipolygons=True)
-        adata = aggregate(values=image, by=labels)
+        adata = aggregate(values=image, by=labels).table
         adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
+        del adata.uns[TableModel.ATTRS_KEY]
         table = TableModel.parse(adata, region="blobs_labels", region_key="region", instance_key="instance_id")
 
         return SpatialData(

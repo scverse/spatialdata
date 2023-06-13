@@ -43,8 +43,10 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     shapes = sdata[by_shapes]
 
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument
-    result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum")
-    result_adata_bis = aggregate(values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum")
+    result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum").table
+    result_adata_bis = aggregate(
+        values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum"
+    ).table
     np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
     # check that the obs of aggregated values are correct
@@ -72,12 +74,12 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
 
     # id_key can be implicit for points
     points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
-    result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum")
+    result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum").table
     assert_equal(result_adata, result_adata_implicit)
 
     # in the categorical case, check that sum and count behave the same
     if value_key == "categorical_in_ddf":
-        result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count")
+        result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count").table
         assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
@@ -88,7 +90,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
             aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
     else:
         points["another_" + value_key] = points[value_key] + 10
-        result_adata_multiple = aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
+        result_adata_multiple = aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum").table
         assert result_adata_multiple.var_names.to_list() == new_value_key
         if by_shapes == "by_circles":
             row = (
@@ -140,12 +142,12 @@ def test_aggregate_shapes_by_shapes(
     by = _parse_shapes(sdata, by_shapes=by_shapes)
     values = _parse_shapes(sdata, values_shapes=values_shapes)
 
-    result_adata = aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum")
+    result_adata = aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum").table
 
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument (only relevant when
     # the values to aggregate are not in the table, for which only one of the two syntaxes is possible)
     if value_key.endswith("_in_gdf"):
-        result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum")
+        result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum").table
         np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
     # check that the obs of the aggregated values are correct
@@ -248,7 +250,7 @@ def test_aggregate_shapes_by_shapes(
     if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
         result_adata_count = aggregate(
             values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
-        )
+        ).table
         assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
@@ -272,7 +274,7 @@ def test_aggregate_shapes_by_shapes(
 
         result_adata = aggregate(
             values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum"
-        )
+        ).table
         assert result_adata.var_names.to_list() == new_value_key
 
         # since we added only columns of 1., we just have 4 cases to check all the aggregations, and not 12 like before
@@ -323,15 +325,15 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     image = image_schema.parse(image)
     labels = labels_schema.parse(labels_blobs)
 
-    out = aggregate(values=image, by=labels, agg_func="mean")
+    out = aggregate(values=image, by=labels, agg_func="mean").table
     assert len(out) + 1 == len(np.unique(labels_blobs))
     assert isinstance(out, AnnData)
     np.testing.assert_array_equal(out.var_names, [f"channel_{i}_mean" for i in image.coords["c"].values])
 
-    out = aggregate(values=image, by=labels, agg_func=["mean", "sum", "count"])
+    out = aggregate(values=image, by=labels, agg_func=["mean", "sum", "count"]).table
     assert len(out) + 1 == len(np.unique(labels_blobs))
 
-    out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3])
+    out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3]).table
     assert len(out) == 3
 
 
@@ -349,7 +351,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
         assert by.attrs["transform"] is not values.attrs["transform"]
 
     sdata = SpatialData.init_from_elements({"values": values, "by": by})
-    out0 = aggregate(values=values, by=by, agg_func="sum")
+    out0 = aggregate(values=values, by=by, agg_func="sum").table
 
     theta = np.pi / 7
     affine = Affine(
@@ -371,12 +373,12 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
 
     # both values and by map to the "other" coordinate system, but they are not aligned
     set_transformation(by, Identity(), "other")
-    out1 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum")
+    out1 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").table
     assert not np.allclose(out0.X.A, out1.X.A)
 
     # both values and by map to the "other" coordinate system, and they are aligned
     set_transformation(by, affine, "other")
-    out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum")
+    out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").table
     assert np.allclose(out0.X.A, out2.X.A)
 
     # actually transforming the data still lead to a correct the result
@@ -384,7 +386,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
     # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
     # transformed sdata
-    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum")
+    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").table
     assert np.allclose(out0.X.A, out3.X.A)
 
 
@@ -403,7 +405,7 @@ def test_aggregate_considering_fractions_single_values(
     sdata = sdata_query_aggregation
     values = sdata[values_name]
     by = sdata[by_name]
-    result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True)
+    result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True).table
     # to manually compute the fractions of overlap that we use to test that aggregate() works
     values = circles_to_polygons(values)
     values["__index"] = values.index
@@ -483,7 +485,7 @@ def test_aggregate_considering_fractions_multiple_values(
         value_key=["numerical_in_var", "another_numerical_in_var"],
         agg_func="sum",
         fractions=True,
-    )
+    ).table
     overlaps = np.array([0.655781239649211, 1.0000000000000002, 1.0000000000000004, 0.1349639285777728])
     row0 = np.sum(sdata.table.X[[0, 1, 2, 3], :] * overlaps.reshape(-1, 1), axis=0)
     assert np.all(np.isclose(out.X.A, np.array([row0, [0, 0]])))
@@ -521,8 +523,7 @@ def test_aggregation_invalid_cases(sdata_query_aggregation):
 
 
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
-    sdata = sdata_blobs.aggregate(sdata_blobs.points["blobs_points"], by="blobs_polygons", agg_func="sum")
+    sdata = sdata_blobs.aggregate(values=sdata_blobs.points["blobs_points"], by="blobs_polygons", agg_func="sum")
     assert isinstance(sdata, SpatialData)
     assert len(sdata.shapes["blobs_polygons"]) == 3
     assert sdata.table.shape == (3, 2)
-    assert len(sdata.points["points"].compute()) == 300

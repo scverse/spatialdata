@@ -213,12 +213,13 @@ class SpatialData:
 
     def aggregate(
         self,
-        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
-        by: str,
-        agg_func: str | list[str] = "mean",
+        values_sdata: SpatialData | None = None,
+        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | None = None,
+        by: str | None = None,
+        value_key: list[str] | str | None = None,
+        agg_func: str | list[str] = "sum",
         target_coordinate_system: str = "global",
-        id_key: str | None = None,
-        value_key: str | None = None,
+        fractions: bool = False,
         region_key: str = "region",
         instance_key: str = "instance_id",
         **kwargs: Any,
@@ -226,80 +227,26 @@ class SpatialData:
         """
         Aggregate values by given region.
 
-        Parameters
-        ----------
-        values
-            Spatial element object with values to aggregate.
-        by
-            Name of the spatial element describing the regions to aggregate by.
-        agg_func
-            Aggregation function to apply over point values, e.g. "mean", "sum", "count".
-            Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
-            according to the type of `values`.
-        target_coordinate_system
-            Coordinate system to transform to before aggregating.
-        id_key
-            Key to group observations in `values` by. E.g. this could be transcript id for points.
-            Defaults to `FEATURE_KEY` for points, required for shapes. Valid for points aggregation.
-        value_key
-            Key to aggregate values by. This is the key in the values object.
-            If nothing is passed here, assumed to be a column of ones.
-            For points, this could be probe intensity. Valid for points aggregation.
-        region_key
-            Name that will be given to the new region column in the returned aggregated table.
-        instance_key
-            Name that will be given to the new instance id column in the returned aggregated table.
-        kwargs
-            Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
-
-        Returns
-        -------
-        SpatialData with aggregated results
+        Notes
+        -----
+        This function calls :func:`spatialdata.aggregate` with ``by_sdata=self``; please see
+        :func:`spatialdata.aggregate` for the complete docstring.
         """
         from spatialdata._core.operations.aggregate import aggregate
 
-        if by in self.labels:
-            by_ = self.labels[by]
-        elif by in self.shapes:
-            by_ = self.shapes[by]
-        else:
-            raise ValueError(f"Unknown region  `{by}`.")
-
-        adata = aggregate(
+        return aggregate(
+            values_sdata=values_sdata,
             values=values,
-            by=by_,
+            by_sdata=self,
+            by=by,
+            value_key=value_key,
             agg_func=agg_func,
             target_coordinate_system=target_coordinate_system,
-            id_key=id_key,
-            value_key=value_key,
+            fractions=fractions,
+            region_key=region_key,
+            instance_key=instance_key,
             **kwargs,
         )
-        adata.obs[instance_key] = adata.obs_names.copy()
-        adata.obs[region_key] = by
-        table = TableModel.parse(adata, region=by, region_key=region_key, instance_key=instance_key)
-
-        if by in self.labels:
-            try:
-                table.obs[instance_key] = table.obs[instance_key].astype(int)
-            except ValueError as e:
-                raise ValueError("Could not convert `instance_id` to `int`.") from e
-            sdata = SpatialData(labels={by: self.labels[by]}, table=table)
-        elif by in self.shapes:
-            sdata = SpatialData(shapes={by: self.shapes[by].iloc[table.obs_names].copy()}, table=table)
-        else:
-            raise ValueError(f"Unknown region  `{by}`.")
-
-        values_type = get_model(values)
-        if values_type is Image2DModel:
-            sdata.add_image("image", values)
-            return sdata
-        if values_type is ShapesModel:
-            sdata.add_shapes("shapes", values)
-            return sdata
-        if values_type is PointsModel:
-            sdata.add_points("points", values)
-            return sdata
-        raise ValueError(f"Unknown values type `{values_type}`.")
 
     @staticmethod
     def _validate_unique_element_names(element_names: list[str]) -> None:

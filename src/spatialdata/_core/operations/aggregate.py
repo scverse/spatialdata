@@ -26,6 +26,8 @@ from spatialdata.models import (
     Labels2DModel,
     PointsModel,
     ShapesModel,
+    SpatialElement,
+    TableModel,
     get_model,
 )
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
@@ -36,25 +38,51 @@ if TYPE_CHECKING:
 __all__ = ["aggregate"]
 
 
+def _parse_element(element: str | SpatialElement, sdata: SpatialData | None, str_for_exception: str) -> SpatialElement:
+    if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
+        raise ValueError(
+            f"To specify the {str_for_exception!r} spatial element element, please do one of the following: "
+            f"- either pass a SpatialElement to the {str_for_exception!r} parameter (and keep "
+            f"`{str_for_exception}_sdata` = None);"
+            f"- either `{str_for_exception}_sdata` needs to be a SpatialData object, and {str_for_exception!r} needs "
+            f"to be the string name of the element."
+        )
+    if sdata is not None:
+        assert isinstance(element, str)
+        return sdata[element]
+    assert element is not None
+    return element
+
+
 def aggregate(
-    values_sdata: Optional[SpatialData] = None,
-    values: Optional[ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str] = None,
-    by: Optional[gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage] = None,
+    values_sdata: SpatialData | None = None,
+    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+    by_sdata: SpatialData | None = None,
+    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
     value_key: list[str] | str | None = None,
     agg_func: str | list[str] = "sum",
     target_coordinate_system: str = "global",
     fractions: bool = False,
+    region_key: str = "region",
+    instance_key: str = "instance_id",
     **kwargs: Any,
-) -> ad.AnnData:
+) -> SpatialData:
     """
     Aggregate values by given region.
 
     Parameters
     ----------
+    values_sdata
+        SpatialData object containing the values to aggregate: if None, values must be a SpatialElement; if not None,
+        values must be a string.
     values
-        Values to aggregate.
+        The values to aggregate: if values_sdata is None, must be a SpatialElement, otherwise must be a string
+        specifying the name of the SpatialElement in values_sdata
+    by_sdata
+        Regions to aggregate by: if None, by must be a SpatialElement; if not None, by must be a string.
     by
-        Regions to aggregate by.
+        The regions to aggregate by: if by_sdata is None, must be a SpatialElement, otherwise must be a string
+        specifying the name of the SpatialElement in by_sdata
     value_key
         Name (or list of names) of the columns containing the values to aggregate; can refer both to numerical or
         categorical values. If the values are categorical, value_key can't be a list.
@@ -76,7 +104,7 @@ def aggregate(
     fractions
         Adjusts for partial areas overlap between regions in values and by.
         More precisely: in the case in which a region in by partially overlaps with a region in values, this setting
-        specifies whether the value to aggregate should be consider as it is (fractions = False) or is it to be
+        specifies whether the value to aggregate should be considered as it is (fractions = False) or it is to be
         multiplied by the following ratio: "area of the intersection between the two regions" / "area of the region in
         values".
 
@@ -90,38 +118,38 @@ def aggregate(
              actually sums the values of the intersecting regions, and should thus be used.
              - aggregating categorical values with agg_func = 'mean' is not allowed as it give unmeaningful results
 
+    region_key
+        Name that will be given to the new region column in the returned aggregated table.
+    instance_key
+        Name that will be given to the new instance id column in the returned aggregated table.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
     Returns
     -------
-    If value_key refers to a categorical variable, returns an AnnData of shape (by.shape[0], <n categories>).
-    AnnData of shape (by.shape[0], values[id_key].nunique())])
+    Returns a SpatialData object with the "by" shapes as SpatialElement and a table with the aggregated values
+    annotating the shapes.
+
+    If value_key refers to a categorical variable, the table in the SpaitalData object has shape
+    (by.shape[0], <n categories>).
 
     Notes
     -----
-    This function returns an AnnData object. Use :func:`spatialdata.SpatialData.aggregate` to return a `SpatialData`
-    object instead (with the table already referring to the regions passed in `by`).
+    This function returns a `SpatialData` object, so to access the aggregated table you can use the `table` attribute`.
+
+    The shapes in the returned `SpatialData` objects are a reference to the original one. If you want them to be a
+    different object you can do a deepcopy manually (this loads the data into memory), or you can save the `SpatialData`
+    object to disk and reload it (this keeps the data lazily represented).
 
     When aggregation points by shapes, the current implementation loads all the points into
     memory and thus could lead to a large memory usage. This Github issue
     https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to
     address this behavior.
     """
-    assert by is not None
-    if not ((values_sdata is not None and isinstance(values, str)) ^ (not isinstance(values, str))):
-        raise ValueError(
-            "To specify the spatial element element with the values to aggregate, please do one of the following: "
-            "- either pass a SpatialElement to the `values` parameter (and keep `values_sdata` = None);"
-            "- either `values_sdata` needs to be a SpatialData object, and `values` needs to be the string nane of "
-            "the element."
-        )
-    if values_sdata is not None:
-        assert isinstance(values, str)
-        values = values_sdata[values]
-    assert values is not None
+    values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
+    by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
 
-    if id(values) == id(by):
+    if id(values_) == id(by_):
         # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relavant edge case so
         # skipping it for now
         raise NotImplementedError(
@@ -130,51 +158,88 @@ def aggregate(
         )
 
     # get schema
-    by_type = get_model(by)
-    values_type = get_model(values)
+    by_type = get_model(by_)
+    values_type = get_model(values_)
 
     # get transformation between coordinate systems
-    by_transform: BaseTransformation = get_transformation(by, target_coordinate_system)  # type: ignore[assignment]
+    by_transform: BaseTransformation = get_transformation(by_, target_coordinate_system)  # type: ignore[assignment]
     values_transform: BaseTransformation = get_transformation(
-        values,
+        values_,
         target_coordinate_system,  # type: ignore[assignment]
     )
     if not (by_transform == values_transform and isinstance(values_transform, Identity)):
-        by = transform(by, by_transform)
-        values = transform(values, values_transform)
+        by_ = transform(by_, by_transform)
+        values_ = transform(values_, values_transform)
 
     # dispatch
+    adata = None
     if by_type is ShapesModel and values_type in [PointsModel, ShapesModel]:
-        # Default value for value_key is ATTRS_KEY for values (if present)
+        # Default value for value_key is ATTRS_KEY for values_ (if present)
         if values_type is PointsModel:
-            assert isinstance(values, DaskDataFrame)
-            if value_key is None and PointsModel.ATTRS_KEY in values.attrs:
-                value_key = values.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
+            assert isinstance(values_, DaskDataFrame)
+            if value_key is None and PointsModel.ATTRS_KEY in values_.attrs:
+                value_key = values_.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY]
 
         # if value_key is not specified, add a columns on ones
         ONES_KEY = None
         if value_key is None:
             ONES_KEY = "__ones_column_aggregate"
             assert (
-                ONES_KEY not in values.columns
-            ), f"Column {ONES_KEY} is reserved for internal use and cannot be already present in values"
-            values[ONES_KEY] = 1
+                ONES_KEY not in values_.columns
+            ), f"Column {ONES_KEY} is reserved for internal use and cannot be already present in values_"
+            values_[ONES_KEY] = 1
             value_key = ONES_KEY
 
-        out = _aggregate_shapes(
-            values=values, by=by, values_sdata=values_sdata, value_key=value_key, agg_func=agg_func, fractions=fractions
+        adata = _aggregate_shapes(
+            values=values_,
+            by=by_,
+            values_sdata=values_sdata,
+            value_key=value_key,
+            agg_func=agg_func,
+            fractions=fractions,
         )
 
         # eventually remove the colum of ones if it was added
         if ONES_KEY is not None:
-            del values[ONES_KEY]
-        return out
+            del values_[ONES_KEY]
 
     if by_type is Labels2DModel and values_type is Image2DModel:
         if fractions is True:
             raise NotImplementedError("fractions = True is not yet supported for raster aggregation")
-        return _aggregate_image_by_labels(values=values, by=by, agg_func=agg_func, **kwargs)
-    raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
+        adata = _aggregate_image_by_labels(values=values_, by=by_, agg_func=agg_func, **kwargs)
+
+    if adata is None:
+        raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
+
+    # create a SpatialData object with the aggregated table and the "by" shapes
+    shapes_name = by if isinstance(by, str) else "by"
+    return _create_sdata_from_table_and_shapes(
+        table=adata,
+        shapes_name=shapes_name,
+        shapes=by_,
+        region_key=region_key,
+        instance_key=instance_key,
+    )
+
+
+def _create_sdata_from_table_and_shapes(
+    table: ad.AnnData,
+    shapes: GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
+    shapes_name: str,
+    region_key: str,
+    instance_key: str,
+) -> SpatialData:
+    from spatialdata import SpatialData
+
+    table.obs[instance_key] = table.obs_names.copy()
+    table.obs[region_key] = shapes_name
+    table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
+
+    # labels case, needs conversion from str to int
+    if isinstance(shapes, (SpatialImage, MultiscaleSpatialImage)):
+        table.obs[instance_key] = table.obs[instance_key].astype(int)
+
+    return SpatialData.from_elements_dict({shapes_name: shapes, "": table})
 
 
 def _aggregate_image_by_labels(
