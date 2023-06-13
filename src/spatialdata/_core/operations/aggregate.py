@@ -154,7 +154,7 @@ def aggregate(
     by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
 
     if values_ is by_:
-        # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relavant edge case so
+        # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relevant edge case so
         # skipping it for now
         raise NotImplementedError(
             "Aggregating an element by itself is not currenlty supported. If you have an use case for this please open "
@@ -198,6 +198,7 @@ def aggregate(
             values=values_,
             by=by_,
             values_sdata=values_sdata,
+            values_element_name=values if isinstance(values, str) else None,
             value_key=value_key,
             agg_func=agg_func,
             fractions=fractions,
@@ -318,6 +319,7 @@ def _aggregate_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
     values_sdata: Optional[SpatialData] = None,
+    values_element_name: Optional[str] = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
     fractions: bool = False,
@@ -331,6 +333,13 @@ def _aggregate_shapes(
     ----------
     values
         Geopandas dataframe to be aggregated. Must have a geometry column.
+    values_sdata
+        Optional SpatialData object containing the table annotating the values. Note: when values is transformed (
+        because by and values are not in the same coordinate system), value_sdata will not contain the transformed
+        values. This is why we can't infer the element name from values_sdata (using
+        values_sdata._locate_spatial_element(values)[0]) and we need to pass it explicitly.
+    values_element_name
+        Name of the element in values_sdata that contains the values. If values_sdata is None, this is not needed.
     by
         Geopandas dataframe to group values by. Must have a geometry column.
     value_key
@@ -341,9 +350,9 @@ def _aggregate_shapes(
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
+    assert (values_sdata is None) == (values_element_name is None)
     if values_sdata is not None:
-        element_name = values_sdata._locate_spatial_element(values)[0]
-        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=element_name)
+        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=values_element_name)
     else:
         actual_values = get_values(value_key=value_key, element=values)
     assert isinstance(actual_values, pd.DataFrame), f"Expected pd.DataFrame, got {type(actual_values)}"

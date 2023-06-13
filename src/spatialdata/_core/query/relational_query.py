@@ -104,11 +104,11 @@ def _filter_table_by_elements(
         assert isinstance(instances, np.ndarray)
         assert np.sum(to_keep) != 0, "No row matches in the table annotates the element"
         assert np.sum(to_keep) == len(instances), (
-            "Sorting is not supported when filtering by multiple elements or when no elements match to rows in the "
+            "Sorting is not supported when filtering by multiple elements or when no element matches to rows in the "
             "table"
         )
         assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
-        table_df = pd.DataFrame({"instance_id": table.obs[instance_key], "position": np.arange(len(instances))})
+        table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
         matched_positions = merged["position"].to_numpy()
         table = table[matched_positions, :]
@@ -262,5 +262,10 @@ def get_values(
         if origin == "obs":
             return matched_table.obs[value_key_values]
         if origin == "var":
-            return pd.DataFrame(matched_table[:, value_key_values].X, columns=value_key_values)
+            x = matched_table[:, value_key_values].X
+            import scipy
+
+            if isinstance(x, scipy.sparse.csr_matrix):
+                x = x.todense()
+            return pd.DataFrame(x, columns=value_key_values)
     raise ValueError(f"Unknown origin {origin}")
