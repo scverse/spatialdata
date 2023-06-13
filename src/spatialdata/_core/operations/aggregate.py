@@ -298,6 +298,10 @@ def _aggregate_shapes(
         "Incompatible choice: aggregating a categorical column with " "agg_func='mean'"
     )
 
+    # we need to add a column of ones to the values dataframe to be able to count the number of instances in each zone
+    # and we need to add a column with the area of each zone to be able to compute the fractions describing the overlaps
+    # between what is being aggregated and in the "by" regions, where the denominators of these fractions are the areas
+    # of the regions in "values"
     ONES_COLUMN = "__ones_column"
     AREAS_COLUMN = "__areas_column"
 

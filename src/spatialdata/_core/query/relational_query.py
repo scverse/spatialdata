@@ -11,7 +11,6 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
-from spatialdata._types import ArrayLike
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Labels2DModel,
@@ -197,7 +196,7 @@ def get_values(
     element: Optional[SpatialElement] = None,
     sdata: Optional[SpatialData] = None,
     element_name: Optional[str] = None,
-) -> pd.DataFrame | ArrayLike:
+) -> pd.DataFrame:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table), channel of the image.
 
