@@ -65,6 +65,7 @@ def aggregate(
     fractions: bool = False,
     region_key: str = "region",
     instance_key: str = "instance_id",
+    deepcopy: bool = True,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -122,6 +123,9 @@ def aggregate(
         Name that will be given to the new region column in the returned aggregated table.
     instance_key
         Name that will be given to the new instance id column in the returned aggregated table.
+    deepcopy
+        Whether to deepcopy the shapes in the returned SpatialData object. If the shapes are large (e.g. large
+        multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -149,7 +153,7 @@ def aggregate(
     values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
     by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
 
-    if id(values_) == id(by_):
+    if values_ is by_:
         # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relavant edge case so
         # skipping it for now
         raise NotImplementedError(
@@ -219,6 +223,7 @@ def aggregate(
         shapes=by_,
         region_key=region_key,
         instance_key=instance_key,
+        deepcopy=deepcopy,
     )
 
 
@@ -228,8 +233,10 @@ def _create_sdata_from_table_and_shapes(
     shapes_name: str,
     region_key: str,
     instance_key: str,
+    deepcopy: bool,
 ) -> SpatialData:
     from spatialdata import SpatialData
+    from spatialdata._utils import _deepcopy_geodataframe
 
     table.obs[instance_key] = table.obs_names.copy()
     table.obs[region_key] = shapes_name
@@ -238,6 +245,9 @@ def _create_sdata_from_table_and_shapes(
     # labels case, needs conversion from str to int
     if isinstance(shapes, (SpatialImage, MultiscaleSpatialImage)):
         table.obs[instance_key] = table.obs[instance_key].astype(int)
+
+    if deepcopy:
+        shapes = _deepcopy_geodataframe(shapes)
 
     return SpatialData.from_elements_dict({shapes_name: shapes, "": table})
 

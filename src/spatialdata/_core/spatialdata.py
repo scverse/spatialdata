@@ -214,14 +214,16 @@ class SpatialData:
     def aggregate(
         self,
         values_sdata: SpatialData | None = None,
-        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | None = None,
-        by: str | None = None,
+        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        by_sdata: SpatialData | None = None,
+        by: GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
         value_key: list[str] | str | None = None,
         agg_func: str | list[str] = "sum",
         target_coordinate_system: str = "global",
         fractions: bool = False,
         region_key: str = "region",
         instance_key: str = "instance_id",
+        deepcopy: bool = True,
         **kwargs: Any,
     ) -> SpatialData:
         """
@@ -229,15 +231,23 @@ class SpatialData:
 
         Notes
         -----
-        This function calls :func:`spatialdata.aggregate` with ``by_sdata=self``; please see
+        This function calls :func:`spatialdata.aggregate` with the convenience that values and by can be string
+        without having to specify the values_sdata and by_sdata, which in that case will be replaced by `self`.
+
+        Please see
         :func:`spatialdata.aggregate` for the complete docstring.
         """
         from spatialdata._core.operations.aggregate import aggregate
 
+        if isinstance(values, str) and values_sdata is None:
+            values_sdata = self
+        if isinstance(by, str) and by_sdata is None:
+            by_sdata = self
+
         return aggregate(
             values_sdata=values_sdata,
             values=values,
-            by_sdata=self,
+            by_sdata=by_sdata,
             by=by,
             value_key=value_key,
             agg_func=agg_func,
@@ -245,6 +255,7 @@ class SpatialData:
             fractions=fractions,
             region_key=region_key,
             instance_key=instance_key,
+            deepcopy=deepcopy,
             **kwargs,
         )
 

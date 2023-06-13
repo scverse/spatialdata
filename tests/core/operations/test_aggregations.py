@@ -12,7 +12,7 @@ from numpy.random import default_rng
 from spatialdata import SpatialData, aggregate
 from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._utils import _deepcopy_geodataframe
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
 RNG = default_rng(42)
@@ -523,7 +523,29 @@ def test_aggregation_invalid_cases(sdata_query_aggregation):
 
 
 def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
-    sdata = sdata_blobs.aggregate(values=sdata_blobs.points["blobs_points"], by="blobs_polygons", agg_func="sum")
-    assert isinstance(sdata, SpatialData)
-    assert len(sdata.shapes["blobs_polygons"]) == 3
-    assert sdata.table.shape == (3, 2)
+    sdata0 = sdata_blobs.aggregate(values="blobs_points", by="blobs_polygons", agg_func="sum")
+    sdata1 = sdata_blobs.aggregate(values=sdata_blobs["blobs_points"], by="blobs_polygons", agg_func="sum")
+    sdata2 = sdata_blobs.aggregate(values="blobs_points", by=sdata_blobs["blobs_polygons"], agg_func="sum")
+    sdata3 = sdata_blobs.aggregate(values=sdata_blobs["blobs_points"], by=sdata_blobs["blobs_polygons"], agg_func="sum")
+
+    assert_equal(sdata0.table, sdata1.table)
+    assert_equal(sdata2.table, sdata3.table)
+
+    # in sdata2 the name of the "by" region was not passed, so a default one is used
+    assert sdata2.table.obs["region"].value_counts()["by"] == 3
+    # let's change it so we can make the objects comparable
+    sdata2.table.obs["region"] = "blobs_polygons"
+    sdata2.table.obs["region"] = sdata2.table.obs["region"].astype("category")
+    sdata2.table.uns[TableModel.ATTRS_KEY]["region"] = "blobs_polygons"
+    assert_equal(sdata0.table, sdata2.table)
+
+    assert len(sdata0.shapes["blobs_polygons"]) == 3
+    assert sdata0.table.shape == (3, 2)
+
+
+def test_aggregate_deepcopy(sdata_blobs: SpatialData) -> None:
+    sdata0 = sdata_blobs.aggregate(values="blobs_points", by="blobs_polygons", agg_func="sum")
+    sdata1 = sdata_blobs.aggregate(values="blobs_points", by="blobs_polygons", agg_func="sum", deepcopy=False)
+
+    assert sdata0["blobs_polygons"] is not sdata_blobs["blobs_polygons"]
+    assert sdata1["blobs_polygons"] is sdata_blobs["blobs_polygons"]
