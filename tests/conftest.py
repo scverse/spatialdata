@@ -434,7 +434,6 @@ def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> Spat
     sdata.table = table
     # to visualize the cases considered in the test, much more immediate than reading them as text as done above
     if plot:
-        ##
         import matplotlib.pyplot as plt
         import spatialdata_plot
 
@@ -442,19 +441,12 @@ def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> Spat
         _ = spatialdata_plot
 
         ax = plt.gca()
-        # sdata.pl.render_shapes(element="values_polygons", color="categorical_in_obs").pl.show(ax=ax)
-        # sdata.pl.render_shapes(element="values_circles", color="categorical_in_obs").pl.show(ax=ax)
-        # sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
-        # sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="values_polygons", color="categorical_in_obs").pl.show(ax=ax)
+        sdata.pl.render_shapes(element="values_circles", color="categorical_in_obs").pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
+        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
         sdata.pl.render_points(color="categorical_in_ddf", size=10.0, palette="tab10").pl.show(ax=ax)
-        sdata.pl.render_points(color="categorical_in_ddf", size=10.0, palette="tab10").pl.show()
-        plt.xlim(-50, 200)
-        plt.ylim(-50, 200)
-        plt.gca().invert_yaxis()
-        # sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
-        # sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
         plt.show()
-        ##
     return sdata
 
 

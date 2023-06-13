@@ -310,8 +310,6 @@ def _aggregate_shapes(
     assert AREAS_COLUMN not in by.columns, e
     assert ONES_COLUMN not in actual_values.columns, e
 
-    by[ONES_COLUMN] = 1
-    by[AREAS_COLUMN] = by.geometry.area
     values[ONES_COLUMN] = 1
     values[AREAS_COLUMN] = values.geometry.area
 
@@ -330,7 +328,6 @@ def _aggregate_shapes(
             values[vk] = s
             to_remove.append(vk)
 
-    ##
     by["__index"] = by.index
     values["__index"] = values.index
 
@@ -350,10 +347,6 @@ def _aggregate_shapes(
             columns={
                 "__index_1": "__index_left",
                 "__index_2": "__index_right",
-                ONES_COLUMN + "_1": ONES_COLUMN + "_left",
-                ONES_COLUMN + "_2": ONES_COLUMN + "_right",
-                AREAS_COLUMN + "_1": AREAS_COLUMN + "_left",
-                AREAS_COLUMN + "_2": AREAS_COLUMN + "_right",
             },
             inplace=True,
         )
@@ -362,30 +355,17 @@ def _aggregate_shapes(
 
     fractions_of_values = None
     if fractions:
-        fractions_of_values = joined.geometry.area / joined[AREAS_COLUMN + "_right"]
-    ##
-    # with pd.option_context(
-    #     "display.max_rows",
-    #     None,
-    #     "display.max_columns",
-    #     None,
-    #     "display.precision",
-    #     3,
-    # ):
-    #     print("joined:")
-    #     print(joined)
-    #     print("overlayed:")
-    #     print(overlayed)
-    ##
+        fractions_of_values = joined.geometry.area / joined[AREAS_COLUMN]
+
     if categorical:
         # we only allow the aggregation of one categorical column at the time, because each categorical column would
         # give a different table as result of the aggregation, and we only support single tables
         assert len(value_key) == 1
         vk = value_key[0]
         if fractions_of_values is not None:
-            joined[ONES_COLUMN + "_right"] = fractions_of_values
-        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN + "_right"].agg(agg_func).reset_index()
-        aggregated_values = aggregated[ONES_COLUMN + "_right"].values
+            joined[ONES_COLUMN] = fractions_of_values
+        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN].agg(agg_func).reset_index()
+        aggregated_values = aggregated[ONES_COLUMN].values
     else:
         if fractions_of_values is not None:
             joined[value_key] = joined[value_key].to_numpy() * fractions_of_values.to_numpy().reshape(-1, 1)
@@ -412,7 +392,6 @@ def _aggregate_shapes(
             columns_categories * (numel // len(columns_categories)), categories=columns_categories
         )
 
-    ##
     X = sparse.coo_matrix(
         (
             aggregated_values.ravel(),
@@ -421,23 +400,14 @@ def _aggregate_shapes(
         shape=(len(rows_categories), len(columns_categories)),
     ).tocsr()
 
-    # print(X.todense())
-
-    ##
     anndata = ad.AnnData(
         X,
         obs=pd.DataFrame(index=rows_categories),
         var=pd.DataFrame(index=columns_categories),
         dtype=X.dtype,
     )
-    # print(anndata)
-    # print(anndata.obs_names)
-    # print(anndata.var_names)
-    # print(anndata.X.todense())
-    ##
 
     # cleanup: remove columns previously added
-    by.drop(columns=[ONES_COLUMN, AREAS_COLUMN], inplace=True)
     values.drop(columns=[ONES_COLUMN, AREAS_COLUMN] + to_remove, inplace=True)
 
     return anndata

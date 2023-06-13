@@ -348,7 +348,6 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
         by = _deepcopy_geodataframe(by)
         assert by.attrs["transform"] is not values.attrs["transform"]
 
-    ##
     sdata = SpatialData.init_from_elements({"values": values, "by": by})
     out0 = aggregate(values=values, by=by, agg_func="sum")
 
@@ -411,17 +410,6 @@ def test_aggregate_considering_fractions_single_values(
     by = circles_to_polygons(by)
     by["__index"] = by.index
     overlayed = geopandas.overlay(by, values, how="intersection")
-    ##
-    # with pd.option_context(
-    #     "display.max_rows",
-    #     None,
-    #     "display.max_columns",
-    #     None,
-    #     "display.precision",
-    #     3,
-    # ):
-    #     print(overlayed)
-    ##
     overlayed.index = overlayed["__index_2"]
     overlaps = overlayed.geometry.area
     full_areas = values.geometry.area
