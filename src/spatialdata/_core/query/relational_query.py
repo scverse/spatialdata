@@ -72,6 +72,10 @@ def _filter_table_by_elements(
     The filtered table (eventually with reordered rows), or None if the input table was None.
     """
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
+    assert len(elements_dict) > 0, "elements_dict must not be empty"
+    assert any(
+        len(elements) > 0 for elements in elements_dict.values()
+    ), "elements_dict must contain at least one dict which contains at least one element"
     if table is None:
         return None
     to_keep = np.zeros(len(table), dtype=bool)
@@ -103,10 +107,19 @@ def _filter_table_by_elements(
         assert instances is not None
         assert isinstance(instances, np.ndarray)
         assert np.sum(to_keep) != 0, "No row matches in the table annotates the element"
-        assert np.sum(to_keep) == len(instances), (
-            "Sorting is not supported when filtering by multiple elements or when no element matches to rows in the "
-            "table"
-        )
+        if np.sum(to_keep) != len(instances):
+            if len(elements_dict) > 1 or len(elements_dict) == 1 and len(next(iter(elements_dict.values()))) > 1:
+                raise NotImplementedError("Sorting is not supported when filtering by multiple elements")
+            # case in which the instances in the table and the instances in the element don't correspond
+            assert "element" in locals()
+            assert "name" in locals()
+            n0 = np.setdiff1d(element.index.to_numpy(), table.obs["cell_id"].to_numpy())
+            n1 = np.setdiff1d(table.obs["cell_id"].to_numpy(), element.index.to_numpy())
+            raise ValueError(
+                f"Instances in the table and in the element don't correspond: found {len(n0)} indices in the "
+                f"element {name} but not in the table and found {len(n1)} indices in the table but not in the "
+                "element"
+            )
         assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
         table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
