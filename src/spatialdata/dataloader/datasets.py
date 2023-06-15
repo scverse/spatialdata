@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
+import pandas as pd
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
@@ -10,6 +11,7 @@ from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 
 from spatialdata._core.operations.rasterize import rasterize
+from spatialdata._types import ArrayLike
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,
@@ -17,9 +19,12 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     ShapesModel,
+    TableModel,
     get_axes_names,
     get_model,
 )
+from spatialdata.models._utils import SpatialElement
+from spatialdata.transformations import get_transformation
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
@@ -28,26 +33,41 @@ if TYPE_CHECKING:
 
 
 class ImageTilesDataset(Dataset):
+    CS_KEY = "CS"
+    REGION_KEY = "REGION"
+    IMAGE_KEY = "IMAGE"
+    INSTANCE_KEY = "INSTANCE"
+
     def __init__(
         self,
         sdata: SpatialData,
         regions_to_images: dict[str, str],
-        tile_dim_in_units: float,
-        tile_dim_in_pixels: int,
-        target_coordinate_system: str = "global",
+        tiel_scale: float = 1.0,
+        tile_dim_in_units: float | None = None,
+        tile_dim_in_pixels: int | None = None,
+        coordinate_systems: str | list[str] = None,
         # unused at the moment, see
         transform: Optional[Callable[[SpatialData], Any]] = None,
     ):
         """
-        Torch Dataset that returns image tiles around regions from a SpatialData object.
+        :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
 
         Parameters
         ----------
         sdata
-            The SpatialData object containing the regions and images from which to extract the tiles from.
+            The :class`spatialdata.SpatialData` object.
         regions_to_images
-            A dictionary mapping the regions element key we want to extract the tiles around to the images element key
-            we want to get the image data from.
+            A mapping betwen region and images. The regions are used to compute the tile centers, while the images are
+            used to get the pixel values.
+        tile_scale
+            The scale of the tiles. This is used only if the `regions` are `shapes`.
+            It is a scaling factor applied to either the radius (spots) or length (polygons) of the `shapes`
+            according to the geometry type of the `shapes` element:
+
+                - if `shapes` are circles (spots), the radius is scaled by `tile_scale`.
+                - if `shapes` are polygons, the length of the polygon is scaled by `tile_scale`.
+
+            If `tile_dim_in_units` is passed, `tile_scale` is ignored.
         tile_dim_in_units
             The dimension of the requested tile in the units of the target coordinate system. This specifies the extent
             of the image each tile is querying. This is not related he size in pixel of each returned tile.
@@ -60,28 +80,97 @@ class ImageTilesDataset(Dataset):
         # TODO: we can extend this code to support:
         #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
         #  - use the bounding box query instead of the raster function if the user wants
-        self.sdata = sdata
-        self.regions_to_images = regions_to_images
+        coordinate_systems = [coordinate_systems] if isinstance(coordinate_systems, str) else coordinate_systems
+        self._validate(sdata, regions_to_images, coordinate_systems)
+
         self.tile_dim_in_units = tile_dim_in_units
         self.tile_dim_in_pixels = tile_dim_in_pixels
-        self.transform = transform
-        self.target_coordinate_system = target_coordinate_system
 
         self.n_spots_dict = self._compute_n_spots_dict()
         self.n_spots = sum(self.n_spots_dict.values())
 
-    def _validate_regions_to_images(self) -> None:
-        for region_key, image_key in self.regions_to_images.items():
-            regions_element = self.sdata[region_key]
-            images_element = self.sdata[image_key]
-            # we could allow also for points
-            if get_model(regions_element) not in [ShapesModel, Labels2DModel, Labels3DModel]:
-                raise ValueError("regions_element must be a shapes element or a labels element")
-            if get_model(images_element) not in [Image2DModel, Image3DModel]:
-                raise ValueError("images_element must be an image element")
+    def _validate(
+        self,
+        sdata: SpatialData,
+        regions_to_images: dict[str, str],
+        coordinate_systems: list[str],
+    ) -> None:
+        """Validate input parameters."""
+        self._region_key = sdata.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        self._instance_key = sdata.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        available_regions = sdata.obs[region_key].unique()
+        cs_region_image = []  # list of tuples (coordinate_system, region, image)
 
-    def _compute_n_spots_dict(self) -> dict[str, int]:
+        for region_key, image_key in regions_to_images.items():
+            if region_key not in available_regions:
+                raise ValueError(f"region {region_key} not found in the spatialdata object.")
+
+            # get elements
+            region_elem = sdata[region_key]
+            image_elem = sdata[image_key]
+
+            # check that the elements are supported
+            if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
+                raise NotImplementedError("labels elements are not implemented yet.")
+            if get_model(region_elem) not in [ShapesModel]:
+                raise ValueError("`regions_element` must be a shapes element.")
+            if get_model(image_elem) not in [Image2DModel, Image3DModel]:
+                raise ValueError("`images_element` must be an image element.")
+
+            # check that the coordinate systems are valid for the elements
+            region_trans = get_transformation(region_elem)
+            image_trans = get_transformation(image_elem)
+
+            for cs in coordinate_systems:
+                if cs in region_trans and cs in image_trans:
+                    cs_region_image.append(tuple(cs, region_key, image_key))
+
+        self.regions = list(available_regions.keys())  # all regions for the dataloader
+        self.sdata = sdata
+        self._cs_region_image = tuple(cs_region_image)  # tuple(coordinate_system, region_key, image_key)
+
+    def _preprocess(self, tile_scale, tile_dim_in_units) -> None:
+        """Preprocess the dataset."""
+        index_df = []
+
+        for cs, region, image in self._cs_region_image:
+            # get instances from region
+            inst = self.sdata.table.obs[self.sdata.table.obs[self._region_key] == region][self._instance_key]
+            # get extent for bounding box
+            extent = self._get_extent(self.sdata[region], tile_scale, tile_dim_in_units)
+            if len(extent) == 1:
+                extent = np.repeat(extent, len(inst))
+            if len(extent) != len(inst):
+                raise ValueError(
+                    f"the number of elements in the region {region} ({len(extent)}) does not match the number of "
+                    f"instances ({len(inst)})."
+                )
+            df = pd.DataFrame({self.INSTANCE_KEY: inst})
+            df[self.CS_KEY] = cs
+            df[self.REGION_KEY] = region
+            df[self.IMAGE_KEY] = image
+            index_df.append(df)
+
+        self.index = pd.concat(index_df).reset_index(inplace=True, drop=True)
+
+    def _get_extent(
+        self,
+        elem: SpatialElement,
+        tile_scale: float | None = None,
+        tile_dim_in_units: float | None = None,
+    ) -> ArrayLike:
+        """Get the extent of the region."""
+        if tile_dim_in_units is None:
+            if elem.iloc[0][0].geom_type == "Point":
+                return elem[ShapesModel.RADIUS_KEY].values * tile_scale
+            if elem.iloc[0][0].geom_type == "Polygon":
+                return elem[ShapesModel.GEOMETRY_KEY].length * tile_scale
+            raise ValueError("Only point and polygon shapes are supported.")
+        return tile_dim_in_units
+
+    def _get_unique_instances(self) -> dict[str, Any]:
         n_spots_dict = {}
+        region_key = self.sdata.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
         for region_key in self.regions_to_images:
             element = self.sdata[region_key]
             # we could allow also points
@@ -186,3 +275,27 @@ class ImageTilesDataset(Dataset):
         if self.transform is not None:
             return self.transform(tile_sdata)
         return tile_sdata
+
+    @property
+    def regions(self) -> list[str]:
+        return self._regions
+
+    @regions.setter
+    def regions(self, regions: list[str]) -> None:
+        self._regions = regions
+
+    @property
+    def sdata(self) -> SpatialData:
+        return self._sdata
+
+    @sdata.setter
+    def sdata(self, sdata: SpatialData) -> None:
+        self._sdata = sdata
+
+    @property
+    def coordinate_systems(self) -> list[str]:
+        return self._coordinate_systems
+
+    @coordinate_systems.setter
+    def coordinate_systems(self, coordinate_systems: list[str]) -> None:
+        self._coordinate_systems = coordinate_systems
