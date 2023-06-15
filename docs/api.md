@@ -108,7 +108,7 @@ The transformations that can be defined between elements and coordinate systems 
 ## DataLoader
 
 ```{eval-rst}
-.. currentmodule:: spatialdata.dataloader
+.. currentmodule:: spatialdata.dataloader.datasets
 
 .. autosummary::
     :toctree: generated
