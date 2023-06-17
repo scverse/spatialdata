@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from itertools import chain
+from typing import Any, Callable, Optional
 
 import numpy as np
 import pandas as pd
+from anndata import AnnData
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from shapely import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
+from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
+from spatialdata import SpatialData, bounding_box_query
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
@@ -25,15 +26,12 @@ from spatialdata.models import (
 from spatialdata.transformations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
-
 
 class ImageTilesDataset(Dataset):
-    CS_KEY = "CS"
-    REGION_KEY = "REGION"
-    IMAGE_KEY = "IMAGE"
-    INSTANCE_KEY = "INSTANCE"
+    INSTANCE_KEY = "instance"
+    CS_KEY = "cs"
+    REGION_KEY = "region"
+    IMAGE_KEY = "image"
 
     def __init__(
         self,
@@ -42,9 +40,18 @@ class ImageTilesDataset(Dataset):
         regions_to_coordinate_systems: dict[str, str],
         tile_scale: float = 1.0,
         tile_dim_in_units: float | None = None,
+        raster: bool = False,
+        return_table: str | list[str] | None = None,
+        *kwargs: Any,
     ):
         """
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
+
+        By default, the dataset returns spatialdata object, but when `return_image` and `return_table`
+        are set, the dataset may return a tuple containing:
+
+            - the tile image, centered in the target coordinate system of the region.
+            - a vector or scala value from the table.
 
         Parameters
         ----------
@@ -68,15 +75,39 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units
             The dimension of the requested tile in the units of the target coordinate system. This specifies the extent
             of the image each tile is querying. This is not related he size in pixel of each returned tile.
-        tile_dim_in_pixels
-            The dimension of the requested tile in pixels. This specifies the size of the output tiles that we will get,
-             independently of which extent of the image the tile is covering.
+        rasterize
+            If True, the regions are rasterized using :func:`spatialdata.rasterize`.
+            If False, uses the :func:`spatialdata.bounding_box_query`.
+        return_table
+            If not None, a value from the table is returned together with the image.
+            Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
+            can be returned. It will not be returned a spatialdata object but only a tuple
+            containing the image and the table value.
+
+        Returns
+        -------
+        :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData`.
         """
         # TODO: we can extend this code to support:
         #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
         #  - use the bounding box query instead of the raster function if the user wants
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
         self._preprocess(tile_scale, tile_dim_in_units)
+        self._crop_image: Callable[..., Any] = rasterize if raster else bounding_box_query
+
+        if return_table is not None:
+            return_table = [return_table] if isinstance(return_table, str) else return_table
+            if return_table in self.dataset_table.obs:
+                self._return_table: Optional[Callable[[int], Any]] = (
+                    lambda x: self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1)
+                )
+            if return_table in sdata.table.var_names:
+                if issparse(self.dataset_table.X):
+                    self._return_table = lambda x: self.dataset_table.X[:, return_table].X[x].A
+                else:
+                    self._return_table = lambda x: self.dataset_table.X[:, return_table].X[x]
+        else:
+            self._return_table = None
 
     def _validate(
         self,
@@ -89,6 +120,14 @@ class ImageTilesDataset(Dataset):
         self._instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
         available_regions = sdata.table.obs[self._region_key].unique()
         cs_region_image = []  # list of tuples (coordinate_system, region, image)
+
+        # check unique matching between regions and images and coordinate systems
+        assert len(set(regions_to_images.values())) == len(
+            regions_to_images.keys()
+        ), "One region cannot be paired to multiple regions."
+        assert len(set(regions_to_coordinate_systems.values())) == len(
+            regions_to_coordinate_systems.keys()
+        ), "One region cannot be paired to multiple coordinate systems."
 
         for region_key, image_key in regions_to_images.items():
             if region_key not in available_regions:
@@ -121,7 +160,8 @@ class ImageTilesDataset(Dataset):
 
         self.regions = list(available_regions.keys())  # all regions for the dataloader
         self.sdata = sdata
-        self._cs_region_image = tuple(cs_region_image)  # tuple(coordinate_system, region_key, image_key)
+        self.dataset_table = self.sdata.table.obs[self.sdata.table.obs[self._region_key].isin(self.regions)]
+        self._cs_region_image = tuple(cs_region_image)  # tuple of tuples (coordinate_system, region_key, image_key)
 
     def _preprocess(
         self,
@@ -131,10 +171,12 @@ class ImageTilesDataset(Dataset):
         """Preprocess the dataset."""
         index_df = []
         tile_coords_df = []
+        dims_l = []
 
         for cs, region, image in self._cs_region_image:
             # get dims and transformations for the region element
             dims = get_axes_names(region)
+            dims_l.append(dims)
             t = get_transformation(region, cs)
             assert isinstance(t, BaseTransformation)
 
@@ -144,6 +186,7 @@ class ImageTilesDataset(Dataset):
 
             # get instances from region
             inst = self.sdata.table.obs[self.sdata.table.obs[self._region_key] == region][self._instance_key].values
+
             # get index dictionary, with `instance_id`, `cs`, `region`, and `image`
             df = pd.DataFrame({self.INSTANCE_KEY: inst})
             df[self.CS_KEY] = cs
@@ -154,92 +197,36 @@ class ImageTilesDataset(Dataset):
         # concatenate and assign to self
         self.dataset_index = pd.concat(index_df).reset_index(inplace=True, drop=True)
         self.tiles_coords = pd.concat(tile_coords_df).reset_index(inplace=True, drop=True)
+        # get table filtered by regions
+        self.filtered_table = self.sdata.table.obs[self.sdata.table.obs[self._region_key].isin[self._cs_region_imag[1]]]
+
         assert len(self.tiles_coords) == len(self.dataset_index)
+        dims_ = set(chain(*dims_l))
+        assert np.all([i in self.tiles_coords for i in dims_])
+        self.dims = list(dims_)
 
     def __len__(self) -> int:
         return len(self.dataset_index)
 
     def __getitem__(self, idx: int) -> Any | SpatialData:
-        from spatialdata import SpatialData
+        """Get item from the dataset."""
+        # get the row from the index
+        row = self.dataset_index.iloc[idx]
+        # get the tile coordinates
+        t_coords = self.tiles_coords.iloc[idx]
 
-        if idx >= self.n_spots:
-            raise IndexError()
-        regions_name, region_index = self._get_region_info_for_index(idx)
-        regions = self.sdata[regions_name]
-        # TODO: here we just need to compute the centroids,
-        #  we probably want to move this functionality to a different file
-        if isinstance(regions, GeoDataFrame):
-            dims = get_axes_names(regions)
-            region = regions.iloc[region_index]
-            shape = regions.geometry.iloc[0]
-            if isinstance(shape, Polygon):
-                xy = region.geometry.centroid.coords.xy
-                centroid = np.array([[xy[0][0], xy[1][0]]])
-            elif isinstance(shape, MultiPolygon):
-                raise NotImplementedError("MultiPolygon not supported yet")
-            elif isinstance(shape, Point):
-                xy = region.geometry.coords.xy
-                centroid = np.array([[xy[0][0], xy[1][0]]])
-            else:
-                raise RuntimeError(f"Unsupported type: {type(shape)}")
-
-            t = get_transformation(regions, self.target_coordinate_system)
-            assert isinstance(t, BaseTransformation)
-            aff = t.to_affine_matrix(input_axes=dims, output_axes=dims)
-            transformed_centroid = np.squeeze(_affine_matrix_multiplication(aff, centroid), 0)
-        elif isinstance(regions, (SpatialImage, MultiscaleSpatialImage)):
-            raise NotImplementedError("labels not supported yet")
-        else:
-            raise ValueError("element must be shapes or labels")
-        min_coordinate = np.array(transformed_centroid) - self.tile_dim_in_units / 2
-        max_coordinate = np.array(transformed_centroid) + self.tile_dim_in_units / 2
-
-        raster = self.sdata[self.regions_to_images[regions_name]]
-        tile = rasterize(
-            raster,
-            axes=dims,
-            min_coordinate=min_coordinate,
-            max_coordinate=max_coordinate,
-            target_coordinate_system=self.target_coordinate_system,
-            target_width=self.tile_dim_in_pixels,
+        image = self.sdata[row["image"]]
+        tile = self._crop_image(
+            image,
+            axes=self.dims,
+            min_coordinate=t_coords[[f"min{i}" for i in self.dims]],
+            max_coordinate=t_coords[[f"min{i}" for i in self.dims]],
+            target_coordinate_system=row["cs"],
         )
-        # TODO: as explained in the TODO in the __init__(), we want to let the
-        #  user also use the bounding box query instaed of the rasterization
-        #  the return function of this function would change, so we need to
-        #  decide if instead having an extra Tile dataset class
-        # from spatialdata._core._spatial_query import BoundingBoxRequest
-        # request = BoundingBoxRequest(
-        #     target_coordinate_system=self.target_coordinate_system,
-        #     axes=dims,
-        #     min_coordinate=min_coordinate,
-        #     max_coordinate=max_coordinate,
-        # )
-        # sdata_item = self.sdata.query.bounding_box(**request.to_dict())
-        table = self.sdata.table
-        filter_table = False
-        if table is not None:
-            region = table.uns["spatialdata_attrs"]["region"]
-            region_key = table.uns["spatialdata_attrs"]["region_key"]
-            instance_key = table.uns["spatialdata_attrs"]["instance_key"]
-            if isinstance(region, str):
-                if regions_name == region:
-                    filter_table = True
-            elif isinstance(region, list):
-                if regions_name in region:
-                    filter_table = True
-            else:
-                raise ValueError("region must be a string or a list of strings")
-        # TODO: maybe slow, we should check if there is a better way to do this
-        if filter_table:
-            instance = self.sdata[regions_name].iloc[region_index].name
-            row = table[(table.obs[region_key] == regions_name) & (table.obs[instance_key] == instance)].copy()
-            tile_table = row
-        else:
-            tile_table = None
-        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=tile_table)
-        if self.transform is not None:
-            return self.transform(tile_sdata)
-        return tile_sdata
+
+        if self._return_table is not None:
+            return tile, self.filtered_table(idx)
+        return SpatialData(images={t_coords[self.REGION_KEY][idx]: tile}, table=self.dataset_table[idx])
 
     @property
     def regions(self) -> list[str]:
@@ -252,7 +239,7 @@ class ImageTilesDataset(Dataset):
 
     @property
     def sdata(self) -> SpatialData:
-        """SpatialData object."""
+        """The original SpatialData object."""
         return self._sdata
 
     @sdata.setter
@@ -270,7 +257,19 @@ class ImageTilesDataset(Dataset):
 
     @property
     def tiles_coords(self) -> pd.DataFrame:
-        """DataFrame with the index of tiles."""
+        """DataFrame with the index of tiles.
+
+        It contains axis coordinates of the centroids, and extent of the tiles.
+        For example, for a 2D image, it contains the following columns:
+
+            - `x`: the x coordinate of the centroid.
+            - `y`: the y coordinate of the centroid.
+            - `extent`: the extent of the tile.
+            - `minx`: the minimum x coordinate of the tile.
+            - `miny`: the minimum y coordinate of the tile.
+            - `maxx`: the maximum x coordinate of the tile.
+            - `maxy`: the maximum y coordinate of the tile.
+        """
         return self._tiles_coords
 
     @tiles_coords.setter
@@ -283,16 +282,34 @@ class ImageTilesDataset(Dataset):
 
         It contains the following columns:
 
-            - INSTANCE: the name of the instance in the region.
-            - CS: the coordinate system of the region-image pair.
-            - REGION: the name of the region.
-            - IMAGE: the name of the image.
+            - `instance`: the name of the instance in the region.
+            - `cs`: the coordinate system of the region-image pair.
+            - `region`: the name of the region.
+            - `image`: the name of the image.
         """
         return self._dataset_index
 
     @dataset_index.setter
     def dataset_index(self, dataset_index: pd.DataFrame) -> None:
         self._dataset_index = dataset_index
+
+    @property
+    def dataset_table(self) -> AnnData:
+        """AnnData table filtered by the `region` and `cs` present in the dataset."""
+        return self._dataset_table
+
+    @dataset_table.setter
+    def dataset_table(self, dataset_table: AnnData) -> None:
+        self._dataset_table = dataset_table
+
+    @property
+    def dims(self) -> list[str]:
+        """Dimensions of the dataset."""
+        return self._dims
+
+    @dims.setter
+    def dims(self, dims: list[str]) -> None:
+        self._dims = dims
 
 
 def _get_tile_coords(
@@ -304,10 +321,9 @@ def _get_tile_coords(
 ) -> pd.DataFrame:
     """Get the (transformed) centroid of the region and the extent."""
     # get centroids and transform them
-    centroids = elem.centroid.get_coordinates()
+    centroids = elem.centroid.get_coordinates().values
     aff = transformation.to_affine_matrix(input_axes=dims, output_axes=dims)
     centroids = np.squeeze(_affine_matrix_multiplication(aff, centroids), 0)
-    centroids = pd.DataFrame(centroids, columns=dims)
 
     # get extent, first by checking shape defaults, then by using the `tile_dim_in_units`
     if tile_dim_in_units is None:
@@ -327,5 +343,14 @@ def _get_tile_coords(
 
     # transform extent
     aff = transformation.to_affine_matrix(input_axes=tuple(dims[0]), output_axes=tuple(dims[0]))
-    centroids["extent"] = np.squeeze(_affine_matrix_multiplication(aff, extent), 0)
-    return centroids
+    extent = np.squeeze(_affine_matrix_multiplication(aff, extent), 0)
+
+    # get min and max coordinates
+    min_coordinates = np.array(centroids.values) - extent / 2
+    max_coordinates = np.array(centroids.values) + extent / 2
+
+    # return a dataframe with columns e.g.  ["x", "y", "extent", "minx", "miny", "maxx", "maxy"]
+    return pd.DataFrame(
+        np.hstack([centroids, extent[:, np.newaxis], min_coordinates, max_coordinates]),
+        columns=list(dims) + ["extent"] + ["min" + dim for dim in dims] + ["max" + dim for dim in dims],
+    )
