@@ -94,20 +94,7 @@ class ImageTilesDataset(Dataset):
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
         self._preprocess(tile_scale, tile_dim_in_units)
         self._crop_image: Callable[..., Any] = rasterize if raster else bounding_box_query
-
-        if return_table is not None:
-            return_table = [return_table] if isinstance(return_table, str) else return_table
-            if return_table in self.dataset_table.obs:
-                self._return_table: Optional[Callable[[int], Any]] = (
-                    lambda x: self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1)
-                )
-            if return_table in sdata.table.var_names:
-                if issparse(self.dataset_table.X):
-                    self._return_table = lambda x: self.dataset_table.X[:, return_table].X[x].A
-                else:
-                    self._return_table = lambda x: self.dataset_table.X[:, return_table].X[x]
-        else:
-            self._return_table = None
+        self._return_table = self._get_return_table(return_table)
 
     def _validate(
         self,
@@ -204,6 +191,17 @@ class ImageTilesDataset(Dataset):
         dims_ = set(chain(*dims_l))
         assert np.all([i in self.tiles_coords for i in dims_])
         self.dims = list(dims_)
+
+    def _get_return_table(self, return_table: str | list[str] | None) -> Optional[Callable[[int], Any]] | None:
+        if return_table is not None:
+            return_table = [return_table] if isinstance(return_table, str) else return_table
+            if return_table in self.dataset_table.obs:
+                return lambda x: self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1)
+            if return_table in self.dataset_table.var_names:
+                if issparse(self.dataset_table.X):
+                    return lambda x: self.dataset_table.X[:, return_table].X[x].A
+                return lambda x: self.dataset_table.X[:, return_table].X[x]
+        return None
 
     def __len__(self) -> int:
         return len(self.dataset_index)
