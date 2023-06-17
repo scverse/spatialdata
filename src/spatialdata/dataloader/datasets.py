@@ -193,8 +193,10 @@ class ImageTilesDataset(Dataset):
         self.dims = list(dims_)
 
     def _get_return_table(self, return_table: str | list[str] | None) -> Optional[Callable[[int], Any]] | None:
+        """Get function to return values from the table of the dataset."""
         if return_table is not None:
             return_table = [return_table] if isinstance(return_table, str) else return_table
+            # return callable that always return array of shape (1, len(return_table))
             if return_table in self.dataset_table.obs:
                 return lambda x: self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1)
             if return_table in self.dataset_table.var_names:
