@@ -17,7 +17,7 @@ repos:
       hooks:
           - id: prettier
     - repo: https://github.com/asottile/blacken-docs
-      rev: 1.13.0
+      rev: 1.14.0
       hooks:
           - id: blacken-docs
     - repo: https://github.com/pre-commit/mirrors-mypy
@@ -27,7 +27,7 @@ repos:
             additional_dependencies: [numpy, types-requests]
             exclude: tests/|docs/
     - repo: https://github.com/charliermarsh/ruff-pre-commit
-      rev: v0.0.267
+      rev: v0.0.272
       hooks:
           - id: ruff
             args: [--fix, --exit-non-zero-on-fix]
