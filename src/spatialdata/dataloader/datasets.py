@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import chain
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -192,7 +192,7 @@ class ImageTilesDataset(Dataset):
         assert np.all([i in self.tiles_coords for i in dims_])
         self.dims = list(dims_)
 
-    def _get_return_table(self, return_table: str | list[str] | None) -> Optional[Callable[[int], Any]] | None:
+    def _get_return_table(self, return_table: str | list[str] | None) -> Callable[[int], Any] | None:
         """Get function to return values from the table of the dataset."""
         if return_table is not None:
             return_table = [return_table] if isinstance(return_table, str) else return_table
