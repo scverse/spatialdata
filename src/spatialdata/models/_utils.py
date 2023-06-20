@@ -117,16 +117,16 @@ def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
 @singledispatch
 def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
     """
-    Get the dimensions of a spatial element.
+    Get the dimensions of a SpatialElement.
 
     Parameters
     ----------
     e
-        Spatial element
+        SpatialElement
 
     Returns
     -------
-    Dimensions of the spatial element (e.g. ("z", "y", "x"))
+    Dimensions of the SpatialElement (e.g. ("z", "y", "x"))
     """
     raise TypeError(f"Unsupported type: {type(e)}")
 

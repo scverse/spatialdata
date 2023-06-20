@@ -133,7 +133,7 @@ def _filter_table_by_elements(
 
 def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
     """
-    Filter the table and reorders the rows to match the instances (rows/labels) of the spatial element specified.
+    Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
     Parameters
     ----------

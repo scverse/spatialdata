@@ -41,7 +41,7 @@ __all__ = ["aggregate"]
 def _parse_element(element: str | SpatialElement, sdata: SpatialData | None, str_for_exception: str) -> SpatialElement:
     if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
         raise ValueError(
-            f"To specify the {str_for_exception!r} spatial element element, please do one of the following: "
+            f"To specify the {str_for_exception!r} SpatialElement, please do one of the following: "
             f"- either pass a SpatialElement to the {str_for_exception!r} parameter (and keep "
             f"`{str_for_exception}_sdata` = None);"
             f"- either `{str_for_exception}_sdata` needs to be a SpatialData object, and {str_for_exception!r} needs "

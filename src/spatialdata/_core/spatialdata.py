@@ -62,7 +62,7 @@ class SpatialData:
     """
     The SpatialData object.
 
-    The SpatialData object is a modular container for arbitrary combinations of spatial elements. The elements
+    The SpatialData object is a modular container for arbitrary combinations of SpatialElements. The elements
     can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
     :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
@@ -89,7 +89,7 @@ class SpatialData:
 
     Notes
     -----
-    The spatial elements are stored with standard types:
+    The SpatialElements are stored with standard types:
 
         - images and labels are stored as :class:`spatial_image.SpatialImage` or
             :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to
@@ -472,12 +472,12 @@ class SpatialData:
 
     def contains_element(self, element: SpatialElement, raise_exception: bool = False) -> bool:
         """
-        Check if the spatial element is contained in the SpatialData object.
+        Check if the SpatialElement is contained in the SpatialData object.
 
         Parameters
         ----------
         element
-            The spatial element to check
+            The SpatialElement to check
         raise_exception
             If True, raise an exception if the element is not found. If False, return False if the element is not found.
 
