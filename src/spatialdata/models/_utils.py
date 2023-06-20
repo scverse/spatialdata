@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import dask.dataframe as dd
 import geopandas
@@ -48,7 +48,7 @@ def has_type_spatial_element(e: Any) -> bool:
 
 
 # added this code as part of a refactoring to catch errors earlier
-def _validate_mapping_to_coordinate_system_type(transformations: Optional[MappingToCoordinateSystem_t]) -> None:
+def _validate_mapping_to_coordinate_system_type(transformations: MappingToCoordinateSystem_t | None) -> None:
     if not (
         transformations is None
         or isinstance(transformations, dict)
