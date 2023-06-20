@@ -270,7 +270,7 @@ def _(
         Labels3DModel,
     )
     from spatialdata.transformations import get_transformation, set_transformation
-    from spatialdata.transformations.transformations import BaseTransformation, Sequence
+    from spatialdata.transformations.transformations import Sequence
 
     # labels need to be preserved after the resizing of the image
     if schema in (Labels2DModel, Labels3DModel):

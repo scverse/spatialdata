@@ -339,7 +339,6 @@ def get_transformation_between_landmarks(
     from spatialdata.models import get_axes_names
     from spatialdata.transformations.transformations import (
         Affine,
-        BaseTransformation,
         Sequence,
     )
 

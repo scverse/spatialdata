@@ -153,6 +153,9 @@ ignore = [
     "B008",
     # Missing docstring in magic method
     "D105",
+    # pyupgrade typing rewrite TODO: remove at some point
+    "UP006",
+    "UP007",
 ]
 line-length = 120
 select = [
@@ -190,6 +193,3 @@ target-version = "py39"
     "tests/conftest.py"= ["E402"]
 [tool.ruff.pydocstyle]
 convention = "numpy"
-[tool.ruff.pyupgrade]
-# Preserve types, even if a file imports `from __future__ import annotations`.
-keep-runtime-typing = true
