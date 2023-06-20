@@ -145,7 +145,7 @@ class BaseTransformation(ABC):
     # warning: the function _transform_coordinates() will always expect points that are x, y or x, y, z and return
     # points that are x, y or x, y, z (it allows the case in which the number of dimensions changes) the function
     # to_affine_matrix() is public so it doesn't add this costraint, but this function is used only to transform
-    # spatial elements, where we always have x, y, z
+    # SpatialElements, where we always have x, y, z
     @abstractmethod
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         raise NotImplementedError
