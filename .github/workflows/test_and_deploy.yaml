@@ -20,6 +20,9 @@ jobs:
             matrix:
                 python: ["3.9", "3.10"]
                 os: [ubuntu-latest]
+                include:
+                  - os: macos-latest
+                    python: "3.9"
 
         env:
             OS: ${{ matrix.os }}
