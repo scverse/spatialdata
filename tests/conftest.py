@@ -347,7 +347,7 @@ def _make_circles(centroid_coordinates: np.ndarray, radius: list[float]) -> GeoD
     return ShapesModel.parse(centroid_coordinates, geometry=0, radius=radius)
 
 
-def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> SpatialData:
+def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     """
     Creates a SpatialData object with many edge cases for testing querying and aggregation.
 
@@ -357,15 +357,17 @@ def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> Spat
 
     Notes
     -----
-    Description of what is tested (for a quick visualization, plot the returned SpatialData object):
-    - values to query/aggregate: polygons, points, circles
-    - values to query by: polygons, circles
-    - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or outside
-     the query region)
+    Description of what is tested (for a quick visualization, please plot the returned SpatialData object):
+
+        - values to query/aggregate: polygons, points, circles
+        - values to query by: polygons, circles
+        - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or
+            outside the query region)
 
     Additional cases:
-    - concave shape intersecting multiple times the same shape; used both as query and as value
-    - shape intersecting multiple shapes; used both as query and as value
+
+        - concave shape intersecting multiple times the same shape; used both as query and as value
+        - shape intersecting multiple shapes; used both as query and as value
     """
     values_centroids_squares = np.array([[x * 18, 0] for x in range(8)] + [[8 * 18 + 7, 0]] + [[0, 90], [50, 90]])
     values_centroids_circles = np.array([[x * 18, 30] for x in range(8)] + [[8 * 18 + 7, 30]])
@@ -432,21 +434,6 @@ def _make_sdata_for_testing_querying_and_aggretation(plot: bool = False) -> Spat
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
     sdata.table = table
-    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
-    if plot:
-        import matplotlib.pyplot as plt
-        import spatialdata_plot
-
-        # otherwise pre-commits will remove the "unused" import
-        _ = spatialdata_plot
-
-        ax = plt.gca()
-        sdata.pl.render_shapes(element="values_polygons", color="categorical_in_obs").pl.show(ax=ax)
-        sdata.pl.render_shapes(element="values_circles", color="categorical_in_obs").pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.3)).pl.show(ax=ax)
-        sdata.pl.render_points(color="categorical_in_ddf", size=10.0, palette="tab10").pl.show(ax=ax)
-        plt.show()
     return sdata
 
 

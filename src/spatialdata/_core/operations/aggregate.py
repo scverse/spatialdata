@@ -74,68 +74,69 @@ def aggregate(
     Parameters
     ----------
     values_sdata
-        SpatialData object containing the values to aggregate: if None, values must be a SpatialElement; if not None,
-        values must be a string.
+        SpatialData object containing the values to aggregate: if `None`, `values` must be a SpatialElement; if not
+        `None`, `values` must be a string.
     values
-        The values to aggregate: if values_sdata is None, must be a SpatialElement, otherwise must be a string
-        specifying the name of the SpatialElement in values_sdata
+        The values to aggregate: if `values_sdata` is `None`, must be a SpatialElement, otherwise must be a string
+        specifying the name of the SpatialElement in `values_sdata`
     by_sdata
-        Regions to aggregate by: if None, by must be a SpatialElement; if not None, by must be a string.
+        Regions to aggregate by: if `None`, `by` must be a SpatialElement; if not `None`, `by` must be a string.
     by
-        The regions to aggregate by: if by_sdata is None, must be a SpatialElement, otherwise must be a string
-        specifying the name of the SpatialElement in by_sdata
+        The regions to aggregate by: if `by_sdata` is None, must be a SpatialElement, otherwise must be a string
+        specifying the name of the SpatialElement in `by_sdata`
     value_key
         Name (or list of names) of the columns containing the values to aggregate; can refer both to numerical or
-        categorical values. If the values are categorical, value_key can't be a list.
+        categorical values. If the values are categorical, `value_key` can't be a list.
 
         The key can be:
 
-             - the name of a column(s) in the dataframe (Dask DataFrame for points or GeoDataFrame for shapes);
-             - the name of obs column(s) in the associated AnnData table (for shapes and labels);
+             - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
+             - the name of obs column(s) in the associated `AnnData` table (for shapes and labels);
              - the name of a var(s), referring to the column(s) of the X matrix in the table (for shapes and labels).
 
         If nothing is passed here, it defaults to the equivalent of a column of ones.
         Defaults to `FEATURE_KEY` for points (if present).
     agg_func
-        Aggregation function to apply over point values, e.g. "mean", "sum", "count".
+        Aggregation function to apply over point values, e.g. `"mean"`, `"sum"`, `"count"`.
         Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
         according to the type of `values`.
     target_coordinate_system
         Coordinate system to transform to before aggregating.
     fractions
-        Adjusts for partial areas overlap between regions in values and by.
-        More precisely: in the case in which a region in by partially overlaps with a region in values, this setting
-        specifies whether the value to aggregate should be considered as it is (fractions = False) or it is to be
+        Adjusts for partial areas overlap between regions in `values` and `by`.
+        More precisely: in the case in which a region in `by` partially overlaps with a region in `values`, this setting
+        specifies whether the value to aggregate should be considered as it is (`fractions = False`) or it is to be
         multiplied by the following ratio: "area of the intersection between the two regions" / "area of the region in
-        values".
+        `values`".
 
         Additional details:
 
-             - default is fractions = False.
-             - when aggregating points this values must be left to False, as the points don't have area, thus
-             otherwise a table of zeros will be obtained;
-             - for categorical values count and sum are equivalent when fractions = False, but when fractions = True
-             count and sum are different: count would give unmeaningful results and so it's not allowed, while sum
-             actually sums the values of the intersecting regions, and should thus be used.
-             - aggregating categorical values with agg_func = 'mean' is not allowed as it give unmeaningful results
+             - default is `fractions = False`.
+             - when aggregating points this parameter must be left to `False`, as the points don't have area (otherwise
+                 a table of zeros would be obtained);
+             - for categorical values `"count"` and `"sum"` are equivalent when `fractions = False`, but when
+                `fractions = True`, `"count"` and `"sum"` are different: `count` would give not meaningful results and
+                so it's not allowed, while `"sum"` actually sums the values of the intersecting regions, and should
+                therefore be used.
+             - aggregating categorical values with `agg_func = "mean"` is not allowed as it give not meaningful results.
 
     region_key
         Name that will be given to the new region column in the returned aggregated table.
     instance_key
         Name that will be given to the new instance id column in the returned aggregated table.
     deepcopy
-        Whether to deepcopy the shapes in the returned SpatialData object. If the shapes are large (e.g. large
+        Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
     Returns
     -------
-    Returns a SpatialData object with the "by" shapes as SpatialElement and a table with the aggregated values
+    Returns a `SpatialData` object with the `by` shapes as SpatialElement and a table with the aggregated values
     annotating the shapes.
 
-    If value_key refers to a categorical variable, the table in the SpaitalData object has shape
-    (by.shape[0], <n categories>).
+    If `value_key` refers to a categorical variable, the table in the `SpaitalData` object has shape
+    (`by.shape[0]`, <n categories>).
 
     Notes
     -----
@@ -145,10 +146,9 @@ def aggregate(
     different object you can do a deepcopy manually (this loads the data into memory), or you can save the `SpatialData`
     object to disk and reload it (this keeps the data lazily represented).
 
-    When aggregation points by shapes, the current implementation loads all the points into
-    memory and thus could lead to a large memory usage. This Github issue
-    https://github.com/scverse/spatialdata/issues/210 keeps track of the changes required to
-    address this behavior.
+    When aggregation points by shapes, the current implementation loads all the points into memory and thus could lead
+    to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
+    changes required to address this behavior.
     """
     values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
     by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
@@ -372,7 +372,7 @@ def _aggregate_shapes(
     if fractions:
         assert not (categorical and agg_func == "count"), (
             "Aggregating categorical values using fractions=True and agg_func='count' will most likely give "
-            "unmeaningful results. Please consider using a different aggregation function, for instance "
+            "not meaningful results. Please consider using a different aggregation function, for instance "
             "agg_func='sum' instead."
         )
         assert not isinstance(values.iloc[0].geometry, Point), (

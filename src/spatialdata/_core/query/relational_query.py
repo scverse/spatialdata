@@ -198,9 +198,6 @@ def _locate_value(
                 # check if the value_key is in the var
                 elif value_key in table.var_names:
                     origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
-
-    # adding from the channel names of images
-    # TODO
     return origins
 
 
@@ -211,7 +208,7 @@ def get_values(
     element_name: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Get the values from the element, from any location: df columns, obs or var columns (table), channel of the image.
+    Get the values from the element, from any location: df columns, obs or var columns (table).
 
     Parameters
     ----------
@@ -226,8 +223,7 @@ def get_values(
 
     Returns
     -------
-    DataFrame or ndarray with the values requested.
-
+    DataFrame with the values requested.
     """
     assert (element is None) ^ (sdata is None and element_name is None)
     if element is not None:
