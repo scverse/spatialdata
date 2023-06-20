@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import zarr
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -108,8 +108,8 @@ def _write_metadata(
     group: zarr.Group,
     group_type: str,
     fmt: Format,
-    axes: Optional[Union[str, list[str], list[dict[str, str]]]] = None,
-    attrs: Optional[Mapping[str, Any]] = None,
+    axes: str | list[str] | list[dict[str, str]] | None = None,
+    attrs: Mapping[str, Any] | None = None,
 ) -> None:
     """Write metdata to a group."""
     axes = _get_valid_axes(axes=axes, fmt=fmt)
@@ -125,7 +125,7 @@ def _write_metadata(
 
 def _iter_multiscale(
     data: MultiscaleSpatialImage,
-    attr: Optional[str],
+    attr: str | None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
     for i in data:
@@ -161,9 +161,9 @@ class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
 def _are_directories_identical(
     dir1: Any,
     dir2: Any,
-    exclude_regexp: Optional[str] = None,
-    _root_dir1: Optional[str] = None,
-    _root_dir2: Optional[str] = None,
+    exclude_regexp: str | None = None,
+    _root_dir1: str | None = None,
+    _root_dir2: str | None = None,
 ) -> bool:
     """
     Compare two directory trees content.
@@ -218,7 +218,7 @@ def _get_backing_files_raster(raster: DataArray) -> list[str]:
 
 
 @singledispatch
-def get_backing_files(element: Union[SpatialImage, MultiscaleSpatialImage, DaskDataFrame]) -> list[str]:
+def get_backing_files(element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
     raise TypeError(f"Unsupported type: {type(element)}")
 
 

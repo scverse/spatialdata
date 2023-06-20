@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     pass
 
 
-def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: Union[str, list[str]]) -> Optional[AnnData]:
+def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: str | list[str]) -> AnnData | None:
     if table is None:
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
@@ -24,7 +24,7 @@ def _filter_table_by_coordinate_system(table: AnnData, coordinate_system: Union[
     return table
 
 
-def _filter_table_by_elements(table: AnnData, elements_dict: dict[str, dict[str, Any]]) -> Optional[AnnData]:
+def _filter_table_by_elements(table: AnnData, elements_dict: dict[str, dict[str, Any]]) -> AnnData | None:
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
     if table is None:
         return None

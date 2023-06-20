@@ -5,7 +5,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import zarr
 from anndata import AnnData
@@ -120,8 +120,8 @@ class SpatialData:
     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _table: Optional[AnnData] = None
-    path: Optional[str] = None
+    _table: AnnData | None = None
+    path: str | None = None
 
     def __init__(
         self,
@@ -129,7 +129,7 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: Optional[AnnData] = None,
+        table: AnnData | None = None,
     ) -> None:
         self.path = None
 
@@ -138,12 +138,12 @@ class SpatialData:
         )
 
         if images is not None:
-            self._images: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._images: dict[str, SpatialImage | MultiscaleSpatialImage] = {}
             for k, v in images.items():
                 self._add_image_in_memory(name=k, image=v)
 
         if labels is not None:
-            self._labels: dict[str, Union[SpatialImage, MultiscaleSpatialImage]] = {}
+            self._labels: dict[str, SpatialImage | MultiscaleSpatialImage] = {}
             for k, v in labels.items():
                 self._add_labels_in_memory(name=k, labels=v)
 
@@ -164,7 +164,7 @@ class SpatialData:
         self._query = QueryManager(self)
 
     @staticmethod
-    def from_elements_dict(elements_dict: dict[str, Union[SpatialElement, AnnData]]) -> SpatialData:
+    def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
         """
         Create a SpatialData object from a dict of elements.
 
@@ -178,7 +178,7 @@ class SpatialData:
         -------
         The SpatialData object.
         """
-        d: dict[str, Union[dict[str, SpatialElement], Optional[AnnData]]] = {
+        d: dict[str, dict[str, SpatialElement] | AnnData | None] = {
             "images": {},
             "labels": {},
             "points": {},
@@ -308,7 +308,7 @@ class SpatialData:
             )
 
     def _add_image_in_memory(
-        self, name: str, image: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
+        self, name: str, image: SpatialImage | MultiscaleSpatialImage, overwrite: bool = False
     ) -> None:
         """Add an image element to the SpatialData object.
 
@@ -337,7 +337,7 @@ class SpatialData:
             raise ValueError("Only czyx and cyx images supported")
 
     def _add_labels_in_memory(
-        self, name: str, labels: Union[SpatialImage, MultiscaleSpatialImage], overwrite: bool = False
+        self, name: str, labels: SpatialImage | MultiscaleSpatialImage, overwrite: bool = False
     ) -> None:
         """
         Add a labels element to the SpatialData object.
@@ -566,9 +566,7 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(
-        self, coordinate_system: Union[str, list[str]], filter_table: bool = True
-    ) -> SpatialData:
+    def filter_by_coordinate_system(self, coordinate_system: str | list[str], filter_table: bool = True) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
 
@@ -671,8 +669,8 @@ class SpatialData:
     def add_image(
         self,
         name: str,
-        image: Union[SpatialImage, MultiscaleSpatialImage],
-        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
+        image: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
         """
@@ -754,8 +752,8 @@ class SpatialData:
     def add_labels(
         self,
         name: str,
-        labels: Union[SpatialImage, MultiscaleSpatialImage],
-        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
+        labels: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
         """
@@ -956,8 +954,8 @@ class SpatialData:
 
     def write(
         self,
-        file_path: Union[str, Path],
-        storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
+        file_path: str | Path,
+        storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
         """Write the SpatialData object to Zarr."""
@@ -1181,12 +1179,12 @@ class SpatialData:
         return read_zarr(file_path)
 
     @property
-    def images(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+    def images(self) -> dict[str, SpatialImage | MultiscaleSpatialImage]:
         """Return images as a Dict of name to image data."""
         return self._images
 
     @property
-    def labels(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+    def labels(self) -> dict[str, SpatialImage | MultiscaleSpatialImage]:
         """Return labels as a Dict of name to label data."""
         return self._labels
 
@@ -1272,7 +1270,7 @@ class SpatialData:
                     if attr == "shapes":
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                     elif attr == "points":
-                        length: Optional[int] = None
+                        length: int | None = None
                         if len(v.dask.layers) == 1:
                             name, layer = v.dask.layers.items().__iter__().__next__()
                             if "read-parquet" in name:
@@ -1308,7 +1306,7 @@ class SpatialData:
                             descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
                         elif isinstance(v, MultiscaleSpatialImage):
                             shapes = []
-                            dims: Optional[str] = None
+                            dims: str | None = None
                             for pyramid_level in v:
                                 dataset_names = list(v[pyramid_level].keys())
                                 assert len(dataset_names) == 1
