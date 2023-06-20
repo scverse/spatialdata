@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import anndata as ad
 import dask as da
@@ -318,8 +318,8 @@ def _aggregate_image_by_labels(
 def _aggregate_shapes(
     values: gpd.GeoDataFrame,
     by: gpd.GeoDataFrame,
-    values_sdata: Optional[SpatialData] = None,
-    values_element_name: Optional[str] = None,
+    values_sdata: SpatialData | None = None,
+    values_element_name: str | None = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
     fractions: bool = False,
