@@ -55,10 +55,10 @@ def _parse_element(element: str | SpatialElement, sdata: SpatialData | None, str
 
 
 def aggregate(
+    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str,
+    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str,
     values_sdata: SpatialData | None = None,
-    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
     by_sdata: SpatialData | None = None,
-    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
     value_key: list[str] | str | None = None,
     agg_func: str | list[str] = "sum",
     target_coordinate_system: str = "global",
