@@ -397,6 +397,10 @@ def _aggregate_shapes(
     values[ONES_COLUMN] = 1
     values[AREAS_COLUMN] = values.geometry.area
 
+    INDEX = "__index"
+    assert INDEX not in by, f"{INDEX} is a reserved column name"
+    assert "__index" not in values, f"{INDEX} is a reserved column name"
+
     if isinstance(value_key, str):
         value_key = [value_key]
     # either all the values of value_key are in the GeoDataFrame values, either none of them are (and in such a case
@@ -412,30 +416,20 @@ def _aggregate_shapes(
             values[vk] = s
             to_remove.append(vk)
 
-    by["__index"] = by.index
-    values["__index"] = values.index
-
     # when values are points, we need to use sjoin(); when they are polygons and fractions is True, we need to use
     # overlay() also, we use sjoin() when fractions is False and values are polygons, because they are equivalent and
     # I think that sjoin() is faster
     if fractions is False or isinstance(values.iloc[0].geometry, Point):
         joined = by.sjoin(values)
 
-        assert "__index" not in joined
-        joined["__index"] = joined.index
+        assert INDEX not in joined
+        joined[INDEX] = joined.index
     else:
+        by[INDEX] = by.index
         overlayed = gpd.overlay(by, values, how="intersection")
-
-        assert "__index" not in overlayed
-        overlayed.rename(
-            columns={
-                "__index_1": "__index_left",
-                "__index_2": "__index_right",
-            },
-            inplace=True,
-        )
-        overlayed["__index"] = overlayed["__index_left"]
+        del by[INDEX]
         joined = overlayed
+    assert INDEX in joined
 
     fractions_of_values = None
     if fractions:
@@ -448,17 +442,17 @@ def _aggregate_shapes(
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
-        aggregated = joined.groupby(["__index", vk])[ONES_COLUMN].agg(agg_func).reset_index()
+        aggregated = joined.groupby([INDEX, vk])[ONES_COLUMN].agg(agg_func).reset_index()
         aggregated_values = aggregated[ONES_COLUMN].values
     else:
         if fractions_of_values is not None:
             joined[value_key] = joined[value_key].to_numpy() * fractions_of_values.to_numpy().reshape(-1, 1)
-        aggregated = joined.groupby(["__index"])[value_key].agg(agg_func).reset_index()
+        aggregated = joined.groupby([INDEX])[value_key].agg(agg_func).reset_index()
         aggregated_values = aggregated[value_key].values
 
     # Here we prepare some variables to construct a sparse matrix in the coo format (edges + nodes)
     rows_categories = by.index.tolist()
-    indices_of_aggregated_rows = np.array(aggregated["__index"])
+    indices_of_aggregated_rows = np.array(aggregated[INDEX])
     # In the categorical case len(value_key) == 1 so np.repeat does nothing, in the non-categorical case len(value_key)
     # can be > 1, so the aggregated table len(value_key) columns. This table will be flattened to a vector, so when
     # constructing the sparse matrix we need to repeat each row index len(value_key) times.
