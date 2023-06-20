@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 from geopandas import GeoDataFrame
@@ -36,7 +36,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_pixels: int,
         target_coordinate_system: str = "global",
         # unused at the moment, see
-        transform: Optional[Callable[[SpatialData], Any]] = None,
+        transform: Callable[[SpatialData], Any] | None = None,
     ):
         """
         Torch Dataset that returns image tiles around regions from a SpatialData object.

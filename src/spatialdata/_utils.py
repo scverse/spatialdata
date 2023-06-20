@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     pass
 
 
-def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
     if isinstance(array, list):
         array = np.array(array)
     if array.dtype != float:
@@ -38,12 +38,12 @@ def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
     return array
 
 
-def _atoi(text: str) -> Union[int, str]:
+def _atoi(text: str) -> int | str:
     return int(text) if text.isdigit() else text
 
 
 # from https://stackoverflow.com/a/5967539/3343783
-def _natural_keys(text: str) -> list[Union[int, str]]:
+def _natural_keys(text: str) -> list[int | str]:
     """Sort keys in natural order.
 
     alist.sort(key=natural_keys) sorts in human order
@@ -63,7 +63,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     return result  # type: ignore[no-any-return]
 
 
-def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage | MultiscaleSpatialImage:
     """
     Remove padding from a raster type that was eventually added by the rotation component of a transformation.
 

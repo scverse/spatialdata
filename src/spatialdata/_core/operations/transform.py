@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import dask_image.ndinterp
@@ -107,7 +107,7 @@ def _transform_raster(
 def _prepend_transformation(
     element: SpatialElement,
     transformation: BaseTransformation,
-    raster_translation: Optional[Translation],
+    raster_translation: Translation | None,
     maintain_positioning: bool,
 ) -> None:
     """Prepend a transformation to an element.
@@ -136,7 +136,7 @@ def _prepend_transformation(
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
 
-    to_prepend: Optional[BaseTransformation] = None
+    to_prepend: BaseTransformation | None = None
     if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
         if maintain_positioning:
             assert raster_translation is not None
@@ -270,7 +270,7 @@ def _(
         Labels3DModel,
     )
     from spatialdata.transformations import get_transformation, set_transformation
-    from spatialdata.transformations.transformations import BaseTransformation, Sequence
+    from spatialdata.transformations.transformations import Sequence
 
     # labels need to be preserved after the resizing of the image
     if schema in (Labels2DModel, Labels3DModel):

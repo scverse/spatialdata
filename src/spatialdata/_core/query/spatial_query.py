@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 import dask.array as da
 import numpy as np
@@ -38,8 +38,8 @@ from spatialdata.transformations.transformations import (
 
 def get_bounding_box_corners(
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
 ) -> DataArray:
     """Get the coordinates of the corners of a bounding box from the min/max values.
 
@@ -97,8 +97,8 @@ def get_bounding_box_corners(
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> tuple[ArrayLike, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
@@ -209,8 +209,8 @@ class BoundingBoxRequest(BaseSpatialRequest):
 def _bounding_box_mask_points(
     points: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
 ) -> da.Array:
     """Compute a mask that is true for the points inside of an axis-aligned bounding box..
 
@@ -264,13 +264,13 @@ def _dict_query_dispatcher(
 
 @singledispatch
 def bounding_box_query(
-    element: Union[SpatialElement, SpatialData],
+    element: SpatialElement | SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     **kwargs: Any,
-) -> Optional[Union[SpatialElement, SpatialData]]:
+) -> SpatialElement | SpatialData | None:
     """
     Perform a bounding box query on the SpatialData object.
 
@@ -300,8 +300,8 @@ def bounding_box_query(
 def _(
     sdata: SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
@@ -330,12 +330,12 @@ def _(
 @bounding_box_query.register(SpatialImage)
 @bounding_box_query.register(MultiscaleSpatialImage)
 def _(
-    image: Union[SpatialImage, MultiscaleSpatialImage],
+    image: SpatialImage | MultiscaleSpatialImage,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> Optional[Union[SpatialImage, MultiscaleSpatialImage]]:
+) -> SpatialImage | MultiscaleSpatialImage | None:
     """Implement bounding box query for SpatialImage.
 
     Notes
@@ -509,10 +509,10 @@ def _(
 def _(
     points: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> Optional[DaskDataFrame]:
+) -> DaskDataFrame | None:
     from spatialdata import transform
     from spatialdata.transformations import BaseTransformation, get_transformation
 
@@ -585,10 +585,10 @@ def _(
 def _(
     polygons: GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> Optional[GeoDataFrame]:
+) -> GeoDataFrame | None:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -679,7 +679,7 @@ def _polygon_query(
 # this function is currently excluded from the API documentation. TODO: add it after the refactoring
 def polygon_query(
     sdata: SpatialData,
-    polygons: Union[Polygon, list[Polygon]],
+    polygons: Polygon | list[Polygon],
     target_coordinate_system: str,
     filter_table: bool = True,
     shapes: bool = True,

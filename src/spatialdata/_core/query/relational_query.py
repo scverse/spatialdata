@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import numpy as np
@@ -26,9 +26,7 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
 
 
-def _filter_table_by_coordinate_system(
-    table: AnnData | None, coordinate_system: Union[str, list[str]]
-) -> AnnData | None:
+def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system: str | list[str]) -> AnnData | None:
     """
     Filter an AnnData table to keep only the rows that are in the coordinate system.
 
@@ -162,9 +160,9 @@ class _ValueOrigin:
 
 def _locate_value(
     value_key: str,
-    element: Optional[SpatialElement] = None,
-    sdata: Optional[SpatialData] = None,
-    element_name: Optional[str] = None,
+    element: SpatialElement | None = None,
+    sdata: SpatialData | None = None,
+    element_name: str | None = None,
 ) -> list[_ValueOrigin]:
     assert (element is None) ^ (sdata is None and element_name is None)
     if element is not None:
@@ -203,9 +201,9 @@ def _locate_value(
 
 def get_values(
     value_key: str | list[str],
-    element: Optional[SpatialElement] = None,
-    sdata: Optional[SpatialData] = None,
-    element_name: Optional[str] = None,
+    element: SpatialElement | None = None,
+    sdata: SpatialData | None = None,
+    element_name: str | None = None,
 ) -> pd.DataFrame:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
