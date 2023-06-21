@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import chain
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from geopandas import GeoDataFrame
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
-from spatialdata import SpatialData, bounding_box_query
+from spatialdata import bounding_box_query
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
@@ -25,6 +25,11 @@ from spatialdata.models import (
 )
 from spatialdata.transformations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
+
+__all__ = ["ImageTilesDataset"]
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 class ImageTilesDataset(Dataset):
@@ -42,7 +47,6 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units: float | None = None,
         raster: bool = False,
         return_table: str | list[str] | None = None,
-        *kwargs: Any,
     ):
         """
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
@@ -76,25 +80,22 @@ class ImageTilesDataset(Dataset):
             The dimension of the requested tile in the units of the target coordinate system. This specifies the extent
             of the image each tile is querying. This is not related he size in pixel of each returned tile.
         rasterize
-            If True, the regions are rasterized using :func:`spatialdata.rasterize`.
-            If False, uses the :func:`spatialdata.bounding_box_query`.
+            If True, the images are rasterized using :func:`spatialdata.rasterize`.
+            If False, they are rasterized using :func:`spatialdata.bounding_box_query`.
         return_table
-            If not None, a value from the table is returned together with the image.
+            If not None, a value from the table is returned together with the image tile.
             Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
-            can be returned. It will not be returned a spatialdata object but only a tuple
+            can be returned. If None, it will return a spatialdata object with only the tuple
             containing the image and the table value.
 
         Returns
         -------
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData`.
         """
-        # TODO: we can extend this code to support:
-        #  - automatic dermination of the tile_dim_in_pixels to match the image resolution (prevent down/upscaling)
-        #  - use the bounding box query instead of the raster function if the user wants
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
         self._preprocess(tile_scale, tile_dim_in_units)
         self._crop_image: Callable[..., Any] = rasterize if raster else bounding_box_query
-        self._return_table = self._get_return_table(return_table)
+        self._return = self._get_return(return_table)
 
     def _validate(
         self,
@@ -192,18 +193,28 @@ class ImageTilesDataset(Dataset):
         assert np.all([i in self.tiles_coords for i in dims_])
         self.dims = list(dims_)
 
-    def _get_return_table(self, return_table: str | list[str] | None) -> Callable[[int], Any] | None:
+    def _get_return(
+        self,
+        return_table: str | list[str] | None,
+    ) -> Callable[[int, Any], tuple[Any, Any] | SpatialData]:
         """Get function to return values from the table of the dataset."""
+        from spatialdata import SpatialData
+
         if return_table is not None:
+            # table is always returned as array shape (1, len(return_table))
+            # where return_table can be a single column or a list of columns
             return_table = [return_table] if isinstance(return_table, str) else return_table
-            # return callable that always return array of shape (1, len(return_table))
+            # return tuple of (tile, table)
             if return_table in self.dataset_table.obs:
-                return lambda x: self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1)
+                return lambda x, tile: (tile, self.dataset_table.obs[return_table].iloc[x].values.reshape(1, -1))
             if return_table in self.dataset_table.var_names:
                 if issparse(self.dataset_table.X):
-                    return lambda x: self.dataset_table.X[:, return_table].X[x].A
-                return lambda x: self.dataset_table.X[:, return_table].X[x]
-        return None
+                    return lambda x, tile: (tile, self.dataset_table.X[:, return_table].X[x].A)
+                return lambda x, tile: (tile, self.dataset_table.X[:, return_table].X[x])
+        # return spatialdata consisting of the image tile and the associated table
+        return lambda x, tile: SpatialData(
+            images={self.tiles_coords.iloc[x][[self.REGION_KEY]]: tile}, table=self.dataset_table[x]
+        )
 
     def __len__(self) -> int:
         return len(self.dataset_index)
@@ -224,9 +235,7 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=row["cs"],
         )
 
-        if self._return_table is not None:
-            return tile, self.filtered_table(idx)
-        return SpatialData(images={t_coords[self.REGION_KEY][idx]: tile}, table=self.dataset_table[idx])
+        self._return(idx, tile)
 
     @property
     def regions(self) -> list[str]:

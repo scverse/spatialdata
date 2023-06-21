@@ -8,26 +8,27 @@ from spatialdata.dataloader import ImageTilesDataset
 from spatialdata.models import TableModel
 
 
-@pytest.mark.parametrize("image_element", ["blobs_image", "blobs_multiscale_image"])
-@pytest.mark.parametrize(
-    "regions_element",
-    ["blobs_labels", "blobs_multiscale_labels", "blobs_circles", "blobs_polygons", "blobs_multipolygons"],
-)
-def test_tiles_dataset(sdata_blobs, image_element, regions_element):
-    if regions_element in ["blobs_labels", "blobs_multipolygons", "blobs_multiscale_labels"]:
-        cm = pytest.raises(NotImplementedError)
-    else:
-        cm = contextlib.nullcontext()
-    with cm:
-        ds = ImageTilesDataset(
-            sdata=sdata_blobs,
-            regions_to_images={regions_element: image_element},
-            tile_dim_in_units=10,
-            tile_dim_in_pixels=32,
-            target_coordinate_system="global",
-        )
-        tile = ds[0].images.values().__iter__().__next__()
-        assert tile.shape == (3, 32, 32)
+class TestImageTilesDataset:
+    @pytest.mark.parametrize("image_element", ["blobs_image", "blobs_multiscale_image"])
+    @pytest.mark.parametrize(
+        "regions_element",
+        ["blobs_labels", "blobs_multiscale_labels", "blobs_circles", "blobs_polygons", "blobs_multipolygons"],
+    )
+    def test_tiles_dataset(self, sdata_blobs, image_element, regions_element):
+        if regions_element in ["blobs_labels", "blobs_multipolygons", "blobs_multiscale_labels"]:
+            cm = pytest.raises(NotImplementedError)
+        else:
+            cm = contextlib.nullcontext()
+        with cm:
+            ds = ImageTilesDataset(
+                sdata=sdata_blobs,
+                regions_to_images={regions_element: image_element},
+                tile_dim_in_units=10,
+                tile_dim_in_pixels=32,
+                target_coordinate_system="global",
+            )
+            tile = ds[0].images.values().__iter__().__next__()
+            assert tile.shape == (3, 32, 32)
 
 
 def test_tiles_table(sdata_blobs):
