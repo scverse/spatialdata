@@ -7,11 +7,10 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
-from spatialdata import bounding_box_query
-from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,
@@ -92,6 +91,9 @@ class ImageTilesDataset(Dataset):
         -------
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData`.
         """
+        from spatialdata import bounding_box_query
+        from spatialdata._core.operations.rasterize import rasterize
+
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
         self._preprocess(tile_scale, tile_dim_in_units)
         self._crop_image: Callable[..., Any] = rasterize if raster else bounding_box_query
@@ -118,9 +120,6 @@ class ImageTilesDataset(Dataset):
         ), "One region cannot be paired to multiple coordinate systems."
 
         for region_key, image_key in regions_to_images.items():
-            if region_key not in available_regions:
-                raise ValueError(f"region {region_key} not found in the spatialdata object.")
-
             # get elements
             region_elem = sdata[region_key]
             image_elem = sdata[image_key]
@@ -132,6 +131,11 @@ class ImageTilesDataset(Dataset):
                 raise ValueError("`regions_element` must be a shapes element.")
             if get_model(image_elem) not in [Image2DModel, Image3DModel]:
                 raise ValueError("`images_element` must be an image element.")
+            if isinstance(image_elem, MultiscaleSpatialImage):
+                raise NotImplementedError("Multiscale images are not implemented yet.")
+
+            if region_key not in available_regions:
+                raise ValueError(f"region {region_key} not found in the spatialdata object.")
 
             # check that the coordinate systems are valid for the elements
             region_trans = get_transformation(region_elem)
@@ -148,7 +152,9 @@ class ImageTilesDataset(Dataset):
 
         self.regions = list(available_regions.keys())  # all regions for the dataloader
         self.sdata = sdata
-        self.dataset_table = self.sdata.table.obs[self.sdata.table.obs[self._region_key].isin(self.regions)]
+        self.dataset_table = self.sdata.table.obs[
+            self.sdata.table.obs[self._region_key].isin(self.regions)
+        ]  # filtered table for the data loader
         self._cs_region_image = tuple(cs_region_image)  # tuple of tuples (coordinate_system, region_key, image_key)
 
     def _preprocess(
@@ -231,7 +237,7 @@ class ImageTilesDataset(Dataset):
             image,
             axes=self.dims,
             min_coordinate=t_coords[[f"min{i}" for i in self.dims]],
-            max_coordinate=t_coords[[f"min{i}" for i in self.dims]],
+            max_coordinate=t_coords[[f"max{i}" for i in self.dims]],
             target_coordinate_system=row["cs"],
         )
 
@@ -338,7 +344,7 @@ def _get_tile_coords(
     if tile_dim_in_units is None:
         if elem.iloc[0][0].geom_type == "Point":
             extent = elem[ShapesModel.RADIUS_KEY].values * tile_scale
-        if elem.iloc[0][0].geom_type == "Polygon":
+        if elem.iloc[0][0].geom_type in ["Polygon", "MultiPolygon"]:
             extent = elem[ShapesModel.GEOMETRY_KEY].length * tile_scale
         raise ValueError("Only point and polygon shapes are supported.")
     if tile_dim_in_units is not None:
