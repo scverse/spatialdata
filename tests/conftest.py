@@ -31,8 +31,10 @@ from spatialdata.models import (
 from xarray import DataArray
 from spatialdata.datasets import BlobsDataset
 import geopandas as gpd
+import dask.dataframe as dd
+from spatialdata._utils import _deepcopy_geodataframe
 
-RNG = default_rng()
+RNG = default_rng(seed=0)
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -298,6 +300,8 @@ def sdata_blobs() -> SpatialData:
     from spatialdata.datasets import blobs
 
     sdata = deepcopy(blobs(256, 300, 3))
+    for k, v in sdata.shapes.items():
+        sdata.shapes[k] = _deepcopy_geodataframe(v)
     from spatialdata._utils import multiscale_spatial_image_from_data_tree
 
     sdata.images["blobs_multiscale_image"] = multiscale_spatial_image_from_data_tree(
@@ -353,23 +357,30 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 
     Notes
     -----
-    Description of what is tested (for a quick visualization, plot the returned SpatialData object):
-    - values to query/aggregate: polygons, points, circles
-    - values to query by: polygons, circles
-    - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or outside
-     the query region)
+    Description of what is tested (for a quick visualization, please plot the returned SpatialData object):
+
+        - values to query/aggregate: polygons, points, circles
+        - values to query by: polygons, circles
+        - the shapes are completely inside, outside, or intersecting the query region (with the centroid inside or
+            outside the query region)
 
     Additional cases:
-    - concave shape intersecting multiple times the same shape; used both as query and as value
-    - shape intersecting multiple shapes; used both as query and as value
+
+        - concave shape intersecting multiple times the same shape; used both as query and as value
+        - shape intersecting multiple shapes; used both as query and as value
     """
     values_centroids_squares = np.array([[x * 18, 0] for x in range(8)] + [[8 * 18 + 7, 0]] + [[0, 90], [50, 90]])
     values_centroids_circles = np.array([[x * 18, 30] for x in range(8)] + [[8 * 18 + 7, 30]])
     by_centroids_squares = np.array([[119, 15], [100, 90], [150, 90], [210, 15]])
     by_centroids_circles = np.array([[24, 15], [290, 15]])
     values_points = _make_points(np.vstack((values_centroids_squares, values_centroids_circles)))
+
     values_squares = _make_squares(values_centroids_squares, half_widths=[6] * 9 + [15, 15])
+
     values_circles = _make_circles(values_centroids_circles, radius=[6] * 9)
+    values_circles["categorical_in_gdf"] = pd.Categorical(["a"] * 9)
+    values_circles["numerical_in_gdf"] = np.arange(9)
+
     by_squares = _make_squares(by_centroids_squares, half_widths=[30, 15, 15, 30])
     by_circles = _make_circles(by_centroids_circles, radius=[30, 30])
 
@@ -379,9 +390,17 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     values_squares.loc[len(values_squares)] = [polygon]
     ShapesModel.validate(values_squares)
 
+    values_squares["categorical_in_gdf"] = pd.Categorical(["a"] * 9 + ["b"] * 3)
+    values_squares["numerical_in_gdf"] = np.arange(12)
+
     polygon = Polygon([(0, 90 - 10), (0 + 30, 90), (0, 90 + 10), (50, 90)])
     by_squares.loc[len(by_squares)] = [polygon]
     ShapesModel.validate(by_squares)
+
+    s = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
+    values_points["categorical_in_ddf"] = dd.from_pandas(s, npartitions=1)
+    s = pd.Series(RNG.random(20))
+    values_points["numerical_in_ddf"] = dd.from_pandas(s, npartitions=1)
 
     sdata = SpatialData(
         points={"points": values_points},
@@ -392,29 +411,32 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
             "by_circles": by_circles,
         },
     )
-    # to visualize the cases considered in the test, much more immediate than reading them as text as done above
-    PLOT = False
-    if PLOT:
-        ##
-        import matplotlib.pyplot as plt
-
-        ax = plt.gca()
-        sdata.pl.render_shapes(element="values_polygons", na_color=(0.5, 0.2, 0.5, 0.5)).pl.render_points().pl.show(
-            ax=ax
-        )
-        sdata.pl.render_shapes(element="values_circles", na_color=(0.5, 0.2, 0.5, 0.5)).pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_polygons", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
-        sdata.pl.render_shapes(element="by_circles", na_color=(1.0, 0.7, 0.7, 0.5)).pl.show(ax=ax)
-        plt.show()
-        ##
 
     # generate table
-    x = np.ones((21, 2)) * np.array([1, 2])
+    x = RNG.random((21, 1))
     region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
     instance_id = np.array(list(range(9)) + list(range(12)))
-    table = AnnData(x, obs=pd.DataFrame({"region": region, "instance_id": instance_id}))
+    categorical_obs = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3))
+    numerical_obs = pd.Series(RNG.random(21))
+    table = AnnData(
+        x,
+        obs=pd.DataFrame(
+            {
+                "region": region,
+                "instance_id": instance_id,
+                "categorical_in_obs": categorical_obs,
+                "numerical_in_obs": numerical_obs,
+            }
+        ),
+        var=pd.DataFrame(index=["numerical_in_var"]),
+    )
     table = TableModel.parse(
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
     sdata.table = table
     return sdata
+
+
+@pytest.fixture()
+def sdata_query_aggregation() -> SpatialData:
+    return _make_sdata_for_testing_querying_and_aggretation()
