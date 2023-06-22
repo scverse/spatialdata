@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
+from spatialdata import SpatialData
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,
@@ -29,9 +30,6 @@ from spatialdata.transformations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
 __all__ = ["ImageTilesDataset"]
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
 
 class ImageTilesDataset(Dataset):
@@ -217,8 +215,6 @@ class ImageTilesDataset(Dataset):
         return_annot: str | list[str] | None,
     ) -> Callable[[int, Any], tuple[Any, Any] | SpatialData]:
         """Get function to return values from the table of the dataset."""
-        from spatialdata import SpatialData
-
         if return_annot is not None:
             # table is always returned as array shape (1, len(return_annot))
             # where return_table can be a single column or a list of columns
