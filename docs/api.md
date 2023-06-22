@@ -111,7 +111,6 @@ The transformations that can be defined between elements and coordinate systems 
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.dataloader
-
 .. autosummary::
     :toctree: generated
 
