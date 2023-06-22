@@ -27,7 +27,7 @@ __all__ = [
     "save_transformations",
 ]
 
-from spatialdata import models, transformations
+from spatialdata import dataloader, models, transformations
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
