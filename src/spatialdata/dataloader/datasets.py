@@ -377,7 +377,7 @@ def _get_tile_coords(
 
     # transform extent
     aff = transformation.to_affine_matrix(input_axes=tuple(dims[0]), output_axes=tuple(dims[0]))
-    extent = _affine_matrix_multiplication(aff, extent[:, np.newaxis])
+    extent = _affine_matrix_multiplication(aff, np.array(extent)[:, np.newaxis])
 
     # get min and max coordinates
     min_coordinates = np.array(centroids) - extent / 2
