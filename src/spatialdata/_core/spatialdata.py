@@ -1182,10 +1182,10 @@ class SpatialData:
             del root["table/table"]
 
     @staticmethod
-    def read(file_path: str) -> SpatialData:
+    def read(file_path: str, selection: Optional[tuple[str]] = None) -> SpatialData:
         from spatialdata import read_zarr
 
-        return read_zarr(file_path)
+        return read_zarr(file_path, selection=selection)
 
     @property
     def images(self) -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:

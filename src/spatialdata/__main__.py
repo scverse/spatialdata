@@ -10,7 +10,8 @@ import click
 
 @click.command(help="Peek inside the SpatialData .zarr dataset")
 @click.argument("path", default=False, type=str)
-def peek(path: str) -> None:
+@click.argument("selection", type=str, nargs=-1)
+def peek(path: str, selection: tuple[str]) -> None:
     """
     Peek inside the SpatialData .zarr dataset.
 
@@ -26,7 +27,7 @@ def peek(path: str) -> None:
     import spatialdata as sd
 
     try:
-        sdata = sd.SpatialData.read(path)
+        sdata = sd.SpatialData.read(path, selection=selection)
         print(sdata)  # noqa: T201
     except ValueError as e:
         # checking if a valid path was provided is difficult given the various ways in which

@@ -17,7 +17,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 
-def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
+def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
     f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     images = {}
@@ -26,8 +26,11 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
     table: Optional[AnnData] = None
     shapes = {}
 
+    selector = {"images", "labels", "points", "shapes", "table"} if not selection else set(selection or [])
+    logger.debug(f"Reading selection {selector}")
+
     # read multiscale images
-    if "images" in f:
+    if "images" in selector and "images" in f:
         group = f["images"]
         count = 0
         for subgroup_name in group:
@@ -43,7 +46,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
 
     # read multiscale labels
     with ome_zarr_logger(logging.ERROR):
-        if "labels" in f:
+        if "labels" in selector and "labels" in f:
             group = f["labels"]
             count = 0
             for subgroup_name in group:
@@ -57,7 +60,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
-    if "points" in f:
+    if "points" in selector and "points" in f:
         group = f["points"]
         for subgroup_name in group:
             f_elem = group[subgroup_name]
@@ -67,7 +70,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             points[subgroup_name] = _read_points(f_elem_store)
 
-    if "shapes" in f:
+    if "shapes" in selector and "shapes" in f:
         group = f["shapes"]
         for subgroup_name in group:
             if Path(subgroup_name).name.startswith("."):
@@ -77,7 +80,7 @@ def read_zarr(store: Union[str, Path, zarr.Group]) -> SpatialData:
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             shapes[subgroup_name] = _read_shapes(f_elem_store)
 
-    if "table" in f:
+    if "table" in selector and "table" in f:
         group = f["table"]
         for subgroup_name in group:
             if Path(subgroup_name).name.startswith("."):
