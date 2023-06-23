@@ -9,7 +9,6 @@
 The `SpatialData` class.
 
 ```{eval-rst}
-.. currentmodule:: spatialdata
 .. autosummary::
     :toctree: generated
 
@@ -49,6 +48,7 @@ The elements (building-blocks) that consitute `SpatialData`.
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.models
+
 .. autosummary::
     :toctree: generated
 
@@ -65,6 +65,7 @@ The elements (building-blocks) that consitute `SpatialData`.
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.models
+
 .. autosummary::
     :toctree: generated
 
@@ -82,6 +83,7 @@ The transformations that can be defined between elements and coordinate systems 
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.transformations
+
 .. autosummary::
     :toctree: generated
 
@@ -97,8 +99,9 @@ The transformations that can be defined between elements and coordinate systems 
 ### Utilities
 
 ```{eval-rst}
-.. autosummary::
 .. currentmodule:: spatialdata.transformations
+
+.. autosummary::
     :toctree: generated
 
     get_transformation
@@ -113,6 +116,7 @@ The transformations that can be defined between elements and coordinate systems 
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.dataloader
+
 .. autosummary::
     :toctree: generated
 
