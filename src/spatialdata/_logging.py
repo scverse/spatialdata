@@ -1,4 +1,5 @@
 import logging
+import os
 
 
 def _setup_logger() -> "logging.Logger":
@@ -6,7 +7,8 @@ def _setup_logger() -> "logging.Logger":
     from rich.logging import RichHandler
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+    level = os.environ.get("LOGLEVEL", logging.INFO)
+    logger.setLevel(level=level)
     console = Console(force_terminal=True)
     if console.is_jupyter is True:
         console.is_jupyter = False
