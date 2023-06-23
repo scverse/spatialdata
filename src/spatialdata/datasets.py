@@ -131,7 +131,7 @@ class BlobsDataset:
     ) -> SpatialData:
         """Blobs dataset."""
         image = self._image_blobs(self.transformations, self.length, self.n_channels)
-        multiscale_image = self._image_blobs(self.transformations, self.length, multiscale=True)
+        multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
         labels = self._labels_blobs(self.transformations, self.length)
         multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
         points = self._points_blobs(self.transformations, self.length, self.n_points)
