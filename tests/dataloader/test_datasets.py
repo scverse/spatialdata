@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.dataloader import ImageTilesDataset
 from spatialdata.models import TableModel
 

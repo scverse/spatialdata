@@ -16,7 +16,7 @@ from spatialdata.transformations._utils import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata import SpatialData
+    from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models import SpatialElement
     from spatialdata.transformations import Affine, BaseTransformation
 

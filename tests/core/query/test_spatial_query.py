@@ -5,13 +5,13 @@ import pytest
 from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,
     polygon_query,
 )
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,

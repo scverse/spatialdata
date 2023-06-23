@@ -14,7 +14,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,

@@ -17,7 +17,6 @@ from spatialdata.transformations.transformations import BaseTransformation
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
-# ValidAxis_t = Literal["c", "x", "y", "z"]
 ValidAxis_t = str
 MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 C = "c"

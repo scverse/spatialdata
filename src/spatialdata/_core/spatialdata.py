@@ -18,27 +18,17 @@ from ome_zarr.types import JSONDict
 from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
-from spatialdata._io import (
-    write_image,
-    write_labels,
-    write_points,
-    write_shapes,
-    write_table,
-)
-from spatialdata._io._utils import get_backing_files
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata._utils import _natural_keys
-from spatialdata.models import (
+from spatialdata.models._utils import SpatialElement, get_axes_names
+from spatialdata.models.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
     ShapesModel,
-    SpatialElement,
     TableModel,
-    get_axes_names,
     get_model,
 )
 
@@ -653,6 +643,9 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
+        from spatialdata._io._utils import get_backing_files
+        from spatialdata._io.io_raster import write_image
+
         if self.is_backed():
             files = get_backing_files(image)
             assert self.path is not None
@@ -736,6 +729,9 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
+        from spatialdata._io._utils import get_backing_files
+        from spatialdata._io.io_raster import write_labels
+
         if self.is_backed():
             files = get_backing_files(labels)
             assert self.path is not None
@@ -820,6 +816,9 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
+        from spatialdata._io._utils import get_backing_files
+        from spatialdata._io.io_points import write_points
+
         if self.is_backed():
             files = get_backing_files(points)
             assert self.path is not None
@@ -902,6 +901,8 @@ class SpatialData:
         -----
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
+        from spatialdata._io.io_shapes import write_shapes
+
         self._add_shapes_in_memory(name=name, shapes=shapes, overwrite=overwrite)
         if self.is_backed():
             elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
@@ -918,6 +919,8 @@ class SpatialData:
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
+        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1113,6 +1116,8 @@ class SpatialData:
         The table needs to pass validation (see :class:`~spatialdata.TableModel`).
         If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
         """
+        from spatialdata._io.io_table import write_table
+
         TableModel().validate(table)
         if self.table is not None:
             raise ValueError("The table already exists. Use del sdata.table to remove it first.")
@@ -1199,6 +1204,7 @@ class SpatialData:
         -------
             The string representation of the SpatialData object.
         """
+        from spatialdata._utils import _natural_keys
 
         def rreplace(s: str, old: str, new: str, occurrence: int) -> str:
             li = s.rsplit(old, occurrence)
