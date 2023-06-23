@@ -29,7 +29,6 @@ Operations on `SpatialData` objects.
     match_table_to_element
     concatenate
     rasterize
-    transform
     aggregate
 ```
 
