@@ -145,9 +145,6 @@ class ImageTilesDataset(Dataset):
                 raise ValueError(f"region {region_key} not found in the spatialdata object.")
 
             # check that the coordinate systems are valid for the elements
-            region_trans = get_transformation(region_elem)
-            image_trans = get_transformation(image_elem)
-
             try:
                 cs = regions_to_coordinate_systems[region_key]
                 region_trans = get_transformation(region_elem, cs)
@@ -182,15 +179,17 @@ class ImageTilesDataset(Dataset):
             t = get_transformation(self.sdata[region], cs)
             assert isinstance(t, BaseTransformation)
 
+            # get instances from region
+            inst = self.sdata.table.obs[self.sdata.table.obs[self._region_key] == region][self._instance_key].values
+
+            # subset the regions by instances
+            subset_region = self.sdata[region].iloc[inst]
             # get coordinates of centroids and extent for tiles
-            tile_coords = _get_tile_coords(self.sdata[region], t, dims, tile_scale, tile_dim_in_units)
+            tile_coords = _get_tile_coords(subset_region, t, dims, tile_scale, tile_dim_in_units)
             tile_coords_df.append(tile_coords)
 
             # get shapes
             shapes_l.append(self.sdata[region])
-
-            # get instances from region
-            inst = self.sdata.table.obs[self.sdata.table.obs[self._region_key] == region][self._instance_key].values
 
             # get index dictionary, with `instance_id`, `cs`, `region`, and `image`
             df = pd.DataFrame({self.INSTANCE_KEY: inst})
@@ -224,8 +223,8 @@ class ImageTilesDataset(Dataset):
                 return lambda x, tile: (tile, self.dataset_table.obs[return_annot].iloc[x].values.reshape(1, -1))
             if np.all([i in self.dataset_table.var_names for i in return_annot]):
                 if issparse(self.dataset_table.X):
-                    return lambda x, tile: (tile, self.dataset_table.X[:, return_annot].X[x].A)
-                return lambda x, tile: (tile, self.dataset_table.X[:, return_annot].X[x])
+                    return lambda x, tile: (tile, self.dataset_table[:, return_annot].X[x].A)
+                return lambda x, tile: (tile, self.dataset_table[:, return_annot].X[x])
             raise ValueError(
                 f"`return_annot` must be a column name in the table or a variable name in the table. "
                 f"Got {return_annot}."
@@ -255,7 +254,7 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=row["cs"],
         )
 
-        yield self._return(idx, tile)
+        return self._return(idx, tile)
 
     @property
     def regions(self) -> list[str]:
