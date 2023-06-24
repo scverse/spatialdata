@@ -28,7 +28,11 @@ __all__ = ["blobs", "raccoon"]
 
 
 def blobs(
-    length: int = 512, n_points: int = 200, n_shapes: int = 5, extra_coord_system: Optional[str] = None
+    length: int = 512,
+    n_points: int = 200,
+    n_shapes: int = 5,
+    extra_coord_system: Optional[str] = None,
+    n_channels: int = 3,
 ) -> SpatialData:
     """
     Blobs dataset.
@@ -43,7 +47,9 @@ def blobs(
         Number of max shapes to generate.
         At most, as if overlapping they will be discarded
     extra_coord_system
-            Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+        Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+    n_channels
+        Number of channels of the image
 
 
     Returns
@@ -52,7 +58,11 @@ def blobs(
         SpatialData object with blobs dataset.
     """
     return BlobsDataset(
-        length=length, n_points=n_points, n_shapes=n_shapes, extra_coord_system=extra_coord_system
+        length=length,
+        n_points=n_points,
+        n_shapes=n_shapes,
+        extra_coord_system=extra_coord_system,
+        n_channels=n_channels,
     ).blobs()
 
 
@@ -84,7 +94,12 @@ class BlobsDataset:
     """Blobs dataset."""
 
     def __init__(
-        self, length: int = 512, n_points: int = 200, n_shapes: int = 5, extra_coord_system: Optional[str] = None
+        self,
+        length: int = 512,
+        n_points: int = 200,
+        n_shapes: int = 5,
+        extra_coord_system: Optional[str] = None,
+        n_channels: int = 3,
     ) -> None:
         """
         Blobs dataset.
@@ -100,11 +115,14 @@ class BlobsDataset:
             At most, as if overlapping they will be discarded
         extra_coord_system
             Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+        n_channels
+            Number of channels of the image
         """
         self.length = length
         self.n_points = n_points
         self.n_shapes = n_shapes
         self.transformations = {"global": Identity()}
+        self.n_channels = n_channels
         if extra_coord_system:
             self.transformations[extra_coord_system] = Identity()
 
@@ -112,8 +130,8 @@ class BlobsDataset:
         self,
     ) -> SpatialData:
         """Blobs dataset."""
-        image = self._image_blobs(self.transformations, self.length)
-        multiscale_image = self._image_blobs(self.transformations, self.length, multiscale=True)
+        image = self._image_blobs(self.transformations, self.length, self.n_channels)
+        multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
         labels = self._labels_blobs(self.transformations, self.length)
         multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
         points = self._points_blobs(self.transformations, self.length, self.n_points)
@@ -138,10 +156,11 @@ class BlobsDataset:
         self,
         transformations: Optional[dict[str, Any]] = None,
         length: int = 512,
+        n_channels: int = 3,
         multiscale: bool = False,
     ) -> Union[SpatialImage, MultiscaleSpatialImage]:
         masks = []
-        for i in range(3):
+        for i in range(n_channels):
             mask = self._generate_blobs(length=length, seed=i)
             mask = (mask - mask.min()) / mask.ptp()
             masks.append(mask)
