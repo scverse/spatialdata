@@ -33,6 +33,7 @@ def blobs(
     n_shapes: int = 5,
     extra_coord_system: Optional[str] = None,
     n_channels: int = 3,
+    c_coords: Optional[ArrayLike] = None,
 ) -> SpatialData:
     """
     Blobs dataset.
@@ -63,6 +64,7 @@ def blobs(
         n_shapes=n_shapes,
         extra_coord_system=extra_coord_system,
         n_channels=n_channels,
+        c_coords=c_coords,
     ).blobs()
 
 
@@ -100,6 +102,7 @@ class BlobsDataset:
         n_shapes: int = 5,
         extra_coord_system: Optional[str] = None,
         n_channels: int = 3,
+        c_coords: Optional[ArrayLike] = None,
     ) -> None:
         """
         Blobs dataset.
@@ -122,6 +125,9 @@ class BlobsDataset:
         self.n_points = n_points
         self.n_shapes = n_shapes
         self.transformations = {"global": Identity()}
+        self.c_coords = c_coords
+        if c_coords is not None:
+            n_channels = len(c_coords)
         self.n_channels = n_channels
         if extra_coord_system:
             self.transformations[extra_coord_system] = Identity()
@@ -130,7 +136,7 @@ class BlobsDataset:
         self,
     ) -> SpatialData:
         """Blobs dataset."""
-        image = self._image_blobs(self.transformations, self.length, self.n_channels)
+        image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
         multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
         labels = self._labels_blobs(self.transformations, self.length)
         multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
@@ -157,6 +163,7 @@ class BlobsDataset:
         transformations: Optional[dict[str, Any]] = None,
         length: int = 512,
         n_channels: int = 3,
+        c_coords: Optional[ArrayLike] = None,
         multiscale: bool = False,
     ) -> Union[SpatialImage, MultiscaleSpatialImage]:
         masks = []
@@ -168,8 +175,10 @@ class BlobsDataset:
         x = np.stack(masks, axis=0)
         dims = ["c", "y", "x"]
         if not multiscale:
-            return Image2DModel.parse(x, transformations=transformations, dims=dims)
-        return Image2DModel.parse(x, transformations=transformations, dims=dims, scale_factors=[2, 2])
+            return Image2DModel.parse(x, transformations=transformations, dims=dims, c_coords=c_coords)
+        return Image2DModel.parse(
+            x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=[2, 2]
+        )
 
     def _labels_blobs(
         self, transformations: Optional[dict[str, Any]] = None, length: int = 512, multiscale: bool = False
