@@ -62,6 +62,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
     # now read rest of the data
     if "points" in selector and "points" in f:
         group = f["points"]
+        count = 0
         for subgroup_name in group:
             f_elem = group[subgroup_name]
             if Path(subgroup_name).name.startswith("."):
@@ -69,9 +70,12 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             points[subgroup_name] = _read_points(f_elem_store)
+            count += 1
+        logger.debug(f"Found {count} elements in {group}")
 
     if "shapes" in selector and "shapes" in f:
         group = f["shapes"]
+        count = 0
         for subgroup_name in group:
             if Path(subgroup_name).name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
@@ -79,9 +83,12 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(group._store.path, f_elem.path)
             shapes[subgroup_name] = _read_shapes(f_elem_store)
+            count += 1
+        logger.debug(f"Found {count} elements in {group}")
 
     if "table" in selector and "table" in f:
         group = f["table"]
+        count = 0
         for subgroup_name in group:
             if Path(subgroup_name).name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
@@ -101,6 +108,8 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # fix type for region
                 if "region" in attrs and isinstance(attrs["region"], np.ndarray):
                     attrs["region"] = attrs["region"].tolist()
+            count += 1
+        logger.debug(f"Found {count} elements in {group}")
 
     sdata = SpatialData(
         images=images,
