@@ -3,8 +3,11 @@ from copy import deepcopy
 import numpy as np
 import pytest
 import xarray.testing
+from spatialdata import transform
+from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel
 from spatialdata.models._utils import ValidAxis_t
+from spatialdata.transformations import get_transformation
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.ngff.ngff_transformations import (
@@ -862,3 +865,19 @@ def test_compose_in_xy_and_operate_in_cyx():
             ]
         ),
     )
+
+
+def test_keep_numerical_coordinates_c():
+    c_coords = range(3)
+    sdata = blobs(n_channels=len(c_coords))
+    t = get_transformation(sdata.images["blobs_image"])
+    t_blobs = transform(sdata.images["blobs_image"], t)
+    assert np.array_equal(t_blobs.coords["c"], c_coords)
+
+
+def test_keep_string_coordinates_c():
+    c_coords = ["a", "b", "c"]
+    sdata = blobs(c_coords=c_coords)
+    t = get_transformation(sdata.images["blobs_image"])
+    t_blobs = transform(sdata.images["blobs_image"], t)
+    assert np.array_equal(t_blobs.coords["c"], c_coords)
