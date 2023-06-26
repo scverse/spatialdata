@@ -32,6 +32,7 @@ def _read_points(
 
     path = os.path.join(f._store.path, f.path, "points.parquet")
     # cache on remote file needed for parquet reader to work
+    # TODO: allow reading in the metadata without caching all the data
     table = read_parquet("simplecache::" + path if "http" in path else path)
     assert isinstance(table, DaskDataFrame)
 
