@@ -47,6 +47,7 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units: float | None = None,
         raster: bool = False,
         return_annot: str | list[str] | None = None,
+        transform: Callable[[Any], Any] | None = None,
         raster_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         """
@@ -105,6 +106,7 @@ class ImageTilesDataset(Dataset):
             partial(rasterize, **dict(raster_kwargs)) if raster else bounding_box_query  # type: ignore[assignment]
         )
         self._return = self._get_return(return_annot)
+        self.transform = transform
 
     def _validate(
         self,
@@ -223,8 +225,8 @@ class ImageTilesDataset(Dataset):
                 return lambda x, tile: (tile, self.dataset_table.obs[return_annot].iloc[x].values.reshape(1, -1))
             if np.all([i in self.dataset_table.var_names for i in return_annot]):
                 if issparse(self.dataset_table.X):
-                    return lambda x, tile: (tile, self.dataset_table[:, return_annot].X[x].A)
-                return lambda x, tile: (tile, self.dataset_table[:, return_annot].X[x])
+                    return lambda x, tile: (tile, self.dataset_table[x, return_annot].X.A)
+                return lambda x, tile: (tile, self.dataset_table[x, return_annot].X)
             raise ValueError(
                 f"`return_annot` must be a column name in the table or a variable name in the table. "
                 f"Got {return_annot}."
@@ -254,6 +256,9 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=row["cs"],
         )
 
+        if self.transform is not None:
+            out = self._return(idx, tile)
+            return self.transform(out)
         return self._return(idx, tile)
 
     @property
@@ -362,8 +367,13 @@ def _get_tile_coords(
         else:
             raise ValueError("Only point and polygon shapes are supported.")
     if tile_dim_in_units is not None:
-        if isinstance(tile_dim_in_units, float):
+        if isinstance(tile_dim_in_units, (float, int)):
             extent = np.repeat(tile_dim_in_units, len(centroids))
+        else:
+            raise TypeError(
+                f"`tile_dim_in_units` must be a `float`, `int`, `list`, `tuple` or `np.ndarray`, "
+                f"not {type(tile_dim_in_units)}."
+            )
         if len(extent) != len(centroids):
             raise ValueError(
                 f"the number of elements in the region ({len(extent)}) does not match"

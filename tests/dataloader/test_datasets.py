@@ -43,7 +43,7 @@ class TestImageTilesDataset:
             raster_kwargs=raster_kwargs,
         )
 
-        sdata_tile = ds[0].__next__()
+        sdata_tile = ds[0]
         tile = sdata_tile.images.values().__iter__().__next__()
 
         if regions_element == "blobs_circles":
@@ -82,7 +82,7 @@ class TestImageTilesDataset:
             return_annot=return_annot,
         )
 
-        tile, annot = ds[0].__next__()
+        tile, annot = ds[0]
         if regions_element == "blobs_circles":
             assert tile.shape == (3, 25, 25)
         elif regions_element == "blobs_polygons":
