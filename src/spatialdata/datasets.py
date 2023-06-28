@@ -14,6 +14,7 @@ from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -127,6 +128,11 @@ class BlobsDataset:
         self.transformations = {"global": Identity()}
         self.c_coords = c_coords
         if c_coords is not None:
+            if n_channels != len(c_coords):
+                logger.info(
+                    f"Number of channels ({n_channels}) and c_coords ({len(c_coords)}) do not match; ignoring "
+                    f"n_channels value"
+                )
             n_channels = len(c_coords)
         self.n_channels = n_channels
         if extra_coord_system:

@@ -877,7 +877,8 @@ def test_keep_numerical_coordinates_c():
 
 def test_keep_string_coordinates_c():
     c_coords = ["a", "b", "c"]
-    sdata = blobs(c_coords=c_coords)
+    # n_channels will be ignored, testing also that this works
+    sdata = blobs(c_coords=c_coords, n_channels=4)
     t = get_transformation(sdata.images["blobs_image"])
     t_blobs = transform(sdata.images["blobs_image"], t)
     assert np.array_equal(t_blobs.coords["c"], c_coords)
