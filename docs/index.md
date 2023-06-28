@@ -12,6 +12,8 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 -   [spatialdata-plot][]: Static plotting library for `spatialdata`.
 -   [napari-spatialdata][]: napari plugin for interactive exploration and annotation of `spatialdata`.
 
+Please see our preprint {cite}`Marconato2023.05.05.539647` for citation and to learn more.
+
 ```{eval-rst}
 .. note::
    This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
