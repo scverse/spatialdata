@@ -242,8 +242,9 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
     )
+    c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     set_transformation(transformed_data, old_transformations.copy(), set_all=True)
