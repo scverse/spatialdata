@@ -57,14 +57,14 @@ class ImageTilesDataset(Dataset):
         are set, the dataset may return a tuple containing:
 
             - the tile image, centered in the target coordinate system of the region.
-            - a vector or scala value from the table.
+            - a vector or scalar value from the table.
 
         Parameters
         ----------
         sdata
             The :class`spatialdata.SpatialData` object.
         regions_to_images
-            A mapping betwen region and images. The regions are used to compute the tile centers, while the images are
+            A mapping between region and images. The regions are used to compute the tile centers, while the images are
             used to get the pixel values.
         regions_to_coordinate_systems
             A mapping between regions and coordinate systems. The coordinate systems are used to transform both
