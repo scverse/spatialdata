@@ -700,6 +700,7 @@ def polygon_query(
         Whether to filter shapes
     points
         Whether to filter points
+
     Returns
     -------
     The queried SpatialData object with filtered shapes and points.
