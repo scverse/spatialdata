@@ -191,8 +191,7 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        return data
+        return compute_coordinates(data)
 
     @singledispatchmethod
     def validate(self, data: Any) -> None:

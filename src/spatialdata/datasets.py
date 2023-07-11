@@ -226,6 +226,7 @@ class BlobsDataset:
         points = (length * rng.random((2, n_pts))).astype(int)
         mask[tuple(indices for indices in points)] = 1
         mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
+        assert isinstance(mask, np.ndarray)
         return mask
 
     def _points_blobs(
