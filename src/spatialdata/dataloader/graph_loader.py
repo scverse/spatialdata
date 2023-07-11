@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Literal
+
 import geopandas as gpd
 import numpy as np
 from scipy.spatial import KDTree
@@ -7,7 +9,7 @@ from scipy.spatial import KDTree
 from spatialdata._logging import logger
 
 
-def build_graph( # TODO: add rings for grids
+def build_graph(  # TODO: add rings for grids
     gdf: gpd.GeoDataFrame,
     method: Literal["knn", "radius", "expansion"] = "knn",
     use_centroids: bool = True,
@@ -15,7 +17,7 @@ def build_graph( # TODO: add rings for grids
     max_distance: float | None = None,  # type: ignore[syntax]
     percentile: int | None = None,
     self_loops: bool = False,
-    **kwargs
+    **kwargs,
 ) -> np.ndarray:
     """
     Build a graph from a GeoDataceFrame.
@@ -50,59 +52,71 @@ def build_graph( # TODO: add rings for grids
     if method == "knn":
         assert k is not None
         assert k > 0
-        assert max_distance is None or max_distance > 0 
+        assert max_distance is None or max_distance > 0
         if not use_centroids:
             logger.warning("method knn is only available for centroids, automatically set use_centroids=True.")
-        gdf_t     = gdf.centroid
-        centroids = np.array(gdf_t.apply(lambda g:[g.x,g.y]).tolist())
-        tree      = KDTree(centroids)
-        
+        gdf_t = gdf.centroid
+        centroids = np.array(gdf_t.apply(lambda g: [g.x, g.y]).tolist())
+        tree = KDTree(centroids)
+
         if max_distance is not None:
             if percentile is not None:
                 logger.warning("both percentile and max_distance are set, will only use max_distance.")
-            d_tree, idx   = tree.query(centroids, k=k, distance_upper_bound=max_distance)
+            d_tree, idx = tree.query(centroids, k=k, distance_upper_bound=max_distance)
         else:
             if percentile is not None:
                 logger.warning("computing percentile could take long for large datasets.")
-                centroids    = np.array(centroids)
-                dd           = tree.sparse_distance_matrix(tree, max_distance=np.sqrt((np.max(centroids[:,0]) - np.min(centroids[:,0]))**2 + (np.max(centroids[:,1]) - np.min(centroids[:,1]))**2)).toarray()
+                centroids = np.array(centroids)
+                dd = tree.sparse_distance_matrix(
+                    tree,
+                    max_distance=np.sqrt(
+                        (np.max(centroids[:, 0]) - np.min(centroids[:, 0])) ** 2
+                        + (np.max(centroids[:, 1]) - np.min(centroids[:, 1])) ** 2
+                    ),
+                ).toarray()
                 np.fill_diagonal(dd, np.nan)
-                dd           = dd[~np.isnan(dd)].reshape(dd.shape[0], dd.shape[1] - 1)
+                dd = dd[~np.isnan(dd)].reshape(dd.shape[0], dd.shape[1] - 1)
                 max_distance = np.percentile(dd, percentile)
-                d_tree, idx  = tree.query(centroids, k=k, distance_upper_bound=max_distance)
+                d_tree, idx = tree.query(centroids, k=k, distance_upper_bound=max_distance)
             else:
-                d_tree, idx   = tree.query(centroids, k=k)
+                d_tree, idx = tree.query(centroids, k=k)
 
-        idx           = idx[:,1:]
-        if idx.size ==0:
-            return 
+        idx = idx[:, 1:]
+        if idx.size == 0:
+            return
         point_numbers = np.arange(len(centroids))
-        point_numbers = np.repeat(point_numbers, k-1)
-        idx_flatten   = idx.flatten()
-        edge_index    = np.vstack((point_numbers,idx_flatten)).T
+        point_numbers = np.repeat(point_numbers, k - 1)
+        idx_flatten = idx.flatten()
+        edge_index = np.vstack((point_numbers, idx_flatten)).T
 
-         # to delete the edges longer than max_distance
+        # to delete the edges longer than max_distance
         # check for self edges
     elif method == "radius":
         assert k is None
         assert max_distance is not None or percentile is not None
         if not use_centroids:
             logger.warning("method radius is only available for centroids, automatically set use_centroids=True.")
-        gdf_t     = gdf.centroid
-        centroids = gdf_t.apply(lambda g:[g.x,g.y]).tolist()
-        tree      = KDTree(centroids)
+        gdf_t = gdf.centroid
+        centroids = gdf_t.apply(lambda g: [g.x, g.y]).tolist()
+        tree = KDTree(centroids)
         if max_distance is not None:
             if percentile is not None:
                 logger.warning("both percentile and max_distance are set, will only use max_distance.")
-            neigh_list    = tree.query_ball_tree(tree, r=max_distance) 
+            neigh_list = tree.query_ball_tree(tree, r=max_distance)
         else:
             logger.warning("computing percentile could take long for large datasets.")
-            centroids    = np.array(centroids)
-            dd           = tree.sparse_distance_matrix(tree, max_distance=np.sqrt((np.max(centroids[:,0]) - np.min(centroids[:,0]))**2 + (np.max(centroids[:,1]) - np.min(centroids[:,1]))**2)).toarray()
+            centroids = np.array(centroids)
+            dd = tree.sparse_distance_matrix(
+                tree,
+                max_distance=np.sqrt(
+                    (np.max(centroids[:, 0]) - np.min(centroids[:, 0])) ** 2
+                    + (np.max(centroids[:, 1]) - np.min(centroids[:, 1])) ** 2
+                ),
+            ).toarray()
             np.fill_diagonal(dd, np.nan)
-            dd           = dd[~np.isnan(dd)].reshape(dd.shape[0], dd.shape[1] - 1)
+            dd = dd[~np.isnan(dd)].reshape(dd.shape[0], dd.shape[1] - 1)
             max_distance = np.percentile(dd, percentile)
-            neigh_list   = tree.query_ball_tree(tree, r=max_distance) 
+            neigh_list = tree.query_ball_tree(tree, r=max_distance)
         edge_index = []
         for sublist_index, sublist in enumerate(neigh_list):
             for index in sublist:
@@ -115,20 +129,17 @@ def build_graph( # TODO: add rings for grids
         assert max_distance is not None or percentile is not None
         if use_centroids:
             gdf_cent = gdf.centroid
-            gdf = gpd.GeoDataFrame({'geometry': gdf_cent, 'id': gdf.index}) #check if index is the best way
-        gdf        = gpd.GeoDataFrame({'geometry': gdf.buffer(max_distance, **kwargs), 'id': gdf.index}) #check if index is the best way
-        gdf_ret    = gdf.overlay(gdf, how='intersection')
-        edge_index = gdf_ret[['id_1', 'id_2']].values
+            gdf = gpd.GeoDataFrame({"geometry": gdf_cent, "id": gdf.index})  # check if index is the best way
+        gdf = gpd.GeoDataFrame(
+            {"geometry": gdf.buffer(max_distance, **kwargs), "id": gdf.index}
+        )  # check if index is the best way
+        gdf_ret = gdf.overlay(gdf, how="intersection")
+        edge_index = gdf_ret[["id_1", "id_2"]].values
 
     edge_index = np.unique(edge_index, axis=0)
     edge_index = np.delete(edge_index, np.where(edge_index == gdf.shape[0])[0], 0)
     if not self_loops:
-        mask = edge_index[:,0] != edge_index[:,1]
+        mask = edge_index[:, 0] != edge_index[:, 1]
         edge_index = edge_index[mask]
 
-    return edge_index.T # transposed to be compatible with pyg 
-
-
-
-
-
+    return edge_index.T  # transposed to be compatible with pyg
