@@ -1,24 +1,25 @@
 """Functions to compute the bounding box describing the extent of a SpatialElement or region."""
+from typing import Any, Iterable, Literal, Sequence
+
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
 
+from spatialdata._core.operations.transform import transform
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import get_axes_names
-from spatialdata._core.spatialdata import SpatialData
-from typing import Sequence, Iterable, Any, Literal
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import (
-    Identity,
-    Translation,
-    Scale,
     Affine,
-    Sequence,
     BaseTransformation,
+    Identity,
+    Scale,
+    Sequence,
+    Translation,
 )
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatialdata._core.operations.transform import transform
 
 
 def _get_extent_of_circles(circles: GeoDataFrame) -> tuple[ArrayLike, ArrayLike, tuple[str, ...]]:
@@ -34,7 +35,7 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> tuple[ArrayLike, ArrayLike,
         The maximum coordinate of the bounding box.
     """
     assert isinstance(circles.geometry.iloc[0], Point)
-    assert 'radius' in circles.columns, "Circles must have a 'radius' column."
+    assert "radius" in circles.columns, "Circles must have a 'radius' column."
     circle_dims = get_axes_names(circles)
 
     centroids = []
