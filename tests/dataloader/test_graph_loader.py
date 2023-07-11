@@ -6,7 +6,7 @@ sdata = blobs()
 
 
 @pytest.mark.parametrize(
-    "method, kwargs", [("knn", {"neighbors": 2}), ("radius", {"max_distance": 50}), ("expansion", {"max_distance": 50})]
+    "method, kwargs", [("knn", {"neighbors": 2}), ("radius", {"max_distance": 50}), ("expansion", {"max_distance": 50}), ("expansion", {"percentile": 50})]
 )
 def test_build_graph(method, kwargs):
     gdf = sdata["blobs_circles"]
