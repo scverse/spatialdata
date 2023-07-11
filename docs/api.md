@@ -120,6 +120,7 @@ The transformations that can be defined between elements and coordinate systems 
     :toctree: generated
 
     ImageTilesDataset
+    build_graph
 ```
 
 ## Input/output
