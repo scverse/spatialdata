@@ -26,12 +26,12 @@ def test_get_extent_shapes(shape_type):
         min_coordinates = np.array([98.92618679, 137.62348969])
         max_coordinates = np.array([420.42236303, 422.31870626])
     elif shape_type == "polygons":
-        min_coordinates = (np.array([149.92618679, 188.62348969]),)
-        max_coordinates = (np.array([446.70264371, 461.85209239]),)
+        min_coordinates = np.array([149.92618679, 188.62348969])
+        max_coordinates = np.array([446.70264371, 461.85209239])
     else:
         assert shape_type == "multipolygons"
-        min_coordinates = (np.array([291.06219195, 197.06539872]),)
-        max_coordinates = (np.array([389.3319439, 375.89584037]),)
+        min_coordinates = np.array([291.06219195, 197.06539872])
+        max_coordinates = np.array([389.3319439, 375.89584037])
 
     check_test_results(
         extent,
@@ -64,11 +64,18 @@ def test_get_extent_points():
     )
 
 
-@pytest.mark.skip
 @pytest.mark.parametrize("raster_type", ["image", "labels"])
 @pytest.mark.parametrize("multiscale", [False, True])
 def test_get_extent_raster(raster_type, multiscale):
-    pass
+    raster = sdata[f"blobs_multiscale_{raster_type}"] if multiscale else sdata[f"blobs_{raster_type}"]
+
+    extent = get_extent(raster)
+    check_test_results(
+        extent,
+        min_coordinates=np.array([0, 0]),
+        max_coordinates=np.array([512, 512]),
+        axes=("y", "x"),
+    )
 
 
 def test_get_extent_spatialdata():

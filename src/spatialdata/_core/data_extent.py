@@ -10,6 +10,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
@@ -71,6 +72,30 @@ def _get_extent_of_polygons_multipolygons(shapes: GeoDataFrame) -> BoundingBoxDe
     min_coordinates = np.array((bounds["minx"].min(), bounds["miny"].min()))
     max_coordinates = np.array((bounds["maxx"].max(), bounds["maxy"].max()))
     return min_coordinates, max_coordinates, axes
+
+
+def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingBoxDescription:
+    # lightweight conversion to SpatialImage just to fix the type of the single-dispatch
+    _check_element_has_coordinate_system(element=SpatialImage(e), coordinate_system=coordinate_system)
+    # also here
+    data_axes = get_axes_names(SpatialImage(e))
+    min_coordinates = []
+    max_coordinates = []
+    axes = []
+    for ax in ["z", "y", "x"]:
+        if ax in data_axes:
+            i = data_axes.index(ax)
+            axes.append(ax)
+            min_coordinates.append(0)
+            max_coordinates.append(e.shape[i])
+    return _compute_extent_in_coordinate_system(
+        # and here
+        element=SpatialImage(e),
+        coordinate_system=coordinate_system,
+        min_coordinates=np.array(min_coordinates),
+        max_coordinates=np.array(max_coordinates),
+        axes=tuple(axes),
+    )
 
 
 @singledispatch
@@ -174,28 +199,14 @@ def _(e: DaskDataFrame, coordinate_system: str = "global") -> BoundingBoxDescrip
 
 @get_extent.register
 def _(e: SpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
-    _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    raise NotImplementedError()
-    # return _compute_extent_in_coordinate_system(
-    #     element=e,
-    #     coordinate_system=coordinate_system,
-    #     min_coordinates=min_coordinates,
-    #     max_coordinates=max_coordinates,
-    #     axes=axes,
-    # )
+    return _get_extent_of_data_array(e, coordinate_system=coordinate_system)
 
 
 @get_extent.register
 def _(e: MultiscaleSpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    raise NotImplementedError()
-    # return _compute_extent_in_coordinate_system(
-    #     element=e,
-    #     coordinate_system=coordinate_system,
-    #     min_coordinates=min_coordinates,
-    #     max_coordinates=max_coordinates,
-    #     axes=axes,
-    # )
+    xdata = next(iter(e["scale0"].values()))
+    return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
 
 
 def _check_element_has_coordinate_system(element: SpatialElement, coordinate_system: str) -> None:
@@ -210,7 +221,7 @@ def _check_element_has_coordinate_system(element: SpatialElement, coordinate_sys
 
 
 def _compute_extent_in_coordinate_system(
-    element: SpatialElement,
+    element: SpatialElement | DataArray,
     coordinate_system: str,
     min_coordinates: ArrayLike,
     max_coordinates: ArrayLike,
