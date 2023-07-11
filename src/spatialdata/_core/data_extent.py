@@ -74,9 +74,14 @@ def _get_extent_of_polygons_multipolygons(shapes: GeoDataFrame) -> BoundingBoxDe
 
 
 @singledispatch
-def get_extent(object: SpatialData | SpatialElement, coordinate_system: str = "global") -> BoundingBoxDescription:
+def get_extent(e: SpatialData | SpatialElement, coordinate_system: str = "global") -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
+
+    Parameters
+    ----------
+    e
+        The SpatialData object or SpatialElement to computed the extent of.
 
     Returns
     -------
@@ -130,10 +135,6 @@ def _(e: SpatialData, coordinate_system: str = "global") -> BoundingBoxDescripti
 def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescription:
     """
     Compute the extent (bounding box) of a set of shapes.
-
-    Parameters
-    ----------
-    shapes
 
     Returns
     -------
