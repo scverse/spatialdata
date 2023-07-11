@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Literal
 
 import geopandas as gpd
@@ -7,9 +9,9 @@ import networkx as nx
 def build_graph(
     gdf: gpd.GeoDataFrame,
     method: Literal["knn", "distance", "expansion"] = "knn",
-    neighbors: int | None = None,  # type: ignore[syntax]
-    threshold: float | None = None,  # type: ignore[syntax]
-    distance: float | None = None,  # type: ignore[syntax]
+    neighbors: int | None = None,
+    threshold: float | None = None,
+    distance: float | None = None,
     self_loops: bool = False,
     # **kwargs,
 ) -> nx.Graph:
