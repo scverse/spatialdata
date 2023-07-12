@@ -104,7 +104,9 @@ class RasterSchema(DataArraySchema):
         Parameters
         ----------
         data
-            Data to validate.
+            Data to validate (or parse). The shape of the data should be c(z)yx for 2D (3D) images and (z)yx for 2D (
+            3D) labels. If you have a 2D image with shape yx, you can use :func:`numpy.expand_dims` (or an equivalent
+            function) to add a channel dimension.
         dims
             Dimensions of the data.
         transformations
@@ -189,8 +191,7 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        return data
+        return compute_coordinates(data)
 
     @singledispatchmethod
     def validate(self, data: Any) -> None:

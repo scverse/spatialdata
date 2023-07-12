@@ -52,11 +52,11 @@ def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordina
 @singledispatch
 def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
     """
-    Set the transformation of a spatial element *only in memory*.
+    Set the transformation of a SpatialElement *only in memory*.
     Parameters
     ----------
     e
-        spatial element
+        SpatialElement
     t
         transformation
 
@@ -64,7 +64,7 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
     -----
     This function only replaces the transformation in memory and is meant of internal use only. The function
     SpatialData.set_transform() should be used instead, since it will update the transformation in memory and on disk
-    (when the spatial element is backed).
+    (when the SpatialElement is backed).
 
     """
     raise TypeError(f"Unsupported type: {type(e)}")
