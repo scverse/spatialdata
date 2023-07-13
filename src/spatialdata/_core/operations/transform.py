@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import dask_image.ndinterp
@@ -55,7 +55,6 @@ def _transform_raster(
         int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
     )
     output_shape = c_shape + new_spatial_shape
-    ##
     translation_vector = np.min(new_v[:, :-1], axis=0)
     translation = Translation(translation_vector, axes=axes)
     inverse_matrix_adjusted = Sequence(
@@ -75,11 +74,9 @@ def _transform_raster(
         # , output_chunks=output_chunks
     )
     assert isinstance(transformed_dask, DaskArray)
-    ##
 
     if DEBUG_WITH_PLOTS:
         if n_spatial_dims == 2:
-            ##
             import matplotlib.pyplot as plt
 
             plt.figure()
@@ -101,7 +98,6 @@ def _transform_raster(
                 new_v_inverse[:, start_index:-1][:, 1] - 0.5, new_v_inverse[:, start_index:-1][:, 0] - 0.5, c="k"
             )
             plt.show()
-            ##
         else:
             assert n_spatial_dims == 3
             # raise NotImplementedError()
@@ -111,7 +107,7 @@ def _transform_raster(
 def _prepend_transformation(
     element: SpatialElement,
     transformation: BaseTransformation,
-    raster_translation: Optional[Translation],
+    raster_translation: Translation | None,
     maintain_positioning: bool,
 ) -> None:
     """Prepend a transformation to an element.
@@ -123,7 +119,7 @@ def _prepend_transformation(
     Parameters
     ----------
     element
-        The spatial element to which the transformation should be prepended
+        The SpatialElement to which the transformation should be prepended
     transformation
         The transformation to prepend
     raster_translation
@@ -140,7 +136,7 @@ def _prepend_transformation(
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
 
-    to_prepend: Optional[BaseTransformation] = None
+    to_prepend: BaseTransformation | None = None
     if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
         if maintain_positioning:
             assert raster_translation is not None
@@ -173,12 +169,12 @@ def _prepend_transformation(
 @singledispatch
 def transform(data: Any, transformation: BaseTransformation, maintain_positioning: bool = False) -> Any:
     """
-    Transform a spatial element using this transformation and returns the transformed element.
+    Transform a SpatialElement using this transformation and returns the transformed element.
 
     Parameters
     ----------
     element
-        Spatial element to transform.
+        SpatialElement to transform.
     maintain_positioning
         If True, in the transformed element, each transformation that was present in the original element will be
         prepended with the inverse of the transformation used to transform the data (i.e. the current
@@ -195,7 +191,7 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
 
     Returns
     -------
-    SpatialElement: Transformed spatial element.
+    SpatialElement: Transformed SpatialElement.
 
     Notes
     -----
@@ -246,8 +242,9 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
     )
+    c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     set_transformation(transformed_data, old_transformations.copy(), set_all=True)
@@ -274,7 +271,7 @@ def _(
         Labels3DModel,
     )
     from spatialdata.transformations import get_transformation, set_transformation
-    from spatialdata.transformations.transformations import BaseTransformation, Sequence
+    from spatialdata.transformations.transformations import Sequence
 
     # labels need to be preserved after the resizing of the image
     if schema in (Labels2DModel, Labels3DModel):

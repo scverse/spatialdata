@@ -1,18 +1,16 @@
 from dataclasses import FrozenInstanceError
 
-import geopandas as gpd
 import numpy as np
-import pandas as pd
 import pytest
 from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
-from shapely import linearrings, polygons
 from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,
+    polygon_query,
 )
 from spatialdata.models import (
     Image2DModel,
@@ -28,15 +26,10 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 
-
-def _make_points_element():
-    """Helper function to make a Points element."""
-    coordinates = np.array([[10, 10], [20, 20], [20, 30]], dtype=float)
-    return PointsModel.parse(
-        coordinates, annotation=pd.DataFrame({"genes": np.repeat("a", len(coordinates))}), feature_key="genes"
-    )
+from tests.conftest import _make_points, _make_squares
 
 
+# ---------------- test bounding box queries ---------------[
 def test_bounding_box_request_immutable():
     """Test that the bounding box request is immutable."""
     request = BoundingBoxRequest(
@@ -109,7 +102,7 @@ def test_bounding_box_request_wrong_coordinate_order():
 
 def test_bounding_box_points():
     """test the points bounding box_query"""
-    points_element = _make_points_element()
+    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
     original_x = np.array(points_element["x"])
     original_y = np.array(points_element["y"])
 
@@ -137,7 +130,7 @@ def test_bounding_box_points_no_points():
     """Points bounding box query with no points in range should
     return a points element with length 0.
     """
-    points_element = _make_points_element()
+    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
     request = bounding_box_query(
         points_element,
         axes=("x", "y"),
@@ -279,32 +272,10 @@ def test_bounding_box_labels_3d():
 #  (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 
 
-def _make_squares(centroid_coordinates: np.ndarray, half_width: float) -> polygons:
-    linear_rings = []
-    for centroid in centroid_coordinates:
-        min_coords = centroid - half_width
-        max_coords = centroid + half_width
-
-        linear_rings.append(
-            linearrings(
-                [
-                    [min_coords[0], min_coords[1]],
-                    [min_coords[0], max_coords[1]],
-                    [max_coords[0], max_coords[1]],
-                    [max_coords[0], min_coords[1]],
-                ]
-            )
-        )
-    return polygons(linear_rings)
-
-
 def test_bounding_box_polygons():
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
-    cell_outline_polygons = _make_squares(centroid_coordinates=centroids, half_width=6)
-
-    polygon_series = gpd.GeoSeries(cell_outline_polygons)
-    cell_polygon_table = gpd.GeoDataFrame(geometry=polygon_series)
-    sd_polygons = ShapesModel.parse(cell_polygon_table)
+    half_widths = [6] * 4
+    sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
 
     polygons_result = bounding_box_query(
         sd_polygons,
@@ -383,3 +354,107 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
+
+
+# ----------------- test polygon query -----------------
+def test_polygon_query_points(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
+    points = queried["points"].compute()
+    assert len(points) == 6
+    assert len(queried.table) == 0
+
+    # TODO: the case of querying points with multiple polygons is not currently implemented
+
+
+def test_polygon_query_shapes(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    values_sdata = SpatialData(
+        shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
+        table=sdata.table,
+    )
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    circle = sdata["by_circles"].geometry.iloc[0]
+    circle_pol = circle.buffer(sdata["by_circles"].radius.iloc[0])
+
+    queried = polygon_query(
+        values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
+
+    queried = polygon_query(
+        values_sdata, polygons=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 8
+    assert len(queried["values_circles"]) == 8
+    assert len(queried.table) == 16
+
+    queried = polygon_query(
+        values_sdata, polygons=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
+    )
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried.table) == 8
+
+    PLOT = False
+    if PLOT:
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
+        queried.pl.render_shapes("values_polygons").pl.show(ax=ax)
+        queried.pl.render_shapes("values_circles").pl.show(ax=ax)
+        plt.show()
+
+
+@pytest.mark.skip
+def test_polygon_query_multipolygons():
+    pass
+
+
+def test_polygon_query_spatial_data(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    values_sdata = SpatialData(
+        shapes={
+            "values_polygons": sdata["values_polygons"],
+            "values_circles": sdata["values_circles"],
+        },
+        points={"points": sdata["points"]},
+        table=sdata.table,
+    )
+    polygon = sdata["by_polygons"].geometry.iloc[0]
+    queried = polygon_query(values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=True)
+    assert len(queried["values_polygons"]) == 4
+    assert len(queried["values_circles"]) == 4
+    assert len(queried["points"]) == 6
+    assert len(queried.table) == 8
+
+
+@pytest.mark.skip
+def test_polygon_query_image2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+@pytest.mark.skip
+def test_polygon_query_image3d():
+    # single image case
+    # multiscale case
+    pass
+
+
+@pytest.mark.skip
+def test_polygon_query_labels2d():
+    # single image case
+    # multiscale case
+    pass
+
+
+@pytest.mark.skip
+def test_polygon_query_labels3d():
+    # single image case
+    # multiscale case
+    pass

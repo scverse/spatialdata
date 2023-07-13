@@ -11,6 +11,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata.datasets import blobs
 from spatialdata.models import (
     Image2DModel,
     Labels2DModel,
@@ -18,7 +19,7 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata.transformations.operations import set_transformation
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
 
 from tests.conftest import _get_table
@@ -239,3 +240,25 @@ def test_set_item(full_sdata):
             # trying to overwrite the file used for backing (only for images, labels and points)
             with pytest.raises(ValueError):
                 full_sdata[name] = full_sdata[name]
+
+
+def test_no_shared_transformations():
+    """Test transformation dictionary copy for transformations not to be shared."""
+    sdata = blobs()
+    element_name = "blobs_image"
+    test_space = "test"
+    set_transformation(sdata.images[element_name], Identity(), to_coordinate_system=test_space)
+
+    gen = sdata._gen_elements()
+    for _, name, obj in gen:
+        if name != element_name:
+            assert test_space not in get_transformation(obj, get_all=True)
+        else:
+            assert test_space in get_transformation(obj, get_all=True)
+
+
+def test_init_from_elements(full_sdata):
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
+    sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
+    for element_type in ["images", "labels", "points", "shapes"]:
+        assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())

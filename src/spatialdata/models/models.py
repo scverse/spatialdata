@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Union
 
 import dask.dataframe as dd
 import numpy as np
@@ -62,9 +62,7 @@ ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 Transform_s = AttrSchema(BaseTransformation, None)
 
 
-def _parse_transformations(
-    element: SpatialElement, transformations: Optional[MappingToCoordinateSystem_t] = None
-) -> None:
+def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:
     _validate_mapping_to_coordinate_system_type(transformations)
     transformations_in_element = _get_transformations(element)
     if (
@@ -92,21 +90,23 @@ class RasterSchema(DataArraySchema):
     @classmethod
     def parse(
         cls,
-        data: Union[ArrayLike, DataArray, DaskArray],
-        dims: Optional[Sequence[str]] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
-        scale_factors: Optional[ScaleFactors_t] = None,
-        method: Optional[Methods] = None,
-        chunks: Optional[Chunks_t] = None,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
+        scale_factors: ScaleFactors_t | None = None,
+        method: Methods | None = None,
+        chunks: Chunks_t | None = None,
         **kwargs: Any,
-    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    ) -> SpatialImage | MultiscaleSpatialImage:
         """
         Validate (or parse) raster data.
 
         Parameters
         ----------
         data
-            Data to validate.
+            Data to validate (or parse). The shape of the data should be c(z)yx for 2D (3D) images and (z)yx for 2D (
+            3D) labels. If you have a 2D image with shape yx, you can use :func:`numpy.expand_dims` (or an equivalent
+            function) to add a channel dimension.
         dims
             Dimensions of the data.
         transformations
@@ -124,6 +124,8 @@ class RasterSchema(DataArraySchema):
         :class:`spatial_image.SpatialImage` or
         :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
         """
+        if transformations:
+            transformations = transformations.copy()
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
@@ -189,8 +191,7 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        return data
+        return compute_coordinates(data)
 
     @singledispatchmethod
     def validate(self, data: Any) -> None:
@@ -373,10 +374,10 @@ class ShapesModel:
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
         geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
-        offsets: Optional[tuple[ArrayLike, ...]] = None,
-        radius: Optional[Union[float, ArrayLike]] = None,
-        index: Optional[ArrayLike] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        offsets: tuple[ArrayLike, ...] | None = None,
+        radius: float | ArrayLike | None = None,
+        index: ArrayLike | None = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
     ) -> GeoDataFrame:
         geometry = GeometryType(geometry)
         data = from_ragged_array(geometry_type=geometry, coords=data, offsets=offsets)
@@ -396,10 +397,10 @@ class ShapesModel:
     @classmethod
     def _(
         cls,
-        data: Union[str, Path],
-        radius: Optional[Union[float, ArrayLike]] = None,
-        index: Optional[ArrayLike] = None,
-        transformations: Optional[Any] = None,
+        data: str | Path,
+        radius: float | ArrayLike | None = None,
+        index: ArrayLike | None = None,
+        transformations: Any | None = None,
         **kwargs: Any,
     ) -> GeoDataFrame:
         data = Path(data) if isinstance(data, str) else data
@@ -423,7 +424,7 @@ class ShapesModel:
     def _(
         cls,
         data: GeoDataFrame,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
     ) -> GeoDataFrame:
         if "geometry" not in data.columns:
             raise ValueError("`geometry` column not found in `GeoDataFrame`.")
@@ -507,10 +508,10 @@ class PointsModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        annotation: Optional[pd.DataFrame] = None,
-        feature_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        annotation: pd.DataFrame | None = None,
+        feature_key: str | None = None,
+        instance_key: str | None = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
         if "npartitions" not in kwargs and "chunksize" not in kwargs:
@@ -541,9 +542,9 @@ class PointsModel:
         cls,
         data: pd.DataFrame,
         coordinates: Mapping[str, str],
-        feature_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        feature_key: str | None = None,
+        instance_key: str | None = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
         **kwargs: Any,
     ) -> DaskDataFrame:
         if "npartitions" not in kwargs and "chunksize" not in kwargs:
@@ -577,9 +578,9 @@ class PointsModel:
     def _add_metadata_and_validate(
         cls,
         data: DaskDataFrame,
-        feature_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
-        transformations: Optional[MappingToCoordinateSystem_t] = None,
+        feature_key: str | None = None,
+        instance_key: str | None = None,
+        transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
         if feature_key is not None or instance_key is not None:
@@ -655,9 +656,9 @@ class TableModel:
     def parse(
         cls,
         adata: AnnData,
-        region: Optional[Union[str, list[str]]] = None,
-        region_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
+        region: str | list[str] | None = None,
+        region_key: str | None = None,
+        instance_key: str | None = None,
     ) -> AnnData:
         """
         Parse the :class:`anndata.AnnData` to be compatible with the model.

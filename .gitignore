@@ -42,3 +42,9 @@ spatialdata-sandbox
 
 # notebooks
 *.ipynb
+
+# version file
+_version.py
+
+# prevent submodule notebooks getting out of sync
+docs/tutorials/notebooks

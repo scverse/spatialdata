@@ -57,6 +57,18 @@ def write_points(
 
     points_groups = group.require_group(name)
     path = Path(points_groups._store.path) / points_groups.path / "points.parquet"
+
+    # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
+    # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
+    # categories to known categories using 'c.cat.as_known()' and assigns the transformed Series back to the original
+    # DataFrame. This step is crucial when the number of categories exceeds 127, as pyarrow defaults to int8 for
+    # unknown categories which can only hold values from -128 to 127.
+    for column_name in points.columns:
+        c = points[column_name]
+        if c.dtype == "category" and not c.cat.known:
+            c = c.cat.as_known()
+            points[column_name] = c
+
     points.to_parquet(path)
 
     attrs = fmt.attrs_to_dict(points.attrs)

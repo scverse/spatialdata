@@ -1,18 +1,20 @@
 """SpatialData datasets."""
-from typing import Optional
+from typing import Any, Optional, Union
 
 import numpy as np
 import pandas as pd
 import scipy
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
-from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
 from spatial_image import SpatialImage
 
 from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -21,11 +23,19 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.transformations import Identity
 
 __all__ = ["blobs", "raccoon"]
 
 
-def blobs(length: int = 512, n_points: int = 200, n_shapes: int = 5) -> SpatialData:
+def blobs(
+    length: int = 512,
+    n_points: int = 200,
+    n_shapes: int = 5,
+    extra_coord_system: Optional[str] = None,
+    n_channels: int = 3,
+    c_coords: Optional[ArrayLike] = None,
+) -> SpatialData:
     """
     Blobs dataset.
 
@@ -38,13 +48,25 @@ def blobs(length: int = 512, n_points: int = 200, n_shapes: int = 5) -> SpatialD
     n_shapes
         Number of max shapes to generate.
         At most, as if overlapping they will be discarded
+    extra_coord_system
+        Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+    n_channels
+        Number of channels of the image
+
 
     Returns
     -------
     SpatialData
         SpatialData object with blobs dataset.
     """
-    return BlobsDataset(length=length, n_points=n_points, n_shapes=n_shapes).blobs()
+    return BlobsDataset(
+        length=length,
+        n_points=n_points,
+        n_shapes=n_shapes,
+        extra_coord_system=extra_coord_system,
+        n_channels=n_channels,
+        c_coords=c_coords,
+    ).blobs()
 
 
 def raccoon() -> SpatialData:
@@ -74,7 +96,15 @@ class RaccoonDataset:
 class BlobsDataset:
     """Blobs dataset."""
 
-    def __init__(self, length: int = 512, n_points: int = 200, n_shapes: int = 5) -> None:
+    def __init__(
+        self,
+        length: int = 512,
+        n_points: int = 200,
+        n_shapes: int = 5,
+        extra_coord_system: Optional[str] = None,
+        n_channels: int = 3,
+        c_coords: Optional[ArrayLike] = None,
+    ) -> None:
         """
         Blobs dataset.
 
@@ -87,42 +117,78 @@ class BlobsDataset:
         n_shapes
             Number of max shapes to generate.
             At most, as if overlapping they will be discarded
+        extra_coord_system
+            Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
+        n_channels
+            Number of channels of the image
         """
         self.length = length
         self.n_points = n_points
         self.n_shapes = n_shapes
+        self.transformations = {"global": Identity()}
+        self.c_coords = c_coords
+        if c_coords is not None:
+            if n_channels != len(c_coords):
+                logger.info(
+                    f"Number of channels ({n_channels}) and c_coords ({len(c_coords)}) do not match; ignoring "
+                    f"n_channels value"
+                )
+            n_channels = len(c_coords)
+        self.n_channels = n_channels
+        if extra_coord_system:
+            self.transformations[extra_coord_system] = Identity()
 
     def blobs(
         self,
     ) -> SpatialData:
         """Blobs dataset."""
-        image = self._image_blobs(self.length)
-        labels = self._labels_blobs(self.length)
-        points = self._points_blobs(self.length, self.n_points)
-        shapes = self._shapes_blobs(self.length, self.n_shapes)
-        adata = aggregate(image, labels)
+        image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
+        multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
+        labels = self._labels_blobs(self.transformations, self.length)
+        multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
+        points = self._points_blobs(self.transformations, self.length, self.n_points)
+        circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
+        polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
+        multipolygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes, multipolygons=True)
+        adata = aggregate(values=image, by=labels).table
         adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
+        del adata.uns[TableModel.ATTRS_KEY]
         table = TableModel.parse(adata, region="blobs_labels", region_key="region", instance_key="instance_id")
 
         return SpatialData(
-            images={"blobs_image": image},
-            labels={"blobs_labels": labels},
+            images={"blobs_image": image, "blobs_multiscale_image": multiscale_image},
+            labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
-            shapes={"blobs_shapes": shapes},
+            shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
             table=table,
         )
 
-    def _image_blobs(self, length: int = 512) -> SpatialImage:
+    def _image_blobs(
+        self,
+        transformations: Optional[dict[str, Any]] = None,
+        length: int = 512,
+        n_channels: int = 3,
+        c_coords: Optional[ArrayLike] = None,
+        multiscale: bool = False,
+    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
         masks = []
-        for i in range(3):
+        for i in range(n_channels):
             mask = self._generate_blobs(length=length, seed=i)
             mask = (mask - mask.min()) / mask.ptp()
             masks.append(mask)
 
-        return Image2DModel.parse(np.stack(masks, axis=0), dims=["c", "y", "x"])
+        x = np.stack(masks, axis=0)
+        dims = ["c", "y", "x"]
+        if not multiscale:
+            return Image2DModel.parse(x, transformations=transformations, dims=dims, c_coords=c_coords)
+        return Image2DModel.parse(
+            x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=[2, 2]
+        )
 
-    def _labels_blobs(self, length: int = 512) -> SpatialImage:
+    def _labels_blobs(
+        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, multiscale: bool = False
+    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
         """Create a 2D labels."""
         from scipy.ndimage import watershed_ift
 
@@ -144,7 +210,10 @@ class BlobsDataset:
                 out[out == val[idx]] = 0
             else:
                 out[out == val[idx]] = i
-        return Labels2DModel.parse(out, dims=["y", "x"])
+        dims = ["y", "x"]
+        if not multiscale:
+            return Labels2DModel.parse(out, transformations=transformations, dims=dims)
+        return Labels2DModel.parse(out, transformations=transformations, dims=dims, scale_factors=[2, 2])
 
     def _generate_blobs(self, length: int = 512, seed: Optional[int] = None) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
@@ -157,13 +226,16 @@ class BlobsDataset:
         points = (length * rng.random((2, n_pts))).astype(int)
         mask[tuple(indices for indices in points)] = 1
         mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
+        assert isinstance(mask, np.ndarray)
         return mask
 
-    def _points_blobs(self, length: int = 512, n_points: int = 200) -> DaskDataFrame:
+    def _points_blobs(
+        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, n_points: int = 200
+    ) -> DaskDataFrame:
         rng = default_rng(42)
-        arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int_)
+        arr = rng.integers(10, length - 10, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
-        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int_)
+        points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int64)
         genes = rng.choice(["a", "b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
@@ -171,18 +243,55 @@ class BlobsDataset:
                 "instance_id": points_assignment0,
             },
         )
-        return PointsModel.parse(arr, annotation=annotation, feature_key="genes", instance_key="instance_id")
+        return PointsModel.parse(
+            arr, transformations=transformations, annotation=annotation, feature_key="genes", instance_key="instance_id"
+        )
 
-    def _shapes_blobs(self, length: int = 512, n_shapes: int = 5) -> GeoDataFrame:
+    def _circles_blobs(
+        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, n_shapes: int = 5
+    ) -> GeoDataFrame:
+        midpoint = length // 2
+        halfmidpoint = midpoint // 2
+        radius = length // 10
+        circles = GeoDataFrame(
+            {
+                "geometry": self._generate_random_points(n_shapes, (midpoint - halfmidpoint, midpoint + halfmidpoint)),
+                "radius": radius,
+            }
+        )
+        return ShapesModel.parse(circles, transformations=transformations)
+
+    def _polygons_blobs(
+        self,
+        transformations: Optional[dict[str, Any]] = None,
+        length: int = 512,
+        n_shapes: int = 5,
+        multipolygons: bool = False,
+    ) -> GeoDataFrame:
         midpoint = length // 2
         halfmidpoint = midpoint // 2
         poly = GeoDataFrame(
-            {"geometry": self._generate_random_polygons(n_shapes, (midpoint - halfmidpoint, midpoint + halfmidpoint))}
+            {
+                "geometry": self._generate_random_polygons(
+                    n_shapes, (midpoint - halfmidpoint, midpoint + halfmidpoint), multipolygons=multipolygons
+                )
+            }
         )
-        return ShapesModel.parse(poly)
+        return ShapesModel.parse(poly, transformations=transformations)
 
     # function that generates random shapely polygons given a bounding box
-    def _generate_random_polygons(self, n: int, bbox: tuple[int, int]) -> list[Polygon]:
+    def _generate_random_polygons(
+        self, n: int, bbox: tuple[int, int], multipolygons: bool = False
+    ) -> list[Union[Polygon, MultiPolygon]]:
+        def get_poly() -> Polygon:
+            return Polygon(
+                [
+                    (x + default_rng(i + 1).uniform(0, maxx // 4), y + default_rng(i).uniform(0, maxy // 4)),
+                    (x + default_rng(i + 2).uniform(0, maxx // 4), y),
+                    (x, y + default_rng(i + 3).uniform(0, maxy // 4)),
+                ]
+            )
+
         minx = miny = bbox[0]
         maxx = maxy = bbox[1]
         polygons: list[Polygon] = []
@@ -192,14 +301,28 @@ class BlobsDataset:
             x = rng1.uniform(minx, maxx)
             y = rng1.uniform(miny, maxy)
             # generate random polygon
-            poly = Polygon(
-                [
-                    (x + default_rng(i + 1).uniform(0, maxx // 4), y + default_rng(i).uniform(0, maxy // 4)),
-                    (x + default_rng(i + 2).uniform(0, maxx // 4), y),
-                    (x, y + default_rng(i + 3).uniform(0, maxy // 4)),
-                ]
-            )
+            poly = get_poly()
             # check if the polygon overlaps with any of the existing polygons
             if not any(poly.overlaps(p) for p in polygons):
                 polygons.append(poly)
+            if multipolygons:
+                # add a second polygon even if it overlaps
+                poly2 = get_poly()
+                last = polygons.pop()
+                polygons.append(MultiPolygon([last, poly2]))
         return polygons
+
+    # function that generates random shapely points given a bounding box
+    def _generate_random_points(self, n: int, bbox: tuple[int, int]) -> list[Point]:
+        minx = miny = bbox[0]
+        maxx = maxy = bbox[1]
+        points: list[Point] = []
+        for i in range(n):
+            # generate random points
+            rng1 = default_rng(i)
+            x = rng1.uniform(minx, maxx)
+            y = rng1.uniform(miny, maxy)
+            # generate random polygon
+            point = Point(x, y)
+            points.append(point)
+        return points

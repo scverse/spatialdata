@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Generator
+from copy import deepcopy
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
+import pandas as pd
+from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -26,7 +30,7 @@ if TYPE_CHECKING:
     pass
 
 
-def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
+def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
     if isinstance(array, list):
         array = np.array(array)
     if array.dtype != float:
@@ -34,12 +38,12 @@ def _parse_list_into_array(array: Union[list[Number], ArrayLike]) -> ArrayLike:
     return array
 
 
-def _atoi(text: str) -> Union[int, str]:
+def _atoi(text: str) -> int | str:
     return int(text) if text.isdigit() else text
 
 
 # from https://stackoverflow.com/a/5967539/3343783
-def _natural_keys(text: str) -> list[Union[int, str]]:
+def _natural_keys(text: str) -> list[int | str]:
     """Sort keys in natural order.
 
     alist.sort(key=natural_keys) sorts in human order
@@ -59,7 +63,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     return result  # type: ignore[no-any-return]
 
 
-def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage | MultiscaleSpatialImage:
     """
     Remove padding from a raster type that was eventually added by the rotation component of a transformation.
 
@@ -147,8 +151,7 @@ def unpad_raster(raster: Union[SpatialImage, MultiscaleSpatialImage]) -> Union[S
         assert old_transform is not None
         sequence = Sequence([translation, old_transform])
         set_transformation(element=unpadded, transformation=sequence, to_coordinate_system=target_cs)
-    unpadded = compute_coordinates(unpadded)
-    return unpadded
+    return compute_coordinates(unpadded)
 
 
 # TODO: probably we want this method to live in multiscale_spatial_image
@@ -184,3 +187,46 @@ def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray
         assert len(v) == 1
         xdata = next(iter(v))
         yield xdata
+
+
+def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
+    """
+    Fix categorical obs columns of subset_adata to match the categories of original_adata.
+
+    Parameters
+    ----------
+    subset_adata
+        The subset AnnData object
+    original_adata
+        The original AnnData object
+
+    Notes
+    -----
+    See discussion here: https://github.com/scverse/anndata/issues/997
+    """
+    obs = subset_adata.obs
+    for column in obs.columns:
+        is_categorical = pd.api.types.is_categorical_dtype(obs[column])
+        if is_categorical:
+            c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
+            obs[column] = c
+
+
+def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
+    """
+    temporary fix for https://github.com/scverse/spatialdata/issues/286.
+
+    Parameters
+    ----------
+    gdf
+        The GeoDataFrame to deepcopy
+
+    Returns
+    -------
+    A deepcopy of the GeoDataFrame
+    """
+    #
+    new_gdf = deepcopy(gdf)
+    new_attrs = deepcopy(gdf.attrs)
+    new_gdf.attrs = new_attrs
+    return new_gdf
