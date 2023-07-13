@@ -18,6 +18,22 @@ from spatialdata.models import TableModel
 
 
 def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
+    """
+    Read a SpatialData dataset from a zarr store (on-disk or remote).
+
+    Parameters
+    ----------
+    store
+        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+
+    selection
+        List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
+        read.
+
+    Returns
+    -------
+    A SpatialData object.
+    """
     f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
 
     images = {}

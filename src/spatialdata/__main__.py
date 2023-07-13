@@ -23,6 +23,9 @@ def peek(path: str, selection: tuple[str]) -> None:
     ----------
     path
         The path to the .zarr dataset to be inspected.
+    selection
+        Optional, a list of keys (among images, labels, points, shapes, table) to load only a subset of the dataset.
+        Example: `python -m spatialdata peek data.zarr images labels`
     """
     import spatialdata as sd
 
@@ -36,9 +39,9 @@ def peek(path: str, selection: tuple[str]) -> None:
         print(e)  # noqa: T201
         print(  # noqa: T201
             f"Error: .zarr storage not found at {path}. Please specify a valid OME-NGFF spatial data (.zarr) file. "
-            "Example "
-            '"python -m '
-            'spatialdata peek data.zarr"'
+            "Examples "
+            '"python -m spatialdata peek data.zarr"'
+            '"python -m spatialdata peek https://remote/.../data.zarr labels table"'
         )
 
 

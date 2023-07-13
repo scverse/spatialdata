@@ -1139,6 +1139,20 @@ class SpatialData:
 
     @staticmethod
     def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
+        """
+        Read a SpatialData object from a Zarr storage (on-disk or remote).
+
+        Parameters
+        ----------
+        file_path
+            The path or URL to the Zarr storage.
+        selection
+            The elements to read (images, labels, points, shapes, table). If None, all elements are read.
+
+        Returns
+        -------
+        The SpatialData object.
+        """
         from spatialdata import read_zarr
 
         return read_zarr(file_path, selection=selection)
