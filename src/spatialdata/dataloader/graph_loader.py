@@ -115,9 +115,9 @@ def build_graph(  # TODO: add rings for grids
         # to delete the edges longer than max_distance
         # check for self edges
     elif method == "radius":
-        gdf_c = gdf.centroid
-        centroids = gdf_c.apply(lambda g: [g.x, g.y]).tolist()
+        centroids = np.array(gdf_c.apply(lambda g: [g.x, g.y]).tolist())
         tree = KDTree(centroids)
+
         if max_distance is not None:
             neigh_list = tree.query_ball_tree(tree, r=max_distance)
         else:
@@ -131,8 +131,7 @@ def build_graph(  # TODO: add rings for grids
         edge_index = np.array(edge_index_list)
     else:
         if use_centroids:
-            gdf_cent = gdf.centroid
-            gdf = gpd.GeoDataFrame({"geometry": gdf_cent, "id": gdf.index})  # check if index is the best way
+            gdf = gpd.GeoDataFrame({"geometry": gdf_c, "id": gdf.index})  # check if index is the best way
         gdf = gpd.GeoDataFrame(
             {"geometry": gdf.buffer(max_distance, **kwargs), "id": gdf.index}
         )  # check if index is the best way
