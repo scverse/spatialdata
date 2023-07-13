@@ -83,7 +83,7 @@ class ImageTilesDataset(Dataset):
             of the image each tile is querying. This is not related he size in pixel of each returned tile.
         raster
             If True, the images are rasterized using :func:`spatialdata.rasterize`.
-            If False, they are rasterized using :func:`spatialdata.bounding_box_query`.
+            If False, they are queried using :func:`spatialdata.bounding_box_query`.
         return_annot
             If not None, a value from the table is returned together with the image tile.
             Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
