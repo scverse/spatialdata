@@ -47,10 +47,7 @@ mamba create -n my_env python==3.10 -y
 conda activate my_env
 
 mamba install -c conda-forge napari -y
-pip install spatialdata-io
-pip install spatialdata-plot
-pip install napari-spatialdata
-pip install spatialdata
+pip install spatialdata spatialdata-io spatialdata-plot napari-spatialdata
 ```
 
 ## Development version
