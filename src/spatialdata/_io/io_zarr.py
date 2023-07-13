@@ -34,11 +34,7 @@ def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, s
     # workaround for but with .zmetadata being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
     if isinstance(store, (str, Path)) and str(store).startswith("http") and len(f) == 0:
         f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    if isinstance(f.store, zarr.storage.FSStore):
-        f_store_path = f.store.path
-    else:
-        assert isinstance(f.store, zarr.storage.ConsolidatedMetadataStore)
-        f_store_path = f.store.store.path
+    f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
     return f, f_store_path
 
 
