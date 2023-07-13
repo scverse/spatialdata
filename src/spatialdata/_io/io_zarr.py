@@ -132,7 +132,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(f_store_path, f_elem.path)
-            if isinstance(f, zarr.storage.ConsolidatedMetadataStore):
+            if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore):
                 logger.warning("Reading table from remote store is not supported yet. Skipping.")
                 table = None
                 # this doesn't work, needs to be fixed in the anndata package
