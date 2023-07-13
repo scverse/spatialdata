@@ -11,12 +11,11 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 
 -   [spatialdata-io](https://github.com/scverse/spatialdata-io): load data from common spatial omics technologies into spatialdata.
 -   [spatialdata-plot](https://github.com/scverse/spatialdata-plot): Static plotting library for spatialdata.
--   [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatialdata.
+-   [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatial data.
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
 -   **The library is currently under review.** We expect there to be changes as the community provides feedback.
--   To get involved in the discussion, or if you need help to get started, you are welcome to join our [`scverse` Zulip chat](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) and our [scverse discourse forum](https://discourse.scverse.org/).
 -   The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
@@ -27,6 +26,8 @@ Please refer to the [documentation][link-docs]. In particular:
 -   [Design doc][link-design-doc].
 -   [Example notebooks][link-notebooks].
 
+Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
+
 ## Installation
 
 Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/latest/installation.html). To get started with the "batteries included" installation, you can install via pip:
@@ -35,9 +36,11 @@ Check out the docs for more complete [installation instructions](https://spatial
 pip install "spatialdata[extra]"
 ```
 
+Note: if you are using a Mac with an M1/M2 chip, please follow the installation instructions.
+
 ## Contact
 
-For questions and help requests, you can reach out in the [scverse discourse][scverse-discourse].
+-   To get involved in the discussion, or if you need help to get started, you are welcome to join our [`scverse` Zulip chat](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) and our [scverse discourse forum](https://discourse.scverse.org/).
 If you found a bug, please use the [issue tracker][issue-tracker].
 
 ## Citation

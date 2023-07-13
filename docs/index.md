@@ -8,9 +8,9 @@
 
 SpatialData is a data framework that comprises a FAIR storage format and a collection of python libraries for performant access, alignment, and processing of uni- and multi-modal spatial omics datasets. This page provides documentation on how to install, use, and extend the core `spatialdata` library. See the links below to learn more about other packages in the SpatialData ecosystem.
 
--   [spatialdata-io][]: load data from common spatial omics technologies into `spatialdata`.
--   [spatialdata-plot][]: Static plotting library for `spatialdata`.
--   [napari-spatialdata][]: napari plugin for interactive exploration and annotation of `spatialdata`.
+-   `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
+-   `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-io-docs]).
+-   `napari-spatialdata-repo`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
 
 Please see our preprint {cite}`Marconato2023.05.05.539647` for citation and to learn more.
 
@@ -74,6 +74,10 @@ references.md
 
 <!-- Links -->
 
-[napari-spatialdata]: https://github.com/scverse/napari-spatialdata
-[spatialdata-io]: https://github.com/scverse/spatialdata-io
-[spatialdata-plot]: https://github.com/scverse/spatialdata-plot
+[napari-spatialdata-repo]: https://github.com/scverse/napari-spatialdata
+[spatialdata-io-repo]: https://github.com/scverse/spatialdata-io
+[spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
+[napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html 
+[spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/latest/ 
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/latest/index.html 
+
