@@ -33,7 +33,7 @@ __all__ = ["ImageTilesDataset"]
 
 
 class ImageTilesDataset(Dataset):
-    INSTANCE_KEY = "instance"
+    INSTANCE_KEY = "instance_id"
     CS_KEY = "cs"
     REGION_KEY = "region"
     IMAGE_KEY = "image"
@@ -79,9 +79,9 @@ class ImageTilesDataset(Dataset):
 
             If `tile_dim_in_units` is passed, `tile_scale` is ignored.
         tile_dim_in_units
-            The dimension of the requested tile in the units of the target coordinate system. This specifies the extent
-            of the image each tile is querying. This is not related he size in pixel of each returned tile.
-        raster
+            The dimension of the requested tile in the units of the target coordinate system.
+            This specifies the extent of the tile. This is not related the size in pixel of each returned tile.
+        rasterize
             If True, the images are rasterized using :func:`spatialdata.rasterize`.
             If False, they are queried using :func:`spatialdata.bounding_box_query`.
         return_annot
@@ -97,13 +97,13 @@ class ImageTilesDataset(Dataset):
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData`.
         """
         from spatialdata import bounding_box_query
-        from spatialdata._core.operations.rasterize import rasterize
+        from spatialdata._core.operations.rasterize import rasterize as rasterize_fn
 
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
         self._preprocess(tile_scale, tile_dim_in_units)
 
         self._crop_image: Callable[..., Any] = (
-            partial(rasterize, **dict(raster_kwargs)) if raster else bounding_box_query  # type: ignore[assignment]
+            partial(rasterize_fn, **dict(raster_kwargs)) if raster else bounding_box_query  # type: ignore[assignment]
         )
         self._return = self._get_return(return_annot)
         self.transform = transform
