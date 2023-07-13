@@ -31,7 +31,9 @@ To use the `PyTorch` dataloader in `spatialdata`, `torch` needs to be installed.
 ```bash
 pip install "spatialdata[torch]"
 ```
+
 ## Installation on a M1/M2 (Apple Silicon) Mac
+
 The framework supports the Apple Silicon architecture, but `napari-spatialdata` cannot be installed with `pip`, because `PyQt5` leads to an installation error.
 
 Thus `pip install "spatialdata[extra]"` will not work (as it installs `napari-spatialdata`).
@@ -42,7 +44,7 @@ This is what is done in the following commands, which perform a correct installa
 
 ```bash
 mamba create -n my_env python==3.10 -y
-conda activate my_env 
+conda activate my_env
 
 mamba install -c conda-forge napari -y
 pip install spatialdata-io
@@ -68,9 +70,10 @@ pip install -e .
 This is the reccommended way to install the package in case in which you want to contribute to the code. In this case, to subsequently update the package you can use `git pull`.
 
 ### A note on editable install
-If you perform an editable install of `spatialdata` and then install `spatialdata-plot`, `spatialdata-io` or `napari-spatialdata`, they may automatically override the installation of `spatialdata` with the version from PyPI. 
 
-To check if this happened you can run 
+If you perform an editable install of `spatialdata` and then install `spatialdata-plot`, `spatialdata-io` or `napari-spatialdata`, they may automatically override the installation of `spatialdata` with the version from PyPI.
+
+To check if this happened you can run
 
 ```
 python -c "import spatialdata; print(spatialdata.__path__)"
