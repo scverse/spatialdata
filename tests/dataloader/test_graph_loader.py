@@ -12,6 +12,7 @@ sdata = blobs()
         ("knn", {"k": 2, "percentile": 50}),
         ("knn", {"k": 2, "max_distance": 50}),
         ("radius", {"max_distance": 50}),
+        ("radius", {"percentile": 50}),
         ("expansion", {"max_distance": 50}),
     ],
 )
