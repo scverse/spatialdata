@@ -1055,7 +1055,9 @@ class SpatialData:
 
         if consolidate_metadata:
             # consolidate metadata to more easily support remote reading
-            zarr.consolidate_metadata(store)
+            # bug in zarr, 'zmetadata' is written instead of '.zmetadata'
+            # see discussion https://github.com/zarr-developers/zarr-python/issues/1121
+            zarr.consolidate_metadata(store, metadata_key=".zmetadata")
 
         # old code to support overwriting the backing file
         # if target_path is not None:

@@ -17,6 +17,31 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 
+def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, str]:
+    """
+    Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
+
+    Parameters
+    ----------
+    store
+        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+
+    Returns
+    -------
+    A tuple of the zarr.Group object and the path to the store.
+    """
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+    # workaround for but with .zmetadata being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
+    if isinstance(store, (str, Path)) and str(store).startswith("http") and len(f) == 0:
+        f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
+    if isinstance(f.store, zarr.storage.FSStore):
+        f_store_path = f.store.path
+    else:
+        assert isinstance(f.store, zarr.storage.ConsolidatedMetadataStore)
+        f_store_path = f.store.store.path
+    return f, f_store_path
+
+
 def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
@@ -34,7 +59,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
     -------
     A SpatialData object.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+    f, f_store_path = _open_zarr_store(store)
 
     images = {}
     labels = {}
@@ -54,7 +79,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(group._store.path, f_elem.path)
+            f_elem_store = os.path.join(f_store_path, f_elem.path)
             element = _read_multiscale(f_elem_store, raster_type="image")
             images[subgroup_name] = element
             count += 1
@@ -70,7 +95,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(group._store.path, f_elem.path)
+                f_elem_store = os.path.join(f_store_path, f_elem.path)
                 labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                 count += 1
             logger.debug(f"Found {count} elements in {group}")
@@ -84,7 +109,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
             if Path(subgroup_name).name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem_store = os.path.join(group._store.path, f_elem.path)
+            f_elem_store = os.path.join(f_store_path, f_elem.path)
             points[subgroup_name] = _read_points(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
@@ -97,7 +122,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(group._store.path, f_elem.path)
+            f_elem_store = os.path.join(f_store_path, f_elem.path)
             shapes[subgroup_name] = _read_shapes(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
@@ -110,20 +135,26 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(group._store.path, f_elem.path)
-            table = read_anndata_zarr(f_elem_store)
-            if TableModel.ATTRS_KEY in table.uns:
-                # fill out eventual missing attributes that has been omitted because their value was None
-                attrs = table.uns[TableModel.ATTRS_KEY]
-                if "region" not in attrs:
-                    attrs["region"] = None
-                if "region_key" not in attrs:
-                    attrs["region_key"] = None
-                if "instance_key" not in attrs:
-                    attrs["instance_key"] = None
-                # fix type for region
-                if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                    attrs["region"] = attrs["region"].tolist()
+            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            if isinstance(f, zarr.storage.ConsolidatedMetadataStore):
+                logger.warning("Reading table from remote store is not supported yet. Skipping.")
+                table = None
+                # this doesn't work, needs to be fixed in the anndata package
+                # table = read_anndata_zarr(f_elem)
+            else:
+                table = read_anndata_zarr(f_elem_store)
+                if TableModel.ATTRS_KEY in table.uns:
+                    # fill out eventual missing attributes that has been omitted because their value was None
+                    attrs = table.uns[TableModel.ATTRS_KEY]
+                    if "region" not in attrs:
+                        attrs["region"] = None
+                    if "region_key" not in attrs:
+                        attrs["region_key"] = None
+                    if "instance_key" not in attrs:
+                        attrs["instance_key"] = None
+                    # fix type for region
+                    if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                        attrs["region"] = attrs["region"].tolist()
             count += 1
         logger.debug(f"Found {count} elements in {group}")
 
