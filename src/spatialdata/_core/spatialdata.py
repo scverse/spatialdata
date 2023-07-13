@@ -1138,7 +1138,7 @@ class SpatialData:
             del root["table/table"]
 
     @staticmethod
-    def read(file_path: str, selection: Optional[tuple[str]] = None) -> SpatialData:
+    def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
         from spatialdata import read_zarr
 
         return read_zarr(file_path, selection=selection)
