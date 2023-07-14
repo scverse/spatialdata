@@ -7,6 +7,7 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
+from anndata.experimental import read_elem
 
 from spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger
@@ -133,24 +134,24 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(f_store_path, f_elem.path)
             if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore):
-                logger.warning("Reading table from remote store is not supported yet. Skipping.")
-                table = None
-                # this doesn't work, needs to be fixed in the anndata package
+                table = read_elem(f_elem)
+                # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
+                # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
                 # table = read_anndata_zarr(f_elem)
             else:
                 table = read_anndata_zarr(f_elem_store)
-                if TableModel.ATTRS_KEY in table.uns:
-                    # fill out eventual missing attributes that has been omitted because their value was None
-                    attrs = table.uns[TableModel.ATTRS_KEY]
-                    if "region" not in attrs:
-                        attrs["region"] = None
-                    if "region_key" not in attrs:
-                        attrs["region_key"] = None
-                    if "instance_key" not in attrs:
-                        attrs["instance_key"] = None
-                    # fix type for region
-                    if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                        attrs["region"] = attrs["region"].tolist()
+            if TableModel.ATTRS_KEY in table.uns:
+                # fill out eventual missing attributes that has been omitted because their value was None
+                attrs = table.uns[TableModel.ATTRS_KEY]
+                if "region" not in attrs:
+                    attrs["region"] = None
+                if "region_key" not in attrs:
+                    attrs["region_key"] = None
+                if "instance_key" not in attrs:
+                    attrs["instance_key"] = None
+                # fix type for region
+                if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                    attrs["region"] = attrs["region"].tolist()
             count += 1
         logger.debug(f"Found {count} elements in {group}")
 
