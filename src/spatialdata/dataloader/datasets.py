@@ -90,10 +90,10 @@ class ImageTilesDataset(Dataset):
             can be returned. If None, it will return a `SpatialData` object with only the tuple
             containing the image and the table value.
         transform
-            A callable that takes as input the tuple (image, table_value) and returns a new tuple (when 
-            `return_annotations` is not None); a callable that takes as input the `SpatialData` object and 
-            returns a tuple when `return_annotations` is `None`. 
-            This parameter can be used to apply data transformations (for instance a normalization operation) to the 
+            A callable that takes as input the tuple (image, table_value) and returns a new tuple (when
+            `return_annotations` is not None); a callable that takes as input the `SpatialData` object and
+            returns a tuple when `return_annotations` is `None`.
+            This parameter can be used to apply data transformations (for instance a normalization operation) to the
             image and the table value.
         rasterize_kwargs
             Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is True.
