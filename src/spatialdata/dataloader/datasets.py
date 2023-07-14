@@ -13,7 +13,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
-from spatialdata._core.query.relational_query import match_table_to_element
+
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
@@ -107,7 +107,12 @@ class ImageTilesDataset(Dataset):
         self._preprocess(tile_scale, tile_dim_in_units)
 
         self._crop_image: Callable[..., Any] = (
-            partial(rasterize_fn, **dict(rasterize_kwargs)) if rasterize else bounding_box_query  # type: ignore[assignment]
+            partial(
+                rasterize_fn,
+                **dict(rasterize_kwargs),
+            )
+            if rasterize
+            else bounding_box_query  # type: ignore[assignment]
         )
         self._return = self._get_return(return_annotations)
         self.transform = transform
