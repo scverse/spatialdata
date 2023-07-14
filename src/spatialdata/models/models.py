@@ -587,6 +587,8 @@ class PointsModel:
                     f'The column "{coordinates[c]}" has now been renamed to "{c}"; the column "{c}" was already '
                     f"present in the dataframe, and will be dropped."
                 )
+        if Z not in axes and Z in data.columns:
+            logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
         return cls._add_metadata_and_validate(
