@@ -584,7 +584,7 @@ class PointsModel:
         for c in [X, Y, Z]:
             if c in coordinates and c != coordinates[c] and c in data.columns:
                 logger.info(
-                    f'The column "{coordinates[c]} has now been renamed to "{c}"; the column "{c}" was already '
+                    f'The column "{coordinates[c]}" has now been renamed to "{c}"; the column "{c}" was already '
                     f"present in the dataframe, and will be dropped."
                 )
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
