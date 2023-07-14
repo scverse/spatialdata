@@ -37,10 +37,10 @@ class TestImageTilesDataset:
         sdata = self._annotate_shapes(sdata_blobs, regions_element)
         ds = ImageTilesDataset(
             sdata=sdata,
-            raster=raster,
+            rasterize=raster,
             regions_to_images={regions_element: "blobs_image"},
             regions_to_coordinate_systems={regions_element: "global"},
-            raster_kwargs=raster_kwargs,
+            rasterize_kwargs=raster_kwargs,
         )
 
         sdata_tile = ds[0]
@@ -79,7 +79,7 @@ class TestImageTilesDataset:
             sdata=sdata,
             regions_to_images={regions_element: "blobs_image"},
             regions_to_coordinate_systems={regions_element: "global"},
-            return_annot=return_annot,
+            return_annotations=return_annot,
         )
 
         tile, annot = ds[0]

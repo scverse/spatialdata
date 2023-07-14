@@ -13,7 +13,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
-
+from spatialdata._core.query.relational_query import match_table_to_element
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
@@ -45,10 +45,10 @@ class ImageTilesDataset(Dataset):
         regions_to_coordinate_systems: dict[str, str],
         tile_scale: float = 1.0,
         tile_dim_in_units: float | None = None,
-        raster: bool = False,
-        return_annot: str | list[str] | None = None,
+        rasterize: bool = False,
+        return_annotations: str | list[str] | None = None,
         transform: Callable[[Any], Any] | None = None,
-        raster_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        rasterize_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         """
         :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
@@ -84,13 +84,17 @@ class ImageTilesDataset(Dataset):
         rasterize
             If True, the images are rasterized using :func:`spatialdata.rasterize`.
             If False, they are queried using :func:`spatialdata.bounding_box_query`.
-        return_annot
+        return_annotations
             If not None, a value from the table is returned together with the image tile.
             Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
             can be returned. If None, it will return a spatialdata object with only the tuple
             containing the image and the table value.
-        raster_kwargs
-            Keyword arguments passed to :func:`spatialdata.rasterize` if `raster` is True.
+        transform
+            A callable that takes as input the tuple (image, table_value) and returns a new tuple.
+            This can be used to apply transformations to the image and the table value.
+        rasterize_kwargs
+            Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is True.
+            This argument can be used for instance to choose the pixel dimension of the image tile.
 
         Returns
         -------
@@ -103,9 +107,9 @@ class ImageTilesDataset(Dataset):
         self._preprocess(tile_scale, tile_dim_in_units)
 
         self._crop_image: Callable[..., Any] = (
-            partial(rasterize_fn, **dict(raster_kwargs)) if raster else bounding_box_query  # type: ignore[assignment]
+            partial(rasterize_fn, **dict(rasterize_kwargs)) if rasterize else bounding_box_query  # type: ignore[assignment]
         )
-        self._return = self._get_return(return_annot)
+        self._return = self._get_return(return_annotations)
         self.transform = transform
 
     def _validate(
@@ -123,7 +127,7 @@ class ImageTilesDataset(Dataset):
         # check unique matching between regions and images and coordinate systems
         assert len(set(regions_to_images.values())) == len(
             regions_to_images.keys()
-        ), "One region cannot be paired to multiple regions."
+        ), "One region cannot be paired to multiple images."
         assert len(set(regions_to_coordinate_systems.values())) == len(
             regions_to_coordinate_systems.keys()
         ), "One region cannot be paired to multiple coordinate systems."
