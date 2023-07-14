@@ -5,13 +5,15 @@ This module provides command line interface (CLI) interactions for the SpatialDa
 various operations through a terminal. Currently, it implements the "peek" function, which allows users to inspect
 the contents of a SpatialData .zarr dataset. Additional CLI functionalities will be implemented in the future.
 """
+from typing import Literal
+
 import click
 
 
 @click.command(help="Peek inside the SpatialData .zarr dataset")
 @click.argument("path", default=False, type=str)
-@click.argument("selection", type=str, nargs=-1)
-def peek(path: str, selection: tuple[str]) -> None:
+@click.argument("selection", type=click.Choice(["images", "labels", "points", "shapes", "table"]), nargs=-1)
+def peek(path: str, selection: tuple[Literal["images", "labels", "points", "shapes", "table"]]) -> None:
     """
     Peek inside the SpatialData .zarr dataset.
 
