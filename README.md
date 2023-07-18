@@ -13,7 +13,7 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 -   [spatialdata-plot](https://github.com/scverse/spatialdata-plot): Static plotting library for spatialdata.
 -   [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatialdata.
 
-[//]: # (numfocus-fiscal-sponsor-attribution)
+[//]: # "numfocus-fiscal-sponsor-attribution"
 
 The spatialdata project uses a [consensus based governance model](https://scverse.org/about/roles/) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/). Consider making a [tax-deductible donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
 
