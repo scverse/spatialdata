@@ -46,6 +46,7 @@ If you found a bug, please use the [issue tracker][issue-tracker].
 
 ## Sponsor
 The spatialdata project is supported by the EMBL International PhD Programme and the Chan Zuckerberg Initiative.
+
 [//]: # (numfocus-fiscal-sponsor-attribution)
 
 The scverse project uses a [consensus based governance model](https://scverse.org/about/roles/) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/). Consider making a [tax-deductible donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
