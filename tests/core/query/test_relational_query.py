@@ -14,9 +14,8 @@ def test_match_table_to_element(sdata_query_aggregation):
     with pytest.raises(AssertionError, match="No row matches in the table annotates the element"):
         match_table_to_element(sdata=sdata_query_aggregation, element_name="by_circles")
     matched_table = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
-    sdata_query_aggregation["values_circles"].index = np.array(
-        reversed(sdata_query_aggregation["values_circles"].index)
-    )
+    arr = np.array(list(reversed(sdata_query_aggregation["values_circles"].index)))
+    sdata_query_aggregation["values_circles"].index = arr
     matched_table_reversed = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
     assert matched_table.obs.index.tolist() == list(reversed(matched_table_reversed.obs.index.tolist()))
 

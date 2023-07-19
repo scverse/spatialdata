@@ -104,7 +104,9 @@ class RasterSchema(DataArraySchema):
         Parameters
         ----------
         data
-            Data to validate.
+            Data to validate (or parse). The shape of the data should be c(z)yx for 2D (3D) images and (z)yx for 2D (
+            3D) labels. If you have a 2D image with shape yx, you can use :func:`numpy.expand_dims` (or an equivalent
+            function) to add a channel dimension.
         dims
             Dimensions of the data.
         transformations
@@ -189,8 +191,7 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        return data
+        return compute_coordinates(data)
 
     @singledispatchmethod
     def validate(self, data: Any) -> None:
@@ -486,7 +487,10 @@ class PointsModel:
         annotation
             Annotation dataframe. Only if `data` is :class:`numpy.ndarray`.
         coordinates
-            Mapping of axes names to column names in `data`. Only if `data` is :class:`pandas.DataFrame`.
+            Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
+            :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
+            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optinally `z` are column names,
+            then they will be used as coordinates.
         feature_key
             Feature key in `annotation` or `data`.
         instance_key
@@ -527,7 +531,9 @@ class PointsModel:
                 table[feature_key] = feature_categ
             if instance_key is not None:
                 table[instance_key] = annotation[instance_key]
-            for c in set(annotation.columns) - {feature_key, instance_key}:
+            if Z not in axes and Z in annotation.columns:
+                logger.info(f"Column `{Z}` in `annotation` will be ignored since the data is 2D.")
+            for c in set(annotation.columns) - {feature_key, instance_key, X, Y, Z}:
                 table[c] = dd.from_pandas(annotation[c], **kwargs)  # type: ignore[attr-defined]
             return cls._add_metadata_and_validate(
                 table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
@@ -540,7 +546,7 @@ class PointsModel:
     def _(
         cls,
         data: pd.DataFrame,
-        coordinates: Mapping[str, str],
+        coordinates: Mapping[str, str] | None = None,
         feature_key: str | None = None,
         instance_key: str | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
@@ -548,6 +554,14 @@ class PointsModel:
     ) -> DaskDataFrame:
         if "npartitions" not in kwargs and "chunksize" not in kwargs:
             kwargs["npartitions"] = cls.NPARTITIONS
+        if coordinates is None:
+            if X in data.columns and Y in data.columns:
+                coordinates = {X: X, Y: Y, Z: Z} if Z in data.columns else {X: X, Y: Y}
+            else:
+                raise ValueError(
+                    f"Coordinates must be provided as a mapping of axes names (keys) to column names (values) in "
+                    f"dataframe. Example: `{'x': 'my_x_column', 'y': 'my_y_column'}`."
+                )
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
@@ -567,7 +581,15 @@ class PointsModel:
                 table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
-        for c in set(data.columns) - {feature_key, instance_key, *coordinates.values()}:
+        for c in [X, Y, Z]:
+            if c in coordinates and c != coordinates[c] and c in data.columns:
+                logger.info(
+                    f'The column "{coordinates[c]}" has now been renamed to "{c}"; the column "{c}" was already '
+                    f"present in the dataframe, and will be dropped."
+                )
+        if Z not in axes and Z in data.columns:
+            logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
+        for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
         return cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations

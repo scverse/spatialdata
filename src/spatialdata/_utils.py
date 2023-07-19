@@ -148,8 +148,7 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
         assert old_transform is not None
         sequence = Sequence([translation, old_transform])
         set_transformation(element=unpadded, transformation=sequence, to_coordinate_system=target_cs)
-    unpadded = compute_coordinates(unpadded)
-    return unpadded
+    return compute_coordinates(unpadded)
 
 
 # TODO: probably we want this method to live in multiscale_spatial_image

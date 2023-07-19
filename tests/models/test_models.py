@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import os
 import pathlib
 import tempfile
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 import dask.array.core
 import dask.dataframe as dd
@@ -30,6 +32,7 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    get_axes_names,
     get_model,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
@@ -156,7 +159,7 @@ class TestModels:
     @pytest.mark.parametrize("permute", [True, False])
     @pytest.mark.parametrize("kwargs", [None, {"name": "test"}])
     def test_raster_schema(
-        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: Optional[dict[str, str]]
+        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: dict[str, str] | None
     ) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
@@ -223,26 +226,37 @@ class TestModels:
     @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
     @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
+    @pytest.mark.parametrize("coordinates", [None, {"x": "A", "y": "B", "z": "C"}])
     def test_points_model(
         self,
         model: PointsModel,
         typ: Any,
         is_3d: bool,
         is_annotation: bool,
-        instance_key: Optional[str],
-        feature_key: Optional[str],
+        instance_key: str | None,
+        feature_key: str | None,
+        coordinates: dict[str, str] | None,
     ) -> None:
-        coords = ["A", "B", "C"]
-        axes = ["x", "y", "z"]
-        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 3)), columns=coords)
+        if typ is np.ndarray and coordinates is not None:
+            # the case np.ndarray ignores the coordinates argument
+            return
+        if coordinates is not None:
+            coordinates = coordinates.copy()
+        coords = ["A", "B", "C", "x", "y", "z"]
+        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 6)), columns=coords)
         data["target"] = pd.Series(RNG.integers(0, 2, size=(10,))).astype(str)
         data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(10,))).astype(np.int_)
         data["anno"] = pd.Series(RNG.integers(0, 1, size=(10,))).astype(np.int_)
         if not is_3d:
-            coords = coords[:2]
-            axes = axes[:2]
+            if coordinates is not None:
+                del coordinates["z"]
+            else:
+                del data["z"]
         if typ == np.ndarray:
-            numpy_coords = data[coords].to_numpy()
+            axes = ["x", "y"]
+            if is_3d:
+                axes += ["z"]
+            numpy_coords = data[axes].to_numpy()
             self._parse_transformation_from_multiple_places(model, numpy_coords)
             points = model.parse(
                 numpy_coords,
@@ -252,7 +266,6 @@ class TestModels:
             )
             self._passes_validation_after_io(model, points, "points")
         elif typ == pd.DataFrame:
-            coordinates = dict(zip(axes, coords))
             self._parse_transformation_from_multiple_places(model, data)
             points = model.parse(
                 data,
@@ -262,7 +275,6 @@ class TestModels:
             )
             self._passes_validation_after_io(model, points, "points")
         elif typ == dd.DataFrame:
-            coordinates = dict(zip(axes, coords))
             dd_data = dd.from_pandas(data, npartitions=2)
             self._parse_transformation_from_multiple_places(model, dd_data, coordinates=coordinates)
             points = model.parse(
@@ -271,6 +283,10 @@ class TestModels:
                 instance_key=instance_key,
                 feature_key=feature_key,
             )
+            if coordinates is not None:
+                axes = get_axes_names(points)
+                for axis in axes:
+                    assert np.array_equal(points[axis], data[coordinates[axis]])
             self._passes_validation_after_io(model, points, "points")
         assert "transform" in points.attrs
         if feature_key is not None and is_annotation:
@@ -287,7 +303,7 @@ class TestModels:
     def test_table_model(
         self,
         model: TableModel,
-        region: Union[str, np.ndarray],
+        region: str | np.ndarray,
     ) -> None:
         region_key = "reg"
         obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
