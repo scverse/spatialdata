@@ -17,7 +17,7 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 
 The spatialdata project uses a [consensus based governance model](https://scverse.org/about/roles/) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/). Consider making a [tax-deductible donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
 
-The spatialdata project received support by the EMBL International PhD Programme and the Chan Zuckerberg Initiative.
+The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
