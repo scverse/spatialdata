@@ -2,7 +2,7 @@ image: gitpod/workspace-python
 tasks:
   - name: install spatialdata universe and dependencies
     command: |
-      python -m pip install -e .
-      python -m pip install -r requirements-dev.txt
+      pip install --upgrade pip
+      python -m pip install -r pyproject.toml
       python -m pip install spatialdata-io spatialdata-plot
       pre-commit install --install-hooks
