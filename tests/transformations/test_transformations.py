@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from copy import deepcopy
 
 import numpy as np
@@ -29,6 +30,7 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
     _decompose_affine_into_linear_and_translation,
+    _decompose_transformation,
     _get_affine_for_element,
 )
 from xarray import DataArray
@@ -781,6 +783,125 @@ def test_decompose_affine_into_linear_and_translation():
     linear, translation = _decompose_affine_into_linear_and_translation(affine)
     assert np.allclose(linear.matrix, np.array([[1, 2, 3, 0], [4, 5, 6, 0], [0, 0, 0, 1]]))
     assert np.allclose(translation.translation, np.array([10, 11]))
+
+
+@pytest.mark.parametrize(
+    "matrix,input_axes,output_axes,valid",
+    [
+        # non-square matrix are not supported
+        (
+            np.array(
+                [
+                    [1, 2, 3, 10],
+                    [4, 5, 6, 11],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "z"),
+            ("x", "y"),
+            False,
+        ),
+        (
+            np.array(
+                [
+                    [1, 2, 3],
+                    [4, 5, 6],
+                    [7, 8, 9],
+                    [0, 0, 1],
+                ]
+            ),
+            ("x", "y"),
+            ("x", "y", "z"),
+            False,
+        ),
+        # z axis should not be present
+        (
+            np.array(
+                [
+                    [1, 2, 3, 10],
+                    [4, 5, 6, 11],
+                    [7, 8, 9, 12],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "z"),
+            ("x", "y", "z"),
+            False,
+        ),
+        # c channel is modified
+        (
+            np.array(
+                [
+                    [1, 2, 0, 4],
+                    [4, 5, 0, 7],
+                    [8, 9, 1, 10],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "c"),
+            ("x", "y", "c"),
+            False,
+        ),
+        (
+            np.array(
+                [
+                    [1, 2, 0, 4],
+                    [4, 5, 0, 7],
+                    [0, 0, 0, 0],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "c"),
+            ("x", "y", "c"),
+            False,
+        ),
+        (
+            np.array(
+                [
+                    [1, 2, 3, 4],
+                    [4, 5, 6, 7],
+                    [0, 0, 1, 0],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "c"),
+            ("x", "y", "c"),
+            False,
+        ),
+        # valid, no c channel
+        (
+            np.array(
+                [
+                    [1, 2, 3],
+                    [4, 5, 6],
+                    [0, 0, 1],
+                ]
+            ),
+            ("x", "y"),
+            ("x", "y"),
+            True,
+        ),
+        # valid, c channel
+        (
+            np.array(
+                [
+                    [1, 2, 0, 4],
+                    [4, 5, 0, 7],
+                    [0, 0, 1, 0],
+                    [0, 0, 0, 1],
+                ]
+            ),
+            ("x", "y", "c"),
+            ("x", "y", "c"),
+            True,
+        ),
+    ],
+)
+def test_decompose_transformation(matrix, input_axes, output_axes, valid):
+    affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
+    context = nullcontext() if valid else pytest.raises(ValueError)
+    with context:
+        _ = _decompose_transformation(affine, input_axes=input_axes)
 
 
 def test_assign_xy_scale_to_cyx_image():
