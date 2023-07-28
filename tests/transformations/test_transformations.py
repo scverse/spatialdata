@@ -897,11 +897,12 @@ def test_decompose_affine_into_linear_and_translation():
         ),
     ],
 )
-def test_decompose_transformation(matrix, input_axes, output_axes, valid):
+@pytest.mark.parametrize("simple_decomposition", [True, False])
+def test_decompose_transformation(matrix, input_axes, output_axes, valid, simple_decomposition):
     affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
     context = nullcontext() if valid else pytest.raises(ValueError)
     with context:
-        _ = _decompose_transformation(affine, input_axes=input_axes)
+        _ = _decompose_transformation(affine, input_axes=input_axes, simple_decomposition=simple_decomposition)
 
 
 def test_assign_xy_scale_to_cyx_image():

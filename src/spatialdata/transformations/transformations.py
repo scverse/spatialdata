@@ -830,23 +830,37 @@ def _compose_affine_from_linear_and_translation(
     return Affine(matrix, input_axes=input_axes, output_axes=output_axes)
 
 
-def _decompose_transformation(transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]) -> Sequence:
+def _decompose_transformation(
+    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...], simple_decomposition: bool = True
+) -> Sequence:
     """
     Decompose a given 2D transformation into a sequence of predetermined types of transformations.
 
     Parameters
     ----------
     transformation
-        The transformation to decompose. It is assumed to be a type that can be represented as a single affine
+        The transformation to decompose. It is assumed to be of a type that can be represented as a single affine
         transformation. It should leave the input axes unmodified, and it should not transform the c channel, if this
         is present.
+    input_axes
+        The axes of the data the transformation is to be applied to
+    simple_decomposition
+        If true, decomposes a transformation into it's linear part (affine without translation) and translation part,
+        otherwise decomposes it into a sequence of reflection, rotation, shear, scale, translation.
 
     Returns
     -------
     sequence
         Returns a sequence of transformations (class :class:`~spatialdata.transformations.Sequence`) which operates only
-        on the spatial part (no c channel). The output sequence will contain 5 transformations in the following order
-        (the first is applied first):
+        on the spatial part (no c channel). The output sequence will contain either 2 either 5 transformations in the
+        following order (the first is applied first).
+        Case `simple_decomposition = True`.
+
+            1. Linear part (affine): linear part of the affine transformation, represented as a
+            :class:`~spatialdata.transformations.Affine` transformation.
+            2. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
+
+        Case `simple_decomposition = False`.
 
             1. Reflection. Represented as :class:`~spatialdata.transformations.Scale` transformation with elements in
                 {1, -1}.
@@ -855,15 +869,12 @@ def _decompose_transformation(transformation: BaseTransformation, input_axes: tu
                 Please look at the source code of this function if you need to recover the angle theta.
             3. Shear. Represented as an :class:`~spatialdata.transformations.Affine` transformation which in its matrix
                 form presents itself as an homogeneous affine matrix with no translation part. The matrix is upper
-                triangular with diagonal elements in {-1, 1}.
-            3. Scale. Represented as a :class:`~spatialdata.transformations.Scale` transformation with positive
+                triangular with diagonal elements all equal to 1.
+            4. Scale. Represented as a :class:`~spatialdata.transformations.Scale` transformation with positive
             elements.
-            4. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
+            5. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
 
-        Note that some of these transformations may be identity transformations if applicable.
-
-    input_axes
-        The axes of the input coordinate system of the transformation.
+        Note that some of these transformations may be identity transformations.
     """
     output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
     if input_axes != output_axes:
@@ -890,43 +901,62 @@ def _decompose_transformation(transformation: BaseTransformation, input_axes: tu
     translation_part = m[:-1, -1]
     linear_part = m[:-1, :-1]
 
-    ##
-    # qr factorization
-    a = linear_part
-    r, q = scipy.linalg.rq(a)
+    if simple_decomposition:
+        translation = Translation(translation_part, axes=axes)
+        linear = _compose_affine_from_linear_and_translation(
+            linear=linear_part,
+            translation=np.zeros(linear_part.shape[0]),
+            input_axes=axes,
+            output_axes=axes,
+        )
+        sequence = Sequence([linear, translation])
+    else:
+        # qr factorization
+        a = linear_part
+        r, q = scipy.linalg.rq(a)
 
-    theta = np.arctan2(q[1, 0], q[0, 0])
-    rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+        theta = np.arctan2(q[1, 0], q[0, 0])
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-    scale_matrix = np.diag(np.abs(np.diag(r)))
-    shear_matrix = np.linalg.inv(scale_matrix) @ r
-    assert np.allclose(scale_matrix @ shear_matrix, r)
+        scale_matrix = np.diag(np.abs(np.diag(r)))
+        shear_matrix = np.linalg.inv(scale_matrix) @ r
+        assert np.allclose(scale_matrix @ shear_matrix, r)
+        d = np.diag(np.diag(shear_matrix))
 
-    qq = rotation_matrix.T @ q
-    # check that qq is a diagonal matrix with diagonal values in {-1, 1}
-    assert np.allclose(np.diag(qq) ** 2, np.ones(qq.shape[0]))
-    assert np.isclose(np.sum(np.abs(qq.ravel())), qq.shape[0])
-    assert np.allclose(rotation_matrix @ qq, q)
+        qq = rotation_matrix.T @ q
+        # check that qq is a diagonal matrix with diagonal values in {-1, 1}
+        assert np.allclose(np.diag(qq) ** 2, np.ones(qq.shape[0]))
+        assert np.isclose(np.sum(np.abs(qq.ravel())), qq.shape[0])
+        assert np.allclose(rotation_matrix @ qq, q)
 
-    aa = scale_matrix @ shear_matrix @ rotation_matrix @ qq
-    assert np.allclose(a, aa)
+        adjusted_shear_matrix = shear_matrix @ d
+        adjusted_rotation_matrix = d @ rotation_matrix @ d
+        assert np.allclose(
+            adjusted_rotation_matrix @ adjusted_rotation_matrix.T, np.eye(adjusted_rotation_matrix.shape[0])
+        )
+        adjusted_qq = d @ qq
 
-    scale = Scale(np.diag(scale_matrix), axes=axes)
-    shear = _compose_affine_from_linear_and_translation(
-        linear=shear_matrix,
-        translation=np.zeros(shear_matrix.shape[0]),
-        input_axes=axes,
-        output_axes=axes,
-    )
-    rotation = _compose_affine_from_linear_and_translation(
-        linear=rotation_matrix,
-        translation=np.zeros(rotation_matrix.shape[0]),
-        input_axes=axes,
-        output_axes=axes,
-    )
-    inversion = Scale(np.diag(qq), axes=axes)
-    translation = Translation(translation_part, axes=axes)
-    sequence = Sequence([inversion, rotation, shear, scale, translation])
+        aaa = scale_matrix @ shear_matrix @ d @ d @ rotation_matrix @ d @ d @ qq
+        assert np.allclose(a, aaa)
+        aa = scale_matrix @ adjusted_shear_matrix @ adjusted_rotation_matrix @ adjusted_qq
+        assert np.allclose(a, aa)
+
+        scale = Scale(np.diag(scale_matrix), axes=axes)
+        shear = _compose_affine_from_linear_and_translation(
+            linear=adjusted_shear_matrix,
+            translation=np.zeros(shear_matrix.shape[0]),
+            input_axes=axes,
+            output_axes=axes,
+        )
+        rotation = _compose_affine_from_linear_and_translation(
+            linear=adjusted_rotation_matrix,
+            translation=np.zeros(rotation_matrix.shape[0]),
+            input_axes=axes,
+            output_axes=axes,
+        )
+        inversion = Scale(np.diag(adjusted_qq), axes=axes)
+        translation = Translation(translation_part, axes=axes)
+        sequence = Sequence([inversion, rotation, shear, scale, translation])
     check_m = sequence.to_affine_matrix(input_axes=input_axes, output_axes=input_axes)
     assert np.allclose(check_m, matrix)
     return sequence
