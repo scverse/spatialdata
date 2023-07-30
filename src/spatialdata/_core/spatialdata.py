@@ -121,7 +121,6 @@ class SpatialData:
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _table: AnnData | None = None
-    path: str | None = None
 
     def __init__(
         self,
@@ -372,6 +371,22 @@ class SpatialData:
         """Check if the data is backed by a Zarr storage or if it is in-memory."""
         return self.path is not None
 
+    @property
+    def path(self) -> Path | None:
+        """Path to the Zarr storage."""
+        return self._path
+
+    @path.setter
+    def path(self, path: Path | str | None) -> None:
+        """Set the path to the Zarr storage."""
+        if path is not None:
+            path = Path(path)
+            if not path.is_dir():
+                raise ValueError(f"Path {path} is not a directory.")
+            if not path.exists():
+                raise ValueError(f"Path {path} does not exist.")
+        self._path = path
+
     # TODO: from a commennt from Giovanni: consolite somewhere in
     #  a future PR (luca: also _init_add_element could be cleaned)
     def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
@@ -396,13 +411,8 @@ class SpatialData:
         return element_type_group.require_group(name)
 
     def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
-        if self.path is None:
-            # in the future we can relax this, but this ensures that we don't have objects that are partially backed
-            # and partially in memory
-            raise RuntimeError(
-                "The data is not backed by a Zarr storage. In order to add new elements after "
-                "initializing a SpatialData object you need to call SpatialData.write() first"
-            )
+        # if self.path is None:
+        #     warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "shapes"]
@@ -654,60 +664,30 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the image will be written to the Zarr storage.
         """
         if self.is_backed():
+            if TYPE_CHECKING:
+                assert self.path is not None
             files = get_backing_files(image)
-            assert self.path is not None
-            target_path = os.path.realpath(os.path.join(self.path, "images", name))
-            if target_path in files:
+            target_path = (self.path / "images" / name).resolve()
+            if target_path in files and overwrite is False:
                 raise ValueError(
-                    "Cannot add the image to the SpatialData object because it would overwrite an element that it is"
-                    "using for backing. See more here: https://github.com/scverse/spatialdata/pull/138"
+                    f"Image {name} already exists in the Zarr storage. Use overwrite=True to overwrite the image."
                 )
             self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
-            # old code to support overwriting the backing file
-            # with tempfile.TemporaryDirectory() as tmpdir:
-            #     store = parse_url(Path(tmpdir) / "data.zarr", mode="w").store
-            #     root = zarr.group(store=store)
-            #     write_image(
-            #         image=self.images[name],
-            #         group=root,
-            #         name=name,
-            #         storage_options=storage_options,
-            #     )
-            #     src_element_path = Path(store.path) / name
-            #     assert isinstance(self.path, str)
-            #     tgt_element_path = Path(self.path) / "images" / name
-            #     if os.path.isdir(tgt_element_path) and overwrite:
-            #         element_store = parse_url(tgt_element_path, mode="w").store
-            #         _ = zarr.group(store=element_store, overwrite=True)
-            #         element_store.close()
-            #     pathlib.Path(tgt_element_path).mkdir(parents=True, exist_ok=True)
-            #     for file in os.listdir(str(src_element_path)):
-            #         src_file = src_element_path / file
-            #         tgt_file = tgt_element_path / file
-            #         os.rename(src_file, tgt_file)
-            # from spatialdata._io.read import _read_multiscale
-            #
-            # # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
-            # # from the correct storage
-            # image = _read_multiscale(str(tgt_element_path), raster_type="image")
-            # self._add_image_in_memory(name=name, image=image, overwrite=True)
-            elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
-            write_image(
-                image=self.images[name],
-                group=elem_group,
-                name=name,
-                storage_options=storage_options,
-            )
-            from spatialdata._io.io_raster import _read_multiscale
+            if overwrite:
+                elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
+                write_image(
+                    image=self.images[name],
+                    group=elem_group,
+                    name=name,
+                    storage_options=storage_options,
+                )
+                from spatialdata._io.io_raster import _read_multiscale
 
-            # reload the image from the Zarr storage so that now the element is lazy loaded, and most importantly,
-            # from the correct storage
-            assert elem_group.path == "images"
-            path = Path(elem_group.store.path) / "images" / name
-            image = _read_multiscale(path, raster_type="image")
-            self._add_image_in_memory(name=name, image=image, overwrite=True)
-        else:
-            self._add_image_in_memory(name=name, image=image, overwrite=overwrite)
+                # reload the image from the Zarr storage for lazy loading
+                assert elem_group.path == "images"
+                path = Path(elem_group.store.path) / "images" / name
+                image = _read_multiscale(path, raster_type="image")
+                self._add_image_in_memory(name=name, image=image, overwrite=True)
 
     def add_labels(
         self,
@@ -967,7 +947,7 @@ class SpatialData:
         #     self.path = str(file_path)
         # else:
         #     self.path = str(tmp_zarr_file)
-        self.path = str(file_path)
+        self.path = Path(file_path)
         try:
             if len(self.images):
                 root.create_group(name="images")
