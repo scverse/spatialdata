@@ -798,7 +798,7 @@ class SpatialData:
         #             else:
         #                 raise ValueError(f"Unknown element type {element_type}")
         #             self.__getattribute__(element_type)[name] = element
-        assert isinstance(self.path, str)
+        assert isinstance(self.path, Path)
 
     @property
     def table(self) -> AnnData:
