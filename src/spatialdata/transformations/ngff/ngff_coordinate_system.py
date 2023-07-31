@@ -73,9 +73,9 @@ class NgffCoordinateSystem:
 
     @staticmethod
     def from_dict(coord_sys: CoordSystem_t) -> NgffCoordinateSystem:
-        if "name" not in coord_sys.keys():
+        if "name" not in coord_sys:
             raise ValueError("`coordinate_system` MUST have a name.")
-        if "axes" not in coord_sys.keys():
+        if "axes" not in coord_sys:
             raise ValueError("`coordinate_system` MUST have axes.")
 
         if TYPE_CHECKING:
@@ -87,11 +87,11 @@ class NgffCoordinateSystem:
         axes = []
         for axis in coord_sys["axes"]:
             # for axis in sorted_axes:
-            if "name" not in axis.keys():
+            if "name" not in axis:
                 raise ValueError("Each axis MUST have a name.")
-            if "type" not in axis.keys():
+            if "type" not in axis:
                 raise ValueError("Each axis MUST have a type.")
-            if "unit" not in axis.keys() and axis["type"] not in ["channel", "array"]:
+            if "unit" not in axis and axis["type"] not in ["channel", "array"]:
                 raise ValueError("Each axis is either of type channel either MUST have a unit.")
             kw = {}
             if "unit" in axis:
