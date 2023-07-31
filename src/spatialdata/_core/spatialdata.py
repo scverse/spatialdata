@@ -699,8 +699,7 @@ class SpatialData:
                     # reload the image from the Zarr storage so that now the element is lazy loaded,
                     # and most importantly, from the correct storage
                     element_path = Path(self.path) / "images" / name
-                    image = _read_multiscale(element_path, raster_type="image")
-                    self._add_image_in_memory(name=name, image=image)
+                    _read_multiscale(element_path, raster_type="image")
 
             if len(self.labels):
                 root.create_group(name="labels")
@@ -720,8 +719,7 @@ class SpatialData:
                     # reload the labels from the Zarr storage so that now the element is lazy loaded,
                     #  and most importantly, from the correct storage
                     element_path = Path(self.path) / "labels" / name
-                    labels = _read_multiscale(element_path, raster_type="labels")
-                    self._add_labels_in_memory(name=name, labels=labels)
+                    _read_multiscale(element_path, raster_type="labels")
 
             if len(self.points):
                 root.create_group(name="points")
@@ -740,8 +738,7 @@ class SpatialData:
 
                     # reload the points from the Zarr storage so that the element is lazy loaded,
                     # and most importantly, from the correct storage
-                    points = _read_points(element_path)
-                    self._add_points_in_memory(name=name, points=points)
+                    _read_points(element_path)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
