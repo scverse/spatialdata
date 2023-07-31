@@ -4,7 +4,6 @@ import contextlib
 from typing import TYPE_CHECKING, Optional, Union
 
 import networkx as nx
-import numpy
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
