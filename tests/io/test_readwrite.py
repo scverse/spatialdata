@@ -12,7 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from numpy.random import default_rng
 from shapely.geometry import Point
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.models import TableModel
 from spatialdata.transformations.operations import (
@@ -110,7 +110,7 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
 
-        sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
+        sdata.images["sdata_not_saved_yet"] = _get_images().values().__iter__().__next__()
         sdata.write(tmpdir)
 
         for k, v in _get_images().items():
@@ -122,10 +122,10 @@ class TestReadWrite:
                     assert len(names) == 1
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.add_image(name=f"incremental_{k}", image=v)
+            sdata.images[f"incremental_{k}"] = v
             with pytest.raises(KeyError):
-                sdata.add_image(name=f"incremental_{k}", image=v)
-            sdata.add_image(name=f"incremental_{k}", image=v, overwrite=True)
+                sdata.images[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
 
         for k, v in _get_labels().items():
             if isinstance(v, SpatialImage):
@@ -136,10 +136,10 @@ class TestReadWrite:
                     assert len(names) == 1
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.add_labels(name=f"incremental_{k}", labels=v)
+            sdata.labels[f"incremental_{k}"] = v
             with pytest.raises(KeyError):
-                sdata.add_labels(name=f"incremental_{k}", labels=v)
-            sdata.add_labels(name=f"incremental_{k}", labels=v, overwrite=True)
+                sdata.labels[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
 
         for k, v in _get_shapes().items():
             sdata.add_shapes(name=f"incremental_{k}", shapes=v)
@@ -182,8 +182,8 @@ class TestReadWrite:
             f = os.path.join(td, "data.zarr")
             dask0 = points.points[elem_name]
             points.write(f)
-            dask1 = points.points[elem_name]
             assert all("read-parquet" not in key for key in dask0.dask.layers)
+            dask1 = read_zarr(f).points[elem_name]
             assert any("read-parquet" in key for key in dask1.dask.layers)
 
     def test_io_and_lazy_loading_raster(self, images, labels):

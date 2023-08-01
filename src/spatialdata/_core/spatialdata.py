@@ -3,9 +3,9 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Generator
+from itertools import chain
 from pathlib import Path
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import zarr
 from anndata import AnnData
@@ -18,6 +18,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
+from spatialdata._core._elements import Images, Labels, Points, Shapes
 from spatialdata._io import (
     write_image,
     write_labels,
@@ -26,7 +27,7 @@ from spatialdata._io import (
     write_table,
 )
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike
+from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _natural_keys
 from spatialdata.models import (
     Image2DModel,
@@ -52,9 +53,6 @@ Image3D_s = Image3DModel()
 Shape_s = ShapesModel()
 Point_s = PointsModel()
 Table_s = TableModel()
-
-# create a shorthand for raster image types
-Raster_T = Union[SpatialImage, MultiscaleSpatialImage]
 
 
 class SpatialData:
@@ -115,43 +113,43 @@ class SpatialData:
 
     """
 
-    _images: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
-    _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
-    _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
+    _images: Images = Images()
+    _labels: Labels = Labels()
+    _points: Points = Points()
+    _shapes: Shapes = Shapes()
     _table: AnnData | None = None
 
     def __init__(
         self,
-        images: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
-        labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
-        points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
+        images: dict[str, Raster_T] | None = None,
+        labels: dict[str, Raster_T] | None = None,
+        points: dict[str, DaskDataFrame] | None = None,
+        shapes: dict[str, GeoDataFrame] | None = None,
         table: AnnData | None = None,
     ) -> None:
         self.path = None
 
         self._validate_unique_element_names(
-            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+            list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
         )
 
         if images is not None:
-            self._images: dict[str, SpatialImage | MultiscaleSpatialImage] = {}
+            self._images: Images = Images()
             for k, v in images.items():
                 self._add_image_in_memory(name=k, image=v)
 
         if labels is not None:
-            self._labels: dict[str, SpatialImage | MultiscaleSpatialImage] = {}
+            self._labels: Labels = Labels()
             for k, v in labels.items():
                 self._add_labels_in_memory(name=k, labels=v)
 
         if shapes is not None:
-            self._shapes: dict[str, GeoDataFrame] = {}
+            self._shapes: Shapes = Shapes()
             for k, v in shapes.items():
                 self._add_shapes_in_memory(name=k, shapes=v)
 
         if points is not None:
-            self._points: dict[str, DaskDataFrame] = {}
+            self._points: Points = Points()
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
@@ -265,7 +263,7 @@ class SpatialData:
                 f"Element names must be unique. The following element names are used multiple times: {duplicates}"
             )
 
-    def _add_image_in_memory(self, name: str, image: SpatialImage | MultiscaleSpatialImage) -> None:
+    def _add_image_in_memory(self, name: str, image: Raster_T) -> None:
         """Add an image element to the SpatialData object.
 
         Parameters
@@ -278,15 +276,15 @@ class SpatialData:
         self._validate_unique_element_names(
             list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
         )
-        if name in self._images:
-            raise KeyError(f"Image {name} already exists in the dataset.")
+        if name in self.images:
+            raise KeyError(f"Image `{name}` already exists in the dataset.")
         ndim = len(get_axes_names(image))
         if ndim == 3:
             Image2D_s.validate(image)
-            self._images[name] = image
+            self.images[name] = image
         elif ndim == 4:
             Image3D_s.validate(image)
-            self._images[name] = image
+            self.images[name] = image
         else:
             raise NotImplementedError("TODO: implement for ndim > 4.")
 
@@ -847,7 +845,7 @@ class SpatialData:
             del root["table/table"]
 
     @staticmethod
-    def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
+    def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
 
@@ -867,12 +865,17 @@ class SpatialData:
         return read_zarr(file_path, selection=selection)
 
     @property
-    def images(self) -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+    def images(self) -> Images:
         """Return images as a Dict of name to image data."""
         return self._images
 
+    @images.setter
+    def images(self, images: dict[str, Raster_T]) -> None:
+        """Set images."""
+        self._images = Images(images)
+
     @property
-    def labels(self) -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+    def labels(self) -> dict[str, Raster_T]:
         """Return labels as a Dict of name to label data."""
         return self._labels
 
