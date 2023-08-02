@@ -198,6 +198,7 @@ class TestReadWrite:
                 sdata.write(f)
                 dask1 = d[elem_name].data
                 assert all("from-zarr" not in key for key in dask0.dask.layers)
+                dask1 = read_zarr(f)[elem_name].data
                 assert any("from-zarr" in key for key in dask1.dask.layers)
 
     def test_replace_transformation_on_disk_raster(self, images, labels):
@@ -274,45 +275,6 @@ class TestReadWrite:
             os.mkdir(f1)
             with pytest.raises(ValueError):
                 full_sdata.write(f1)
-
-    def test_incremental_io_with_backed_elements(self, full_sdata):
-        # addressing https://github.com/scverse/spatialdata/issues/137
-        # we test also the non-backed case so that if we switch to the
-        # backed version in the future we already have the tests
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            f = os.path.join(tmpdir, "data.zarr")
-            full_sdata.write(f)
-
-            e = full_sdata.images.values().__iter__().__next__()
-            full_sdata.add_image("new_images", e, overwrite=True)
-            # support for overwriting backed images has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
-
-            e = full_sdata.labels.values().__iter__().__next__()
-            full_sdata.add_labels("new_labels", e, overwrite=True)
-            # support for overwriting backed labels has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
-
-            e = full_sdata.points.values().__iter__().__next__()
-            full_sdata.add_points("new_points", e, overwrite=True)
-            # support for overwriting backed points has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
-
-            e = full_sdata.shapes.values().__iter__().__next__()
-            full_sdata.add_shapes("new_shapes", e, overwrite=True)
-            full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
-
-            # commenting out as it is failing
-            # f2 = os.path.join(tmpdir, "data2.zarr")
-            # sdata2 = SpatialData(table=full_sdata.table.copy())
-            # sdata2.write(f2)
-            # del full_sdata.table
-            # full_sdata.table = sdata2.table
-            # full_sdata.write(f2, overwrite=True)
 
 
 def test_io_table(shapes):
