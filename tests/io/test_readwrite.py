@@ -142,17 +142,17 @@ class TestReadWrite:
                 sdata[f"incremental_{k}"] = v
 
         for k, v in _get_shapes().items():
-            sdata.add_shapes(name=f"incremental_{k}", shapes=v)
+            sdata.shapes[f"incremental_{k}"] = v
             with pytest.raises(KeyError):
-                sdata.add_shapes(name=f"incremental_{k}", shapes=v)
-            sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
+                sdata.shapes[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
             break
 
         for k, v in _get_points().items():
-            sdata.add_points(name=f"incremental_{k}", points=v)
+            sdata.points[f"incremental_{k}"] = v
             with pytest.raises(KeyError):
-                sdata.add_points(name=f"incremental_{k}", points=v)
-            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+                sdata.points[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
             break
 
     def test_incremental_io_table(self, table_single_annotation):

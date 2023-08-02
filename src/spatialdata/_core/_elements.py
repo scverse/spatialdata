@@ -14,6 +14,8 @@ from spatialdata.models import (
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
+    PointsModel,
+    ShapesModel,
     get_model,
 )
 
@@ -39,7 +41,7 @@ class Labels(UserDict[str, Raster_T]):
 class Shapes(UserDict[str, GeoDataFrame]):
     def __setitem__(self, key: str, value: GeoDataFrame) -> None:
         schema = get_model(value)
-        if schema in (GeoDataFrame,):
+        if schema == ShapesModel:
             if key in self:
                 raise KeyError(f"Key {key} already exists.")
             super().__setitem__(key, value)
@@ -48,7 +50,7 @@ class Shapes(UserDict[str, GeoDataFrame]):
 class Points(UserDict[str, DaskDataFrame]):
     def __setitem__(self, key: str, value: DaskDataFrame) -> None:
         schema = get_model(value)
-        if schema in (DaskDataFrame,):
+        if schema == PointsModel:
             if key in self:
                 raise KeyError(f"Key {key} already exists.")
             super().__setitem__(key, value)

@@ -875,19 +875,34 @@ class SpatialData:
         self._images = Images(images)
 
     @property
-    def labels(self) -> dict[str, Raster_T]:
+    def labels(self) -> Labels:
         """Return labels as a Dict of name to label data."""
         return self._labels
 
+    @labels.setter
+    def labels(self, labels: dict[str, Raster_T]) -> None:
+        """Set labels."""
+        self._labels = Labels(labels)
+
     @property
-    def points(self) -> dict[str, DaskDataFrame]:
+    def points(self) -> Points:
         """Return points as a Dict of name to point data."""
         return self._points
 
+    @points.setter
+    def points(self, points: dict[str, DaskDataFrame]) -> None:
+        """Set points."""
+        self._points = Points(points)
+
     @property
-    def shapes(self) -> dict[str, GeoDataFrame]:
+    def shapes(self) -> Shapes:
         """Return shapes as a Dict of name to shape data."""
         return self._shapes
+
+    @shapes.setter
+    def shapes(self, shapes: dict[str, GeoDataFrame]) -> None:
+        """Set shapes."""
+        self._shapes = Shapes(shapes)
 
     @property
     def coordinate_systems(self) -> list[str]:
