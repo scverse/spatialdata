@@ -123,7 +123,7 @@ class TestReadWrite:
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
             sdata.images[f"incremental_{k}"] = v
-            with pytest.raises(KeyError):
+            with pytest.warns(UserWarning):
                 sdata.images[f"incremental_{k}"] = v
                 sdata[f"incremental_{k}"] = v
 
@@ -137,25 +137,25 @@ class TestReadWrite:
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
             sdata.labels[f"incremental_{k}"] = v
-            with pytest.raises(KeyError):
+            with pytest.warns(UserWarning):
                 sdata.labels[f"incremental_{k}"] = v
                 sdata[f"incremental_{k}"] = v
 
         for k, v in _get_shapes().items():
             sdata.shapes[f"incremental_{k}"] = v
-            with pytest.raises(KeyError):
+            with pytest.warns(UserWarning):
                 sdata.shapes[f"incremental_{k}"] = v
                 sdata[f"incremental_{k}"] = v
             break
 
         for k, v in _get_points().items():
             sdata.points[f"incremental_{k}"] = v
-            with pytest.raises(KeyError):
+            with pytest.warns(UserWarning):
                 sdata.points[f"incremental_{k}"] = v
                 sdata[f"incremental_{k}"] = v
             break
 
-    def test_incremental_io_table(self, table_single_annotation):
+    def test_incremental_io_table(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
         t = s.table[:10, :].copy()
         with pytest.raises(ValueError):

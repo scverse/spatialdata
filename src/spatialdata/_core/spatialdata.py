@@ -136,22 +136,22 @@ class SpatialData:
         if images is not None:
             self._images: Images = Images()
             for k, v in images.items():
-                self._add_image_in_memory(name=k, image=v)
+                self.images[k] = v
 
         if labels is not None:
             self._labels: Labels = Labels()
             for k, v in labels.items():
-                self._add_labels_in_memory(name=k, labels=v)
+                self.labels[k] = v
 
         if shapes is not None:
             self._shapes: Shapes = Shapes()
             for k, v in shapes.items():
-                self._add_shapes_in_memory(name=k, shapes=v)
+                self.shapes[k] = v
 
         if points is not None:
             self._points: Points = Points()
             for k, v in points.items():
-                self._add_points_in_memory(name=k, points=v)
+                self.points[k] = v
 
         if table is not None:
             Table_s.validate(table)
@@ -262,95 +262,6 @@ class SpatialData:
             raise ValueError(
                 f"Element names must be unique. The following element names are used multiple times: {duplicates}"
             )
-
-    def _add_image_in_memory(self, name: str, image: Raster_T) -> None:
-        """Add an image element to the SpatialData object.
-
-        Parameters
-        ----------
-        name
-            name of the image.
-        image
-            the image element to be added.
-        """
-        self._validate_unique_element_names(
-            list(self.labels.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
-        )
-        if name in self.images:
-            raise KeyError(f"Image `{name}` already exists in the dataset.")
-        ndim = len(get_axes_names(image))
-        if ndim == 3:
-            Image2D_s.validate(image)
-            self.images[name] = image
-        elif ndim == 4:
-            Image3D_s.validate(image)
-            self.images[name] = image
-        else:
-            raise NotImplementedError("TODO: implement for ndim > 4.")
-
-    def _add_labels_in_memory(self, name: str, labels: SpatialImage | MultiscaleSpatialImage) -> None:
-        """
-        Add a labels element to the SpatialData object.
-
-        Parameters
-        ----------
-        name
-            name of the labels.
-        labels
-            the labels element to be added.
-        """
-        self._validate_unique_element_names(
-            list(self.images.keys()) + list(self.points.keys()) + list(self.shapes.keys()) + [name]
-        )
-        if name in self._labels:
-            raise KeyError(f"Labels {name} already exists in the dataset.")
-        ndim = len(get_axes_names(labels))
-        if ndim == 2:
-            Label2D_s.validate(labels)
-            self._labels[name] = labels
-        elif ndim == 3:
-            Label3D_s.validate(labels)
-            self._labels[name] = labels
-        else:
-            raise NotImplementedError("TODO: implement for ndim > 3.")
-
-    def _add_shapes_in_memory(self, name: str, shapes: GeoDataFrame) -> None:
-        """
-        Add a shapes element to the SpatialData object.
-
-        Parameters
-        ----------
-        name
-            name of the shapes.
-        shapes
-            the shapes element to be added.
-        """
-        self._validate_unique_element_names(
-            list(self.images.keys()) + list(self.points.keys()) + list(self.labels.keys()) + [name]
-        )
-        if name in self._shapes:
-            raise KeyError(f"Shapes {name} already exists in the dataset.")
-        Shape_s.validate(shapes)
-        self._shapes[name] = shapes
-
-    def _add_points_in_memory(self, name: str, points: DaskDataFrame) -> None:
-        """
-        Add a points element to the SpatialData object.
-
-        Parameters
-        ----------
-        name
-            name of the points element
-        points
-            the points to be added
-        """
-        self._validate_unique_element_names(
-            list(self.images.keys()) + list(self.labels.keys()) + list(self.shapes.keys()) + [name]
-        )
-        if name in self._points:
-            raise KeyError(f"Points {name} already exists in the dataset.")
-        Point_s.validate(points)
-        self._points[name] = points
 
     def is_backed(self) -> bool:
         """Check if the data is backed by a Zarr storage or if it is in-memory."""
@@ -1148,14 +1059,21 @@ class SpatialData:
             The element.
         """
         schema = get_model(value)
+        self._validate_unique_element_names(
+            list(
+                chain.from_iterable(
+                    [e.keys() for e in [self.images, self.labels, self.points, self.shapes] if e is not None] + [key]
+                )
+            )
+        )
         if schema in (Image2DModel, Image3DModel):
-            self._add_image_in_memory(key, value)
+            self.images[key] = value
         elif schema in (Labels2DModel, Labels3DModel):
-            self._add_labels_in_memory(key, value)
+            self.labels[key] = value
         elif schema == PointsModel:
-            self._add_points_in_memory(key, value)
+            self.points[key] = value
         elif schema == ShapesModel:
-            self._add_shapes_in_memory(key, value)
+            self.shapes[key] = value
         elif schema == TableModel:
             raise TypeError("Use the table property to set the table (e.g. sdata.table = value).")
         else:
