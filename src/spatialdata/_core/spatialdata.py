@@ -1059,13 +1059,6 @@ class SpatialData:
             The element.
         """
         schema = get_model(value)
-        self._validate_unique_element_names(
-            list(
-                chain.from_iterable(
-                    [e.keys() for e in [self.images, self.labels, self.points, self.shapes] if e is not None] + [key]
-                )
-            )
-        )
         if schema in (Image2DModel, Image3DModel):
             self.images[key] = value
         elif schema in (Labels2DModel, Labels3DModel):

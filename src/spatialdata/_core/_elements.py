@@ -1,11 +1,10 @@
 """SpatialData elements."""
 from __future__ import annotations
 
-from collections import UserDict
-from typing import Union
+from collections import OrderedDict
+from typing import Any
 from warnings import warn
 
-from dask.dataframe.core import DataFrame
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
@@ -22,11 +21,14 @@ from spatialdata.models import (
 )
 
 
-class Elements(UserDict[str, Union[Raster_T, GeoDataFrame, DaskDataFrame]]):
-    def __setitem__(self, key: str, value: Raster_T | GeoDataFrame | DataFrame) -> None:
-        if key in self:
+class Elements(OrderedDict[str, Any]):
+    _shared_keys: set[str] = set()
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if key in self._shared_keys:
             warn(f"Key `{key}` already exists.", UserWarning, stacklevel=2)
         super().__setitem__(key, value)
+        self._shared_keys.add(key)
 
 
 class Images(Elements):
