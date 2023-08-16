@@ -6,9 +6,11 @@ from typing import Any
 from warnings import warn
 
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 
 from spatialdata._types import Raster_T
+from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -33,6 +35,8 @@ class Elements(OrderedDict[str, Any]):
 
 class Images(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
+        if isinstance(value, (DataTree)):
+            value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
         if schema not in (Image2DModel, Image3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
@@ -49,6 +53,8 @@ class Images(Elements):
 
 class Labels(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
+        if isinstance(value, (DataTree)):
+            value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
         if schema not in (Labels2DModel, Labels3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")

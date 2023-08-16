@@ -1,6 +1,3 @@
-import tempfile
-from pathlib import Path
-
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -42,14 +39,14 @@ def test_element_names_unique():
         images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
     )
 
-    with pytest.raises(ValueError):
-        sdata.add_image(name="points", image=image)
-    with pytest.raises(ValueError):
-        sdata.add_points(name="image", points=points)
-    with pytest.raises(ValueError):
-        sdata.add_shapes(name="image", shapes=shapes)
-    with pytest.raises(ValueError):
-        sdata.add_labels(name="image", labels=labels)
+    with pytest.warns(UserWarning):
+        sdata.images["points"] = image
+    with pytest.warns(UserWarning):
+        sdata.points["image"] = points
+    with pytest.warns(UserWarning):
+        sdata.shapes["image"] = shapes
+    with pytest.warns(UserWarning):
+        sdata.labels["image"] = labels
 
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
@@ -229,17 +226,15 @@ def test_get_item(points):
         _ = points["not_present"]
 
 
-def test_set_item(full_sdata):
+def test_set_item(full_sdata: SpatialData) -> None:
     for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
         full_sdata[name + "_again"] = full_sdata[name]
-        with pytest.raises(KeyError):
+        with pytest.warns(UserWarning):
             full_sdata[name] = full_sdata[name]
-    with tempfile.TemporaryDirectory() as tmpdir:
-        full_sdata.write(Path(tmpdir) / "test.zarr")
-        for name in ["image2d", "labels2d", "points_0"]:
-            # trying to overwrite the file used for backing (only for images, labels and points)
-            with pytest.raises(ValueError):
-                full_sdata[name] = full_sdata[name]
+    for name in ["image2d", "labels2d", "points_0"]:
+        # trying to overwrite the file used for backing (only for images, labels and points)
+        with pytest.warns(UserWarning):
+            full_sdata[name] = full_sdata[name]
 
 
 def test_no_shared_transformations():
