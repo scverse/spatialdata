@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
+from typing import Any
 from functools import singledispatch
 
 import numpy as np
@@ -69,6 +71,7 @@ def _get_extent_of_polygons_multipolygons(shapes: GeoDataFrame) -> BoundingBoxDe
     assert isinstance(shapes.geometry.iloc[0], (Polygon, MultiPolygon))
     axes = get_axes_names(shapes)
     bounds = shapes["geometry"].bounds
+    # NOTE: this implies the order x, y (which is probably correct?)
     min_coordinates = np.array((bounds["minx"].min(), bounds["miny"].min()))
     max_coordinates = np.array((bounds["maxx"].max(), bounds["maxy"].max()))
     return min_coordinates, max_coordinates, axes
@@ -99,7 +102,15 @@ def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingB
 
 
 @singledispatch
-def get_extent(e: SpatialData | SpatialElement, coordinate_system: str = "global") -> BoundingBoxDescription:
+def get_extent(
+    e: SpatialData | SpatialElement,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
 
@@ -121,7 +132,15 @@ def get_extent(e: SpatialData | SpatialElement, coordinate_system: str = "global
 
 
 @get_extent.register
-def _(e: SpatialData, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(
+    e: SpatialData,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
 
@@ -136,15 +155,27 @@ def _(e: SpatialData, coordinate_system: str = "global") -> BoundingBoxDescripti
     """
     new_min_coordinates_dict = defaultdict(list)
     new_max_coordinates_dict = defaultdict(list)
-    for element in e._gen_elements_values():
-        transformations = get_transformation(element, get_all=True)
-        assert isinstance(transformations, dict)
-        coordinate_systems = list(transformations.keys())
-        if coordinate_system in coordinate_systems:
-            min_coordinates, max_coordinates, axes = get_extent(element, coordinate_system=coordinate_system)
-            for i, ax in enumerate(axes):
-                new_min_coordinates_dict[ax].append(min_coordinates[i])
-                new_max_coordinates_dict[ax].append(max_coordinates[i])
+    mask = [has_images, has_labels, has_points, has_shapes]
+    include_spatial_elements = ["images", "labels", "points", "shapes"]
+    include_spatial_elements = [i for (i, v) in zip(include_spatial_elements, mask) if v]
+
+    if elements is None:  # to shut up ruff
+        elements = []
+    if not isinstance(elements, list):
+        raise ValueError(f"Invalid type of `elements`: {type(elements)}, expected `list`.")
+
+    for element in e._gen_elements():
+        plot_element = (len(elements) == 0) or (element[1] in elements)
+        plot_element = plot_element and (element[0] in include_spatial_elements)
+        if plot_element:
+            transformations = get_transformation(element[2], get_all=True)
+            assert isinstance(transformations, dict)
+            coordinate_systems = list(transformations.keys())
+            if coordinate_system in coordinate_systems:
+                min_coordinates, max_coordinates, axes = get_extent(element[2], coordinate_system=coordinate_system)
+                for i, ax in enumerate(axes):
+                    new_min_coordinates_dict[ax].append(min_coordinates[i])
+                    new_max_coordinates_dict[ax].append(max_coordinates[i])
     axes = tuple(new_min_coordinates_dict.keys())
     if len(axes) == 0:
         raise ValueError(
@@ -157,7 +188,15 @@ def _(e: SpatialData, coordinate_system: str = "global") -> BoundingBoxDescripti
 
 
 @get_extent.register
-def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(
+    e: GeoDataFrame,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     """
     Compute the extent (bounding box) of a set of shapes.
 
@@ -166,15 +205,17 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescript
     The bounding box description.
     """
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    if isinstance(e.geometry.iloc[0], Point):
-        assert "radius" in e.columns, "Shapes must have a 'radius' column."
-        min_coordinates, max_coordinates, axes = _get_extent_of_circles(e)
+    # remove potentially empty geometries
+    e_temp = e[e["geometry"].apply(lambda geom: not geom.is_empty)]
+    if isinstance(e_temp.geometry.iloc[0], Point):
+        assert "radius" in e_temp.columns, "Shapes must have a 'radius' column."
+        min_coordinates, max_coordinates, axes = _get_extent_of_circles(e_temp)
     else:
-        assert isinstance(e.geometry.iloc[0], (Polygon, MultiPolygon)), "Shapes must be polygons or multipolygons."
-        min_coordinates, max_coordinates, axes = _get_extent_of_polygons_multipolygons(e)
+        assert isinstance(e_temp.geometry.iloc[0], (Polygon, MultiPolygon)), "Shapes must be polygons or multipolygons."
+        min_coordinates, max_coordinates, axes = _get_extent_of_polygons_multipolygons(e_temp)
 
     return _compute_extent_in_coordinate_system(
-        element=e,
+        element=e_temp,
         coordinate_system=coordinate_system,
         min_coordinates=min_coordinates,
         max_coordinates=max_coordinates,
@@ -183,7 +224,15 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescript
 
 
 @get_extent.register
-def _(e: DaskDataFrame, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(
+    e: DaskDataFrame,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     axes = get_axes_names(e)
     min_coordinates = np.array([e[ax].min().compute() for ax in axes])
@@ -198,12 +247,28 @@ def _(e: DaskDataFrame, coordinate_system: str = "global") -> BoundingBoxDescrip
 
 
 @get_extent.register
-def _(e: SpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(
+    e: SpatialImage,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     return _get_extent_of_data_array(e, coordinate_system=coordinate_system)
 
 
 @get_extent.register
-def _(e: MultiscaleSpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(
+    e: MultiscaleSpatialImage,
+    coordinate_system: str = "global",
+    has_images: bool = True,
+    has_labels: bool = True,
+    has_points: bool = True,
+    has_shapes: bool = True,
+    elements: Iterable[Any] | None = None,
+) -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     xdata = next(iter(e["scale0"].values()))
     return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
