@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
-from typing import Any
 from functools import singledispatch
+from typing import Any
 
 import numpy as np
 import pandas as pd
