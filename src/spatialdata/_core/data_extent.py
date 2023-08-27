@@ -105,13 +105,7 @@ def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingB
 
 @singledispatch
 def get_extent(
-    e: SpatialData | SpatialElement,
-    coordinate_system: str = "global",
-    has_images: bool = True,
-    has_labels: bool = True,
-    has_points: bool = True,
-    has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
+    e: SpatialData | SpatialElement, coordinate_system: str = "global", **kwargs: Any
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -190,15 +184,7 @@ def _(
 
 
 @get_extent.register
-def _(
-    e: GeoDataFrame,
-    coordinate_system: str = "global",
-    has_images: bool = True,
-    has_labels: bool = True,
-    has_points: bool = True,
-    has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
-) -> BoundingBoxDescription:
+def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescription:
     """
     Compute the extent (bounding box) of a set of shapes.
 
@@ -230,15 +216,7 @@ def _(
 
 
 @get_extent.register
-def _(
-    e: DaskDataFrame,
-    coordinate_system: str = "global",
-    has_images: bool = True,
-    has_labels: bool = True,
-    has_points: bool = True,
-    has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
-) -> BoundingBoxDescription:
+def _(e: DaskDataFrame, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     axes = get_axes_names(e)
     min_coordinates = np.array([e[ax].min().compute() for ax in axes])
@@ -253,28 +231,12 @@ def _(
 
 
 @get_extent.register
-def _(
-    e: SpatialImage,
-    coordinate_system: str = "global",
-    has_images: bool = True,
-    has_labels: bool = True,
-    has_points: bool = True,
-    has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
-) -> BoundingBoxDescription:
+def _(e: SpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
     return _get_extent_of_data_array(e, coordinate_system=coordinate_system)
 
 
 @get_extent.register
-def _(
-    e: MultiscaleSpatialImage,
-    coordinate_system: str = "global",
-    has_images: bool = True,
-    has_labels: bool = True,
-    has_points: bool = True,
-    has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
-) -> BoundingBoxDescription:
+def _(e: MultiscaleSpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     xdata = next(iter(e["scale0"].values()))
     return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
