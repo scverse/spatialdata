@@ -111,8 +111,6 @@ def _filter_table_by_elements(
             # case in which the instances in the table and the instances in the element don't correspond
             assert "element" in locals()
             assert "name" in locals()
-            print(element.index.to_numpy(), "element.index.to_numpy()")
-            print(table.obs, "table.obs")
             n0 = np.setdiff1d(element.index.to_numpy(), table.obs[instance_key].to_numpy())
             n1 = np.setdiff1d(table.obs[instance_key].to_numpy(), element.index.to_numpy())
             raise ValueError(
