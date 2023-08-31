@@ -406,12 +406,8 @@ class SpatialData:
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "shapes"]
-        # not need to create the group for labels as it is already handled by ome-zarr-py
-        if element_type != "labels":
-            elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
+        elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
         if overwrite:
-            if element_type == "labels" and element_type in root:
-                elem_group = root[element_type]
             if name in elem_group:
                 del elem_group[name]
         else:
