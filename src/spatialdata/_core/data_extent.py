@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
 from functools import singledispatch
 from typing import Any
 
@@ -135,7 +134,7 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: Iterable[Any] | None = None,
+    elements: list[Any] | tuple[Any] | None = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
