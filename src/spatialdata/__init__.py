@@ -34,6 +34,7 @@ from spatialdata._core.data_extent import get_extent
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform
+from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
 from spatialdata._core.query.relational_query import get_values, match_table_to_element
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData

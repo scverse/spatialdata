@@ -24,7 +24,7 @@ from spatialdata.transformations.transformations import (
     BaseTransformation,
 )
 
-BoundingBoxDescription = tuple[ArrayLike, ArrayLike, tuple[str, ...]]
+BoundingBoxDescription = dict[str, tuple[float, float]]
 
 
 def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
@@ -52,7 +52,10 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
     min_coordinates = np.min(centroids_array - radius, axis=0)
     max_coordinates = np.max(centroids_array + radius, axis=0)
 
-    return min_coordinates, max_coordinates, axes
+    extent = {}
+    for idx, ax in enumerate(axes):
+        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    return extent
 
 
 def _get_extent_of_polygons_multipolygons(
@@ -75,7 +78,10 @@ def _get_extent_of_polygons_multipolygons(
     # NOTE: this implies the order x, y (which is probably correct?)
     min_coordinates = np.array((bounds["minx"].min(), bounds["miny"].min()))
     max_coordinates = np.array((bounds["maxx"].max(), bounds["maxy"].max()))
-    return min_coordinates, max_coordinates, axes
+    extent = {}
+    for idx, ax in enumerate(axes):
+        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    return extent
 
 
 def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingBoxDescription:
@@ -167,11 +173,13 @@ def _(
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
             if coordinate_system in coordinate_systems:
-                min_coordinates, max_coordinates, axes = get_extent(element[2], coordinate_system=coordinate_system)
+                extent = get_extent(element[2], coordinate_system=coordinate_system)
+                min_coordinates = [pair[0] for pair in extent.values()]
+                max_coordinates = [pair[1] for pair in extent.values()]
+                axes = list(extent.keys())
                 for i, ax in enumerate(axes):
                     new_min_coordinates_dict[ax].append(min_coordinates[i])
                     new_max_coordinates_dict[ax].append(max_coordinates[i])
-    axes = tuple(new_min_coordinates_dict.keys())
     if len(axes) == 0:
         raise ValueError(
             f"The SpatialData object does not contain any element in the coordinate system {coordinate_system!r}, "
@@ -179,7 +187,10 @@ def _(
         )
     new_min_coordinates = np.array([min(new_min_coordinates_dict[ax]) for ax in axes])
     new_max_coordinates = np.array([max(new_max_coordinates_dict[ax]) for ax in axes])
-    return new_min_coordinates, new_max_coordinates, axes
+    extent = {}
+    for idx, ax in enumerate(axes):
+        extent[ax] = (new_min_coordinates[idx], new_max_coordinates[idx])
+    return extent
 
 
 @get_extent.register
@@ -196,20 +207,19 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescript
     e_temp = e[e["geometry"].apply(lambda geom: not geom.is_empty)]
     if isinstance(e_temp.geometry.iloc[0], Point):
         assert "radius" in e_temp.columns, "Shapes must have a 'radius' column."
-        min_coordinates, max_coordinates, axes = _get_extent_of_circles(e_temp)
+        extent = _get_extent_of_circles(e_temp)
     else:
         assert isinstance(e_temp.geometry.iloc[0], (Polygon, MultiPolygon)), "Shapes must be polygons or multipolygons."
-        (
-            min_coordinates,
-            max_coordinates,
-            axes,
-        ) = _get_extent_of_polygons_multipolygons(e_temp)
+        extent = _get_extent_of_polygons_multipolygons(e_temp)
+    min_coordinates = [pair[0] for pair in extent.values()]
+    max_coordinates = [pair[1] for pair in extent.values()]
+    axes = tuple(extent.keys())
 
     return _compute_extent_in_coordinate_system(
         element=e_temp,
         coordinate_system=coordinate_system,
-        min_coordinates=min_coordinates,
-        max_coordinates=max_coordinates,
+        min_coordinates=np.array(min_coordinates),
+        max_coordinates=np.array(max_coordinates),
         axes=axes,
     )
 
@@ -294,4 +304,7 @@ def _compute_extent_in_coordinate_system(
     # Make sure min and max values are in the same order as axes
     min_coordinates = transformed_corners.min()[list(axes)].to_numpy()
     max_coordinates = transformed_corners.max()[list(axes)].to_numpy()
-    return min_coordinates, max_coordinates, axes
+    extent = {}
+    for idx, ax in enumerate(axes):
+        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    return extent
