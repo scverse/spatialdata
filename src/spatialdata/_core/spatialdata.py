@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Any, Union
 
 import zarr
 from anndata import AnnData
+from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
-from pyarrow.parquet import read_table
 from spatial_image import SpatialImage
 
 from spatialdata._io import (
@@ -917,6 +917,7 @@ class SpatialData:
         file_path: str | Path,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
+        consolidate_metadata: bool = True,
     ) -> None:
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
@@ -1052,6 +1053,12 @@ class SpatialData:
             self.path = None
             raise e
 
+        if consolidate_metadata:
+            # consolidate metadata to more easily support remote reading
+            # bug in zarr, 'zmetadata' is written instead of '.zmetadata'
+            # see discussion https://github.com/zarr-developers/zarr-python/issues/1121
+            zarr.consolidate_metadata(store, metadata_key=".zmetadata")
+
         # old code to support overwriting the backing file
         # if target_path is not None:
         #     if os.path.isdir(file_path):
@@ -1133,10 +1140,24 @@ class SpatialData:
             del root["table/table"]
 
     @staticmethod
-    def read(file_path: str) -> SpatialData:
+    def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
+        """
+        Read a SpatialData object from a Zarr storage (on-disk or remote).
+
+        Parameters
+        ----------
+        file_path
+            The path or URL to the Zarr storage.
+        selection
+            The elements to read (images, labels, points, shapes, table). If None, all elements are read.
+
+        Returns
+        -------
+        The SpatialData object.
+        """
         from spatialdata import read_zarr
 
-        return read_zarr(file_path)
+        return read_zarr(file_path, selection=selection)
 
     @property
     def images(self) -> dict[str, SpatialImage | MultiscaleSpatialImage]:
@@ -1238,7 +1259,7 @@ class SpatialData:
                                 assert isinstance(t, tuple)
                                 assert len(t) == 1
                                 parquet_file = t[0]
-                                table = read_table(parquet_file)
+                                table = read_parquet(parquet_file)
                                 length = len(table)
                             else:
                                 # length = len(v)

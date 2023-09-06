@@ -144,7 +144,9 @@ class BlobsDataset:
     ) -> SpatialData:
         """Blobs dataset."""
         image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
-        multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
+        multiscale_image = self._image_blobs(
+            self.transformations, self.length, self.n_channels, self.c_coords, multiscale=True
+        )
         labels = self._labels_blobs(self.transformations, self.length)
         multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
         points = self._points_blobs(self.transformations, self.length, self.n_points)
@@ -227,6 +229,7 @@ class BlobsDataset:
         points = (length * rng.random((2, n_pts))).astype(int)
         mask[tuple(indices for indices in points)] = 1
         mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
+        assert isinstance(mask, np.ndarray)
         return mask
 
     def _points_blobs(
