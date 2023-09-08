@@ -42,19 +42,23 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
     assert isinstance(circles.geometry.iloc[0], Point)
     assert "radius" in circles.columns, "Circles must have a 'radius' column."
     axes = get_axes_names(circles)
-
-    centroids = []
-    for dim_name in axes:
-        centroids.append(getattr(circles["geometry"], dim_name).to_numpy())
-    centroids_array = np.column_stack(centroids)
-    radius = np.expand_dims(circles["radius"].to_numpy(), axis=1)
-
-    min_coordinates = np.min(centroids_array - radius, axis=0)
-    max_coordinates = np.max(centroids_array + radius, axis=0)
+    centroids = circles["geometry"].centroid
+    bounds = pd.DataFrame(
+        {
+            "minx": centroids.x,
+            "maxx": centroids.x,
+            "miny": centroids.y,
+            "maxy": centroids.y,
+        }
+    )
+    bounds["minx"] -= circles["radius"]
+    bounds["miny"] -= circles["radius"]
+    bounds["maxx"] += circles["radius"]
+    bounds["maxy"] += circles["radius"]
 
     extent = {}
-    for idx, ax in enumerate(axes):
-        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    for ax in axes:
+        extent[ax] = (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max())
     return extent
 
 
@@ -76,11 +80,9 @@ def _get_extent_of_polygons_multipolygons(
     axes = get_axes_names(shapes)
     bounds = shapes["geometry"].bounds
     # NOTE: this implies the order x, y (which is probably correct?)
-    min_coordinates = np.array((bounds["minx"].min(), bounds["miny"].min()))
-    max_coordinates = np.array((bounds["maxx"].max(), bounds["maxy"].max()))
     extent = {}
-    for idx, ax in enumerate(axes):
-        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    for ax in axes:
+        extent[ax] = (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max())
     return extent
 
 
@@ -154,8 +156,8 @@ def _(
     -------
     The bounding box description.
     """
-    new_min_coordinates_dict = defaultdict(list)
-    new_max_coordinates_dict = defaultdict(list)
+    new_min_coordinates_dict: dict[str, list[float]] = defaultdict(list)
+    new_max_coordinates_dict: dict[str, list[float]] = defaultdict(list)
     mask = [has_images, has_labels, has_points, has_shapes]
     include_spatial_elements = ["images", "labels", "points", "shapes"]
     include_spatial_elements = [i for (i, v) in zip(include_spatial_elements, mask) if v]
@@ -166,25 +168,25 @@ def _(
         raise ValueError(f"Invalid type of `elements`: {type(elements)}, expected `list`.")
 
     for element in e._gen_elements():
-        plot_element = (len(elements) == 0) or (element[1] in elements)
-        plot_element = plot_element and (element[0] in include_spatial_elements)
+        element_type, element_name, element_obj = element
+        plot_element = (len(elements) == 0) or (element_name in elements)
+        plot_element = plot_element and (element_type in include_spatial_elements)
         if plot_element:
-            transformations = get_transformation(element[2], get_all=True)
+            transformations = get_transformation(element_obj, get_all=True)
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
             if coordinate_system in coordinate_systems:
-                extent = get_extent(element[2], coordinate_system=coordinate_system)
-                min_coordinates = [pair[0] for pair in extent.values()]
-                max_coordinates = [pair[1] for pair in extent.values()]
+                extent = get_extent(element_obj, coordinate_system=coordinate_system)
                 axes = list(extent.keys())
-                for i, ax in enumerate(axes):
-                    new_min_coordinates_dict[ax].append(min_coordinates[i])
-                    new_max_coordinates_dict[ax].append(max_coordinates[i])
-    if len(axes) == 0:
-        raise ValueError(
-            f"The SpatialData object does not contain any element in the coordinate system {coordinate_system!r}, "
-            f"please pass a different coordinate system wiht the argument 'coordinate_system'."
-        )
+                for ax in axes:
+                    new_min_coordinates_dict[ax] += [extent[ax][0]]
+                    new_max_coordinates_dict[ax] += [extent[ax][1]]
+                if len(axes) == 0:
+                    raise ValueError(
+                        f"The SpatialData object does not contain any element in the "
+                        f" coordinate system {coordinate_system!r}, "
+                        f"please pass a different coordinate system wiht the argument 'coordinate_system'."
+                    )
     new_min_coordinates = np.array([min(new_min_coordinates_dict[ax]) for ax in axes])
     new_max_coordinates = np.array([max(new_max_coordinates_dict[ax]) for ax in axes])
     extent = {}
@@ -211,8 +213,9 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescript
     else:
         assert isinstance(e_temp.geometry.iloc[0], (Polygon, MultiPolygon)), "Shapes must be polygons or multipolygons."
         extent = _get_extent_of_polygons_multipolygons(e_temp)
-    min_coordinates = [pair[0] for pair in extent.values()]
-    max_coordinates = [pair[1] for pair in extent.values()]
+
+    min_coordinates = [extent["y"][0], extent["x"][0]]
+    max_coordinates = [extent["y"][1], extent["x"][1]]
     axes = tuple(extent.keys())
 
     return _compute_extent_in_coordinate_system(
@@ -279,9 +282,9 @@ def _compute_extent_in_coordinate_system(
     coordinate_system
         The coordinate system to transform the extent to.
     min_coordinates
-        Min coordinates of the extent in the intrinsic coordinates of the element.
+        Min coordinates of the extent in the intrinsic coordinates of the element, expects [y_min, x_min].
     max_coordinates
-        Max coordinates of the extent in the intrinsic coordinates of the element.
+        Max coordinates of the extent in the intrinsic coordinates of the element, expects [y_max, x_max].
     axes
         The min and max coordinates refer to.
 
@@ -300,11 +303,9 @@ def _compute_extent_in_coordinate_system(
     )
     df = pd.DataFrame(corners.data, columns=corners.axis.data.tolist())
     points = PointsModel.parse(df, coordinates={k: k for k in axes})
-    transformed_corners = transform(points, transformation).compute()
+    transformed_corners = pd.DataFrame(transform(points, transformation).compute())
     # Make sure min and max values are in the same order as axes
-    min_coordinates = transformed_corners.min()[list(axes)].to_numpy()
-    max_coordinates = transformed_corners.max()[list(axes)].to_numpy()
     extent = {}
-    for idx, ax in enumerate(axes):
-        extent[ax] = (min_coordinates[idx], max_coordinates[idx])
+    for ax in axes:
+        extent[ax] = (transformed_corners[ax].min(), transformed_corners[ax].max())
     return extent

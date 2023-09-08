@@ -167,9 +167,9 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
 
 @get_axes_names.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
-    all_dims = (X, Y, Z)
+    all_dims = (Z, Y, X)
     n = e.geometry.iloc[0]._ndim
-    dims = all_dims[:n]
+    dims = all_dims[-n:]
     _validate_dims(dims)
     return dims
 

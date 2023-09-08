@@ -14,9 +14,11 @@ sdata = blobs()
 
 
 def check_test_results(extent, min_coordinates, max_coordinates, axes):
-    assert np.allclose(extent[0], min_coordinates)
-    assert np.allclose(extent[1], max_coordinates)
-    assert extent[2] == axes
+    assert np.allclose([extent["x"][0], extent["y"][0]], min_coordinates)
+    assert np.allclose([extent["x"][1], extent["y"][1]], max_coordinates)
+    extend_axes = list(extent.keys())
+    extend_axes.sort()
+    assert tuple(extend_axes) == axes
 
 
 @pytest.mark.parametrize("shape_type", ["circles", "polygons", "multipolygons"])
@@ -74,7 +76,7 @@ def test_get_extent_raster(raster_type, multiscale):
         extent,
         min_coordinates=np.array([0, 0]),
         max_coordinates=np.array([512, 512]),
-        axes=("y", "x"),
+        axes=("x", "y"),
     )
 
 
