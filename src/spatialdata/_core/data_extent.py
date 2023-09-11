@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import singledispatch
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -111,9 +110,7 @@ def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingB
 
 
 @singledispatch
-def get_extent(
-    e: SpatialData | SpatialElement, coordinate_system: str = "global", **kwargs: Any
-) -> BoundingBoxDescription:
+def get_extent(e: SpatialData | SpatialElement, coordinate_system: str = "global") -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
 
@@ -142,7 +139,7 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[Any] | None = None,
+    elements: list[str] | None = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
