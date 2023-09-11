@@ -15,5 +15,5 @@ python:
               - docs
 submodules:
     include:
-        - "docs/tutorials/notebooks"
+        - "docs/tutorials/notebooks_repo"
     recursive: true
