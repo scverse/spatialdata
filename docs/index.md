@@ -27,7 +27,7 @@ Please see our preprint {cite}`Marconato2023.05.05.539647` for citation and to l
     Learn how to install ``spatialdata``.
 
 .. card:: Tutorials
-    :link: tutorials/notebooks/notebooks
+    :link: tutorials/notebooks_repo/notebooks
     :link-type: doc
 
     Learn how to use ``spatialdata`` with hands-on examples.
@@ -39,7 +39,7 @@ Please see our preprint {cite}`Marconato2023.05.05.539647` for citation and to l
     Find a detailed documentation of ``spatialdata``.
 
 .. card:: Datasets
-    :link: tutorials/notebooks/datasets/README
+    :link: tutorials/notebooks_repo/datasets/README
     :link-type: doc
 
     Example datasets from 8 different technologies.
@@ -64,8 +64,8 @@ Please see our preprint {cite}`Marconato2023.05.05.539647` for citation and to l
 
 installation.md
 api.md
-tutorials/notebooks/notebooks.md
-tutorials/notebooks/datasets/README.md
+tutorials/notebooks_repo/notebooks.md
+tutorials/notebooks_repo/datasets/README.md
 design_doc.md
 contributing.md
 changelog.md
