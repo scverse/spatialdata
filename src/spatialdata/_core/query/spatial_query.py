@@ -761,11 +761,15 @@ def polygon_query(
     # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
     #  in a loop as done preliminarily here
     if points or images or labels:
-        raise NotImplementedError(
-            "points=True, images=True and labels=True are not implemented when querying by multiple polygons. "
-            "If you encounter this error, please"
-            " open an issue on GitHub and we will prioritize the implementation."
+        logger.warning(
+            "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
+            'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
+            "you need this implementation please open an issue on GitHub and we will prioritize the implementation."
         )
+        points = False
+        images = False
+        labels = False
+
     sdatas = []
     for polygon in tqdm(polygons):
         try:

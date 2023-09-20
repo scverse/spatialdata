@@ -380,7 +380,11 @@ def test_polygon_query_shapes(sdata_query_aggregation):
     circle_pol = circle.buffer(sdata["by_circles"].radius.iloc[0])
 
     queried = polygon_query(
-        values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=False
+        values_sdata,
+        polygons=polygon,
+        target_coordinate_system="global",
+        shapes=True,
+        points=False,
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
