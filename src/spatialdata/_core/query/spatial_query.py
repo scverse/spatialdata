@@ -764,7 +764,7 @@ def polygon_query(
         logger.warning(
             "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
             'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
-            "you need this implementation please open an issue on GitHub and we will prioritize the implementation."
+            "you need this implementation please open an issue on GitHub."
         )
         points = False
         images = False
