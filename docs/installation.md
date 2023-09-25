@@ -58,7 +58,7 @@ To install `spatialdata` from GitHub, run:
 pip install git+https://github.com/scverse/spatialdata
 ```
 
-Alternative you can clone the repository and do an editable install with:
+Alternative you can clone the repository (or a fork of it if you are contributing) and do an editable install with:
 
 ```bash
 pip install -e .
