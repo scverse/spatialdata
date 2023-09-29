@@ -205,12 +205,28 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> BoundingBoxDescript
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     # remove potentially empty geometries
     e_temp = e[e["geometry"].apply(lambda geom: not geom.is_empty)]
-    if isinstance(e_temp.geometry.iloc[0], Point):
-        assert "radius" in e_temp.columns, "Shapes must have a 'radius' column."
-        extent = _get_extent_of_circles(e_temp)
-    else:
-        assert isinstance(e_temp.geometry.iloc[0], (Polygon, MultiPolygon)), "Shapes must be polygons or multipolygons."
-        extent = _get_extent_of_polygons_multipolygons(e_temp)
+
+    # separate points from (multi-)polygons
+    e_points = e_temp[e_temp["geometry"].apply(lambda geom: isinstance(geom, Point))]
+    e_polygons = e_temp[e_temp["geometry"].apply(lambda geom: isinstance(geom, (Polygon, MultiPolygon)))]
+    extent = None
+    if len(e_points) > 0:
+        assert "radius" in e_points.columns, "Shapes that are points must have a 'radius' column."
+        extent = _get_extent_of_circles(e_points)
+    if len(e_polygons) > 0:
+        extent_polygons = _get_extent_of_polygons_multipolygons(e_polygons)
+        if extent is None:
+            extent = extent_polygons
+        else:
+            # case when there are points AND (multi-)polygons in the GeoDataFrame
+            extent["y"] = (min(extent["y"][0], extent_polygons["y"][0]), max(extent["y"][1], extent_polygons["y"][1]))
+            extent["x"] = (min(extent["x"][0], extent_polygons["x"][0]), max(extent["x"][1], extent_polygons["x"][1]))
+
+    if extent is None:
+        raise ValueError(
+            "Unable to compute extent of GeoDataFrame. It needs to contain at least one non-empty "
+            "Point or Polygon or Multipolygon."
+        )
 
     min_coordinates = [extent["y"][0], extent["x"][0]]
     max_coordinates = [extent["y"][1], extent["x"][1]]
