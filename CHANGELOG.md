@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## [0.0.13] - 2023-10-02
+### Added
+-    polygon_query() support for images #358
+-    
+### Fixed
+-    Fix missing c_coords argument in blobs multiscale #342
+-    Replaced hardcoded string with instance_key #346
+
 ## [0.0.12] - 2023-06-24
 ### Added
 -    Add multichannel blobs sample data (by @melonora)
