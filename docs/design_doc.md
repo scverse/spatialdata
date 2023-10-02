@@ -218,7 +218,6 @@ A set of (multi-)polygons or points (circles) associated with a set of observati
 The Shapes object is implemented as a geopandas dataframe with its associated [geopandas data structure](https://geopandas.org/en/stable/docs/user_guide/data_structures.html). The coordinate systems and transforms are stored in `geopandas.DataFrame.attrs`.
 We are considering using the [dask-geopandas library](https://dask-geopandas.readthedocs.io/en/stable/), [discussion here](https://github.com/scverse/spatialdata/issues/122).
 
-
 **Warning**
 In the case where both a `Labels` image and its centroids coordinates are present, the centroids are stored as type of annotation.
 Therefore, there is no `Shapes` element and the centroids coordinates can still be stored in `obsm["spatial"]`
@@ -236,6 +235,7 @@ SpatialData
                       # of `Labels`
 
 ```
+
 #### Points
 
 _This representation is still under discussion and it might change.
@@ -396,7 +396,7 @@ sdata = sd.transform(sdata, tgt="tgt_space")
 The transfromation object should not have a method to apply itself to an element.
 `SpatialData` can have a `transform` method, that can be applied to either a `SpatialData` object or an element.
 
-##### Layout of a SpatialData object
+#### Layout of a SpatialData object
 
 The layout of some common datasets.
 
@@ -419,7 +419,7 @@ The layout of some common datasets.
 -   (optional) cell segmentation labels can be derived from the H&E images;
 -   (optional) the cell segmentation can be annotated with image-derived features (image features/statistics).
 
-##### Code/pseudo-code workflows
+#### Code/pseudo-code workflows
 
 **Workflows to show**
 
@@ -429,7 +429,7 @@ The layout of some common datasets.
 -   [x] accumulation with multiple types of elements
 -   [x] subsetting/querying by coordinate system, bounding box, spatial region, table rows
 
-##### Loading multiple Visium samples from the SpaceRanger output and saving them to NGFF using the SpatialData APIs
+#### Loading multiple Visium samples from the SpaceRanger output and saving them to NGFF using the SpatialData APIs
 
 ```python
 import spatialdata as sd
@@ -446,7 +446,7 @@ sdata = sd.SpatialData.concatenate(sdatas, merge_tables=True)
 sdata.write("data.zarr")
 ```
 
-##### Loading multiple Visium samples from a generic NGFF storage with arbitrary folder structure (i.e. a NGFF file that was not created with the SpatialData APIs).
+#### Loading multiple Visium samples from a generic NGFF storage with arbitrary folder structure (i.e. a NGFF file that was not created with the SpatialData APIs).
 
 This is the multislide Visium use case.
 
@@ -504,7 +504,7 @@ SpatialData object with:
     obs: "in_tissue", "array_row", "array_col", "library_id", "visium_spot_id", "library"'
 ```
 
-##### Aggregating spatial information from an element into a set of regions
+#### Aggregating spatial information from an element into a set of regions
 
 ```python
 sdata = from_zarr("data.zarr")
@@ -513,7 +513,7 @@ table = spatialdata.aggregate(
 )
 ```
 
-##### Subsetting/querying by coordinate system, bounding box, spatial region, table rows
+#### Subsetting/querying by coordinate system, bounding box, spatial region, table rows
 
 ```python
 """
@@ -551,7 +551,7 @@ sdata1 = sdata.query.polygon("/polygons/annotations")
 sdata1 = sdata.query.table(...)
 ```
 
-##### Related notes/issues/PRs
+#### Related notes/issues/PRs
 
 -   [Issue discussing SpatialData layout](https://github.com/scverse/spatialdata/issues/12)
 -   [Notes from Basel Hackathon](https://hackmd.io/MPeMr2mbSRmeIzOCgwKbxw)
