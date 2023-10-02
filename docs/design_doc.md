@@ -106,6 +106,12 @@ _Elements_ are the building blocks of _SpatialData_ datasets. Each element repre
 **`SpatialData`**
 
 The `SpatialData` object contains a set of Elements to be used for analysis. Elements contained within a `SpatialData` object can be annotated by a single Table. Future work may extend `SpatialData` to allow multiple tables (see previous discussions [here](https://github.com/scverse/spatialdata/issues/43) and a new proposed design [here](https://github.com/scverse/spatialdata/issues/298)). All Elements within a `SpatialData` object can be queried, selected, and saved via the `SpatialData` APIs.
+-   [ ] P2. **`NGFFStore`**
+
+    The `NGFFStore` is an object representing the on-disk layout of a dataset. The `NGFFStore` parses the files to determine what data are available to be loaded.
+    Initial implementations will target a single Zarr file on disk, but future implementations may support reading from a collection of files. A `SpatialData` object can be instantiated from a `NGFFStore`.
+    The implementation of the `NGFFStore` has low priority since we can get around it by loading and saving our data in multiple `.zarr` files and combine them in memory, but it will be important for reading arbitrary `.zarr` files when the NGFF specifications will be updated to support the various elements.
+
 
 ### Elements
 
@@ -255,6 +261,7 @@ If any of `region`, `region_key` and `instance_key` are defined, they all MUST b
 Graphs are stored in the annotating table for a Regions element. Graphs represent relationships between observations. Coordinates MAY be stored redundantly in the `obsm` slot of the annotating table, and are assumed to be in the intrinsic coordinate system of the label image.
 Features on edges would just be separate obsp.
 Features or annotation on nodes coincide with the information stored in the annotating table (either `X` or `adata.obs`).
+-   Graphs in general (on Labels and Shapes) are stored in `obsp` of the associated table. Coordinates are stored in `obsm` and are assumed to be in the intrinsic coordinate system of the label image. After a transformation the coordinates could get out of sync, [see this issue](https://github.com/scverse/spatialdata/issues/123).
 
 Since Tables cannot currently annotate Points, no graph is currently available for them. But this restrictions is very likely going to be relaxed by unifying points and circles [see here](https://github.com/scverse/spatialdata/issues/46).
 
