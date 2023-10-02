@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   polygon_query() support for images #358
--
 
 ### Fixed
 
