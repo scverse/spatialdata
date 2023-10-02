@@ -1,3 +1,0 @@
-[submodule "docs/tutorials/notebooks_repo"]
-	path = docs/tutorials/notebooks_repo
-	url = https://github.com/scverse/spatialdata-notebooks
