@@ -218,6 +218,24 @@ A set of (multi-)polygons or points (circles) associated with a set of observati
 The Shapes object is implemented as a geopandas dataframe with its associated [geopandas data structure](https://geopandas.org/en/stable/docs/user_guide/data_structures.html). The coordinate systems and transforms are stored in `geopandas.DataFrame.attrs`.
 We are considering using the [dask-geopandas library](https://dask-geopandas.readthedocs.io/en/stable/), [discussion here](https://github.com/scverse/spatialdata/issues/122).
 
+
+**Warning**
+In the case where both a `Labels` image and its centroids coordinates are present, the centroids are stored as type of annotation.
+Therefore, there is no `Shapes` element and the centroids coordinates can still be stored in `obsm["spatial"]`
+of slot of the `Table`, yet no coordinates system is defined for them.
+The assumption is that the coordinate system of the centroids corresponds to the implicit coordinates system of the `Labels` image. If the image gets transfomed (e.g. cropped), the coordinates could get out of sync, [see this issue](https://github.com/scverse/spatialdata/issues/123).
+
+Example:
+
+```{code-block} python
+
+SpatialData
+  - Labels: ["Label1", "Label2", ...]
+  - Table: AnnData
+    - obsm: "spatial" # no coordinate system, assumed to be default of implicit
+                      # of `Labels`
+
+```
 #### Points
 
 _This representation is still under discussion and it might change.
