@@ -450,7 +450,7 @@ sdata.write("data.zarr")
 
 This is the multislide Visium use case.
 
-```python console
+```pycon
 >>> # This dataset comprises multiple Visium slides which have been stored in a unique OME-NGFF store
 ... ngff_store = open_container(uri)
 ... ngff_store

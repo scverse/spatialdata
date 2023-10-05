@@ -109,7 +109,7 @@ def concatenate(
     if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
         raise KeyError("Shapes must have unique names across the SpatialData objects to concatenate")
 
-    assert type(sdatas) == list, "sdatas must be a list"
+    assert isinstance(sdatas, list), "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
 
     merged_table = _concatenate_tables(
