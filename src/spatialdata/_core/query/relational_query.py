@@ -96,6 +96,7 @@ def _filter_table_by_elements(
                 if 0 in instances:
                     # remove the 0 label (background) if present
                     instances = instances[instances != 0]
+                instances = np.sort(instances)
             elif get_model(element) == ShapesModel:
                 instances = element.index.to_numpy()
             else:
