@@ -23,6 +23,10 @@ jobs:
                 include:
                     - os: macos-latest
                       python: "3.9"
+                    - os: ubuntu-latest
+                      python: "3.10"
+                      pip-flags: "--pre"
+                      name: "Python 3.10 (pre-release)"
 
         env:
             OS: ${{ matrix.os }}
@@ -52,7 +56,7 @@ jobs:
                   pip install pytest-cov
             - name: Install dependencies
               run: |
-                  pip install -e ".[dev,test,torch]"
+                  pip install ${{ matrix.pip-flags }} -e ".[dev,test,torch]"
             - name: Test
               env:
                   MPLBACKEND: agg
