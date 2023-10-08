@@ -23,7 +23,7 @@ jobs:
                 include:
                     - os: macos-latest
                       python: "3.9"
-                    - os: ubuntu-latest
+                    - os: macos-latest
                       python: "3.10"
                       pip-flags: "--pre"
                       name: "Python 3.10 (pre-release)"
