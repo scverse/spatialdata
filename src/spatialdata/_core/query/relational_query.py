@@ -229,6 +229,11 @@ def get_values(
     Returns
     -------
     DataFrame with the values requested.
+
+    Notes
+    -----
+    - The index of the returned dataframe is the instance_key of the table for the specified element.
+    - If the element is a labels, the eventual background (0) is not included in the dataframe of returned values.
     """
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     value_keys = [value_key] if isinstance(value_key, str) else value_key
@@ -267,13 +272,20 @@ def get_values(
     if sdata is not None:
         assert element_name is not None
         matched_table = match_table_to_element(sdata=sdata, element_name=element_name)
+        region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        obs = matched_table.obs
+        assert obs[region_key].nunique() == 1
+        assert obs[instance_key].nunique() == len(matched_table)
         if origin == "obs":
-            return matched_table.obs[value_key_values]
+            df = obs[value_key_values].copy()
         if origin == "var":
             x = matched_table[:, value_key_values].X
             import scipy
 
             if isinstance(x, scipy.sparse.csr_matrix):
                 x = x.todense()
-            return pd.DataFrame(x, columns=value_key_values)
+            df = pd.DataFrame(x, columns=value_key_values)
+        df.index = obs[instance_key]
+        return df
     raise ValueError(f"Unknown origin {origin}")
