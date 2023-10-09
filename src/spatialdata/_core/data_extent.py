@@ -217,14 +217,10 @@ def _(
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
             if coordinate_system in coordinate_systems:
-                # kwargs = {"exact": exact} if isinstance(element_obj, (DaskDataFrame, GeoDataFrame)) else {}
-                # extent = get_extent(element_obj, coordinate_system=coordinate_system, **kwargs)
-
                 if isinstance(element_obj, (DaskDataFrame, GeoDataFrame)):
                     extent = get_extent(element_obj, coordinate_system=coordinate_system, exact=exact)
                 else:
                     extent = get_extent(element_obj, coordinate_system=coordinate_system)
-
                 axes = list(extent.keys())
                 for ax in axes:
                     new_min_coordinates_dict[ax] += [extent[ax][0]]
