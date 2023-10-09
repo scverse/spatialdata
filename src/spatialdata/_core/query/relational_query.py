@@ -93,6 +93,10 @@ def _filter_table_by_elements(
                     xdata = next(iter(v))
                     # can be slow
                     instances = da.unique(xdata.data).compute()
+                if 0 in instances:
+                    # remove the 0 label (background) if present
+                    instances = instances[instances != 0]
+                instances = np.sort(instances)
             elif get_model(element) == ShapesModel:
                 instances = element.index.to_numpy()
             else:
@@ -111,8 +115,8 @@ def _filter_table_by_elements(
             # case in which the instances in the table and the instances in the element don't correspond
             assert "element" in locals()
             assert "name" in locals()
-            n0 = np.setdiff1d(element.index.to_numpy(), table.obs["cell_id"].to_numpy())
-            n1 = np.setdiff1d(table.obs["cell_id"].to_numpy(), element.index.to_numpy())
+            n0 = np.setdiff1d(instances, table.obs[instance_key].to_numpy())
+            n1 = np.setdiff1d(table.obs[instance_key].to_numpy(), instances)
             raise ValueError(
                 f"Instances in the table and in the element don't correspond: found {len(n0)} indices in the "
                 f"element {name} but not in the table and found {len(n1)} indices in the table but not in the "
@@ -158,19 +162,23 @@ class _ValueOrigin:
     value_key: str
 
 
+def _get_element(element: SpatialElement | None, sdata: SpatialData | None, element_name: str | None) -> SpatialElement:
+    if element is None:
+        assert sdata is not None
+        assert element_name is not None
+        return sdata[element_name]
+    assert sdata is None
+    assert element_name is None
+    return element
+
+
 def _locate_value(
     value_key: str,
     element: SpatialElement | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
 ) -> list[_ValueOrigin]:
-    assert (element is None) ^ (sdata is None and element_name is None)
-    if element is not None:
-        el = element
-    else:
-        assert sdata is not None
-        assert element_name is not None
-        el = sdata[element_name]
+    el = _get_element(element=element, sdata=sdata, element_name=element_name)
     origins = []
     model = get_model(el)
     if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel]:
@@ -222,14 +230,13 @@ def get_values(
     Returns
     -------
     DataFrame with the values requested.
+
+    Notes
+    -----
+    - The index of the returned dataframe is the instance_key of the table for the specified element.
+    - If the element is a labels, the eventual background (0) is not included in the dataframe of returned values.
     """
-    assert (element is None) ^ (sdata is None and element_name is None)
-    if element is not None:
-        el = element
-    else:
-        assert sdata is not None
-        assert element_name is not None
-        el = sdata[element_name]
+    el = _get_element(element=element, sdata=sdata, element_name=element_name)
     value_keys = [value_key] if isinstance(value_key, str) else value_key
     locations = []
     for vk in value_keys:
@@ -266,13 +273,20 @@ def get_values(
     if sdata is not None:
         assert element_name is not None
         matched_table = match_table_to_element(sdata=sdata, element_name=element_name)
+        region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        obs = matched_table.obs
+        assert obs[region_key].nunique() == 1
+        assert obs[instance_key].nunique() == len(matched_table)
         if origin == "obs":
-            return matched_table.obs[value_key_values]
+            df = obs[value_key_values].copy()
         if origin == "var":
             x = matched_table[:, value_key_values].X
             import scipy
 
             if isinstance(x, scipy.sparse.csr_matrix):
                 x = x.todense()
-            return pd.DataFrame(x, columns=value_key_values)
+            df = pd.DataFrame(x, columns=value_key_values)
+        df.index = obs[instance_key]
+        return df
     raise ValueError(f"Unknown origin {origin}")
