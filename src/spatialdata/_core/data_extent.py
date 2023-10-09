@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import singledispatch
-from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -100,7 +99,7 @@ def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingB
     _check_element_has_coordinate_system(element=SpatialImage(e), coordinate_system=coordinate_system)
     # also here
     data_axes = get_axes_names(SpatialImage(e))
-    extent = {}
+    extent: BoundingBoxDescription = {}
     for ax in ["z", "y", "x"]:
         if ax in data_axes:
             i = data_axes.index(ax)
@@ -122,7 +121,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: Union[list[str], None] = None,
+    elements: list[str] | None = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -184,7 +183,7 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: Union[list[str], None] = None,
+    elements: list[str] | None = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
@@ -218,8 +217,10 @@ def _(
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
             if coordinate_system in coordinate_systems:
-                kwargs = {"exact": exact} if isinstance(element_obj, (DaskDataFrame, GeoDataFrame)) else {}
-                extent = get_extent(element_obj, coordinate_system=coordinate_system, **kwargs)
+                if isinstance(element_obj, (DaskDataFrame, GeoDataFrame)):
+                    extent = get_extent(element_obj, coordinate_system=coordinate_system)
+                else:
+                    extent = get_extent(element_obj, coordinate_system=coordinate_system, exact=exact)
                 axes = list(extent.keys())
                 for ax in axes:
                     new_min_coordinates_dict[ax] += [extent[ax][0]]
@@ -253,9 +254,8 @@ def _get_extent_of_shapes(e: GeoDataFrame) -> BoundingBoxDescription:
     first_geometry = e_temp["geometry"].iloc[0]
     if isinstance(first_geometry, Point):
         return _get_extent_of_circles(e)
-    else:
-        assert isinstance(first_geometry, (Polygon, MultiPolygon))
-        return _get_extent_of_polygons_multipolygons(e)
+    assert isinstance(first_geometry, (Polygon, MultiPolygon))
+    return _get_extent_of_polygons_multipolygons(e)
 
 
 @get_extent.register
@@ -275,11 +275,10 @@ def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) ->
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    else:
-        t = get_transformation(e, to_coordinate_system=coordinate_system)
-        assert isinstance(t, BaseTransformation)
-        transformed = transform(e, t)
-        return _get_extent_of_shapes(transformed)
+    t = get_transformation(e, to_coordinate_system=coordinate_system)
+    assert isinstance(t, BaseTransformation)
+    transformed = transform(e, t)
+    return _get_extent_of_shapes(transformed)
 
 
 @get_extent.register
@@ -292,11 +291,10 @@ def _(e: DaskDataFrame, coordinate_system: str = "global", exact: bool = True) -
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    else:
-        t = get_transformation(e, to_coordinate_system=coordinate_system)
-        assert isinstance(t, BaseTransformation)
-        transformed = transform(e, t)
-        return _get_extent_of_points(transformed)
+    t = get_transformation(e, to_coordinate_system=coordinate_system)
+    assert isinstance(t, BaseTransformation)
+    transformed = transform(e, t)
+    return _get_extent_of_points(transformed)
 
 
 @get_extent.register

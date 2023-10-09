@@ -23,10 +23,12 @@ def check_test_results0(extent, min_coordinates, max_coordinates, axes):
     extend_axes.sort()
     assert tuple(extend_axes) == axes
 
+
 def check_test_results1(extent0, extent1):
     assert extent0.keys() == extent1.keys()
-    for ax in extent0.keys():
+    for ax in extent0:
         assert np.allclose(extent0[ax], extent1[ax])
+
 
 @pytest.mark.parametrize("shape_type", ["circles", "polygons", "multipolygons"])
 def test_get_extent_shapes(shape_type):
@@ -123,7 +125,7 @@ def test_rotate_vector_data(exact):
     To test for the ability to correctly compute the exact and approximate extent of vector datasets.
     In particular tests for the solution to this issue: https://github.com/scverse/spatialdata/issues/353
     """
-    # import spatialdata_plot
+
     # _ = spatialdata_plot
     circles = []
     for p in [[0.5, 0.1], [0.9, 0.5], [0.5, 0.9], [0.1, 0.5]]:
@@ -172,18 +174,19 @@ def test_rotate_vector_data(exact):
     # sdata.pl.render_shapes("polygons").pl.show()
     # sdata.pl.render_shapes("multipolygons").pl.show()
     # sdata.pl.render_points("points", size=10).pl.show()
+    sdata.pl.render_points().pl.render_shapes().pl.show()
 
     # manually computing the extent results and verifying it is correct
     for e in [sdata, circles_gdf, polygons_gdf, multipolygons_gdf, points_df]:
-        extent = get_extent(e, coordinate_system='global')
-        check_test_results1(extent, {'x': (0.0, 1.0), 'y': (0.0, 1.0)})
+        extent = get_extent(e, coordinate_system="global")
+        check_test_results1(extent, {"x": (0.0, 1.0), "y": (0.0, 1.0)})
 
-    EXPECTED_NON_EXACT = {'x': (-math.sqrt(2) / 2, math.sqrt(2) / 2), 'y': (0.0, math.sqrt(2))}
+    EXPECTED_NON_EXACT = {"x": (-math.sqrt(2) / 2, math.sqrt(2) / 2), "y": (0.0, math.sqrt(2))}
     extent = get_extent(circles_gdf, coordinate_system="transformed", exact=exact)
     if exact:
         expected = {
-            'x': (_rotate_point((0.1, 0.5))[0] - 0.1, _rotate_point((0.5, 0.1))[0] + 0.1),
-            'y': (_rotate_point((0.5, 0.1))[1] - 0.1, _rotate_point((0.9, 0.5))[1] + 0.1),
+            "x": (_rotate_point((0.1, 0.5))[0] - 0.1, _rotate_point((0.5, 0.1))[0] + 0.1),
+            "y": (_rotate_point((0.5, 0.1))[1] - 0.1, _rotate_point((0.9, 0.5))[1] + 0.1),
         }
     else:
         expected = EXPECTED_NON_EXACT
@@ -192,8 +195,8 @@ def test_rotate_vector_data(exact):
     extent = get_extent(polygons_gdf, coordinate_system="transformed", exact=exact)
     if exact:
         expected = {
-            'x': (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
-            'y': (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
+            "x": (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
+            "y": (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
         }
     else:
         expected = EXPECTED_NON_EXACT
@@ -202,19 +205,18 @@ def test_rotate_vector_data(exact):
     extent = get_extent(multipolygons_gdf, coordinate_system="transformed", exact=exact)
     if exact:
         expected = {
-            'x': (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
-            'y': (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
+            "x": (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
+            "y": (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
         }
     else:
         expected = EXPECTED_NON_EXACT
     check_test_results1(extent, expected)
 
-
     extent = get_extent(points_df, coordinate_system="transformed", exact=exact)
     if exact:
         expected = {
-            'x': (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
-            'y': (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
+            "x": (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
+            "y": (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
         }
     else:
         expected = EXPECTED_NON_EXACT
@@ -223,8 +225,8 @@ def test_rotate_vector_data(exact):
     extent = get_extent(sdata, coordinate_system="transformed", exact=exact)
     if exact:
         expected = {
-            'x': (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
-            'y': (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
+            "x": (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
+            "y": (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
         }
     else:
         expected = EXPECTED_NON_EXACT
@@ -271,7 +273,6 @@ def test_get_extent_affine_circles():
     gdf = ShapesModel.parse(gdf)
     transformed_bounding_box = transform(gdf, affine)
 
-    transformed_extent
     transformed_bounding_box_extent = get_extent(transformed_bounding_box)
 
     assert transformed_axes == list(transformed_bounding_box_extent.keys())
