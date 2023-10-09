@@ -531,11 +531,11 @@ def test_transformations_between_coordinate_systems(images):
                     )
                 assert "global2" in images.coordinate_systems
 
+
 def test_bug_rotate_circles_wrong_extent():
     # https://github.com/scverse/spatialdata/issues/353
     import geopandas as gpd
-    import spatialdata_plot
-    from shapely import MultiPolygon, Point, Polygon
+    from shapely import Point
 
     points = []
     for p in [[0, 0], [0, 1], [1, 1], [1, 0]]:
