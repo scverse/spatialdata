@@ -125,8 +125,9 @@ def test_rotate_vector_data(exact):
     To test for the ability to correctly compute the exact and approximate extent of vector datasets.
     In particular tests for the solution to this issue: https://github.com/scverse/spatialdata/issues/353
     """
+    import spatialdata_plot
 
-    # _ = spatialdata_plot
+    _ = spatialdata_plot
     circles = []
     for p in [[0.5, 0.1], [0.9, 0.5], [0.5, 0.9], [0.1, 0.5]]:
         circles.append(Point(p))
