@@ -560,7 +560,14 @@ def _(
 
 
 def _polygon_query(
-    sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, filter_table: bool, shapes: bool, points: bool
+    sdata: SpatialData,
+    polygon: Polygon,
+    target_coordinate_system: str,
+    filter_table: bool,
+    shapes: bool,
+    points: bool,
+    images: bool,
+    labels: bool,
 ) -> SpatialData:
     from spatialdata._core.query._utils import circles_to_polygons
     from spatialdata._core.query.relational_query import _filter_table_by_elements
@@ -612,11 +619,32 @@ def _polygon_query(
             set_transformation(ddf, transformation, target_coordinate_system)
             new_points[points_name] = ddf
 
-    if filter_table:
+    new_images = {}
+    if images:
+        for images_name, im in sdata.images.items():
+            min_x, min_y, max_x, max_y = polygon.bounds
+            cropped = bounding_box_query(
+                im,
+                min_coordinate=[min_x, min_y],
+                max_coordinate=[max_x, max_y],
+                axes=("x", "y"),
+                target_coordinate_system=target_coordinate_system,
+            )
+            new_images[images_name] = cropped
+    if labels:
+        for labels_name, l in sdata.labels.items():
+            _ = labels_name
+            _ = l
+            raise NotImplementedError(
+                "labels=True is not implemented yet. If you encounter this error please open an "
+                "issue and we will prioritize the implementation."
+            )
+
+    if filter_table and sdata.table is not None:
         table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
     else:
         table = sdata.table
-    return SpatialData(shapes=new_shapes, points=new_points, table=table)
+    return SpatialData(shapes=new_shapes, points=new_points, images=new_images, table=table)
 
 
 # this function is currently excluded from the API documentation. TODO: add it after the refactoring
@@ -627,6 +655,8 @@ def polygon_query(
     filter_table: bool = True,
     shapes: bool = True,
     points: bool = True,
+    images: bool = True,
+    labels: bool = True,
 ) -> SpatialData:
     """
     Query a spatial data object by a polygon, filtering shapes and points.
@@ -668,14 +698,21 @@ def polygon_query(
             filter_table=filter_table,
             shapes=shapes,
             points=points,
+            images=images,
+            labels=labels,
         )
     # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
     #  in a loop as done preliminarily here
-    if points:
-        raise NotImplementedError(
-            "points=True is not implemented when querying by multiple polygons. If you encounter this error, please"
-            " open an issue on GitHub and we will prioritize the implementation."
+    if points or images or labels:
+        logger.warning(
+            "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
+            'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
+            "you need this implementation please open an issue on GitHub."
         )
+        points = False
+        images = False
+        labels = False
+
     sdatas = []
     for polygon in tqdm(polygons):
         try:
@@ -687,6 +724,8 @@ def polygon_query(
                 filter_table=False,
                 shapes=shapes,
                 points=points,
+                images=images,
+                labels=labels,
             )
             sdatas.append(queried_sdata)
         except ValueError as e:

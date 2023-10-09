@@ -106,10 +106,13 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     "**.ipynb_checkpoints",
-    "tutorials/notebooks_repo/index.md",
-    "tutorials/notebooks_repo/README.md",
-    "tutorials/notebooks_repo/references.md",
-    "tutorials/notebooks_repo/notebooks/paper_reproducibility/*",
+    "tutorials/notebooks/index.md",
+    "tutorials/notebooks/README.md",
+    "tutorials/notebooks/references.md",
+    "tutorials/notebooks/notebooks/paper_reproducibility/*",
+    "tutorials/notebooks/notebooks/paper_reproducibility/*",
+    "tutorials/notebooks/notebooks/developers_resources/storage_format/*.ipynb",
+    "tutorials/notebooks/notebooks/developers_resources/storage_format/Readme.md",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.
