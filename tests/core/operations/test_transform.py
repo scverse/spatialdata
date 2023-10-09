@@ -530,35 +530,3 @@ def test_transformations_between_coordinate_systems(images):
                         write_to_sdata=sdata,
                     )
                 assert "global2" in images.coordinate_systems
-
-
-def test_bug_rotate_circles_wrong_extent():
-    # https://github.com/scverse/spatialdata/issues/353
-    import geopandas as gpd
-    from shapely import Point
-
-    points = []
-    for p in [[0, 0], [0, 1], [1, 1], [1, 0]]:
-        points.append(Point(p))
-
-    gdf = gpd.GeoDataFrame(geometry=points)
-    gdf["radius"] = 0.05
-    circles_df = ShapesModel.parse(gdf)
-    sdata = SpatialData(shapes={"circles": circles_df})
-
-    theta = math.pi / 4
-    rotation = Affine(
-        [
-            [math.cos(theta), -math.sin(theta), 0],
-            [math.sin(theta), math.cos(theta), 0],
-            [0, 0, 1],
-        ],
-        input_axes=("x", "y"),
-        output_axes=("x", "y"),
-    )
-    set_transformation(element=sdata["circles"], transformation=rotation, to_coordinate_system="transformed")
-
-    sdata.pl.render_shapes().pl.show()
-
-    for cs in ["global", "transformed"]:
-        print(cs, get_extent(sdata, coordinate_system=cs))
