@@ -125,8 +125,6 @@ def test_rotate_vector_data(exact):
     To test for the ability to correctly compute the exact and approximate extent of vector datasets.
     In particular tests for the solution to this issue: https://github.com/scverse/spatialdata/issues/353
     """
-    # import spatialdata_plot
-    # _ = spatialdata_plot
     circles = []
     for p in [[0.5, 0.1], [0.9, 0.5], [0.5, 0.9], [0.1, 0.5]]:
         circles.append(Point(p))
@@ -169,12 +167,6 @@ def test_rotate_vector_data(exact):
     )
     for element_name in ["circles", "polygons", "multipolygons", "points"]:
         set_transformation(element=sdata[element_name], transformation=rotation, to_coordinate_system="transformed")
-
-    # sdata.pl.render_shapes("circles").pl.show()
-    # sdata.pl.render_shapes("polygons").pl.show()
-    # sdata.pl.render_shapes("multipolygons").pl.show()
-    # sdata.pl.render_points("points", size=10).pl.show()
-    # sdata.pl.render_points().pl.render_shapes().pl.show()
 
     # manually computing the extent results and verifying it is correct
     for e in [sdata, circles_gdf, polygons_gdf, multipolygons_gdf, points_df]:
@@ -255,8 +247,6 @@ def test_get_extent_affine_circles():
     assert axes == transformed_axes
     for ax in axes:
         assert not np.allclose(extent[ax], transformed_extent[ax])
-
-    # min_coordinates, max_coordinates, axes = extent
 
     # Create a list of points
     points = [
