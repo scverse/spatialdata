@@ -93,9 +93,6 @@ def _filter_table_by_elements(
                     xdata = next(iter(v))
                     # can be slow
                     instances = da.unique(xdata.data).compute()
-                if 0 in instances:
-                    # remove the 0 label (background) if present
-                    instances = instances[instances != 0]
                 instances = np.sort(instances)
             elif get_model(element) == ShapesModel:
                 instances = element.index.to_numpy()
@@ -117,11 +114,10 @@ def _filter_table_by_elements(
             assert "name" in locals()
             n0 = np.setdiff1d(instances, table.obs[instance_key].to_numpy())
             n1 = np.setdiff1d(table.obs[instance_key].to_numpy(), instances)
-            raise ValueError(
-                f"Instances in the table and in the element don't correspond: found {len(n0)} indices in the "
-                f"element {name} but not in the table and found {len(n1)} indices in the table but not in the "
-                "element"
-            )
+            assert len(n1) == 0, f"The table contains {len(n1)} instances that are not in the element: {n1}"
+            # some instances have not a corresponding row in the table
+            instances = np.setdiff1d(instances, n0)
+        assert np.sum(to_keep) == len(instances)
         assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
         table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
