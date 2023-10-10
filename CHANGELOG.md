@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.0.14] - tbd
 
+### Added
+#### Major
+
+-   get_extent() function to compute bounding box of the data
+
+#### Minor
+
+-   testing against pre-release packages
+
+### Fixed
+
+-   Fixed bug with get_values(): ignoring background channel in labels
+
 ## [0.0.13] - 2023-10-02
 
 ### Added
