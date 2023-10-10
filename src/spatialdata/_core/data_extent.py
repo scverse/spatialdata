@@ -208,9 +208,9 @@ def _(
 
     for element in e._gen_elements():
         element_type, element_name, element_obj = element
-        plot_element = (len(elements) == 0) or (element_name in elements)
-        plot_element = plot_element and (element_type in include_spatial_elements)
-        if plot_element:
+        consider_element = (len(elements) == 0) or (element_name in elements)
+        consider_element = consider_element and (element_type in include_spatial_elements)
+        if consider_element:
             transformations = get_transformation(element_obj, get_all=True)
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
