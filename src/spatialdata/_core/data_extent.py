@@ -1,6 +1,6 @@
-# Functions to compute the bounding box describing the extent of a SpatialElement or region.
 from __future__ import annotations
 
+# Functions to compute the bounding box describing the extent of a SpatialElement or SpatialData object
 from collections import defaultdict
 from functools import singledispatch
 
@@ -33,7 +33,7 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
     Parameters
     ----------
     circles
-        The circles represented as a GeoDataFrame with a radius column.
+        The circles represented as a GeoDataFrame with a `radius` column.
 
     Returns
     -------
