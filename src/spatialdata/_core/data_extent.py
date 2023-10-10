@@ -115,6 +115,8 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
+    # python 3.9 tests fail if we don't use Union here, see
+    # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
     elements: Union[list[str], None] = None,  # noqa: UP007
 ) -> BoundingBoxDescription:
     """
@@ -177,6 +179,8 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
+    # python 3.9 tests fail if we don't use Union here, see
+    # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
     elements: Union[list[str], None] = None,  # noqa: UP007
 ) -> BoundingBoxDescription:
     """
