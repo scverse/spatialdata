@@ -1,24 +1,33 @@
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
 from geopandas import GeoDataFrame
-from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData, get_extent, transform
 from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.datasets import blobs
 from spatialdata.models import PointsModel, ShapesModel
-from spatialdata.transformations import Translation, remove_transformation, set_transformation
+from spatialdata.transformations import Affine, Translation, remove_transformation, set_transformation
 
 # for faster tests; we will pay attention not to modify the original data
 sdata = blobs()
 
 
-def check_test_results(extent, min_coordinates, max_coordinates, axes):
-    assert np.allclose([extent["x"][0], extent["y"][0]], min_coordinates)
-    assert np.allclose([extent["x"][1], extent["y"][1]], max_coordinates)
+def check_test_results0(extent, min_coordinates, max_coordinates, axes):
+    for i, ax in enumerate(axes):
+        assert np.isclose(extent[ax][0], min_coordinates[i])
+        assert np.isclose(extent[ax][1], max_coordinates[i])
     extend_axes = list(extent.keys())
     extend_axes.sort()
     assert tuple(extend_axes) == axes
+
+
+def check_test_results1(extent0, extent1):
+    assert extent0.keys() == extent1.keys()
+    for ax in extent0:
+        assert np.allclose(extent0[ax], extent1[ax])
 
 
 @pytest.mark.parametrize("shape_type", ["circles", "polygons", "multipolygons"])
@@ -35,7 +44,7 @@ def test_get_extent_shapes(shape_type):
         min_coordinates = np.array([291.06219195, 197.06539872])
         max_coordinates = np.array([389.3319439, 375.89584037])
 
-    check_test_results(
+    check_test_results0(
         extent,
         min_coordinates=min_coordinates,
         max_coordinates=max_coordinates,
@@ -46,7 +55,7 @@ def test_get_extent_shapes(shape_type):
 def test_get_extent_points():
     # 2d case
     extent = get_extent(sdata["blobs_points"])
-    check_test_results(
+    check_test_results0(
         extent,
         min_coordinates=np.array([12.0, 13.0]),
         max_coordinates=np.array([500.0, 498.0]),
@@ -58,7 +67,7 @@ def test_get_extent_points():
     df = pd.DataFrame(data, columns=["zeta", "x", "y"])
     points_3d = PointsModel.parse(df, coordinates={"x": "x", "y": "y", "z": "zeta"})
     extent_3d = get_extent(points_3d)
-    check_test_results(
+    check_test_results0(
         extent_3d,
         min_coordinates=np.array([2, 3, 1]),
         max_coordinates=np.array([5, 6, 4]),
@@ -72,7 +81,7 @@ def test_get_extent_raster(raster_type, multiscale):
     raster = sdata[f"blobs_multiscale_{raster_type}"] if multiscale else sdata[f"blobs_{raster_type}"]
 
     extent = get_extent(raster)
-    check_test_results(
+    check_test_results0(
         extent,
         min_coordinates=np.array([0, 0]),
         max_coordinates=np.array([512, 512]),
@@ -83,7 +92,7 @@ def test_get_extent_raster(raster_type, multiscale):
 def test_get_extent_spatialdata():
     sdata2 = SpatialData(shapes={"circles": sdata["blobs_circles"], "polygons": sdata["blobs_polygons"]})
     extent = get_extent(sdata2)
-    check_test_results(
+    check_test_results0(
         extent,
         min_coordinates=np.array([98.92618679, 137.62348969]),
         max_coordinates=np.array([446.70264371, 461.85209239]),
@@ -100,7 +109,127 @@ def test_get_extent_invalid_coordinate_system():
         _ = get_extent(sdata, coordinate_system="invalid")
 
 
+def _rotate_point(point: tuple[float, float], angle_degrees=45) -> tuple[float, float]:
+    angle_radians = math.radians(angle_degrees)
+    x, y = point
+
+    x_prime = x * math.cos(angle_radians) - y * math.sin(angle_radians)
+    y_prime = x * math.sin(angle_radians) + y * math.cos(angle_radians)
+
+    return (x_prime, y_prime)
+
+
+@pytest.mark.parametrize("exact", [True, False])
+def test_rotate_vector_data(exact):
+    """
+    To test for the ability to correctly compute the exact and approximate extent of vector datasets.
+    In particular tests for the solution to this issue: https://github.com/scverse/spatialdata/issues/353
+    """
+    circles = []
+    for p in [[0.5, 0.1], [0.9, 0.5], [0.5, 0.9], [0.1, 0.5]]:
+        circles.append(Point(p))
+    circles_gdf = GeoDataFrame(geometry=circles)
+    circles_gdf["radius"] = 0.1
+    circles_gdf = ShapesModel.parse(circles_gdf)
+
+    polygons = []
+    polygons.append(Polygon([(0.5, 0.5), (0.5, 0), (0.6, 0.1), (0.5, 0.5)]))
+    polygons.append(Polygon([(0.5, 0.5), (1, 0.5), (0.9, 0.6), (0.5, 0.5)]))
+    polygons.append(Polygon([(0.5, 0.5), (0.5, 1), (0.4, 0.9), (0.5, 0.5)]))
+    polygons.append(Polygon([(0.5, 0.5), (0, 0.5), (0.1, 0.4), (0.5, 0.5)]))
+    polygons_gdf = GeoDataFrame(geometry=polygons)
+    polygons_gdf = ShapesModel.parse(polygons_gdf)
+
+    multipolygons = []
+    multipolygons.append(MultiPolygon([polygons[0], Polygon([(0.7, 0.1), (0.9, 0.1), (0.9, 0.3), (0.7, 0.1)])]))
+    multipolygons.append(MultiPolygon([polygons[1], Polygon([(0.9, 0.7), (0.9, 0.9), (0.7, 0.9), (0.9, 0.7)])]))
+    multipolygons.append(MultiPolygon([polygons[2], Polygon([(0.3, 0.9), (0.1, 0.9), (0.1, 0.7), (0.3, 0.9)])]))
+    multipolygons.append(MultiPolygon([polygons[3], Polygon([(0.1, 0.3), (0.1, 0.1), (0.3, 0.1), (0.1, 0.3)])]))
+    multipolygons_gdf = GeoDataFrame(geometry=multipolygons)
+    multipolygons_gdf = ShapesModel.parse(multipolygons_gdf)
+
+    points_df = PointsModel.parse(np.array([[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]))
+
+    sdata = SpatialData(
+        shapes={"circles": circles_gdf, "polygons": polygons_gdf, "multipolygons": multipolygons_gdf},
+        points={"points": points_df},
+    )
+
+    theta = math.pi / 4
+    rotation = Affine(
+        [
+            [math.cos(theta), -math.sin(theta), 0],
+            [math.sin(theta), math.cos(theta), 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    for element_name in ["circles", "polygons", "multipolygons", "points"]:
+        set_transformation(element=sdata[element_name], transformation=rotation, to_coordinate_system="transformed")
+
+    # manually computing the extent results and verifying it is correct
+    for e in [sdata, circles_gdf, polygons_gdf, multipolygons_gdf, points_df]:
+        extent = get_extent(e, coordinate_system="global")
+        check_test_results1(extent, {"x": (0.0, 1.0), "y": (0.0, 1.0)})
+
+    EXPECTED_NON_EXACT = {"x": (-math.sqrt(2) / 2, math.sqrt(2) / 2), "y": (0.0, math.sqrt(2))}
+    extent = get_extent(circles_gdf, coordinate_system="transformed", exact=exact)
+    if exact:
+        expected = {
+            "x": (_rotate_point((0.1, 0.5))[0] - 0.1, _rotate_point((0.5, 0.1))[0] + 0.1),
+            "y": (_rotate_point((0.5, 0.1))[1] - 0.1, _rotate_point((0.9, 0.5))[1] + 0.1),
+        }
+    else:
+        expected = EXPECTED_NON_EXACT
+    check_test_results1(extent, expected)
+
+    extent = get_extent(polygons_gdf, coordinate_system="transformed", exact=exact)
+    if exact:
+        expected = {
+            "x": (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
+            "y": (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
+        }
+    else:
+        expected = EXPECTED_NON_EXACT
+    check_test_results1(extent, expected)
+
+    extent = get_extent(multipolygons_gdf, coordinate_system="transformed", exact=exact)
+    if exact:
+        expected = {
+            "x": (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
+            "y": (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
+        }
+    else:
+        expected = EXPECTED_NON_EXACT
+    check_test_results1(extent, expected)
+
+    extent = get_extent(points_df, coordinate_system="transformed", exact=exact)
+    if exact:
+        expected = {
+            "x": (_rotate_point((0, 0.5))[0], _rotate_point((0.5, 0))[0]),
+            "y": (_rotate_point((0.5, 0))[1], _rotate_point((1, 0.5))[1]),
+        }
+    else:
+        expected = EXPECTED_NON_EXACT
+    check_test_results1(extent, expected)
+
+    extent = get_extent(sdata, coordinate_system="transformed", exact=exact)
+    if exact:
+        expected = {
+            "x": (_rotate_point((0.1, 0.9))[0], _rotate_point((0.9, 0.1))[0]),
+            "y": (_rotate_point((0.1, 0.1))[1], _rotate_point((0.9, 0.9))[1]),
+        }
+    else:
+        expected = EXPECTED_NON_EXACT
+    check_test_results1(extent, expected)
+
+
 def test_get_extent_affine_circles():
+    """
+    Verify that the extent of the transformed circles, computed with exact = False, gives the same result as
+    transforming the bounding box of the original circles
+    """
     from tests.core.operations.test_transform import _get_affine
 
     affine = _get_affine(small_translation=True)
@@ -111,21 +240,21 @@ def test_get_extent_affine_circles():
     set_transformation(element=circles, transformation=affine, to_coordinate_system="transformed")
 
     extent = get_extent(circles)
-    transformed_extent = get_extent(circles, coordinate_system="transformed")
+    transformed_extent = get_extent(circles, coordinate_system="transformed", exact=False)
 
-    assert extent[2] == transformed_extent[2]
-    assert not np.allclose(extent[0], transformed_extent[0])
-    assert not np.allclose(extent[1], transformed_extent[1])
-
-    min_coordinates, max_coordinates, axes = extent
+    axes = list(extent.keys())
+    transformed_axes = list(extent.keys())
+    assert axes == transformed_axes
+    for ax in axes:
+        assert not np.allclose(extent[ax], transformed_extent[ax])
 
     # Create a list of points
     points = [
-        (min_coordinates[0], min_coordinates[1]),  # lower left corner
-        (min_coordinates[0], max_coordinates[1]),  # upper left corner
-        (max_coordinates[0], max_coordinates[1]),  # upper right corner
-        (max_coordinates[0], min_coordinates[1]),  # lower right corner
-        (min_coordinates[0], min_coordinates[1]),  # back to start to close the polygon
+        (extent["x"][0], extent["y"][0]),  # lower left corner
+        (extent["x"][0], extent["y"][1]),  # upper left corner
+        (extent["x"][1], extent["y"][1]),  # upper right corner
+        (extent["x"][1], extent["y"][0]),  # lower right corner
+        (extent["x"][0], extent["y"][0]),  # back to start to close the polygon
     ]
 
     # Create a Polygon from the points
@@ -134,12 +263,11 @@ def test_get_extent_affine_circles():
     gdf = ShapesModel.parse(gdf)
     transformed_bounding_box = transform(gdf, affine)
 
-    min_coordinates0, max_coordinates0, axes0 = transformed_extent
-    min_coordinates1, max_coordinates1, axes1 = get_extent(transformed_bounding_box)
+    transformed_bounding_box_extent = get_extent(transformed_bounding_box)
 
-    assert np.allclose(min_coordinates0, min_coordinates1)
-    assert np.allclose(max_coordinates0, max_coordinates1)
-    assert axes0 == axes1
+    assert transformed_axes == list(transformed_bounding_box_extent.keys())
+    for ax in transformed_axes:
+        assert np.allclose(transformed_extent[ax], transformed_bounding_box_extent[ax])
 
 
 def test_get_extent_affine_points3d():
@@ -159,16 +287,15 @@ def test_get_extent_affine_points3d():
     transformed_extent_2d = get_extent(points_2d, coordinate_system="transformed")
     transformed_extent_3d = get_extent(points_3d, coordinate_system="transformed")
 
-    assert transformed_extent_2d[2] == ("x", "y")
-    assert transformed_extent_3d[2] == ("x", "y", "z")
+    assert list(transformed_extent_2d.keys()) == ["x", "y"]
+    assert list(transformed_extent_3d.keys()) == ["x", "y", "z"]
 
     # the x and y extent for the 2d and 3d points are identical
-    assert np.allclose(transformed_extent_2d[0], transformed_extent_3d[0][:2])
-    assert np.allclose(transformed_extent_2d[1], transformed_extent_3d[1][:2])
+    for ax in ["x", "y"]:
+        assert np.allclose(transformed_extent_2d[ax], transformed_extent_3d[ax])
 
     # the z extent for the 3d points didn't get transformed, so it's the same as the original
-    assert np.allclose(transformed_extent_3d[0][2], extent_3d[0][2])
-    assert np.allclose(transformed_extent_3d[1][2], extent_3d[1][2])
+    assert np.allclose(transformed_extent_3d["z"], extent_3d["z"])
 
 
 def test_get_extent_affine_sdata():
@@ -193,14 +320,14 @@ def test_get_extent_affine_sdata():
     min_coordinates1 = np.array([149.92618679, 188.62348969]) + np.array([1000.0, 0.0])
     max_coordinates1 = np.array([446.70264371, 461.85209239]) + np.array([1000.0, 0.0])
 
-    check_test_results(
+    check_test_results0(
         extent0,
         min_coordinates=min_coordinates0,
         max_coordinates=max_coordinates0,
         axes=("x", "y"),
     )
 
-    check_test_results(
+    check_test_results0(
         extent1,
         min_coordinates=min_coordinates1,
         max_coordinates=max_coordinates1,

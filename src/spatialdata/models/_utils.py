@@ -5,7 +5,6 @@ from typing import Any, Union
 
 import dask.dataframe as dd
 import geopandas
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -167,15 +166,15 @@ def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
 
 @get_axes_names.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
-    all_dims = (Z, Y, X)
+    all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
-    dims = all_dims[-n:]
+    dims = all_dims[:n]
     _validate_dims(dims)
     return dims
 
 
 @get_axes_names.register(DaskDataFrame)
-def _(e: AnnData) -> tuple[str, ...]:
+def _(e: DaskDataFrame) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = tuple([c for c in valid_dims if c in e.columns])
     _validate_dims(dims)
