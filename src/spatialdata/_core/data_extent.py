@@ -1,3 +1,4 @@
+# Functions to compute the bounding box describing the extent of a SpatialElement or region.
 from __future__ import annotations
 
 from collections import defaultdict
@@ -32,6 +33,7 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
     Parameters
     ----------
     circles
+        The circles represented as a GeoDataFrame with a radius column.
 
     Returns
     -------
@@ -54,10 +56,7 @@ def _get_extent_of_circles(circles: GeoDataFrame) -> BoundingBoxDescription:
     bounds["maxx"] += circles["radius"]
     bounds["maxy"] += circles["radius"]
 
-    extent = {}
-    for ax in axes:
-        extent[ax] = (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max())
-    return extent
+    return {ax: (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max()) for ax in axes}
 
 
 def _get_extent_of_polygons_multipolygons(
@@ -69,6 +68,7 @@ def _get_extent_of_polygons_multipolygons(
     Parameters
     ----------
     shapes
+        The shapes represented as a GeoDataFrame.
 
     Returns
     -------
@@ -77,21 +77,14 @@ def _get_extent_of_polygons_multipolygons(
     assert isinstance(shapes.geometry.iloc[0], (Polygon, MultiPolygon))
     axes = get_axes_names(shapes)
     bounds = shapes["geometry"].bounds
-    # NOTE: this implies the order x, y (which is probably correct?)
-    extent = {}
-    for ax in axes:
-        extent[ax] = (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max())
-    return extent
+    return {ax: (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max()) for ax in axes}
 
 
 def _get_extent_of_points(e: DaskDataFrame) -> BoundingBoxDescription:
     axes = get_axes_names(e)
-    min_coordinates = np.array([e[ax].min().compute() for ax in axes])
-    max_coordinates = np.array([e[ax].max().compute() for ax in axes])
-    extent = {}
-    for i, ax in enumerate(axes):
-        extent[ax] = (min_coordinates[i], max_coordinates[i])
-    return extent
+    mins = dict(e[list(axes)].min().compute())
+    maxs = dict(e[list(axes)].max().compute())
+    return {ax: (mins[ax], maxs[ax]) for ax in axes}
 
 
 def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingBoxDescription:
@@ -129,7 +122,7 @@ def get_extent(
     Parameters
     ----------
     e
-        The SpatialData object or SpatialElement to computed the extent of.
+        The SpatialData object or SpatialElement to compute the extent of.
 
     Returns
     -------

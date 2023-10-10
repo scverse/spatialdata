@@ -4,15 +4,17 @@ import numpy as np
 import pandas as pd
 import pytest
 from geopandas import GeoDataFrame
+from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData, get_extent, transform
 from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.datasets import blobs
-from spatialdata.models import PointsModel, ShapesModel
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations import Affine, Translation, remove_transformation, set_transformation
 
 # for faster tests; we will pay attention not to modify the original data
 sdata = blobs()
+RNG = default_rng(seed=0)
 
 
 def check_test_results0(extent, min_coordinates, max_coordinates, axes):
@@ -333,3 +335,11 @@ def test_get_extent_affine_sdata():
         max_coordinates=max_coordinates1,
         axes=("x", "y"),
     )
+
+
+def test_bug_get_extent_swap_xy_for_images():
+    # https://github.com/scverse/spatialdata/issues/335#issue-1842914360
+    x = RNG.random((1, 10, 20))
+    im = Image2DModel.parse(x, dims=("c", "x", "y"))
+    extent = get_extent(im)
+    check_test_results1(extent, {"x": (0.0, 10.0), "y": (0.0, 20.0)})
