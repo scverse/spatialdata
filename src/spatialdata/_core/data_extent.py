@@ -3,6 +3,7 @@ from __future__ import annotations
 # Functions to compute the bounding box describing the extent of a SpatialElement or SpatialData object
 from collections import defaultdict
 from functools import singledispatch
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -12,7 +13,6 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
-from typing import Union
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
