@@ -12,6 +12,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
+from typing import Union
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
@@ -114,7 +115,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[str] | None = None,
+    elements: Union[list[str], None] = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -176,7 +177,7 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[str] | None = None,
+    elements: Union[list[str], None] = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
