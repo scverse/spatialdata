@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning][].
 ## [0.0.14] - tbd
 
 ### Added
+
 #### Major
 
 -   get_extent() function to compute bounding box of the data
