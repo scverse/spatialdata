@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # isort: off
 import os
 
@@ -6,7 +8,6 @@ os.environ["USE_PYGEOS"] = "0"
 
 from shapely import linearrings, polygons
 from pathlib import Path
-from typing import Union
 from spatialdata._types import ArrayLike
 import numpy as np
 import pandas as pd
@@ -132,7 +133,7 @@ def sdata(request) -> SpatialData:
     return request.getfixturevalue(request.param)
 
 
-def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
@@ -159,7 +160,7 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     return out
 
 
-def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_labels() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
@@ -274,7 +275,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Union[str, list[str]] = "sample1",
+    region: str | list[str] = "sample1",
     region_key: str = "region",
     instance_key: str = "instance_id",
 ) -> AnnData:
