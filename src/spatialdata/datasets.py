@@ -8,6 +8,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
+from shapely.affinity import translate
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
 from spatial_image import SpatialImage
@@ -143,7 +144,9 @@ class BlobsDataset:
     ) -> SpatialData:
         """Blobs dataset."""
         image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
-        multiscale_image = self._image_blobs(self.transformations, self.length, self.n_channels, multiscale=True)
+        multiscale_image = self._image_blobs(
+            self.transformations, self.length, self.n_channels, self.c_coords, multiscale=True
+        )
         labels = self._labels_blobs(self.transformations, self.length)
         multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
         points = self._points_blobs(self.transformations, self.length, self.n_points)
@@ -283,7 +286,7 @@ class BlobsDataset:
     def _generate_random_polygons(
         self, n: int, bbox: tuple[int, int], multipolygons: bool = False
     ) -> list[Union[Polygon, MultiPolygon]]:
-        def get_poly() -> Polygon:
+        def get_poly(i: int) -> Polygon:
             return Polygon(
                 [
                     (x + default_rng(i + 1).uniform(0, maxx // 4), y + default_rng(i).uniform(0, maxy // 4)),
@@ -301,15 +304,26 @@ class BlobsDataset:
             x = rng1.uniform(minx, maxx)
             y = rng1.uniform(miny, maxy)
             # generate random polygon
-            poly = get_poly()
+            poly = get_poly(i)
             # check if the polygon overlaps with any of the existing polygons
             if not any(poly.overlaps(p) for p in polygons):
                 polygons.append(poly)
-            if multipolygons:
-                # add a second polygon even if it overlaps
-                poly2 = get_poly()
-                last = polygons.pop()
-                polygons.append(MultiPolygon([last, poly2]))
+                if multipolygons:
+                    # Add a second polygon to replace the previous one to have a multipolygon instead of a single
+                    # polygon. In doing so we make sure that the second polygon is not overlapping with the first one,
+                    # by translating it by the size of the first polygon.
+                    poly2 = get_poly(i)
+                    last = polygons.pop()
+
+                    # Calculate the size of the polygon
+                    (minx, miny, maxx, maxy) = poly2.bounds
+                    dx = maxx - minx
+                    dy = maxy - miny
+
+                    # Translate the polygon
+                    poly2 = translate(poly2, xoff=dx, yoff=dy)
+
+                    polygons.append(MultiPolygon([last, poly2]))
         return polygons
 
     # function that generates random shapely points given a bounding box

@@ -1,4 +1,5 @@
 from typing import Union
+from __future__ import annotations
 
 import numpy as np
 from multiscale_spatial_image import MultiscaleSpatialImage
