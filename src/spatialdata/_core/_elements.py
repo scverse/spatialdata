@@ -24,9 +24,9 @@ from spatialdata.models import (
 
 
 class Elements(OrderedDict[str, Any]):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self._shared_keys = set()
+        self._shared_keys: set[str] = set()
 
     def __setitem__(self, key: str, value: Any) -> None:
         if key in self._shared_keys:

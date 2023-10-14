@@ -783,7 +783,8 @@ class SpatialData:
     @images.setter
     def images(self, images: dict[str, Raster_T]) -> None:
         """Set images."""
-        self._images = Images(images)
+        for k, v in images.items():
+            self._images[k] = v
 
     @property
     def labels(self) -> Labels:
@@ -793,7 +794,8 @@ class SpatialData:
     @labels.setter
     def labels(self, labels: dict[str, Raster_T]) -> None:
         """Set labels."""
-        self._labels = Labels(labels)
+        for k, v in labels.items():
+            self._labels[k] = v
 
     @property
     def points(self) -> Points:
@@ -803,7 +805,8 @@ class SpatialData:
     @points.setter
     def points(self, points: dict[str, DaskDataFrame]) -> None:
         """Set points."""
-        self._points = Points(points)
+        for k, v in points.items():
+            self._points[k] = v
 
     @property
     def shapes(self) -> Shapes:
@@ -813,7 +816,8 @@ class SpatialData:
     @shapes.setter
     def shapes(self, shapes: dict[str, GeoDataFrame]) -> None:
         """Set shapes."""
-        self._shapes = Shapes(shapes)
+        for k, v in shapes.items():
+            self._shapes[k] = v
 
     @property
     def coordinate_systems(self) -> list[str]:
