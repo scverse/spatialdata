@@ -12,6 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from numpy.random import default_rng
 from shapely.geometry import Point
 from spatial_image import SpatialImage
+
 from spatialdata import SpatialData
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.models import TableModel
@@ -20,7 +21,6 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 RNG = default_rng()
@@ -243,12 +243,9 @@ class TestReadWrite:
             f = os.path.join(tmpdir, "data.zarr")
             old_data = SpatialData()
             old_data.write(f)
-            # Since not backed, no risk of overwriting backing data. Should not raise.
-            try:
-                full_sdata.write(f, overwrite=True)
-            except Exception as e:
-                assert "The file path specified is the same as the one used for backing" not in str(e)
-                raise  # Let other unexpected exceptions bubble up
+            # Since not backed, no risk of overwriting backing data.
+            # Should not raise "The file path specified is the same as the one used for backing."
+            full_sdata.write(f, overwrite=True)
 
     def test_overwrite_files_with_backed_data(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
