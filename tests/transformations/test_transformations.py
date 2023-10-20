@@ -4,10 +4,12 @@ from copy import deepcopy
 import numpy as np
 import pytest
 import xarray.testing
+from xarray import DataArray
+
 from spatialdata import transform
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, ValidAxis_t
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, ValidAxis_t, get_channels
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.ngff.ngff_transformations import (
@@ -32,7 +34,6 @@ from spatialdata.transformations.transformations import (
     _decompose_transformation,
     _get_affine_for_element,
 )
-from xarray import DataArray
 
 
 def test_identity():
@@ -988,11 +989,12 @@ def test_compose_in_xy_and_operate_in_cyx():
     )
 
 
-def test_keep_numerical_coordinates_c():
+@pytest.mark.parametrize("image_name", ["blobs_image", "blobs_multiscale_image"])
+def test_keep_numerical_coordinates_c(image_name):
     c_coords = range(3)
     sdata = blobs(n_channels=len(c_coords))
-    t_blobs = transform(sdata.images["blobs_image"], to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
-    assert np.array_equal(t_blobs.coords["c"], c_coords)
+    t_blobs = transform(sdata.images[image_name], to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
+    assert np.array_equal(get_channels(t_blobs), c_coords)
 
 
 def test_keep_string_coordinates_c():
