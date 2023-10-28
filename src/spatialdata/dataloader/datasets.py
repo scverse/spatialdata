@@ -149,6 +149,7 @@ class ImageTilesDataset(Dataset):
             target_coordinate_system=self.target_coordinate_system,
             target_width=self.tile_dim_in_pixels,
         )
+        tile_regions = regions.iloc[region_index : region_index + 1]
         # TODO: as explained in the TODO in the __init__(), we want to let the
         #  user also use the bounding box query instaed of the rasterization
         #  the return function of this function would change, so we need to
@@ -182,7 +183,9 @@ class ImageTilesDataset(Dataset):
             tile_table = row
         else:
             tile_table = None
-        tile_sdata = SpatialData(images={self.regions_to_images[regions_name]: tile}, table=tile_table)
+        tile_sdata = SpatialData(
+            images={self.regions_to_images[regions_name]: tile}, shapes={regions_name: tile_regions}, table=tile_table
+        )
         if self.transform is not None:
             return self.transform(tile_sdata)
         return tile_sdata
