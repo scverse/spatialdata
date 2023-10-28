@@ -277,6 +277,7 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
+            matched_table.obs = pd.DataFrame(obs)
             x = matched_table[:, value_key_values].X
             import scipy
 
