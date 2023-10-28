@@ -38,7 +38,7 @@ The framework supports the Apple Silicon architecture, but `napari-spatialdata` 
 
 Thus `pip install "spatialdata[extra]"` will not work (as it installs `napari-spatialdata`).
 
-The solution is to pre-install `napari` via `conda` (which will install `PyQt5` correctly), and then install `napari-spatialdata` without the option `[extra]`.
+The solution is to pre-install `napari` via `conda` (which will install `PyQt5` correctly), and `pyqt`, and then install `napari-spatialdata` without the option `[extra]`.
 
 This is what is done in the following commands, which perform a correct installation on a M1/M2 Mac.
 
@@ -46,7 +46,7 @@ This is what is done in the following commands, which perform a correct installa
 mamba create -n my_env python==3.10 -y
 conda activate my_env
 
-mamba install -c conda-forge napari -y
+mamba install -c conda-forge napari pyqt -y
 pip install spatialdata spatialdata-io spatialdata-plot napari-spatialdata
 ```
 
