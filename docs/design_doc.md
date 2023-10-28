@@ -385,6 +385,7 @@ This section describes a more detailed timeline of future developments, includin
     -   [ ] Use `GeoDataFrame` for points
 -   [ ] More performant disk storage
     -   [ ] Use `geoparquet` for shapes and points
+-   [ ] Support for nested hierarchies in NGFF stores
 -   [ ] Start working on multiple tables
 -   [ ] Start working on the transformations refactoring
 
