@@ -4,6 +4,7 @@ import pytest
 from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
 from spatialdata._core.query.relational_query import _locate_value, _ValueOrigin
+from spatialdata.models.models import TableModel
 
 
 def test_match_table_to_element(sdata_query_aggregation):
@@ -181,3 +182,21 @@ def test_get_values_df(sdata_query_aggregation):
             sdata=sdata_query_aggregation,
             element_name="values_circles",
         )
+
+
+def test_get_values_labels_bug(sdata_blobs):
+    # https://github.com/scverse/spatialdata-plot/issues/165
+    from spatialdata import get_values
+
+    get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels")
+
+
+def test_filter_table_categorical_bug(shapes):
+    # one bug that was triggered by: https://github.com/scverse/anndata/issues/1210
+    adata = AnnData(obs={"categorical": pd.Categorical(["a", "a", "a", "b", "c"])})
+    adata.obs["region"] = "circles"
+    adata.obs["cell_id"] = np.arange(len(adata))
+    adata = TableModel.parse(adata, region=["circles"], region_key="region", instance_key="cell_id")
+    adata_subset = adata[adata.obs["categorical"] == "a"].copy()
+    shapes.table = adata_subset
+    shapes.filter_by_coordinate_system("global")
