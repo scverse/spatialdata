@@ -45,6 +45,7 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
+    table.obs = pd.DataFrame(table.obs)
     table = table[table.obs[region_key].isin(coordinate_system)].copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
