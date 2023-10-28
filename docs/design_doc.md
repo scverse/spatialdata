@@ -375,19 +375,24 @@ If you need to implement a method not in Python please refer to [this online res
 See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks/transformations.ipynb) for extensive examples on the transformations.
 
 ### Roadmap
+
 This section describes a more detailed timeline of future developments, including also more technical tasks like code refactoring of existing functionalities for improving stability/performance. Compared to the "goal" section above, here we provide an concrete timeline.
 
 #### Nov, Dec 2023
-- [ ] Simplify data models
-    - [ ] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
-    - [ ] Use `GeoDataFrame` for points
-- [ ] More performant disk storage
-    - [ ] Use `geoparquet` for shapes and points
-- [ ] Start working on multiple tables
-- [ ] Start working on the transformations refactoring
+
+-   [ ] Simplify data models
+    -   [ ] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
+    -   [ ] Use `GeoDataFrame` for points
+-   [ ] More performant disk storage
+    -   [ ] Use `geoparquet` for shapes and points
+-   [ ] Support for nested hierarchies in NGFF stores
+-   [ ] Start working on multiple tables
+-   [ ] Start working on the transformations refactoring
+
 #### Jan, Feb 2024
-- [ ] Finalize multiple tables support
-- [ ] Finalize transformations refactoring
+
+-   [ ] Finalize multiple tables support
+-   [ ] Finalize transformations refactoring
 
 ---
 
