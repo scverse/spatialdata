@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning][].
 
 -   new API: sdata.rename_coordinate_systems()
 
+#### Technical
+
+-   decompose affine transformation into simpler transformations
+-   remove padding for blobs()
+
 #### Major
 
 -   get_extent() function to compute bounding box of the data
