@@ -10,9 +10,15 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.0.15] - tbd
 
+### Added
+
 ## [0.0.14] - 2023-10-11
 
 ### Added
+
+#### Minor
+
+-   new API: sdata.rename_coordinate_systems()
 
 #### Major
 
