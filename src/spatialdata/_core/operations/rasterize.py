@@ -291,7 +291,7 @@ def _get_xarray_data_to_rasterize(
             m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
             m_linear = m[:-1, :-1]
             m_translation = m[:-1, -1]
-            from spatialdata._core.query.spatial_query import get_bounding_box_corners
+            from spatialdata._core.query._utils import get_bounding_box_corners
 
             bb_corners = get_bounding_box_corners(
                 min_coordinate=min_coordinate, max_coordinate=max_coordinate, axes=axes
@@ -355,10 +355,7 @@ def _get_corrected_affine_matrix(
     if "z" in target_axes_unordered:
         target_axes = ("c", "z", "y", "x") if "c" in target_axes_unordered else ("z", "y", "x")
     else:
-        if "c" in target_axes_unordered:
-            target_axes = ("c", "y", "x")
-        else:
-            target_axes = ("y", "x")
+        target_axes = ("c", "y", "x") if "c" in target_axes_unordered else ("y", "x")
     target_spatial_axes = get_spatial_axes(target_axes)
     assert len(target_spatial_axes) == len(axes)
     assert len(target_spatial_axes) == len(axes)

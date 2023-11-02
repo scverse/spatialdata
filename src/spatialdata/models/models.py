@@ -342,7 +342,11 @@ class ShapesModel:
                   ragged arrays, in case of (Multi)`Polygons`.
                   Therefore additional arguments `offsets` and `geometry` must be provided
                 - if `Path` or `str`, it's read as a GeoJSON file.
-                - If :class:`geopandas.GeoDataFrame`, it's validated.
+                - If :class:`geopandas.GeoDataFrame`, it's validated. The object needs to
+                  have a column called `geometry` which is a :class:`geopandas.GeoSeries`
+                  or `shapely` objects. Valid options are combinations of `Polygon`/
+                  `MultiPolygon` or `Point`. If the geometries are `Point`, there must be
+                  another column called `radius`.
 
         geometry
             Geometry type of the shapes. The following geometries are supported:
@@ -352,7 +356,10 @@ class ShapesModel:
                 - 6: `MultiPolygon`
 
         offsets
-            In the case of (Multi)`Polygons` shapes, the offsets of the polygons must be provided.
+            In the case of (Multi)`Polygons` shapes, in order to initialize the shapes from their
+            ragged array representation, the offsets of the polygons must be provided.
+            Alternatively you can call the parser as `ShapesModel.parse(data)`, where data is a
+            `GeoDataFrame` object and ignore the `offset` paramter (recommended).
         radius
             Size of the `Circles`. It must be provided if the shapes are `Circles`.
         index

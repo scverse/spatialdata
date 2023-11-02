@@ -110,6 +110,9 @@ exclude_patterns = [
     "tutorials/notebooks/README.md",
     "tutorials/notebooks/references.md",
     "tutorials/notebooks/notebooks/paper_reproducibility/*",
+    "tutorials/notebooks/notebooks/paper_reproducibility/*",
+    "tutorials/notebooks/notebooks/developers_resources/storage_format/*.ipynb",
+    "tutorials/notebooks/notebooks/developers_resources/storage_format/Readme.md",
 ]
 # Ignore warnings.
 nitpicky = False  # TODO: solve upstream.
