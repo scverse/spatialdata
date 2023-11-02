@@ -559,6 +559,62 @@ class SpatialData:
 
         return SpatialData(**elements, table=table)
 
+    def rename_coordinate_systems(self, rename_dict: dict[str, str]) -> None:
+        """
+        Rename coordinate systems.
+
+        Parameters
+        ----------
+        rename_dict
+            A dictionary mapping old coordinate system names to new coordinate system names.
+
+        Notes
+        -----
+        The method does not allow to rename a coordinate system into an existing one, unless the existing one is also
+        renamed in the same call.
+        """
+        from spatialdata.transformations.operations import get_transformation, set_transformation
+
+        # check that the rename_dict is valid
+        old_names = self.coordinate_systems
+        new_names = list(set(old_names).difference(set(rename_dict.keys())))
+        for old_cs, new_cs in rename_dict.items():
+            if old_cs not in old_names:
+                raise ValueError(f"Coordinate system {old_cs} does not exist.")
+            if new_cs in new_names:
+                raise ValueError(
+                    "It is not allowed to rename a coordinate system if the new name already exists and "
+                    "if it is not renamed in the same call."
+                )
+            new_names.append(new_cs)
+
+        # rename the coordinate systems
+        for element in self._gen_elements_values():
+            # get the transformations
+            transformations = get_transformation(element, get_all=True)
+            assert isinstance(transformations, dict)
+
+            # appends a random suffix to the coordinate system name to avoid collisions
+            suffixes_to_replace = set()
+            for old_cs, new_cs in rename_dict.items():
+                if old_cs in transformations:
+                    random_suffix = hashlib.sha1(os.urandom(128)).hexdigest()[:8]
+                    transformations[new_cs + random_suffix] = transformations.pop(old_cs)
+                    suffixes_to_replace.add(new_cs + random_suffix)
+
+            # remove the random suffixes
+            new_transformations = {}
+            for cs_with_suffix in transformations:
+                if cs_with_suffix in suffixes_to_replace:
+                    cs = cs_with_suffix[:-8]
+                    new_transformations[cs] = transformations[cs_with_suffix]
+                    suffixes_to_replace.remove(cs_with_suffix)
+                else:
+                    new_transformations[cs_with_suffix] = transformations[cs_with_suffix]
+
+            # set the new transformations
+            set_transformation(element=element, transformation=new_transformations, set_all=True)
+
     def transform_element_to_coordinate_system(
         self, element: SpatialElement, target_coordinate_system: str
     ) -> SpatialElement:
