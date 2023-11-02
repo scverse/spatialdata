@@ -102,6 +102,7 @@ def _filter_table_by_elements(
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
             to_keep = to_keep | indices
     original_table = table
+    table.obs = pd.DataFrame(table.obs)
     table = table[to_keep, :]
     if match_rows:
         assert instances is not None
