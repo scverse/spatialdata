@@ -364,8 +364,8 @@ class ShapesModel:
             Size of the `Circles`. It must be provided if the shapes are `Circles`.
         index
             Index of the shapes, must be of type `str`. If None, it's generated automatically.
-        transform
-            Transform of points.
+        transformations
+            Transformations of shapes.
         kwargs
             Additional arguments for GeoJSON reader.
 
