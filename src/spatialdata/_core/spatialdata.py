@@ -5,13 +5,15 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, Callable, Optional, Mapping, Iterable, Tuple
 
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.array import Array
 from dask.delayed import Delayed
+from numpy.typing import NDArray
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -41,6 +43,7 @@ from spatialdata.models import (
     get_axes_names,
     get_model,
 )
+from spatialdata.models.models import ScaleFactors_t
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -1148,6 +1151,41 @@ class SpatialData:
         #                 raise ValueError(f"Unknown element type {element_type}")
         #             self.__getattribute__(element_type)[name] = element
         assert isinstance(self.path, str)
+
+    def apply(
+        self,
+        func: Callable[..., NDArray | Array] | Mapping[str, Any],
+        fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
+        img_layer: Optional[str] = None,
+        output_layer: Optional[str] = None,
+        channel: Optional[int | Iterable[int] | str | Iterable[str]] = None,
+        z_slice: Optional[float | Iterable[float]] = None,
+        combine_c=True,
+        combine_z=True,
+        chunks: Optional[str | int | Tuple[int, ...]] = None,
+        scale_factors: Optional[ScaleFactors_t] = None,
+        overwrite: bool = False,
+        **kwargs: Any,
+    ):
+        from spatialdata._core.operations.apply import apply
+
+        self = apply(
+            self,
+            func,
+            fn_kwargs=fn_kwargs,
+            img_layer=img_layer,
+            output_layer=output_layer,
+            channel=channel,
+            z_slice=z_slice,
+            combine_c=combine_c,
+            combine_z=combine_z,
+            chunks=chunks,
+            scale_factors=scale_factors,
+            overwrite=overwrite,
+            **kwargs,
+        )
+
+        return self
 
     @property
     def table(self) -> AnnData:
