@@ -3,6 +3,7 @@ import pytest
 
 from spatialdata import SpatialData
 from spatialdata._core.operations.apply import _precondition
+from spatialdata.transformations import Translation, get_transformation, set_transformation
 
 
 def _multiply(image, parameter=2):
@@ -212,7 +213,7 @@ def test_apply_multiple_functions_multiple_fn_kwargs(sdata_blobs: SpatialData):
     with pytest.raises(KeyError):
         sdata_blobs.images["blobs_apply"].sel(c=1)
 
-    # AssertionErrro if keys in fn_kwargs do not match keys in func
+    # AssertionError if keys in fn_kwargs do not match keys in func
     fn_kwargs = {0: {"parameter": 4}, 1: {"parameter_add": 4}}
     with pytest.raises(AssertionError):
         _ = sdata_blobs.apply(
@@ -228,7 +229,35 @@ def test_apply_multiple_functions_multiple_fn_kwargs(sdata_blobs: SpatialData):
         )
 
 
-# test multiscale + test transformations
+def test_apply_transformation(sdata_blobs: SpatialData):
+    fn_kwargs = {"parameter": 4}
+
+    # set a dummy translation
+    translation = Translation([100, 100], axes=("x", "y"))
+    set_transformation(sdata_blobs.images["blobs_image"], translation)
+
+    sdata_blobs = sdata_blobs.apply(
+        func=_multiply,
+        fn_kwargs=fn_kwargs,
+        img_layer="blobs_image",
+        output_layer="blobs_apply",
+        combine_c=True,
+        combine_z=True,
+        overwrite=True,
+        chunks=212,
+        scale_factors=None,
+    )
+
+    tr1 = get_transformation(sdata_blobs.images["blobs_image"])
+    tr2 = get_transformation(sdata_blobs.images["blobs_apply"])
+    assert tr1 == tr2
+
+    res = sdata_blobs.images["blobs_image"].compute()
+    res2 = sdata_blobs.images["blobs_apply"].compute()
+    assert np.array_equal(res * fn_kwargs["parameter"], res2)
+
+
+# TODO add unit test for multiscale. both for scale_factors != None, as for sdata input being multiscale
 
 
 def test_precondition():

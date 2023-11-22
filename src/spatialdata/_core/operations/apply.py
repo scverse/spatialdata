@@ -15,6 +15,7 @@ import spatialdata
 from spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata.models.models import ScaleFactors_t
+from spatialdata.transformations import get_transformation, set_transformation
 
 # TODO test for multiscale -> here apply will be done len(scale_factors) times.
 # So on each multiscale scale.
@@ -79,8 +80,6 @@ def apply(
         Specification for rechunking the data before applying the function.
         If specified, dask's map_overlap or map_blocks is used depending on the occurence of the "depth" parameter in kwargs.
         If chunks is a Tuple, they should contain desired chunk size for c, (z), y, x.
-    crd : Optional[Tuple[int, int, int, int]], default=None
-        The coordinates specifying the region of the image to be processed. Defines the bounds (x_min, x_max, y_min, y_max).
     scale_factors
         Scale factors to apply for multiscale.
     overwrite : bool, default=False
@@ -211,7 +210,8 @@ def apply(
             arr = da.map_blocks(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
         return arr.rechunk(chunks)
 
-    # get spatial element
+    # get transformation and spatial element
+    transformation = get_transformation(sdata.images[img_layer])
     se = _get_spatial_element(sdata, layer=img_layer)
 
     # here you specify the channels the function is applied on
@@ -295,15 +295,15 @@ def apply(
                 arr = se.sel(c=channel).data
             arr = apply_func(func=func, arr=arr, fn_kwargs=fn_kwargs)
 
-    # this could be fix to prevent recomputation for multiscale if sdata is not backed. 
+    # this could be fix to prevent recomputation for multiscale if sdata is not backed.
     # if sdata is backed, multiscale will still trigger recomputation for every scale
-    #if not sdata.is_backed():
+    # if not sdata.is_backed():
     #    arr=arr.persist()
 
     if "z" in se.dims:
         se = spatialdata.models.Image3DModel.parse(
             arr,
-            dims=se.dims,  # TODO need to test this for multiscale
+            dims=se.dims,
             scale_factors=scale_factors,
             chunks=arr.chunksize,
             c_coords=channel,
@@ -312,11 +312,13 @@ def apply(
     else:
         se = spatialdata.models.Image2DModel.parse(
             arr,
-            dims=se.dims,  # TODO need to test this for multiscale
+            dims=se.dims,
             scale_factors=scale_factors,
             chunks=arr.chunksize,
             c_coords=channel,
         )
+
+    set_transformation(se, transformation=transformation)
 
     sdata.add_image(name=output_layer, image=se, overwrite=overwrite)
 
