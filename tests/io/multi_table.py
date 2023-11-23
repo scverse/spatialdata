@@ -19,13 +19,13 @@ np.random.shuffle(visium_locations2.index)
 
 
 def get_annotation_target_of_table(table: AnnData) -> str:
-    return table.obs['__spatial_element__']
+    return table.obs["__spatial_element__"]
 
 
 def set_annotation_target_of_table(table: AnnData, spatial_element: str) -> None:
-    table.obs['__spatial_element__'] = spatial_element
+    table.obs["__spatial_element__"] = spatial_element
 
-@pytest.mark.paramterreize('instance_id', [None, np.array([str(i) for i in range(20000)])])
+@pytest.mark.paramterreize("instance_id", [None, np.array([str(i) for i in range(20000)])])
 def test_single_table(tmp_path: str, instance_id: Any):
     # shared table
     tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -49,12 +49,12 @@ def test_single_table(tmp_path: str, instance_id: Any):
 
     # use case example 1
     # sorting the shapes to match the order of the table
-    sdata['visium0'][sdata.table.obs['__instance_id__']]
+    sdata["visium0"][sdata.table.obs["__instance_id__"]]
     assert ...
     # use case example 2
     # sorting the table to match the order of the shapes
-    sdata.table.obs.set_index(keys=['__instance_id__'])
-    sdata.table.obs[sdata['visium0']]
+    sdata.table.obs.set_index(keys=["__instance_id__"])
+    sdata.table.obs[sdata["visium0"]]
     assert ...
 
 def test_elements_transfer_annotation():
@@ -72,8 +72,8 @@ def test_elements_transfer_annotation():
             "segmentation": table
         },
     )
-    set_annotation_target_of_table(visium.table, 'visium1')
-    assert get_annotation_target_of_table(visium.table, 'visium1')
+    set_annotation_target_of_table(visium.table, "visium1")
+    assert get_annotation_target_of_table(visium.table, "visium1")
 
 def test_single_table_multiple_elements(tmp_path: str):
     tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -94,13 +94,13 @@ def test_single_table_multiple_elements(tmp_path: str):
 
     # use case example 1
     # sorting the shapes visium0 to match the order of the table
-    sdata['visium0'][sdata.table.obs['__instance_id__'][sdata.table.obs['__spatial_element__'] == 'visium0']]
+    sdata["visium0"][sdata.table.obs["__instance_id__"][sdata.table.obs["__spatial_element__"] == "visium0"]]
     assert ...
     # use case example 2
     # subsetting and sorting the table to match the order of the shapes visium0
-    sub_table = sdata.table[sdata.table.obs['__spatial_element'] == 'visium0']
-    sub_table.set_index(keys=['__instance_id__'])
-    sub_table.obs[sdata['visium0']]
+    sub_table = sdata.table[sdata.table.obs["__spatial_element"] == "visium0"]
+    sub_table.set_index(keys=["__instance_id__"])
+    sub_table.obs[sdata["visium0"]]
     assert ...
 
 def test_concatenate(tmp_path: str):
@@ -155,12 +155,12 @@ def test_multiple_tables_same_element():
     # use cases
     # use case example 1
     # sorting the shapes to match the order of the table
-    sdata['visium0'][sdata.table.obs['__instance_id__']]
+    sdata["visium0"][sdata.table.obs["__instance_id__"]]
     assert ...
     # use case example 2
     # sorting the table to match the order of the shapes
-    sdata.table.obs.set_index(keys=['__instance_id__'])
-    sdata.table.obs[sdata['visium0']]
+    sdata.table.obs.set_index(keys=["__instance_id__"])
+    sdata.table.obs[sdata["visium0"]]
     assert ...
 
 def test_partial_match():
