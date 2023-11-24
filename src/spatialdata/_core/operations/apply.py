@@ -163,7 +163,6 @@ def apply(
     >>> fn_kwargs={ 0: {  0.5: { "parameter": 2 }, 1.5: { "parameter": 3 } }, 1: {  0.5: { "parameter": 4 }, 1.5: { "parameter": 5 } }  }
     >>> sdata = apply(sdata, my_function, fn_kwargs=fn_kwargs, img_layer="raw_image", output_layer="processed_image", combine_c=False, combine_z=False)
     """
-
     if img_layer is None:
         img_layer = [*sdata.images][-1]
         logger.warning(

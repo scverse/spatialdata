@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from spatialdata import SpatialData
 from spatialdata._core.operations.apply import _precondition
 from spatialdata.transformations import Translation, get_transformation, set_transformation

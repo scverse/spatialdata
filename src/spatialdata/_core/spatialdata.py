@@ -5,17 +5,17 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Union, Callable, Optional, Mapping, Iterable, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Optional, Tuple, Union
 
 import zarr
 from anndata import AnnData
+from dask.array import Array
 from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.array import Array
 from dask.delayed import Delayed
-from numpy.typing import NDArray
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
+from numpy.typing import NDArray
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
@@ -1178,7 +1178,6 @@ class SpatialData:
         Please see
         :func:`spatialdata.apply` for the complete docstring.
         """
-
         from spatialdata._core.operations.apply import apply
 
         self = apply(
