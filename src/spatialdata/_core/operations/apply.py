@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import dask.array as da
 from dask.array import Array
@@ -12,15 +12,14 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 import spatialdata
-from spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata.models.models import ScaleFactors_t
 from spatialdata.transformations import get_transformation, set_transformation
 
-# TODO test for multiscale -> here apply will be done len(scale_factors) times.
-# So on each multiscale scale.
-# We want different behaviour. I.e. once calculate, save to intermediate dask array, and then rewrite.
-# also need to
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
+
+__all__ = ["apply"]
 
 
 def apply(
@@ -31,8 +30,8 @@ def apply(
     output_layer: Optional[str] = None,
     channel: Optional[int | Iterable[int] | str | Iterable[str]] = None,
     z_slice: Optional[float | Iterable[float]] = None,
-    combine_c=True,
-    combine_z=True,
+    combine_c: bool = True,
+    combine_z: bool = True,
     chunks: Optional[str | int | Tuple[int, ...]] = None,
     scale_factors: Optional[ScaleFactors_t] = None,
     overwrite: bool = False,
@@ -47,7 +46,7 @@ def apply(
         Spatial data object containing the image to be processed.
     func : Callable[..., NDArray | Array] | Mapping[ str | Any ]
         The Callable to apply to the image.
-        Can also be a Mapping if different Callable should be applied to z_slice and/or channel
+        Can also be a Mapping if different Callable should be applied different z_slices and/or channels
         e.g. { 'channel1': function, 'channel2': function2 ... } or { 'channel': { 'z_slice': function ... } ... }.
         If a Mapping is specified, and fn_kwargs is specified then the Mapping should match
         the Mapping specified in fn_kwargs.
@@ -62,19 +61,19 @@ def apply(
     channel : Optional[int | Iterable[int] | str | Iterable[str] ], default=None
         Specifies which channel(s) to run `func` on.
         If None, the `func` is run on all channels if `func` is a Callable,
-        and if `func` or `fn_kwargs` is a mapping, it will run on the specfied channels if provided.
+        and if `func` or `fn_kwargs` is a Mapping, it will run on the specfied channels in `func`/`fn_kwargs` if provided.
     z_slice : Optional[float | Iterable[float]], default=None
-        Specifies which z_slice to run `func` on.
-        If None, the `func` is run on all channels if `func` is a Callable,
-        and if `func` or `fn_kwargs` is a mapping, in will run on the specfied z slices if provided.
+        Specifies which z_slice(s) to run `func` on.
+        If None, the `func` is run on all z_slices if `func` is a Callable,
+        and if `func` or `fn_kwargs` is a Mapping, in will run on the specfied z slices in `func`/`fn_kwargs` if provided.
     combine_c : bool, default=True.
         If False, each channel is processed indepentently,
         i.e. input to `func`/map_blocks/map_overlap will be of shape (1,(z),y,x).
-        If set to True, input will depend on the chunk parameter specified for the c dimension.
+        If set to True, input to the Callable will depend on the chunk parameter specified for the c dimension.
     combine_z : bool, default=True.
         If False, each z slice is processed indepentently,
         i.e. input to `func`/map_blocks/map_overlap will be of shape (c,1,y,x).
-        If set to True, input will depend on the chunk parameter specified for the z dimension.
+        If set to True, input to the Callable will depend on the chunk parameter specified for the z dimension.
         Ignored when `img_layer` does not contain a z dimension.
     chunks : str | Tuple[int, ...] | int | None, default=None
         Specification for rechunking the data before applying the function.
@@ -121,6 +120,14 @@ def apply(
     >>> fn_kwargs={ 0: { "parameter": 2 } }
     >>> sdata = apply(sdata, my_function, fn_kwargs=fn_kwargs, img_layer="raw_image", output_layer="processed_image", combine_c=False)
 
+    Apply the same function to all channels of the image with the same parameters:
+
+    >>> fn_kwargs={ "parameter": 2 }
+    >>> sdata = apply(sdata, my_function, fn_kwargs=fn_kwargs, img_layer="raw_image", output_layer="processed_image", combine_c=False)
+
+    In the above example, setting combine_c to True results in `my_function` receiving an array with the shape c,y,x,
+    whereas setting it to False leads to my_function being supplied with an array shaped as 1,y,x.
+
     Apply a custom function `my_function` and `my_function2` to channel 0, respectively channel 1 of an image layer
     (we assume sdata[ "raw_image" ] has 2 channels, 0 and 1, and has dimensions c,y,x ):
 
@@ -139,6 +146,15 @@ def apply(
     ...    return image*parameter
     >>> fn_kwargs={ 0.5: { "parameter": 2 }, 1.5: { "parameter": 3 } }
     >>> sdata = apply(sdata, my_function, fn_kwargs=fn_kwargs, img_layer="raw_image", output_layer="processed_image", combine_z=False)
+
+    Apply a custom function `my_function` to all z slices anc channels of an image layer using different parameters for each z slice
+    and channel.
+    (we assume sdata[ "raw_image" ] has 2 channels 0 and 1, and 2 z slices at 0.5 and 1.5, and has dimensions c,z,y,x ):
+
+    >>> def my_function( image, parameter ):
+    ...    return image*parameter
+    >>> fn_kwargs={ 0: {  0.5: { "parameter": 2 }, 1.5: { "parameter": 3 } }, 1: {  0.5: { "parameter": 4 }, 1.5: { "parameter": 5 } }  }
+    >>> sdata = apply(sdata, my_function, fn_kwargs=fn_kwargs, img_layer="raw_image", output_layer="processed_image", combine_c=False, combine_z=False)
     """
 
     if img_layer is None:
@@ -402,18 +418,29 @@ def _precondition(
     # sanity checks
     if keys_fn_kwargs is not None:
         keys_func = collect_keys_func(func)
-        assert keys_fn_kwargs == keys_func, "should specify same keys in fn_kwargs and func"
+        assert keys_fn_kwargs == keys_func, "should specify same keys in 'fn_kwargs' and 'func'"
         keys = set(flatten_list(keys_fn_kwargs))
         # now also do sanity check on the channels and z slices.
         if combine_c and channels is not None:
             if keys.intersection(set(channels)):
                 raise ValueError(
-                    "Keys in 'fn_kwargs' can not have intersection with channel names if 'combine_c' is set to True."
+                    "Keys in 'fn_kwargs' can not have intersection with names of 'channel' if 'combine_c' is set to True."
                 )
         if combine_z and z_slices is not None:
             if keys.intersection(set(z_slices)):
                 raise ValueError(
                     "Keys in 'fn_kwargs' can not have intersection with names of 'z_slices' if 'combine_z' is set to True."
+                )
+        # we do not allow channel/z_slices keys specified in fn_kwargs/func that are not in channels/z_slices
+        if not combine_z or not combine_c:
+            if not combine_c and channels is not None:
+                keys = keys - set(channels)
+            if not combine_z and z_slices is not None:
+                keys = keys - set(z_slices)
+            if keys:
+                raise ValueError(
+                    f"Some keys in 'fn_kwargs/func' where specified that "
+                    f"where not found in specified channels ({channels}) or z_slices ({z_slices})."
                 )
 
     # fix keys

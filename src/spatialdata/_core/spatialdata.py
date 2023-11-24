@@ -1160,13 +1160,24 @@ class SpatialData:
         output_layer: Optional[str] = None,
         channel: Optional[int | Iterable[int] | str | Iterable[str]] = None,
         z_slice: Optional[float | Iterable[float]] = None,
-        combine_c=True,
-        combine_z=True,
+        combine_c: bool = True,
+        combine_z: bool = True,
         chunks: Optional[str | int | Tuple[int, ...]] = None,
         scale_factors: Optional[ScaleFactors_t] = None,
         overwrite: bool = False,
         **kwargs: Any,
     ):
+        """
+        Apply a specified function to an image layer.
+
+        Notes
+        -----
+        This function calls :func:`spatialdata.apply`.
+
+        Please see
+        :func:`spatialdata.apply` for the complete docstring.
+        """
+
         from spatialdata._core.operations.apply import apply
 
         self = apply(
