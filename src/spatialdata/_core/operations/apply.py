@@ -33,6 +33,7 @@ def apply(
     combine_c: bool = True,
     combine_z: bool = True,
     chunks: Optional[str | int | Tuple[int, ...]] = None,
+    output_chunks: Optional[Tuple[Tuple[int, ...], ...]] = None,
     scale_factors: Optional[ScaleFactors_t] = None,
     overwrite: bool = False,
     **kwargs: Any,
@@ -79,6 +80,12 @@ def apply(
         Specification for rechunking the data before applying the function.
         If specified, dask's map_overlap or map_blocks is used depending on the occurence of the "depth" parameter in kwargs.
         If chunks is a Tuple, they should contain desired chunk size for c, (z), y, x.
+    output_chunks: Tuple[Tuple[int, ...], ...], default=None
+        Chunk shape of resulting blocks if the function does not preserve
+        shape. If not provided, the resulting array is assumed to have the same
+        block structure as the first input array.
+        Ignored when chunks is None. Passed to map_overlap/map_blocks as `chunks`.
+        E.g. ( (3,), (256,) , (256,)  ).
     scale_factors
         Scale factors to apply for multiscale.
     overwrite : bool, default=False
@@ -179,8 +186,7 @@ def apply(
         fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ) -> Array:
         if chunks is None:
-            # if dask array, we want to rechunk,
-            # because taking a crop could have caused irregular chunks
+            # if dask array, we want to rechunk, to prevent irregular chunks
             if isinstance(arr, Array):
                 arr = arr.rechunk(arr.chunksize)
             arr = func(arr, **fn_kwargs)
@@ -191,6 +197,8 @@ def apply(
                     f"Chunks ({chunks}) are provided for {len(chunks)} dimensions. "
                     f"Please (only) provide chunks for {arr.ndim} dimensions."
                 )
+        if output_chunks is not None:
+            kwargs["chunks"] = output_chunks
         arr = da.asarray(arr).rechunk(chunks)
         if "depth" in kwargs:
             kwargs.setdefault("boundary", "reflect")
@@ -272,7 +280,7 @@ def apply(
                     func_c_z = func_c[key_z]
                     arr = se.sel(z=[key_z], c=[key_c]).data
                     # TODO decide if we want to squeeze here, and then put them back in next step
-                    # but then we have to be carefull if chunks was passed
+                    # but then we have to be carefull if chunks was passed as tuple
                     arr = apply_func(func=func_c_z, arr=arr, fn_kwargs=_fn_kwargs_c_z)
                     # arr of size (1,1,y,x)
                     result_z.append(arr[0, 0, ...])

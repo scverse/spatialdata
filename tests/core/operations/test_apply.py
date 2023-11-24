@@ -295,13 +295,64 @@ def test_apply_multiscale(sdata_blobs: SpatialData):
         scale_factors=[2, 2],
     )
 
-    for scale in sdata_blobs["blobs_apply"]:
-        res = sdata_blobs["blobs_multiscale_image"][scale][
-            sdata_blobs["blobs_multiscale_image"][scale].__iter__().__next__()
+    for scale in sdata_blobs.images["blobs_apply"]:
+        res = sdata_blobs.images["blobs_multiscale_image"][scale][
+            sdata_blobs.images["blobs_multiscale_image"][scale].__iter__().__next__()
         ]
-        res2 = sdata_blobs["blobs_apply"][scale][sdata_blobs["blobs_apply"][scale].__iter__().__next__()]
+        res2 = sdata_blobs.images["blobs_apply"][scale][sdata_blobs.images["blobs_apply"][scale].__iter__().__next__()]
 
         assert np.array_equal(res.compute() * fn_kwargs["parameter"], res2.compute())
+
+
+def test_apply_alter_c_dim(sdata_blobs: SpatialData):
+    fn_kwargs = {}
+
+    def _alter_c_dimension(image):
+        return np.stack([image[0], image[0]])
+
+    # TODO Do we want to support altering of c dimension when combine_c is True?
+    with pytest.raises(ValueError):
+        sdata_blobs = sdata_blobs.apply(
+            func=_alter_c_dimension,
+            fn_kwargs=fn_kwargs,
+            img_layer="blobs_image",
+            output_layer="blobs_apply",
+            combine_c=True,
+            combine_z=True,
+            overwrite=True,
+            chunks=256,
+            scale_factors=None,
+            output_chunks=((2,), (256,), (256,)),
+        )
+
+        res = sdata_blobs.images["blobs_apply"].compute()
+
+
+def test_apply_alter_x_y_dim(sdata_blobs: SpatialData):
+    fn_kwargs = {}
+
+    def _alter_x_dimension(
+        image,
+    ):
+        padding = ((0, 0), (5, 5), (5, 5))
+        padded_array = np.pad(image, pad_width=padding, mode="constant", constant_values=0)
+        return padded_array
+
+    sdata_blobs = sdata_blobs.apply(
+        func=_alter_x_dimension,
+        fn_kwargs=fn_kwargs,
+        img_layer="blobs_image",
+        output_layer="blobs_apply",
+        combine_c=True,
+        combine_z=True,
+        overwrite=True,
+        chunks=212,
+        scale_factors=None,
+        output_chunks=((3,), (212 + 10, 44 + 10), (212 + 10, 44 + 10)),
+    )
+
+    res = sdata_blobs.images["blobs_apply"].compute()
+    res
 
 
 def test_precondition():
