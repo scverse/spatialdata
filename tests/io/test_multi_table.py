@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 from anndata import AnnData
+import anndata as ad
 from spatialdata import SpatialData
 
 from tests.conftest import _get_new_table, _get_shapes
@@ -64,69 +65,57 @@ class TestMultiTable:
         set_annotation_target_of_table(test_sdata["segmentation"], "test_multipoly")
         assert get_annotation_target_of_table(test_sdata["segmentation"]) == "test_multipoly"
 
+    def test_single_table_multiple_elements(self, tmp_path: str):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
 
-# def test_single_table_multiple_elements(tmp_path: str):
-#     tmpdir = Path(tmp_path) / "tmp.zarr"
-#     adata0 = AnnData(np.random.rand(10, 20000))
-#     table = TableModel.parse(adata0, spatial_element: None | str | Sequence[str] = ["<spatial_element_path>",...],
-#     instance_id: None | Sequence[Any] = instance_id)
-#
-#     visium = SpatialData(
-#         shapes={
-#             "visium0": visium_locations0,
-#             "visium1": visium_locations1,
-#         },
-#         tables={
-#             "segmentation": table
-#         },
-#     )
-#     visium.write(visium)
-#     sdata = SpatialData.read(tmpdir)
-#
-#     # use case example 1
-#     # sorting the shapes visium0 to match the order of the table
-#     sdata["visium0"][sdata.table.obs["__instance_id__"][sdata.table.obs["__spatial_element__"] == "visium0"]]
-#     assert ...
-#     # use case example 2
-#     # subsetting and sorting the table to match the order of the shapes visium0
-#     sub_table = sdata.table[sdata.table.obs["__spatial_element"] == "visium0"]
-#     sub_table.set_index(keys=["__instance_id__"])
-#     sub_table.obs[sdata["visium0"]]
-#     assert ...
-#
-# def test_concatenate(tmp_path: str):
-#     table0 = TableModel.parse(adata0, spatial_element: None | str | Sequence[str] = ["<spatial_element_path>", ...],
-#     instance_id: None | Sequence[
-#     table1 = TableModel.parse(adata0, spatial_element: None | str | Sequence[str] = ["<spatial_element_path>",
-#                                                                                      ...], instance_id: None |
-#                                                                                      Sequence[
-#                                                                                      Any] = instance_i
-#
-#    concatenated_table = ad.concat([table0, table1])
-# visium = SpatialData(
-#     shapes={
-#         "visium0": visium_locations0,
-#         "visium1": visium_locations1,
-#     },
-#     tables={
-#         "segmentation": concatenated_table
-#     },
-# )
-#     # use case tests as above (we test only visium0)
-#
-# def test_multiple_table_without_element():
-#     table0 = TableModel.parse(adata0)
-#     table1 = TableModel.parse(adata0)
-#
-#     visium = SpatialData(
-#         tables={
-#             "segmentation0": table0,
-#             "segmentation1": table1
-#         },
-#     )
-#
-#     # nothing to test? probably nothing
-#
+        test_sdata = SpatialData(
+            shapes={
+                "test_shapes": test_shapes["poly"],
+                "test_multipoly": test_shapes["multi_poly"],
+            },
+            tables={
+                "segmentation": table
+            },
+        )
+        test_sdata.write(tmpdir)
+        # sdata = SpatialData.read(tmpdir)
+
+        # # use case example 1
+        # # sorting the shapes visium0 to match the order of the table
+        # sdata["visium0"][sdata.table.obs["__instance_id__"][sdata.table.obs["__spatial_element__"] == "visium0"]]
+        # assert ...
+        # # use case example 2
+        # # subsetting and sorting the table to match the order of the shapes visium0
+        # sub_table = sdata.table[sdata.table.obs["__spatial_element"] == "visium0"]
+        # sub_table.set_index(keys=["__instance_id__"])
+        # sub_table.obs[sdata["visium0"]]
+        # assert ...
+
+    def test_concatenate_tables(self):
+        table_two = _get_new_table(spatial_element="test_multipoly", instance_id=np.array([str(i) for i in range(2)]))
+        concatenated_table = ad.concat([table, table_two])
+        test_sdata = SpatialData(
+            shapes={
+                "test_shapes": test_shapes["poly"],
+                "test_multipoly": test_shapes["multi_poly"],
+            },
+            tables={
+                "segmentation": concatenated_table
+            },
+        )
+        # use case tests as above (we test only visium0)
+
+    def test_multiple_table_without_element(self):
+        table = _get_new_table()
+        table_two = _get_new_table()
+
+        test_sdata = SpatialData(
+            tables={
+                "table": table,
+                "table_two": table_two
+            },
+        )
+
 # def test_multiple_tables_same_element():
 #     tmpdir = Path(tmp_path) / "tmp.zarr"
 #     adata0 = AnnData(np.random.rand(10, 20000))
