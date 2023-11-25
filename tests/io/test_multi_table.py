@@ -109,6 +109,7 @@ class TestMultiTable:
             tables={"table": table, "table_two": table_two},
         )
 
+
     def test_multiple_tables_same_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table_two = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
