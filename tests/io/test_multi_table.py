@@ -1,8 +1,8 @@
 from pathlib import Path
 
+import anndata as ad
 import numpy as np
 from anndata import AnnData
-import anndata as ad
 from spatialdata import SpatialData
 
 from tests.conftest import _get_new_table, _get_shapes
@@ -73,9 +73,7 @@ class TestMultiTable:
                 "test_shapes": test_shapes["poly"],
                 "test_multipoly": test_shapes["multi_poly"],
             },
-            tables={
-                "segmentation": table
-            },
+            tables={"segmentation": table},
         )
         test_sdata.write(tmpdir)
         # sdata = SpatialData.read(tmpdir)
@@ -99,9 +97,7 @@ class TestMultiTable:
                 "test_shapes": test_shapes["poly"],
                 "test_multipoly": test_shapes["multi_poly"],
             },
-            tables={
-                "segmentation": concatenated_table
-            },
+            tables={"segmentation": concatenated_table},
         )
         # use case tests as above (we test only visium0)
 
@@ -110,29 +106,21 @@ class TestMultiTable:
         table_two = _get_new_table()
 
         test_sdata = SpatialData(
-            tables={
-                "table": table,
-                "table_two": table_two
-            },
+            tables={"table": table, "table_two": table_two},
         )
 
-# def test_multiple_tables_same_element():
-#     tmpdir = Path(tmp_path) / "tmp.zarr"
-#     adata0 = AnnData(np.random.rand(10, 20000))
-#     table0 = TableModel.parse(adata0, spatial_element: None | str | Sequence[str] = ["<spatial_element_path>",...],
-#     instance_id: None | Sequence[Any] = instance_id)
-#     table1 = TableModel.parse(adata0, spatial_element: None | str | Sequence[str] = ["<spatial_element_path>",...],
-#     instance_id: None | Sequence[Any] = instance_id)
-#
-#     visium = SpatialData(
-#         shapes={
-#             "visium0": visium_locations0,
-#         },
-#         tables={
-#             "segmentation0": table0,
-#             "segmentation1": table1
-#         },
-#     )
+    def test_multiple_tables_same_element(self, tmp_path: str):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        table_two = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
+
+        test_sdata = SpatialData(
+            shapes={
+                "test_shapes": test_shapes["poly"],
+            },
+            tables={"segmentation": table, "segmentation_two": table_two},
+        )
+        test_sdata.write(tmpdir)
+
 #
 #     # do we reallyneed to do the test below? maybe we can write something smarter
 #     # use cases
