@@ -109,7 +109,6 @@ class TestMultiTable:
             tables={"table": table, "table_two": table_two},
         )
 
-
     def test_multiple_tables_same_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table_two = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
@@ -121,6 +120,7 @@ class TestMultiTable:
             tables={"segmentation": table, "segmentation_two": table_two},
         )
         test_sdata.write(tmpdir)
+
 
 #
 #     # do we reallyneed to do the test below? maybe we can write something smarter
