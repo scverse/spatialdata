@@ -14,21 +14,64 @@ from tests.conftest import _get_new_table, _get_shapes
 test_shapes = _get_shapes()
 instance_id = np.array([str(i) for i in range(5)])
 table = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
+adata0 = _get_new_table()
+adata1 = _get_new_table()
 
 
 # shuffle the indices of the dataframe
 np.random.default_rng().shuffle(test_shapes["poly"].index)
 
+# tables is a dict
+SpatialData.tables
 
-def get_annotation_target_of_table(table: AnnData) -> str:
-    return table.obs["__spatial_element__"]
+# def get_table_keys(sdata: SpatialData) -> tuple[list[str], str, str]:
+#     d = sdata.table.uns[sd.models.TableModel.ATTRS_KEY]
+#     return d['region'], d['region_key'], d['instance_key']
+#
+# @staticmethod
+# def SpatialData.get_key_column(table: AnnData, key_column: str) -> ...:
+#     region, region_key, instance_key = sd.models.get_table_keys()
+#     if key_clumns == 'region_key':
+#     return table.obs[region_key]
+# else: ....
+#
+# @staticmethod
+# def SpatialData.get_region_key_column(table: AnnData | str):
+# return get_key_column(...)
+
+# @staticmethod
+# def SpatialData.get_instance_key_column(table: AnnData | str):
+# return get_key_column(...)
+
+# we need also the two set_...() functions
 
 
-def set_annotation_target_of_table(table: AnnData, spatial_element: str) -> None:
-    table.obs["__spatial_element__"] = spatial_element
+def get_annotation_target_of_table(table: AnnData) -> pd.Series:
+    return SpatialData.get_region_key_column(table)
+
+
+def set_annotation_target_of_table(table: AnnData, spatial_element: str | pd.Series) -> None:
+    SpatialData.set_instance_key_column(table, spatial_element)
 
 
 class TestMultiTable:
+    def test_set_get_tables_from_spatialdata(self, sdata):  # sdata is form conftest
+        sdata["my_new_table0"] = adata0
+        sdata["my_new_table1"] = adata1
+
+    def test_old_accessor_deprecation(self, sdata):
+        # assume no table is present
+        # this prints a deprecation warning
+        sdata.table = adata0  # this gets placed in sdata['table']
+        # this prints a deprecation warning
+        _ = sdata.table  # this returns sdata['table']
+        # this prints a deprecation waring
+        del sdata.table
+
+        sdata["my_new_table0"] = adata0
+        # will fail, because there is no sdata['table'], even if another table is present
+        _ = sdata.table
+
     def test_single_table(self, tmp_path: str):
         # shared table
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -47,15 +90,24 @@ class TestMultiTable:
 
         assert assert_equal(test_sdata["segmentation"], sdata["segmentation"])
 
+        # note (to keep in the code): these tests here should silmulate the interactions from teh users; if the syntax
+        # here we are matching the table to the shapes and viceversa (= subset + reordeing)
+        # there is already a function to do one of these two join operations which is match_table_to_element()
+        # is too verbose/complex we need to adjust the internals to make it smoother
         # # use case example 1
         # # sorting the shapes to match the order of the table
-        # sdata["visium0"][sdata.table.obs["__instance_id__"]]
+        # alternatively, we can have a helper function (join, and simpler ones "match_table_to_element()"
+        # "match_element_to_table()", "match_annotations_order(...)", "mathc_reference_eleemnt_order??(...)")
+        # sdata["visium0"][SpatialData.get_instance_key_column(sdata.table['visium0'])]
         # assert ...
         # # use case example 2
         # # sorting the table to match the order of the shapes
         # sdata.table.obs.set_index(keys=["__instance_id__"])
         # sdata.table.obs[sdata["visium0"]]
         # assert ...
+
+    def test_paired_elements_tables(self, tmp_path: str):
+        pass
 
     def test_elements_transfer_annotation(self, tmp_path: str):
         test_sdata = SpatialData(
@@ -109,7 +161,6 @@ class TestMultiTable:
             tables={"table": table, "table_two": table_two},
         )
 
-
     def test_multiple_tables_same_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table_two = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
@@ -122,8 +173,9 @@ class TestMultiTable:
         )
         test_sdata.write(tmpdir)
 
+
 #
-#     # do we reallyneed to do the test below? maybe we can write something smarter
+#     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this, either helper function, ...)
 #     # use cases
 #     # use case example 1
 #     # sorting the shapes to match the order of the table
