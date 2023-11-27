@@ -63,6 +63,18 @@ def test_element_names_unique() -> None:
     with pytest.raises(KeyError):
         sdata.shapes["labels"] = shapes
 
+    assert sdata["image"].shape == image.shape
+    assert sdata["labels"].shape == labels.shape
+    assert len(sdata["points"]) == len(points)
+    assert sdata["shapes"].shape == shapes.shape
+
+    with pytest.raises(KeyError):
+        sdata["labels"] = image
+    with pytest.warns(UserWarning):
+        sdata["points"] = points
+
+    sdata["image2"] = image
+
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
     for element_type, element_name, element in sdata0._gen_elements():
