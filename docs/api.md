@@ -33,7 +33,7 @@ Operations on `SpatialData` objects.
     aggregate
 ```
 
-### Utilities
+### Operations Utilities
 
 ```{eval-rst}
 .. autosummary::
@@ -61,7 +61,7 @@ The elements (building-blocks) that consitute `SpatialData`.
     TableModel
 ```
 
-### Utilities
+### Models Utilities
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.models
@@ -96,7 +96,7 @@ The transformations that can be defined between elements and coordinate systems 
     Sequence
 ```
 
-### Utilities
+### Transformations Utilities
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.transformations
@@ -123,7 +123,7 @@ The transformations that can be defined between elements and coordinate systems 
     ImageTilesDataset
 ```
 
-## Input/output
+## Input/Output
 
 ```{eval-rst}
 .. currentmodule:: spatialdata
