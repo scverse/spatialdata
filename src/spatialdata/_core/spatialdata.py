@@ -610,7 +610,7 @@ class SpatialData:
                     "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
                     "data loss."
                 )
-            if not overwrite and self.path != str(file_path):
+            if not overwrite and str(self.path) != str(file_path):
                 raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
             raise ValueError(
                 "The file path specified is the same as the one used for backing. "
