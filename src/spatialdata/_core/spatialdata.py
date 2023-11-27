@@ -129,7 +129,7 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        tables: dict[str, AnnData] = MappingProxyType({}),
+        table: dict[str, AnnData] = MappingProxyType({}),
     ) -> None:
         self.path = None
 
@@ -157,9 +157,9 @@ class SpatialData:
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
-        if tables is not None:
-            Table_s.validate(tables)
-            self._tables = tables
+        if table is not None:
+            Table_s.validate(table)
+            self._tables = table
 
         self._query = QueryManager(self)
 
