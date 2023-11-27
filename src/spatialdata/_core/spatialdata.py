@@ -134,7 +134,7 @@ class SpatialData:
         self.path = None
 
         self._validate_unique_element_names(
-            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(tables.keys())
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(table.keys())
         )
 
         if images is not None:
@@ -158,8 +158,8 @@ class SpatialData:
                 self._add_points_in_memory(name=k, points=v)
 
         if table is not None:
-            for table_name, table in table.items():
-                Table_s.validate(table)
+            for table_value in table.values():
+                Table_s.validate(table_value)
             self._tables = table
 
         self._query = QueryManager(self)
@@ -184,7 +184,7 @@ class SpatialData:
             "labels": {},
             "points": {},
             "shapes": {},
-            "table": None,
+            "table": {},
         }
         for k, e in elements_dict.items():
             schema = get_model(e)
@@ -201,9 +201,7 @@ class SpatialData:
                 assert isinstance(d["shapes"], dict)
                 d["shapes"][k] = e
             elif schema == TableModel:
-                if d["table"] is not None:
-                    raise ValueError("Only one table can be present in the dataset.")
-                d["table"] = e
+                d["table"][k] = e
             else:
                 raise ValueError(f"Unknown schema {schema}")
         return SpatialData(**d)  # type: ignore[arg-type]
