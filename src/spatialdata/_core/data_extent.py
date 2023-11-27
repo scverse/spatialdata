@@ -115,9 +115,9 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    # python 3.9 tests fail if we don't use Union here, see
-    # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
-    elements: Union[list[str], None] = None,  # noqa: UP007
+    elements: Union[  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
+        list[str], None
+    ] = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -134,7 +134,7 @@ def get_extent(
     max_coordinate
         The maximum coordinate of the bounding box.
     axes
-        The names of the dimensions of the bounding box
+        The names of the dimensions of the bounding box.
     exact
         If True, the extent is computed exactly. If False, an approximation faster to compute is given. The
         approximation is guaranteed to contain all the data, see notes for details.
