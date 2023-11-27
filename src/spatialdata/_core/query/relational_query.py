@@ -45,6 +45,7 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
+    table.obs = pd.DataFrame(table.obs)
     table = table[table.obs[region_key].isin(coordinate_system)].copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
@@ -101,6 +102,7 @@ def _filter_table_by_elements(
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
             to_keep = to_keep | indices
     original_table = table
+    table.obs = pd.DataFrame(table.obs)
     table = table[to_keep, :]
     if match_rows:
         assert instances is not None
@@ -277,6 +279,7 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
+            matched_table.obs = pd.DataFrame(obs)
             x = matched_table[:, value_key_values].X
             import scipy
 

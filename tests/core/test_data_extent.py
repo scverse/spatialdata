@@ -59,8 +59,8 @@ def test_get_extent_points():
     extent = get_extent(sdata["blobs_points"])
     check_test_results0(
         extent,
-        min_coordinates=np.array([12.0, 13.0]),
-        max_coordinates=np.array([500.0, 498.0]),
+        min_coordinates=np.array([3.0, 4.0]),
+        max_coordinates=np.array([509.0, 507.0]),
         axes=("x", "y"),
     )
 

@@ -125,6 +125,59 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
     assert len(filtered_sdata2.table) == len(full_sdata.table)
 
 
+def test_rename_coordinate_systems(full_sdata):
+    # all the elements point to global, add new coordinate systems
+    set_transformation(
+        element=full_sdata.shapes["circles"], transformation=Identity(), to_coordinate_system="my_space0"
+    )
+    set_transformation(element=full_sdata.shapes["poly"], transformation=Identity(), to_coordinate_system="my_space1")
+    set_transformation(
+        element=full_sdata.shapes["multipoly"], transformation=Identity(), to_coordinate_system="my_space2"
+    )
+
+    elements_in_global_before = {
+        name for _, name, _ in full_sdata.filter_by_coordinate_system("global")._gen_elements()
+    }
+
+    # test a renaming without collisions
+    full_sdata.rename_coordinate_systems({"my_space0": "my_space00", "my_space1": "my_space11"})
+    assert {"my_space00", "my_space11", "global", "my_space2"}.issubset(full_sdata.coordinate_systems)
+    assert "my_space0" not in full_sdata.coordinate_systems
+    assert "my_space1" not in full_sdata.coordinate_systems
+
+    # renaming with collisions (my_space2 already exists)
+    with pytest.raises(ValueError):
+        full_sdata.rename_coordinate_systems({"my_space00": "my_space2"})
+
+    # renaming with collisions (my_space3 doesn't exist but it's target of two renamings)
+    with pytest.raises(ValueError):
+        full_sdata.rename_coordinate_systems({"my_space00": "my_space3", "my_space11": "my_space3"})
+
+    # invalid renaming: my_space3 is not a valid coordinate system
+    with pytest.raises(ValueError):
+        full_sdata.rename_coordinate_systems({"my_space3": "my_space4"})
+
+    # invalid renaming: my_space3 is not a valid coordinate system (it doesn't matter if my_space3 is target of one
+    # renaming, as it doesn't exist at the time of the function call)
+    with pytest.raises(ValueError):
+        full_sdata.rename_coordinate_systems(
+            {"my_space00": "my_space3", "my_space11": "my_space3", "my_space3": "my_space4"}
+        )
+
+    # valid renaming with collisions
+    full_sdata.rename_coordinate_systems({"my_space00": "my_space2", "my_space2": "my_space3"})
+    assert get_transformation(full_sdata.shapes["circles"], get_all=True)["my_space2"] == Identity()
+    assert get_transformation(full_sdata.shapes["multipoly"], get_all=True)["my_space3"] == Identity()
+
+    # renaming without effect
+    full_sdata.rename_coordinate_systems({"my_space11": "my_space11"})
+    assert get_transformation(full_sdata.shapes["poly"], get_all=True)["my_space11"] == Identity()
+
+    # check that all the elements with coordinate system global are still there
+    elements_in_global_after = {name for _, name, _ in full_sdata.filter_by_coordinate_system("global")._gen_elements()}
+    assert elements_in_global_before == elements_in_global_after
+
+
 def test_concatenate_tables():
     """
     The concatenation uses AnnData.concatenate(), here we test the

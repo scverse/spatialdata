@@ -687,6 +687,9 @@ def polygon_query(
     """
     from spatialdata._core.query.relational_query import _filter_table_by_elements
 
+    # adjust coordinate transformation (this implementation can be made faster)
+    sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
+
     if isinstance(polygons, Polygon):
         polygons = [polygons]
 
