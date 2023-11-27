@@ -7,7 +7,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Union
 
-
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
@@ -130,7 +129,7 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: dict[str, AnnData] = MappingProxyType({}),
+        table: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
     ) -> None:
         self.path = None
 
@@ -1161,9 +1160,23 @@ class SpatialData:
         The table.
         """
         # TODO: decide version for deprecation
-        logger.warning("DeprecationWarning: table accessor will be deprecated with SpatialData version X.X, use tables"
-                       "instead")
+        logger.warning(
+            "DeprecationWarning: table accessor will be deprecated with SpatialData version X.X, use tables" "instead"
+        )
         return self._tables.values()[0]
+
+    @property
+    def tables(self) -> dict[str, AnnData]:
+        """
+        Return tables dictionary.
+
+        Returns
+        -------
+        dict[str, AnnData]
+            Either the empty dictionary or a dictionary with as values the strings representing the table names and
+            as values the AnnData tables themselves.
+        """
+        return self._tables
 
     @table.setter
     def table(self, table: AnnData) -> None:
