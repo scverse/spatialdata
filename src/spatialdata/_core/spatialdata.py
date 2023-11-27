@@ -983,7 +983,7 @@ class SpatialData:
             file_path = Path(file_path)
         assert isinstance(file_path, Path)
 
-        if self.is_backed() and self.path != file_path:
+        if self.is_backed() and str(self.path) != str(file_path):
             logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
 
         # old code to support overwriting the backing file
