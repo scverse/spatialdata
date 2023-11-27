@@ -6,7 +6,7 @@ from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Union
-
+import warnings
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
@@ -1160,8 +1160,9 @@ class SpatialData:
         The table.
         """
         # TODO: decide version for deprecation
-        logger.warning(
-            "DeprecationWarning: table accessor will be deprecated with SpatialData version X.X, use tables" "instead"
+        warnings.warn(
+            "Table accessor will be deprecated with SpatialData version X.X, use sdata.tables instead.",
+            DeprecationWarning, stacklevel=2
         )
         return self._tables.values()[0]
 
