@@ -561,6 +561,8 @@ class SpatialData:
                     elements[element_type][element_name] = element
                     element_paths_in_coordinate_system.append(element_name)
 
+        # TODO: check whether full table dict should be returned or only those which annotate elements. Also check
+        # filtering with tables having potentially different keys.
         if filter_table:
             table = _filter_table_by_coordinate_system(self.table, element_paths_in_coordinate_system)
         else:
