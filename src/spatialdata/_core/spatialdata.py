@@ -120,7 +120,7 @@ class SpatialData:
     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _table: dict[str, AnnData] = MappingProxyType({})
+    _tables: dict[str, AnnData] = MappingProxyType({})
     path: str | None = None
 
     def __init__(
@@ -129,12 +129,12 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: dict[str, AnnData] = MappingProxyType({}),
+        tables: dict[str, AnnData] = MappingProxyType({}),
     ) -> None:
         self.path = None
 
         self._validate_unique_element_names(
-            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys())
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(tables.keys())
         )
 
         if images is not None:
@@ -157,9 +157,9 @@ class SpatialData:
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
-        if table is not None:
-            Table_s.validate(table)
-            self._table = table
+        if tables is not None:
+            Table_s.validate(tables)
+            self._tables = tables
 
         self._query = QueryManager(self)
 
