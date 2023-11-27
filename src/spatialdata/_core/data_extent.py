@@ -129,6 +129,8 @@ def get_extent(
 
     Returns
     -------
+    The bounding box description.
+
     min_coordinate
         The minimum coordinate of the bounding box.
     max_coordinate
@@ -136,7 +138,11 @@ def get_extent(
     axes
         The names of the dimensions of the bounding box.
     exact
-        If `True`, the extent is computed exactly. If `False`, an approximation faster to compute is given.
+        Whether the extent is computed exactly or not.
+
+            - If `True`, the extent is computed exactly.
+            - If `False`, an approximation faster to compute is given.
+
         The approximation is guaranteed to contain all the data, see notes for details.
     has_images
         If `True`, images are included in the computation of the extent.
