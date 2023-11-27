@@ -129,9 +129,13 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        table: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
     ) -> None:
         self.path = None
+
+        # Work around to allow for backward compatibility
+        if isinstance(table, AnnData):
+            table = {"table": table}
 
         self._validate_unique_element_names(
             list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(table.keys())
@@ -158,6 +162,7 @@ class SpatialData:
                 self._add_points_in_memory(name=k, points=v)
 
         if table is not None:
+            self._tables: dict[str, AnnData] = {}
             for table_value in table.values():
                 Table_s.validate(table_value)
             self._tables = table
