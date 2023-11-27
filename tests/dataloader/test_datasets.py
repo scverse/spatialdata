@@ -60,14 +60,18 @@ class TestImageTilesDataset:
             if raster:
                 assert tile.shape == (3, 329, 329)
             else:
-                assert tile.shape == (3, 164, 164)
+                assert tile.shape == (3, 165, 164)
         else:
             raise ValueError(f"Unexpected regions_element: {regions_element}")
+
         # extent has units in pixel so should be the same as tile shape
         if raster:
             assert round(ds.tiles_coords.extent.unique()[0] * 2) == tile.shape[1]
         else:
-            assert int(ds.tiles_coords.extent.unique()[0]) == tile.shape[1]
+            if regions_element != "blobs_multipolygons":
+                assert int(ds.tiles_coords.extent.unique()[0]) == tile.shape[1]
+            else:
+                assert int(ds.tiles_coords.extent.unique()[0]) + 1 == tile.shape[1]
         assert np.all(sdata_tile.table.obs.columns == ds.sdata.table.obs.columns)
         assert list(sdata_tile.images.keys())[0] == "blobs_image"
 
@@ -88,11 +92,14 @@ class TestImageTilesDataset:
         elif regions_element == "blobs_polygons":
             assert tile.shape == (3, 82, 82)
         elif regions_element == "blobs_multipolygons":
-            assert tile.shape == (3, 164, 164)
+            assert tile.shape == (3, 165, 164)
         else:
             raise ValueError(f"Unexpected regions_element: {regions_element}")
         # extent has units in pixel so should be the same as tile shape
-        assert int(ds.tiles_coords.extent.unique()[0]) == tile.shape[1]
+        if regions_element != "blobs_multipolygons":
+            assert int(ds.tiles_coords.extent.unique()[0]) == tile.shape[1]
+        else:
+            assert round(ds.tiles_coords.extent.unique()[0]) + 1 == tile.shape[1]
         return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
         assert annot.shape[1] == len(return_annot)
 

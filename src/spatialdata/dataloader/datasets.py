@@ -375,9 +375,9 @@ def _get_tile_coords(
 
     # get extent, first by checking shape defaults, then by using the `tile_dim_in_units`
     if tile_dim_in_units is None:
-        if elem.iloc[0][0].geom_type == "Point":
+        if elem.iloc[0, 0].geom_type == "Point":
             extent = elem[ShapesModel.RADIUS_KEY].values * tile_scale
-        elif elem.iloc[0][0].geom_type in ["Polygon", "MultiPolygon"]:
+        elif elem.iloc[0, 0].geom_type in ["Polygon", "MultiPolygon"]:
             extent = elem[ShapesModel.GEOMETRY_KEY].length * tile_scale
         else:
             raise ValueError("Only point and polygon shapes are supported.")
