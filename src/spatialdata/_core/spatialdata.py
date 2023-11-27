@@ -120,7 +120,7 @@ class SpatialData:
     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _table: AnnData | None = None
+    _table: dict[str, AnnData] = MappingProxyType({})
     path: str | None = None
 
     def __init__(
@@ -129,7 +129,7 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: AnnData | None = None,
+        table: dict[str, AnnData] = MappingProxyType({}),
     ) -> None:
         self.path = None
 
