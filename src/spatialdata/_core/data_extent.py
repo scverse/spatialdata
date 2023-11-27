@@ -259,7 +259,12 @@ def _get_extent_of_shapes(e: GeoDataFrame) -> BoundingBoxDescription:
 @get_extent.register
 def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) -> BoundingBoxDescription:
     """
-    Compute the extent (bounding box) of a set of shapes.
+    Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
+
+    Parameters
+    ----------
+    e
+        The SpatialData object.
 
     Returns
     -------
