@@ -113,12 +113,6 @@ class SpatialData:
 
     """
 
-    _images: Images = Images()
-    _labels: Labels = Labels()
-    _points: Points = Points()
-    _shapes: Shapes = Shapes()
-    _table: AnnData | None = None
-
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -129,27 +123,30 @@ class SpatialData:
     ) -> None:
         self.path = None
 
+        self._shared_keys: set[str | None] = set()
+        self._images: Images = Images(shared_keys=self._shared_keys)
+        self._labels: Labels = Labels(shared_keys=self._shared_keys)
+        self._points: Points = Points(shared_keys=self._shared_keys)
+        self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
+        self._table: AnnData | None = None
+
         self._validate_unique_element_names(
             list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
         )
 
         if images is not None:
-            self._images: Images = Images()
             for k, v in images.items():
                 self.images[k] = v
 
         if labels is not None:
-            self._labels: Labels = Labels()
             for k, v in labels.items():
                 self.labels[k] = v
 
         if shapes is not None:
-            self._shapes: Shapes = Shapes()
             for k, v in shapes.items():
                 self.shapes[k] = v
 
         if points is not None:
-            self._points: Points = Points()
             for k, v in points.items():
                 self.points[k] = v
 
@@ -259,7 +256,7 @@ class SpatialData:
     def _validate_unique_element_names(element_names: list[str]) -> None:
         if len(element_names) != len(set(element_names)):
             duplicates = {x for x in element_names if element_names.count(x) > 1}
-            raise ValueError(
+            raise KeyError(
                 f"Element names must be unique. The following element names are used multiple times: {duplicates}"
             )
 

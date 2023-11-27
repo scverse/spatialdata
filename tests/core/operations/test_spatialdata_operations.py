@@ -22,31 +22,46 @@ from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import _get_table
 
 
-def test_element_names_unique():
+def test_element_names_unique() -> None:
     shapes = ShapesModel.parse(np.array([[0, 0]]), geometry=0, radius=1)
     points = PointsModel.parse(np.array([[0, 0]]))
     labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
     image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, points={"image": points})
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, shapes={"image": shapes})
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, labels={"image": labels})
 
     sdata = SpatialData(
         images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
     )
 
+    # add elements with the same name
+    # of element of same type
     with pytest.warns(UserWarning):
+        sdata.images["image"] = image
+    with pytest.warns(UserWarning):
+        sdata.points["points"] = points
+    with pytest.warns(UserWarning):
+        sdata.shapes["shapes"] = shapes
+    with pytest.warns(UserWarning):
+        sdata.labels["labels"] = labels
+
+    # add elements with the same name
+    # of element of different type
+    with pytest.raises(KeyError):
         sdata.images["points"] = image
-    with pytest.warns(UserWarning):
-        sdata.points["image"] = points
-    with pytest.warns(UserWarning):
-        sdata.shapes["image"] = shapes
-    with pytest.warns(UserWarning):
-        sdata.labels["image"] = labels
+    with pytest.raises(KeyError):
+        sdata.images["shapes"] = image
+    with pytest.raises(KeyError):
+        sdata.labels["points"] = labels
+    with pytest.raises(KeyError):
+        sdata.points["shapes"] = points
+    with pytest.raises(KeyError):
+        sdata.shapes["labels"] = shapes
 
 
 def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):

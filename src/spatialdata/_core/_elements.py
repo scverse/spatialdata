@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Iterable
 from typing import Any
 from warnings import warn
 
@@ -24,19 +25,30 @@ from spatialdata.models import (
 
 
 class Elements(OrderedDict[str, Any]):
-    def __init__(self) -> None:
+    def __init__(self, shared_keys: set[str | None]) -> None:
         super().__init__()
-        self._shared_keys: set[str] = set()
+        self._shared_keys = shared_keys
+
+    @staticmethod
+    def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
+        if key in element_keys:
+            warn(f"Key `{key}` already exists. Overwriting it.", UserWarning, stacklevel=2)
+        else:
+            if key in shared_keys:
+                raise KeyError(f"Key `{key}` already exists.")
 
     def __setitem__(self, key: str, value: Any) -> None:
-        if key in self._shared_keys:
-            warn(f"Key `{key}` already exists.", UserWarning, stacklevel=2)
-        super().__setitem__(key, value)
         self._shared_keys.add(key)
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        self._shared_keys.remove(key)
+        super().__delitem__(key)
 
 
 class Images(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
+        self._check_key(key, self.keys(), self._shared_keys)
         if isinstance(value, (DataTree)):
             value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
@@ -55,6 +67,7 @@ class Images(Elements):
 
 class Labels(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
+        self._check_key(key, self.keys(), self._shared_keys)
         if isinstance(value, (DataTree)):
             value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
@@ -73,6 +86,7 @@ class Labels(Elements):
 
 class Shapes(Elements):
     def __setitem__(self, key: str, value: GeoDataFrame) -> None:
+        self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
         if schema != ShapesModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
@@ -82,6 +96,7 @@ class Shapes(Elements):
 
 class Points(Elements):
     def __setitem__(self, key: str, value: DaskDataFrame) -> None:
+        self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
         if schema != PointsModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
