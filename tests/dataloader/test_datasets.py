@@ -60,7 +60,7 @@ class TestImageTilesDataset:
             if raster:
                 assert tile.shape == (3, 329, 329)
             else:
-                assert tile.shape == (3, 165, 164)
+                assert tile.shape == (3, 164, 164)
         else:
             raise ValueError(f"Unexpected regions_element: {regions_element}")
         # extent has units in pixel so should be the same as tile shape
