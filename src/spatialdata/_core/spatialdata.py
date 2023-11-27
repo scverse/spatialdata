@@ -158,7 +158,8 @@ class SpatialData:
                 self._add_points_in_memory(name=k, points=v)
 
         if table is not None:
-            Table_s.validate(table)
+            for table_name, table in table.items():
+                Table_s.validate(table)
             self._tables = table
 
         self._query = QueryManager(self)
