@@ -7,6 +7,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Union
 
+
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
@@ -1159,7 +1160,10 @@ class SpatialData:
         -------
         The table.
         """
-        return self._table
+        # TODO: decide version for deprecation
+        logger.warning("DeprecationWarning: table accessor will be deprecated with SpatialData version X.X, use tables"
+                       "instead")
+        return self._tables.values()[0]
 
     @table.setter
     def table(self, table: AnnData) -> None:
