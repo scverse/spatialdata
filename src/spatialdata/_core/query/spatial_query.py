@@ -336,24 +336,21 @@ def _(
         error_message = (
             f"This case is not supported (data with dimension"
             f"{data_dim} but transformation with rank {transform_dimension}."
-            f"Please open a GitHub issue if you want to discuss a case."
+            f"Please open a GitHub issue if you want to discuss a use case."
         )
         raise ValueError(error_message)
 
     if set(axes) != set(output_axes_without_c):
         if set(axes).issubset(output_axes_without_c):
-            logger.warning(
-                f"The element has axes {output_axes_without_c}, but the query has axes {axes}. Excluding the element "
-                f"from the query result. In the future we can add support for this case. If you are interested, "
-                f"please open a GitHub issue."
+            # TODO: hereeeeeeeeeeeeeee need to to something with input_axes_without_c and output_axes_without_c
+            pass
+        else:
+            error_message = (
+                f"Invalid case. The bounding box axes are {axes},"
+                f"the spatial axes in {target_coordinate_system} are"
+                f"{output_axes_without_c}"
             )
-            return None
-        error_messeage = (
-            f"Invalid case. The bounding box axes are {axes},"
-            f"the spatial axes in {target_coordinate_system} are"
-            f"{output_axes_without_c}"
-        )
-        raise ValueError(error_messeage)
+            raise ValueError(error_message)
 
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     spatial_transform_bb_axes = Affine(
@@ -370,7 +367,7 @@ def _(
         )
     else:
         assert case == 2
-        # TODO: we need to intersect the plane in the extrinsic coordiante system with the 3D bounding box. The
+        # TODO: we need to intersect the plane in the extrinsic coordinate system with the 3D bounding box. The
         #  vertices of this polygons needs to be transformed to the intrinsic coordinate system
         raise NotImplementedError(
             "Case 2 (the transformation is embedding 2D data in the 3D space, is not "

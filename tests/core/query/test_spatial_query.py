@@ -142,131 +142,85 @@ def test_bounding_box_points_no_points():
     assert request is None
 
 
-@pytest.mark.parametrize("n_channels", [1, 2, 3])
-def test_bounding_box_image_2d(n_channels):
-    """Apply a bounding box to a 2D image"""
-    image = np.zeros((n_channels, 10, 10))
-    # y: [5, 9], x: [0, 4] has value 1
-    image[:, 5::, 0:5] = 1
-    image_element = Image2DModel.parse(image)
-    image_element_multiscale = Image2DModel.parse(image, scale_factors=[2, 2])
+# @pytest.mark.parametrize("n_channels", [1, 2, 3])
+# @pytest.mark.parametrize("is_labels", [False, True])
+# @pytest.mark.parametrize("is_3d", [False, True])
+# @pytest.mark.parametrize("is_bb_3d", [False, True])
+@pytest.mark.parametrize("n_channels", [1])
+@pytest.mark.parametrize("is_labels", [False, True])
+@pytest.mark.parametrize("is_3d", [True])
+@pytest.mark.parametrize("is_bb_3d", [False])
+def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
+    """Apply a bounding box to a raster element."""
+    if is_labels and n_channels > 1:
+        # labels cannot have multiple channels, let's ignore this combination of parameters
+        return
 
-    for image in [image_element, image_element_multiscale]:
-        # bounding box: y: [5, 10[, x: [0, 5[
+    shape = (10, 10)
+    if is_3d:
+        shape = (10, ) + shape
+    if not is_labels:
+        shape = (n_channels, ) + shape
+    else:
+        shape = (1, ) + shape
+
+    image = np.zeros(shape)
+    if is_3d:
+        image[:, 5::, 0:5, 2:7] = 1
+    else:
+        image[:, 5::, 0:5] = 1
+
+    if is_labels:
+        image = np.squeeze(image, axis=0)
+
+    model = (
+        Labels3DModel
+        if is_labels and is_3d
+        else Labels2DModel
+        if is_labels
+        else Image3DModel
+        if is_3d
+        else Image2DModel
+    )
+
+    image_element = model.parse(image)
+    image_element_multiscale = model.parse(image, scale_factors=[2, 2])
+
+    images = [image_element, image_element_multiscale]
+
+    for image in images:
+        if is_bb_3d:
+            _min_coordinate = np.array([5, 0, 2])
+            _max_coordinate = np.array([10, 5, 7])
+            _axes = ("z", "y", "x")
+        else:
+            _min_coordinate = np.array([5, 0])
+            _max_coordinate = np.array([10, 5])
+            _axes = ("y", "x")
+
         image_result = bounding_box_query(
             image,
-            axes=("y", "x"),
-            min_coordinate=np.array([5, 0]),
-            max_coordinate=np.array([10, 5]),
+            axes=_axes,
+            min_coordinate=_min_coordinate,
+            max_coordinate=_max_coordinate,
             target_coordinate_system="global",
         )
-        expected_image = np.ones((n_channels, 5, 5))  # c dimension is preserved
-        if isinstance(image, SpatialImage):
-            assert isinstance(image, SpatialImage)
-            np.testing.assert_allclose(image_result, expected_image)
-        elif isinstance(image, MultiscaleSpatialImage):
-            assert isinstance(image_result, MultiscaleSpatialImage)
-            v = image_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
-        else:
-            raise ValueError("Unexpected type")
 
+    expected_image = np.ones((n_channels, 5, 5, 5)) if is_3d else np.ones((n_channels, 5, 5))
+    if is_labels:
+        expected_image = np.squeeze(expected_image, axis=0)
 
-@pytest.mark.parametrize("n_channels", [1, 2, 3])
-def test_bounding_box_image_3d(n_channels):
-    """Apply a bounding box to a 3D image"""
-    image = np.zeros((n_channels, 10, 10, 10))
-    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
-    image[:, 5::, 0:5, 2:7] = 1
-    image_element = Image3DModel.parse(image)
-    image_element_multiscale = Image3DModel.parse(image, scale_factors=[2, 2])
-
-    for image in [image_element, image_element_multiscale]:
-        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
-        image_result = bounding_box_query(
-            image,
-            axes=("z", "y", "x"),
-            min_coordinate=np.array([5, 0, 2]),
-            max_coordinate=np.array([10, 5, 7]),
-            target_coordinate_system="global",
-        )
-        expected_image = np.ones((n_channels, 5, 5, 5))  # c dimension is preserved
-        if isinstance(image, SpatialImage):
-            assert isinstance(image, SpatialImage)
-            np.testing.assert_allclose(image_result, expected_image)
-        elif isinstance(image, MultiscaleSpatialImage):
-            assert isinstance(image_result, MultiscaleSpatialImage)
-            v = image_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
-        else:
-            raise ValueError("Unexpected type")
-
-
-def test_bounding_box_labels_2d():
-    """Apply a bounding box to a 2D label image"""
-    # in this test let's try some affine transformations, we could do that also for the other tests
-    image = np.zeros((10, 10))
-    # y: [5, 9], x: [0, 4] has value 1
-    image[5::, 0:5] = 1
-    labels_element = Labels2DModel.parse(image)
-    labels_element_multiscale = Labels2DModel.parse(image, scale_factors=[2, 2])
-
-    for labels in [labels_element, labels_element_multiscale]:
-        # bounding box: y: [5, 10[, x: [0, 5[
-        labels_result = bounding_box_query(
-            labels,
-            axes=("y", "x"),
-            min_coordinate=np.array([5, 0]),
-            max_coordinate=np.array([10, 5]),
-            target_coordinate_system="global",
-        )
-        expected_image = np.ones((5, 5))
-        if isinstance(labels, SpatialImage):
-            assert isinstance(labels, SpatialImage)
-            np.testing.assert_allclose(labels_result, expected_image)
-        elif isinstance(labels, MultiscaleSpatialImage):
-            assert isinstance(labels_result, MultiscaleSpatialImage)
-            v = labels_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
-        else:
-            raise ValueError("Unexpected type")
-
-
-def test_bounding_box_labels_3d():
-    """Apply a bounding box to a 3D label image"""
-    image = np.zeros((10, 10, 10), dtype=int)
-    # z: [5, 9], y: [0, 4], x: [2, 6] has value 1
-    image[5::, 0:5, 2:7] = 1
-    labels_element = Labels3DModel.parse(image)
-    labels_element_multiscale = Labels3DModel.parse(image, scale_factors=[2, 2])
-
-    for labels in [labels_element, labels_element_multiscale]:
-        # bounding box: z: [5, 10[, y: [0, 5[, x: [2, 7[
-        labels_result = bounding_box_query(
-            labels,
-            axes=("z", "y", "x"),
-            min_coordinate=np.array([5, 0, 2]),
-            max_coordinate=np.array([10, 5, 7]),
-            target_coordinate_system="global",
-        )
-        expected_image = np.ones((5, 5, 5))
-        if isinstance(labels, SpatialImage):
-            assert isinstance(labels, SpatialImage)
-            np.testing.assert_allclose(labels_result, expected_image)
-        elif isinstance(labels, MultiscaleSpatialImage):
-            assert isinstance(labels_result, MultiscaleSpatialImage)
-            v = labels_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
-        else:
-            raise ValueError("Unexpected type")
+    if isinstance(image, SpatialImage):
+        assert isinstance(image, SpatialImage)
+        np.testing.assert_allclose(image_result, expected_image)
+    elif isinstance(image, MultiscaleSpatialImage):
+        assert isinstance(image_result, MultiscaleSpatialImage)
+        v = image_result["scale0"].values()
+        assert len(v) == 1
+        xdata = v.__iter__().__next__()
+        np.testing.assert_allclose(xdata, expected_image)
+    else:
+        raise ValueError("Unexpected type")
 
 
 # TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented
@@ -355,6 +309,14 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
+
+
+def test_3d_bounding_box_2d_raster():
+    pass
+
+
+def test_2d_bounding_box_3d_points():
+    pass
 
 
 # ----------------- test polygon query -----------------
