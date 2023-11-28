@@ -166,17 +166,17 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
         shape = (1,) + shape
 
     image = np.zeros(shape)
-    axes = ['y', 'x']
+    axes = ["y", "x"]
     if is_3d:
         image[:, 2:7, 5::, 0:5] = 1
-        axes = ['z'] + axes
+        axes = ["z"] + axes
     else:
         image[:, 5::, 0:5] = 1
 
     if is_labels:
         image = np.squeeze(image, axis=0)
     else:
-        axes = ['c'] + axes
+        axes = ["c"] + axes
 
     ximage = xarray.DataArray(image, dims=axes)
     model = (
