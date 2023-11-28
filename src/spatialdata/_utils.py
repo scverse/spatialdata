@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import functools
+import inspect
 import re
+import warnings
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Callable, Union
 
 import numpy as np
 import pandas as pd
@@ -234,43 +237,45 @@ def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
 
 
 #
-# def deprecation_alias(**aliases: str) -> Callable:
-#     """Decorator for giving deprecation warnings of arguments to be deprecated .
-#
-#     Use as follows:
-#
-#     @deprecation_alias(old_arg='new_arg')
-#     def myfunc(new_arg):
-#         ...
-#
-#     """
-#
-#     def deprecation_decorator(f: Callable):
-#         @functools.wraps(f)
-#         def wrapper(*args, **kwargs):
-#             rename_kwargs(f.__name__, kwargs, aliases)
-#             return f(*args, **kwargs)
-#
-#         return wrapper
-#
-#     return deprecation_decorator
-#
-#
-# def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str]):
-#     """Helper function for deprecating function arguments."""
-#     for alias, new in aliases.items():
-#         if alias in kwargs:
-#             if new in kwargs:
-#                 raise TypeError(
-#                     f"{func_name} received both {alias} and {new} as arguments!"
-#                     f" {alias} is being deprecated in SpatialData version X.x, switch to {new} instead."
-#                 )
-#             warnings.warn(
-#                 message=(
-#                     f"`{alias}` is being deprecated as an argument to `{func_name}` in SpatialData version X.x,"
-#                     f" switch to `{new}` instead."
-#                 ),
-#                 category=DeprecationWarning,
-#                 stacklevel=2,
-#             )
-#             kwargs[new] = kwargs.pop(alias)
+def deprecation_alias(**aliases: str) -> Callable:
+    """Decorate functions for which arguments being deprecated.
+
+    Use as follows:
+
+    @deprecation_alias(old_arg='new_arg')
+    def myfunc(new_arg):
+        ...
+
+    """
+
+    def deprecation_decorator(f: Callable):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            class_name = inspect._findclass(f).__name__
+            rename_kwargs(f.__name__, kwargs, aliases, class_name)
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return deprecation_decorator
+
+
+def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str):
+    """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
+    for alias, new in aliases.items():
+        if alias in kwargs:
+            class_name = class_name + "." if class_name else ""
+            if new in kwargs:
+                raise TypeError(
+                    f"{class_name}{func_name} received both {alias} and {new} as arguments!"
+                    f" {alias} is being deprecated in SpatialData version X.x, only use {new} instead."
+                )
+            warnings.warn(
+                message=(
+                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in SpatialData "
+                    f"version X.x, switch to `{new}` instead."
+                ),
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
+            kwargs[new] = kwargs.pop(alias)

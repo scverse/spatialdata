@@ -29,7 +29,7 @@ from spatialdata._io import (
 from spatialdata._io._utils import get_backing_files
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata._utils import _natural_keys
+from spatialdata._utils import _natural_keys, deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -124,6 +124,7 @@ class SpatialData:
     _tables: dict[str, AnnData] = MappingProxyType({})
     path: str | None = None
 
+    @deprecation_alias(table="tables")
     def __init__(
         self,
         images: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
