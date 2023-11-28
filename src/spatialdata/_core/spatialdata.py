@@ -1210,6 +1210,10 @@ class SpatialData:
             elem_group = root.require_group(name="table")
             write_table(table=self.table, group=elem_group, name="table")
 
+    # @tables.setter
+    # def tables(self, tables: dict[str, AnnData]) -> None:
+    #     for k,v in tables.items():
+
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
@@ -1280,7 +1284,7 @@ class SpatialData:
         non_empty_elements
             The names of the elements that are not empty.
         """
-        all_elements = ["images", "labels", "points", "shapes", "table"]
+        all_elements = ["images", "labels", "points", "shapes", "tables"]
         return [
             element
             for element in all_elements
@@ -1317,71 +1321,69 @@ class SpatialData:
             attribute = getattr(self, attr)
 
             descr += f"\n{h('level0')}{attr.capitalize()}"
-            if isinstance(attribute, AnnData):
+
+            unsorted_elements = attribute.items()
+            sorted_elements = sorted(unsorted_elements, key=lambda x: _natural_keys(x[0]))
+            for k, v in sorted_elements:
                 descr += f"{h('empty_line')}"
-                descr_class = attribute.__class__.__name__
-                descr += f"{h('level1.0')}{attribute!r}: {descr_class} {attribute.shape}"
-                descr = rreplace(descr, h("level1.0"), "    └── ", 1)
-            else:
-                unsorted_elements = attribute.items()
-                sorted_elements = sorted(unsorted_elements, key=lambda x: _natural_keys(x[0]))
-                for k, v in sorted_elements:
-                    descr += f"{h('empty_line')}"
-                    descr_class = v.__class__.__name__
-                    if attr == "shapes":
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
-                    elif attr == "points":
-                        length: int | None = None
-                        if len(v.dask.layers) == 1:
-                            name, layer = v.dask.layers.items().__iter__().__next__()
-                            if "read-parquet" in name:
-                                t = layer.creation_info["args"]
-                                assert isinstance(t, tuple)
-                                assert len(t) == 1
-                                parquet_file = t[0]
-                                table = read_parquet(parquet_file)
-                                length = len(table)
-                            else:
-                                # length = len(v)
-                                length = None
+                descr_class = v.__class__.__name__
+                if attr == "shapes":
+                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
+                elif attr == "points":
+                    length: int | None = None
+                    if len(v.dask.layers) == 1:
+                        name, layer = v.dask.layers.items().__iter__().__next__()
+                        if "read-parquet" in name:
+                            t = layer.creation_info["args"]
+                            assert isinstance(t, tuple)
+                            assert len(t) == 1
+                            parquet_file = t[0]
+                            table = read_parquet(parquet_file)
+                            length = len(table)
                         else:
+                            # length = len(v)
                             length = None
-
-                        n = len(get_axes_names(v))
-                        dim_string = f"({n}D points)"
-
-                        assert len(v.shape) == 2
-                        if length is not None:
-                            shape_str = f"({length}, {v.shape[1]})"
-                        else:
-                            shape_str = (
-                                "("
-                                + ", ".join(
-                                    [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
-                                )
-                                + ")"
-                            )
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                     else:
-                        if isinstance(v, SpatialImage):
-                            descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
-                        elif isinstance(v, MultiscaleSpatialImage):
-                            shapes = []
-                            dims: str | None = None
-                            for pyramid_level in v:
-                                dataset_names = list(v[pyramid_level].keys())
-                                assert len(dataset_names) == 1
-                                dataset_name = dataset_names[0]
-                                vv = v[pyramid_level][dataset_name]
-                                shape = vv.shape
-                                if dims is None:
-                                    dims = "".join(vv.dims)
-                                shapes.append(shape)
-                            descr += (
-                                f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                        length = None
+
+                    n = len(get_axes_names(v))
+                    dim_string = f"({n}D points)"
+
+                    assert len(v.shape) == 2
+                    if length is not None:
+                        shape_str = f"({length}, {v.shape[1]})"
+                    else:
+                        shape_str = (
+                            "("
+                            + ", ".join(
+                                [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
                             )
-                        else:
-                            raise TypeError(f"Unknown type {type(v)}")
+                            + ")"
+                        )
+                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
+                elif attr == "tables":
+                    descr += f"{h('level1.0')}{k!r}: {descr_class} {v.shape}"
+                    descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+                else:
+                    if isinstance(v, SpatialImage):
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
+                    elif isinstance(v, MultiscaleSpatialImage):
+                        shapes = []
+                        dims: str | None = None
+                        for pyramid_level in v:
+                            dataset_names = list(v[pyramid_level].keys())
+                            assert len(dataset_names) == 1
+                            dataset_name = dataset_names[0]
+                            vv = v[pyramid_level][dataset_name]
+                            shape = vv.shape
+                            if dims is None:
+                                dims = "".join(vv.dims)
+                            shapes.append(shape)
+                        descr += (
+                            f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                        )
+                    else:
+                        raise TypeError(f"Unknown type {type(v)}")
             if last_attr is True:
                 descr = descr.replace(h("empty_line"), "\n  ")
             else:
@@ -1390,7 +1392,7 @@ class SpatialData:
         descr = rreplace(descr, h("level0"), "└── ", 1)
         descr = descr.replace(h("level0"), "├── ")
 
-        for attr in ["images", "labels", "points", "table", "shapes"]:
+        for attr in ["images", "labels", "points", "tables", "shapes"]:
             descr = rreplace(descr, h(attr + "level1.1"), "    └── ", 1)
             descr = descr.replace(h(attr + "level1.1"), "    ├── ")
 
@@ -1404,13 +1406,14 @@ class SpatialData:
             gen = self._gen_elements()
             elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
-                transformations = get_transformation(obj, get_all=True)
-                assert isinstance(transformations, dict)
-                target_css = transformations.keys()
-                if cs in target_css:
-                    if k not in elements_in_cs:
-                        elements_in_cs[k] = []
-                    elements_in_cs[k].append(name)
+                if isinstance(obj, SpatialElement):
+                    transformations = get_transformation(obj, get_all=True)
+                    assert isinstance(transformations, dict)
+                    target_css = transformations.keys()
+                    if cs in target_css:
+                        if k not in elements_in_cs:
+                            elements_in_cs[k] = []
+                        elements_in_cs[k].append(name)
             for element_names in elements_in_cs.values():
                 element_names.sort(key=_natural_keys)
             if len(elements_in_cs) > 0:
@@ -1432,7 +1435,7 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
-        for element_type in ["images", "labels", "points", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes", "tables"]:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
