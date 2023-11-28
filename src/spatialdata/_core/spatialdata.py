@@ -1363,8 +1363,7 @@ class SpatialData:
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
                 elif attr == "tables":
-                    descr += f"{h('level1.0')}{k!r}: {descr_class} {v.shape}"
-                    descr = rreplace(descr, h("level1.0"), "    └── ", 1)
+                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} {v.shape}"
                 else:
                     if isinstance(v, SpatialImage):
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
