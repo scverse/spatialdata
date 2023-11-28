@@ -1,7 +1,7 @@
 """SpatialData elements."""
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import UserDict
 from collections.abc import Iterable
 from typing import Any
 from warnings import warn
@@ -24,10 +24,10 @@ from spatialdata.models import (
 )
 
 
-class Elements(OrderedDict[str, Any]):
+class Elements(UserDict[str, Any]):
     def __init__(self, shared_keys: set[str | None]) -> None:
-        super().__init__()
         self._shared_keys = shared_keys
+        super().__init__()
 
     @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
