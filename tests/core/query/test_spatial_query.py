@@ -158,11 +158,11 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
 
     shape = (10, 10)
     if is_3d:
-        shape = (10, ) + shape
+        shape = (10,) + shape
     if not is_labels:
-        shape = (n_channels, ) + shape
+        shape = (n_channels,) + shape
     else:
-        shape = (1, ) + shape
+        shape = (1,) + shape
 
     image = np.zeros(shape)
     if is_3d:
