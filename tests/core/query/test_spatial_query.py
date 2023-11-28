@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import numpy as np
 import pytest
+import xarray
 from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Polygon
@@ -158,21 +159,26 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
 
     shape = (10, 10)
     if is_3d:
-        shape = (10, ) + shape
+        shape = (10,) + shape
     if not is_labels:
-        shape = (n_channels, ) + shape
+        shape = (n_channels,) + shape
     else:
-        shape = (1, ) + shape
+        shape = (1,) + shape
 
     image = np.zeros(shape)
+    axes = ['y', 'x']
     if is_3d:
-        image[:, 5::, 0:5, 2:7] = 1
+        image[:, 2:7, 5::, 0:5] = 1
+        axes = ['z'] + axes
     else:
         image[:, 5::, 0:5] = 1
 
     if is_labels:
         image = np.squeeze(image, axis=0)
+    else:
+        axes = ['c'] + axes
 
+    ximage = xarray.DataArray(image, dims=axes)
     model = (
         Labels3DModel
         if is_labels and is_3d
@@ -190,8 +196,8 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
 
     for image in images:
         if is_bb_3d:
-            _min_coordinate = np.array([5, 0, 2])
-            _max_coordinate = np.array([10, 5, 7])
+            _min_coordinate = np.array([2, 5, 0])
+            _max_coordinate = np.array([7, 10, 5])
             _axes = ("z", "y", "x")
         else:
             _min_coordinate = np.array([5, 0])
@@ -206,21 +212,22 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
             target_coordinate_system="global",
         )
 
-    expected_image = np.ones((n_channels, 5, 5, 5)) if is_3d else np.ones((n_channels, 5, 5))
-    if is_labels:
-        expected_image = np.squeeze(expected_image, axis=0)
+        expected_image = ximage
 
-    if isinstance(image, SpatialImage):
-        assert isinstance(image, SpatialImage)
-        np.testing.assert_allclose(image_result, expected_image)
-    elif isinstance(image, MultiscaleSpatialImage):
-        assert isinstance(image_result, MultiscaleSpatialImage)
-        v = image_result["scale0"].values()
-        assert len(v) == 1
-        xdata = v.__iter__().__next__()
-        np.testing.assert_allclose(xdata, expected_image)
-    else:
-        raise ValueError("Unexpected type")
+        if is_labels:
+            expected_image = np.squeeze(expected_image, axis=0)
+
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 # TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented
