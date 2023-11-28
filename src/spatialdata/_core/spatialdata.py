@@ -1169,7 +1169,7 @@ class SpatialData:
             "Table accessor will be deprecated with SpatialData version X.X, use sdata.tables instead.",
             DeprecationWarning, stacklevel=2
         )
-        return self._tables.values()[0]
+        return list(self._tables.values())[0]
 
     @property
     def tables(self) -> dict[str, AnnData]:
