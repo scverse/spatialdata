@@ -1109,9 +1109,10 @@ class SpatialData:
                     )
                     # no reloading of the file storage since the AnnData is not lazy loaded
 
-            if self.table is not None:
-                elem_group = root.create_group(name="table")
-                write_table(table=self.table, group=elem_group, name="table")
+            if len(self._tables):
+                elem_group = root.create_group(name="tables")
+                for key in self._tables.keys():
+                    write_table(table=self._tables[key], group=elem_group, name=key)
 
         except Exception as e:  # noqa: B902
             self.path = None
