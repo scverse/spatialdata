@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import os
+import warnings
 from collections.abc import Generator
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Union
-import warnings
+
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
@@ -129,16 +130,16 @@ class SpatialData:
         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-        table: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+        tables: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
     ) -> None:
         self.path = None
 
         # Work around to allow for backward compatibility
-        if isinstance(table, AnnData):
-            table = {"table": table}
+        if isinstance(tables, AnnData):
+            tables = {"table": tables}
 
         self._validate_unique_element_names(
-            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(table.keys())
+            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(tables.keys())
         )
 
         if images is not None:
@@ -161,11 +162,11 @@ class SpatialData:
             for k, v in points.items():
                 self._add_points_in_memory(name=k, points=v)
 
-        if table is not None:
+        if tables is not None:
             self._tables: dict[str, AnnData] = {}
-            for table_value in table.values():
+            for table_value in tables.values():
                 Table_s.validate(table_value)
-            self._tables = table
+            self._tables = tables
 
         self._query = QueryManager(self)
 
@@ -1167,7 +1168,8 @@ class SpatialData:
         # TODO: decide version for deprecation
         warnings.warn(
             "Table accessor will be deprecated with SpatialData version X.X, use sdata.tables instead.",
-            DeprecationWarning, stacklevel=2
+            DeprecationWarning,
+            stacklevel=2,
         )
         return list(self._tables.values())[0]
 
@@ -1355,9 +1357,7 @@ class SpatialData:
                     else:
                         shape_str = (
                             "("
-                            + ", ".join(
-                                [str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape]
-                            )
+                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
                             + ")"
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
@@ -1379,9 +1379,7 @@ class SpatialData:
                             if dims is None:
                                 dims = "".join(vv.dims)
                             shapes.append(shape)
-                        descr += (
-                            f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
-                        )
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
                     else:
                         raise TypeError(f"Unknown type {type(v)}")
             if last_attr is True:

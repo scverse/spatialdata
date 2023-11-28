@@ -659,7 +659,7 @@ class TableModel:
         The validated data.
         """
         if self.ATTRS_KEY not in data.uns:
-            raise ValueError(f"`{self.ATTRS_KEY}` not found in `adata.uns`.")
+            return data
         attr = data.uns[self.ATTRS_KEY]
 
         if "region" not in attr:
@@ -708,11 +708,13 @@ class TableModel:
         """
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
+        if n_args == 0:
+            return adata
         if n_args > 0:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
-                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}`"
-                    f"as arguments or have them in `adata.uns[{cls.ATTRS_KEY!r}]`."
+                    f"`{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and / or `{cls.INSTANCE_KEY}` is/has been passed as"
+                    f"as argument(s). However, `adata.uns[{cls.ATTRS_KEY!r}]` has already been set."
                 )
         elif cls.ATTRS_KEY in adata.uns:
             attr = adata.uns[cls.ATTRS_KEY]
