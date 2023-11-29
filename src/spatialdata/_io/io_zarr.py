@@ -1,21 +1,17 @@
 import logging
 import os
+import warnings
 from pathlib import Path
 from typing import Optional, Union
 
-import numpy as np
 import zarr
-from anndata import AnnData
-from anndata import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 
 from spatialdata import SpatialData
-from spatialdata._io._utils import ome_zarr_logger
+from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._logging import logger
-from spatialdata.models import TableModel
 
 
 def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, str]:
@@ -61,10 +57,11 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
     images = {}
     labels = {}
     points = {}
-    table: Optional[AnnData] = None
+    tables = {}
     shapes = {}
 
-    selector = {"images", "labels", "points", "shapes", "table"} if not selection else set(selection or [])
+    # TODO: remove table once deprecated.
+    selector = {"images", "labels", "points", "shapes", "tables", "table"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
     # read multiscale images
@@ -123,36 +120,21 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
             shapes[subgroup_name] = _read_shapes(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
+    if "tables" in selector and "tables" in f:
+        group = f["tables"]
+        tables = read_table_and_validate(f_store_path, f, group, tables)
 
     if "table" in selector and "table" in f:
-        group = f["table"]
-        count = 0
-        for subgroup_name in group:
-            if Path(subgroup_name).name.startswith("."):
-                # skip hidden files like .zgroup or .zmetadata
-                continue
-            f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
-            if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore):
-                table = read_elem(f_elem)
-                # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
-                # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
-                # table = read_anndata_zarr(f_elem)
-            else:
-                table = read_anndata_zarr(f_elem_store)
-            if TableModel.ATTRS_KEY in table.uns:
-                # fill out eventual missing attributes that has been omitted because their value was None
-                attrs = table.uns[TableModel.ATTRS_KEY]
-                if "region" not in attrs:
-                    attrs["region"] = None
-                if "region_key" not in attrs:
-                    attrs["region_key"] = None
-                if "instance_key" not in attrs:
-                    attrs["instance_key"] = None
-                # fix type for region
-                if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                    attrs["region"] = attrs["region"].tolist()
-            count += 1
+        warnings.warn(
+            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store"
+            f"to use tables instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        subgroup_name = "table"
+        group = f[subgroup_name]
+        tables = read_table_and_validate(f_store_path, f, group, tables)
+
         logger.debug(f"Found {count} elements in {group}")
 
     sdata = SpatialData(
@@ -160,7 +142,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         labels=labels,
         points=points,
         shapes=shapes,
-        table=table,
+        tables=tables,
     )
     sdata.path = str(store)
     return sdata

@@ -10,7 +10,10 @@ from contextlib import contextmanager
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import zarr
+from anndata import read_zarr as read_anndata_zarr
+from anndata.experimental import read_elem
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
@@ -18,7 +21,9 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._logging import logger
 from spatialdata._utils import iterate_pyramid_levels
+from spatialdata.models import TableModel
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     ValidAxis_t,
@@ -289,3 +294,34 @@ def save_transformations(sdata: SpatialData) -> None:
     for element in sdata._gen_elements_values():
         transformations = get_transformation(element, get_all=True)
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
+
+
+def read_table_and_validate(zarr_store_path, group, subgroup, tables):
+    count = 0
+    for table_name in subgroup:
+        f_elem = subgroup[table_name]
+        f_elem_store = os.path.join(zarr_store_path, f_elem.path)
+        if isinstance(group.store, zarr.storage.ConsolidatedMetadataStore):
+            tables[table_name] = read_elem(f_elem)
+            # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
+            # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
+            # table = read_anndata_zarr(f_elem)
+        else:
+            tables[table_name] = read_anndata_zarr(f_elem_store)
+        if TableModel.ATTRS_KEY in tables[table_name].uns:
+            # fill out eventual missing attributes that has been omitted because their value was None
+            attrs = tables[table_name].uns[TableModel.ATTRS_KEY]
+            if "region" not in attrs:
+                attrs["region"] = None
+            if "region_key" not in attrs:
+                attrs["region_key"] = None
+            if "instance_key" not in attrs:
+                attrs["instance_key"] = None
+            # fix type for region
+            if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                attrs["region"] = attrs["region"].tolist()
+
+        count += 1
+
+    logger.debug(f"Found {count} elements in {subgroup}")
+    return tables
