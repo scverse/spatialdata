@@ -1240,11 +1240,14 @@ class SpatialData:
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
-        self._tables["table"] = None
-        if self.is_backed():
-            store = parse_url(self.path, mode="r+").store
-            root = zarr.group(store=store)
-            del root["tables/table"]
+        if self._tables.get("table"):
+            self._tables["table"] = None
+            if self.is_backed():
+                store = parse_url(self.path, mode="r+").store
+                root = zarr.group(store=store)
+                del root["tables/table"]
+        else:
+            raise KeyError("table with name 'table' not present in the SpatialData object.")
 
     @staticmethod
     def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
