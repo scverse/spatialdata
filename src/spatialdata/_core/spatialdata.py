@@ -1173,7 +1173,9 @@ class SpatialData:
             DeprecationWarning,
             stacklevel=2,
         )
-        return list(self._tables.values())[0]
+        if self._tables.get("table"):
+            return self._tables["table"]
+        raise KeyError("'table' is not present in the spatialdata object.")
 
     @property
     def tables(self) -> dict[str, AnnData]:
