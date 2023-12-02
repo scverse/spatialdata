@@ -2,10 +2,12 @@ from pathlib import Path
 
 import anndata as ad
 import numpy as np
+import pandas as pd
+import pytest
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from tests.conftest import _get_new_table, _get_shapes
+from tests.conftest import _get_new_table, _get_shapes, _get_table
 
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734
 # notes for the people (to prettify) https://hackmd.io/wd7K4Eg1SlykKVN-nOP44w
@@ -13,16 +15,16 @@ from tests.conftest import _get_new_table, _get_shapes
 # shapes
 test_shapes = _get_shapes()
 instance_id = np.array([str(i) for i in range(5)])
-table = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
-adata0 = _get_new_table()
-adata1 = _get_new_table()
+table = _get_table()  # _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
+adata0 = _get_table()
+adata1 = _get_table()
 
 
 # shuffle the indices of the dataframe
-np.random.default_rng().shuffle(test_shapes["poly"].index)
+# np.random.default_rng().shuffle(test_shapes["poly"].index)
 
 # tables is a dict
-SpatialData.tables
+# SpatialData.tables
 
 # def get_table_keys(sdata: SpatialData) -> tuple[list[str], str, str]:
 #     d = sdata.table.uns[sd.models.TableModel.ATTRS_KEY]
@@ -55,22 +57,35 @@ def set_annotation_target_of_table(table: AnnData, spatial_element: str | pd.Ser
 
 
 class TestMultiTable:
-    def test_set_get_tables_from_spatialdata(self, sdata):  # sdata is form conftest
+    def test_set_get_tables_from_spatialdata(self, sdata: SpatialData):  # sdata is form conftest
         sdata["my_new_table0"] = adata0
         sdata["my_new_table1"] = adata1
 
-    def test_old_accessor_deprecation(self, sdata):
+    def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # assume no table is present
         # this prints a deprecation warning
-        sdata.table = adata0  # this gets placed in sdata['table']
-        # this prints a deprecation warning
-        _ = sdata.table  # this returns sdata['table']
-        # this prints a deprecation waring
-        del sdata.table
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        full_sdata.write(tmpdir)
+        with pytest.warns(DeprecationWarning):
+            _ = full_sdata.table
+        with pytest.raises(ValueError):
+            full_sdata.table = adata0
+        with pytest.warns(DeprecationWarning):
+            del full_sdata.table
+        with pytest.raises(KeyError):
+            del full_sdata.table
+        with pytest.warns(DeprecationWarning):
+            full_sdata.table = adata0  # this gets placed in sdata['table']
+        from anndata.tests.helpers import assert_equal
 
-        sdata["my_new_table0"] = adata0
-        # will fail, because there is no sdata['table'], even if another table is present
-        _ = sdata.table
+        assert_equal(adata0, full_sdata.table)
+
+        del full_sdata.table
+
+        full_sdata.tables["my_new_table0"] = adata0
+        with pytest.raises(KeyError):
+            # will fail, because there is no sdata['table'], even if another table is present
+            _ = full_sdata.table
 
     def test_single_table(self, tmp_path: str):
         # shared table
@@ -80,15 +95,15 @@ class TestMultiTable:
             shapes={
                 "test_shapes": test_shapes["poly"],
             },
-            tables={"shape_annotate": table},
+            table={"shape_annotate": table},
         )
         test_sdata.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        assert sdata.get("segmentation")
-        assert isinstance(sdata["segmentation"], AnnData)
+
+        assert isinstance(sdata["shape_annotate"], AnnData)
         from anndata.tests.helpers import assert_equal
 
-        assert assert_equal(test_sdata["segmentation"], sdata["segmentation"])
+        assert_equal(test_sdata["shape_annotate"], sdata["shape_annotate"])
 
         # note (to keep in the code): these tests here should silmulate the interactions from teh users; if the syntax
         # here we are matching the table to the shapes and viceversa (= subset + reordeing)
@@ -123,12 +138,12 @@ class TestMultiTable:
         test_sdata = SpatialData(
             shapes={
                 "test_shapes": test_shapes["poly"],
-                "test_multipoly": test_shapes["multi_poly"],
+                "test_multipoly": test_shapes["multipoly"],
             },
             tables={"segmentation": table},
         )
         test_sdata.write(tmpdir)
-        # sdata = SpatialData.read(tmpdir)
+        sdata = SpatialData.read(tmpdir)
 
         # # use case example 1
         # # sorting the shapes visium0 to match the order of the table
@@ -147,7 +162,7 @@ class TestMultiTable:
         test_sdata = SpatialData(
             shapes={
                 "test_shapes": test_shapes["poly"],
-                "test_multipoly": test_shapes["multi_poly"],
+                "test_multipoly": test_shapes["multipoly"],
             },
             tables={"segmentation": concatenated_table},
         )
@@ -157,7 +172,7 @@ class TestMultiTable:
         table = _get_new_table()
         table_two = _get_new_table()
 
-        test_sdata = SpatialData(
+        SpatialData(
             tables={"table": table, "table_two": table_two},
         )
 
@@ -169,9 +184,11 @@ class TestMultiTable:
             shapes={
                 "test_shapes": test_shapes["poly"],
             },
-            tables={"segmentation": table, "segmentation_two": table_two},
+            tables={"region_props": table, "codebook": table_two},
         )
         test_sdata.write(tmpdir)
+        sdata = SpatialData.read(tmpdir)
+        print(sdata)
 
 
 #
