@@ -1227,6 +1227,11 @@ class SpatialData:
         The table needs to pass validation (see :class:`~spatialdata.TableModel`).
         If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
         """
+        warnings.warn(
+            "Table setter will be deprecated with SpatialData version X.X, use tables instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         TableModel().validate(table)
         if self._tables["table"] is not None:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
@@ -1252,6 +1257,7 @@ class SpatialData:
                 root = zarr.group(store=store)
                 del root["tables/table"]
         else:
+            # More informative than the error in the zarr library.
             raise KeyError("table with name 'table' not present in the SpatialData object.")
 
     @staticmethod
