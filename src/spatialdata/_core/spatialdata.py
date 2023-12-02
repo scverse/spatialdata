@@ -1190,8 +1190,7 @@ class SpatialData:
         """
         return self._tables
 
-    @tables.setter
-    def tables(
+    def add_tables(
         self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
     ):
         if table:
@@ -1200,12 +1199,23 @@ class SpatialData:
                 if self._tables[table_name] is not None:
                     raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
                 self._tables[table_name] = table
+                if self.is_backed():
+                    store = parse_url(self.path, mode="r+").store
+                    root = zarr.group(store=store)
+                    elem_group = root.require_group(name="tables")
+                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
             else:
                 raise ValueError("Please provide a string value for the parameter table_name.")
         elif table_mapping:
             for table in table_mapping.values():
                 TableModel().validate(table)
-            self._tables = table_mapping
+            self._tables.update(table_mapping)
+
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            elem_group = root.require_group(name="tables")
+            for key in table_mapping:
+                write_table(table=self._tables[key], group=elem_group, name=key)
         else:
             raise ValueError(
                 "Please provide either a value for the parameter table and table_name or for table_mapping"
@@ -1547,7 +1557,7 @@ class SpatialData:
         elif schema == ShapesModel:
             self.add_shapes(key, value)
         elif schema == TableModel:
-            raise TypeError("Use the table property to set the table (e.g. sdata.table = value)")
+            self.add_tables(table_name=key, table=value)
         else:
             raise TypeError(f"Unknown element type with schema{schema!r}")
 
