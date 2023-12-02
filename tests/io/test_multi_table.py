@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from anndata.tests.helpers import assert_equal
 from spatialdata import SpatialData
 
 from tests.conftest import _get_new_table, _get_shapes, _get_table
@@ -57,9 +58,18 @@ def set_annotation_target_of_table(table: AnnData, spatial_element: str | pd.Ser
 
 
 class TestMultiTable:
-    def test_set_get_tables_from_spatialdata(self, full_sdata: SpatialData):  # sdata is form conftest
+    def test_set_get_tables_from_spatialdata(self, full_sdata: SpatialData, tmp_path: str):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
         full_sdata["my_new_table0"] = adata0
         full_sdata["my_new_table1"] = adata1
+        full_sdata.write(tmpdir)
+
+        full_sdata = SpatialData.read(tmpdir)
+        assert_equal(adata0, full_sdata["my_new_table0"])
+        assert_equal(adata1, full_sdata["my_new_table1"])
+
+        # test new property
+        assert_equal(adata0, full_sdata.tables["my_new_table0"])
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
@@ -76,7 +86,6 @@ class TestMultiTable:
             del full_sdata.table
         with pytest.warns(DeprecationWarning):
             full_sdata.table = adata0  # this gets placed in sdata['table']
-        from anndata.tests.helpers import assert_equal
 
         assert_equal(adata0, full_sdata.table)
 
@@ -101,7 +110,6 @@ class TestMultiTable:
         sdata = SpatialData.read(tmpdir)
 
         assert isinstance(sdata["shape_annotate"], AnnData)
-        from anndata.tests.helpers import assert_equal
 
         assert_equal(test_sdata["shape_annotate"], sdata["shape_annotate"])
 
@@ -143,7 +151,7 @@ class TestMultiTable:
             tables={"segmentation": table},
         )
         test_sdata.write(tmpdir)
-        sdata = SpatialData.read(tmpdir)
+        SpatialData.read(tmpdir)
 
         # # use case example 1
         # # sorting the shapes visium0 to match the order of the table
