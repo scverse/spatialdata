@@ -794,3 +794,28 @@ def get_model(
     if isinstance(e, AnnData):
         return _validate_and_return(TableModel, e)
     raise TypeError(f"Unsupported type {type(e)}")
+
+
+def get_table_keys(table: AnnData):
+    """
+    Get the table keys giving information about what spatial element is annotated.
+
+    The first element returned gives information regarding which spatial elements are annotated by the table, the second
+    element gives information which column in table.obs contains the information which spatial element is annotated
+    by each row in the table and the instance key indicates the column in obs giving information of the id of each row.
+
+    Parameters
+    ----------
+    table:
+        AnnData table for which to retrieve the spatialdata_attrs keys.
+
+    Returns
+    -------
+    None | tuple[str | list[str], str, str]
+        The keys in table.uns['spatialdata_attrs']
+    """
+    if table.uns.get(TableModel.ATTRS_KEY):
+        attrs = table.uns[TableModel.ATTRS_KEY]
+        return attrs[TableModel.REGION_KEY], attrs[TableModel.REGION_KEY_KEY], attrs[TableModel.INSTANCE_KEY]
+
+    raise ValueError("No spatialdata_attrs key found in table.uns. Therefore, no table keys found.")
