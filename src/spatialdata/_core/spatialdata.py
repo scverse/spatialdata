@@ -1240,6 +1240,11 @@ class SpatialData:
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
+        warnings.warn(
+            "del sdata.table will be deprecated with SpatialData version X.X, use del sdata.tables['table'] instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if self._tables.get("table"):
             self._tables["table"] = None
             if self.is_backed():
