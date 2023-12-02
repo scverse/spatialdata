@@ -1111,7 +1111,7 @@ class SpatialData:
 
             if len(self._tables):
                 elem_group = root.create_group(name="tables")
-                for key in self._tables.keys():
+                for key in self._tables:
                     write_table(table=self._tables[key], group=elem_group, name=key)
 
         except Exception as e:  # noqa: B902
@@ -1188,6 +1188,27 @@ class SpatialData:
         """
         return self._tables
 
+    @tables.setter
+    def tables(
+        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
+    ):
+        if table:
+            if table_name:
+                TableModel().validate(table)
+                if self._tables[table_name] is not None:
+                    raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
+                self._tables[table_name] = table
+            else:
+                raise ValueError("Please provide a string value for the parameter table_name.")
+        elif table_mapping:
+            for table in table_mapping.values():
+                TableModel().validate(table)
+            self._tables = table_mapping
+        else:
+            raise ValueError(
+                "Please provide either a value for the parameter table and table_name or for table_mapping"
+            )
+
     @table.setter
     def table(self, table: AnnData) -> None:
         """
@@ -1205,14 +1226,14 @@ class SpatialData:
         If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
         """
         TableModel().validate(table)
-        if self.table is not None:
-            raise ValueError("The table already exists. Use del sdata.table to remove it first.")
-        self._table = table
+        if self._tables["table"] is not None:
+            raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
+        self._tables["table"] = table
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
-            elem_group = root.require_group(name="table")
-            write_table(table=self.table, group=elem_group, name="table")
+            elem_group = root.require_group(name="tables")
+            write_table(table=self._tables["table"], group=elem_group, name="table")
 
     # @tables.setter
     # def tables(self, tables: dict[str, AnnData]) -> None:
@@ -1221,11 +1242,11 @@ class SpatialData:
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
-        self._table = None
+        self._tables["table"] = None
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
-            del root["table/table"]
+            del root["tables/table"]
 
     @staticmethod
     def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:
