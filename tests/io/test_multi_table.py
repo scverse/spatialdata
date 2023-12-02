@@ -62,10 +62,10 @@ class TestMultiTable:
         sdata["my_new_table1"] = adata1
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
-        # assume no table is present
-        # this prints a deprecation warning
+        # To test self._backed
         tmpdir = Path(tmp_path) / "tmp.zarr"
         full_sdata.write(tmpdir)
+
         with pytest.warns(DeprecationWarning):
             _ = full_sdata.table
         with pytest.raises(ValueError):
