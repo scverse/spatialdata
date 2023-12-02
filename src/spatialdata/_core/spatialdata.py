@@ -1237,10 +1237,6 @@ class SpatialData:
             elem_group = root.require_group(name="tables")
             write_table(table=self._tables["table"], group=elem_group, name="table")
 
-    # @tables.setter
-    # def tables(self, tables: dict[str, AnnData]) -> None:
-    #     for k,v in tables.items():
-
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
