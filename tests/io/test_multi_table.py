@@ -57,9 +57,9 @@ def set_annotation_target_of_table(table: AnnData, spatial_element: str | pd.Ser
 
 
 class TestMultiTable:
-    def test_set_get_tables_from_spatialdata(self, sdata: SpatialData):  # sdata is form conftest
-        sdata["my_new_table0"] = adata0
-        sdata["my_new_table1"] = adata1
+    def test_set_get_tables_from_spatialdata(self, full_sdata: SpatialData):  # sdata is form conftest
+        full_sdata["my_new_table0"] = adata0
+        full_sdata["my_new_table1"] = adata1
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed

@@ -165,9 +165,8 @@ class SpatialData:
 
         if tables is not None:
             self._tables: dict[str, AnnData] = {}
-            for table_value in tables.values():
-                Table_s.validate(table_value)
-            self._tables = tables
+
+            self._add_tables(table_mapping=tables)
 
         self._query = QueryManager(self)
 
@@ -1193,33 +1192,36 @@ class SpatialData:
     def add_tables(
         self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
     ):
+        self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
+
+    def _store_tables(self, table_name: str = None, table_mapping: None | dict[str, AnnData] = None):
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            elem_group = root.require_group(name="tables")
+            if table_name:
+                write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+            else:
+                for table_name in table_mapping:
+                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+
+    def _add_tables(
+        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
+    ):
         if table:
             if table_name:
                 TableModel().validate(table)
-                if self._tables[table_name] is not None:
+                if self._tables.get(table_name) is not None:
                     raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
                 self._tables[table_name] = table
-                if self.is_backed():
-                    store = parse_url(self.path, mode="r+").store
-                    root = zarr.group(store=store)
-                    elem_group = root.require_group(name="tables")
-                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+                self._store_tables(table_name=table_name)
             else:
                 raise ValueError("Please provide a string value for the parameter table_name.")
         elif table_mapping:
             for table in table_mapping.values():
                 TableModel().validate(table)
             self._tables.update(table_mapping)
-
-            store = parse_url(self.path, mode="r+").store
-            root = zarr.group(store=store)
-            elem_group = root.require_group(name="tables")
-            for key in table_mapping:
-                write_table(table=self._tables[key], group=elem_group, name=key)
-        else:
-            raise ValueError(
-                "Please provide either a value for the parameter table and table_name or for table_mapping"
-            )
+            self._store_tables(table_mapping=table_mapping)
 
     @table.setter
     def table(self, table: AnnData) -> None:
@@ -1246,11 +1248,7 @@ class SpatialData:
         if self._tables["table"] is not None:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
         self._tables["table"] = table
-        if self.is_backed():
-            store = parse_url(self.path, mode="r+").store
-            root = zarr.group(store=store)
-            elem_group = root.require_group(name="tables")
-            write_table(table=self._tables["table"], group=elem_group, name="table")
+        self._store_tables(table_name="table")
 
     @table.deleter
     def table(self) -> None:
