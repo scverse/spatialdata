@@ -42,6 +42,7 @@ from spatialdata.models import (
     get_axes_names,
     get_model,
 )
+from spatialdata.models.models import get_table_keys
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -211,6 +212,25 @@ class SpatialData:
             else:
                 raise ValueError(f"Unknown schema {schema}")
         return SpatialData(**d)  # type: ignore[arg-type]
+
+    @staticmethod
+    def get_annotated_regions(table: AnnData):
+        regions, _, _ = get_table_keys(table)
+        return regions
+
+    @staticmethod
+    def get_region_key_column(table: AnnData):
+        _, region_key, _ = get_table_keys(table)
+        if table.obs.get(region_key):
+            return table.obs[region_key]
+        raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
+
+    @staticmethod
+    def get_instance_key_column(table: AnnData):
+        _, _, instance_key = get_table_keys(table)
+        if table.obs.get(instance_key):
+            return table.obs[instance_key]
+        raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
     @property
     def query(self) -> QueryManager:
