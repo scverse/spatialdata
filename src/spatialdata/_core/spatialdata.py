@@ -8,6 +8,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Union
 
+import pandas as pd
 import zarr
 from anndata import AnnData
 from dask.dataframe import read_parquet
@@ -42,7 +43,7 @@ from spatialdata.models import (
     get_axes_names,
     get_model,
 )
-from spatialdata.models.models import get_table_keys
+from spatialdata.models.models import check_target_region_column_symmetry, get_table_keys
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -231,6 +232,91 @@ class SpatialData:
         if table.obs.get(instance_key):
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
+
+    @staticmethod
+    def _set_table_annotation_target(
+        table: AnnData,
+        target_element_name: str | pd.Series,
+        region_key: None | str = None,
+        instance_key: None | str = None,
+    ):
+        if table.obs.get(region_key) is None:
+            raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
+        if table.obs.get(instance_key) is None:
+            raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
+        attrs = {
+            TableModel.REGION_KEY: target_element_name,
+            TableModel.REGION_KEY_KEY: region_key,
+            TableModel.INSTANCE_KEY: instance_key,
+        }
+        check_target_region_column_symmetry(table, region_key, target_element_name)
+        table.uns[TableModel.ATTRS_KEY] = attrs
+
+    @staticmethod
+    def _change_table_annotation_target(
+        table: AnnData,
+        target_element_name: str | pd.Series,
+        region_key: None | str = None,
+        instance_key: None | str = None,
+    ):
+        attrs = table.uns[TableModel.ATTRS_KEY]
+        if not region_key:
+            if attrs.get(TableModel.REGION_KEY_KEY) and table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is not None:
+                if (
+                    not instance_key
+                    and not attrs.get(TableModel.INSTANCE_KEY)
+                    and not table.obs.get(attrs[TableModel.INSTANCE_KEY])
+                ):
+                    raise ValueError(
+                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as parameter."
+                    )
+                elif instance_key:
+                    if table.obs.get(instance_key) is not None:
+                        attrs[TableModel.INSTANCE_KEY] = instance_key
+                    else:
+                        raise ValueError(f"Instance key {instance_key} not found in table.obs.")
+                check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
+                attrs[TableModel.REGION_KEY] = target_element_name
+            else:
+                raise ValueError(
+                    "Region key and/or region key column not found in table. Please pass region_key as a parameter"
+                )
+        else:
+            if table.obs.get(region_key) is None:
+                raise ValueError(f"{region_key} not present in table.obs")
+            else:
+                if (
+                    not instance_key
+                    and not attrs.get(TableModel.INSTANCE_KEY)
+                    and table.obs.get(attrs[TableModel.INSTANCE_KEY]) is None
+                ):
+                    raise ValueError(
+                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as parameter."
+                    )
+                elif instance_key:
+                    if table.obs.get(instance_key) is not None:
+                        attrs[TableModel.INSTANCE_KEY] = instance_key
+                    else:
+                        raise ValueError(f"Instance key {instance_key} not found in table.obs.")
+                check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
+                attrs[TableModel.REGION_KEY] = target_element_name
+
+    def set_table_annotation_target(
+        self,
+        table_name: str,
+        target_element_name: str | pd.Series,
+        region_key: None | str = None,
+        instance_key: None | str = None,
+    ):
+        table = self._tables[table_name]
+        element_names = set(element[1] for element in self._gen_elements())
+        if target_element_name not in element_names:
+            raise ValueError(f"Annotation target {target_element_name} not present in SpatialData object.")
+
+        if table.uns.get(TableModel.ATTRS_KEY):
+            self._change_table_annotation_target(table, target_element_name, region_key, instance_key)
+        else:
+            self._set_table_annotation_target(table, target_element_name, region_key, instance_key)
 
     @property
     def query(self) -> QueryManager:

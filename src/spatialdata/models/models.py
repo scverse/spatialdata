@@ -819,3 +819,13 @@ def get_table_keys(table: AnnData):
         return attrs[TableModel.REGION_KEY], attrs[TableModel.REGION_KEY_KEY], attrs[TableModel.INSTANCE_KEY]
 
     raise ValueError("No spatialdata_attrs key found in table.uns. Therefore, no table keys found.")
+
+
+def check_target_region_column_symmetry(table: AnnData, region_key, target: str | pd.Series):
+    found_regions = set(table.obs[region_key].unique().tolist())
+    target_element_set = [target] if isinstance(target, str) else target
+    symmetric_difference = found_regions.symmetric_difference(target_element_set)
+    if symmetric_difference:
+        raise ValueError(
+            f"Mismatch found between regions in region column in obs and target element: {symmetric_difference}"
+        )
