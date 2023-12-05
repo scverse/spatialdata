@@ -142,7 +142,11 @@ class SpatialData:
             tables = {"table": tables}
 
         self._validate_unique_element_names(
-            list(images.keys()) + list(labels.keys()) + list(points.keys()) + list(shapes.keys()) + list(tables.keys())
+            list(images.keys())
+            + list(labels.keys())
+            + list(points.keys())
+            + list(shapes.keys())
+            + (list(tables.keys() if tables else []))
         )
 
         if images is not None:
