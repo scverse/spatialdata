@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import pathlib
 import tempfile
 from copy import deepcopy
 from functools import partial
@@ -119,7 +118,7 @@ class TestModels:
                 str,
                 np.ndarray,
                 dask.array.core.Array,
-                pathlib.PosixPath,
+                Path,
                 pd.DataFrame,
             )
         ):
