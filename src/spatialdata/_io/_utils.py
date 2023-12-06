@@ -180,8 +180,8 @@ def _are_directories_identical(
     if _root_dir2 is None:
         _root_dir2 = dir2
     if exclude_regexp is not None and (
-        re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1))
-        or re.match(rf"{_root_dir2}/" + exclude_regexp, str(dir2))
+        re.match(rf"{re.escape(str(_root_dir1))}/" + exclude_regexp, str(dir1))
+        or re.match(rf"{re.escape(str(_root_dir2))}/" + exclude_regexp, str(dir2))
     ):
         return True
 
