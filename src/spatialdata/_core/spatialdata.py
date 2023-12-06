@@ -281,10 +281,10 @@ class SpatialData:
                         raise ValueError(f"Instance key {instance_key} not found in table.obs.")
                 check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
                 attrs[TableModel.REGION_KEY] = target_element_name
-            else:
-                raise ValueError(
-                    "Region key and/or region key column not found in table. Please pass region_key as a parameter"
-                )
+
+            raise ValueError(
+                "Region key and/or region key column not found in table. Please pass region_key as a parameter"
+            )
         else:
             if table.obs.get(region_key) is None:
                 raise ValueError(f"{region_key} not present in table.obs")
@@ -1276,7 +1276,7 @@ class SpatialData:
         assert isinstance(self.path, str)
 
     @property
-    def table(self) -> AnnData:
+    def table(self) -> None | AnnData:
         """
         Return the table.
 
@@ -1292,7 +1292,7 @@ class SpatialData:
         )
         if self._tables.get("table"):
             return self._tables["table"]
-        raise KeyError("'table' is not present in the spatialdata object.")
+        return None
 
     @property
     def tables(self) -> dict[str, AnnData]:
