@@ -93,7 +93,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(region="sample1"),
+        table=_get_table(region="labels2d"),
     )
 
 
@@ -290,9 +290,11 @@ def _get_table(
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
 
 
-def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
+def _get_new_table(
+    spatial_element: None | str | Sequence[str] = None, instance_id: None | Sequence[Any] = None
+) -> AnnData:
     adata = AnnData(np.random.default_rng().random((10, 20000)))
-    return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
+    return TableModel.parse(adata=adata)
 
 
 @pytest.fixture()
