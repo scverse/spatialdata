@@ -465,7 +465,8 @@ class PointsModel:
         """
         for ax in [X, Y, Z]:
             if ax in data.columns:
-                assert data[ax].dtype in [np.float32, np.float64, np.int64]
+                # TODO: check why this can return int32 on windows.
+                assert data[ax].dtype in [np.int32, np.float32, np.float64, np.int64]
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
@@ -821,7 +822,22 @@ def get_table_keys(table: AnnData):
     raise ValueError("No spatialdata_attrs key found in table.uns. Therefore, no table keys found.")
 
 
-def check_target_region_column_symmetry(table: AnnData, region_key, target: str | pd.Series):
+def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
+    """
+    Check region and region_key column symmetry.
+
+    This checks whether the specified targets are also present in the region key column in obs and raises an error
+    if this is not the case.
+
+    Parameters
+    ----------
+    table: AnnData
+        Table annotating specific SpatialElements
+    region_key: str
+        The column in obs containing for each row which SpatialElement is annotated by that row.
+    target: str | pd.Series
+         Name of target(s) SpatialElement(s)
+    """
     found_regions = set(table.obs[region_key].unique().tolist())
     target_element_set = [target] if isinstance(target, str) else target
     symmetric_difference = found_regions.symmetric_difference(target_element_set)
