@@ -1290,7 +1290,8 @@ class SpatialData:
             DeprecationWarning,
             stacklevel=2,
         )
-        if self._tables.get("table"):
+        # Isinstance will still return table if anndata has 0 rows.
+        if isinstance(self._tables.get("table"), AnnData):
             return self._tables["table"]
         return None
 

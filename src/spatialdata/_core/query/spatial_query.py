@@ -640,11 +640,13 @@ def _polygon_query(
                 "issue and we will prioritize the implementation."
             )
 
-    if filter_table and sdata.table is not None:
-        table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
+    if filter_table and sdata.tables is not None:
+        tables = {}
+        for table_name, table in sdata.tables.items():
+            tables[table_name] = _filter_table_by_elements(table, {"shapes": new_shapes, "points": new_points})
     else:
-        table = sdata.table
-    return SpatialData(shapes=new_shapes, points=new_points, images=new_images, table=table)
+        tables = sdata.tables
+    return SpatialData(shapes=new_shapes, points=new_points, images=new_images, tables=tables)
 
 
 # this function is currently excluded from the API documentation. TODO: add it after the refactoring
