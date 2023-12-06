@@ -641,7 +641,10 @@ class SpatialData:
             else:
                 raise ValueError("Unknown element type")
 
-    def filter_by_coordinate_system(self, coordinate_system: str | list[str], filter_table: bool = True) -> SpatialData:
+    @deprecation_alias(filter_table="filter_tables")
+    def filter_by_coordinate_system(
+        self, coordinate_system: str | list[str], filter_tables: bool = True
+    ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
 
@@ -660,6 +663,7 @@ class SpatialData:
         -------
         The filtered SpatialData.
         """
+        # TODO: decide whether to add parameter to filter only specific table.
         from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
         from spatialdata.transformations.operations import get_transformation
 
@@ -668,23 +672,26 @@ class SpatialData:
         if isinstance(coordinate_system, str):
             coordinate_system = [coordinate_system]
         for element_type, element_name, element in self._gen_elements():
-            transformations = get_transformation(element, get_all=True)
-            assert isinstance(transformations, dict)
-            for cs in coordinate_system:
-                if cs in transformations:
-                    if element_type not in elements:
-                        elements[element_type] = {}
-                    elements[element_type][element_name] = element
-                    element_paths_in_coordinate_system.append(element_name)
+            if element_type != "tables":
+                transformations = get_transformation(element, get_all=True)
+                assert isinstance(transformations, dict)
+                for cs in coordinate_system:
+                    if cs in transformations:
+                        if element_type not in elements:
+                            elements[element_type] = {}
+                        elements[element_type][element_name] = element
+                        element_paths_in_coordinate_system.append(element_name)
 
         # TODO: check whether full table dict should be returned or only those which annotate elements. Also check
         # filtering with tables having potentially different keys.
-        if filter_table:
-            table = _filter_table_by_coordinate_system(self.table, element_paths_in_coordinate_system)
+        if filter_tables:
+            tables = {}
+            for table_name, table in self._tables.items():
+                tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
         else:
-            table = self.table
+            tables = self._tables
 
-        return SpatialData(**elements, table=table)
+        return SpatialData(**elements, tables=tables)
 
     def rename_coordinate_systems(self, rename_dict: dict[str, str]) -> None:
         """
@@ -793,11 +800,12 @@ class SpatialData:
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in sdata._gen_elements():
-            transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
-            if element_type not in elements:
-                elements[element_type] = {}
-            elements[element_type][element_name] = transformed
-        return SpatialData(**elements, table=sdata.table)
+            if element_type != "tables":
+                transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
+                if element_type not in elements:
+                    elements[element_type] = {}
+                elements[element_type][element_name] = transformed
+        return SpatialData(**elements, table=sdata.tables)
 
     def add_image(
         self,
@@ -1355,7 +1363,7 @@ class SpatialData:
             stacklevel=2,
         )
         TableModel().validate(table)
-        if self._tables["table"] is not None:
+        if self._tables.get("table") is not None:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
         self._tables["table"] = table
         self._store_tables(table_name="table")
@@ -1585,7 +1593,7 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
-        for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        for element_type in ["images", "labels", "points", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v

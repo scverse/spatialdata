@@ -41,7 +41,7 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
     -------
     The filtered table, or None if the input table was None
     """
-    if table is None:
+    if table is None or not table.uns.get(TableModel.ATTRS_KEY):
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
