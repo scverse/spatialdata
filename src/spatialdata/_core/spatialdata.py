@@ -1594,7 +1594,7 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
-        for element_type in ["images", "labels", "points", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes", "tables"]:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v

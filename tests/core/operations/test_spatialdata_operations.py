@@ -95,13 +95,13 @@ def test_filter_by_coordinate_system(full_sdata):
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
-    assert len(list(sdata_my_space._gen_elements())) == 2
+    assert len(list(sdata_my_space._gen_elements())) == 3
     _assert_tables_seem_identical(sdata_my_space.table, full_sdata.table)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
         coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
     )
-    assert len(list(sdata_my_space1._gen_elements())) == 3
+    assert len(list(sdata_my_space1._gen_elements())) == 4
 
 
 def test_filter_by_coordinate_system_also_table(full_sdata):
@@ -253,7 +253,7 @@ def test_concatenate_sdatas(full_sdata):
     filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
     filtered1.table.obs[filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
     concatenated = concatenate([filtered0, filtered1])
-    assert len(list(concatenated._gen_elements())) == 2
+    assert len(list(concatenated._gen_elements())) == 3
 
 
 def test_locate_spatial_element(full_sdata):
