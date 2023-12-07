@@ -241,7 +241,7 @@ def test_concatenate_sdatas(full_sdata):
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
     filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
-    assert len(list(filtered._gen_elements())) == 2
+    assert len(list(filtered._gen_elements())) == 3
     filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
     # this is needed cause we can't handle regions with same name.
@@ -303,15 +303,16 @@ def test_no_shared_transformations():
     set_transformation(sdata.images[element_name], Identity(), to_coordinate_system=test_space)
 
     gen = sdata._gen_elements()
-    for _, name, obj in gen:
-        if name != element_name:
-            assert test_space not in get_transformation(obj, get_all=True)
-        else:
-            assert test_space in get_transformation(obj, get_all=True)
+    for element_type, name, obj in gen:
+        if element_type != "tables":
+            if name != element_name:
+                assert test_space not in get_transformation(obj, get_all=True)
+            else:
+                assert test_space in get_transformation(obj, get_all=True)
 
 
 def test_init_from_elements(full_sdata):
-    all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
-    sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
-    for element_type in ["images", "labels", "points", "shapes"]:
+    all_elements = {name: el for element_type, name, el in full_sdata._gen_elements() if element_type != "tables"}
+    sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata.table)
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
