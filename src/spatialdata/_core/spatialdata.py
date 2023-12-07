@@ -181,7 +181,7 @@ class SpatialData:
         element_names = [
             element_name for element_type, element_name, _ in self._gen_elements() if element_type != "tables"
         ]
-        if TableModel.ATTRS_KEY in data.uns.keys():
+        if TableModel.ATTRS_KEY in data.uns:
             attrs = data.uns[TableModel.ATTRS_KEY]
             regions = (
                 attrs[TableModel.REGION_KEY]
@@ -259,9 +259,9 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ):
-        if region_key not in table.obs.keys():
+        if region_key not in table.obs:
             raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
-        if instance_key not in table.obs.keys():
+        if instance_key not in table.obs:
             raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
         attrs = {
             TableModel.REGION_KEY: target_element_name,
@@ -282,13 +282,14 @@ class SpatialData:
         if not region_key:
             if attrs.get(TableModel.REGION_KEY_KEY) and table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is not None:
                 if not instance_key and (
-                    not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs.keys()
+                    not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs
                 ):
                     raise ValueError(
-                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as parameter."
+                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as "
+                        "parameter."
                     )
-                elif instance_key:
-                    if instance_key in table.obs.keys():
+                if instance_key:
+                    if instance_key in table.obs:
                         attrs[TableModel.INSTANCE_KEY] = instance_key
                     else:
                         raise ValueError(f"Instance key {instance_key} not found in table.obs.")
@@ -299,23 +300,23 @@ class SpatialData:
                     "Region key and/or region key column not found in table. Please pass region_key as a parameter"
                 )
         else:
-            if region_key not in table.obs.keys():
+            if region_key not in table.obs:
                 raise ValueError(f"{region_key} not present in table.obs")
-            else:
-                if not instance_key and (
-                    not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs.keys()
-                ):
-                    raise ValueError(
-                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as "
-                        "parameter."
-                    )
-                elif instance_key:
-                    if instance_key in table.obs.keys():
-                        attrs[TableModel.INSTANCE_KEY] = instance_key
-                    else:
-                        raise ValueError(f"Instance key {instance_key} not found in table.obs.")
-                check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
-                attrs[TableModel.REGION_KEY] = target_element_name
+
+            if not instance_key and (
+                not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs
+            ):
+                raise ValueError(
+                    "Instance key and/or instance key column not found in table.obs. Please pass instance_key as "
+                    "parameter."
+                )
+            if instance_key:
+                if instance_key in table.obs:
+                    attrs[TableModel.INSTANCE_KEY] = instance_key
+                else:
+                    raise ValueError(f"Instance key {instance_key} not found in table.obs.")
+            check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
+            attrs[TableModel.REGION_KEY] = target_element_name
 
     def set_table_annotation_target(
         self,
@@ -325,7 +326,7 @@ class SpatialData:
         instance_key: None | str = None,
     ):
         table = self._tables[table_name]
-        element_names = set(element[1] for element in self._gen_elements())
+        element_names = {element[1] for element in self._gen_elements()}
         if target_element_name not in element_names:
             raise ValueError(f"Annotation target {target_element_name} not present in SpatialData object.")
 

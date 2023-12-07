@@ -645,7 +645,7 @@ class TableModel:
 
     def _validate_table_annotation_metadata(self, data: AnnData) -> None:
         """
-        Validate spatialdata_attrs in AnnData.uns against corresponding columns in AnnData.obs
+        Validate spatialdata_attrs in AnnData.uns against corresponding columns in AnnData.obs.
 
         Parameters
         ----------
@@ -809,7 +809,7 @@ def get_model(
     raise TypeError(f"Unsupported type {type(e)}")
 
 
-def get_table_keys(table: AnnData):
+def get_table_keys(table: AnnData) -> None:
     """
     Get the table keys giving information about what spatial element is annotated.
 
