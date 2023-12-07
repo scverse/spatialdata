@@ -189,7 +189,9 @@ class SpatialData:
                 else [attrs[TableModel.REGION_KEY]]
             )
             if not all(element_name in element_names for element_name in regions):
-                raise ValueError("The table is annotating elements not present in the SpatialData object")
+                warnings.warn(
+                    "The table is annotating elements not present in the SpatialData object", UserWarning, stacklevel=2
+                )
 
     @staticmethod
     def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
