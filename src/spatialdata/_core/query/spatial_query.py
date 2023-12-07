@@ -266,8 +266,12 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
-    return SpatialData(**new_elements, table=table)
+    if filter_table:
+        tables = {name: _filter_table_by_elements(table, new_elements) for name, table in sdata.tables.items()}
+    else:
+        tables = sdata.tables
+
+    return SpatialData(**new_elements, tables=tables)
 
 
 @bounding_box_query.register(SpatialImage)
@@ -640,10 +644,9 @@ def _polygon_query(
                 "issue and we will prioritize the implementation."
             )
 
-    if filter_table and sdata.tables is not None:
-        tables = {}
-        for table_name, table in sdata.tables.items():
-            tables[table_name] = _filter_table_by_elements(table, {"shapes": new_shapes, "points": new_points})
+    if filter_table:
+        elements = {"shapes": new_shapes, "points": new_points}
+        tables = {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
     else:
         tables = sdata.tables
     return SpatialData(shapes=new_shapes, points=new_points, images=new_images, tables=tables)
@@ -750,7 +753,10 @@ def polygon_query(
         vv = pd.concat(v)
         vv = vv[~vv.index.duplicated(keep="first")]
         geodataframes[k] = vv
+    if filter_table:
+        elements = {"shapes": geodataframes}
+        tables = {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
+    else:
+        tables = sdata.tables
 
-    table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
-
-    return SpatialData(shapes=geodataframes, table=table)
+    return SpatialData(shapes=geodataframes, tables=tables)

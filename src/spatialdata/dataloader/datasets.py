@@ -184,7 +184,7 @@ class ImageTilesDataset(Dataset):
         else:
             tile_table = None
         tile_sdata = SpatialData(
-            images={self.regions_to_images[regions_name]: tile}, shapes={regions_name: tile_regions}, table=tile_table
+            images={self.regions_to_images[regions_name]: tile}, shapes={regions_name: tile_regions}, tables=tile_table
         )
         if self.transform is not None:
             return self.transform(tile_sdata)

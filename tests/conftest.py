@@ -64,12 +64,12 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(table=_get_table(region="sample1"))
+    return SpatialData(tables=_get_table(region="labels2d"))
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["sample1", "sample2"]))
+    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
 
 
 @pytest.fixture()
@@ -91,7 +91,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(region="labels2d"),
+        tables=_get_table(region="labels2d"),
     )
 
 
@@ -126,7 +126,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            table=_get_table("sample1"),
+            tables=_get_table("labels2d"),
         )
     if request.param == "empty":
         return SpatialData()

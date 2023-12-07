@@ -123,7 +123,7 @@ def concatenate(
         labels=merged_labels,
         points=merged_points,
         shapes=merged_shapes,
-        table=merged_table,
+        tables=merged_table,
     )
 
 

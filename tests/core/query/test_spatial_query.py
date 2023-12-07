@@ -338,7 +338,7 @@ def test_bounding_box_filter_table():
     table.obs["region"] = ["circles0", "circles0", "circles1"]
     table.obs["instance"] = [0, 1, 0]
     table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
-    sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, table=table)
+    sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, tables=table)
     queried0 = sdata.query.bounding_box(
         axes=("y", "x"),
         min_coordinate=np.array([15, 15]),
@@ -373,7 +373,7 @@ def test_polygon_query_shapes(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        table=sdata.table,
+        tables=sdata.table,
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -427,7 +427,7 @@ def test_polygon_query_spatial_data(sdata_query_aggregation):
             "values_circles": sdata["values_circles"],
         },
         points={"points": sdata["points"]},
-        table=sdata.table,
+        tables=sdata.table,
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     queried = polygon_query(values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=True)
