@@ -1,18 +1,16 @@
 from pathlib import Path
 
-import anndata as ad
-import numpy as np
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from tests.conftest import _get_new_table, _get_table
+from tests.conftest import _get_shapes, _get_table
 
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734
 # notes for the people (to prettify) https://hackmd.io/wd7K4Eg1SlykKVN-nOP44w
-
+test_shapes = _get_shapes()
 
 # shuffle the indices of the dataframe
 # np.random.default_rng().shuffle(test_shapes["poly"].index)
@@ -25,18 +23,20 @@ class TestMultiTable:
         adata1 = _get_table(region="multipolygon")
         full_sdata["adata0"] = adata0
         full_sdata["adata1"] = adata1
+
         adata2 = adata0.copy()
         del adata2.obs["region"]
         with pytest.raises(ValueError):
             full_sdata["not_added_table"] = adata2
+
         assert len(full_sdata.tables) == 3
-        assert "adata0" in full_sdata.tables.keys() and "adata1" in full_sdata.tables.keys()
+        assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
         full_sdata.write(tmpdir)
 
         full_sdata = SpatialData.read(tmpdir)
         assert_equal(adata0, full_sdata["adata0"])
         assert_equal(adata1, full_sdata["adata1"])
-        assert "adata0" in full_sdata.tables.keys() and "adata1" in full_sdata.tables.keys()
+        assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
 
     @pytest.mark.parametrize(
         "region_key, instance_key, error_msg",
@@ -61,7 +61,7 @@ class TestMultiTable:
         with pytest.raises(ValueError, match=error_msg):
             full_sdata.set_table_annotation_target("table", "poly", region_key=region_key, instance_key=instance_key)
 
-        full_sdata["table"].obs["instance_id"] = [i for i in range(n_obs)]
+        full_sdata["table"].obs["instance_id"] = range(n_obs)
         full_sdata.set_table_annotation_target("table", "poly", instance_key="instance_id", region_key=region_key)
 
         with pytest.raises(ValueError, match="not_existing not present"):
@@ -108,12 +108,20 @@ class TestMultiTable:
     def test_single_table(self, tmp_path: str):
         # shared table
         tmpdir = Path(tmp_path) / "tmp.zarr"
-
+        table = _get_table(region="test_shapes")
+        table2 = _get_table(region="non_existing")
+        with pytest.warns(UserWarning, match="The table is"):
+            SpatialData(
+                shapes={
+                    "test_shapes": test_shapes["poly"],
+                },
+                tables={"shape_annotate": table2},
+            )
         test_sdata = SpatialData(
             shapes={
                 "test_shapes": test_shapes["poly"],
             },
-            table={"shape_annotate": table},
+            tables={"shape_annotate": table},
         )
         test_sdata.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
@@ -140,25 +148,35 @@ class TestMultiTable:
 
     def test_paired_elements_tables(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
-
+        table = _get_table(region="poly")
+        table2 = _get_table(region="multipoly")
+        table3 = _get_table(region="non_existing")
+        with pytest.warns(UserWarning, match="The table is"):
+            SpatialData(
+                shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
+                table={"poly_annotate": table, "multipoly_annotate": table3},
+            )
         test_sdata = SpatialData(
-            shapes={
-                "test_shapes": test_shapes["poly"],
-            },
-            table={
-                "shape_annotate": table,
-            },
+            shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
+            table={"poly_annotate": table, "multipoly_annotate": table2},
         )
+        test_sdata.write(tmpdir)
+        test_sdata = SpatialData.read(tmpdir)
+        assert len(test_sdata.tables) == 2
 
     def test_single_table_multiple_elements(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
+        table = _get_table(region=["poly", "multipoly"])
+        subset = table[table.obs.region == "multipoly"]
+        with pytest.raises(ValueError, match="Regions in"):
+            TableModel().validate(subset)
 
         test_sdata = SpatialData(
             shapes={
-                "test_shapes": test_shapes["poly"],
-                "test_multipoly": test_shapes["multipoly"],
+                "poly": test_shapes["poly"],
+                "multipoly": test_shapes["multipoly"],
             },
-            tables={"segmentation": table},
+            tables={"table": table},
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)
@@ -174,41 +192,35 @@ class TestMultiTable:
         # sub_table.obs[sdata["visium0"]]
         # assert ...
 
-    def test_concatenate_tables(self):
-        table_two = _get_new_table(spatial_element="test_multipoly", instance_id=np.array([str(i) for i in range(2)]))
-        concatenated_table = ad.concat([table, table_two])
-        test_sdata = SpatialData(
-            shapes={
-                "test_shapes": test_shapes["poly"],
-                "test_multipoly": test_shapes["multipoly"],
-            },
-            tables={"segmentation": concatenated_table},
-        )
-        # use case tests as above (we test only visium0)
+    def test_multiple_table_without_element(self, tmp_path: str):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        table = _get_table(region=None, region_key=None, instance_key=None)
+        table_two = _get_table(region=None, region_key=None, instance_key=None)
 
-    def test_multiple_table_without_element(self):
-        table = _get_new_table()
-        table_two = _get_new_table()
-
-        SpatialData(
+        sdata = SpatialData(
             tables={"table": table, "table_two": table_two},
         )
+        sdata.write(tmpdir)
+        SpatialData.read(tmpdir)
 
     def test_multiple_tables_same_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        table_two = _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
+        table = _get_table(region="test_shapes")
+        table2 = _get_table(region="test_shapes")
 
         test_sdata = SpatialData(
             shapes={
                 "test_shapes": test_shapes["poly"],
             },
-            tables={"region_props": table, "codebook": table_two},
+            tables={"table": table, "table2": table2},
         )
         test_sdata.write(tmpdir)
+        SpatialData.read(tmpdir)
 
 
 #
-#     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this, either helper function, ...)
+#     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this,
+#     either helper function, ...)
 #     # use cases
 #     # use case example 1
 #     # sorting the shapes to match the order of the table

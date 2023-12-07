@@ -2,8 +2,6 @@ from __future__ import annotations
 
 # isort: off
 import os
-from typing import Any
-from collections.abc import Sequence
 
 os.environ["USE_PYGEOS"] = "0"
 # isort:on
@@ -277,24 +275,19 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: str | list[str] = "sample1",
-    region_key: str = "region",
-    instance_key: str = "instance_id",
+    region: None | str | list[str] = "sample1",
+    region_key: None | str = "region",
+    instance_key: None | str = "instance_id",
 ) -> AnnData:
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    if not all(var for var in (region, region_key, instance_key)):
+        return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
-
-
-def _get_new_table(
-    spatial_element: None | str | Sequence[str] = None, instance_id: None | Sequence[Any] = None
-) -> AnnData:
-    adata = AnnData(np.random.default_rng().random((10, 20000)))
-    return TableModel.parse(adata=adata)
 
 
 @pytest.fixture()
