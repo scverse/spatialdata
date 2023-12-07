@@ -25,6 +25,8 @@ def _concatenate_tables(
 ) -> AnnData:
     import anndata as ad
 
+    if not all(TableModel.ATTRS_KEY in table.uns for table in tables):
+        raise ValueError("Not all tables are annotating a spatial element")
     region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
     instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
     regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
