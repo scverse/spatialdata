@@ -266,39 +266,36 @@ class SpatialData:
         attrs = table.uns[TableModel.ATTRS_KEY]
         if not region_key:
             if attrs.get(TableModel.REGION_KEY_KEY) and table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is not None:
-                if (
-                    not instance_key
-                    and not attrs.get(TableModel.INSTANCE_KEY)
-                    and not table.obs.get(attrs[TableModel.INSTANCE_KEY])
+                if not instance_key and (
+                    not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs.keys()
                 ):
                     raise ValueError(
                         "Instance key and/or instance key column not found in table.obs. Please pass instance_key as parameter."
                     )
                 elif instance_key:
-                    if table.obs.get(instance_key) is not None:
+                    if instance_key in table.obs.keys():
                         attrs[TableModel.INSTANCE_KEY] = instance_key
                     else:
                         raise ValueError(f"Instance key {instance_key} not found in table.obs.")
                 check_target_region_column_symmetry(table, attrs[TableModel.REGION_KEY_KEY], target_element_name)
                 attrs[TableModel.REGION_KEY] = target_element_name
-
-            raise ValueError(
-                "Region key and/or region key column not found in table. Please pass region_key as a parameter"
-            )
+            else:
+                raise ValueError(
+                    "Region key and/or region key column not found in table. Please pass region_key as a parameter"
+                )
         else:
-            if table.obs.get(region_key) is None:
+            if region_key not in table.obs.keys():
                 raise ValueError(f"{region_key} not present in table.obs")
             else:
-                if (
-                    not instance_key
-                    and not attrs.get(TableModel.INSTANCE_KEY)
-                    and table.obs.get(attrs[TableModel.INSTANCE_KEY]) is None
+                if not instance_key and (
+                    not attrs.get(TableModel.INSTANCE_KEY) or attrs[TableModel.INSTANCE_KEY] not in table.obs.keys()
                 ):
                     raise ValueError(
-                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as parameter."
+                        "Instance key and/or instance key column not found in table.obs. Please pass instance_key as "
+                        "parameter."
                     )
                 elif instance_key:
-                    if table.obs.get(instance_key) is not None:
+                    if instance_key in table.obs.keys():
                         attrs[TableModel.INSTANCE_KEY] = instance_key
                     else:
                         raise ValueError(f"Instance key {instance_key} not found in table.obs.")
