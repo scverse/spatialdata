@@ -1604,7 +1604,10 @@ class SpatialData:
             raise KeyError(f"Could not find element with name {element_name!r}")
 
     @classmethod
-    def init_from_elements(cls, elements: dict[str, SpatialElement], table: AnnData | None = None) -> SpatialData:
+    @deprecation_alias(table="tables")
+    def init_from_elements(
+        cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
+    ) -> SpatialData:
         """
         Create a SpatialData object from a dict of named elements and an optional table.
 
@@ -1612,8 +1615,8 @@ class SpatialData:
         ----------
         elements
             A dict of named elements.
-        table
-            An optional table.
+        tables
+            An optional table or dictionary of tables
 
         Returns
         -------
@@ -1632,7 +1635,7 @@ class SpatialData:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        return cls(**elements_dict, table=table)
+        return cls(**elements_dict, tables=tables)
 
     def __getitem__(self, item: str) -> SpatialElement:
         """
