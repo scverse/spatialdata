@@ -25,6 +25,10 @@ class TestMultiTable:
         adata1 = _get_table(region="multipolygon")
         full_sdata["adata0"] = adata0
         full_sdata["adata1"] = adata1
+        adata2 = adata0.copy()
+        del adata2.obs["region"]
+        with pytest.raises(ValueError):
+            full_sdata["not_added_table"] = adata2
         assert len(full_sdata.tables) == 3
         assert "adata0" in full_sdata.tables.keys() and "adata1" in full_sdata.tables.keys()
         full_sdata.write(tmpdir)
