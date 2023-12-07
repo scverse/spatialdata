@@ -2,79 +2,86 @@ from pathlib import Path
 
 import anndata as ad
 import numpy as np
-import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from spatialdata import SpatialData
+from spatialdata.models import TableModel
 
-from tests.conftest import _get_new_table, _get_shapes, _get_table
+from tests.conftest import _get_new_table, _get_table
 
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734
 # notes for the people (to prettify) https://hackmd.io/wd7K4Eg1SlykKVN-nOP44w
-
-# shapes
-test_shapes = _get_shapes()
-instance_id = np.array([str(i) for i in range(5)])
-table = _get_table()  # _get_new_table(spatial_element="test_shapes", instance_id=instance_id)
-adata0 = _get_table()
-adata1 = _get_table()
 
 
 # shuffle the indices of the dataframe
 # np.random.default_rng().shuffle(test_shapes["poly"].index)
 
-# tables is a dict
-# SpatialData.tables
-
-# def get_table_keys(sdata: SpatialData) -> tuple[list[str], str, str]:
-#     d = sdata.table.uns[sd.models.TableModel.ATTRS_KEY]
-#     return d['region'], d['region_key'], d['instance_key']
-#
-# @staticmethod
-# def SpatialData.get_key_column(table: AnnData, key_column: str) -> ...:
-#     region, region_key, instance_key = sd.models.get_table_keys()
-#     if key_clumns == 'region_key':
-#     return table.obs[region_key]
-# else: ....
-#
-# @staticmethod
-# def SpatialData.get_region_key_column(table: AnnData | str):
-# return get_key_column(...)
-
-# @staticmethod
-# def SpatialData.get_instance_key_column(table: AnnData | str):
-# return get_key_column(...)
-
-# we need also the two set_...() functions
-
-
-def get_annotation_target_of_table(table: AnnData) -> pd.Series:
-    return SpatialData.get_region_key_column(table)
-
-
-def set_annotation_target_of_table(table: AnnData, spatial_element: str | pd.Series) -> None:
-    SpatialData.set_instance_key_column(table, spatial_element)
-
 
 class TestMultiTable:
     def test_set_get_tables_from_spatialdata(self, full_sdata: SpatialData, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        full_sdata["my_new_table0"] = adata0
-        full_sdata["my_new_table1"] = adata1
+        adata0 = _get_table(region="polygon")
+        adata1 = _get_table(region="multipolygon")
+        full_sdata["adata0"] = adata0
+        full_sdata["adata1"] = adata1
+        assert len(full_sdata.tables) == 3
+        assert "adata0" in full_sdata.tables.keys() and "adata1" in full_sdata.tables.keys()
         full_sdata.write(tmpdir)
 
         full_sdata = SpatialData.read(tmpdir)
-        assert_equal(adata0, full_sdata["my_new_table0"])
-        assert_equal(adata1, full_sdata["my_new_table1"])
+        assert_equal(adata0, full_sdata["adata0"])
+        assert_equal(adata1, full_sdata["adata1"])
+        assert "adata0" in full_sdata.tables.keys() and "adata1" in full_sdata.tables.keys()
 
-        # test new property
-        assert_equal(adata0, full_sdata.tables["my_new_table0"])
+    @pytest.mark.parametrize(
+        "region_key, instance_key, error_msg",
+        [
+            (None, None, "Instance key and/or instance"),
+            ("region", None, "Instance key and/or instance"),
+            ("region", "instance_id", "Instance key instance_id not"),
+            (None, "instance_id", "Instance key instance_id not"),
+        ],
+    )
+    def test_change_annotation_target(self, full_sdata, region_key, instance_key, error_msg):
+        n_obs = full_sdata["table"].n_obs
+        with pytest.raises(ValueError, match="Mismatch found between regions"):
+            full_sdata.set_table_annotation_target("table", "poly")
+
+        del full_sdata["table"].obs["region"]
+        with pytest.raises(ValueError, match="Region key and/or region key"):
+            full_sdata.set_table_annotation_target("table", "poly")
+
+        del full_sdata["table"].obs["instance_id"]
+        full_sdata["table"].obs["region"] = ["poly"] * n_obs
+        with pytest.raises(ValueError, match=error_msg):
+            full_sdata.set_table_annotation_target("table", "poly", region_key=region_key, instance_key=instance_key)
+
+        full_sdata["table"].obs["instance_id"] = [i for i in range(n_obs)]
+        full_sdata.set_table_annotation_target("table", "poly", instance_key="instance_id", region_key=region_key)
+
+        with pytest.raises(ValueError, match="not_existing not present"):
+            full_sdata.set_table_annotation_target("table", "circles", region_key="not_existing")
+
+    def test_set_table_nonexisting_target(self, full_sdata):
+        with pytest.raises(ValueError, match="Annotation target"):
+            full_sdata.set_table_annotation_target("table", "non_existing")
+
+    def test_set_table_annotation_target(self, full_sdata):
+        del full_sdata["table"].uns[TableModel.ATTRS_KEY]
+        with pytest.raises(ValueError, match="Specified region_key"):
+            full_sdata.set_table_annotation_target("table", "labels2d", region_key="non_existent")
+        with pytest.raises(ValueError, match="Specified instance_key"):
+            full_sdata.set_table_annotation_target(
+                "table", "labels2d", region_key="region", instance_key="non_existent"
+            )
+        full_sdata.set_table_annotation_target("table", "labels2d", region_key="region", instance_key="instance_id")
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
         tmpdir = Path(tmp_path) / "tmp.zarr"
         full_sdata.write(tmpdir)
+        adata0 = _get_table(region="polygon")
 
         with pytest.warns(DeprecationWarning):
             _ = full_sdata.table
@@ -92,9 +99,7 @@ class TestMultiTable:
         del full_sdata.table
 
         full_sdata.tables["my_new_table0"] = adata0
-        with pytest.raises(KeyError):
-            # will fail, because there is no sdata['table'], even if another table is present
-            _ = full_sdata.table
+        assert full_sdata.table is None
 
     def test_single_table(self, tmp_path: str):
         # shared table
@@ -130,15 +135,16 @@ class TestMultiTable:
         # assert ...
 
     def test_paired_elements_tables(self, tmp_path: str):
-        pass
+        tmpdir = Path(tmp_path) / "tmp.zarr"
 
-    def test_elements_transfer_annotation(self, tmp_path: str):
         test_sdata = SpatialData(
-            shapes={"test_shapes": test_shapes["poly"], "test_multipoly": test_shapes["multipoly"]},
-            tables={"segmentation": table},
+            shapes={
+                "test_shapes": test_shapes["poly"],
+            },
+            table={
+                "shape_annotate": table,
+            },
         )
-        set_annotation_target_of_table(test_sdata["segmentation"], "test_multipoly")
-        assert get_annotation_target_of_table(test_sdata["segmentation"]) == "test_multipoly"
 
     def test_single_table_multiple_elements(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -195,8 +201,6 @@ class TestMultiTable:
             tables={"region_props": table, "codebook": table_two},
         )
         test_sdata.write(tmpdir)
-        sdata = SpatialData.read(tmpdir)
-        print(sdata)
 
 
 #
