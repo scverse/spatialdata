@@ -244,9 +244,9 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ):
-        if table.obs.get(region_key) is None:
+        if region_key not in table.obs.keys():
             raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
-        if table.obs.get(instance_key) is None:
+        if instance_key not in table.obs.keys():
             raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
         attrs = {
             TableModel.REGION_KEY: target_element_name,
