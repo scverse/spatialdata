@@ -176,6 +176,21 @@ class SpatialData:
 
         self._query = QueryManager(self)
 
+    def validate_table_in_spatialdata(self, data: AnnData):
+        TableModel().validate(data)
+        element_names = [
+            element_name for element_type, element_name, _ in self._gen_elements() if element_type != "tables"
+        ]
+        if TableModel.ATTRS_KEY in data.uns.keys():
+            attrs = data.uns[TableModel.ATTRS_KEY]
+            regions = (
+                attrs[TableModel.REGION_KEY]
+                if isinstance(attrs[TableModel.REGION_KEY], list)
+                else [attrs[TableModel.REGION_KEY]]
+            )
+            if not all(element_name in element_names for element_name in regions):
+                raise ValueError("The table is annotating elements not present in the SpatialData object")
+
     @staticmethod
     def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
         """
@@ -1335,7 +1350,7 @@ class SpatialData:
                 raise ValueError("Please provide a string value for the parameter table_name.")
         elif table_mapping:
             for table in table_mapping.values():
-                TableModel().validate(table)
+                self.validate_table_in_spatialdata(table)
             self._tables.update(table_mapping)
             self._store_tables(table_mapping=table_mapping)
 

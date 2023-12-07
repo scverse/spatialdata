@@ -643,6 +643,33 @@ class TableModel:
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
 
+    def _validate_table_annotation_metadata(self, data: AnnData) -> None:
+        """
+        Validate spatialdata_attrs in AnnData.uns against corresponding columns in AnnData.obs
+
+        Parameters
+        ----------
+        data: AnnData
+            Table for which to validate the annotation metdatadata
+        """
+        attr = data.uns[self.ATTRS_KEY]
+
+        if "region" not in attr:
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "region_key" not in attr:
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+        if "instance_key" not in attr:
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+
+        if attr[self.REGION_KEY_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
+        if attr[self.INSTANCE_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
+        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
+        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
+            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+
     def validate(
         self,
         data: AnnData,
@@ -661,23 +688,8 @@ class TableModel:
         """
         if self.ATTRS_KEY not in data.uns:
             return data
-        attr = data.uns[self.ATTRS_KEY]
 
-        if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-        if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-        if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-
-        if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
-        if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
-        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
-        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
-        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
-            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+        self._validate_table_annotation_metadata(data)
 
         return data
 
