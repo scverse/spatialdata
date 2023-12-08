@@ -260,7 +260,7 @@ class SpatialData:
         target_element_name: str | pd.Series,
         region_key: None | str = None,
         instance_key: None | str = None,
-    ):
+    ) -> None:
         if region_key not in table.obs:
             raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
         if instance_key not in table.obs:
@@ -279,7 +279,7 @@ class SpatialData:
         target_element_name: str | pd.Series,
         region_key: None | str = None,
         instance_key: None | str = None,
-    ):
+    ) -> None:
         attrs = table.uns[TableModel.ATTRS_KEY]
         if not region_key:
             if attrs.get(TableModel.REGION_KEY_KEY) and table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is not None:

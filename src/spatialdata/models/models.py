@@ -809,7 +809,7 @@ def get_model(
     raise TypeError(f"Unsupported type {type(e)}")
 
 
-def get_table_keys(table: AnnData) -> None:
+def get_table_keys(table: AnnData) -> None | tuple[str | list[str], str, str]:
     """
     Get the table keys giving information about what spatial element is annotated.
 
