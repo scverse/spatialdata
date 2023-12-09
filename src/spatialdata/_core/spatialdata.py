@@ -1359,7 +1359,7 @@ class SpatialData:
     ):
         self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
 
-    def _store_tables(self, table_name: str = None, table_mapping: None | dict[str, AnnData] = None) -> None:
+    def _store_tables(self, table_name: None | str = None, table_mapping: None | dict[str, AnnData] = None) -> None:
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
