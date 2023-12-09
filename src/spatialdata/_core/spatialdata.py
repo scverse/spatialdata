@@ -123,7 +123,7 @@ class SpatialData:
     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-    _tables: dict[str, AnnData] = MappingProxyType({})
+    _tables: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     path: str | None = None
 
     @deprecation_alias(table="tables")
@@ -176,7 +176,7 @@ class SpatialData:
 
         self._query = QueryManager(self)
 
-    def validate_table_in_spatialdata(self, data: AnnData):
+    def validate_table_in_spatialdata(self, data: AnnData) -> None:
         TableModel().validate(data)
         element_names = [
             element_name for element_type, element_name, _ in self._gen_elements() if element_type != "tables"
@@ -236,19 +236,19 @@ class SpatialData:
         return SpatialData(**d)  # type: ignore[arg-type]
 
     @staticmethod
-    def get_annotated_regions(table: AnnData):
+    def get_annotated_regions(table: AnnData) -> str | list[str]:
         regions, _, _ = get_table_keys(table)
         return regions
 
     @staticmethod
-    def get_region_key_column(table: AnnData):
+    def get_region_key_column(table: AnnData) -> str:
         _, region_key, _ = get_table_keys(table)
         if table.obs.get(region_key):
             return table.obs[region_key]
         raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
 
     @staticmethod
-    def get_instance_key_column(table: AnnData):
+    def get_instance_key_column(table: AnnData) -> str:
         _, _, instance_key = get_table_keys(table)
         if table.obs.get(instance_key):
             return table.obs[instance_key]
@@ -258,8 +258,8 @@ class SpatialData:
     def _set_table_annotation_target(
         table: AnnData,
         target_element_name: str | pd.Series,
-        region_key: None | str = None,
-        instance_key: None | str = None,
+        region_key: str,
+        instance_key: str,
     ) -> None:
         if region_key not in table.obs:
             raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
@@ -1323,56 +1323,8 @@ class SpatialData:
         """
         return self._tables
 
-    def add_tables(
-        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
-    ):
-        self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
-
-    def _store_tables(self, table_name: str = None, table_mapping: None | dict[str, AnnData] = None):
-        if self.is_backed():
-            store = parse_url(self.path, mode="r+").store
-            root = zarr.group(store=store)
-            elem_group = root.require_group(name="tables")
-            if table_name:
-                write_table(table=self._tables[table_name], group=elem_group, name=table_name)
-            else:
-                for table_name in table_mapping:
-                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
-
-    def _add_tables(
-        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
-    ):
-        if table:
-            if table_name:
-                TableModel().validate(table)
-                if self._tables.get(table_name) is not None:
-                    raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
-                self._tables[table_name] = table
-                self._store_tables(table_name=table_name)
-            else:
-                raise ValueError("Please provide a string value for the parameter table_name.")
-        elif table_mapping:
-            for table in table_mapping.values():
-                self.validate_table_in_spatialdata(table)
-            self._tables.update(table_mapping)
-            self._store_tables(table_mapping=table_mapping)
-
     @table.setter
     def table(self, table: AnnData) -> None:
-        """
-        Set the table of a SpatialData object in a object that doesn't contain a table.
-
-        Parameters
-        ----------
-        table
-            The table to set.
-
-        Notes
-        -----
-        If a table is already present, it needs to be removed first.
-        The table needs to pass validation (see :class:`~spatialdata.TableModel`).
-        If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
-        """
         warnings.warn(
             "Table setter will be deprecated with SpatialData version X.X, use tables instead.",
             DeprecationWarning,
@@ -1401,6 +1353,40 @@ class SpatialData:
         else:
             # More informative than the error in the zarr library.
             raise KeyError("table with name 'table' not present in the SpatialData object.")
+
+    def add_tables(
+        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
+    ):
+        self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
+
+    def _store_tables(self, table_name: str = None, table_mapping: None | dict[str, AnnData] = None) -> None:
+        if self.is_backed():
+            store = parse_url(self.path, mode="r+").store
+            root = zarr.group(store=store)
+            elem_group = root.require_group(name="tables")
+            if table_name:
+                write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+            else:
+                for table_name in table_mapping:
+                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+
+    def _add_tables(
+        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
+    ) -> None:
+        if table:
+            if table_name:
+                TableModel().validate(table)
+                if self._tables.get(table_name) is not None:
+                    raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
+                self._tables[table_name] = table
+                self._store_tables(table_name=table_name)
+            else:
+                raise ValueError("Please provide a string value for the parameter table_name.")
+        elif table_mapping:
+            for table in table_mapping.values():
+                self.validate_table_in_spatialdata(table)
+            self._tables.update(table_mapping)
+            self._store_tables(table_mapping=table_mapping)
 
     @staticmethod
     def read(file_path: str, selection: tuple[str] | None = None) -> SpatialData:

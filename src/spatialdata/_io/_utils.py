@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import zarr
+from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -296,7 +297,7 @@ def save_transformations(sdata: SpatialData) -> None:
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
 
 
-def read_table_and_validate(zarr_store_path, group, subgroup, tables):
+def read_table_and_validate(zarr_store_path: str, group: zarr.Group, subgroup, tables) -> dict[str, AnnData]:
     count = 0
     for table_name in subgroup:
         f_elem = subgroup[table_name]
