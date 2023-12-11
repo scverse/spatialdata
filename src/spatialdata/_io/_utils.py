@@ -297,7 +297,9 @@ def save_transformations(sdata: SpatialData) -> None:
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
 
 
-def read_table_and_validate(zarr_store_path: str, group: zarr.Group, subgroup, tables) -> dict[str, AnnData]:
+def read_table_and_validate(
+    zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
+) -> dict[str, AnnData]:
     count = 0
     for table_name in subgroup:
         f_elem = subgroup[table_name]

@@ -176,7 +176,7 @@ class TestMultiTable:
                 "poly": test_shapes["poly"],
                 "multipoly": test_shapes["multipoly"],
             },
-            tables={"table": table},
+            table=table,
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)

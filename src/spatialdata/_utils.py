@@ -6,7 +6,7 @@ import re
 import warnings
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, Union
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,8 @@ from spatialdata.transformations import (
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 if TYPE_CHECKING:
     pass
@@ -237,7 +239,7 @@ def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
 
 
 #
-def deprecation_alias(**aliases: str) -> Callable:
+def deprecation_alias(**aliases: str) -> Callable[[F], F]:
     """Decorate functions for which arguments being deprecated.
 
     Use as follows:
@@ -248,19 +250,19 @@ def deprecation_alias(**aliases: str) -> Callable:
 
     """
 
-    def deprecation_decorator(f: Callable):
+    def deprecation_decorator(f: F) -> F:
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             class_name = inspect._findclass(f).__name__
             rename_kwargs(f.__name__, kwargs, aliases, class_name)
             return f(*args, **kwargs)
 
-        return wrapper
+        return cast(F, wrapper)
 
     return deprecation_decorator
 
 
-def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str):
+def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str) -> None:
     """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
     for alias, new in aliases.items():
         if alias in kwargs:

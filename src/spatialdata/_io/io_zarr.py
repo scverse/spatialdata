@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import zarr
+from anndata import AnnData
 
 from spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
@@ -57,7 +58,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
     images = {}
     labels = {}
     points = {}
-    tables = {}
+    tables: dict[str, AnnData] = {}
     shapes = {}
 
     # TODO: remove table once deprecated.
