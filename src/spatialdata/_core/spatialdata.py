@@ -1566,7 +1566,7 @@ class SpatialData:
             gen = self._gen_elements()
             elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
-                if isinstance(obj, SpatialElement):
+                if not isinstance(obj, AnnData):
                     transformations = get_transformation(obj, get_all=True)
                     assert isinstance(transformations, dict)
                     target_css = transformations.keys()
