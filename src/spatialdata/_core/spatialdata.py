@@ -1371,7 +1371,10 @@ class SpatialData:
                     write_table(table=self._tables[table_name], group=elem_group, name=table_name)
 
     def _add_tables(
-        self, table: None | AnnData = None, table_name: None | str = None, table_mapping: None | dict[str, AnnData] = None
+        self,
+        table: None | AnnData = None,
+        table_name: None | str = None,
+        table_mapping: None | dict[str, AnnData] = None,
     ) -> None:
         if table:
             if table_name:
