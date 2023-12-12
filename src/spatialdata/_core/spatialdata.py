@@ -326,7 +326,7 @@ class SpatialData:
         target_element_name: str | pd.Series,
         region_key: None | str = None,
         instance_key: None | str = None,
-    ):
+    ) -> None:
         table = self._tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if target_element_name not in element_names:
@@ -1355,7 +1355,10 @@ class SpatialData:
             raise KeyError("table with name 'table' not present in the SpatialData object.")
 
     def add_tables(
-        self, table: None | AnnData = None, table_name: str = None, table_mapping: None | dict[str, AnnData] = None
+        self,
+        table: None | AnnData = None,
+        table_name: None | str = None,
+        table_mapping: None | dict[str, AnnData] = None,
     ) -> None:
         self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
 
@@ -1366,9 +1369,11 @@ class SpatialData:
             elem_group = root.require_group(name="tables")
             if table_name:
                 write_table(table=self._tables[table_name], group=elem_group, name=table_name)
-            else:
+            elif table_mapping:
                 for table_name in table_mapping:
                     write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+            else:
+                raise TypeError("Missing arguments, either table_name or table_mapping should be provided.")
 
     def _add_tables(
         self,
