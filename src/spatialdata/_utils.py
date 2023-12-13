@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import functools
-import inspect
 import re
 import warnings
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -28,7 +27,7 @@ from spatialdata.transformations import (
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-F = TypeVar("F", bound=Callable[..., Any])
+RT = TypeVar("RT")
 
 
 if TYPE_CHECKING:
@@ -238,8 +237,8 @@ def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
     return new_gdf
 
 
-#
-def deprecation_alias(**aliases: str) -> Callable[[F], F]:
+# TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
+def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
     """Decorate functions for which arguments being deprecated.
 
     Use as follows:
@@ -250,14 +249,14 @@ def deprecation_alias(**aliases: str) -> Callable[[F], F]:
 
     """
 
-    def deprecation_decorator(f: F) -> F:
+    def deprecation_decorator(f: Callable[..., RT]) -> Callable[..., RT]:
         @functools.wraps(f)
-        def wrapper(*args, **kwargs):
-            class_name = inspect._findclass(f).__name__
+        def wrapper(*args: Any, **kwargs: Any) -> RT:
+            class_name = f.__qualname__
             rename_kwargs(f.__name__, kwargs, aliases, class_name)
             return f(*args, **kwargs)
 
-        return cast(F, wrapper)
+        return wrapper
 
     return deprecation_decorator
 

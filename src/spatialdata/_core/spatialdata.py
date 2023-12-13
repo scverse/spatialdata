@@ -213,7 +213,7 @@ class SpatialData:
             "labels": {},
             "points": {},
             "shapes": {},
-            "table": {},
+            "tables": {},
         }
         for k, e in elements_dict.items():
             schema = get_model(e)
@@ -230,7 +230,7 @@ class SpatialData:
                 assert isinstance(d["shapes"], dict)
                 d["shapes"][k] = e
             elif schema == TableModel:
-                d["table"][k] = e
+                d["tables"][k] = e
             else:
                 raise ValueError(f"Unknown schema {schema}")
         return SpatialData(**d)  # type: ignore[arg-type]
@@ -241,14 +241,14 @@ class SpatialData:
         return regions
 
     @staticmethod
-    def get_region_key_column(table: AnnData) -> str:
+    def get_region_key_column(table: AnnData) -> pd.Series:
         _, region_key, _ = get_table_keys(table)
         if table.obs.get(region_key):
             return table.obs[region_key]
         raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
 
     @staticmethod
-    def get_instance_key_column(table: AnnData) -> str:
+    def get_instance_key_column(table: AnnData) -> pd.Series:
         _, _, instance_key = get_table_keys(table)
         if table.obs.get(instance_key):
             return table.obs[instance_key]
@@ -334,8 +334,10 @@ class SpatialData:
 
         if table.uns.get(TableModel.ATTRS_KEY):
             self._change_table_annotation_target(table, target_element_name, region_key, instance_key)
-        else:
+        elif isinstance(region_key, str) and isinstance(instance_key, str):
             self._set_table_annotation_target(table, target_element_name, region_key, instance_key)
+        else:
+            raise TypeError("No current annotation metadata found. Please specify region_key and instance_key.")
 
     @property
     def query(self) -> QueryManager:
@@ -812,7 +814,7 @@ class SpatialData:
         -------
         The transformed SpatialData.
         """
-        sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
+        sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_tables=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in sdata._gen_elements():
             if element_type != "tables":
@@ -820,7 +822,7 @@ class SpatialData:
                 if element_type not in elements:
                     elements[element_type] = {}
                 elements[element_type][element_name] = transformed
-        return SpatialData(**elements, table=sdata.tables)
+        return SpatialData(**elements, tables=sdata.tables)
 
     def add_image(
         self,
@@ -1291,6 +1293,19 @@ class SpatialData:
         assert isinstance(self.path, str)
 
     @property
+    def tables(self) -> dict[str, AnnData]:
+        """
+        Return tables dictionary.
+
+        Returns
+        -------
+        dict[str, AnnData]
+            Either the empty dictionary or a dictionary with as values the strings representing the table names and
+            as values the AnnData tables themselves.
+        """
+        return self._tables
+
+    @property
     def table(self) -> None | AnnData:
         """
         Return the table.
@@ -1309,19 +1324,6 @@ class SpatialData:
         if isinstance(self._tables.get("table"), AnnData):
             return self._tables["table"]
         return None
-
-    @property
-    def tables(self) -> dict[str, AnnData]:
-        """
-        Return tables dictionary.
-
-        Returns
-        -------
-        dict[str, AnnData]
-            Either the empty dictionary or a dictionary with as values the strings representing the table names and
-            as values the AnnData tables themselves.
-        """
-        return self._tables
 
     @table.setter
     def table(self, table: AnnData) -> None:
