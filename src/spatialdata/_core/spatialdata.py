@@ -230,6 +230,7 @@ class SpatialData:
                 assert isinstance(d["shapes"], dict)
                 d["shapes"][k] = e
             elif schema == TableModel:
+                assert isinstance(d["tables"], dict)
                 d["tables"][k] = e
             else:
                 raise ValueError(f"Unknown schema {schema}")
