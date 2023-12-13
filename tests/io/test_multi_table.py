@@ -73,7 +73,7 @@ class TestMultiTable:
 
     def test_set_table_annotation_target(self, full_sdata):
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
-        with pytest.raises(ValueError, match="Specified region_key"):
+        with pytest.raises(TypeError, match="No current annotation"):
             full_sdata.set_table_annotation_target("table", "labels2d", region_key="non_existent")
         with pytest.raises(ValueError, match="Specified instance_key"):
             full_sdata.set_table_annotation_target(

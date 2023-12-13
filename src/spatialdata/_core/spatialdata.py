@@ -338,7 +338,7 @@ class SpatialData:
         elif isinstance(region_key, str) and isinstance(instance_key, str):
             self._set_table_annotation_target(table, target_element_name, region_key, instance_key)
         else:
-            raise TypeError("No current annotation metadata found. Please specify region_key and instance_key.")
+            raise TypeError("No current annotation metadata found. Please specify both region_key and instance_key.")
 
     @property
     def query(self) -> QueryManager:
