@@ -248,7 +248,6 @@ def _(
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
-    from spatialdata import SpatialData
     from spatialdata._core.query.relational_query import _filter_table_by_elements
 
     min_coordinate = _parse_list_into_array(min_coordinate)

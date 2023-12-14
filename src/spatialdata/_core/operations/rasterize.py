@@ -207,8 +207,6 @@ def _(
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialData:
-    from spatialdata import SpatialData
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 

@@ -12,7 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from numpy.random import default_rng
 from shapely.geometry import Point
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.models import TableModel
 from spatialdata.transformations.operations import (

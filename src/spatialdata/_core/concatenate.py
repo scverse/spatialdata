@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from copy import copy  # Should probably go up at the top
 from itertools import chain
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from anndata import AnnData
 
-if TYPE_CHECKING:
-    from spatialdata._core.spatialdata import SpatialData
-
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 __all__ = [
@@ -94,8 +92,6 @@ def concatenate(
     -------
     The concatenated :class:`spatialdata.SpatialData` object.
     """
-    from spatialdata import SpatialData
-
     merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
     if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
         raise KeyError("Images must have unique names across the SpatialData objects to concatenate")

@@ -1,6 +1,4 @@
-import contextlib
-
-with contextlib.suppress(ImportError):
+try:
     from spatialdata.dataloader.datasets import ImageTilesDataset
-
-__all__ = ["ImageTilesDataset"]
+except ImportError:
+    ImageTilesDataset = None  # type: ignore[assignment, misc]
