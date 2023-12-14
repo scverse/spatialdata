@@ -177,6 +177,26 @@ class SpatialData:
         self._query = QueryManager(self)
 
     def validate_table_in_spatialdata(self, data: AnnData) -> None:
+        """
+        Validates the presence of the annotation target of a SpatialData table in the SpatialData object.
+
+        This method validates a table in the SpatialData object to ensure that if annotation metadata is present, the
+        annotation target (SpatialElement) is present in the SpatialData object. Otherwise, a warning is raised.
+
+        Parameters
+        ----------
+        data : AnnData
+            The table potentially annotating a SpatialElement
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        UserWarning
+            If the table is annotating elements not present in the SpatialData object.
+        """
         TableModel().validate(data)
         element_names = [
             element_name for element_type, element_name, _ in self._gen_elements() if element_type != "tables"
