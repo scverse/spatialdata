@@ -282,6 +282,31 @@ class SpatialData:
         region_key: str,
         instance_key: str,
     ) -> None:
+        """
+        Set the SpatialElement annotation target of an AnnData table.
+
+        This method sets the target element for the table annotation in the provided `table` object based on the
+        specified parameters. It updates the creates the `attrs` dictionary for `table.uns` and only after validation
+        that the regions are present in the region_key column of table.obs updates the annotation metadata of the table.
+
+        Parameters
+        ----------
+        table : AnnData
+            The AnnData object containing the data table.
+        target_element_name : str or pd.Series
+            The name of the target element for the table annotation.
+        region_key : str
+            The key for the region annotation column in `table.obs`.
+        instance_key : str
+            The key for the instance annotation column in `table.obs`.
+
+        Raises
+        ------
+        ValueError
+            If `region_key` is not present in the `table.obs` columns.
+        ValueError
+            If `instance_key` is not present in the `table.obs` columns.
+        """
         if region_key not in table.obs:
             raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
         if instance_key not in table.obs:
@@ -301,6 +326,32 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
+        """ Change the annotation target of a table currently having annotation metadata already
+        Parameters
+        ----------
+        table : AnnData
+            The table already annotating a SpatialElement.
+        target_element_name : str | pd.Series
+            The name of the target SpatialElement for which the table annotation will be changed.
+        region_key : None | str, optional
+            The name of the region key column in the table. If not provided, it will be extracted from the table's uns
+            attribute.
+        instance_key : None | str, optional
+            The name of the instance key column in the table. If not provided, it will be extracted from the table's uns
+            attribute.
+
+        Raises
+        ------
+        ValueError
+            If region_key is not given, but is already present in uns['spatialdata_attrs'] but instance_key is not
+            provided and not in both table.uns['spatialdata_attrs'] and table.obs.
+        ValueError
+            If instance_key is provided but not present in table.obs.
+        ValueError
+            If no region_key is provided and it is not present in both table.uns['spatialdata_attrs'] and table.obs.
+        ValueError
+            If provided region_key is not present in table.obs.
+        """
         attrs = table.uns[TableModel.ATTRS_KEY]
         if not region_key:
             if attrs.get(TableModel.REGION_KEY_KEY) and table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is not None:
@@ -348,6 +399,27 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
+        """
+        Sets the SpatialElement annotation target of a given AnnData table.
+
+        Parameters
+        ----------
+        table_name : str
+            The name of the table to set the annotation target for.
+        target_element_name : str | pd.Series
+            The name of the target element for the annotation. This can either be a string or a pandas Series object.
+        region_key : None | str, optional
+            The region key for the annotation. If not specified, defaults to None.
+        instance_key : None | str, optional
+            The instance key for the annotation. If not specified, defaults to None.
+
+        Raises
+        ------
+        ValueError
+            If the annotation SpatialElement target is not present in the SpatialData object.
+        TypeError
+            If no current annotation metadata is found and both region_key and instance_key are not specified.
+        """
         table = self._tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if target_element_name not in element_names:
@@ -1383,9 +1455,45 @@ class SpatialData:
         table_name: None | str = None,
         table_mapping: None | dict[str, AnnData] = None,
     ) -> None:
+        """
+        Add AnnData tables to the SpatialData object.
+
+        Parameters
+        ----------
+        table : None or AnnData, optional
+            The table to be added. If provided, it is added with the specified table_name.
+            If not provided, the table_mapping must be provided.
+
+        table_name : None or str, optional
+            The name of the table to be added. This parameter is required if table is provided.
+
+        table_mapping : None or dict[str, AnnData], optional
+            A dictionary mapping table names to tables. If provided, the tables are added
+            according to the mapping. This parameter is required if table is not provided.
+        """
         self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
 
     def _store_tables(self, table_name: None | str = None, table_mapping: None | dict[str, AnnData] = None) -> None:
+        """
+        Write tables back to the SpatialData Zarr store.
+
+        This method is used to store tables in a backed `AnnData` object. If the `AnnData` object is backed, the tables
+        are stored in a Zarr store, under the "tables" group.
+        attribute.
+
+        Parameters
+        ----------
+        table_name : None or str, optional
+            The name of the table to store. If not provided, all tables in `table_mapping` will be stored.
+        table_mapping : None or dict[str, AnnData], optional
+            A dictionary mapping table names to `AnnData` tables. If provided, all tables in `table_mapping` will be
+            stored.
+
+        Raises
+        ------
+        TypeError
+            If both `table_name` and `table_mapping` are None.
+        """
         if self.is_backed():
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
