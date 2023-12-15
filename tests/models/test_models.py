@@ -21,7 +21,7 @@ from numpy.random import default_rng
 from pandas.api.types import is_categorical_dtype
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,

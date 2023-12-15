@@ -115,9 +115,9 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    # python 3.9 tests fail if we don't use Union here, see
-    # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
-    elements: Union[list[str], None] = None,  # noqa: UP007
+    elements: Union[  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
+        list[str], None
+    ] = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -129,43 +129,50 @@ def get_extent(
 
     Returns
     -------
+    The bounding box description.
+
     min_coordinate
         The minimum coordinate of the bounding box.
     max_coordinate
         The maximum coordinate of the bounding box.
     axes
-        The names of the dimensions of the bounding box
+        The names of the dimensions of the bounding box.
     exact
-        If True, the extent is computed exactly. If False, an approximation faster to compute is given. The
-        approximation is guaranteed to contain all the data, see notes for details.
+        Whether the extent is computed exactly or not.
+
+            - If `True`, the extent is computed exactly.
+            - If `False`, an approximation faster to compute is given.
+
+        The approximation is guaranteed to contain all the data, see notes for details.
     has_images
-        If True, images are included in the computation of the extent.
+        If `True`, images are included in the computation of the extent.
     has_labels
-        If True, labels are included in the computation of the extent.
+        If `True`, labels are included in the computation of the extent.
     has_points
-        If True, points are included in the computation of the extent.
+        If `True`, points are included in the computation of the extent.
     has_shapes
-        If True, shapes are included in the computation of the extent.
+        If `True`, shapes are included in the computation of the extent.
     elements
-        If not None, only the elements with the given names are included in the computation of the extent.
+        If not `None`, only the elements with the given names are included in the computation of the extent.
 
     Notes
     -----
-    The extent of a SpatialData object is the extent of the union of the extents of all its elements. The extent of a
-    SpatialElement is the extent of the element in the coordinate system specified by the argument `coordinate_system`.
+    The extent of a `SpatialData` object is the extent of the union of the extents of all its elements.
+    The extent of a `SpatialElement` is the extent of the element in the coordinate system
+    specified by the argument `coordinate_system`.
 
-    If `exact` is False, first the extent of the SpatialElement before any transformation is computed. Then, the extent
-    is transformed to the target coordinate system. This is faster than computing the extent after the transformation,
-    since the transformation is applied to extent of the untransformed data, as opposed to transforming the data and
-    then computing the extent.
+    If `exact` is `False`, first the extent of the `SpatialElement` before any transformation is computed.
+    Then, the extent is transformed to the target coordinate system. This is faster than computing the extent
+    after the transformation, since the transformation is applied to extent of the untransformed data,
+    as opposed to transforming the data and then computing the extent.
 
-    The exact and approximate extent are the same if the transformation doesn't contain any rotation or shear, or in the
-    case in which the transformation is affine but all the corners of the extent of the untransformed data
+    The exact and approximate extent are the same if the transformation does not contain any rotation or shear, or in
+    the case in which the transformation is affine but all the corners of the extent of the untransformed data
     (bounding box corners) are part of the dataset itself. Note that this is always the case for raster data.
 
-    An extreme case is a dataset composed of the two points (0, 0) and (1, 1), rotated anticlockwise by 45 degrees. The
-    exact extent is the bounding box [minx, miny, maxx, maxy] = [0, 0, 0, 1.414], while the approximate extent is the
-    box [minx, miny, maxx, maxy] = [-0.707, 0, 0.707, 1.414].
+    An extreme case is a dataset composed of the two points `(0, 0)` and `(1, 1)`, rotated anticlockwise by 45 degrees.
+    The exact extent is the bounding box `[minx, miny, maxx, maxy] = [0, 0, 0, 1.414]`, while the approximate extent is
+    the box `[minx, miny, maxx, maxy] = [-0.707, 0, 0.707, 1.414]`.
     """
     raise ValueError("The object type is not supported.")
 
@@ -184,7 +191,9 @@ def _(
     elements: Union[list[str], None] = None,  # noqa: UP007
 ) -> BoundingBoxDescription:
     """
-    Get the extent (bounding box) of a SpatialData object: the extent of the union of the extents of all its elements.
+    Get the extent (bounding box) of a SpatialData object.
+
+    The resulting extent is the union of the extents of all its elements.
 
     Parameters
     ----------
@@ -259,7 +268,14 @@ def _get_extent_of_shapes(e: GeoDataFrame) -> BoundingBoxDescription:
 @get_extent.register
 def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) -> BoundingBoxDescription:
     """
-    Compute the extent (bounding box) of a set of shapes.
+    Get the extent (bounding box) of a SpatialData object.
+
+    The resulting extent is the union of the extents of all its elements.
+
+    Parameters
+    ----------
+    e
+        The SpatialData object.
 
     Returns
     -------

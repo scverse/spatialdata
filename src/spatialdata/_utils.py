@@ -30,9 +30,6 @@ Number = Union[int, float]
 RT = TypeVar("RT")
 
 
-if TYPE_CHECKING:
-    pass
-
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
     if isinstance(array, list):

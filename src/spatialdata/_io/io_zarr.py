@@ -7,8 +7,9 @@ from typing import Optional, Union
 import zarr
 from anndata import AnnData
 
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
+
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
