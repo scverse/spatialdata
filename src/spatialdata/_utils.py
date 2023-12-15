@@ -256,11 +256,12 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
 
     ```python
-    @deprecation_alias(table='tables')
+    @deprecation_alias(table="tables")
     def my_function(tables: AnnData | dict[str, AnnData]):
         pass
     ```
     """
+
     def deprecation_decorator(f: Callable[..., RT]) -> Callable[..., RT]:
         @functools.wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> RT:
