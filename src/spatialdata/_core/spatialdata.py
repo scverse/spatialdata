@@ -1512,6 +1512,26 @@ class SpatialData:
         table_name: None | str = None,
         table_mapping: None | dict[str, AnnData] = None,
     ) -> None:
+        """
+        Validate and add AnnData table(s) to the SpatialData object.
+
+        Parameters
+        ----------
+        table : None or AnnData, optional
+            An optional AnnData table to be added.
+        table_name : None or str, optional
+            An optional string representing the name of the table to be added.
+        table_mapping : None or dict[str, AnnData], optional
+            An optional dictionary mapping table names to AnnData tables. If specified, multiple tables are added at
+            once
+
+        Raises
+        ------
+        ValueError
+            If the specified table already exists in the SpatialData.tables.
+        ValueError
+            If table is given but table_name is not specified.
+        """
         if table:
             if table_name:
                 TableModel().validate(table)
