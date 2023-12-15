@@ -22,7 +22,7 @@ from spatial_image import SpatialImage
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata._utils import _natural_keys, deprecation_alias
+from spatialdata._utils import deprecation_alias
 from spatialdata.models._utils import SpatialElement, get_axes_names
 from spatialdata.models.models import (
     Image2DModel,
@@ -32,9 +32,10 @@ from spatialdata.models.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    check_target_region_column_symmetry,
     get_model,
+    get_table_keys,
 )
-from spatialdata.models.models import check_target_region_column_symmetry, get_table_keys
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -317,7 +318,8 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
-        """ Change the annotation target of a table currently having annotation metadata already
+        """Change the annotation target of a table currently having annotation metadata already
+
         Parameters
         ----------
         table : AnnData
@@ -1500,7 +1502,7 @@ class SpatialData:
         """
         if self.is_backed():
             from spatialdata._io.io_table import write_table
-            
+
             store = parse_url(self.path, mode="r+").store
             root = zarr.group(store=store)
             elem_group = root.require_group(name="tables")
