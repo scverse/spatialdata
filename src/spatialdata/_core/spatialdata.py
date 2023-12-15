@@ -170,7 +170,7 @@ class SpatialData:
 
     def validate_table_in_spatialdata(self, data: AnnData) -> None:
         """
-        Validates the presence of the annotation target of a SpatialData table in the SpatialData object.
+        Validate the presence of the annotation target of a SpatialData table in the SpatialData object.
 
         This method validates a table in the SpatialData object to ensure that if annotation metadata is present, the
         annotation target (SpatialElement) is present in the SpatialData object. Otherwise, a warning is raised.
@@ -318,7 +318,7 @@ class SpatialData:
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
-        """Change the annotation target of a table currently having annotation metadata already
+        """Change the annotation target of a table currently having annotation metadata already.
 
         Parameters
         ----------
@@ -393,7 +393,7 @@ class SpatialData:
         instance_key: None | str = None,
     ) -> None:
         """
-        Sets the SpatialElement annotation target of a given AnnData table.
+        Set the SpatialElement annotation target of a given AnnData table.
 
         Parameters
         ----------
