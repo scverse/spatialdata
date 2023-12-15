@@ -1513,7 +1513,7 @@ class SpatialData:
         table_mapping: None | dict[str, AnnData] = None,
     ) -> None:
         """
-        Validate and add AnnData table(s) to the SpatialData object.
+        Validate and add AnnData table(s) to the SpatialData object and save to the SpatialData Zarr store if backed.
 
         Parameters
         ----------
