@@ -178,7 +178,7 @@ def remove_transformation(
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
     g = nx.DiGraph()
-    gen = sdata._gen_elements_values()
+    gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
         g.add_node(cs)
     for e in gen:

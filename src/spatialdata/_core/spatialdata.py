@@ -826,7 +826,7 @@ class SpatialData:
             new_names.append(new_cs)
 
         # rename the coordinate systems
-        for element in self._gen_elements_values():
+        for element in self._gen_spatial_element_values():
             # get the transformations
             transformations = get_transformation(element, get_all=True)
             assert isinstance(transformations, dict)
@@ -1600,7 +1600,7 @@ class SpatialData:
         from spatialdata.transformations.operations import get_transformation
 
         all_cs = set()
-        gen = self._gen_elements_values()
+        gen = self._gen_spatial_element_values()
         for obj in gen:
             transformations = get_transformation(obj, get_all=True)
             assert isinstance(transformations, dict)
@@ -1757,7 +1757,7 @@ class SpatialData:
                 descr += "\n"
         return descr
 
-    def _gen_elements_values(self) -> Generator[SpatialElement, None, None]:
+    def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
         for element_type in ["images", "labels", "points", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()

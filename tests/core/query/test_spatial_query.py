@@ -323,7 +323,7 @@ def test_bounding_box_spatial_data(full_sdata):
 
     _assert_spatialdata_objects_seem_identical(result, result2)
 
-    for element in result._gen_elements_values():
+    for element in result._gen_spatial_element_values():
         d = get_transformation(element, get_all=True)
         new_d = {k.replace("global", "cropped"): v for k, v in d.items()}
         set_transformation(element, new_d, set_all=True)

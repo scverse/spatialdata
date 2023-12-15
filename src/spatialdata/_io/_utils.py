@@ -288,7 +288,7 @@ def save_transformations(sdata: SpatialData) -> None:
     """
     from spatialdata.transformations import get_transformation, set_transformation
 
-    for element in sdata._gen_elements_values():
+    for element in sdata._gen_spatial_element_values():
         transformations = get_transformation(element, get_all=True)
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
 
