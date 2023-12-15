@@ -645,12 +645,31 @@ class TableModel:
 
     def _validate_table_annotation_metadata(self, data: AnnData) -> None:
         """
-        Validate spatialdata_attrs in AnnData.uns against corresponding columns in AnnData.obs.
+        Validate annotation metadata.
 
         Parameters
         ----------
-        data: AnnData
-            Table for which to validate the annotation metdatadata
+        data : AnnData
+            The AnnData object containing the table annotation data.
+
+        Raises
+        ------
+        ValueError
+            If any of the required metadata keys are not found in the `adata.uns` dictionary or the `adata.obs`
+            dataframe.
+
+            - If "region" is not found in `adata.uns['ATTRS_KEY']`.
+            - If "region_key" is not found in `adata.uns['ATTRS_KEY']`.
+            - If "instance_key" is not found in `adata.uns['ATTRS_KEY']`.
+            - If `attr[self.REGION_KEY_KEY]` is not found in `adata.obs`.
+            - If `attr[self.INSTANCE_KEY]` is not found in `adata.obs`.
+            - If the regions in the AnnData object and `attr[self.REGION_KEY_KEY]` do not match.
+
+        Notes
+        -----
+        This does not check whether the annotation target of the table is present in a given SpatialData object. Rather
+        it is an internal validation of the annotation metadata of the table.
+
         """
         attr = data.uns[self.ATTRS_KEY]
 
@@ -849,6 +868,11 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
         The column in obs containing for each row which SpatialElement is annotated by that row.
     target: str | pd.Series
          Name of target(s) SpatialElement(s)
+
+    Raises
+    ------
+    ValueError
+        If the regions specified in table.uns["spatialdata_attrs"] are not present in the region column of table.obs.
     """
     found_regions = set(table.obs[region_key].unique().tolist())
     target_element_set = [target] if isinstance(target, str) else target

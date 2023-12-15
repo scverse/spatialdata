@@ -236,16 +236,32 @@ def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
 def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
-    """Decorate functions for which arguments being deprecated.
-
-    Use as follows:
-
-    @deprecation_alias(old_arg='new_arg')
-    def myfunc(new_arg):
-        ...
-
     """
+    Parameters
+    ----------
+    aliases : str
+        Deprecation argument aliases to be mapped to the new arguments.
 
+    Returns
+    -------
+    Callable[..., RT]
+        A decorator that can be used to mark an argument for deprecation and substituting it with the new argument.
+
+    Raises
+    ------
+    TypeError
+        If the provided aliases are not of string type.
+
+    Example
+    -------
+    Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
+
+    ```python
+    @deprecation_alias(table='tables')
+    def my_function(tables: AnnData | dict[str, AnnData]):
+        pass
+    ```
+    """
     def deprecation_decorator(f: Callable[..., RT]) -> Callable[..., RT]:
         @functools.wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> RT:

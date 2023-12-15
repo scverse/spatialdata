@@ -297,6 +297,25 @@ def save_transformations(sdata: SpatialData) -> None:
 def read_table_and_validate(
     zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
 ) -> dict[str, AnnData]:
+    """
+    Read in tables in the tables Zarr.group of a SpatialData Zarr store.
+
+    Parameters
+    ----------
+    zarr_store_path : str
+        The path to the Zarr store.
+    group : zarr.Group
+        The parent group containing the subgroup.
+    subgroup : zarr.Group
+        The subgroup containing the tables.
+    tables : dict[str, AnnData]
+        A dictionary of tables.
+
+    Returns
+    -------
+    dict[str, AnnData]
+        The modified dictionary with the tables.
+    """
     count = 0
     for table_name in subgroup:
         f_elem = subgroup[table_name]
