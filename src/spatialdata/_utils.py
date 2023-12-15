@@ -5,7 +5,7 @@ import re
 import warnings
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
+from typing import Any, Callable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,6 @@ from spatialdata.transformations import (
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
 RT = TypeVar("RT")
-
 
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:

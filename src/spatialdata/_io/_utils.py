@@ -22,9 +22,8 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-
-from spatialdata._logging import logger
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._logging import logger
 from spatialdata._utils import iterate_pyramid_levels
 from spatialdata.models import TableModel
 from spatialdata.models._utils import (
