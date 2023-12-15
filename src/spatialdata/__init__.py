@@ -19,6 +19,7 @@ __all__ = [
     "rasterize",
     "transform",
     "aggregate",
+    "apply",
     "bounding_box_query",
     "polygon_query",
     "get_values",
@@ -34,6 +35,7 @@ from spatialdata import dataloader, models, transformations
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.data_extent import get_extent
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.operations.apply import apply
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
