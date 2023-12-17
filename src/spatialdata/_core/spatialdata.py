@@ -112,7 +112,7 @@ class SpatialData:
         shapes: dict[str, GeoDataFrame] | None = None,
         table: AnnData | None = None,
     ) -> None:
-        self.path = None
+        self._path: Path | None = None
 
         self._shared_keys: set[str | None] = set()
         self._images: Images = Images(shared_keys=self._shared_keys)
@@ -253,23 +253,12 @@ class SpatialData:
 
     def is_backed(self) -> bool:
         """Check if the data is backed by a Zarr storage or if it is in-memory."""
-        return self.path is not None
+        return self._path is not None
 
     @property
     def path(self) -> Path | None:
         """Path to the Zarr storage."""
         return self._path
-
-    @path.setter
-    def path(self, path: Path | str | None) -> None:
-        """Set the path to the Zarr storage."""
-        if path is not None:
-            path = Path(path)
-            if not path.is_dir():
-                raise ValueError(f"Path {path} is not a directory.")
-            if not path.exists():
-                raise ValueError(f"Path {path} does not exist.")
-        self._path = path
 
     # TODO: from a commennt from Giovanni: consolite somewhere in
     #  a future PR (luca: also _init_add_element could be cleaned)
@@ -631,14 +620,13 @@ class SpatialData:
         #     self.path = str(file_path)
         # else:
         #     self.path = str(tmp_zarr_file)
-        self.path = Path(file_path)
+        self._path = Path(file_path)
         try:
             if len(self.images):
                 root.create_group(name="images")
                 # add_image_in_memory will delete and replace the same key in self.images,
                 # so we need to make a copy of the keys. Same for the other elements
                 keys = self.images.keys()
-                from spatialdata._io.io_raster import _read_multiscale
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
@@ -649,16 +637,16 @@ class SpatialData:
                         storage_options=storage_options,
                     )
 
+                    # TODO(giovp): fix or remove
                     # reload the image from the Zarr storage so that now the element is lazy loaded,
                     # and most importantly, from the correct storage
-                    element_path = Path(self.path) / "images" / name
-                    _read_multiscale(element_path, raster_type="image")
+                    # element_path = Path(self.path) / "images" / name
+                    # _read_multiscale(element_path, raster_type="image")
 
             if len(self.labels):
                 root.create_group(name="labels")
                 # keys = list(self.labels.keys())
                 keys = self.labels.keys()
-                from spatialdata._io.io_raster import _read_multiscale
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
@@ -669,16 +657,16 @@ class SpatialData:
                         storage_options=storage_options,
                     )
 
+                    # TODO(giovp): fix or remove
                     # reload the labels from the Zarr storage so that now the element is lazy loaded,
                     #  and most importantly, from the correct storage
-                    element_path = Path(self.path) / "labels" / name
-                    _read_multiscale(element_path, raster_type="labels")
+                    # element_path = Path(self.path) / "labels" / name
+                    # _read_multiscale(element_path, raster_type="labels")
 
             if len(self.points):
                 root.create_group(name="points")
                 # keys = list(self.points.keys())
                 keys = self.points.keys()
-                from spatialdata._io.io_points import _read_points
 
                 for name in keys:
                     elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
@@ -687,11 +675,12 @@ class SpatialData:
                         group=elem_group,
                         name=name,
                     )
-                    element_path = Path(self.path) / "points" / name
+                    # TODO(giovp): fix or remove
+                    # element_path = Path(self.path) / "points" / name
 
-                    # reload the points from the Zarr storage so that the element is lazy loaded,
-                    # and most importantly, from the correct storage
-                    _read_points(element_path)
+                    # # reload the points from the Zarr storage so that the element is lazy loaded,
+                    # # and most importantly, from the correct storage
+                    # _read_points(element_path)
 
             if len(self.shapes):
                 root.create_group(name="shapes")
@@ -710,7 +699,7 @@ class SpatialData:
                 write_table(table=self.table, group=elem_group, name="table")
 
         except Exception as e:  # noqa: B902
-            self.path = None
+            self._path = None
             raise e
 
         if consolidate_metadata:
