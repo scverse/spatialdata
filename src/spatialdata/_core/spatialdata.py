@@ -295,8 +295,6 @@ class SpatialData:
         return element_type_group.require_group(name)
 
     def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
-        # if self.path is None:
-        #     warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "shapes"]
@@ -831,6 +829,8 @@ class SpatialData:
     @images.setter
     def images(self, images: dict[str, Raster_T]) -> None:
         """Set images."""
+        self._shared_keys = self._shared_keys - set(self._images.keys())
+        self._images = Images(shared_keys=self._shared_keys)
         for k, v in images.items():
             self._images[k] = v
 
@@ -842,6 +842,8 @@ class SpatialData:
     @labels.setter
     def labels(self, labels: dict[str, Raster_T]) -> None:
         """Set labels."""
+        self._shared_keys = self._shared_keys - set(self._labels.keys())
+        self._labels = Labels(shared_keys=self._shared_keys)
         for k, v in labels.items():
             self._labels[k] = v
 
@@ -853,6 +855,8 @@ class SpatialData:
     @points.setter
     def points(self, points: dict[str, DaskDataFrame]) -> None:
         """Set points."""
+        self._shared_keys = self._shared_keys - set(self._points.keys())
+        self._points = Points(shared_keys=self._shared_keys)
         for k, v in points.items():
             self._points[k] = v
 
@@ -864,6 +868,8 @@ class SpatialData:
     @shapes.setter
     def shapes(self, shapes: dict[str, GeoDataFrame]) -> None:
         """Set shapes."""
+        self._shared_keys = self._shared_keys - set(self._shapes.keys())
+        self._shapes = Shapes(shared_keys=self._shared_keys)
         for k, v in shapes.items():
             self._shapes[k] = v
 
