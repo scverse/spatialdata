@@ -9,7 +9,6 @@ from spatialdata.models import TableModel
 from tests.conftest import _get_shapes, _get_table
 
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734
-# notes for the people (to prettify) https://hackmd.io/wd7K4Eg1SlykKVN-nOP44w
 test_shapes = _get_shapes()
 
 # shuffle the indices of the dataframe
@@ -26,6 +25,7 @@ class TestMultiTable:
 
         adata2 = adata0.copy()
         del adata2.obs["region"]
+        # fails because either none either all three 'region', 'region_key', 'instance_key' are required
         with pytest.raises(ValueError):
             full_sdata["not_added_table"] = adata2
 
@@ -106,7 +106,6 @@ class TestMultiTable:
         assert full_sdata.table is None
 
     def test_single_table(self, tmp_path: str):
-        # shared table
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table = _get_table(region="test_shapes")
         table2 = _get_table(region="non_existing")
@@ -151,7 +150,7 @@ class TestMultiTable:
         table = _get_table(region="poly")
         table2 = _get_table(region="multipoly")
         table3 = _get_table(region="non_existing")
-        with pytest.warns(UserWarning, match="The table is"):
+        with pytest.warns(UserWarning, match="The table is annotating elements not present in the SpatialData object"):
             SpatialData(
                 shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
                 table={"poly_annotate": table, "multipoly_annotate": table3},
