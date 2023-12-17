@@ -9,7 +9,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
 
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale

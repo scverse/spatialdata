@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -25,9 +25,6 @@ from spatialdata.transformations import (
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-
-if TYPE_CHECKING:
-    pass
 
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:

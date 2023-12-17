@@ -6,8 +6,8 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
 from spatialdata.models import (
     Image2DModel,

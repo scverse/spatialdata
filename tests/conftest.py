@@ -19,7 +19,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,

@@ -19,16 +19,8 @@ from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes
-from spatialdata._io import (
-    write_image,
-    write_labels,
-    write_points,
-    write_shapes,
-    write_table,
-)
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _natural_keys
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -36,11 +28,10 @@ from spatialdata.models import (
     Labels3DModel,
     PointsModel,
     ShapesModel,
-    SpatialElement,
     TableModel,
-    get_axes_names,
     get_model,
 )
+from spatialdata.models._utils import SpatialElement, get_axes_names
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -592,6 +583,8 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
     ) -> None:
+        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -789,6 +782,8 @@ class SpatialData:
         The table needs to pass validation (see :class:`~spatialdata.TableModel`).
         If the SpatialData object is backed by a Zarr storage, the table will be written to the Zarr storage.
         """
+        from spatialdata._io.io_table import write_table
+
         TableModel().validate(table)
         if self.table is not None:
             raise ValueError("The table already exists. Use del sdata.table to remove it first.")
@@ -913,6 +908,7 @@ class SpatialData:
         -------
             The string representation of the SpatialData object.
         """
+        from spatialdata._utils import _natural_keys
 
         def rreplace(s: str, old: str, new: str, occurrence: int) -> str:
             li = s.rsplit(old, occurrence)
