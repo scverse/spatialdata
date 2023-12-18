@@ -394,7 +394,7 @@ class SpatialData:
         table = self._tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if target_element_name not in element_names:
-            raise ValueError(f"Annotation target {target_element_name} not present in SpatialData object.")
+            raise ValueError(f"Annotation target '{target_element_name}' not present in SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):
             self._change_table_annotation_target(table, target_element_name, region_key, instance_key)
