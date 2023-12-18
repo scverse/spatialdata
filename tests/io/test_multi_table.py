@@ -41,10 +41,10 @@ class TestMultiTable:
     @pytest.mark.parametrize(
         "region_key, instance_key, error_msg",
         [
-            (None, None, "Instance key and/or instance"),
-            ("region", None, "Instance key and/or instance"),
-            ("region", "instance_id", "Instance key instance_id not"),
-            (None, "instance_id", "Instance key instance_id not"),
+            (None, None, "Specified instance_key in table.uns"),
+            ("region", None, "Specified instance_key in table.uns"),
+            ("region", "instance_id", "Instance key column"),
+            (None, "instance_id", "Instance key column"),
         ],
     )
     def test_change_annotation_target(self, full_sdata, region_key, instance_key, error_msg):
@@ -53,7 +53,7 @@ class TestMultiTable:
             full_sdata.set_table_annotation_target("table", "poly")
 
         del full_sdata["table"].obs["region"]
-        with pytest.raises(ValueError, match="Region key and/or region key"):
+        with pytest.raises(ValueError, match="Specified region_key in table.uns"):
             full_sdata.set_table_annotation_target("table", "poly")
 
         del full_sdata["table"].obs["instance_id"]
@@ -64,7 +64,7 @@ class TestMultiTable:
         full_sdata["table"].obs["instance_id"] = range(n_obs)
         full_sdata.set_table_annotation_target("table", "poly", instance_key="instance_id", region_key=region_key)
 
-        with pytest.raises(ValueError, match="not_existing not present"):
+        with pytest.raises(ValueError, match="column not present in table.obs"):
             full_sdata.set_table_annotation_target("table", "circles", region_key="not_existing")
 
     def test_set_table_nonexisting_target(self, full_sdata):

@@ -643,6 +643,49 @@ class TableModel:
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
 
+    def _validate_set_instance_key(self, data: AnnData, instance_key: str | None = None) -> None:
+        """
+        Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
+
+        If no instance_key is provided as argument, the presence of instance_key in table.uns is checked and validated.
+        If instance_key is provided, presence in table.obs will be validated and if present it will be set as the new
+        instance_key in table.uns.
+
+        Parameters
+        ----------
+        data
+            The AnnData table.
+
+        instance_key
+            The instance_key to be validated and set in table.uns.
+
+        Raises
+        ------
+        ValueError
+            If no instance_key is provided as argument and no instance_key is found in the `uns` attribute of table.
+        ValueError
+            If no instance_key is provided and the instance_key in table.uns does not match any column in table.obs.
+        ValueError
+            If provided instance_key is not present as table.obs column.
+        """
+        attrs = data.uns[self.ATTRS_KEY]
+        if not instance_key:
+            if not attrs.get(TableModel.INSTANCE_KEY):
+                raise ValueError(
+                    "No instance_key in table.uns and no instance_key provided as argument. Please "
+                    "specify instance_key."
+                )
+            if data.obs.get(attrs[self.INSTANCE_KEY]) is None:
+                raise ValueError(
+                    f"Specified instance_key in table.uns '{attrs.get(self.INSTANCE_KEY)}' is not present"
+                    f" as column in table.obs. Please specify instance_key."
+                )
+        if instance_key:
+            if instance_key in data.obs:
+                attrs[self.INSTANCE_KEY] = instance_key
+            else:
+                raise ValueError(f"Instance key column '{instance_key}' not found in table.obs.")
+
     def _validate_table_annotation_metadata(self, data: AnnData) -> None:
         """
         Validate annotation metadata.
