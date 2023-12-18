@@ -217,7 +217,8 @@ class TestMultiTable:
         SpatialData.read(tmpdir)
 
 
-#     The following use cases needs to be put in the tutorial notebook, let's keep the comment here until we have the notebook ready.
+#     The following use cases needs to be put in the tutorial notebook, let's keep the comment here until we have the
+#     notebook ready.
 #     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this,
 #     either helper function, ...)
 #     # use cases
