@@ -1758,17 +1758,53 @@ class SpatialData:
         return descr
 
     def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
+        """
+        Generate spatial element objects contained in the SpatialData instance.
+
+        Returns
+        -------
+        Generator[SpatialElement, None, None]
+            A generator that yields spatial element objects contained in the SpatialData instance.
+
+        """
         for element_type in ["images", "labels", "points", "shapes"]:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
 
     def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+        """
+        Generate elements contained in the SpatialData instance.
+
+        Returns
+        -------
+        Generator[tuple[str, str, SpatialElement], None, None]
+            A generator object that returns a tuple containing the type of the element, its name, and the element
+            itself.
+        """
         for element_type in ["images", "labels", "points", "shapes", "tables"]:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
 
-    def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement]:
+    def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
+        """
+        Retrieve element from the SpatialData instance matching element_name.
+
+        Parameters
+        ----------
+        element_name : str
+            The name of the element to find.
+
+        Returns
+        -------
+        tuple[str, str, SpatialElement | AnnData]
+            A tuple containing the element type, element name, and the retrieved element itself.
+
+        Raises
+        ------
+        KeyError
+            If the element with the given name cannot be found.
+        """
         for element_type, element_name_, element in self._gen_elements():
             if element_name_ == element_name:
                 return element_type, element_name_, element
