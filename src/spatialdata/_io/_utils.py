@@ -301,19 +301,18 @@ def read_table_and_validate(
 
     Parameters
     ----------
-    zarr_store_path : str
+    zarr_store_path
         The path to the Zarr store.
-    group : zarr.Group
+    group
         The parent group containing the subgroup.
-    subgroup : zarr.Group
+    subgroup
         The subgroup containing the tables.
-    tables : dict[str, AnnData]
+    tables
         A dictionary of tables.
 
     Returns
     -------
-    dict[str, AnnData]
-        The modified dictionary with the tables.
+    The modified dictionary with the tables.
     """
     count = 0
     for table_name in subgroup:
