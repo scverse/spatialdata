@@ -217,7 +217,7 @@ class TestMultiTable:
         SpatialData.read(tmpdir)
 
 
-#
+#     The following use cases needs to be put in the tutorial notebook, let's keep the comment here until we have the notebook ready.
 #     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this,
 #     either helper function, ...)
 #     # use cases
@@ -231,6 +231,7 @@ class TestMultiTable:
 #     sdata.table.obs[sdata["visium0"]]
 #     assert ...
 #
+#     We can postpone the implemntation of this test when the functions "match_table_to_element" etc. are ready.
 # def test_partial_match():
 #     # the function spatialdata._core.query.relational_query.match_table_to_element(no s) needs to be modified (will be
 #     # simpler), we need also a function match_element_to_table. Maybe we can have just one function doing both the
