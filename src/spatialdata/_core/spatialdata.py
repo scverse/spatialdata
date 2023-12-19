@@ -200,6 +200,7 @@ class SpatialData:
                 if isinstance(attrs[TableModel.REGION_KEY], list)
                 else [attrs[TableModel.REGION_KEY]]
             )
+            # TODO: check throwing error
             if not all(element_name in element_names for element_name in regions):
                 warnings.warn(
                     "The table is annotating elements not present in the SpatialData object", UserWarning, stacklevel=2
@@ -363,7 +364,8 @@ class SpatialData:
             check_target_region_column_symmetry(table, table_region_key, target_element_name)
             attrs[TableModel.REGION_KEY] = target_element_name
 
-    def set_table_annotation_target(
+    # TODO: change target_element_name to
+    def set_table_annotation_spatialelement(
         self,
         table_name: str,
         target_element_name: str | pd.Series,

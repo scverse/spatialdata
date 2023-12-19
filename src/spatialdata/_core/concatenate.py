@@ -73,6 +73,7 @@ def concatenate(
     sdatas: list[SpatialData],
     region_key: str | None = None,
     instance_key: str | None = None,
+    concatenate_table: bool = True,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -87,6 +88,8 @@ def concatenate(
         If all region_keys are the same, the `region_key` is used.
     instance_key
         The key to use for the instance column in the concatenated object.
+    concatenate_table
+        Whether to merge the tables in case of having the same element name.
     kwargs
         See :func:`anndata.concat` for more details.
 
@@ -106,20 +109,29 @@ def concatenate(
     merged_shapes = {**{k: v for sdata in sdatas for k, v in sdata.shapes.items()}}
     if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
         raise KeyError("Shapes must have unique names across the SpatialData objects to concatenate")
+    # TODO: finish
 
     assert isinstance(sdatas, list), "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
 
-    merged_table = _concatenate_tables(
-        [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
-    )
+    if not concatenate_table:
+        merged_tables = {**{k: v for sdata in sdatas for k, v in sdata.tables.items()}}
+        if len(merged_shapes) != np.sum([len(sdata.tables) for sdata in sdatas]):
+            raise KeyError(
+                "Tables must have unique names across the SpatialData objects to concatenate unless"
+                "concatenate_table is set to True."
+            )
+    else:
+        merged_tables = _concatenate_tables(
+            [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
+        )
 
     return SpatialData(
         images=merged_images,
         labels=merged_labels,
         points=merged_points,
         shapes=merged_shapes,
-        tables=merged_table,
+        tables=merged_tables,
     )
 
 
