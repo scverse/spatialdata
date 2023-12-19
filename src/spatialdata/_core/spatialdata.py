@@ -130,7 +130,7 @@ class SpatialData:
         labels: dict[str, Raster_T] | None = None,
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
-        table: AnnData | None = None,
+        tables: dict[str, AnnData] | None = None,
     ) -> None:
         self._path: Path | None = None
 
