@@ -49,7 +49,7 @@ class TestMultiTable:
     )
     def test_change_annotation_target(self, full_sdata, region_key, instance_key, error_msg):
         n_obs = full_sdata["table"].n_obs
-        with pytest.raises(ValueError, match="Mismatch found between regions"):
+        with pytest.raises(ValueError, match=r"Mismatch\(es\) found between regions"):
             full_sdata.set_table_annotation_target("table", "poly")
 
         del full_sdata["table"].obs["region"]
