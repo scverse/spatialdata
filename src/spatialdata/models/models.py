@@ -922,5 +922,6 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
     symmetric_difference = found_regions.symmetric_difference(target_element_set)
     if symmetric_difference:
         raise ValueError(
-            f"Mismatch found between regions in region column in obs and target element: {symmetric_difference}"
+            f"Mismatch(es) found between regions in region column in obs and target element: "
+            f"{', '.join(diff for diff in symmetric_difference)}"
         )
