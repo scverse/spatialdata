@@ -22,9 +22,8 @@ from spatial_image import SpatialImage
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes
 from spatialdata._logging import logger
-
-from spatialdata._utils import deprecation_alias
 from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._utils import deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -110,22 +109,21 @@ class SpatialData:
 
     """
 
+    #     _images: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
+    #     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
+    #     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
+    #     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
+    #     _tables: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
+    #     path: str | None = None
 
-#     _images: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
-#     _labels: dict[str, Raster_T] = MappingProxyType({})  # type: ignore[assignment]
-#     _points: dict[str, DaskDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-#     _shapes: dict[str, GeoDataFrame] = MappingProxyType({})  # type: ignore[assignment]
-#     _tables: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
-#     path: str | None = None
-
-#     @deprecation_alias(table="tables")
-#     def __init__(
-#         self,
-#         images: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
-#         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
-#         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-#         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
-#         tables: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+    #     @deprecation_alias(table="tables")
+    #     def __init__(
+    #         self,
+    #         images: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
+    #         labels: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
+    #         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
+    #         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
+    #         tables: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,

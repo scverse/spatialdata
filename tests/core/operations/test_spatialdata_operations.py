@@ -356,11 +356,11 @@ def test_no_shared_transformations() -> None:
                 assert test_space in get_transformation(obj, get_all=True)
 
 
-
 # def test_init_from_elements(full_sdata):
 #     all_elements = {name: el for element_type, name, el in full_sdata._gen_elements() if element_type != "tables"}
 #     sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata.table)
 #     for element_type in ["images", "labels", "points", "shapes", "tables"]:
+
 
 def test_init_from_elements(full_sdata: SpatialData) -> None:
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
