@@ -167,9 +167,8 @@ class SpatialData:
                 self.points[k] = v
 
         if tables is not None:
-            self._tables: dict[str, AnnData] = {}
-
-            self._add_tables(table_mapping=tables)
+            for k, v in tables.items():
+                self.tables[k] = v
 
         self._query = QueryManager(self)
 
@@ -398,7 +397,7 @@ class SpatialData:
         TypeError
             If no current annotation metadata is found and both region_key and instance_key are not specified.
         """
-        table = self._tables[table_name]
+        table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if target_element_name not in element_names:
             raise ValueError(
@@ -673,10 +672,10 @@ class SpatialData:
         # filtering with tables having potentially different keys.
         if filter_tables:
             tables = {}
-            for table_name, table in self._tables.items():
+            for table_name, table in self.tables.items():
                 tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
         else:
-            tables = self._tables
+            tables = self.tables
 
         return SpatialData(**elements, tables=tables)
 
@@ -925,10 +924,10 @@ class SpatialData:
                         name=name,
                     )
 
-            if len(self._tables):
+            if len(self.tables):
                 elem_group = root.create_group(name="tables")
-                for key in self._tables:
-                    write_table(table=self._tables[key], group=elem_group, name=key)
+                for key in self.tables:
+                    write_table(table=self.tables[key], group=elem_group, name=key)
 
         except Exception as e:  # noqa: B902
             self._path = None
@@ -975,7 +974,7 @@ class SpatialData:
         assert isinstance(self.path, Path)
 
     @property
-    def tables(self) -> dict[str, AnnData]:
+    def tables(self) -> Tables:
         """
         Return tables dictionary.
 
@@ -1003,8 +1002,8 @@ class SpatialData:
             stacklevel=2,
         )
         # Isinstance will still return table if anndata has 0 rows.
-        if isinstance(self._tables.get("table"), AnnData):
-            return self._tables["table"]
+        if isinstance(self.tables.get("table"), AnnData):
+            return self.tables["table"]
         return None
 
     @table.setter
@@ -1015,9 +1014,9 @@ class SpatialData:
             stacklevel=2,
         )
         TableModel().validate(table)
-        if self._tables.get("table") is not None:
+        if self.tables.get("table") is not None:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
-        self._tables["table"] = table
+        self.tables["table"] = table
         self._store_tables(table_name="table")
 
     @table.deleter
@@ -1028,8 +1027,8 @@ class SpatialData:
             DeprecationWarning,
             stacklevel=2,
         )
-        if self._tables.get("table"):
-            self._tables["table"] = None
+        if self.tables.get("table"):
+            self.tables["table"] = None
             if self.is_backed():
                 store = parse_url(self.path, mode="r+").store
                 root = zarr.group(store=store)
@@ -1090,10 +1089,10 @@ class SpatialData:
             root = zarr.group(store=store)
             elem_group = root.require_group(name="tables")
             if table_name:
-                write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+                write_table(table=self.tables[table_name], group=elem_group, name=table_name)
             elif table_mapping:
                 for table_name in table_mapping:
-                    write_table(table=self._tables[table_name], group=elem_group, name=table_name)
+                    write_table(table=self.tables[table_name], group=elem_group, name=table_name)
             else:
                 raise TypeError("Missing arguments, either table_name or table_mapping should be provided.")
 
@@ -1126,8 +1125,10 @@ class SpatialData:
         if table:
             if table_name:
                 TableModel().validate(table)
-                if self._tables.get(table_name) is not None:
+                if self.tables.get(table_name) is not None:
                     raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
+                self._shared_keys = self._shared_keys - set(self._tables.keys())
+                self._tables = Tables(shared_keys=self._shared_keys)
                 self._tables[table_name] = table
                 self._store_tables(table_name=table_name)
             else:
@@ -1135,6 +1136,8 @@ class SpatialData:
         elif table_mapping:
             for table in table_mapping.values():
                 self.validate_table_in_spatialdata(table)
+            self._shared_keys = self._shared_keys - set(self._tables.keys())
+            self._tables = Tables(shared_keys=self._shared_keys)
             self._tables.update(table_mapping)
             self._store_tables(table_mapping=table_mapping)
 
