@@ -116,7 +116,7 @@ class SpatialData:
     #     _tables: dict[str, AnnData] = MappingProxyType({})  # type: ignore[assignment]
     #     path: str | None = None
 
-    #     @deprecation_alias(table="tables")
+    #
     #     def __init__(
     #         self,
     #         images: dict[str, Raster_T] = MappingProxyType({}),  # type: ignore[assignment]
@@ -124,6 +124,7 @@ class SpatialData:
     #         points: dict[str, DaskDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
     #         shapes: dict[str, GeoDataFrame] = MappingProxyType({}),  # type: ignore[assignment]
     #         tables: AnnData | dict[str, AnnData] = MappingProxyType({}),  # type: ignore[assignment]
+    @deprecation_alias(table="tables")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
