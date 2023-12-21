@@ -20,7 +20,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from spatial_image import SpatialImage
 
-from spatialdata._core._elements import Images, Labels, Points, Shapes
+from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import deprecation_alias
@@ -139,7 +139,7 @@ class SpatialData:
         self._labels: Labels = Labels(shared_keys=self._shared_keys)
         self._points: Points = Points(shared_keys=self._shared_keys)
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
-        self._table: AnnData | None = None
+        self._tables: Tables = Tables(shared_keys=self._shared_keys)
 
         # Work around to allow for backward compatibility
         if isinstance(tables, AnnData):
