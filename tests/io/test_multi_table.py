@@ -50,36 +50,36 @@ class TestMultiTable:
     def test_change_annotation_target(self, full_sdata, region_key, instance_key, error_msg):
         n_obs = full_sdata["table"].n_obs
         with pytest.raises(ValueError, match=r"Mismatch\(es\) found between regions"):
-            full_sdata.set_table_annotation_target("table", "poly")
+            full_sdata.set_table_annotates_spatialelement("table", "poly")
 
         del full_sdata["table"].obs["region"]
         with pytest.raises(ValueError, match="Specified region_key in table.uns"):
-            full_sdata.set_table_annotation_target("table", "poly")
+            full_sdata.set_table_annotates_spatialelement("table", "poly")
 
         del full_sdata["table"].obs["instance_id"]
         full_sdata["table"].obs["region"] = ["poly"] * n_obs
         with pytest.raises(ValueError, match=error_msg):
-            full_sdata.set_table_annotation_target("table", "poly", region_key=region_key, instance_key=instance_key)
+            full_sdata.set_table_annotates_spatialelement("table", "poly", region_key=region_key, instance_key=instance_key)
 
         full_sdata["table"].obs["instance_id"] = range(n_obs)
-        full_sdata.set_table_annotation_target("table", "poly", instance_key="instance_id", region_key=region_key)
+        full_sdata.set_table_annotates_spatialelement("table", "poly", instance_key="instance_id", region_key=region_key)
 
         with pytest.raises(ValueError, match="column not present in table.obs"):
-            full_sdata.set_table_annotation_target("table", "circles", region_key="not_existing")
+            full_sdata.set_table_annotates_spatialelement("table", "circles", region_key="not_existing")
 
     def test_set_table_nonexisting_target(self, full_sdata):
         with pytest.raises(ValueError, match="Annotation target"):
-            full_sdata.set_table_annotation_target("table", "non_existing")
+            full_sdata.set_table_annotates_spatialelement("table", "non_existing")
 
-    def test_set_table_annotation_target(self, full_sdata):
+    def test_set_table_annotates_spatialelement(self, full_sdata):
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
         with pytest.raises(TypeError, match="No current annotation"):
-            full_sdata.set_table_annotation_target("table", "labels2d", region_key="non_existent")
+            full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="non_existent")
         with pytest.raises(ValueError, match="Specified instance_key"):
-            full_sdata.set_table_annotation_target(
+            full_sdata.set_table_annotates_spatialelement(
                 "table", "labels2d", region_key="region", instance_key="non_existent"
             )
-        full_sdata.set_table_annotation_target("table", "labels2d", region_key="region", instance_key="instance_id")
+        full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="region", instance_key="instance_id")
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
