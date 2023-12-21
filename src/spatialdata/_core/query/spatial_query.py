@@ -8,6 +8,7 @@ from typing import Any, Callable
 import dask.array as da
 import numpy as np
 import pandas as pd
+from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
@@ -17,6 +18,7 @@ from spatial_image import SpatialImage
 from tqdm import tqdm
 from xarray import DataArray
 
+from spatialdata._core._elements import Tables
 from spatialdata._core.query._utils import get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
@@ -266,7 +268,9 @@ def _(
         new_elements[element_type] = queried_elements
 
     if filter_table:
-        tables = {name: _filter_table_by_elements(table, new_elements) for name, table in sdata.tables.items()}
+        tables: dict[str, AnnData] | Tables = {
+            name: _filter_table_by_elements(table, new_elements) for name, table in sdata.tables.items()
+        }
     else:
         tables = sdata.tables
 
@@ -645,7 +649,9 @@ def _polygon_query(
 
     if filter_table:
         elements = {"shapes": new_shapes, "points": new_points}
-        tables = {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
+        tables: dict[str, AnnData] | Tables = {
+            name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()
+        }
     else:
         tables = sdata.tables
     return SpatialData(shapes=new_shapes, points=new_points, images=new_images, tables=tables)
@@ -754,7 +760,9 @@ def polygon_query(
         geodataframes[k] = vv
     if filter_table:
         elements = {"shapes": geodataframes}
-        tables = {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
+        tables: dict[str, AnnData] | Tables = {
+            name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()
+        }
     else:
         tables = sdata.tables
 
