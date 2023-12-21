@@ -370,7 +370,7 @@ class SpatialData:
             attrs[TableModel.REGION_KEY] = target_element_name
 
     # TODO: change target_element_name to
-    def set_table_annotation_spatialelement(
+    def set_table_annotates_spatialelement(
         self,
         table_name: str,
         target_element_name: str | pd.Series,
