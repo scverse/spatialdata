@@ -59,10 +59,14 @@ class TestMultiTable:
         del full_sdata["table"].obs["instance_id"]
         full_sdata["table"].obs["region"] = ["poly"] * n_obs
         with pytest.raises(ValueError, match=error_msg):
-            full_sdata.set_table_annotates_spatialelement("table", "poly", region_key=region_key, instance_key=instance_key)
+            full_sdata.set_table_annotates_spatialelement(
+                "table", "poly", region_key=region_key, instance_key=instance_key
+            )
 
         full_sdata["table"].obs["instance_id"] = range(n_obs)
-        full_sdata.set_table_annotates_spatialelement("table", "poly", instance_key="instance_id", region_key=region_key)
+        full_sdata.set_table_annotates_spatialelement(
+            "table", "poly", instance_key="instance_id", region_key=region_key
+        )
 
         with pytest.raises(ValueError, match="column not present in table.obs"):
             full_sdata.set_table_annotates_spatialelement("table", "circles", region_key="not_existing")
@@ -79,7 +83,9 @@ class TestMultiTable:
             full_sdata.set_table_annotates_spatialelement(
                 "table", "labels2d", region_key="region", instance_key="non_existent"
             )
-        full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="region", instance_key="instance_id")
+        full_sdata.set_table_annotates_spatialelement(
+            "table", "labels2d", region_key="region", instance_key="instance_id"
+        )
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
