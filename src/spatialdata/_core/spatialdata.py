@@ -131,7 +131,7 @@ class SpatialData:
         labels: dict[str, Raster_T] | None = None,
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
-        tables: dict[str, AnnData] | None = None,
+        tables: dict[str, AnnData] | Tables|  None = None,
     ) -> None:
         self._path: Path | None = None
 
@@ -671,7 +671,7 @@ class SpatialData:
         # TODO: check whether full table dict should be returned or only those which annotate elements. Also check
         # filtering with tables having potentially different keys.
         if filter_tables:
-            tables = {}
+            tables: Tables = Tables(shared_keys=self._shared_keys)
             for table_name, table in self.tables.items():
                 tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
         else:
@@ -986,6 +986,14 @@ class SpatialData:
         """
         return self._tables
 
+    @tables.setter
+    def tables(self, shapes: dict[str, GeoDataFrame]) -> None:
+        """Set shapes."""
+        self._shared_keys = self._shared_keys - set(self._tables.keys())
+        self._tables = Tables(shared_keys=self._shared_keys)
+        for k, v in shapes.items():
+            self._tables[k] = v
+
     @property
     def table(self) -> None | AnnData:
         """
@@ -1017,7 +1025,7 @@ class SpatialData:
         if self.tables.get("table") is not None:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
         self.tables["table"] = table
-        self._store_tables(table_name="table")
+
 
     @table.deleter
     def table(self) -> None:
@@ -1037,109 +1045,6 @@ class SpatialData:
             # More informative than the error in the zarr library.
             raise KeyError("table with name 'table' not present in the SpatialData object.")
 
-    def add_tables(
-        self,
-        table: None | AnnData = None,
-        table_name: None | str = None,
-        table_mapping: None | dict[str, AnnData] = None,
-    ) -> None:
-        """
-        Add AnnData tables to the SpatialData object.
-
-        Parameters
-        ----------
-        table : None or AnnData, optional
-            The table to be added. If provided, it is added with the specified table_name.
-            If not provided, the table_mapping must be provided.
-
-        table_name : None or str, optional
-            The name of the table to be added. This parameter is required if table is provided.
-
-        table_mapping : None or dict[str, AnnData], optional
-            A dictionary mapping table names to tables. If provided, the tables are added
-            according to the mapping. This parameter is required if table is not provided.
-        """
-        self._add_tables(table=table, table_name=table_name, table_mapping=table_mapping)
-
-    def _store_tables(self, table_name: None | str = None, table_mapping: None | dict[str, AnnData] = None) -> None:
-        """
-        Write tables back to the SpatialData Zarr store.
-
-        This method is used to store tables in a backed `AnnData` object. If the `AnnData` object is backed, the tables
-        are stored in a Zarr store, under the "tables" group.
-        attribute.
-
-        Parameters
-        ----------
-        table_name : None or str, optional
-            The name of the table to store. If not provided, all tables in `table_mapping` will be stored.
-        table_mapping : None or dict[str, AnnData], optional
-            A dictionary mapping table names to `AnnData` tables. If provided, all tables in `table_mapping` will be
-            stored.
-
-        Raises
-        ------
-        TypeError
-            If both `table_name` and `table_mapping` are None.
-        """
-        if self.is_backed():
-            from spatialdata._io.io_table import write_table
-
-            store = parse_url(self.path, mode="r+").store
-            root = zarr.group(store=store)
-            elem_group = root.require_group(name="tables")
-            if table_name:
-                write_table(table=self.tables[table_name], group=elem_group, name=table_name)
-            elif table_mapping:
-                for table_name in table_mapping:
-                    write_table(table=self.tables[table_name], group=elem_group, name=table_name)
-            else:
-                raise TypeError("Missing arguments, either table_name or table_mapping should be provided.")
-
-    def _add_tables(
-        self,
-        table: None | AnnData = None,
-        table_name: None | str = None,
-        table_mapping: None | dict[str, AnnData] = None,
-    ) -> None:
-        """
-        Validate and add AnnData table(s) to the SpatialData object and save to the SpatialData Zarr store if backed.
-
-        Parameters
-        ----------
-        table : None or AnnData, optional
-            An optional AnnData table to be added.
-        table_name : None or str, optional
-            An optional string representing the name of the table to be added.
-        table_mapping : None or dict[str, AnnData], optional
-            An optional dictionary mapping table names to AnnData tables. If specified, multiple tables are added at
-            once
-
-        Raises
-        ------
-        ValueError
-            If the specified table already exists in the SpatialData.tables.
-        ValueError
-            If table is given but table_name is not specified.
-        """
-        if table:
-            if table_name:
-                TableModel().validate(table)
-                if self.tables.get(table_name) is not None:
-                    raise ValueError("The table already exists. Use del sdata.tables[<table_name>] to remove it first.")
-                self._shared_keys = self._shared_keys - set(self._tables.keys())
-                self._tables = Tables(shared_keys=self._shared_keys)
-                self._tables[table_name] = table
-                self._store_tables(table_name=table_name)
-            else:
-                raise ValueError("Please provide a string value for the parameter table_name.")
-        elif table_mapping:
-            for table in table_mapping.values():
-                self.validate_table_in_spatialdata(table)
-            self._shared_keys = self._shared_keys - set(self._tables.keys())
-            self._tables = Tables(shared_keys=self._shared_keys)
-            self._tables.update(table_mapping)
-            self._store_tables(table_mapping=table_mapping)
 
     @staticmethod
     def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
@@ -1500,7 +1405,7 @@ class SpatialData:
         elif schema == ShapesModel:
             self.shapes[key] = value
         elif schema == TableModel:
-            self.add_tables(table_name=key, table=value)
+            self.tables[key] = value
         else:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
 
