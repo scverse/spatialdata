@@ -272,7 +272,7 @@ class SpatialData:
     @staticmethod
     def _set_table_annotation_target(
         table: AnnData,
-        target_element_name: str | pd.Series,
+        region: str | pd.Series,
         region_key: str,
         instance_key: str,
     ) -> None:
@@ -287,7 +287,7 @@ class SpatialData:
         ----------
         table
             The AnnData object containing the data table.
-        target_element_name
+        region
             The name of the target element for the table annotation.
         region_key
             The key for the region annotation column in `table.obs`.
@@ -306,17 +306,17 @@ class SpatialData:
         if instance_key not in table.obs:
             raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
         attrs = {
-            TableModel.REGION_KEY: target_element_name,
+            TableModel.REGION_KEY: region,
             TableModel.REGION_KEY_KEY: region_key,
             TableModel.INSTANCE_KEY: instance_key,
         }
-        check_target_region_column_symmetry(table, region_key, target_element_name)
+        check_target_region_column_symmetry(table, region_key, region)
         table.uns[TableModel.ATTRS_KEY] = attrs
 
     @staticmethod
     def _change_table_annotation_target(
         table: AnnData,
-        target_element_name: str | pd.Series,
+        region: str | pd.Series,
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
@@ -326,7 +326,7 @@ class SpatialData:
         ----------
         table
             The table already annotating a SpatialElement.
-        target_element_name
+        region
             The name of the target SpatialElement for which the table annotation will be changed.
         region_key
             The name of the region key column in the table. If not provided, it will be extracted from the table's uns
@@ -355,21 +355,20 @@ class SpatialData:
                     f"present as column in table.obs. Please specify region_key."
                 )
             TableModel()._validate_set_instance_key(table, instance_key)
-            check_target_region_column_symmetry(table, table_region_key, target_element_name)
-            attrs[TableModel.REGION_KEY] = target_element_name
+            check_target_region_column_symmetry(table, table_region_key, region)
+            attrs[TableModel.REGION_KEY] = region
         else:
             if region_key not in table.obs:
                 raise ValueError(f"'{region_key}' column not present in table.obs")
 
             TableModel()._validate_set_instance_key(table, instance_key)
-            check_target_region_column_symmetry(table, table_region_key, target_element_name)
-            attrs[TableModel.REGION_KEY] = target_element_name
+            check_target_region_column_symmetry(table, table_region_key, region)
+            attrs[TableModel.REGION_KEY] = region
 
-    # TODO: change target_element_name to
     def set_table_annotates_spatialelement(
         self,
         table_name: str,
-        target_element_name: str | pd.Series,
+        region: str | pd.Series,
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
@@ -380,7 +379,7 @@ class SpatialData:
         ----------
         table_name
             The name of the table to set the annotation target for.
-        target_element_name
+        region
             The name of the target element for the annotation. This can either be a string or a pandas Series object.
         region_key
             The region key for the annotation. If not specified, defaults to None.
@@ -396,15 +395,13 @@ class SpatialData:
         """
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
-        if target_element_name not in element_names:
-            raise ValueError(
-                f"Annotation target '{target_element_name}' not present as SpatialElement in  " f"SpatialData object."
-            )
+        if region not in element_names:
+            raise ValueError(f"Annotation target '{region}' not present as SpatialElement in  " f"SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):
-            self._change_table_annotation_target(table, target_element_name, region_key, instance_key)
+            self._change_table_annotation_target(table, region, region_key, instance_key)
         elif isinstance(region_key, str) and isinstance(instance_key, str):
-            self._set_table_annotation_target(table, target_element_name, region_key, instance_key)
+            self._set_table_annotation_target(table, region, region_key, instance_key)
         else:
             raise TypeError("No current annotation metadata found. Please specify both region_key and instance_key.")
 
