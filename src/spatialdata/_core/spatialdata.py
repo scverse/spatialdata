@@ -671,8 +671,8 @@ class SpatialData:
         # TODO: check whether full table dict should be returned or only those which annotate elements. Also check
         # filtering with tables having potentially different keys.
         if filter_tables:
-            tables: Tables = Tables(shared_keys=self._shared_keys)
-            for table_name, table in self.tables.items():
+            tables = {}
+            for table_name, table in self._tables.items():
                 tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
         else:
             tables = self.tables
