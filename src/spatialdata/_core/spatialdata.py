@@ -1293,7 +1293,9 @@ class SpatialData:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
 
-    def _gen_elements(self, include_table=None) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    def _gen_elements(
+        self, include_table: bool = False
+    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         """
         Generate elements contained in the SpatialData instance.
 
@@ -1311,10 +1313,10 @@ class SpatialData:
             for k, v in d.items():
                 yield element_type, k, v
 
-    def gen_spatial_elements(self):
+    def gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
         return self._gen_elements()
 
-    def gen_elements(self):
+    def gen_elements(self) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         return self._gen_elements(include_table=True)
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
