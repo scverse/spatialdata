@@ -641,8 +641,8 @@ class SpatialData:
         ----------
         coordinate_system
             The coordinate system(s) to filter by.
-        filter_table
-            If True (default), the table will be filtered to only contain regions
+        filter_tables
+            If True (default), the tables will be filtered to only contain regions
             of an element belonging to the specified coordinate system(s).
 
         Returns
@@ -1292,7 +1292,7 @@ class SpatialData:
             d = getattr(SpatialData, element_type).fget(self)
             yield from d.values()
 
-    def _gen_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    def _gen_elements(self, include_table=None) -> Generator[tuple[str, str, SpatialElement], None, None]:
         """
         Generate elements contained in the SpatialData instance.
 
@@ -1302,10 +1302,19 @@ class SpatialData:
             A generator object that returns a tuple containing the type of the element, its name, and the element
             itself.
         """
-        for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        element_types = ["images", "labels", "points", "shapes"]
+        if include_table:
+            element_types.append("tables")
+        for element_type in element_types:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
+
+    def gen_spatial_elements(self):
+        return self._gen_elements()
+
+    def gen_elements(self):
+        return self._gen_elements(include_table=True)
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
