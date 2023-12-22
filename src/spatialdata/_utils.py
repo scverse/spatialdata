@@ -285,12 +285,12 @@ def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str
             if new in kwargs:
                 raise TypeError(
                     f"{class_name}{func_name} received both {alias} and {new} as arguments!"
-                    f" {alias} is being deprecated in SpatialData version X.x, only use {new} instead."
+                    f" {alias} is being deprecated in SpatialData version 0.1, only use {new} instead."
                 )
             warnings.warn(
                 message=(
                     f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in SpatialData "
-                    f"version X.x, switch to `{new}` instead."
+                    f"version 0.1, switch to `{new}` instead."
                 ),
                 category=DeprecationWarning,
                 stacklevel=3,

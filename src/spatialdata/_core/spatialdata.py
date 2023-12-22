@@ -1006,7 +1006,7 @@ class SpatialData:
         """
         # TODO: decide version for deprecation
         warnings.warn(
-            "Table accessor will be deprecated with SpatialData version X.X, use sdata.tables instead.",
+            "Table accessor will be deprecated with SpatialData version 0.1, use sdata.tables instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1018,7 +1018,7 @@ class SpatialData:
     @table.setter
     def table(self, table: AnnData) -> None:
         warnings.warn(
-            "Table setter will be deprecated with SpatialData version X.X, use tables instead.",
+            "Table setter will be deprecated with SpatialData version 0.1, use tables instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1031,7 +1031,7 @@ class SpatialData:
     def table(self) -> None:
         """Delete the table."""
         warnings.warn(
-            "del sdata.table will be deprecated with SpatialData version X.X, use del sdata.tables['table'] instead.",
+            "del sdata.table will be deprecated with SpatialData version 0.1, use del sdata.tables['table'] instead.",
             DeprecationWarning,
             stacklevel=2,
         )
