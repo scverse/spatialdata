@@ -182,12 +182,8 @@ class SpatialData:
 
         Parameters
         ----------
-        data : AnnData
+        data
             The table potentially annotating a SpatialElement
-
-        Returns
-        -------
-        None
 
         Raises
         ------
@@ -289,13 +285,13 @@ class SpatialData:
 
         Parameters
         ----------
-        table : AnnData
+        table
             The AnnData object containing the data table.
-        target_element_name : str or pd.Series
+        target_element_name
             The name of the target element for the table annotation.
-        region_key : str
+        region_key
             The key for the region annotation column in `table.obs`.
-        instance_key : str
+        instance_key
             The key for the instance annotation column in `table.obs`.
 
         Raises
@@ -328,14 +324,14 @@ class SpatialData:
 
         Parameters
         ----------
-        table : AnnData
+        table
             The table already annotating a SpatialElement.
-        target_element_name : str | pd.Series
+        target_element_name
             The name of the target SpatialElement for which the table annotation will be changed.
-        region_key : None | str, optional
+        region_key
             The name of the region key column in the table. If not provided, it will be extracted from the table's uns
             attribute.
-        instance_key : None | str, optional
+        instance_key
             The name of the instance key column in the table. If not provided, it will be extracted from the table's uns
             attribute.
 
@@ -382,13 +378,13 @@ class SpatialData:
 
         Parameters
         ----------
-        table_name : str
+        table_name
             The name of the table to set the annotation target for.
-        target_element_name : str | pd.Series
+        target_element_name
             The name of the target element for the annotation. This can either be a string or a pandas Series object.
-        region_key : None | str, optional
+        region_key
             The region key for the annotation. If not specified, defaults to None.
-        instance_key : None | str, optional
+        instance_key
             The instance key for the annotation. If not specified, defaults to None.
 
         Raises
@@ -1296,11 +1292,15 @@ class SpatialData:
         """
         Generate elements contained in the SpatialData instance.
 
+        Parameters
+        ----------
+        include_table
+            Whether to also generate table elements.
+
         Returns
         -------
-        Generator[tuple[str, str, SpatialElement], None, None]
-            A generator object that returns a tuple containing the type of the element, its name, and the element
-            itself.
+        A generator object that returns a tuple containing the type of the element, its name, and the element
+        itself.
         """
         element_types = ["images", "labels", "points", "shapes"]
         if include_table:
@@ -1311,9 +1311,27 @@ class SpatialData:
                 yield element_type, k, v
 
     def gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+        """
+        Generate spatial elements within the SpatialData object.
+
+        This method generates spatial elements (images, labels, points and shapes).
+
+        Returns
+        -------
+        A generator that yields tuples containing the name, description, and SpatialElement objects themselves.
+        """
         return self._gen_elements()
 
     def gen_elements(self) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+        """
+        Generate elements within the SpatialData object.
+
+        This method generates elements in the SpatialData object (images, labels, points, shapes and tables
+
+        Returns
+        -------
+        A generator that yields tuples containing the name, description, and element objects themselves.
+        """
         return self._gen_elements(include_table=True)
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
@@ -1322,13 +1340,12 @@ class SpatialData:
 
         Parameters
         ----------
-        element_name : str
+        element_name
             The name of the element to find.
 
         Returns
         -------
-        tuple[str, str, SpatialElement | AnnData]
-            A tuple containing the element type, element name, and the retrieved element itself.
+        A tuple containing the element type, element name, and the retrieved element itself.
 
         Raises
         ------
