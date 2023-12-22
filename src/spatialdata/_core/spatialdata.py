@@ -1037,10 +1037,6 @@ class SpatialData:
         )
         if self.tables.get("table"):
             del self.tables["table"]
-            if self.is_backed():
-                store = parse_url(self.path, mode="r+").store
-                root = zarr.group(store=store)
-                del root["tables/table"]
         else:
             # More informative than the error in the zarr library.
             raise KeyError("table with name 'table' not present in the SpatialData object.")
