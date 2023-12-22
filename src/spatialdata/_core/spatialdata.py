@@ -131,7 +131,7 @@ class SpatialData:
         labels: dict[str, Raster_T] | None = None,
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
-        tables: dict[str, AnnData] | Tables|  None = None,
+        tables: dict[str, AnnData] | Tables | None = None,
     ) -> None:
         self._path: Path | None = None
 
@@ -1026,7 +1026,6 @@ class SpatialData:
             raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
         self.tables["table"] = table
 
-
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
@@ -1036,7 +1035,7 @@ class SpatialData:
             stacklevel=2,
         )
         if self.tables.get("table"):
-            self.tables["table"] = None
+            del self.tables["table"]
             if self.is_backed():
                 store = parse_url(self.path, mode="r+").store
                 root = zarr.group(store=store)
@@ -1044,7 +1043,6 @@ class SpatialData:
         else:
             # More informative than the error in the zarr library.
             raise KeyError("table with name 'table' not present in the SpatialData object.")
-
 
     @staticmethod
     def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
