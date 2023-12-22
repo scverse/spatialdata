@@ -1335,7 +1335,7 @@ class SpatialData:
         KeyError
             If the element with the given name cannot be found.
         """
-        for element_type, element_name_, element in self._gen_elements():
+        for element_type, element_name_, element in self.gen_elements():
             if element_name_ == element_name:
                 return element_type, element_name_, element
         else:
