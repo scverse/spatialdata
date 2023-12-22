@@ -111,28 +111,31 @@ class TestMultiTable:
         full_sdata.tables["my_new_table0"] = adata0
         assert full_sdata.table is None
 
-    def test_single_table(self, tmp_path: str):
+    @pytest.mark.parametrize("region", ["test_shapes", "non_existing"])
+    def test_single_table(self, tmp_path: str, region: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
-        table = _get_table(region="test_shapes")
-        table2 = _get_table(region="non_existing")
-        with pytest.warns(UserWarning, match="The table is"):
-            SpatialData(
-                shapes={
-                    "test_shapes": test_shapes["poly"],
-                },
-                tables={"shape_annotate": table2},
-            )
+        table = _get_table(region=region)
+
+        # Create shapes dictionary
+        shapes_dict = {
+            "test_shapes": test_shapes["poly"],
+        }
+
+        if region == "non_existing":
+            with pytest.warns(UserWarning, match="The table is"):
+                SpatialData(
+                    shapes=shapes_dict,
+                    tables={"shape_annotate": table},
+                )
+
         test_sdata = SpatialData(
-            shapes={
-                "test_shapes": test_shapes["poly"],
-            },
+            shapes=shapes_dict,
             tables={"shape_annotate": table},
         )
+
         test_sdata.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-
         assert isinstance(sdata["shape_annotate"], AnnData)
-
         assert_equal(test_sdata["shape_annotate"], sdata["shape_annotate"])
 
         # note (to keep in the code): these tests here should silmulate the interactions from teh users; if the syntax
