@@ -168,6 +168,7 @@ class SpatialData:
 
         if tables is not None:
             for k, v in tables.items():
+                self.validate_table_in_spatialdata(v)
                 self.tables[k] = v
 
         self._query = QueryManager(self)
