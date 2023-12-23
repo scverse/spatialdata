@@ -89,7 +89,7 @@ def concatenate(
         If all region_keys are the same, the `region_key` is used.
     instance_key
         The key to use for the instance column in the concatenated object.
-    concatenate_table
+    concatenate_tables
         Whether to merge the tables in case of having the same element name.
     kwargs
         See :func:`anndata.concat` for more details.
