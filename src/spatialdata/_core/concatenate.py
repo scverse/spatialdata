@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from anndata import AnnData
 
+from spatialdata._core._utils import find_common_keys
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -73,7 +74,7 @@ def concatenate(
     sdatas: list[SpatialData],
     region_key: str | None = None,
     instance_key: str | None = None,
-    concatenate_table: bool = True,
+    concatenate_tables: bool = True,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -114,17 +115,22 @@ def concatenate(
     assert isinstance(sdatas, list), "sdatas must be a list"
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
 
-    if not concatenate_table:
+    if not concatenate_tables:
         merged_tables = {**{k: v for sdata in sdatas for k, v in sdata.tables.items()}}
         if len(merged_tables) != np.sum([len(sdata.tables) for sdata in sdatas]):
             raise KeyError(
                 "Tables must have unique names across the SpatialData objects to concatenate unless"
-                "concatenate_table is set to True."
+                "concatenate_tables is set to True."
             )
     else:
-        merged_tables = _concatenate_tables(
-            [sdata.table for sdata in sdatas if sdata.table is not None], region_key, instance_key, **kwargs
-        )
+        common_keys = find_common_keys(sdatas)
+        merged_tables = {}
+        for sdata in sdatas:
+            for k, v in sdata.tables.items():
+                if k in common_keys and merged_tables.get(k) is not None:
+                    merged_tables[k] = _concatenate_tables([merged_tables[k], v], region_key, instance_key, **kwargs)
+                else:
+                    merged_tables[k] = v
 
     return SpatialData(
         images=merged_images,
