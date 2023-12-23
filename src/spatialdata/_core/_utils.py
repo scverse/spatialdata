@@ -1,7 +1,4 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 
 
 def find_common_keys(sdatas: list[SpatialData]) -> set[str]:
