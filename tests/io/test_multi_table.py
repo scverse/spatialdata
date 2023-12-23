@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
-from spatialdata import SpatialData
+from spatialdata import SpatialData, concatenate
 from spatialdata.models import TableModel
 
 from tests.conftest import _get_shapes, _get_table
@@ -224,6 +224,25 @@ class TestMultiTable:
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)
+
+
+def test_concatenate_sdata_multitables():
+    sdatas = [
+        SpatialData(
+            shapes={f"poly_{i + 1}": test_shapes["poly"], f"multipoly_{i + 1}": test_shapes["multipoly"]},
+            tables={"table": _get_table(region=f"poly_{i + 1}"), "table2": _get_table(region=f"multipoly_{i + 1}")},
+        )
+        for i in range(3)
+    ]
+
+    with pytest.raises(KeyError, match="Tables must have"):
+        concatenate(sdatas)
+
+    merged_sdata = concatenate(sdatas, concatenate_tables=True)
+    assert merged_sdata.tables["table"].n_obs == 300
+    assert merged_sdata.tables["table2"].n_obs == 300
+    assert all(merged_sdata.tables["table"].obs.region.unique() == ["poly_1", "poly_2", "poly_3"])
+    assert all(merged_sdata.tables["table2"].obs.region.unique() == ["multipoly_1", "multipoly_2", "multipoly_3"])
 
 
 #     The following use cases needs to be put in the tutorial notebook, let's keep the comment here until we have the

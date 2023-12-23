@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from anndata import AnnData
 
-from spatialdata._core._utils import find_common_keys
+from spatialdata._core._utils import find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -74,7 +74,7 @@ def concatenate(
     sdatas: list[SpatialData],
     region_key: str | None = None,
     instance_key: str | None = None,
-    concatenate_tables: bool = True,
+    concatenate_tables: bool = False,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -120,10 +120,10 @@ def concatenate(
         if len(merged_tables) != np.sum([len(sdata.tables) for sdata in sdatas]):
             raise KeyError(
                 "Tables must have unique names across the SpatialData objects to concatenate unless"
-                "concatenate_tables is set to True."
+                " concatenate_tables is set to True."
             )
     else:
-        common_keys = find_common_keys(sdatas)
+        common_keys = find_common_table_keys(sdatas)
         merged_tables = {}
         for sdata in sdatas:
             for k, v in sdata.tables.items():
