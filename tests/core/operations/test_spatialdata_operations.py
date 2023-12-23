@@ -303,7 +303,7 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     filtered1.table = table_new
     filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
     filtered1.table.obs[filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
-    concatenated = concatenate([filtered0, filtered1])
+    concatenated = concatenate([filtered0, filtered1], concatenate_tables=True)
     assert len(list(concatenated.gen_elements())) == 3
 
 
