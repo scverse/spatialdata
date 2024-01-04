@@ -41,19 +41,38 @@ class TestMultiTable:
     @pytest.mark.parametrize(
         "region_key, instance_key, error_msg",
         [
-            (None, None, "Specified instance_key in table.uns"),
-            ("region", None, "Specified instance_key in table.uns"),
-            ("region", "instance_id", "Instance key column"),
-            (None, "instance_id", "Instance key column"),
+            (
+                None,
+                None,
+                "Specified instance_key in table.uns 'instance_id' is not present as column in table.obs. "
+                "Please specify instance_key.",
+            ),
+            (
+                "region",
+                None,
+                "Specified instance_key in table.uns 'instance_id' is not present as column in table.obs. "
+                "Please specify instance_key.",
+            ),
+            ("region", "instance_id", "Instance key column 'instance_id' not found in table.obs."),
+            (None, "instance_id", "Instance key column 'instance_id' not found in table.obs."),
         ],
     )
     def test_change_annotation_target(self, full_sdata, region_key, instance_key, error_msg):
         n_obs = full_sdata["table"].n_obs
-        with pytest.raises(ValueError, match=r"Mismatch\(es\) found between regions"):
+        ##
+        with pytest.raises(
+            ValueError, match=r"Mismatch\(es\) found between regions in region column in obs and target element: "
+        ):
+            # ValueError: Mismatch(es) found between regions in region column in obs and target element: labels2d, poly
             full_sdata.set_table_annotates_spatialelement("table", "poly")
+        ##
 
         del full_sdata["table"].obs["region"]
-        with pytest.raises(ValueError, match="Specified region_key in table.uns"):
+        with pytest.raises(
+            ValueError,
+            match="Specified region_key in table.uns 'region' is not present as column in table.obs. "
+            "Please specify region_key.",
+        ):
             full_sdata.set_table_annotates_spatialelement("table", "poly")
 
         del full_sdata["table"].obs["instance_id"]
@@ -68,18 +87,23 @@ class TestMultiTable:
             "table", "poly", instance_key="instance_id", region_key=region_key
         )
 
-        with pytest.raises(ValueError, match="column not present in table.obs"):
+        with pytest.raises(ValueError, match="'not_existing' column not present in table.obs"):
             full_sdata.set_table_annotates_spatialelement("table", "circles", region_key="not_existing")
 
     def test_set_table_nonexisting_target(self, full_sdata):
-        with pytest.raises(ValueError, match="Annotation target"):
+        with pytest.raises(
+            ValueError,
+            match="Annotation target 'non_existing' not present as SpatialElement in  " "SpatialData object.",
+        ):
             full_sdata.set_table_annotates_spatialelement("table", "non_existing")
 
     def test_set_table_annotates_spatialelement(self, full_sdata):
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
-        with pytest.raises(TypeError, match="No current annotation"):
+        with pytest.raises(
+            TypeError, match="No current annotation metadata found. " "Please specify both region_key and instance_key."
+        ):
             full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="non_existent")
-        with pytest.raises(ValueError, match="Specified instance_key"):
+        with pytest.raises(ValueError, match="Specified instance_key, non_existent, not in table.obs"):
             full_sdata.set_table_annotates_spatialelement(
                 "table", "labels2d", region_key="region", instance_key="non_existent"
             )
@@ -122,7 +146,9 @@ class TestMultiTable:
         }
 
         if region == "non_existing":
-            with pytest.warns(UserWarning, match="The table is"):
+            with pytest.warns(
+                UserWarning, match="The table is annotating elements not present in the SpatialData object"
+            ):
                 SpatialData(
                     shapes=shapes_dict,
                     tables={"shape_annotate": table},
@@ -235,7 +261,11 @@ def test_concatenate_sdata_multitables():
         for i in range(3)
     ]
 
-    with pytest.raises(KeyError, match="Tables must have"):
+    with pytest.raises(
+        KeyError,
+        match="Tables must have unique names across the SpatialData objects to concatenate unless concatenate_tables "
+        "is set to True.",
+    ):
         concatenate(sdatas)
 
     merged_sdata = concatenate(sdatas, concatenate_tables=True)

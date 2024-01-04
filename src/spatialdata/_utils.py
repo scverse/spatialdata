@@ -240,13 +240,12 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
 
     Parameters
     ----------
-    aliases : str
+    aliases
         Deprecation argument aliases to be mapped to the new arguments.
 
     Returns
     -------
-    Callable[..., RT]
-        A decorator that can be used to mark an argument for deprecation and substituting it with the new argument.
+    A decorator that can be used to mark an argument for deprecation and substituting it with the new argument.
 
     Raises
     ------

@@ -692,7 +692,7 @@ class TableModel:
 
         Parameters
         ----------
-        data : AnnData
+        data
             The AnnData object containing the table annotation data.
 
         Raises
@@ -779,7 +779,7 @@ class TableModel:
 
         Returns
         -------
-        :class:`anndata.AnnData`.
+        The parsed data.
         """
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
@@ -905,11 +905,11 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
 
     Parameters
     ----------
-    table: AnnData
+    table
         Table annotating specific SpatialElements
-    region_key: str
+    region_key
         The column in obs containing for each row which SpatialElement is annotated by that row.
-    target: str | pd.Series
+    target
          Name of target(s) SpatialElement(s)
 
     Raises
