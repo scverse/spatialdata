@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from copy import copy  # Should probably go up at the top
 from itertools import chain
 from typing import Any
+from warnings import warn
 
 import numpy as np
 from anndata import AnnData
@@ -115,12 +117,26 @@ def concatenate(
     assert len(sdatas) > 0, "sdatas must be a non-empty list"
 
     if not concatenate_tables:
-        merged_tables = {**{k: v for sdata in sdatas for k, v in sdata.tables.items()}}
-        if len(merged_tables) != np.sum([len(sdata.tables) for sdata in sdatas]):
-            raise KeyError(
-                "Tables must have unique names across the SpatialData objects to concatenate unless"
-                " concatenate_tables is set to True."
+        key_counts: dict[str, int] = defaultdict(int)
+        for sdata in sdatas:
+            for k in sdata.tables:
+                key_counts[k] += 1
+
+        if any(value > 1 for value in key_counts.values()):
+            warn(
+                "Duplicate table names found. Tables will be added with integer suffix. Set concatenate_tables to True"
+                "if concatenation is wished for instead.",
+                UserWarning,
+                stacklevel=2,
             )
+        merged_tables = {}
+        count_dict: dict[str, int] = defaultdict(int)
+
+        for sdata in sdatas:
+            for k, v in sdata.tables.items():
+                new_key = f"{k}_{count_dict[k]}" if key_counts[k] > 1 else k
+                count_dict[k] += 1
+                merged_tables[new_key] = v
     else:
         common_keys = _find_common_table_keys(sdatas)
         merged_tables = {}

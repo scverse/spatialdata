@@ -263,10 +263,9 @@ def test_concatenate_sdata_multitables():
         for i in range(3)
     ]
 
-    with pytest.raises(
-        KeyError,
-        match="Tables must have unique names across the SpatialData objects to concatenate unless concatenate_tables "
-        "is set to True.",
+    with pytest.warns(
+        UserWarning,
+        match="Duplicate table names found.",
     ):
         concatenate(sdatas)
 
