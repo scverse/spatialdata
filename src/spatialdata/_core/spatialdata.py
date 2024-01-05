@@ -612,7 +612,7 @@ class SpatialData:
 
     @deprecation_alias(filter_table="filter_tables")
     def filter_by_coordinate_system(
-        self, coordinate_system: str | list[str], filter_tables: bool = True
+        self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
     ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
@@ -627,6 +627,8 @@ class SpatialData:
         filter_tables
             If True (default), the tables will be filtered to only contain regions
             of an element belonging to the specified coordinate system(s).
+        include_orphan_tables
+            If True (not default), include tables that do not annotate SpatialElement(s).
 
         Returns
         -------
@@ -651,13 +653,13 @@ class SpatialData:
                         elements[element_type][element_name] = element
                         element_paths_in_coordinate_system.append(element_name)
 
-        # TODO: check whether full table dict should be returned or only those which annotate elements. Also check
-        # filtering with tables having potentially different keys.
         if filter_tables:
             tables: dict[str, AnnData] | Tables = {}
             for table_name, table in self._tables.items():
+                if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
+                    tables[table_name] = table
+                    continue
                 tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
-
         else:
             tables = self.tables
 
