@@ -1,7 +1,7 @@
 from spatialdata._core.spatialdata import SpatialData
 
 
-def find_common_table_keys(sdatas: list[SpatialData]) -> set[str]:
+def _find_common_table_keys(sdatas: list[SpatialData]) -> set[str]:
     """
     Find table keys present in more than one SpatialData object.
 

@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from anndata import AnnData
 
-from spatialdata._core._utils import find_common_table_keys
+from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -122,7 +122,7 @@ def concatenate(
                 " concatenate_tables is set to True."
             )
     else:
-        common_keys = find_common_table_keys(sdatas)
+        common_keys = _find_common_table_keys(sdatas)
         merged_tables = {}
         for sdata in sdatas:
             for k, v in sdata.tables.items():
