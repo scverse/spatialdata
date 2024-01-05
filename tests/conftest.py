@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # isort: off
 import os
 
@@ -6,7 +8,6 @@ os.environ["USE_PYGEOS"] = "0"
 
 from shapely import linearrings, polygons
 from pathlib import Path
-from typing import Union
 from spatialdata._types import ArrayLike
 import numpy as np
 import pandas as pd
@@ -18,7 +19,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -132,13 +133,16 @@ def sdata(request) -> SpatialData:
     return request.getfixturevalue(request.param)
 
 
-def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
     out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
+        RNG.normal(size=(3, 64, 64)),
+        scale_factors=[2, 2],
+        dims=dims_2d,
+        c_coords=["r", "g", "b"],
     )
     out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
@@ -159,7 +163,7 @@ def _get_images() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
     return out
 
 
-def _get_labels() -> dict[str, Union[SpatialImage, MultiscaleSpatialImage]]:
+def _get_labels() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
@@ -274,7 +278,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: Union[str, list[str]] = "sample1",
+    region: str | list[str] = "sample1",
     region_key: str = "region",
     instance_key: str = "instance_id",
 ) -> AnnData:

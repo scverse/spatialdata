@@ -23,6 +23,10 @@ jobs:
                 include:
                     - os: macos-latest
                       python: "3.9"
+                    - os: macos-latest
+                      python: "3.10"
+                      pip-flags: "--pre"
+                      name: "Python 3.10 (pre-release)"
 
         env:
             OS: ${{ matrix.os }}
@@ -52,14 +56,14 @@ jobs:
                   pip install pytest-cov
             - name: Install dependencies
               run: |
-                  pip install -e ".[dev,test,torch]"
+                  pip install ${{ matrix.pip-flags }} -e ".[dev,test,torch]"
             - name: Test
               env:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  pytest -v --cov --color=yes --cov-report=xml
+                  pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v3.1.1
               with:

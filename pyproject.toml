@@ -27,19 +27,20 @@ dependencies = [
     "xarray",
     "zarr",
     "ome_zarr>=0.7.0",
-    "spatial_image>=0.3.0",
-    "multiscale_spatial_image>=0.11.2",
+    "spatial_image==0.3.0",
+    "multiscale_spatial_image==0.11.2",
     "xarray-schema",
     "pygeos",
     "geopandas",
     "shapely>=2.0.1",
     "rich",
     "pyarrow",
-    "typing_extensions>=4.0.0,<4.6.0",
+    "typing_extensions>=4.8.0",
     "dask-image",
     "networkx",
     "xarray-spatial>=0.3.5",
     "tqdm",
+    "fsspec<=2023.6",
 ]
 
 [project.optional-dependencies]
@@ -49,7 +50,6 @@ dev = [
 docs = [
     "sphinx>=4.5",
     "sphinx-book-theme>=1.0.0",
-    "sphinx_rtd_theme",
     "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
     "sphinx-autodoc-typehints",
@@ -193,4 +193,3 @@ convention = "numpy"
 
 # pyupgrade typing rewrite TODO: remove at some point from per-file ignore
 # "UP006", "UP007"
-    

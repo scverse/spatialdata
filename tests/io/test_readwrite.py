@@ -12,7 +12,7 @@ from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialI
 from numpy.random import default_rng
 from shapely.geometry import Point
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.models import TableModel
 from spatialdata.transformations.operations import (
@@ -110,7 +110,7 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
 
-        sdata.add_image(name="sdata_not_saved_yet", image=_get_images().values().__iter__().__next__())
+        sdata.images["sdata_not_saved_yet"] = _get_images().values().__iter__().__next__()
         sdata.write(tmpdir)
 
         for k, v in _get_images().items():
@@ -122,10 +122,10 @@ class TestReadWrite:
                     assert len(names) == 1
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.add_image(name=f"incremental_{k}", image=v)
-            with pytest.raises(KeyError):
-                sdata.add_image(name=f"incremental_{k}", image=v)
-            sdata.add_image(name=f"incremental_{k}", image=v, overwrite=True)
+            sdata.images[f"incremental_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.images[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
 
         for k, v in _get_labels().items():
             if isinstance(v, SpatialImage):
@@ -136,26 +136,26 @@ class TestReadWrite:
                     assert len(names) == 1
                     name = names[0]
                     v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.add_labels(name=f"incremental_{k}", labels=v)
-            with pytest.raises(KeyError):
-                sdata.add_labels(name=f"incremental_{k}", labels=v)
-            sdata.add_labels(name=f"incremental_{k}", labels=v, overwrite=True)
+            sdata.labels[f"incremental_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.labels[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
 
         for k, v in _get_shapes().items():
-            sdata.add_shapes(name=f"incremental_{k}", shapes=v)
-            with pytest.raises(KeyError):
-                sdata.add_shapes(name=f"incremental_{k}", shapes=v)
-            sdata.add_shapes(name=f"incremental_{k}", shapes=v, overwrite=True)
+            sdata.shapes[f"incremental_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.shapes[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
             break
 
         for k, v in _get_points().items():
-            sdata.add_points(name=f"incremental_{k}", points=v)
-            with pytest.raises(KeyError):
-                sdata.add_points(name=f"incremental_{k}", points=v)
-            sdata.add_points(name=f"incremental_{k}", points=v, overwrite=True)
+            sdata.points[f"incremental_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.points[f"incremental_{k}"] = v
+                sdata[f"incremental_{k}"] = v
             break
 
-    def test_incremental_io_table(self, table_single_annotation):
+    def test_incremental_io_table(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
         t = s.table[:10, :].copy()
         with pytest.raises(ValueError):
@@ -182,8 +182,8 @@ class TestReadWrite:
             f = os.path.join(td, "data.zarr")
             dask0 = points.points[elem_name]
             points.write(f)
-            dask1 = points.points[elem_name]
             assert all("read-parquet" not in key for key in dask0.dask.layers)
+            dask1 = read_zarr(f).points[elem_name]
             assert any("read-parquet" in key for key in dask1.dask.layers)
 
     def test_io_and_lazy_loading_raster(self, images, labels):
@@ -198,6 +198,7 @@ class TestReadWrite:
                 sdata.write(f)
                 dask1 = d[elem_name].data
                 assert all("from-zarr" not in key for key in dask0.dask.layers)
+                dask1 = read_zarr(f)[elem_name].data
                 assert any("from-zarr" in key for key in dask1.dask.layers)
 
     def test_replace_transformation_on_disk_raster(self, images, labels):
@@ -283,45 +284,6 @@ class TestReadWrite:
             os.mkdir(f1)
             with pytest.raises(ValueError):
                 full_sdata.write(f1)
-
-    def test_incremental_io_with_backed_elements(self, full_sdata):
-        # addressing https://github.com/scverse/spatialdata/issues/137
-        # we test also the non-backed case so that if we switch to the
-        # backed version in the future we already have the tests
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            f = os.path.join(tmpdir, "data.zarr")
-            full_sdata.write(f)
-
-            e = full_sdata.images.values().__iter__().__next__()
-            full_sdata.add_image("new_images", e, overwrite=True)
-            # support for overwriting backed images has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_image("new_images", full_sdata.images["new_images"], overwrite=True)
-
-            e = full_sdata.labels.values().__iter__().__next__()
-            full_sdata.add_labels("new_labels", e, overwrite=True)
-            # support for overwriting backed labels has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_labels("new_labels", full_sdata.labels["new_labels"], overwrite=True)
-
-            e = full_sdata.points.values().__iter__().__next__()
-            full_sdata.add_points("new_points", e, overwrite=True)
-            # support for overwriting backed points has been temporarily removed
-            with pytest.raises(ValueError):
-                full_sdata.add_points("new_points", full_sdata.points["new_points"], overwrite=True)
-
-            e = full_sdata.shapes.values().__iter__().__next__()
-            full_sdata.add_shapes("new_shapes", e, overwrite=True)
-            full_sdata.add_shapes("new_shapes", full_sdata.shapes["new_shapes"], overwrite=True)
-
-            # commenting out as it is failing
-            # f2 = os.path.join(tmpdir, "data2.zarr")
-            # sdata2 = SpatialData(table=full_sdata.table.copy())
-            # sdata2.write(f2)
-            # del full_sdata.table
-            # full_sdata.table = sdata2.table
-            # full_sdata.write(f2, overwrite=True)
 
 
 def test_io_table(shapes):

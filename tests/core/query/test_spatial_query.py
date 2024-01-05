@@ -4,14 +4,15 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import Polygon
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
     bounding_box_query,
     polygon_query,
 )
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -379,7 +380,11 @@ def test_polygon_query_shapes(sdata_query_aggregation):
     circle_pol = circle.buffer(sdata["by_circles"].radius.iloc[0])
 
     queried = polygon_query(
-        values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=False
+        values_sdata,
+        polygons=polygon,
+        target_coordinate_system="global",
+        shapes=True,
+        points=False,
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
@@ -432,11 +437,34 @@ def test_polygon_query_spatial_data(sdata_query_aggregation):
     assert len(queried.table) == 8
 
 
-@pytest.mark.skip
-def test_polygon_query_image2d():
-    # single image case
-    # multiscale case
-    pass
+@pytest.mark.parametrize("n_channels", [1, 2, 3])
+def test_polygon_query_image2d(n_channels: int):
+    original_image = np.zeros((n_channels, 10, 10))
+    # y: [5, 9], x: [0, 4] has value 1
+    original_image[:, 5::, 0:5] = 1
+    image_element = Image2DModel.parse(original_image)
+    image_element_multiscale = Image2DModel.parse(original_image, scale_factors=[2, 2])
+
+    polygon = Polygon([(3, 3), (3, 7), (5, 3)])
+    for image in [image_element, image_element_multiscale]:
+        # bounding box: y: [5, 10[, x: [0, 5[
+        image_result = polygon_query(
+            SpatialData(images={"my_image": image}),
+            polygons=polygon,
+            target_coordinate_system="global",
+        )["my_image"]
+        expected_image = original_image[:, 3:7, 3:5]  # c dimension is preserved
+        if isinstance(image, SpatialImage):
+            assert isinstance(image, SpatialImage)
+            np.testing.assert_allclose(image_result, expected_image)
+        elif isinstance(image, MultiscaleSpatialImage):
+            assert isinstance(image_result, MultiscaleSpatialImage)
+            v = image_result["scale0"].values()
+            assert len(v) == 1
+            xdata = v.__iter__().__next__()
+            np.testing.assert_allclose(xdata, expected_image)
+        else:
+            raise ValueError("Unexpected type")
 
 
 @pytest.mark.skip

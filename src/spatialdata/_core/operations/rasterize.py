@@ -207,8 +207,6 @@ def _(
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialData:
-    from spatialdata import SpatialData
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -293,7 +291,7 @@ def _get_xarray_data_to_rasterize(
             m = corrected_affine.inverse().matrix  # type: ignore[attr-defined]
             m_linear = m[:-1, :-1]
             m_translation = m[:-1, -1]
-            from spatialdata._core.query.spatial_query import get_bounding_box_corners
+            from spatialdata._core.query._utils import get_bounding_box_corners
 
             bb_corners = get_bounding_box_corners(
                 min_coordinate=min_coordinate, max_coordinate=max_coordinate, axes=axes

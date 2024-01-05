@@ -5,7 +5,6 @@ from typing import Any, Union
 
 import dask.dataframe as dd
 import geopandas
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -17,7 +16,6 @@ from spatialdata.transformations.transformations import BaseTransformation
 SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
-# ValidAxis_t = Literal["c", "x", "y", "z"]
 ValidAxis_t = str
 MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 C = "c"
@@ -175,7 +173,7 @@ def _(e: GeoDataFrame) -> tuple[str, ...]:
 
 
 @get_axes_names.register(DaskDataFrame)
-def _(e: AnnData) -> tuple[str, ...]:
+def _(e: DaskDataFrame) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = tuple([c for c in valid_dims if c in e.columns])
     _validate_dims(dims)

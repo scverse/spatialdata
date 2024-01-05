@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import zarr
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -18,6 +18,7 @@ from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import iterate_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -29,9 +30,6 @@ from spatialdata.transformations.transformations import (
     BaseTransformation,
     _get_current_output_axes,
 )
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
 
 # suppress logger debug from ome_zarr with context manager
@@ -196,8 +194,6 @@ def _are_directories_identical(
 
 
 def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
-    from spatialdata import SpatialData
-
     if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
         return False
     # TODO: if the sdata object is backed on disk, don't create a new zarr file

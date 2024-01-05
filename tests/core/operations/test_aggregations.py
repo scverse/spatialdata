@@ -9,8 +9,9 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
-from spatialdata import SpatialData, aggregate
+from spatialdata import aggregate
 from spatialdata._core.query._utils import circles_to_polygons
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation

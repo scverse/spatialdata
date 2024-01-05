@@ -8,7 +8,7 @@ def test_datasets() -> None:
     assert len(sdata_blobs.table) == 26
     assert len(sdata_blobs.shapes["blobs_circles"]) == 5
     assert len(sdata_blobs.shapes["blobs_polygons"]) == 5
-    assert len(sdata_blobs.shapes["blobs_multipolygons"]) == 5
+    assert len(sdata_blobs.shapes["blobs_multipolygons"]) == 2
     assert len(sdata_blobs.points["blobs_points"].compute()) == 200
     assert sdata_blobs.images["blobs_image"].shape == (3, 512, 512)
     assert len(sdata_blobs.images["blobs_multiscale_image"]) == 3
