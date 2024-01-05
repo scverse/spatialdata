@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning][].
 
 -   Implemented support in SpatialData for storing multiple tables. These tables
     can annotate a SpatialElement but not necessarily so.
+-   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically performed on-disk.
 
 #### Minor
 
