@@ -8,7 +8,20 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.0.15] - tbd
+## [0.1.0] - tbd
+
+### Added
+
+#### Major
+
+-   Implemented support in SpatialData for storing multiple tables. These tables
+    can annotate a SpatialElement but not necessarily so.
+
+#### Minor
+
+-   Added public helper function get_table_keys in spatialdata.models to retrieve annotation information of a given table.
+-   Added public helper function check_target_region_column_symmetry in spatialdata.models to check whether annotation
+    metadata in table.uns['spatialdata_attrs'] corresponds with respective columns in table.obs.
 
 ### Added
 
