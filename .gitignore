@@ -45,3 +45,6 @@ spatialdata-sandbox
 
 # version file
 _version.py
+
+# prettier cache
+node_modules/
