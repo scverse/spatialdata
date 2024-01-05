@@ -147,7 +147,7 @@ class TestMultiTable:
 
         if region == "non_existing":
             with pytest.warns(
-                UserWarning, match="The table is annotating elements not present in the SpatialData object"
+                UserWarning, match=r"The table is annotating an/some element\(s\) not present in the SpatialData object"
             ):
                 SpatialData(
                     shapes=shapes_dict,
@@ -185,7 +185,9 @@ class TestMultiTable:
         table = _get_table(region="poly")
         table2 = _get_table(region="multipoly")
         table3 = _get_table(region="non_existing")
-        with pytest.warns(UserWarning, match="The table is annotating elements not present in the SpatialData object"):
+        with pytest.warns(
+            UserWarning, match="The table is annotating an/some element(s) not present in the SpatialData object"
+        ):
             SpatialData(
                 shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
                 table={"poly_annotate": table, "multipoly_annotate": table3},
