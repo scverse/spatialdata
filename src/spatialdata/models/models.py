@@ -918,6 +918,19 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
     ------
     ValueError
         If the regions specified in table.uns["spatialdata_attrs"] are not present in the region column of table.obs.
+
+    Example
+    -------
+    Assuming we have a table with region column in obs given by `region_key` called 'region' for which we want to check
+    whether it contains the specified annotation targets in the `target` variable as `pd.Series['region1', 'region2']`:
+
+    ```python
+    check_target_region_column_symmetry(table, region_key=region_key, target=target)
+    ```
+
+    This returns None if both specified targets are present in the region_key obs column. In this case the annotation
+    targets can be safely set. If not then a ValueError is raised stating the elements that are not shared between
+    the region_key column in obs and the specified targets.
     """
     found_regions = set(table.obs[region_key].unique().tolist())
     target_element_set = [target] if isinstance(target, str) else target

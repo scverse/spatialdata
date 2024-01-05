@@ -275,7 +275,6 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     return deprecation_decorator
 
 
-# todo: .1`for deprecation
 def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str) -> None:
     """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
     for alias, new in aliases.items():
