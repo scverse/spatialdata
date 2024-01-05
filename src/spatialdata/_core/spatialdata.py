@@ -369,9 +369,11 @@ class SpatialData:
         region
             The name of the target element for the annotation. This can either be a string or a pandas Series object.
         region_key
-            The region key for the annotation. If not specified, defaults to None.
+            The region key for the annotation. If not specified, defaults to None which means the currently set region
+            key is reused.
         instance_key
-            The instance key for the annotation. If not specified, defaults to None.
+            The instance key for the annotation. If not specified, defaults to None which means the currently set
+            instance key is reused.
 
         Raises
         ------
