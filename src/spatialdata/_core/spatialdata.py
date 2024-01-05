@@ -628,7 +628,8 @@ class SpatialData:
             If True (default), the tables will be filtered to only contain regions
             of an element belonging to the specified coordinate system(s).
         include_orphan_tables
-            If True (not default), include tables that do not annotate SpatialElement(s).
+            If True (not default), include tables that do not annotate SpatialElement(s). Only has an effect if
+            filter_tables is also set to True.
 
         Returns
         -------
