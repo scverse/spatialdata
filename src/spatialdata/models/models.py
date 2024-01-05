@@ -704,9 +704,10 @@ class TableModel:
             - If "region" is not found in `adata.uns['ATTRS_KEY']`.
             - If "region_key" is not found in `adata.uns['ATTRS_KEY']`.
             - If "instance_key" is not found in `adata.uns['ATTRS_KEY']`.
-            - If `attr[self.REGION_KEY_KEY]` is not found in `adata.obs`.
+            - If `attr[self.REGION_KEY_KEY]` is not found in `adata.obs`, with attr = adata.uns['ATTRS_KEY']
             - If `attr[self.INSTANCE_KEY]` is not found in `adata.obs`.
-            - If the regions in the AnnData object and `attr[self.REGION_KEY_KEY]` do not match.
+            - If the regions in `adata.uns['ATTRS_KEY']['self.REGION_KEY']` and the unique values of
+                `attr[self.REGION_KEY_KEY]` do not match.
 
         Notes
         -----
@@ -886,14 +887,15 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
 
     Returns
     -------
-    None | tuple[str | list[str], str, str]
-        The keys in table.uns['spatialdata_attrs']
+    The keys in table.uns['spatialdata_attrs']
     """
     if table.uns.get(TableModel.ATTRS_KEY):
         attrs = table.uns[TableModel.ATTRS_KEY]
         return attrs[TableModel.REGION_KEY], attrs[TableModel.REGION_KEY_KEY], attrs[TableModel.INSTANCE_KEY]
 
-    raise ValueError("No spatialdata_attrs key found in table.uns. Therefore, no table keys found.")
+    raise ValueError(
+        "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."
+    )
 
 
 def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:

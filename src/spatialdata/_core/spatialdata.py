@@ -127,7 +127,7 @@ class SpatialData:
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
 
-        # Work around to allow for backward compatibility
+        # Workaround to allow for backward compatibility
         if isinstance(tables, AnnData):
             tables = {"table": tables}
 
@@ -189,7 +189,9 @@ class SpatialData:
             # TODO: check throwing error
             if not all(element_name in element_names for element_name in regions):
                 warnings.warn(
-                    "The table is annotating elements not present in the SpatialData object", UserWarning, stacklevel=2
+                    "The table is annotating an/some element(s) not present in the SpatialData object",
+                    UserWarning,
+                    stacklevel=2,
                 )
 
     @staticmethod
@@ -1308,7 +1310,7 @@ class SpatialData:
         """
         Generate elements within the SpatialData object.
 
-        This method generates elements in the SpatialData object (images, labels, points, shapes and tables
+        This method generates elements in the SpatialData object (images, labels, points, shapes and tables)
 
         Returns
         -------
