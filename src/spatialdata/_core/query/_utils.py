@@ -6,8 +6,8 @@ import geopandas as gpd
 from anndata import AnnData
 from xarray import DataArray
 
-from spatialdata import SpatialData
 from spatialdata._core._elements import Tables
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 
