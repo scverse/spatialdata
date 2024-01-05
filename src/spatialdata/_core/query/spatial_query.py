@@ -8,7 +8,6 @@ from typing import Any, Callable
 import dask.array as da
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
@@ -18,8 +17,7 @@ from spatial_image import SpatialImage
 from tqdm import tqdm
 from xarray import DataArray
 
-from spatialdata._core._elements import Tables
-from spatialdata._core.query._utils import get_bounding_box_corners
+from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
@@ -250,8 +248,6 @@ def _(
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
@@ -267,12 +263,7 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    if filter_table:
-        tables: dict[str, AnnData] | Tables = {
-            name: _filter_table_by_elements(table, new_elements) for name, table in sdata.tables.items()
-        }
-    else:
-        tables = sdata.tables
+    tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
     return SpatialData(**new_elements, tables=tables)
 
@@ -577,7 +568,6 @@ def _polygon_query(
     labels: bool,
 ) -> SpatialData:
     from spatialdata._core.query._utils import circles_to_polygons
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
     from spatialdata.models import (
         PointsModel,
         ShapesModel,
@@ -647,13 +637,9 @@ def _polygon_query(
                 "issue and we will prioritize the implementation."
             )
 
-    if filter_table:
-        elements = {"shapes": new_shapes, "points": new_points}
-        tables: dict[str, AnnData] | Tables = {
-            name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()
-        }
-    else:
-        tables = sdata.tables
+    elements = {"shapes": new_shapes, "points": new_points}
+    tables = _get_filtered_or_unfiltered_tables(filter_table, elements, sdata)
+
     return SpatialData(shapes=new_shapes, points=new_points, images=new_images, tables=tables)
 
 
@@ -679,6 +665,9 @@ def polygon_query(
         The polygon (or list of polygons) to query by
     target_coordinate_system
         The coordinate system of the polygon
+    filter_table
+        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
+        SpatialData object of the query.
     shapes
         Whether to filter shapes
     points
@@ -695,8 +684,6 @@ def polygon_query(
     making this function more general and ergonomic.
 
     """
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
-
     # adjust coordinate transformation (this implementation can be made faster)
     sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
 
@@ -758,12 +745,8 @@ def polygon_query(
         vv = pd.concat(v)
         vv = vv[~vv.index.duplicated(keep="first")]
         geodataframes[k] = vv
-    if filter_table:
-        elements = {"shapes": geodataframes}
-        tables: dict[str, AnnData] | Tables = {
-            name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()
-        }
-    else:
-        tables = sdata.tables
+
+    elements = {"shapes": geodataframes}
+    tables = _get_filtered_or_unfiltered_tables(filter_table, elements, sdata)
 
     return SpatialData(shapes=geodataframes, tables=tables)

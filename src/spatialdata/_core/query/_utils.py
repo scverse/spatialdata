@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 import geopandas as gpd
+from anndata import AnnData
 from xarray import DataArray
 
+from spatialdata import SpatialData
+from spatialdata._core._elements import Tables
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 
@@ -78,3 +83,35 @@ def get_bounding_box_corners(
         ],
         coords={"corner": range(8), "axis": list(axes)},
     )
+
+
+def _get_filtered_or_unfiltered_tables(
+    filter_table: bool, elements: dict[str, Any], sdata: SpatialData
+) -> dict[str, AnnData] | Tables:
+    """
+    Get the tables in a SpatialData object.
+
+    The tables of the SpatialData object can either be filtered to only include the tables that annotate an element in
+    elements or all tables are returned.
+
+    Parameters
+    ----------
+    filter_table
+        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
+        SpatialData object of the query.
+    elements
+        A dictionary containing the elements to use for filtering the tables.
+    sdata
+        The SpatialData object that contains the tables to filter.
+
+    Returns
+    -------
+    A dictionary containing the filtered or unfiltered tables based on the value of the 'filter_table' parameter.
+
+    """
+    if filter_table:
+        from spatialdata._core.query.relational_query import _filter_table_by_elements
+
+        return {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
+
+    return sdata.tables
