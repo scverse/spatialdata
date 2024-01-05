@@ -266,9 +266,9 @@ class SpatialData:
         """
         Set the SpatialElement annotation target of an AnnData table.
 
-        This method sets the target element for the table annotation in the provided `table` object based on the
-        specified parameters. It updates the creates the `attrs` dictionary for `table.uns` and only after validation
-        that the regions are present in the region_key column of table.obs updates the annotation metadata of the table.
+        This method sets the target annotation element of a table  based on the specified parameters. It creates the
+        `attrs` dictionary for `table.uns` and only after validation that the regions are present in the region_key
+        column of table.obs updates the annotation metadata of the table.
 
         Parameters
         ----------
