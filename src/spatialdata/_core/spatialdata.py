@@ -605,7 +605,7 @@ class SpatialData:
                 raise ValueError(
                     "The file path specified is a parent directory of one or more files used for backing for one or "
                     "more elements in the SpatialData object. You can either load every element of the SpatialData "
-                    "object in memory, either save to a different file path."
+                    "object in memory, or save the current spatialdata object to a different path."
                 )
 
             # old code to support overwriting the backing file
