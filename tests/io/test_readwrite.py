@@ -248,12 +248,25 @@ class TestReadWrite:
             # Should not raise "The file path specified is the same as the one used for backing."
             full_sdata.write(f, overwrite=True)
 
+    def test_not_overwrite_files_without_backed_data_but_with_dask_backed_data(self, full_sdata, points):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = os.path.join(tmpdir, "data.zarr")
+            points.write(f)
+            points2 = SpatialData.read(f)
+            p = points2["points_0"]
+            full_sdata["points_0"] = p
+            with pytest.raises(
+                ValueError,
+                match="The file path specified is a parent directory of one or more files used for backing for one or ",
+            ):
+                full_sdata.write(f, overwrite=True)
+
     def test_overwrite_files_with_backed_data(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
             full_sdata.write(f)
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="The file path specified is the same as the one used for backing."):
                 full_sdata.write(f, overwrite=True)
 
         # support for overwriting backed sdata has been temporarily removed

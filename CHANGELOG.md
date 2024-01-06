@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.0.15] - tbd
+## [0.1.0] - tbd
+
+#### Minor
+
+-   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
 
 ### Added
 

@@ -571,6 +571,7 @@ class SpatialData:
         consolidate_metadata: bool = True,
     ) -> None:
         from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+        from spatialdata._io._utils import get_dask_backing_files
 
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
@@ -583,6 +584,7 @@ class SpatialData:
         # old code to support overwriting the backing file
         # target_path = None
         # tmp_zarr_file = None
+
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r") is None:
                 raise ValueError(
@@ -590,7 +592,7 @@ class SpatialData:
                     "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
                     "data loss."
                 )
-            if not overwrite and str(self.path) != str(file_path):
+            if not overwrite:
                 raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
             if self.is_backed() and str(self.path) == str(file_path):
                 raise ValueError(
@@ -599,6 +601,13 @@ class SpatialData:
                     "We are discussing how to support this use case in the future, if you would like us to "
                     "support it please leave a comment on https://github.com/scverse/spatialdata/pull/138"
                 )
+            if any(Path(fp).resolve().is_relative_to(file_path.resolve()) for fp in get_dask_backing_files(self)):
+                raise ValueError(
+                    "The file path specified is a parent directory of one or more files used for backing for one or "
+                    "more elements in the SpatialData object. You can either load every element of the SpatialData "
+                    "object in memory, either save to a different file path."
+                )
+
             # old code to support overwriting the backing file
             # else:
             #     target_path = tempfile.TemporaryDirectory()
