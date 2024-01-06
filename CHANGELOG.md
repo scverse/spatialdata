@@ -8,9 +8,15 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.0.15] - tbd
+## [0.0.x] - tbd
 
 ### Added
+
+### Fixed
+
+#### Minor
+
+-   refactored data loader for deep learning
 
 ## [0.0.14] - 2023-10-11
 
