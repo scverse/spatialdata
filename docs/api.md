@@ -29,6 +29,7 @@ Operations on `SpatialData` objects.
     get_extent
     match_table_to_element
     concatenate
+    transform
     rasterize
     aggregate
 ```

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.0] - tbd
 
-#### Minor
+### Minor
 
 -   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
 
