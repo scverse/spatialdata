@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning][].
 
 ### Added
 
+### Fixed
+
+#### Minor
+
+-   refactored data loader for deep learning
+
 ## [0.0.14] - 2023-10-11
 
 ### Added
