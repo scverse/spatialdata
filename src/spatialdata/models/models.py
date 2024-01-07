@@ -18,7 +18,7 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
-from pandas.api.types import is_categorical_dtype
+from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -470,7 +470,7 @@ class PointsModel:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-            if not is_categorical_dtype(data[feature_key]):
+            if not isinstance(data[feature_key], CategoricalDtype):
                 logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
 
     @singledispatchmethod
@@ -624,7 +624,7 @@ class PointsModel:
             #  Here we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known.
             # It also just changes the state of the series, so it is not a big deal.
-            if is_categorical_dtype(data[c]) and not data[c].cat.known:
+            if isinstance(data[c], CategoricalDtype) and not data[c].cat.known:
                 try:
                     data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
                 except ValueError:
@@ -729,7 +729,7 @@ class TableModel:
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-        if not is_categorical_dtype(adata.obs[region_key]):
+        if not isinstance(adata.obs[region_key], CategoricalDtype):
             warnings.warn(
                 f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
             )

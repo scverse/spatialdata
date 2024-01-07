@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -25,9 +25,6 @@ from spatialdata.transformations import (
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
-
-if TYPE_CHECKING:
-    pass
 
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
@@ -231,3 +228,20 @@ def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
     new_attrs = deepcopy(gdf.attrs)
     new_gdf.attrs = new_attrs
     return new_gdf
+
+
+def _error_message_add_element() -> None:
+    raise RuntimeError(
+        "The functions add_image(), add_labels(), add_points() and add_shapes() have been removed in favor of "
+        "dict-like access to the elements. Please use the following syntax to add an element:\n"
+        "\n"
+        '\tsdata.images["image_name"] = image\n'
+        '\tsdata.labels["labels_name"] = labels\n'
+        "\t...\n"
+        "\n"
+        "The new syntax does not automatically updates the disk storage, so you need to call sdata.write() when "
+        "the in-memory object is ready to be saved.\n"
+        "To save only a new specific element to an existing Zarr storage please use the functions write_image(), "
+        "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
+        "ergonomic in a follow up PR."
+    )
