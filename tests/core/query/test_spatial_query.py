@@ -102,23 +102,46 @@ def test_bounding_box_request_wrong_coordinate_order():
         )
 
 
-def test_bounding_box_points():
+@pytest.mark.parametrize("is_3d", [True, False])
+@pytest.mark.parametrize("is_bb_3d", [True, False])
+def test_bounding_box_points(is_3d: bool, is_bb_3d: bool):
     """test the points bounding box_query"""
-    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
-    original_x = np.array(points_element["x"])
-    original_y = np.array(points_element["y"])
+    data_x = np.array([10, 20, 20])
+    data_y = np.array([10, 20, 30])
+    data_z = np.array([100, 200, 300])
+
+    data = np.stack((data_x, data_y), axis=1)
+    if is_3d:
+        data = np.hstack((data, data_z.reshape(-1, 1)))
+    points_element = _make_points(data)
+
+    original_x = points_element["x"]
+    original_y = points_element["y"]
+    if is_3d:
+        original_z = points_element["z"]
+
+    if is_bb_3d:
+        _min_coordinate = np.array([18, 25, 250])
+        _max_coordinate = np.array([22, 35, 350])
+        _axes = ("x", "y", "z")
+    else:
+        _min_coordinate = np.array([18, 25])
+        _max_coordinate = np.array([22, 35])
+        _axes = ("x", "y")
 
     points_result = bounding_box_query(
         points_element,
-        axes=("x", "y"),
-        min_coordinate=np.array([18, 25]),
-        max_coordinate=np.array([22, 35]),
+        axes=_axes,
+        min_coordinate=_min_coordinate,
+        max_coordinate=_max_coordinate,
         target_coordinate_system="global",
     )
 
     # Check that the correct point was selected
     np.testing.assert_allclose(points_result["x"].compute(), [20])
     np.testing.assert_allclose(points_result["y"].compute(), [30])
+    if is_3d:
+        np.testing.assert_allclose(points_result["z"].compute(), [300])
 
     # result should be valid points element
     PointsModel.validate(points_result)
@@ -126,6 +149,8 @@ def test_bounding_box_points():
     # original element should be unchanged
     np.testing.assert_allclose(points_element["x"].compute(), original_x)
     np.testing.assert_allclose(points_element["y"].compute(), original_y)
+    if is_3d:
+        np.testing.assert_allclose(points_element["z"].compute(), original_z)
 
 
 def test_bounding_box_points_no_points():
@@ -148,7 +173,7 @@ def test_bounding_box_points_no_points():
 @pytest.mark.parametrize("is_labels", [True, False])
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
-def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
+def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
         # labels cannot have multiple channels, let's ignore this combination of parameters
@@ -310,14 +335,6 @@ def test_bounding_box_filter_table():
     )
     assert len(queried0.table) == 1
     assert len(queried1.table) == 3
-
-
-def test_3d_bounding_box_2d_raster():
-    pass
-
-
-def test_2d_bounding_box_3d_points():
-    pass
 
 
 # ----------------- test polygon query -----------------
