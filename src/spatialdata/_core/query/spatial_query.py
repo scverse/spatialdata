@@ -637,7 +637,7 @@ def parse_polygons_for_query(polygons: Polygon | list[Polygon] | GeoDataFrame) -
         polygons = GeoDataFrame(geometry=polygons)
     if isinstance(polygons, GeoDataFrame):
         values_geotypes = list(polygons.geometry.geom_type.unique())
-        extra_geometries = set(values_geotypes).difference("Polygon", "MultiPolygon")
+        extra_geometries = set(values_geotypes).difference({"Polygon", "MultiPolygon"})
         if len(extra_geometries) > 0:
             raise TypeError(
                 "polygon_query() does not support geometries other than Polygon/MultiPolygon: " + str(extra_geometries)
@@ -713,9 +713,8 @@ def _(
     polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
     target_coordinate_system: str,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
-    # TODO: for row of the dataframe
     polygons = parse_polygons_for_query(polygons)
-    min_x, min_y, max_x, max_y = polygons.bounds
+    min_x, min_y, max_x, max_y = polygons.bounds.values.flatten().tolist()
     return bounding_box_query(
         image,
         min_coordinate=[min_x, min_y],
