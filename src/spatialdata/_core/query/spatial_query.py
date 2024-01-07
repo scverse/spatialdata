@@ -7,19 +7,16 @@ from typing import Any, Callable
 
 import dask.array as da
 import numpy as np
-import pandas as pd
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
-from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
-from tqdm import tqdm
 from xarray import DataArray
 
 from spatialdata._core.query._utils import get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
@@ -100,6 +97,69 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
 
     return intrinsic_bounding_box_corners, intrinsic_axes
+
+
+def _get_axes_of_tranformation(
+    element: SpatialElement, target_coordinate_system: str
+) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
+    """
+    Get the transformation (ignoring c) from the element's intrinsic coordinate system to the query coordinate space.
+
+    Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
+    transformation
+
+    Parameters
+    ----------
+    element
+    target_coordinate_system
+
+    Returns
+    -------
+    m_without_c
+        The transformation from the element's intrinsic coordinate system to the query coordinate space, without the
+        "c" axis.
+    input_axes_without_c
+        The axes of the element's intrinsic coordinate system, without the "c" axis.
+    output_axes_without_c
+        The axes of the query coordinate system, without the "c" axis.
+
+    """
+    from spatialdata.transformations import get_transformation
+
+    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
+    assert isinstance(transform_to_query_space, BaseTransformation)
+    m = _get_affine_for_element(element, transform_to_query_space)
+    input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
+    output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
+    m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+    return m_without_c, input_axes_without_c, output_axes_without_c
+
+
+def _adjust_bounding_box_to_real_axes(
+    axes: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    output_axes_without_c: tuple[str, ...],
+) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
+    """Adjust the bounding box to the real axes of the transformation."""
+    if set(axes) != set(output_axes_without_c):
+        axes_only_in_bb = set(axes) - set(output_axes_without_c)
+        axes_only_in_output = set(output_axes_without_c) - set(axes)
+
+        # let's remove from the bounding box whose axes that are not in the output axes
+        indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
+        axes = tuple([ax for ax in axes if ax not in axes_only_in_bb])
+        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
+        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
+
+        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
+        # with a huge range
+        for ax in axes_only_in_output:
+            axes = axes + (ax,)
+            M = np.finfo(np.float32).max - 1
+            min_coordinate = np.append(min_coordinate, -M)
+            max_coordinate = np.append(max_coordinate, M)
+    return axes, min_coordinate, max_coordinate
 
 
 @dataclass(frozen=True)
@@ -223,10 +283,11 @@ def bounding_box_query(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
+    filter_table: bool = True,
     **kwargs: Any,
 ) -> SpatialElement | SpatialData | None:
     """
-    Perform a bounding box query on the SpatialData object.
+    Query a SpatialData object or SpatialElement within a bounding box.
 
     Parameters
     ----------
@@ -244,8 +305,8 @@ def bounding_box_query(
 
     Returns
     -------
-    The SpatialData object containing the requested data.
-    Elements with no valid data are omitted.
+    The SpatialData object or SpatialElement containing the requested data.
+    Eventual empty Elements are omitted by the SpatialData object.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -276,71 +337,12 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
+    table = (
+        _filter_table_by_elements(sdata.table, new_elements)
+        if filter_table and sdata.table is not None
+        else sdata.table
+    )
     return SpatialData(**new_elements, table=table)
-
-
-def _get_axes_of_tranformation(
-    element: SpatialElement, target_coordinate_system: str
-) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
-    """
-    Get the transformation (ignoring c) from the element's intrinsic coordinate system to the query coordinate space.
-
-    Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
-    transformation
-
-    Parameters
-    ----------
-    element
-    target_coordinate_system
-
-    Returns
-    -------
-    m_without_c
-        The transformation from the element's intrinsic coordinate system to the query coordinate space, without the
-        "c" axis.
-    input_axes_without_c
-        The axes of the element's intrinsic coordinate system, without the "c" axis.
-    output_axes_without_c
-        The axes of the query coordinate system, without the "c" axis.
-
-    """
-    from spatialdata.transformations import get_transformation
-
-    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
-    assert isinstance(transform_to_query_space, BaseTransformation)
-    m = _get_affine_for_element(element, transform_to_query_space)
-    input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
-    output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
-    m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
-    return m_without_c, input_axes_without_c, output_axes_without_c
-
-
-def _adjust_bounding_box_to_real_axes(
-    axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
-    output_axes_without_c: tuple[str, ...],
-) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
-    """Adjust the bounding box to the real axes of the transformation."""
-    if set(axes) != set(output_axes_without_c):
-        axes_only_in_bb = set(axes) - set(output_axes_without_c)
-        axes_only_in_output = set(output_axes_without_c) - set(axes)
-
-        # let's remove from the bounding box whose axes that are not in the output axes
-        indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
-        axes = tuple([ax for ax in axes if ax not in axes_only_in_bb])
-        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
-        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
-
-        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
-        # with a huge range
-        for ax in axes_only_in_output:
-            axes = axes + (ax,)
-            M = np.finfo(np.float32).max - 1
-            min_coordinate = np.append(min_coordinate, -M)
-            max_coordinate = np.append(max_coordinate, M)
-    return axes, min_coordinate, max_coordinate
 
 
 @bounding_box_query.register(SpatialImage)
@@ -356,7 +358,6 @@ def _(
 
     Notes
     -----
-    _____
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
@@ -616,196 +617,321 @@ def _(
     return queried
 
 
-def _polygon_query(
-    sdata: SpatialData,
-    polygon: Polygon,
-    target_coordinate_system: str,
-    filter_table: bool,
-    shapes: bool,
-    points: bool,
-    images: bool,
-    labels: bool,
-) -> SpatialData:
-    from spatialdata._core.query._utils import circles_to_polygons
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
-    from spatialdata.models import (
-        PointsModel,
-        ShapesModel,
-        points_dask_dataframe_to_geopandas,
-        points_geopandas_to_dask_dataframe,
-    )
-    from spatialdata.transformations import get_transformation, set_transformation
-
-    new_shapes = {}
-    if shapes:
-        for shapes_name, s in sdata.shapes.items():
-            buffered = circles_to_polygons(s) if ShapesModel.RADIUS_KEY in s.columns else s
-
-            if "__old_index" in buffered.columns:
-                assert np.all(s["__old_index"] == buffered.index)
-            else:
-                buffered["__old_index"] = buffered.index
-            indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
-            if np.sum(indices) == 0:
-                raise ValueError("we expect at least one shape")
-            queried_shapes = s[indices]
-            queried_shapes.index = buffered[indices]["__old_index"]
-            queried_shapes.index.name = None
-            del buffered["__old_index"]
-            if "__old_index" in queried_shapes.columns:
-                del queried_shapes["__old_index"]
-            transformation = get_transformation(buffered, target_coordinate_system)
-            queried_shapes = ShapesModel.parse(queried_shapes)
-            set_transformation(queried_shapes, transformation, target_coordinate_system)
-            new_shapes[shapes_name] = queried_shapes
-
-    new_points = {}
-    if points:
-        for points_name, p in sdata.points.items():
-            points_gdf = points_dask_dataframe_to_geopandas(p, suppress_z_warning=True)
-            indices = points_gdf.geometry.intersects(polygon)
-            if np.sum(indices) == 0:
-                raise ValueError("we expect at least one point")
-            queried_points = points_gdf[indices]
-            ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
-            transformation = get_transformation(p, target_coordinate_system)
-            if "z" in ddf.columns:
-                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
-            else:
-                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
-            set_transformation(ddf, transformation, target_coordinate_system)
-            new_points[points_name] = ddf
-
-    new_images = {}
-    if images:
-        for images_name, im in sdata.images.items():
-            min_x, min_y, max_x, max_y = polygon.bounds
-            cropped = bounding_box_query(
-                im,
-                min_coordinate=[min_x, min_y],
-                max_coordinate=[max_x, max_y],
-                axes=("x", "y"),
-                target_coordinate_system=target_coordinate_system,
-            )
-            new_images[images_name] = cropped
-    if labels:
-        for labels_name, l in sdata.labels.items():
-            _ = labels_name
-            _ = l
-            raise NotImplementedError(
-                "labels=True is not implemented yet. If you encounter this error please open an "
-                "issue and we will prioritize the implementation."
-            )
-
-    if filter_table and sdata.table is not None:
-        table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
-    else:
-        table = sdata.table
-    return SpatialData(shapes=new_shapes, points=new_points, images=new_images, table=table)
-
-
-# this function is currently excluded from the API documentation. TODO: add it after the refactoring
-def polygon_query(
-    sdata: SpatialData,
-    polygons: Polygon | list[Polygon],
-    target_coordinate_system: str,
-    filter_table: bool = True,
-    shapes: bool = True,
-    points: bool = True,
-    images: bool = True,
-    labels: bool = True,
-) -> SpatialData:
+def parse_polygons_for_query(polygons: Polygon | list[Polygon] | GeoDataFrame) -> GeoDataFrame:
     """
-    Query a spatial data object by a polygon, filtering shapes and points.
+    Parse a polygon or list of polygons into a GeoDataFrame of Polygons or MultiPolygons.
 
     Parameters
     ----------
-    sdata
-        The SpatialData object to query
-    polygon
-        The polygon (or list of polygons) to query by
-    target_coordinate_system
-        The coordinate system of the polygon
-    shapes
-        Whether to filter shapes
-    points
-        Whether to filter points
+    polygons
+        The polygon (or list/GeoDataFrame of polygons) to query by
 
     Returns
     -------
-    The queried SpatialData object with filtered shapes and points.
-
-    Notes
-    -----
-    This function will be refactored to be more general.
-    The table is not filtered by this function, but is passed as is, this will also changed during the refactoring
-    making this function more general and ergonomic.
-
+    A GeoDataFrame containing the polygons, ensuring that the geometry column is made of
+    Polygon/MultiPolygon.
     """
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
-
-    # adjust coordinate transformation (this implementation can be made faster)
-    sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
-
     if isinstance(polygons, Polygon):
         polygons = [polygons]
-
-    if len(polygons) == 1:
-        return _polygon_query(
-            sdata=sdata,
-            polygon=polygons[0],
-            target_coordinate_system=target_coordinate_system,
-            filter_table=filter_table,
-            shapes=shapes,
-            points=points,
-            images=images,
-            labels=labels,
-        )
-    # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
-    #  in a loop as done preliminarily here
-    if points or images or labels:
-        logger.warning(
-            "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
-            'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
-            "you need this implementation please open an issue on GitHub."
-        )
-        points = False
-        images = False
-        labels = False
-
-    sdatas = []
-    for polygon in tqdm(polygons):
-        try:
-            # not filtering now, we filter below
-            queried_sdata = _polygon_query(
-                sdata=sdata,
-                polygon=polygon,
-                target_coordinate_system=target_coordinate_system,
-                filter_table=False,
-                shapes=shapes,
-                points=points,
-                images=images,
-                labels=labels,
+    if isinstance(polygons, list):
+        polygons = GeoDataFrame(geometry=polygons)
+    if isinstance(polygons, GeoDataFrame):
+        values_geotypes = list(polygons.geometry.geom_type.unique())
+        extra_geometries = set(values_geotypes).difference("Polygon", "MultiPolygon")
+        if len(extra_geometries) > 0:
+            raise TypeError(
+                "polygon_query() does not support geometries other than Polygon/MultiPolygon: " + str(extra_geometries)
             )
-            sdatas.append(queried_sdata)
-        except ValueError as e:
-            if str(e) != "we expect at least one shape":
-                raise e
-            # print("skipping", end="")
-    geodataframe_pieces: dict[str, list[GeoDataFrame]] = {}
+    return polygons
 
-    for sdata in sdatas:
-        for shapes_name, shapes in sdata.shapes.items():
-            if shapes_name not in geodataframe_pieces:
-                geodataframe_pieces[shapes_name] = []
-            geodataframe_pieces[shapes_name].append(shapes)
 
-    geodataframes = {}
-    for k, v in geodataframe_pieces.items():
-        vv = pd.concat(v)
-        vv = vv[~vv.index.duplicated(keep="first")]
-        geodataframes[k] = vv
+@singledispatch
+def polygon_query(
+    element: SpatialElement | SpatialData,
+    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    target_coordinate_system: str,
+    filter_table: bool = True,
+) -> SpatialElement | SpatialData | None:
+    """
+    Query a SpatialData object or a SpatialElement by a polygon or list of polygons.
 
-    table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
+    Parameters
+    ----------
+    element
+        The SpatialElement or SpatialData object to query.
+    polygons
+        The polygon (or list/GeoDataFrame of polygons/multipolygons) to query by.
+    target_coordinate_system
+        The coordinate system of the polygon(s).
+    filter_table
+        If `True`, the table is filtered to only contain rows that are annotating regions
+        contained within the query polygon(s).
 
-    return SpatialData(shapes=geodataframes, table=table)
+    Returns
+    -------
+    The queried SpatialData object or SpatialElement containing the requested data.
+    Eventual empty Elements are omitted by the SpatialData object.
+    """
+    raise RuntimeError("Unsupported type for polygon_query: " + str(type(element)) + ".")
+
+
+@polygon_query.register(SpatialData)
+def _(
+    sdata: SpatialData,
+    polygons: Polygon | list[Polygon] | GeoDataFrame,
+    target_coordinate_system: str,
+    filter_table: bool = True,
+) -> SpatialData:
+    from spatialdata._core.query.relational_query import _filter_table_by_elements
+
+    polygons = parse_polygons_for_query(polygons)
+
+    new_elements = {}
+    for element_type in ["points", "images", "labels", "shapes"]:
+        elements = getattr(sdata, element_type)
+        queried_elements = _dict_query_dispatcher(
+            elements,
+            polygon_query,
+            polygons=polygons,
+            target_coordinate_system=target_coordinate_system,
+            polygons_already_validated=True,
+        )
+        new_elements[element_type] = queried_elements
+
+    table = (
+        _filter_table_by_elements(sdata.table, new_elements)
+        if filter_table and sdata.table is not None
+        else sdata.table
+    )
+    return SpatialData(**new_elements, table=table)
+
+
+@polygon_query.register(SpatialImage)
+@polygon_query.register(MultiscaleSpatialImage)
+def _(
+    image: SpatialImage | MultiscaleSpatialImage,
+    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    target_coordinate_system: str,
+) -> SpatialImage | MultiscaleSpatialImage | None:
+    # TODO: for row of the dataframe
+    polygons = parse_polygons_for_query(polygons)
+    min_x, min_y, max_x, max_y = polygons.bounds
+    return bounding_box_query(
+        image,
+        min_coordinate=[min_x, min_y],
+        max_coordinate=[max_x, max_y],
+        axes=("x", "y"),
+        target_coordinate_system=target_coordinate_system,
+    )
+
+
+@bounding_box_query.register(DaskDataFrame)
+def _(
+    points: DaskDataFrame,
+    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    target_coordinate_system: str,
+) -> DaskDataFrame | None:
+    pass
+
+
+@bounding_box_query.register(GeoDataFrame)
+def _(
+    element: GeoDataFrame,
+    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    target_coordinate_system: str,
+) -> GeoDataFrame | None:
+    pass
+
+
+# def _polygon_query(
+#     sdata: SpatialData,
+#     polygon: Polygon,
+#     target_coordinate_system: str,
+#     filter_table: bool,
+#     shapes: bool,
+#     points: bool,
+#     images: bool,
+#     labels: bool,
+# ) -> SpatialData:
+#     from spatialdata._core.query._utils import circles_to_polygons
+#     from spatialdata._core.query.relational_query import _filter_table_by_elements
+#     from spatialdata.models import (
+#         PointsModel,
+#         ShapesModel,
+#         points_dask_dataframe_to_geopandas,
+#         points_geopandas_to_dask_dataframe,
+#     )
+#     from spatialdata.transformations import get_transformation, set_transformation
+#
+#     new_shapes = {}
+#     if shapes:
+#         for shapes_name, s in sdata.shapes.items():
+#             buffered = circles_to_polygons(s) if ShapesModel.RADIUS_KEY in s.columns else s
+#
+#             if "__old_index" in buffered.columns:
+#                 assert np.all(s["__old_index"] == buffered.index)
+#             else:
+#                 buffered["__old_index"] = buffered.index
+#             indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
+#             if np.sum(indices) == 0:
+#                 raise ValueError("we expect at least one shape")
+#             queried_shapes = s[indices]
+#             queried_shapes.index = buffered[indices]["__old_index"]
+#             queried_shapes.index.name = None
+#             del buffered["__old_index"]
+#             if "__old_index" in queried_shapes.columns:
+#                 del queried_shapes["__old_index"]
+#             transformation = get_transformation(buffered, target_coordinate_system)
+#             queried_shapes = ShapesModel.parse(queried_shapes)
+#             set_transformation(queried_shapes, transformation, target_coordinate_system)
+#             new_shapes[shapes_name] = queried_shapes
+#
+#     new_points = {}
+#     if points:
+#         for points_name, p in sdata.points.items():
+#             points_gdf = points_dask_dataframe_to_geopandas(p, suppress_z_warning=True)
+#             indices = points_gdf.geometry.intersects(polygon)
+#             if np.sum(indices) == 0:
+#                 raise ValueError("we expect at least one point")
+#             queried_points = points_gdf[indices]
+#             ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
+#             transformation = get_transformation(p, target_coordinate_system)
+#             if "z" in ddf.columns:
+#                 ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+#             else:
+#                 ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+#             set_transformation(ddf, transformation, target_coordinate_system)
+#             new_points[points_name] = ddf
+#
+#     new_images = {}
+#     if images:
+#         for images_name, im in sdata.images.items():
+#             min_x, min_y, max_x, max_y = polygon.bounds
+#             cropped = bounding_box_query(
+#                 im,
+#                 min_coordinate=[min_x, min_y],
+#                 max_coordinate=[max_x, max_y],
+#                 axes=("x", "y"),
+#                 target_coordinate_system=target_coordinate_system,
+#             )
+#             new_images[images_name] = cropped
+#     if labels:
+#         for labels_name, l in sdata.labels.items():
+#             _ = labels_name
+#             _ = l
+#             raise NotImplementedError(
+#                 "labels=True is not implemented yet. If you encounter this error please open an "
+#                 "issue and we will prioritize the implementation."
+#             )
+#
+#     if filter_table and sdata.table is not None:
+#         table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
+#     else:
+#         table = sdata.table
+#     return SpatialData(shapes=new_shapes, points=new_points, images=new_images, table=table)
+
+
+# def polygon_query(
+#     sdata: SpatialData,
+#     polygons: Polygon | list[Polygon],
+#     target_coordinate_system: str,
+#     filter_table: bool = True,
+#     shapes: bool = True,
+#     points: bool = True,
+#     images: bool = True,
+#     labels: bool = True,
+# ) -> SpatialData:
+#     """
+#     Query a spatial data object by a polygon, filtering shapes and points.
+#
+#     Parameters
+#     ----------
+#     sdata
+#         The SpatialData object to query
+#     polygon
+#         The polygon (or list of polygons) to query by
+#     target_coordinate_system
+#         The coordinate system of the polygon
+#     shapes
+#         Whether to filter shapes
+#     points
+#         Whether to filter points
+#
+#     Returns
+#     -------
+#     The queried SpatialData object with filtered shapes and points.
+#
+#     Notes
+#     -----
+#     This function will be refactored to be more general.
+#     The table is not filtered by this function, but is passed as is, this will also changed during the refactoring
+#     making this function more general and ergonomic.
+#
+#     """
+#     from spatialdata._core.query.relational_query import _filter_table_by_elements
+#
+#     # adjust coordinate transformation (this implementation can be made faster)
+#     sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
+#
+#     if isinstance(polygons, Polygon):
+#         polygons = [polygons]
+#
+#     if len(polygons) == 1:
+#         return _polygon_query(
+#             sdata=sdata,
+#             polygon=polygons[0],
+#             target_coordinate_system=target_coordinate_system,
+#             filter_table=filter_table,
+#             shapes=shapes,
+#             points=points,
+#             images=images,
+#             labels=labels,
+#         )
+#     # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
+#     #  in a loop as done preliminarily here
+#     if points or images or labels:
+#         logger.warning(
+#             "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
+#             'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
+#             "you need this implementation please open an issue on GitHub."
+#         )
+#         points = False
+#         images = False
+#         labels = False
+#
+#     sdatas = []
+#     for polygon in tqdm(polygons):
+#         try:
+#             # not filtering now, we filter below
+#             queried_sdata = _polygon_query(
+#                 sdata=sdata,
+#                 polygon=polygon,
+#                 target_coordinate_system=target_coordinate_system,
+#                 filter_table=False,
+#                 shapes=shapes,
+#                 points=points,
+#                 images=images,
+#                 labels=labels,
+#             )
+#             sdatas.append(queried_sdata)
+#         except ValueError as e:
+#             if str(e) != "we expect at least one shape":
+#                 raise e
+#             # print("skipping", end="")
+#     geodataframe_pieces: dict[str, list[GeoDataFrame]] = {}
+#
+#     for sdata in sdatas:
+#         for shapes_name, shapes in sdata.shapes.items():
+#             if shapes_name not in geodataframe_pieces:
+#                 geodataframe_pieces[shapes_name] = []
+#             geodataframe_pieces[shapes_name].append(shapes)
+#
+#     geodataframes = {}
+#     for k, v in geodataframe_pieces.items():
+#         vv = pd.concat(v)
+#         vv = vv[~vv.index.duplicated(keep="first")]
+#         geodataframes[k] = vv
+#
+#     table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
+#
+#     return SpatialData(shapes=geodataframes, table=table)

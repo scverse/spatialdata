@@ -16,6 +16,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
+from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes
@@ -1209,6 +1210,39 @@ class QueryManager:
             axes=axes,
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
+        )
+
+    def polygon(
+        self,
+        polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+        target_coordinate_system: str,
+        filter_table: bool = True,
+    ) -> SpatialData:
+        """
+        Perform a polygon query on the SpatialData object.
+
+        Parameters
+        ----------
+        polygons
+            The polygon (or list/GeoDataFrame of polygons/multipolygons) to query by.
+        target_coordinate_system
+            The coordinate system of the polygon(s).
+        filter_table
+            If `True`, the table is filtered to only contain rows that are annotating regions
+            contained within the query polygon(s).
+
+        Returns
+        -------
+        The SpatialData object containing the requested data.
+        Elements with no valid data are omitted.
+        """
+        from spatialdata._core.query.spatial_query import polygon_query
+
+        return polygon_query(  # type: ignore[return-value]
+            self._sdata,
+            polygons=polygons,
             target_coordinate_system=target_coordinate_system,
             filter_table=filter_table,
         )
