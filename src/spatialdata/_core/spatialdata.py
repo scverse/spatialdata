@@ -1200,7 +1200,7 @@ class QueryManager:
 
     def polygon(
         self,
-        polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+        polygon: Polygon | MultiPolygon,
         target_coordinate_system: str,
         filter_table: bool = True,
     ) -> SpatialData:
@@ -1214,7 +1214,7 @@ class QueryManager:
 
         return polygon_query(  # type: ignore[return-value]
             self._sdata,
-            polygons=polygons,
+            polygon=polygon,
             target_coordinate_system=target_coordinate_system,
             filter_table=filter_table,
         )

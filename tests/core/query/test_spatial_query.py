@@ -133,7 +133,7 @@ def test_bounding_box_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bo
         if is_bb_3d:
             return
         polygon = Polygon([(18, 25), (18, 35), (22, 35), (22, 25)])
-        points_result = polygon_query(points_element, polygons=polygon, target_coordinate_system="global")
+        points_result = polygon_query(points_element, polygon=polygon, target_coordinate_system="global")
     else:
         points_result = bounding_box_query(
             points_element,
@@ -244,7 +244,7 @@ def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_b
                 return
             # make a triangle whose bounding box is the same as the bounding box specified with the query
             polygon = Polygon([(0, 5), (5, 5), (5, 10)])
-            image_result = polygon_query(image, polygons=polygon, target_coordinate_system="global")
+            image_result = polygon_query(image, polygon=polygon, target_coordinate_system="global")
         else:
             image_result = bounding_box_query(
                 image,
@@ -283,7 +283,7 @@ def test_bounding_box_polygons(with_polygon_query: bool):
         polygon = Polygon([(40, 40), (40, 100), (100, 100), (100, 40)])
         polygons_result = polygon_query(
             sd_polygons,
-            polygons=polygon,
+            polygon=polygon,
             target_coordinate_system="global",
         )
     else:
@@ -310,7 +310,7 @@ def test_bounding_box_circles(with_polygon_query: bool):
         polygon = Polygon([(40, 40), (40, 100), (100, 100), (100, 40)])
         circles_result = polygon_query(
             sd_circles,
-            polygons=polygon,
+            polygon=polygon,
             target_coordinate_system="global",
         )
     else:
@@ -342,8 +342,8 @@ def test_query_spatial_data(full_sdata):
     _assert_spatialdata_objects_seem_identical(result0, result2)
 
     polygon = Polygon([(2, 1), (2, 60), (40, 60), (40, 1)])
-    result3 = polygon_query(full_sdata, polygons=polygon, target_coordinate_system="global", filter_table=True)
-    result4 = full_sdata.query.polygon(polygons=polygon, target_coordinate_system="global", filter_table=True)
+    result3 = polygon_query(full_sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
+    result4 = full_sdata.query.polygon(polygon=polygon, target_coordinate_system="global", filter_table=True)
 
     _assert_spatialdata_objects_seem_identical(result0, result3)
     _assert_spatialdata_objects_seem_identical(result0, result4)
@@ -365,13 +365,13 @@ def test_query_filter_table(with_polygon_query: bool):
         polygon = Polygon([(15, 15), (15, 25), (25, 25), (25, 15)])
         queried0 = polygon_query(
             sdata,
-            polygons=polygon,
+            polygon=polygon,
             target_coordinate_system="global",
             filter_table=True,
         )
         queried1 = polygon_query(
             sdata,
-            polygons=polygon,
+            polygon=polygon,
             target_coordinate_system="global",
             filter_table=False,
         )
@@ -400,7 +400,7 @@ def test_query_filter_table(with_polygon_query: bool):
 def test_polygon_query_points(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     polygon = sdata["by_polygons"].geometry.iloc[0]
-    queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
+    queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global", shapes=False, points=True)
     points = queried["points"].compute()
     assert len(points) == 6
     assert len(queried.table) == 0
@@ -421,7 +421,7 @@ def test_polygon_query_shapes(sdata_query_aggregation):
 
     queried = polygon_query(
         values_sdata,
-        polygons=polygon,
+        polygon=polygon,
         target_coordinate_system="global",
         shapes=True,
         points=False,
@@ -431,14 +431,14 @@ def test_polygon_query_shapes(sdata_query_aggregation):
     assert len(queried.table) == 8
 
     queried = polygon_query(
-        values_sdata, polygons=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
+        values_sdata, polygon=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
     )
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
     assert len(queried.table) == 16
 
     queried = polygon_query(
-        values_sdata, polygons=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
+        values_sdata, polygon=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
@@ -466,7 +466,7 @@ def test_polygon_query_spatial_data(sdata_query_aggregation):
         table=sdata.table,
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
-    queried = polygon_query(values_sdata, polygons=polygon, target_coordinate_system="global", shapes=True, points=True)
+    queried = polygon_query(values_sdata, polygon=polygon, target_coordinate_system="global", shapes=True, points=True)
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
     assert len(queried["points"]) == 6

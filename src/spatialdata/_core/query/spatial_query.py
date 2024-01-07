@@ -103,10 +103,12 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     return intrinsic_bounding_box_corners, intrinsic_axes
 
 
-def _get_polygons_in_intrinsic_coordinates(
-    element: DaskDataFrame | GeoDataFrame, target_coordinate_system: str, polygons: GeoDataFrame
+def _get_polygon_in_intrinsic_coordinates(
+    element: DaskDataFrame | GeoDataFrame, target_coordinate_system: str, polygon: Polygon | MultiPolygon
 ) -> GeoDataFrame:
     from spatialdata._core.operations.transform import transform
+
+    polygon_gdf = ShapesModel.parse(GeoDataFrame(geometry=[polygon]))
 
     m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
         element, target_coordinate_system
@@ -118,9 +120,9 @@ def _get_polygons_in_intrinsic_coordinates(
     assert case in [1, 5]
 
     # we need to deal with the equivalent of _adjust_bounding_box_to_real_axes() to account for the fact that the
-    # intrinsic coordinate system of the points could be ('x', 'y', 'z'). The counter image of the polygons in such
+    # intrinsic coordinate system of the points could be ('x', 'y', 'z'). The counter image of the polygon in such
     # coordinate system could be not orthogonal to the 'z' axis; in such a case we would need to project the points to
-    # the plan in which the polygons live. Let's not handle this complexity and simply raise an error if the inverse
+    # the plan in which the polygon live. Let's not handle this complexity and simply raise an error if the inverse
     # transformation is mixing the 'z' axis with the other axes.
     sorted_input_axes_without_c = ("x", "y", "z")[: len(input_axes_without_c)]
     spatial_transform_bb_axes = Affine(
@@ -139,7 +141,7 @@ def _get_polygons_in_intrinsic_coordinates(
     inverse = spatial_transform_bb_axes.inverse()
     assert isinstance(inverse, Affine)
 
-    return transform(polygons, inverse)
+    return transform(polygon_gdf, inverse)
 
 
 def _get_axes_of_tranformation(
@@ -243,7 +245,7 @@ def _get_case_of_bounding_box_query(
 
     if case in [2, 3, 4]:
         # to implement case 2: we need to intersect the plane in the extrinsic coordinate system with the 3D bounding
-        # box. The vertices of this polygons needs to be transformed to the intrinsic coordinate system
+        # box. The vertices of this polygon needs to be transformed to the intrinsic coordinate system
         error_message = (
             f"This case is not supported (data with dimension {data_dim} but transformation with rank "
             f"{transform_dimension}. Please open a GitHub issue if you want to discuss a use case."
@@ -675,50 +677,21 @@ def _(
     return queried
 
 
-def parse_polygons_for_query(polygons: Polygon | list[Polygon] | GeoDataFrame) -> GeoDataFrame:
-    """
-    Parse a polygon or list of polygons into a GeoDataFrame of Polygons or MultiPolygons.
-
-    Parameters
-    ----------
-    polygons
-        The polygon (or list/GeoDataFrame of polygons) to query by
-
-    Returns
-    -------
-    A GeoDataFrame containing the polygons, ensuring that the geometry column is made of
-    Polygon/MultiPolygon.
-    """
-    if isinstance(polygons, Polygon):
-        polygons = [polygons]
-    if isinstance(polygons, list):
-        polygons = ShapesModel.parse(GeoDataFrame(geometry=polygons))
-    if isinstance(polygons, GeoDataFrame):
-        values_geotypes = list(polygons.geometry.geom_type.unique())
-        extra_geometries = set(values_geotypes).difference({"Polygon", "MultiPolygon"})
-        if len(extra_geometries) > 0:
-            raise TypeError(
-                "polygon_query() does not support geometries other than Polygon/MultiPolygon: " + str(extra_geometries)
-            )
-        ShapesModel.validate(polygons)
-    return polygons
-
-
 @singledispatch
 def polygon_query(
     element: SpatialElement | SpatialData,
-    polygons: Polygon | MultiPolygon,
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialElement | SpatialData | None:
     """
-    Query a SpatialData object or a SpatialElement by a polygon or multipolygon
+    Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
 
     Parameters
     ----------
     element
         The SpatialElement or SpatialData object to query.
-    polygons
+    polygon
         The polygon/multipolygon to query by.
     target_coordinate_system
         The coordinate system of the polygon/multipolygon.
@@ -743,13 +716,11 @@ def polygon_query(
 @polygon_query.register(SpatialData)
 def _(
     sdata: SpatialData,
-    polygons: Polygon | list[Polygon] | GeoDataFrame,
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
     from spatialdata._core.query.relational_query import _filter_table_by_elements
-
-    polygons = parse_polygons_for_query(polygons)
 
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
@@ -757,9 +728,8 @@ def _(
         queried_elements = _dict_query_dispatcher(
             elements,
             polygon_query,
-            polygons=polygons,
+            polygon=polygon,
             target_coordinate_system=target_coordinate_system,
-            polygons_already_validated=True,
         )
         new_elements[element_type] = queried_elements
 
@@ -775,12 +745,11 @@ def _(
 @polygon_query.register(MultiscaleSpatialImage)
 def _(
     image: SpatialImage | MultiscaleSpatialImage,
-    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
-    polygons = parse_polygons_for_query(polygons)
-    assert len(polygons) == 1, "Not implemented yet"
-    min_x, min_y, max_x, max_y = polygons.bounds.values.flatten().tolist()
+    gdf = GeoDataFrame(geometry=[polygon])
+    min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
     return bounding_box_query(
         image,
         min_coordinate=[min_x, min_y],
@@ -793,23 +762,19 @@ def _(
 @polygon_query.register(DaskDataFrame)
 def _(
     points: DaskDataFrame,
-    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
 ) -> DaskDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    polygons = parse_polygons_for_query(polygons)
-    polygons = _get_polygons_in_intrinsic_coordinates(points, target_coordinate_system, polygons)
+    polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
-    joined = polygons.sjoin(points_gdf)
-    assert len(joined.index.unique()) == 1, "only querying by one polygon currently supported"
-    assert len(polygons) == 1, "only querying by one polygon currently supported"
-    if np.sum(indices) == 0:
-        joined.iloc[0]
-        joined.iloc[1]
-        raise ValueError("we expect at least one point")
-    queried_points = points_gdf[indices]
+    joined = polygon_gdf.sjoin(points_gdf)
+    assert len(joined.index.unique()) == 1
+    if len(joined) == 0:
+        return None
+    queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
     if "z" in ddf.columns:
@@ -823,11 +788,12 @@ def _(
 @polygon_query.register(GeoDataFrame)
 def _(
     element: GeoDataFrame,
-    polygons: Polygon | MultiPolygon | list[Polygon | MultiPolygon] | GeoDataFrame,
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
 ) -> GeoDataFrame | None:
-    polygons = parse_polygons_for_query(polygons)
-    pass
+    # polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
+    # TODO: port old code
+    return None
 
 
 # def _polygon_query(
@@ -872,25 +838,10 @@ def _(
 #             queried_shapes = ShapesModel.parse(queried_shapes)
 #             set_transformation(queried_shapes, transformation, target_coordinate_system)
 #             new_shapes[shapes_name] = queried_shapes
-#
-#     new_points = {}
-#     if points:
-#         for points_name, p in sdata.points.items():
-#             points_gdf = points_dask_dataframe_to_geopandas(p, suppress_z_warning=True)
-#             indices = points_gdf.geometry.intersects(polygon)
-#             if np.sum(indices) == 0:
-#                 raise ValueError("we expect at least one point")
-#             queried_points = points_gdf[indices]
-#             ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
-#             transformation = get_transformation(p, target_coordinate_system)
-#             if "z" in ddf.columns:
-#                 ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
-#             else:
-#                 ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
-#             set_transformation(ddf, transformation, target_coordinate_system)
-#             new_points[points_name] = ddf
 
 
+# TODO: mostly code to be removed; instead of calling polygon_query on a list, merge the polygons in a multipolygon
+# tell that the function is going to be deprecated
 # def polygon_query(
 #     sdata: SpatialData,
 #     polygons: Polygon | list[Polygon],
