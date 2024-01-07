@@ -21,6 +21,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._utils import _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -820,22 +821,6 @@ class SpatialData:
 
         return read_zarr(file_path, selection=selection)
 
-    def _error_message_add_element(self) -> None:
-        raise RuntimeError(
-            "The functions add_image(), add_labels(), add_points() and add_shapes() have been removed in favor of "
-            "dict-like access to the elements. Please use the following syntax to add an element:\n"
-            "\n"
-            '\tsdata.images["image_name"] = image\n'
-            '\tsdata.labels["labels_name"] = labels\n'
-            "\t...\n"
-            "\n"
-            "The new syntax does not automatically updates the disk storage, so you need to call sdata.write() when "
-            "the in-memory object is ready to be saved.\n"
-            "To save only a new specific element to an existing Zarr storage please use the functions write_image(), "
-            "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
-            "ergonomic in a follow up PR."
-        )
-
     def add_image(
         self,
         name: str,
@@ -843,7 +828,7 @@ class SpatialData:
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
-        self._error_message_add_element()
+        _error_message_add_element()
 
     def add_labels(
         self,
@@ -852,7 +837,7 @@ class SpatialData:
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
-        self._error_message_add_element()
+        _error_message_add_element()
 
     def add_points(
         self,
@@ -860,7 +845,7 @@ class SpatialData:
         points: DaskDataFrame,
         overwrite: bool = False,
     ) -> None:
-        self._error_message_add_element()
+        _error_message_add_element()
 
     def add_shapes(
         self,
@@ -868,7 +853,7 @@ class SpatialData:
         shapes: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
-        self._error_message_add_element()
+        _error_message_add_element()
 
     @property
     def images(self) -> Images:
