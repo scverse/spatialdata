@@ -21,6 +21,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._utils import _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -819,6 +820,40 @@ class SpatialData:
         from spatialdata import read_zarr
 
         return read_zarr(file_path, selection=selection)
+
+    def add_image(
+        self,
+        name: str,
+        image: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_labels(
+        self,
+        name: str,
+        labels: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_points(
+        self,
+        name: str,
+        points: DaskDataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_shapes(
+        self,
+        name: str,
+        shapes: GeoDataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
 
     @property
     def images(self) -> Images:
