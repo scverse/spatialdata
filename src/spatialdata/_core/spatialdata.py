@@ -1184,24 +1184,8 @@ class QueryManager:
         """
         Perform a bounding box query on the SpatialData object.
 
-        Parameters
-        ----------
-        axes
-            The axes `min_coordinate` and `max_coordinate` refer to.
-        min_coordinate
-            The minimum coordinates of the bounding box.
-        max_coordinate
-            The maximum coordinates of the bounding box.
-        target_coordinate_system
-            The coordinate system the bounding box is defined in.
-        filter_table
-            If `True`, the table is filtered to only contain rows that are annotating regions
-            contained within the bounding box.
-
-        Returns
-        -------
-        The SpatialData object containing the requested data.
-        Elements with no valid data are omitted.
+        Please see
+        :func:`spatialdata.bounding_box_query` for the complete docstring.
         """
         from spatialdata._core.query.spatial_query import bounding_box_query
 
@@ -1223,20 +1207,8 @@ class QueryManager:
         """
         Perform a polygon query on the SpatialData object.
 
-        Parameters
-        ----------
-        polygons
-            The polygon (or list/GeoDataFrame of polygons/multipolygons) to query by.
-        target_coordinate_system
-            The coordinate system of the polygon(s).
-        filter_table
-            If `True`, the table is filtered to only contain rows that are annotating regions
-            contained within the query polygon(s).
-
-        Returns
-        -------
-        The SpatialData object containing the requested data.
-        Elements with no valid data are omitted.
+        Please see
+        :func:`spatialdata.polygon_query` for the complete docstring.
         """
         from spatialdata._core.query.spatial_query import polygon_query
 
