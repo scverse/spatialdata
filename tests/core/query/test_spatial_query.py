@@ -106,9 +106,9 @@ def test_bounding_box_request_wrong_coordinate_order():
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 def test_bounding_box_points(is_3d: bool, is_bb_3d: bool):
     """test the points bounding box_query"""
-    data_x = np.array([10, 20, 20])
-    data_y = np.array([10, 20, 30])
-    data_z = np.array([100, 200, 300])
+    data_x = np.array([10, 20, 20, 20])
+    data_y = np.array([10, 20, 30, 30])
+    data_z = np.array([100, 200, 200, 300])
 
     data = np.stack((data_x, data_y), axis=1)
     if is_3d:
@@ -138,10 +138,18 @@ def test_bounding_box_points(is_3d: bool, is_bb_3d: bool):
     )
 
     # Check that the correct point was selected
-    np.testing.assert_allclose(points_result["x"].compute(), [20])
-    np.testing.assert_allclose(points_result["y"].compute(), [30])
     if is_3d:
-        np.testing.assert_allclose(points_result["z"].compute(), [300])
+        if is_bb_3d:
+            np.testing.assert_allclose(points_result["x"].compute(), [20])
+            np.testing.assert_allclose(points_result["y"].compute(), [30])
+            np.testing.assert_allclose(points_result["z"].compute(), [300])
+        else:
+            np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
+            np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
+            np.testing.assert_allclose(points_result["z"].compute(), [200, 300])
+    else:
+        np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
+        np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
 
     # result should be valid points element
     PointsModel.validate(points_result)
