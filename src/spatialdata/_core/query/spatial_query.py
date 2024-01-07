@@ -349,25 +349,13 @@ def _(
         min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
         max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
 
-        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box with a huge range
+        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
+        # with a huge range
         for ax in axes_only_in_output:
             axes = axes + (ax,)
             M = np.finfo(np.float32).max - 1
             min_coordinate = np.append(min_coordinate, -M)
             max_coordinate = np.append(max_coordinate, M)
-
-        #     if case == 1 or case == 5:
-        #         # in these cases the data is 2D or 3D and the bounding box is specified on a different number of axes (1, 2 or 3)
-        #         axes
-        #     else:
-        #         raise NotImplementedError('Cases 2, 3, 4 are not implemented yet.')
-        # else:
-        #     error_message = (
-        #         f"Invalid case. The bounding box axes are {axes},"
-        #         f"the spatial axes in {target_coordinate_system} are"
-        #         f"{output_axes_without_c}"
-        #     )
-        #     raise ValueError(error_message)
 
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     spatial_transform_bb_axes = Affine(

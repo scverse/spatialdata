@@ -144,13 +144,10 @@ def test_bounding_box_points_no_points():
 
 
 # @pytest.mark.parametrize("n_channels", [1, 2, 3])
-# @pytest.mark.parametrize("is_labels", [False, True])
-# @pytest.mark.parametrize("is_3d", [False, True])
-# @pytest.mark.parametrize("is_bb_3d", [False, True])
-@pytest.mark.parametrize("n_channels", [1])
-@pytest.mark.parametrize("is_labels", [False, True])
-@pytest.mark.parametrize("is_3d", [True])
-@pytest.mark.parametrize("is_bb_3d", [False])
+@pytest.mark.parametrize("n_channels", [1, 2, 3])
+@pytest.mark.parametrize("is_labels", [True, False])
+@pytest.mark.parametrize("is_3d", [True, False])
+@pytest.mark.parametrize("is_bb_3d", [True, False])
 def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
@@ -160,10 +157,7 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
     shape = (10, 10)
     if is_3d:
         shape = (10,) + shape
-    if not is_labels:
-        shape = (n_channels,) + shape
-    else:
-        shape = (1,) + shape
+    shape = (n_channels,) + shape if not is_labels else (1,) + shape
 
     image = np.zeros(shape)
     axes = ["y", "x"]
@@ -212,10 +206,10 @@ def test_bounding_box_raster(n_channels, is_labels, is_3d, is_bb_3d):
             target_coordinate_system="global",
         )
 
-        expected_image = ximage
-
-        if is_labels:
-            expected_image = np.squeeze(expected_image, axis=0)
+        slices = {"y": slice(5, 10), "x": slice(0, 5)}
+        if is_bb_3d and is_3d:
+            slices["z"] = slice(2, 7)
+        expected_image = ximage.sel(**slices)
 
         if isinstance(image, SpatialImage):
             assert isinstance(image, SpatialImage)
