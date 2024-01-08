@@ -960,7 +960,7 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
     Raises
     ------
     ValueError
-        If the regions specified in table.uns["spatialdata_attrs"] are not present in the region column of table.obs.
+        If there is a mismatch between specified target regions and regions in the region key column of table.obs.
 
     Example
     -------
