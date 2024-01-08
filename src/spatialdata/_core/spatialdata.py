@@ -23,8 +23,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import deprecation_alias, _error_message_add_element
-
+from spatialdata._utils import _error_message_add_element, deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,

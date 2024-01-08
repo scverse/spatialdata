@@ -295,7 +295,7 @@ def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str
             )
             kwargs[new] = kwargs.pop(alias)
 
-            
+
 def _error_message_add_element() -> None:
     raise RuntimeError(
         "The functions add_image(), add_labels(), add_points() and add_shapes() have been removed in favor of "
@@ -311,4 +311,3 @@ def _error_message_add_element() -> None:
         "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
         "ergonomic in a follow up PR."
     )
-
