@@ -233,7 +233,7 @@ def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpati
 @get_dask_backing_files.register(SpatialData)
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
-    for e in element._gen_elements_values():
+    for e in element._gen_spatial_element_values():
         if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
             files = files.union(get_dask_backing_files(e))
     return list(files)
