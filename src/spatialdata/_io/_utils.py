@@ -15,12 +15,12 @@ import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
+from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
-from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
@@ -209,37 +209,59 @@ def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
         return _are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))
 
 
-def _get_backing_files_raster(raster: DataArray) -> list[str]:
+@singledispatch
+def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
+    """
+    Get the backing files that appear in the Dask computational graph of an element/any element of a SpatialData object.
+
+    Parameters
+    ----------
+    element
+        The element to get the backing files from.
+
+    Returns
+    -------
+    List of backing files.
+
+    Notes
+    -----
+    It is possible for lazy objects to be constructed from multiple files.
+    """
+    raise TypeError(f"Unsupported type: {type(element)}")
+
+
+@get_dask_backing_files.register(SpatialData)
+def _(element: SpatialData) -> list[str]:
+    files: set[str] = set()
+    for e in element._gen_elements_values():
+        if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
+            files = files.union(get_dask_backing_files(e))
+    return list(files)
+
+
+@get_dask_backing_files.register(SpatialImage)
+def _(element: SpatialImage) -> list[str]:
+    return _get_backing_files(element.data)
+
+
+@get_dask_backing_files.register(MultiscaleSpatialImage)
+def _(element: MultiscaleSpatialImage) -> list[str]:
+    xdata0 = next(iter(iterate_pyramid_levels(element)))
+    return _get_backing_files(xdata0.data)
+
+
+@get_dask_backing_files.register(DaskDataFrame)
+def _(element: DaskDataFrame) -> list[str]:
+    return _get_backing_files(element)
+
+
+def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     files = []
-    for k, v in raster.data.dask.layers.items():
+    for k, v in element.dask.layers.items():
         if k.startswith("original-from-zarr-"):
             mapping = v.mapping[k]
             path = mapping.store.path
             files.append(os.path.realpath(path))
-    return files
-
-
-@singledispatch
-def get_backing_files(element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
-    raise TypeError(f"Unsupported type: {type(element)}")
-
-
-@get_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
-    return _get_backing_files_raster(element)
-
-
-@get_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
-    xdata0 = next(iter(iterate_pyramid_levels(element)))
-    return _get_backing_files_raster(xdata0)
-
-
-@get_backing_files.register(DaskDataFrame)
-def _(element: DaskDataFrame) -> list[str]:
-    files = []
-    layers = element.dask.layers
-    for k, v in layers.items():
         if k.startswith("read-parquet-"):
             t = v.creation_info["args"]
             assert isinstance(t, tuple)

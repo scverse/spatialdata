@@ -23,7 +23,8 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import deprecation_alias
+from spatialdata._utils import deprecation_alias, _error_message_add_element
+
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -775,6 +776,7 @@ class SpatialData:
         consolidate_metadata: bool = True,
     ) -> None:
         from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+        from spatialdata._io._utils import get_dask_backing_files
 
         """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
@@ -787,6 +789,7 @@ class SpatialData:
         # old code to support overwriting the backing file
         # target_path = None
         # tmp_zarr_file = None
+
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r") is None:
                 raise ValueError(
@@ -794,14 +797,22 @@ class SpatialData:
                     "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
                     "data loss."
                 )
-            if not overwrite and str(self.path) != str(file_path):
+            if not overwrite:
                 raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
-            raise ValueError(
-                "The file path specified is the same as the one used for backing. "
-                "Overwriting the backing file is not supported to prevent accidental data loss."
-                "We are discussing how to support this use case in the future, if you would like us to "
-                "support it please leave a comment on https://github.com/scverse/spatialdata/pull/138"
-            )
+            if self.is_backed() and str(self.path) == str(file_path):
+                raise ValueError(
+                    "The file path specified is the same as the one used for backing. "
+                    "Overwriting the backing file is not supported to prevent accidental data loss."
+                    "We are discussing how to support this use case in the future, if you would like us to "
+                    "support it please leave a comment on https://github.com/scverse/spatialdata/pull/138"
+                )
+            if any(Path(fp).resolve().is_relative_to(file_path.resolve()) for fp in get_dask_backing_files(self)):
+                raise ValueError(
+                    "The file path specified is a parent directory of one or more files used for backing for one or "
+                    "more elements in the SpatialData object. You can either load every element of the SpatialData "
+                    "object in memory, or save the current spatialdata object to a different path."
+                )
+
             # old code to support overwriting the backing file
             # else:
             #     target_path = tempfile.TemporaryDirectory()
@@ -1033,6 +1044,40 @@ class SpatialData:
         from spatialdata import read_zarr
 
         return read_zarr(file_path, selection=selection)
+
+    def add_image(
+        self,
+        name: str,
+        image: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_labels(
+        self,
+        name: str,
+        labels: SpatialImage | MultiscaleSpatialImage,
+        storage_options: JSONDict | list[JSONDict] | None = None,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_points(
+        self,
+        name: str,
+        points: DaskDataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
+
+    def add_shapes(
+        self,
+        name: str,
+        shapes: GeoDataFrame,
+        overwrite: bool = False,
+    ) -> None:
+        _error_message_add_element()
 
     @property
     def images(self) -> Images:

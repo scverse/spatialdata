@@ -28,6 +28,7 @@ __all__ = [
     "read_zarr",
     "unpad_raster",
     "save_transformations",
+    "get_dask_backing_files",
 ]
 
 from spatialdata import dataloader, models, transformations
@@ -40,6 +41,6 @@ from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box
 from spatialdata._core.query.relational_query import get_values, match_table_to_element
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import save_transformations
+from spatialdata._io._utils import get_dask_backing_files, save_transformations
 from spatialdata._io.io_zarr import read_zarr
 from spatialdata._utils import unpad_raster

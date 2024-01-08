@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+
 ## [0.1.0] - tbd
 
 ### Added
@@ -24,7 +25,19 @@ and this project adheres to [Semantic Versioning][].
 -   Added public helper function check_target_region_column_symmetry in spatialdata.models to check whether annotation
     metadata in table.uns['spatialdata_attrs'] corresponds with respective columns in table.obs.
 
+## [0.0.x] - tbd
+
+### Minor
+
+-   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
+
 ### Added
+
+### Fixed
+
+#### Minor
+
+-   refactored data loader for deep learning
 
 ## [0.0.14] - 2023-10-11
 
