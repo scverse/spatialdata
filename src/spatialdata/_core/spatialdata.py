@@ -239,11 +239,39 @@ class SpatialData:
 
     @staticmethod
     def get_annotated_regions(table: AnnData) -> str | list[str]:
+        """
+        Get the regions annotated by a table.
+
+        Parameters
+        ----------
+        table
+            The AnnData table for which to retrieve annotated regions.
+
+        Returns
+        -------
+        The annotated regions.
+        """
         regions, _, _ = get_table_keys(table)
         return regions
 
     @staticmethod
     def get_region_key_column(table: AnnData) -> pd.Series:
+        """Get the column of table.obs containing per row the region annotated by that row.
+
+        Parameters
+        ----------
+        table
+            The AnnData table.
+
+        Returns
+        -------
+        The region key column.
+
+        Raises
+        ------
+        KeyError
+            If the region key column is not found in table.obs.
+        """
         _, region_key, _ = get_table_keys(table)
         if table.obs.get(region_key):
             return table.obs[region_key]
@@ -251,6 +279,24 @@ class SpatialData:
 
     @staticmethod
     def get_instance_key_column(table: AnnData) -> pd.Series:
+        """
+        Return the instance key column in table.obs containing for each row the instance id of that row.
+
+        Parameters
+        ----------
+        table
+            The AnnData table.
+
+        Returns
+        -------
+        The instance key column.
+
+        Raises
+        ------
+        KeyError
+            If the instance key column is not found in table.obs.
+
+        """
         _, _, instance_key = get_table_keys(table)
         if table.obs.get(instance_key):
             return table.obs[instance_key]
@@ -288,10 +334,6 @@ class SpatialData:
         ValueError
             If `instance_key` is not present in the `table.obs` columns.
         """
-        # if region_key not in table.obs:
-        #     raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
-        # if instance_key not in table.obs:
-        #     raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
         TableModel()._validate_set_region_key(table, region_key)
         TableModel()._validate_set_instance_key(table, instance_key)
         attrs = {
@@ -981,7 +1023,7 @@ class SpatialData:
     @property
     def table(self) -> None | AnnData:
         """
-        Return the table.
+        Return table with name table from tables if it exists.
 
         Returns
         -------
