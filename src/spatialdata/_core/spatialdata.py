@@ -288,10 +288,12 @@ class SpatialData:
         ValueError
             If `instance_key` is not present in the `table.obs` columns.
         """
-        if region_key not in table.obs:
-            raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
-        if instance_key not in table.obs:
-            raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
+        # if region_key not in table.obs:
+        #     raise ValueError(f"Specified region_key, {region_key}, not in table.obs")
+        # if instance_key not in table.obs:
+        #     raise ValueError(f"Specified instance_key, {instance_key}, not in table.obs")
+        TableModel()._validate_set_region_key(table, region_key)
+        TableModel()._validate_set_instance_key(table, instance_key)
         attrs = {
             TableModel.REGION_KEY: region,
             TableModel.REGION_KEY_KEY: region_key,
@@ -330,27 +332,12 @@ class SpatialData:
             If provided region_key is not present in table.obs.
         """
         attrs = table.uns[TableModel.ATTRS_KEY]
-        table_region_key = attrs.get(TableModel.REGION_KEY_KEY)
-        if not region_key:
-            if not table_region_key:
-                raise ValueError(
-                    "No region_key in table.uns and no region_key provided as argument. Please specify " "region_key."
-                )
-            if table.obs.get(attrs[TableModel.REGION_KEY_KEY]) is None:
-                raise ValueError(
-                    f"Specified region_key in table.uns '{table_region_key}' is not "
-                    f"present as column in table.obs. Please specify region_key."
-                )
-            TableModel()._validate_set_instance_key(table, instance_key)
-            check_target_region_column_symmetry(table, table_region_key, region)
-            attrs[TableModel.REGION_KEY] = region
-        else:
-            if region_key not in table.obs:
-                raise ValueError(f"'{region_key}' column not present in table.obs")
+        table_region_key = region_key if region_key else attrs.get(TableModel.REGION_KEY_KEY)
 
-            TableModel()._validate_set_instance_key(table, instance_key)
-            check_target_region_column_symmetry(table, table_region_key, region)
-            attrs[TableModel.REGION_KEY] = region
+        TableModel()._validate_set_region_key(table, region_key)
+        TableModel()._validate_set_instance_key(table, instance_key)
+        check_target_region_column_symmetry(table, table_region_key, region)
+        attrs[TableModel.REGION_KEY] = region
 
     def set_table_annotates_spatialelement(
         self,

@@ -103,9 +103,13 @@ class TestMultiTable:
             TypeError, match="No current annotation metadata found. " "Please specify both region_key and instance_key."
         ):
             full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="non_existent")
-        with pytest.raises(ValueError, match="Specified instance_key, non_existent, not in table.obs"):
+        with pytest.raises(ValueError, match="Instance key column 'non_existent' not found in table.obs."):
             full_sdata.set_table_annotates_spatialelement(
                 "table", "labels2d", region_key="region", instance_key="non_existent"
+            )
+        with pytest.raises(ValueError, match="column not present"):
+            full_sdata.set_table_annotates_spatialelement(
+                "table", "labels2d", region_key="non_existing", instance_key="instance_id"
             )
         full_sdata.set_table_annotates_spatialelement(
             "table", "labels2d", region_key="region", instance_key="instance_id"

@@ -643,6 +643,46 @@ class TableModel:
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
 
+    def _validate_set_region_key(self, data: AnnData, region_key: str | None = None) -> None:
+        """
+        Validate the region key in table.uns or set a new region key as the region key column.
+
+        Parameters
+        ----------
+        data
+            The AnnData table.
+        region_key : str, optional
+            The region key to be validated and set in table.uns.
+
+
+        Raises
+        ------
+        ValueError
+            If no region_key is found in table.uns and no region_key is provided as an argument.
+        ValueError
+            If the specified region_key in table.uns is not present as a column in table.obs.
+        ValueError
+            If the specified region key column is not present in table.obs.
+        """
+        attrs = data.uns.get(self.ATTRS_KEY)
+        if attrs is None:
+            data.uns[self.ATTRS_KEY] = attrs = {}
+        table_region_key = attrs.get(self.REGION_KEY_KEY)
+        if not region_key:
+            if not table_region_key:
+                raise ValueError(
+                    "No region_key in table.uns and no region_key provided as argument. Please specify 'region_key'."
+                )
+            if data.obs.get(attrs[TableModel.REGION_KEY_KEY]) is None:
+                raise ValueError(
+                    f"Specified region_key in table.uns '{table_region_key}' is not "
+                    f"present as column in table.obs. Please specify region_key."
+                )
+        else:
+            if region_key not in data.obs:
+                raise ValueError(f"'{region_key}' column not present in table.obs")
+            attrs[self.REGION_KEY_KEY] = region_key
+
     def _validate_set_instance_key(self, data: AnnData, instance_key: str | None = None) -> None:
         """
         Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
@@ -668,7 +708,10 @@ class TableModel:
         ValueError
             If provided instance_key is not present as table.obs column.
         """
-        attrs = data.uns[self.ATTRS_KEY]
+        attrs = data.uns.get(self.ATTRS_KEY)
+        if attrs is None:
+            data.uns[self.ATTRS_KEY] = {}
+
         if not instance_key:
             if not attrs.get(TableModel.INSTANCE_KEY):
                 raise ValueError(
