@@ -364,7 +364,7 @@ def test_polygon_query_points(sdata_query_aggregation):
     queried = polygon_query(sdata, polygons=polygon, target_coordinate_system="global", shapes=False, points=True)
     points = queried["points"].compute()
     assert len(points) == 6
-    assert len(queried.table) == 0
+    assert queried.table is None
 
     # TODO: the case of querying points with multiple polygons is not currently implemented
 
