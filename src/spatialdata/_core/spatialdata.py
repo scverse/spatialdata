@@ -312,24 +312,23 @@ class SpatialData:
             return elem_group
         return root
 
-    def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
+    def locate_element(self, element: SpatialElement) -> tuple[str, str] | None:
         """
-        Find the SpatialElement within the SpatialData object.
+        Return the name and the type of a SpatialElement within the SpatialData object.
 
         Parameters
         ----------
         element
             The queried SpatialElement
 
-
         Returns
         -------
-        name and type of the element
+        name and type of the element; if the element is not found, None is returned instead
 
         Raises
         ------
         ValueError
-            the element is not found or found multiple times in the SpatialData object
+            the element is found multiple times in the SpatialData object
         """
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
@@ -341,7 +340,7 @@ class SpatialData:
                     found_element_type.append(element_type)
                     found_element_name.append(element_name)
         if len(found) == 0:
-            raise ValueError("Element not found in the SpatialData object.")
+            return None
         if len(found) > 1:
             raise ValueError(
                 f"Element found multiple times in the SpatialData object."
@@ -351,29 +350,6 @@ class SpatialData:
         assert len(found_element_name) == 1
         assert len(found_element_type) == 1
         return found_element_name[0], found_element_type[0]
-
-    def contains_element(self, element: SpatialElement, raise_exception: bool = False) -> bool:
-        """
-        Check if the SpatialElement is contained in the SpatialData object.
-
-        Parameters
-        ----------
-        element
-            The SpatialElement to check
-        raise_exception
-            If True, raise an exception if the element is not found. If False, return False if the element is not found.
-
-        Returns
-        -------
-        True if the element is found; False otherwise (if raise_exception is False).
-        """
-        try:
-            self._locate_spatial_element(element)
-            return True
-        except ValueError as e:
-            if raise_exception:
-                raise e
-            return False
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         """
@@ -388,7 +364,12 @@ class SpatialData:
 
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
-        found_element_name, found_element_type = self._locate_spatial_element(element)
+        located = self.locate_element(element)
+        if located is None:
+            raise ValueError(
+                "Cannot save the transformation to the element as it has not been found in the SpatialData object"
+            )
+        found_element_name, found_element_type = located
 
         if self.path is not None:
             group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
