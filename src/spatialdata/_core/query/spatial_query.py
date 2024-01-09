@@ -435,6 +435,8 @@ def _(
         if filter_table and sdata.table is not None
         else sdata.table
     )
+    if len(table) == 0:
+        table = None
     return SpatialData(**new_elements, table=table)
 
 
@@ -761,6 +763,8 @@ def _(
         if filter_table and sdata.table is not None
         else sdata.table
     )
+    if len(table) == 0:
+        table = None
     return SpatialData(**new_elements, table=table)
 
 
