@@ -31,7 +31,6 @@ from tests.core.operations.test_spatialdata_operations import (
 )
 
 
-# ---------------- test bounding box queries ---------------[
 def test_bounding_box_request_immutable():
     """Test that the bounding box request is immutable."""
     request = BoundingBoxRequest(
@@ -105,7 +104,7 @@ def test_bounding_box_request_wrong_coordinate_order():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
     """test the points bounding box_query"""
     data_x = np.array([10, 20, 20, 20])
     data_y = np.array([10, 20, 30, 30])
@@ -168,7 +167,7 @@ def test_bounding_box_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bo
         np.testing.assert_allclose(points_element["z"].compute(), original_z)
 
 
-def test_bounding_box_points_no_points():
+def test_query_points_no_points():
     """Points bounding box query with no points in range should
     return a points element with length 0.
     """
@@ -190,7 +189,7 @@ def test_bounding_box_points_no_points():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
         # labels cannot have multiple channels, let's ignore this combination of parameters
@@ -275,7 +274,7 @@ def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_b
 
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_polygons(is_bb_3d: bool, with_polygon_query: bool):
+def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
     half_widths = [6] * 4
     sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
@@ -313,7 +312,7 @@ def test_bounding_box_polygons(is_bb_3d: bool, with_polygon_query: bool):
 
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_circles(is_bb_3d: bool, with_polygon_query: bool):
+def test_query_circles(is_bb_3d: bool, with_polygon_query: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
 
     sd_circles = ShapesModel.parse(centroids, geometry=0, radius=10)
@@ -461,5 +460,9 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         plt.show()
 
 
-# TODO: test polygon query and bounding box query with different coordinate systems
+def test_query_affine_transformation(full_sdata):
+    # sdata = SpatialData.init_from_elements({'image2d': })
+    pass
+
+
 # TODO: test points multiple partitions
