@@ -203,7 +203,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
-        radius = RNG.normal(size=(2,)) if path.name == "points.json" else None
+        radius = np.abs(RNG.normal(size=(2,))) if path.name == "points.json" else None
         self._parse_transformation_from_multiple_places(model, path)
         poly = model.parse(path, radius=radius)
         self._passes_validation_after_io(model, poly, "shapes")
@@ -219,6 +219,14 @@ class TestModels:
         other_poly = model.parse(poly)
         self._passes_validation_after_io(model, other_poly, "shapes")
         assert poly.equals(other_poly)
+
+        if ShapesModel.RADIUS_KEY in poly.columns:
+            poly[ShapesModel.RADIUS_KEY].iloc[0] = -1
+            with pytest.raises(ValueError, match="Radii of circles must be positive."):
+                ShapesModel.validate(poly)
+            poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
+            with pytest.raises(ValueError, match="Radii of circles must be positive."):
+                ShapesModel.validate(poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])

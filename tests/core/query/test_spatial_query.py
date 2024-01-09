@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import xarray
 from anndata import AnnData
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Polygon
 from spatial_image import SpatialImage
@@ -341,7 +342,7 @@ def test_query_spatial_data(full_sdata):
     _assert_spatialdata_objects_seem_identical(result0, result1)
     _assert_spatialdata_objects_seem_identical(result0, result2)
 
-    polygon = Polygon([(2, 1), (2, 60), (40, 60), (40, 1)])
+    polygon = Polygon([(1, 2), (60, 2), (60, 40), (1, 40)])
     result3 = polygon_query(full_sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
     result4 = full_sdata.query.polygon(polygon=polygon, target_coordinate_system="global", filter_table=True)
 
@@ -400,10 +401,9 @@ def test_query_filter_table(with_polygon_query: bool):
 def test_polygon_query_points(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     polygon = sdata["by_polygons"].geometry.iloc[0]
-    queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global", shapes=False, points=True)
+    queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global")
     points = queried["points"].compute()
     assert len(points) == 6
-    assert len(queried.table) == 0
 
     # TODO: the case of querying points with multiple polygons is not currently implemented
 
@@ -430,16 +430,14 @@ def test_polygon_query_shapes(sdata_query_aggregation):
     assert len(queried["values_circles"]) == 4
     assert len(queried.table) == 8
 
-    queried = polygon_query(
-        values_sdata, polygon=[polygon, circle_pol], target_coordinate_system="global", shapes=True, points=False
-    )
+    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
+    queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
     assert len(queried.table) == 16
 
-    queried = polygon_query(
-        values_sdata, polygon=[polygon, polygon], target_coordinate_system="global", shapes=True, points=False
-    )
+    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
+    queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
     assert len(queried.table) == 8
@@ -476,3 +474,4 @@ def test_polygon_query_spatial_data(sdata_query_aggregation):
 # TODO: test polygon query and bounding box query with different coordinate systems
 # TODO: test polygon query with multiple polygons
 # TODO: test multypolygons
+# TODO: test points multiple partitions

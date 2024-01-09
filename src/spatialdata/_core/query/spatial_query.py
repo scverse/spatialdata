@@ -6,6 +6,7 @@ from functools import singledispatch
 from typing import Any, Callable
 
 import dask.array as da
+import dask.dataframe as dd
 import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
@@ -15,7 +16,7 @@ from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.query._utils import get_bounding_box_corners
+from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
@@ -606,22 +607,21 @@ def _(
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
     )
+    # if there aren't any points, just return
+    if in_intrinsic_bounding_box.sum() == 0:
+        return None
     points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
 
-    if in_intrinsic_bounding_box.sum() == 0:
-        # if there aren't any points, just return
-        return None
-
-    # we have to reset the index since we have subset
-    # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
-        points_in_intrinsic_bounding_box.idx.cumsum() - 1
-    )
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
-        lambda df: df.rename(index={"idx": None})
-    )
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
+    # # we have to reset the index since we have subset
+    # # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
+    #     points_in_intrinsic_bounding_box.idx.cumsum() - 1
+    # )
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
+    #     lambda df: df.rename(index={"idx": None})
+    # )
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
 
     # transform the element to the query coordinate system
     transform_to_query_space = get_transformation(points, to_coordinate_system=target_coordinate_system)
@@ -637,9 +637,12 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
-    if bounding_box_mask.sum() == 0:
+    bounding_box_mask = np.where(bounding_box_mask.compute())[0]
+    if len(bounding_box_mask) == 0:
         return None
-    return points_in_intrinsic_bounding_box.loc[bounding_box_mask]
+    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_mask]
+    # an alternative approach is to query for each partition in parallel
+    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1))
 
 
 @bounding_box_query.register(GeoDataFrame)
@@ -671,7 +674,7 @@ def _(
     )
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    queried = polygons[polygons.geometry.within(bounding_box_non_axes_aligned)]
+    queried = polygons[polygons.geometry.intersects(bounding_box_non_axes_aligned)]
     if len(queried) == 0:
         return None
     return queried
@@ -683,6 +686,10 @@ def polygon_query(
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
+    shapes: bool = True,
+    points: bool = True,
+    images: bool = True,
+    labels: bool = True,
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
@@ -698,6 +705,18 @@ def polygon_query(
     filter_table
         If `True`, the table is filtered to only contain rows that are annotating regions
         contained within the query polygon/multipolygon.
+    shapes [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    points [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    images [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    labels [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
 
     Returns
     -------
@@ -719,6 +738,10 @@ def _(
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
+    shapes: bool = True,
+    points: bool = True,
+    images: bool = True,
+    labels: bool = True,
 ) -> SpatialData:
     from spatialdata._core.query.relational_query import _filter_table_by_elements
 
@@ -771,9 +794,9 @@ def _(
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
     joined = polygon_gdf.sjoin(points_gdf)
-    assert len(joined.index.unique()) == 1
     if len(joined) == 0:
         return None
+    assert len(joined.index.unique()) == 1
     queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
@@ -791,53 +814,31 @@ def _(
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
 ) -> GeoDataFrame | None:
-    # polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
-    # TODO: port old code
-    return None
+    from spatialdata.transformations import get_transformation, set_transformation
 
+    polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
+    polygon = polygon_gdf["geometry"].iloc[0]
 
-# def _polygon_query(
-#     sdata: SpatialData,
-#     polygon: Polygon,
-#     target_coordinate_system: str,
-#     filter_table: bool,
-#     shapes: bool,
-#     points: bool,
-#     images: bool,
-#     labels: bool,
-# ) -> SpatialData:
-#     from spatialdata._core.query._utils import circles_to_polygons
-#     from spatialdata._core.query.relational_query import _filter_table_by_elements
-#     from spatialdata.models import (
-#         PointsModel,
-#         ShapesModel,
-#         points_dask_dataframe_to_geopandas,
-#         points_geopandas_to_dask_dataframe,
-#     )
-#     from spatialdata.transformations import get_transformation, set_transformation
-#
-#     new_shapes = {}
-#     if shapes:
-#         for shapes_name, s in sdata.shapes.items():
-#             buffered = circles_to_polygons(s) if ShapesModel.RADIUS_KEY in s.columns else s
-#
-#             if "__old_index" in buffered.columns:
-#                 assert np.all(s["__old_index"] == buffered.index)
-#             else:
-#                 buffered["__old_index"] = buffered.index
-#             indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
-#             if np.sum(indices) == 0:
-#                 raise ValueError("we expect at least one shape")
-#             queried_shapes = s[indices]
-#             queried_shapes.index = buffered[indices]["__old_index"]
-#             queried_shapes.index.name = None
-#             del buffered["__old_index"]
-#             if "__old_index" in queried_shapes.columns:
-#                 del queried_shapes["__old_index"]
-#             transformation = get_transformation(buffered, target_coordinate_system)
-#             queried_shapes = ShapesModel.parse(queried_shapes)
-#             set_transformation(queried_shapes, transformation, target_coordinate_system)
-#             new_shapes[shapes_name] = queried_shapes
+    buffered = circles_to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
+
+    OLD_INDEX = "__old_index"
+    if OLD_INDEX in buffered.columns:
+        assert np.all(element[OLD_INDEX] == buffered.index)
+    else:
+        buffered[OLD_INDEX] = buffered.index
+    indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
+    if np.sum(indices) == 0:
+        return None
+    queried_shapes = element[indices]
+    queried_shapes.index = buffered[indices][OLD_INDEX]
+    queried_shapes.index.name = None
+    del buffered[OLD_INDEX]
+    if OLD_INDEX in queried_shapes.columns:
+        del queried_shapes[OLD_INDEX]
+    transformation = get_transformation(buffered, target_coordinate_system)
+    queried_shapes = ShapesModel.parse(queried_shapes)
+    set_transformation(queried_shapes, transformation, target_coordinate_system)
+    return queried_shapes
 
 
 # TODO: mostly code to be removed; instead of calling polygon_query on a list, merge the polygons in a multipolygon
@@ -852,64 +853,7 @@ def _(
 #     images: bool = True,
 #     labels: bool = True,
 # ) -> SpatialData:
-#     """
-#     Query a spatial data object by a polygon, filtering shapes and points.
-#
-#     Parameters
-#     ----------
-#     sdata
-#         The SpatialData object to query
-#     polygon
-#         The polygon (or list of polygons) to query by
-#     target_coordinate_system
-#         The coordinate system of the polygon
-#     shapes
-#         Whether to filter shapes
-#     points
-#         Whether to filter points
-#
-#     Returns
-#     -------
-#     The queried SpatialData object with filtered shapes and points.
-#
-#     Notes
-#     -----
-#     This function will be refactored to be more general.
-#     The table is not filtered by this function, but is passed as is, this will also changed during the refactoring
-#     making this function more general and ergonomic.
-#
-#     """
-#     from spatialdata._core.query.relational_query import _filter_table_by_elements
-#
-#     # adjust coordinate transformation (this implementation can be made faster)
-#     sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
-#
-#     if isinstance(polygons, Polygon):
-#         polygons = [polygons]
-#
-#     if len(polygons) == 1:
-#         return _polygon_query(
-#             sdata=sdata,
-#             polygon=polygons[0],
-#             target_coordinate_system=target_coordinate_system,
-#             filter_table=filter_table,
-#             shapes=shapes,
-#             points=points,
-#             images=images,
-#             labels=labels,
-#         )
-#     # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
-#     #  in a loop as done preliminarily here
-#     if points or images or labels:
-#         logger.warning(
-#             "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
-#             'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
-#             "you need this implementation please open an issue on GitHub."
-#         )
-#         points = False
-#         images = False
-#         labels = False
-#
+
 #     sdatas = []
 #     for polygon in tqdm(polygons):
 #         try:

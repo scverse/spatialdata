@@ -322,8 +322,12 @@ class ShapesModel:
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}."
             )
-        if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
-            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(geom_, Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+            radii = data[cls.RADIUS_KEY].values
+            if np.any(radii <= 0):
+                raise ValueError("Radii of circles must be positive.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
