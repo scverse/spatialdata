@@ -266,6 +266,8 @@ def _(
         new_elements[element_type] = queried_elements
 
     table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
+    if len(table) == 0:
+        table = None
     return SpatialData(**new_elements, table=table)
 
 
@@ -641,6 +643,8 @@ def _polygon_query(
 
     if filter_table and sdata.table is not None:
         table = _filter_table_by_elements(sdata.table, {"shapes": new_shapes, "points": new_points})
+        if table is not None and len(table) == 0:
+            table = None
     else:
         table = sdata.table
     return SpatialData(shapes=new_shapes, points=new_points, images=new_images, table=table)
@@ -749,5 +753,7 @@ def polygon_query(
         geodataframes[k] = vv
 
     table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
+    if len(table) == 0:
+        table = None
 
     return SpatialData(shapes=geodataframes, table=table)
