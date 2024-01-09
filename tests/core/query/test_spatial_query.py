@@ -273,14 +273,16 @@ def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_b
             raise ValueError("Unexpected type")
 
 
-# TODO: add test bounding box query 3D when querying polygons
+@pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_polygons(with_polygon_query: bool):
+def test_bounding_box_polygons(is_bb_3d: bool, with_polygon_query: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
     half_widths = [6] * 4
     sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
 
     if with_polygon_query:
+        if is_bb_3d:
+            return
         polygon = Polygon([(40, 40), (40, 100), (100, 100), (100, 40)])
         polygons_result = polygon_query(
             sd_polygons,
@@ -288,26 +290,37 @@ def test_bounding_box_polygons(with_polygon_query: bool):
             target_coordinate_system="global",
         )
     else:
+        if is_bb_3d:
+            _min_coordinate = np.array([2, 40, 40])
+            _max_coordinate = np.array([7, 100, 100])
+            _axes = ("z", "y", "x")
+        else:
+            _min_coordinate = np.array([40, 40])
+            _max_coordinate = np.array([100, 100])
+            _axes = ("y", "x")
+
         polygons_result = bounding_box_query(
             sd_polygons,
-            axes=("y", "x"),
+            axes=_axes,
             target_coordinate_system="global",
-            min_coordinate=np.array([40, 40]),
-            max_coordinate=np.array([100, 100]),
+            min_coordinate=_min_coordinate,
+            max_coordinate=_max_coordinate,
         )
 
     assert len(polygons_result) == 1
     assert polygons_result.index[0] == 3
 
 
-# TODO: add test bounding box query 3D when querying circles
+@pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_bounding_box_circles(with_polygon_query: bool):
+def test_bounding_box_circles(is_bb_3d: bool, with_polygon_query: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
 
     sd_circles = ShapesModel.parse(centroids, geometry=0, radius=10)
 
     if with_polygon_query:
+        if is_bb_3d:
+            return
         polygon = Polygon([(40, 40), (40, 100), (100, 100), (100, 40)])
         circles_result = polygon_query(
             sd_circles,
@@ -315,12 +328,21 @@ def test_bounding_box_circles(with_polygon_query: bool):
             target_coordinate_system="global",
         )
     else:
+        if is_bb_3d:
+            _min_coordinate = np.array([2, 40, 40])
+            _max_coordinate = np.array([7, 100, 100])
+            _axes = ("z", "y", "x")
+        else:
+            _min_coordinate = np.array([40, 40])
+            _max_coordinate = np.array([100, 100])
+            _axes = ("y", "x")
+
         circles_result = bounding_box_query(
             sd_circles,
-            axes=("y", "x"),
+            axes=_axes,
             target_coordinate_system="global",
-            min_coordinate=np.array([40, 40]),
-            max_coordinate=np.array([100, 100]),
+            min_coordinate=_min_coordinate,
+            max_coordinate=_max_coordinate,
         )
 
     assert len(circles_result) == 1
@@ -396,20 +418,7 @@ def test_query_filter_table(with_polygon_query: bool):
     assert len(queried1.table) == 3
 
 
-# ----------------- test polygon query -----------------
-# TODO: this test should be covered by one of the above, check and remove this test
-def test_polygon_query_points(sdata_query_aggregation):
-    sdata = sdata_query_aggregation
-    polygon = sdata["by_polygons"].geometry.iloc[0]
-    queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global")
-    points = queried["points"].compute()
-    assert len(points) == 6
-
-    # TODO: the case of querying points with multiple polygons is not currently implemented
-
-
-# TODO: this test should be covered by one of the above, check and remove this test
-def test_polygon_query_shapes(sdata_query_aggregation):
+def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
@@ -452,26 +461,5 @@ def test_polygon_query_shapes(sdata_query_aggregation):
         plt.show()
 
 
-# TODO: this test should be covered by one of the above, check and remove this test
-def test_polygon_query_spatial_data(sdata_query_aggregation):
-    sdata = sdata_query_aggregation
-    values_sdata = SpatialData(
-        shapes={
-            "values_polygons": sdata["values_polygons"],
-            "values_circles": sdata["values_circles"],
-        },
-        points={"points": sdata["points"]},
-        table=sdata.table,
-    )
-    polygon = sdata["by_polygons"].geometry.iloc[0]
-    queried = polygon_query(values_sdata, polygon=polygon, target_coordinate_system="global", shapes=True, points=True)
-    assert len(queried["values_polygons"]) == 4
-    assert len(queried["values_circles"]) == 4
-    assert len(queried["points"]) == 6
-    assert len(queried.table) == 8
-
-
 # TODO: test polygon query and bounding box query with different coordinate systems
-# TODO: test polygon query with multiple polygons
-# TODO: test multypolygons
 # TODO: test points multiple partitions
