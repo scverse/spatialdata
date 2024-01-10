@@ -361,10 +361,12 @@ class SpatialData:
             The name of the target SpatialElement for which the table annotation will be changed.
         region_key
             The name of the region key column in the table. If not provided, it will be extracted from the table's uns
-            attribute.
+            attribute. If present here but also given as argument, the value in the table's uns attribute will be
+            overwritten.
         instance_key
             The name of the instance key column in the table. If not provided, it will be extracted from the table's uns
-            attribute.
+            attribute. If present here but also given as argument, the value in the table's uns attribute will be
+            overwritten.
 
         Raises
         ------
