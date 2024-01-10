@@ -651,7 +651,7 @@ class TableModel:
         ----------
         data
             The AnnData table.
-        region_key : str, optional
+        region_key
             The region key to be validated and set in table.uns.
 
 
