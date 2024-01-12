@@ -1,9 +1,11 @@
 from dataclasses import FrozenInstanceError
 
+import dask.dataframe as dd
 import numpy as np
 import pytest
 import xarray
 from anndata import AnnData
+from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Polygon
@@ -460,9 +462,48 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         plt.show()
 
 
-def test_query_affine_transformation(full_sdata):
+@pytest.mark.parametrize("with_polygon_query", [True, False])
+def test_query_affine_transformation(full_sdata, with_polygon_query: bool):
+    from spatialdata.transformations import Affine, set_transformation
+
+    theta = np.pi / 6
+    t = Affine(
+        np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 100],
+                [np.sin(theta), np.cos(theta), -50],
+                [0, 0, 1],
+            ]
+        )
+    )
     # sdata = SpatialData.init_from_elements({'image2d': })
+    for element_type, element_name, element in full_sdata._gen_elements():
+        old_transformations = set_transformation(element, transformation=t, to_coordinate_system="aligned")
     pass
 
 
-# TODO: test points multiple partitions
+@pytest.mark.parametrize("with_polygon_query", [True, False])
+def test_query_points_multiple_partitions(points, with_polygon_query: bool):
+    p0 = points["points_0"]
+    p1 = PointsModel.parse(dd.from_pandas(p0.compute(), npartitions=10))
+
+    def _query(p: DaskDataFrame) -> DaskDataFrame:
+        if with_polygon_query:
+            polygon = Polygon([(-1, -1), (-1, 1), (1, 1), (1, -1)])
+            return polygon_query(
+                p,
+                polygon=polygon,
+                target_coordinate_system="global",
+            )
+        return bounding_box_query(
+            p,
+            axes=("y", "x"),
+            target_coordinate_system="global",
+            min_coordinate=[-1, -1],
+            max_coordinate=[1, 1],
+        )
+
+    q0 = _query(p0)
+    q1 = _query(p1)
+    assert np.array_equal(q0.index.compute(), q1.index.compute())
+    pass
