@@ -292,9 +292,10 @@ def _get_axes_of_tranformation(
     Parameters
     ----------
     element
-    	SpatialData element to be transformed.
+        SpatialData element to be transformed.
     target_coordinate_system
-    	The target coordinate system for the transformation.
+        The target coordinate system for the transformation.
+
     Returns
     -------
     m_without_c
