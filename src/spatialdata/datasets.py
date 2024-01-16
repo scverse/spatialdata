@@ -13,8 +13,8 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
 from spatial_image import SpatialImage
 
-from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import (

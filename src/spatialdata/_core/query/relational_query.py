@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import dask.array as da
 import numpy as np
@@ -11,6 +11,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Labels2DModel,
@@ -21,9 +22,6 @@ from spatialdata.models import (
     TableModel,
     get_model,
 )
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
 
 def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system: str | list[str]) -> AnnData | None:
