@@ -284,17 +284,19 @@ def _get_axes_of_tranformation(
     element: SpatialElement, target_coordinate_system: str
 ) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
     """
-    Get the transformation, and transformation's axes (ignoring `c`), from the element's intrinsic coordinate system to the query coordinate space.
+    Get the transformation matrix and the transformation's axes (ignoring `c`).
 
+    The transformation is the one from the element's intrinsic coordinate system to the query coordinate space.
     Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
     transformation
 
     Parameters
     ----------
     element
-    	SpatialData element to be transformed.
+        SpatialData element to be transformed.
     target_coordinate_system
-    	The target coordinate system for the transformation.
+        The target coordinate system for the transformation.
+
     Returns
     -------
     m_without_c
@@ -323,19 +325,24 @@ def _adjust_bounding_box_to_real_axes(
     max_coordinate: ArrayLike,
     output_axes_without_c: tuple[str, ...],
 ) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
-    """Adjust the bounding box to the real axes of the transformation."""
+    """
+    Adjust the bounding box to the real axes of the transformation.
+
+    The bounding box is defined by the user and it's axes may not coincide with the axes of the transformation.
+    """
     if set(axes) != set(output_axes_without_c):
         axes_only_in_bb = set(axes) - set(output_axes_without_c)
         axes_only_in_output = set(output_axes_without_c) - set(axes)
 
-        # let's remove from the bounding box whose axes that are not in the output axes
+        # let's remove from the bounding box whose axes that are not in the output axes (e.g. querying 2D points with a
+        # 3D bounding box)
         indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
         axes = tuple([ax for ax in axes if ax not in axes_only_in_bb])
         min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
         max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
 
         # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
-        # with a huge range
+        # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
         for ax in axes_only_in_output:
             axes = axes + (ax,)
             M = np.finfo(np.float32).max - 1
