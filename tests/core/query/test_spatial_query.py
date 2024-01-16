@@ -1,6 +1,7 @@
 from dataclasses import FrozenInstanceError
 
 import dask.dataframe as dd
+import geopandas.testing
 import numpy as np
 import pytest
 import xarray
@@ -462,9 +463,13 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         plt.show()
 
 
-@pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_affine_transformation(full_sdata, with_polygon_query: bool):
+@pytest.mark.parametrize("with_polygon_query", [False, True])
+@pytest.mark.parametrize("name", ["image2d", "labels2d", "points_0", "circles", "multipoly", "poly"])
+def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name: str):
+    from spatialdata import transform
     from spatialdata.transformations import Affine, set_transformation
+
+    sdata = full_sdata.subset([name])
 
     theta = np.pi / 6
     t = Affine(
@@ -474,12 +479,50 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool):
                 [np.sin(theta), np.cos(theta), -50],
                 [0, 0, 1],
             ]
-        )
+        ),
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
     )
-    # sdata = SpatialData.init_from_elements({'image2d': })
-    for element_type, element_name, element in full_sdata._gen_elements():
-        old_transformations = set_transformation(element, transformation=t, to_coordinate_system="aligned")
-    pass
+    set_transformation(sdata[name], transformation=t, to_coordinate_system="aligned")
+
+    x0 = 99
+    x1 = 101
+    y0 = -51
+    y1 = -46
+
+    polygon = Polygon([(x0, y0), (x0, y1), (x1, y1), (x1, y0)])
+    back_polygon = transform(
+        ShapesModel.parse(GeoDataFrame(geometry=[polygon])), transformation=t.inverse()
+    ).geometry.iloc[0]
+
+    def _query(
+        sdata: SpatialData, polygon: Polygon, target_coordinate_system: str, with_polygon_query: bool
+    ) -> SpatialData:
+        px0, py0, px1, py1 = polygon.bounds
+        if with_polygon_query:
+            return polygon_query(sdata, polygon=polygon, target_coordinate_system=target_coordinate_system)
+        return bounding_box_query(
+            sdata,
+            axes=("x", "y"),
+            target_coordinate_system=target_coordinate_system,
+            min_coordinate=[px0, py0],
+            max_coordinate=[px1, py1],
+        )
+
+    queried = _query(sdata, polygon=polygon, target_coordinate_system="aligned", with_polygon_query=with_polygon_query)
+    queried_back = _query(
+        sdata, polygon=back_polygon, target_coordinate_system="global", with_polygon_query=with_polygon_query
+    )
+    queried_back_vector = _query(
+        sdata, polygon=back_polygon, target_coordinate_system="global", with_polygon_query=True
+    )
+
+    if name in ["image2d", "labels2d"]:
+        assert np.array_equal(queried[name], queried_back[name])
+    elif name in ["points_0"]:
+        assert dd.assert_eq(queried[name], queried_back_vector[name])
+    elif name in ["circles", "multipoly", "poly"]:
+        geopandas.testing.assert_geodataframe_equal(queried[name], queried_back[name])
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
@@ -497,7 +540,7 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
             )
         return bounding_box_query(
             p,
-            axes=("y", "x"),
+            axes=("x", "y"),
             target_coordinate_system="global",
             min_coordinate=[-1, -1],
             max_coordinate=[1, 1],
@@ -507,3 +550,42 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     q1 = _query(p1)
     assert np.array_equal(q0.index.compute(), q1.index.compute())
     pass
+
+
+@pytest.mark.parametrize("with_polygon_query", [True, False])
+@pytest.mark.parametrize("name", ["image2d", "labels2d", "points_0", "circles", "multipoly", "poly"])
+def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
+    """Test that attributes are copied over to the new spatial data object."""
+    sdata = full_sdata.subset([name])
+
+    old_attrs = sdata[name].attrs
+    old_transform = sdata[name].attrs["transform"]
+
+    old_attrs_value = old_attrs.copy()
+    old_transform_value = old_transform.copy()
+
+    if with_polygon_query:
+        queried = polygon_query(
+            sdata,
+            polygon=Polygon([(-1, -1), (-1, 1), (1, 1), (1, -1)]),
+            target_coordinate_system="global",
+        )
+    else:
+        queried = bounding_box_query(
+            sdata,
+            axes=("x", "y"),
+            target_coordinate_system="global",
+            min_coordinate=[-1, -1],
+            max_coordinate=[1, 1],
+        )
+
+    # check that the old attribute didn't change, neither in reference nor in value
+    assert sdata[name].attrs is old_attrs
+    assert sdata[name].attrs["transform"] is old_transform
+
+    assert sdata[name].attrs == old_attrs_value
+    assert sdata[name].attrs["transform"] == old_transform_value
+
+    # check that the attributes of the queried element are not the same as the old ones
+    assert sdata[name].attrs is not queried[name].attrs
+    assert sdata[name].attrs["transform"] is not queried[name].attrs["transform"]

@@ -430,13 +430,13 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    table = (
-        _filter_table_by_elements(sdata.table, new_elements)
-        if filter_table and sdata.table is not None
-        else sdata.table
-    )
-    if len(table) == 0:
+    if sdata.table is not None:
+        table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
+        if len(table) == 0:
+            table = None
+    else:
         table = None
+
     return SpatialData(**new_elements, table=table)
 
 
@@ -565,7 +565,11 @@ def _(
                 [translation_transform, initial_transform],
             )
             new_transformations[coordinate_system] = new_transformation
-        set_transformation(query_result, new_transformations, set_all=True)
+        set_transformation(query_result, new_transformations)
+    # let's make a copy of the transformations so that we don't modify the original object
+    t = get_transformation(query_result, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(query_result, t.copy(), set_all=True)
     return query_result
 
 
@@ -643,8 +647,10 @@ def _(
     if len(bounding_box_mask) == 0:
         return None
     points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_mask]
+    old_transformations = get_transformation(points, get_all=True)
+    assert isinstance(old_transformations, dict)
     # an alternative approach is to query for each partition in parallel
-    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1))
+    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy())
 
 
 @bounding_box_query.register(GeoDataFrame)
@@ -655,6 +661,8 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> GeoDataFrame | None:
+    from spatialdata.transformations import get_transformation
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -676,10 +684,14 @@ def _(
     )
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    queried = polygons[polygons.geometry.intersects(bounding_box_non_axes_aligned)]
+    indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
+    queried = polygons[indices]
     if len(queried) == 0:
         return None
-    return queried
+    old_transformations = get_transformation(polygons, get_all=True)
+    assert isinstance(old_transformations, dict)
+    del queried.attrs[ShapesModel.TRANSFORM_KEY]
+    return ShapesModel.parse(queried, transformations=old_transformations.copy())
 
 
 @singledispatch
@@ -758,13 +770,13 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    table = (
-        _filter_table_by_elements(sdata.table, new_elements)
-        if filter_table and sdata.table is not None
-        else sdata.table
-    )
-    if len(table) == 0:
+    if sdata.table is not None:
+        table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
+        if len(table) == 0:
+            table = None
+    else:
         table = None
+
     return SpatialData(**new_elements, table=table)
 
 
@@ -809,6 +821,9 @@ def _(
     else:
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
     set_transformation(ddf, transformation, target_coordinate_system)
+    t = get_transformation(ddf, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(ddf, t.copy(), set_all=True)
     return ddf
 
 
@@ -842,55 +857,7 @@ def _(
     transformation = get_transformation(buffered, target_coordinate_system)
     queried_shapes = ShapesModel.parse(queried_shapes)
     set_transformation(queried_shapes, transformation, target_coordinate_system)
+    t = get_transformation(queried_shapes, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(queried_shapes, t.copy(), set_all=True)
     return queried_shapes
-
-
-# TODO: mostly code to be removed; instead of calling polygon_query on a list, merge the polygons in a multipolygon
-# tell that the function is going to be deprecated
-# def polygon_query(
-#     sdata: SpatialData,
-#     polygons: Polygon | list[Polygon],
-#     target_coordinate_system: str,
-#     filter_table: bool = True,
-#     shapes: bool = True,
-#     points: bool = True,
-#     images: bool = True,
-#     labels: bool = True,
-# ) -> SpatialData:
-
-#     sdatas = []
-#     for polygon in tqdm(polygons):
-#         try:
-#             # not filtering now, we filter below
-#             queried_sdata = _polygon_query(
-#                 sdata=sdata,
-#                 polygon=polygon,
-#                 target_coordinate_system=target_coordinate_system,
-#                 filter_table=False,
-#                 shapes=shapes,
-#                 points=points,
-#                 images=images,
-#                 labels=labels,
-#             )
-#             sdatas.append(queried_sdata)
-#         except ValueError as e:
-#             if str(e) != "we expect at least one shape":
-#                 raise e
-#             # print("skipping", end="")
-#     geodataframe_pieces: dict[str, list[GeoDataFrame]] = {}
-#
-#     for sdata in sdatas:
-#         for shapes_name, shapes in sdata.shapes.items():
-#             if shapes_name not in geodataframe_pieces:
-#                 geodataframe_pieces[shapes_name] = []
-#             geodataframe_pieces[shapes_name].append(shapes)
-#
-#     geodataframes = {}
-#     for k, v in geodataframe_pieces.items():
-#         vv = pd.concat(v)
-#         vv = vv[~vv.index.duplicated(keep="first")]
-#         geodataframes[k] = vv
-#
-#     table = _filter_table_by_elements(sdata.table, {"shapes": geodataframes}) if filter_table else sdata.table
-#
-#     return SpatialData(shapes=geodataframes, table=table)

@@ -222,8 +222,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
                 MultiPolygon(
                     [
                         Polygon(((0, 0), (0, 1), (1, 10))),
-                        Polygon(((0, 0), (0, 1), (1, 1))),
-                        Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
+                        Polygon(((0, 0), (1, 0), (1, 1))),
                     ]
                 ),
             ]
