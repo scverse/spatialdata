@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -123,8 +125,8 @@ def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: S
             raise TypeError(f"Unsupported type {type(element)}")
 
 
-def _assert_tables_seem_identical(table0: AnnData, table1: AnnData) -> None:
-    assert table0.shape == table1.shape
+def _assert_tables_seem_identical(table0: AnnData | None, table1: AnnData | None) -> None:
+    assert table0 is None and table1 is None or table0.shape == table1.shape
 
 
 def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: SpatialData) -> None:
@@ -359,3 +361,27 @@ def test_init_from_elements(full_sdata: SpatialData) -> None:
     sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
     for element_type in ["images", "labels", "points", "shapes"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
+
+
+def test_subset(full_sdata: SpatialData) -> None:
+    element_names = ["image2d", "labels2d", "points_0", "circles", "poly"]
+    subset0 = full_sdata.subset(element_names)
+    unique_names = set()
+    for _, k, _ in subset0._gen_elements():
+        unique_names.add(k)
+    assert "image3d_xarray" in full_sdata.images
+    assert unique_names == set(element_names)
+    assert subset0.table is None
+
+    adata = AnnData(
+        shape=(10, 0),
+        obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, "a", "b", "c", "d", "e"]},
+    )
+    del full_sdata.table
+    full_sdata.table = TableModel.parse(
+        adata, region=["circles", "poly"], region_key="region", instance_key="instance_id"
+    )
+    subset1 = full_sdata.subset(["poly"])
+    assert subset1.table is not None
+    assert len(subset1.table) == 5
+    assert subset1.table.obs["region"].unique().tolist() == ["poly"]

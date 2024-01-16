@@ -1105,6 +1105,33 @@ class SpatialData:
             elements_dict.setdefault(element_type, {})[name] = element
         return cls(**elements_dict, table=table)
 
+    def subset(self, element_names: list[str], filter_table: bool = True) -> SpatialData:
+        """
+        Subset the SpatialData object.
+
+        Parameters
+        ----------
+        element_names
+            The names of the element_names to subset.
+        filter_table
+            If True (default), the table is filtered to only contain rows that are annotating regions
+            contained within the element_names.
+
+        Returns
+        -------
+        The subsetted SpatialData object.
+        """
+        from spatialdata._core.query.relational_query import _filter_table_by_elements
+
+        elements_dict: dict[str, SpatialElement] = {}
+        for element_type, element_name, element in self._gen_elements():
+            if element_name in element_names:
+                elements_dict.setdefault(element_type, {})[element_name] = element
+        table = _filter_table_by_elements(self.table, elements_dict=elements_dict) if filter_table else self.table
+        if len(table) == 0:
+            table = None
+        return SpatialData(**elements_dict, table=table)
+
     def __getitem__(self, item: str) -> SpatialElement:
         """
         Return the element with the given name.
