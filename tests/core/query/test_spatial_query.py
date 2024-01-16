@@ -27,6 +27,7 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.transformations import Identity, set_transformation
 
 from tests.conftest import _make_points, _make_squares
 from tests.core.operations.test_spatialdata_operations import (
@@ -558,6 +559,9 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     """Test that attributes are copied over to the new spatial data object."""
     sdata = full_sdata.subset([name])
 
+    # let's add a second transformation, to make sure that later we are not checking for the presence of default values
+    set_transformation(sdata[name], transformation=Identity(), to_coordinate_system="aligned")
+
     old_attrs = sdata[name].attrs
     old_transform = sdata[name].attrs["transform"]
 
@@ -568,13 +572,13 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
         queried = polygon_query(
             sdata,
             polygon=Polygon([(-1, -1), (-1, 1), (1, 1), (1, -1)]),
-            target_coordinate_system="global",
+            target_coordinate_system="aligned",
         )
     else:
         queried = bounding_box_query(
             sdata,
             axes=("x", "y"),
-            target_coordinate_system="global",
+            target_coordinate_system="aligned",
             min_coordinate=[-1, -1],
             max_coordinate=[1, 1],
         )
@@ -589,3 +593,4 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     # check that the attributes of the queried element are not the same as the old ones
     assert sdata[name].attrs is not queried[name].attrs
     assert sdata[name].attrs["transform"] is not queried[name].attrs["transform"]
+    pass
