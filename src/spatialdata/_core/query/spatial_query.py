@@ -565,7 +565,7 @@ def _(
                 [translation_transform, initial_transform],
             )
             new_transformations[coordinate_system] = new_transformation
-        set_transformation(query_result, new_transformations)
+        set_transformation(query_result, new_transformations, set_all=True)
     # let's make a copy of the transformations so that we don't modify the original object
     t = get_transformation(query_result, get_all=True)
     assert isinstance(t, dict)
