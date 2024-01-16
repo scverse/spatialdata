@@ -310,7 +310,7 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
-    assert full_sdata.locate_element(full_sdata.images["image2d"]) == ("image2d", "images")
+    assert full_sdata.locate_element(full_sdata.images["image2d"]) == "images/image2d"
     im = full_sdata.images["image2d"]
     del full_sdata.images["image2d"]
     assert full_sdata.locate_element(im) is None
