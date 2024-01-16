@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning][].
 
 ### Fixed
 
+-   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
+
 #### Minor
 
 -   refactored data loader for deep learning
