@@ -284,7 +284,7 @@ def _get_axes_of_tranformation(
     element: SpatialElement, target_coordinate_system: str
 ) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
     """
-    Get the transformation (ignoring c) from the element's intrinsic coordinate system to the query coordinate space.
+    Get the transformation, and transformation's axes (ignoring `c`), from the element's intrinsic coordinate system to the query coordinate space.
 
     Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
     transformation
@@ -292,8 +292,9 @@ def _get_axes_of_tranformation(
     Parameters
     ----------
     element
+    	SpatialData element to be transformed.
     target_coordinate_system
-
+    	The target coordinate system for the transformation.
     Returns
     -------
     m_without_c
@@ -356,7 +357,6 @@ def _(
 
     Notes
     -----
-    _____
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
