@@ -379,10 +379,11 @@ def test_subset(full_sdata: SpatialData) -> None:
         obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, "a", "b", "c", "d", "e"]},
     )
     del full_sdata.table
-    full_sdata.table = TableModel.parse(
-        adata, region=["circles", "poly"], region_key="region", instance_key="instance_id"
-    )
-    subset1 = full_sdata.subset(["poly"])
+    sdata_table = TableModel.parse(adata, region=["circles", "poly"], region_key="region", instance_key="instance_id")
+    full_sdata.table = sdata_table
+    full_sdata.tables["second_table"] = sdata_table
+    subset1 = full_sdata.subset(["poly", "second_table"])
     assert subset1.table is not None
     assert len(subset1.table) == 5
     assert subset1.table.obs["region"].unique().tolist() == ["poly"]
+    assert len(subset1["second_table"]) == 10

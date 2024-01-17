@@ -656,7 +656,7 @@ class SpatialData:
                         elements[element_type][element_name] = element
                         element_names_in_coordinate_system.append(element_name)
         tables = self._filter_tables(
-            filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
+            set(), filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
         )
 
         return SpatialData(**elements, tables=tables)
@@ -664,6 +664,7 @@ class SpatialData:
     # TODO: move to relational query with refactor
     def _filter_tables(
         self,
+        names_tables_to_keep: set[str],
         filter_tables: bool = True,
         by: Literal["cs", "elements"] | None = None,
         include_orphan_tables: bool = False,
@@ -697,6 +698,9 @@ class SpatialData:
             tables: dict[str, AnnData] | Tables = {}
             for table_name, table in self._tables.items():
                 if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
+                    tables[table_name] = table
+                    continue
+                if table_name in names_tables_to_keep:
                     tables[table_name] = table
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
@@ -1499,11 +1503,20 @@ class SpatialData:
         The subsetted SpatialData object.
         """
         elements_dict: dict[str, SpatialElement] = {}
-        for element_type, element_name, element in self._gen_elements():
+        names_tables_to_keep: set[str] = set()
+        for element_type, element_name, element in self._gen_elements(include_table=True):
             if element_name in element_names:
-                elements_dict.setdefault(element_type, {})[element_name] = element
-
-        tables = self._filter_tables(filter_tables, "elements", include_orphan_tables, elements_dict=elements_dict)
+                if element_type != "tables":
+                    elements_dict.setdefault(element_type, {})[element_name] = element
+                else:
+                    names_tables_to_keep.add(element_name)
+        tables = self._filter_tables(
+            names_tables_to_keep,
+            filter_tables,
+            "elements",
+            include_orphan_tables,
+            elements_dict=elements_dict,
+        )
         return SpatialData(**elements_dict, tables=tables)
 
     def __getitem__(self, item: str) -> SpatialElement:
