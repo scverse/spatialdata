@@ -705,20 +705,20 @@ class SpatialData:
         ----------
         filter_tables
             If True (default), the tables will be filtered to only contain regions
-            of an element belonging to the specified coordinate system(s).
+            of an element belonging to the specified coordinate system(s) or including only rows annotating specified
+            elements.
         by
             Filter mode. Valid values are "cs" or "elements". Default is None.
         include_orphan_tables
             Flag indicating whether to include orphan tables. Default is False.
         element_paths
             Check whether this should be changed into element names in coordinate system
-        elements_dict : Union[Dict[str, Dict[str, Any]], None], optional
+        elements_dict
             Dictionary of elements for filtering the tables. Default is None.
 
         Returns
         -------
-        Tables or Dict[str, AnnData]
-            Filtered tables.
+        The filtered tables if filter_tables was True, otherwise tables of the SpatialData object.
 
         """
         if filter_tables:
