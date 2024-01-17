@@ -312,7 +312,7 @@ class SpatialData:
             return elem_group
         return root
 
-    def locate_element(self, element: SpatialElement) -> str | None:
+    def locate_element(self, element: SpatialElement) -> list[str] | None:
         """
         Locate a SpatialElement within the SpatialData object and, if found, returns its Zarr path relative to the root.
 
@@ -323,12 +323,8 @@ class SpatialData:
 
         Returns
         -------
-        The Zarr path of the element relative to the root, or None if the element is not found.
-
-        Raises
-        ------
-        ValueError
-            the element is found multiple times in the SpatialData object
+        A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed), or
+        None if the element is not found.
         """
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
@@ -341,15 +337,7 @@ class SpatialData:
                     found_element_name.append(element_name)
         if len(found) == 0:
             return None
-        if len(found) > 1:
-            raise ValueError(
-                f"Element found multiple times in the SpatialData object."
-                f"Found {len(found)} elements with names: {found_element_name},"
-                f" and types: {found_element_type}"
-            )
-        assert len(found_element_name) == 1
-        assert len(found_element_type) == 1
-        return f"{found_element_type[0]}/{found_element_name[0]}"
+        return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         """
@@ -369,25 +357,27 @@ class SpatialData:
             raise ValueError(
                 "Cannot save the transformation to the element as it has not been found in the SpatialData object"
             )
-        found_element_type, found_element_name = located.split("/")
-
         if self.path is not None:
-            group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-            axes = get_axes_names(element)
-            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
-                from spatialdata._io._utils import (
-                    overwrite_coordinate_transformations_raster,
-                )
+            for path in located:
+                found_element_type, found_element_name = path.split("/")
+                group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+                axes = get_axes_names(element)
+                if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                    from spatialdata._io._utils import (
+                        overwrite_coordinate_transformations_raster,
+                    )
 
-                overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
-                from spatialdata._io._utils import (
-                    overwrite_coordinate_transformations_non_raster,
-                )
+                    overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
+                elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+                    from spatialdata._io._utils import (
+                        overwrite_coordinate_transformations_non_raster,
+                    )
 
-                overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
-            else:
-                raise ValueError("Unknown element type")
+                    overwrite_coordinate_transformations_non_raster(
+                        group=group, axes=axes, transformations=transformations
+                    )
+                else:
+                    raise ValueError("Unknown element type")
 
     def filter_by_coordinate_system(self, coordinate_system: str | list[str], filter_table: bool = True) -> SpatialData:
         """

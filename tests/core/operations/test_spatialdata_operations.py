@@ -310,14 +310,14 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
-    assert full_sdata.locate_element(full_sdata.images["image2d"]) == "images/image2d"
+    assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
     del full_sdata.images["image2d"]
     assert full_sdata.locate_element(im) is None
     full_sdata.images["image2d"] = im
     full_sdata.images["image2d_again"] = im
-    with pytest.raises(ValueError):
-        full_sdata.locate_element(im)
+    paths = full_sdata.locate_element(im)
+    assert len(paths) == 2
 
 
 def test_get_item(points: SpatialData) -> None:
