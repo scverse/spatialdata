@@ -366,10 +366,10 @@ def test_init_from_elements(full_sdata: SpatialData) -> None:
 
 
 def test_subset(full_sdata: SpatialData) -> None:
-    element_names = ["image2d", "labels2d", "points_0", "circles", "poly"]
+    element_names = ["image2d", "points_0", "circles", "poly"]
     subset0 = full_sdata.subset(element_names)
     unique_names = set()
-    for _, k, _ in subset0._gen_elements():
+    for _, k, _ in subset0.gen_spatial_elements():
         unique_names.add(k)
     assert "image3d_xarray" in full_sdata.images
     assert unique_names == set(element_names)

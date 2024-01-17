@@ -732,12 +732,16 @@ class SpatialData:
                     from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
 
                     assert element_paths is not None
-                    tables[table_name] = _filter_table_by_coordinate_system(table, element_paths)
+                    table = _filter_table_by_coordinate_system(table, element_paths)
+                    if len(table) != 0:
+                        tables[table_name] = table
                 elif by == "elements":
                     from spatialdata._core.query.relational_query import _filter_table_by_elements
 
                     assert elements_dict is not None
-                    tables[table_name] = _filter_table_by_elements(table, elements_dict=elements_dict)
+                    table = _filter_table_by_elements(table, elements_dict=elements_dict)
+                    if len(table) != 0:
+                        tables[table_name] = table
         else:
             tables = self.tables
 
