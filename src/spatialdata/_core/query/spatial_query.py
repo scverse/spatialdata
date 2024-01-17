@@ -274,7 +274,6 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
     return SpatialData(**new_elements, tables=tables)
