@@ -49,7 +49,11 @@ and this project adheres to [Semantic Versioning][].
 
 ### Added
 
+-   added SpatialData.subset() API
+
 ### Fixed
+
+-   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
 
 #### Minor
 
