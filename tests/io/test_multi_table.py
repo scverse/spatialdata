@@ -232,6 +232,7 @@ class TestMultiTable:
         # sub_table.obs[sdata["visium0"]]
         # assert ...
 
+
     def test_multiple_table_without_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table = _get_table(region=None, region_key=None, instance_key=None)
@@ -247,6 +248,7 @@ class TestMultiTable:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table = _get_table(region="test_shapes")
         table2 = _get_table(region="test_shapes")
+
 
         test_sdata = SpatialData(
             shapes={

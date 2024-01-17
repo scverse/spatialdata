@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # isort: off
 import os
+from typing import Any
+from collections.abc import Sequence
 
 os.environ["USE_PYGEOS"] = "0"
 # isort:on
@@ -291,6 +293,11 @@ def _get_table(
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+
+
+def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
+    adata = AnnData(np.random.default_rng().random(10, 20000))
+    return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
 @pytest.fixture()
