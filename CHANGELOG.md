@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   added SpatialData.subset() API
+-   added SpatialData.locate_element() API
 
 ### Fixed
 

@@ -545,24 +545,19 @@ class SpatialData:
             return elem_group
         return root
 
-    def _locate_spatial_element(self, element: SpatialElement) -> tuple[str, str]:
+    def locate_element(self, element: SpatialElement) -> list[str] | None:
         """
-        Find the SpatialElement within the SpatialData object.
+        Locate a SpatialElement within the SpatialData object and, if found, returns its Zarr path relative to the root.
 
         Parameters
         ----------
         element
             The queried SpatialElement
 
-
         Returns
         -------
-        name and type of the element
-
-        Raises
-        ------
-        ValueError
-            the element is not found or found multiple times in the SpatialData object
+        A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed), or
+        None if the element is not found.
         """
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
@@ -574,39 +569,8 @@ class SpatialData:
                     found_element_type.append(element_type)
                     found_element_name.append(element_name)
         if len(found) == 0:
-            raise ValueError("Element not found in the SpatialData object.")
-        if len(found) > 1:
-            raise ValueError(
-                f"Element found multiple times in the SpatialData object."
-                f"Found {len(found)} elements with names: {found_element_name},"
-                f" and types: {found_element_type}"
-            )
-        assert len(found_element_name) == 1
-        assert len(found_element_type) == 1
-        return found_element_name[0], found_element_type[0]
-
-    def contains_element(self, element: SpatialElement, raise_exception: bool = False) -> bool:
-        """
-        Check if the SpatialElement is contained in the SpatialData object.
-
-        Parameters
-        ----------
-        element
-            The SpatialElement to check
-        raise_exception
-            If True, raise an exception if the element is not found. If False, return False if the element is not found.
-
-        Returns
-        -------
-        True if the element is found; False otherwise (if raise_exception is False).
-        """
-        try:
-            self._locate_spatial_element(element)
-            return True
-        except ValueError as e:
-            if raise_exception:
-                raise e
-            return False
+            return None
+        return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
         """
@@ -621,25 +585,32 @@ class SpatialData:
 
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
-        found_element_name, found_element_type = self._locate_spatial_element(element)
-
+        located = self.locate_element(element)
+        if located is None:
+            raise ValueError(
+                "Cannot save the transformation to the element as it has not been found in the SpatialData object"
+            )
         if self.path is not None:
-            group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-            axes = get_axes_names(element)
-            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
-                from spatialdata._io._utils import (
-                    overwrite_coordinate_transformations_raster,
-                )
+            for path in located:
+                found_element_type, found_element_name = path.split("/")
+                group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+                axes = get_axes_names(element)
+                if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                    from spatialdata._io._utils import (
+                        overwrite_coordinate_transformations_raster,
+                    )
 
-                overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-            elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
-                from spatialdata._io._utils import (
-                    overwrite_coordinate_transformations_non_raster,
-                )
+                    overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
+                elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+                    from spatialdata._io._utils import (
+                        overwrite_coordinate_transformations_non_raster,
+                    )
 
-                overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
-            else:
-                raise ValueError("Unknown element type")
+                    overwrite_coordinate_transformations_non_raster(
+                        group=group, axes=axes, transformations=transformations
+                    )
+                else:
+                    raise ValueError("Unknown element type")
 
     @deprecation_alias(filter_table="filter_tables")
     def filter_by_coordinate_system(
