@@ -24,7 +24,7 @@ from spatialdata.models import (
 )
 
 
-def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system: str | list[str]) -> AnnData | None:
+def _filter_table_by_element_names(table: AnnData | None, element_names: str | list[str]) -> AnnData | None:
     """
     Filter an AnnData table to keep only the rows that are in the coordinate system.
 
@@ -32,8 +32,8 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
     ----------
     table
         The table to filter; if None, returns None
-    coordinate_system
-        The coordinate system to keep
+    element_names
+        The element_names to keep in the tables obs.region column
 
     Returns
     -------
@@ -44,7 +44,7 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
     table.obs = pd.DataFrame(table.obs)
-    table = table[table.obs[region_key].isin(coordinate_system)].copy()
+    table = table[table.obs[region_key].isin(element_names)].copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
 

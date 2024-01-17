@@ -642,7 +642,7 @@ class SpatialData:
         from spatialdata.transformations.operations import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
-        element_paths_in_coordinate_system = []
+        element_names_in_coordinate_system = []
         if isinstance(coordinate_system, str):
             coordinate_system = [coordinate_system]
         for element_type, element_name, element in self._gen_elements():
@@ -654,9 +654,9 @@ class SpatialData:
                         if element_type not in elements:
                             elements[element_type] = {}
                         elements[element_type][element_name] = element
-                        element_paths_in_coordinate_system.append(element_name)
+                        element_names_in_coordinate_system.append(element_name)
         tables = self._filter_tables(
-            filter_tables, "cs", include_orphan_tables, element_paths=element_paths_in_coordinate_system
+            filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
         )
 
         return SpatialData(**elements, tables=tables)
@@ -667,7 +667,7 @@ class SpatialData:
         filter_tables: bool = True,
         by: Literal["cs", "elements"] | None = None,
         include_orphan_tables: bool = False,
-        element_paths: str | list[str] | None = None,
+        element_names: str | list[str] | None = None,
         elements_dict: dict[str, dict[str, Any]] | None = None,
     ) -> Tables | dict[str, AnnData]:
         """
@@ -683,8 +683,8 @@ class SpatialData:
             Filter mode. Valid values are "cs" or "elements". Default is None.
         include_orphan_tables
             Flag indicating whether to include orphan tables. Default is False.
-        element_paths
-            Check whether this should be changed into element names in coordinate system
+        element_names
+            Element names of elements present in specific coordinate system.
         elements_dict
             Dictionary of elements for filtering the tables. Default is None.
 
@@ -701,10 +701,10 @@ class SpatialData:
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
                 if by == "cs":
-                    from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
+                    from spatialdata._core.query.relational_query import _filter_table_by_element_names
 
-                    assert element_paths is not None
-                    table = _filter_table_by_coordinate_system(table, element_paths)
+                    assert element_names is not None
+                    table = _filter_table_by_element_names(table, element_names)
                     if len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
