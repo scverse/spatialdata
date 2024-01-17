@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import anndata as ad
 import dask as da
@@ -20,6 +20,7 @@ from xrspatial import zonal_stats
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._core.query.relational_query import get_values
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
@@ -31,9 +32,6 @@ from spatialdata.models import (
     get_model,
 )
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
 __all__ = ["aggregate"]
 
@@ -236,7 +234,6 @@ def _create_sdata_from_table_and_shapes(
     instance_key: str,
     deepcopy: bool,
 ) -> SpatialData:
-    from spatialdata import SpatialData
     from spatialdata._utils import _deepcopy_geodataframe
 
     table.obs[instance_key] = table.obs_names.copy()
@@ -250,7 +247,7 @@ def _create_sdata_from_table_and_shapes(
     if deepcopy:
         shapes = _deepcopy_geodataframe(shapes)
 
-    return SpatialData.from_elements_dict({shapes_name: shapes, "": table})
+    return SpatialData.from_elements_dict({shapes_name: shapes, "table": table})
 
 
 def _aggregate_image_by_labels(

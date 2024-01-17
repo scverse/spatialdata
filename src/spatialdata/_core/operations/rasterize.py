@@ -207,8 +207,6 @@ def _(
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
 ) -> SpatialData:
-    from spatialdata import SpatialData
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -232,7 +230,7 @@ def _(
             )
             new_name = f"{name}_rasterized_{element_type}"
             new_images[new_name] = rasterized
-    return SpatialData(images=new_images, table=sdata.table)
+    return SpatialData(images=new_images, tables=sdata.tables)
 
     # get xdata
 

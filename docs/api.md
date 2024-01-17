@@ -29,12 +29,12 @@ Operations on `SpatialData` objects.
     get_extent
     match_table_to_element
     concatenate
-    rasterize
     transform
+    rasterize
     aggregate
 ```
 
-### Utilities
+### Operations Utilities
 
 ```{eval-rst}
 .. autosummary::
@@ -49,6 +49,7 @@ The elements (building-blocks) that consitute `SpatialData`.
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.models
+
 .. autosummary::
     :toctree: generated
 
@@ -61,9 +62,11 @@ The elements (building-blocks) that consitute `SpatialData`.
     TableModel
 ```
 
-### Utilities
+### Models Utilities
 
 ```{eval-rst}
+.. currentmodule:: spatialdata.models
+
 .. autosummary::
     :toctree: generated
 
@@ -94,9 +97,11 @@ The transformations that can be defined between elements and coordinate systems 
     Sequence
 ```
 
-### Utilities
+### Transformations Utilities
 
 ```{eval-rst}
+.. currentmodule:: spatialdata.transformations
+
 .. autosummary::
     :toctree: generated
 
@@ -119,7 +124,7 @@ The transformations that can be defined between elements and coordinate systems 
     ImageTilesDataset
 ```
 
-## Input/output
+## Input/Output
 
 ```{eval-rst}
 .. currentmodule:: spatialdata
@@ -129,4 +134,5 @@ The transformations that can be defined between elements and coordinate systems 
 
     read_zarr
     save_transformations
+    get_dask_backing_files
 ```

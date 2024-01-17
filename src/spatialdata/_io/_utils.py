@@ -8,17 +8,24 @@ import tempfile
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import numpy as np
 import zarr
+from anndata import AnnData
+from anndata import read_zarr as read_anndata_zarr
+from anndata.experimental import read_elem
+from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
-from xarray import DataArray
 
+from spatialdata._core.spatialdata import SpatialData
+from spatialdata._logging import logger
 from spatialdata._utils import iterate_pyramid_levels
+from spatialdata.models import TableModel
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     ValidAxis_t,
@@ -29,9 +36,6 @@ from spatialdata.transformations.transformations import (
     BaseTransformation,
     _get_current_output_axes,
 )
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
 
 # suppress logger debug from ome_zarr with context manager
@@ -175,8 +179,8 @@ def _are_directories_identical(
     if _root_dir2 is None:
         _root_dir2 = dir2
     if exclude_regexp is not None and (
-        re.match(rf"{_root_dir1}/" + exclude_regexp, str(dir1))
-        or re.match(rf"{_root_dir2}/" + exclude_regexp, str(dir2))
+        re.match(rf"{re.escape(str(_root_dir1))}/" + exclude_regexp, str(dir1))
+        or re.match(rf"{re.escape(str(_root_dir2))}/" + exclude_regexp, str(dir2))
     ):
         return True
 
@@ -196,8 +200,6 @@ def _are_directories_identical(
 
 
 def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
-    from spatialdata import SpatialData
-
     if not isinstance(a, SpatialData) or not isinstance(b, SpatialData):
         return False
     # TODO: if the sdata object is backed on disk, don't create a new zarr file
@@ -207,37 +209,59 @@ def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
         return _are_directories_identical(os.path.join(tmpdir, "a.zarr"), os.path.join(tmpdir, "b.zarr"))
 
 
-def _get_backing_files_raster(raster: DataArray) -> list[str]:
+@singledispatch
+def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
+    """
+    Get the backing files that appear in the Dask computational graph of an element/any element of a SpatialData object.
+
+    Parameters
+    ----------
+    element
+        The element to get the backing files from.
+
+    Returns
+    -------
+    List of backing files.
+
+    Notes
+    -----
+    It is possible for lazy objects to be constructed from multiple files.
+    """
+    raise TypeError(f"Unsupported type: {type(element)}")
+
+
+@get_dask_backing_files.register(SpatialData)
+def _(element: SpatialData) -> list[str]:
+    files: set[str] = set()
+    for e in element._gen_spatial_element_values():
+        if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
+            files = files.union(get_dask_backing_files(e))
+    return list(files)
+
+
+@get_dask_backing_files.register(SpatialImage)
+def _(element: SpatialImage) -> list[str]:
+    return _get_backing_files(element.data)
+
+
+@get_dask_backing_files.register(MultiscaleSpatialImage)
+def _(element: MultiscaleSpatialImage) -> list[str]:
+    xdata0 = next(iter(iterate_pyramid_levels(element)))
+    return _get_backing_files(xdata0.data)
+
+
+@get_dask_backing_files.register(DaskDataFrame)
+def _(element: DaskDataFrame) -> list[str]:
+    return _get_backing_files(element)
+
+
+def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     files = []
-    for k, v in raster.data.dask.layers.items():
+    for k, v in element.dask.layers.items():
         if k.startswith("original-from-zarr-"):
             mapping = v.mapping[k]
             path = mapping.store.path
             files.append(os.path.realpath(path))
-    return files
-
-
-@singledispatch
-def get_backing_files(element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
-    raise TypeError(f"Unsupported type: {type(element)}")
-
-
-@get_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
-    return _get_backing_files_raster(element)
-
-
-@get_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
-    xdata0 = next(iter(iterate_pyramid_levels(element)))
-    return _get_backing_files_raster(xdata0)
-
-
-@get_backing_files.register(DaskDataFrame)
-def _(element: DaskDataFrame) -> list[str]:
-    files = []
-    layers = element.dask.layers
-    for k, v in layers.items():
         if k.startswith("read-parquet-"):
             t = v.creation_info["args"]
             assert isinstance(t, tuple)
@@ -286,6 +310,57 @@ def save_transformations(sdata: SpatialData) -> None:
     """
     from spatialdata.transformations import get_transformation, set_transformation
 
-    for element in sdata._gen_elements_values():
+    for element in sdata._gen_spatial_element_values():
         transformations = get_transformation(element, get_all=True)
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
+
+
+def read_table_and_validate(
+    zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
+) -> dict[str, AnnData]:
+    """
+    Read in tables in the tables Zarr.group of a SpatialData Zarr store.
+
+    Parameters
+    ----------
+    zarr_store_path
+        The path to the Zarr store.
+    group
+        The parent group containing the subgroup.
+    subgroup
+        The subgroup containing the tables.
+    tables
+        A dictionary of tables.
+
+    Returns
+    -------
+    The modified dictionary with the tables.
+    """
+    count = 0
+    for table_name in subgroup:
+        f_elem = subgroup[table_name]
+        f_elem_store = os.path.join(zarr_store_path, f_elem.path)
+        if isinstance(group.store, zarr.storage.ConsolidatedMetadataStore):
+            tables[table_name] = read_elem(f_elem)
+            # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
+            # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
+            # table = read_anndata_zarr(f_elem)
+        else:
+            tables[table_name] = read_anndata_zarr(f_elem_store)
+        if TableModel.ATTRS_KEY in tables[table_name].uns:
+            # fill out eventual missing attributes that has been omitted because their value was None
+            attrs = tables[table_name].uns[TableModel.ATTRS_KEY]
+            if "region" not in attrs:
+                attrs["region"] = None
+            if "region_key" not in attrs:
+                attrs["region_key"] = None
+            if "instance_key" not in attrs:
+                attrs["instance_key"] = None
+            # fix type for region
+            if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                attrs["region"] = attrs["region"].tolist()
+
+        count += 1
+
+    logger.debug(f"Found {count} elements in {subgroup}")
+    return tables

@@ -13,8 +13,8 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
 from spatial_image import SpatialImage
 
-from spatialdata import SpatialData
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
@@ -153,7 +153,7 @@ class BlobsDataset:
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
         multipolygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes, multipolygons=True)
-        adata = aggregate(values=image, by=labels).table
+        adata = aggregate(values=image, by=labels).tables["table"]
         adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
         del adata.uns[TableModel.ATTRS_KEY]
@@ -164,7 +164,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            table=table,
+            tables=table,
         )
 
     def _image_blobs(

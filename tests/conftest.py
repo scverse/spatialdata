@@ -21,7 +21,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -66,12 +66,12 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(table=_get_table(region="sample1"))
+    return SpatialData(tables=_get_table(region="labels2d"))
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["sample1", "sample2"]))
+    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
 
 
 @pytest.fixture()
@@ -93,7 +93,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(region="sample1"),
+        tables=_get_table(region="labels2d"),
     )
 
 
@@ -128,7 +128,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            table=_get_table("sample1"),
+            tables=_get_table("labels2d"),
         )
     if request.param == "empty":
         return SpatialData()
@@ -141,7 +141,10 @@ def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     dims_3d = ("z", "y", "x", "c")
     out["image2d"] = Image2DModel.parse(RNG.normal(size=(3, 64, 64)), dims=dims_2d, c_coords=["r", "g", "b"])
     out["image2d_multiscale"] = Image2DModel.parse(
-        RNG.normal(size=(3, 64, 64)), scale_factors=[2, 2], dims=dims_2d, c_coords=["r", "g", "b"]
+        RNG.normal(size=(3, 64, 64)),
+        scale_factors=[2, 2],
+        dims=dims_2d,
+        c_coords=["r", "g", "b"],
     )
     out["image2d_xarray"] = Image2DModel.parse(DataArray(RNG.normal(size=(3, 64, 64)), dims=dims_2d), dims=None)
     out["image2d_multiscale_xarray"] = Image2DModel.parse(
@@ -277,11 +280,13 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: str | list[str] = "sample1",
-    region_key: str = "region",
-    instance_key: str = "instance_id",
+    region: None | str | list[str] = "sample1",
+    region_key: None | str = "region",
+    instance_key: None | str = "instance_id",
 ) -> AnnData:
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    if not all(var for var in (region, region_key, instance_key)):
+        return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         adata.obs[region_key] = region

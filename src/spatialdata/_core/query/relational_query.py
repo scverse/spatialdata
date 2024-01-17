@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import dask.array as da
 import numpy as np
@@ -11,6 +11,7 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Labels2DModel,
@@ -22,11 +23,8 @@ from spatialdata.models import (
     get_model,
 )
 
-if TYPE_CHECKING:
-    from spatialdata import SpatialData
 
-
-def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system: str | list[str]) -> AnnData | None:
+def _filter_table_by_element_names(table: AnnData | None, element_names: str | list[str]) -> AnnData | None:
     """
     Filter an AnnData table to keep only the rows that are in the coordinate system.
 
@@ -34,19 +32,19 @@ def _filter_table_by_coordinate_system(table: AnnData | None, coordinate_system:
     ----------
     table
         The table to filter; if None, returns None
-    coordinate_system
-        The coordinate system to keep
+    element_names
+        The element_names to keep in the tables obs.region column
 
     Returns
     -------
     The filtered table, or None if the input table was None
     """
-    if table is None:
+    if table is None or not table.uns.get(TableModel.ATTRS_KEY):
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
     table.obs = pd.DataFrame(table.obs)
-    table = table[table.obs[region_key].isin(coordinate_system)].copy()
+    table = table[table.obs[region_key].isin(element_names)].copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
 

@@ -1,5 +1,4 @@
-import tempfile
-from pathlib import Path
+from __future__ import annotations
 
 import numpy as np
 import pytest
@@ -9,8 +8,8 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
 from spatialdata.models import (
     Image2DModel,
@@ -25,34 +24,88 @@ from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import _get_table
 
 
-def test_element_names_unique():
+def test_element_names_unique() -> None:
     shapes = ShapesModel.parse(np.array([[0, 0]]), geometry=0, radius=1)
     points = PointsModel.parse(np.array([[0, 0]]))
     labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
     image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, points={"image": points})
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, shapes={"image": shapes})
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         SpatialData(images={"image": image}, labels={"image": labels})
 
     sdata = SpatialData(
         images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
     )
 
-    with pytest.raises(ValueError):
-        sdata.add_image(name="points", image=image)
-    with pytest.raises(ValueError):
-        sdata.add_points(name="image", points=points)
-    with pytest.raises(ValueError):
-        sdata.add_shapes(name="image", shapes=shapes)
-    with pytest.raises(ValueError):
-        sdata.add_labels(name="image", labels=labels)
+    # add elements with the same name
+    # of element of same type
+    with pytest.warns(UserWarning):
+        sdata.images["image"] = image
+    with pytest.warns(UserWarning):
+        sdata.points["points"] = points
+    with pytest.warns(UserWarning):
+        sdata.shapes["shapes"] = shapes
+    with pytest.warns(UserWarning):
+        sdata.labels["labels"] = labels
+
+    # add elements with the same name
+    # of element of different type
+    with pytest.raises(KeyError):
+        sdata.images["points"] = image
+    with pytest.raises(KeyError):
+        sdata.images["shapes"] = image
+    with pytest.raises(KeyError):
+        sdata.labels["points"] = labels
+    with pytest.raises(KeyError):
+        sdata.points["shapes"] = points
+    with pytest.raises(KeyError):
+        sdata.shapes["labels"] = shapes
+
+    assert sdata["image"].shape == image.shape
+    assert sdata["labels"].shape == labels.shape
+    assert len(sdata["points"]) == len(points)
+    assert sdata["shapes"].shape == shapes.shape
+
+    # add elements with the same name, test only couples of elements
+    with pytest.raises(KeyError):
+        sdata["labels"] = image
+    with pytest.warns(UserWarning):
+        sdata["points"] = points
+
+    # this should not raise warnings because it's a different (new) name
+    sdata["image2"] = image
+
+    # test replacing complete attribute
+    sdata = SpatialData(
+        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+    )
+    # test for images
+    sdata.images = {"image2": image}
+    assert set(sdata.images.keys()) == {"image2"}
+    assert "image2" in sdata._shared_keys
+    assert "image" not in sdata._shared_keys
+    # test for labels
+    sdata.labels = {"labels2": labels}
+    assert set(sdata.labels.keys()) == {"labels2"}
+    assert "labels2" in sdata._shared_keys
+    assert "labels" not in sdata._shared_keys
+    # test for points
+    sdata.points = {"points2": points}
+    assert set(sdata.points.keys()) == {"points2"}
+    assert "points2" in sdata._shared_keys
+    assert "points" not in sdata._shared_keys
+    # test for points
+    sdata.shapes = {"shapes2": shapes}
+    assert set(sdata.shapes.keys()) == {"shapes2"}
+    assert "shapes2" in sdata._shared_keys
+    assert "shapes" not in sdata._shared_keys
 
 
-def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
+def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData) -> None:
     for element_type, element_name, element in sdata0._gen_elements():
         elements = sdata1.__getattribute__(element_type)
         assert element_name in elements
@@ -72,11 +125,11 @@ def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: S
             raise TypeError(f"Unsupported type {type(element)}")
 
 
-def _assert_tables_seem_identical(table0: AnnData, table1: AnnData):
-    assert table0.shape == table1.shape
+def _assert_tables_seem_identical(table0: AnnData | None, table1: AnnData | None) -> None:
+    assert table0 is None and table1 is None or table0.shape == table1.shape
 
 
-def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: SpatialData):
+def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: SpatialData) -> None:
     # this is not a full comparison, but it's fine anyway
     assert len(list(sdata0._gen_elements())) == len(list(sdata1._gen_elements()))
     assert set(sdata0.coordinate_systems) == set(sdata1.coordinate_systems)
@@ -85,7 +138,7 @@ def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: Spat
     _assert_tables_seem_identical(sdata0.table, sdata1.table)
 
 
-def test_filter_by_coordinate_system(full_sdata):
+def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
     _assert_spatialdata_objects_seem_identical(sdata, full_sdata)
 
@@ -95,16 +148,16 @@ def test_filter_by_coordinate_system(full_sdata):
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
-    assert len(list(sdata_my_space._gen_elements())) == 2
+    assert len(list(sdata_my_space.gen_elements())) == 3
     _assert_tables_seem_identical(sdata_my_space.table, full_sdata.table)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
         coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
     )
-    assert len(list(sdata_my_space1._gen_elements())) == 3
+    assert len(list(sdata_my_space1.gen_elements())) == 4
 
 
-def test_filter_by_coordinate_system_also_table(full_sdata):
+def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None:
     from spatialdata.models import TableModel
 
     rng = np.random.default_rng(seed=0)
@@ -128,7 +181,7 @@ def test_filter_by_coordinate_system_also_table(full_sdata):
     assert len(filtered_sdata2.table) == len(full_sdata.table)
 
 
-def test_rename_coordinate_systems(full_sdata):
+def test_rename_coordinate_systems(full_sdata: SpatialData) -> None:
     # all the elements point to global, add new coordinate systems
     set_transformation(
         element=full_sdata.shapes["circles"], transformation=Identity(), to_coordinate_system="my_space0"
@@ -181,7 +234,7 @@ def test_rename_coordinate_systems(full_sdata):
     assert elements_in_global_before == elements_in_global_after
 
 
-def test_concatenate_tables():
+def test_concatenate_tables() -> None:
     """
     The concatenation uses AnnData.concatenate(), here we test the
     concatenation result on region, region_key, instance_key
@@ -226,7 +279,7 @@ def test_concatenate_tables():
     )
 
 
-def test_concatenate_sdatas(full_sdata):
+def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(images={"image2d": full_sdata.images["image2d"]})])
     with pytest.raises(KeyError):
@@ -241,7 +294,7 @@ def test_concatenate_sdatas(full_sdata):
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
     filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
-    assert len(list(filtered._gen_elements())) == 2
+    assert len(list(filtered.gen_elements())) == 3
     filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
     # this is needed cause we can't handle regions with same name.
@@ -252,23 +305,22 @@ def test_concatenate_sdatas(full_sdata):
     filtered1.table = table_new
     filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
     filtered1.table.obs[filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
-    concatenated = concatenate([filtered0, filtered1])
-    assert len(list(concatenated._gen_elements())) == 2
+    concatenated = concatenate([filtered0, filtered1], concatenate_tables=True)
+    assert len(list(concatenated.gen_elements())) == 3
 
 
-def test_locate_spatial_element(full_sdata):
-    assert full_sdata._locate_spatial_element(full_sdata.images["image2d"]) == ("image2d", "images")
+def test_locate_spatial_element(full_sdata: SpatialData) -> None:
+    assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
     del full_sdata.images["image2d"]
-    with pytest.raises(ValueError, match="Element not found in the SpatialData object."):
-        full_sdata._locate_spatial_element(im)
+    assert full_sdata.locate_element(im) is None
     full_sdata.images["image2d"] = im
     full_sdata.images["image2d_again"] = im
-    with pytest.raises(ValueError):
-        full_sdata._locate_spatial_element(im)
+    paths = full_sdata.locate_element(im)
+    assert len(paths) == 2
 
 
-def test_get_item(points):
+def test_get_item(points: SpatialData) -> None:
     assert id(points["points_0"]) == id(points.points["points_0"])
 
     # removed this test after this change: https://github.com/scverse/spatialdata/pull/145#discussion_r1133122720
@@ -282,20 +334,14 @@ def test_get_item(points):
         _ = points["not_present"]
 
 
-def test_set_item(full_sdata):
+def test_set_item(full_sdata: SpatialData) -> None:
     for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
         full_sdata[name + "_again"] = full_sdata[name]
-        with pytest.raises(KeyError):
+        with pytest.warns(UserWarning):
             full_sdata[name] = full_sdata[name]
-    with tempfile.TemporaryDirectory() as tmpdir:
-        full_sdata.write(Path(tmpdir) / "test.zarr")
-        for name in ["image2d", "labels2d", "points_0"]:
-            # trying to overwrite the file used for backing (only for images, labels and points)
-            with pytest.raises(ValueError):
-                full_sdata[name] = full_sdata[name]
 
 
-def test_no_shared_transformations():
+def test_no_shared_transformations() -> None:
     """Test transformation dictionary copy for transformations not to be shared."""
     sdata = blobs()
     element_name = "blobs_image"
@@ -303,15 +349,41 @@ def test_no_shared_transformations():
     set_transformation(sdata.images[element_name], Identity(), to_coordinate_system=test_space)
 
     gen = sdata._gen_elements()
-    for _, name, obj in gen:
-        if name != element_name:
-            assert test_space not in get_transformation(obj, get_all=True)
-        else:
-            assert test_space in get_transformation(obj, get_all=True)
+    for element_type, name, obj in gen:
+        if element_type != "tables":
+            if name != element_name:
+                assert test_space not in get_transformation(obj, get_all=True)
+            else:
+                assert test_space in get_transformation(obj, get_all=True)
 
 
-def test_init_from_elements(full_sdata):
+def test_init_from_elements(full_sdata: SpatialData) -> None:
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
     sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
     for element_type in ["images", "labels", "points", "shapes"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
+
+
+def test_subset(full_sdata: SpatialData) -> None:
+    element_names = ["image2d", "points_0", "circles", "poly"]
+    subset0 = full_sdata.subset(element_names)
+    unique_names = set()
+    for _, k, _ in subset0.gen_spatial_elements():
+        unique_names.add(k)
+    assert "image3d_xarray" in full_sdata.images
+    assert unique_names == set(element_names)
+    assert subset0.table is None
+
+    adata = AnnData(
+        shape=(10, 0),
+        obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, "a", "b", "c", "d", "e"]},
+    )
+    del full_sdata.table
+    sdata_table = TableModel.parse(adata, region=["circles", "poly"], region_key="region", instance_key="instance_id")
+    full_sdata.table = sdata_table
+    full_sdata.tables["second_table"] = sdata_table
+    subset1 = full_sdata.subset(["poly", "second_table"])
+    assert subset1.table is not None
+    assert len(subset1.table) == 5
+    assert subset1.table.obs["region"].unique().tolist() == ["poly"]
+    assert len(subset1["second_table"]) == 10

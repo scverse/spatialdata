@@ -15,7 +15,7 @@ from spatialdata.transformations._utils import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata import SpatialData
+    from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models import SpatialElement
     from spatialdata.transformations import Affine, BaseTransformation
 
@@ -68,8 +68,8 @@ def set_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, transformation)
     else:
-        if not write_to_sdata.contains_element(element, raise_exception=True):
-            raise RuntimeError("contains_element() failed without raising an exception.")
+        if write_to_sdata.locate_element(element) is None:
+            raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
                 "The SpatialData object is not backed. You can either set a transformation to an element "
@@ -164,8 +164,8 @@ def remove_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, {})
     else:
-        if not write_to_sdata.contains_element(element, raise_exception=True):
-            raise RuntimeError("contains_element() failed without raising an exception.")
+        if write_to_sdata.locate_element(element) is None:
+            raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
                 "The SpatialData object is not backed. You can either remove a transformation from an "
@@ -178,7 +178,7 @@ def remove_transformation(
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
     g = nx.DiGraph()
-    gen = sdata._gen_elements_values()
+    gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
         g.add_node(cs)
     for e in gen:

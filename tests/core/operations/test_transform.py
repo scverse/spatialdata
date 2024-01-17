@@ -8,7 +8,8 @@ import scipy.misc
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from spatialdata import SpatialData, transform
+from spatialdata import transform
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
@@ -462,7 +463,7 @@ def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
     # TODO: we are just applying the transformation,
     #  we are not checking it is correct. We could improve this test
     scale = Scale([2], axes=("x",))
-    for element in sdata._gen_elements_values():
+    for element in sdata._gen_spatial_element_values():
         set_transformation(element, scale, "my_space")
         sdata.transform_element_to_coordinate_system(element, "my_space")
     sdata.transform_to_coordinate_system("my_space")
