@@ -1077,7 +1077,6 @@ class SpatialData:
         -------
         The table.
         """
-        # TODO: decide version for deprecation
         warnings.warn(
             "Table accessor will be deprecated with SpatialData version 0.1, use sdata.tables instead.",
             DeprecationWarning,
