@@ -661,6 +661,7 @@ class SpatialData:
 
         return SpatialData(**elements, tables=tables)
 
+    # TODO: move to relational query with refactor
     def _filter_tables(
         self,
         filter_tables: bool = True,
