@@ -112,6 +112,10 @@ def _get_filtered_or_unfiltered_tables(
     if filter_table:
         from spatialdata._core.query.relational_query import _filter_table_by_elements
 
-        return {name: _filter_table_by_elements(table, elements) for name, table in sdata.tables.items()}
+        return {
+            name: filtered_table
+            for name, table in sdata.tables.items()
+            if (filtered_table := _filter_table_by_elements(table, elements)) and len(filtered_table) != 0
+        }
 
     return sdata.tables
