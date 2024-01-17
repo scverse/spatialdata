@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Generator
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import zarr
@@ -667,7 +667,7 @@ class SpatialData:
         The filtered SpatialData.
         """
         # TODO: decide whether to add parameter to filter only specific table.
-        from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
+
         from spatialdata.transformations.operations import get_transformation
 
         elements: dict[str, dict[str, SpatialElement]] = {}
@@ -684,18 +684,64 @@ class SpatialData:
                             elements[element_type] = {}
                         elements[element_type][element_name] = element
                         element_paths_in_coordinate_system.append(element_name)
+        tables = self._filter_tables(
+            filter_tables, "cs", include_orphan_tables, element_paths=element_paths_in_coordinate_system
+        )
 
+        return SpatialData(**elements, tables=tables)
+
+    def _filter_tables(
+        self,
+        filter_tables: bool = True,
+        by: Literal["cs", "elements"] | None = None,
+        include_orphan_tables: bool = False,
+        element_paths: str | list[str] | None = None,
+        elements_dict: dict[str, dict[str, Any]] | None = None,
+    ) -> Tables | dict[str, AnnData]:
+        """
+        Filter tables by coordinate system or elements or return tables.
+
+        Parameters
+        ----------
+        filter_tables
+            If True (default), the tables will be filtered to only contain regions
+            of an element belonging to the specified coordinate system(s).
+        by
+            Filter mode. Valid values are "cs" or "elements". Default is None.
+        include_orphan_tables
+            Flag indicating whether to include orphan tables. Default is False.
+        element_paths
+            Check whether this should be changed into element names in coordinate system
+        elements_dict : Union[Dict[str, Dict[str, Any]], None], optional
+            Dictionary of elements for filtering the tables. Default is None.
+
+        Returns
+        -------
+        Tables or Dict[str, AnnData]
+            Filtered tables.
+
+        """
         if filter_tables:
             tables: dict[str, AnnData] | Tables = {}
             for table_name, table in self._tables.items():
                 if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
                     tables[table_name] = table
                     continue
-                tables[table_name] = _filter_table_by_coordinate_system(table, element_paths_in_coordinate_system)
+                # each mode here requires paths or elements, using assert here to avoid mypy errors.
+                if by == "cs":
+                    from spatialdata._core.query.relational_query import _filter_table_by_coordinate_system
+
+                    assert element_paths is not None
+                    tables[table_name] = _filter_table_by_coordinate_system(table, element_paths)
+                elif by == "elements":
+                    from spatialdata._core.query.relational_query import _filter_table_by_elements
+
+                    assert elements_dict is not None
+                    tables[table_name] = _filter_table_by_elements(table, elements_dict=elements_dict)
         else:
             tables = self.tables
 
-        return SpatialData(**elements, tables=tables)
+        return tables
 
     def rename_coordinate_systems(self, rename_dict: dict[str, str]) -> None:
         """
@@ -1016,7 +1062,7 @@ class SpatialData:
 
     @tables.setter
     def tables(self, shapes: dict[str, GeoDataFrame]) -> None:
-        """Set shapes."""
+        """Set tables."""
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
         for k, v in shapes.items():
@@ -1456,7 +1502,9 @@ class SpatialData:
             elements_dict.setdefault(element_type, {})[name] = element
         return cls(**elements_dict, tables=tables)
 
-    def subset(self, element_names: list[str], filter_table: bool = True) -> SpatialData:
+    def subset(
+        self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
+    ) -> SpatialData:
         """
         Subset the SpatialData object.
 
@@ -1467,21 +1515,21 @@ class SpatialData:
         filter_table
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
+        include_orphan_tables
+            If True (not default), include tables that do not annotate SpatialElement(s). Only has an effect if
+            filter_tables is also set to True.
 
         Returns
         -------
         The subsetted SpatialData object.
         """
-        from spatialdata._core.query.relational_query import _filter_table_by_elements
-
         elements_dict: dict[str, SpatialElement] = {}
         for element_type, element_name, element in self._gen_elements():
             if element_name in element_names:
                 elements_dict.setdefault(element_type, {})[element_name] = element
-        table = _filter_table_by_elements(self.table, elements_dict=elements_dict) if filter_table else self.table
-        if len(table) == 0:
-            table = None
-        return SpatialData(**elements_dict, table=table)
+
+        tables = self._filter_tables(filter_tables, "elements", include_orphan_tables, elements_dict=elements_dict)
+        return SpatialData(**elements_dict, tables=tables)
 
     def __getitem__(self, item: str) -> SpatialElement:
         """
