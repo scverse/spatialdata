@@ -1490,7 +1490,8 @@ class SpatialData:
         Parameters
         ----------
         element_names
-            The names of the element_names to subset.
+            The names of the element_names to subset. If the element_name is the name of a table, this table would be
+            completely included in the subset even if filter_table is True.
         filter_table
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
