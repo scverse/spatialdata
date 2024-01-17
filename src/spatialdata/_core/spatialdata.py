@@ -676,6 +676,8 @@ class SpatialData:
 
         Parameters
         ----------
+        names_tables_to_keep
+            The names of the tables to keep even when filter_tables is True.
         filter_tables
             If True (default), the tables will be filtered to only contain regions
             of an element belonging to the specified coordinate system(s) or including only rows annotating specified
