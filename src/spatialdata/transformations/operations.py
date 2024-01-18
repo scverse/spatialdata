@@ -68,7 +68,7 @@ def set_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, transformation)
     else:
-        if write_to_sdata.locate_element(element) is None:
+        if len(write_to_sdata.locate_element(element)) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
@@ -164,7 +164,7 @@ def remove_transformation(
             assert to_coordinate_system is None
             _set_transformations(element, {})
     else:
-        if write_to_sdata.locate_element(element) is None:
+        if len(write_to_sdata.locate_element(element)) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(

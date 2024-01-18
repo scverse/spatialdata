@@ -313,7 +313,7 @@ def test_locate_spatial_element(full_sdata: SpatialData) -> None:
     assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
     del full_sdata.images["image2d"]
-    assert full_sdata.locate_element(im) is None
+    assert len(full_sdata.locate_element(im)) == 0
     full_sdata.images["image2d"] = im
     full_sdata.images["image2d_again"] = im
     paths = full_sdata.locate_element(im)
