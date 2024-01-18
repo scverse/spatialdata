@@ -312,9 +312,9 @@ class SpatialData:
             return elem_group
         return root
 
-    def locate_element(self, element: SpatialElement) -> list[str] | None:
+    def locate_element(self, element: SpatialElement) -> list[str]:
         """
-        Locate a SpatialElement within the SpatialData object and, if found, returns its Zarr path relative to the root.
+        Locate a SpatialElement within the SpatialData object and returns its Zarr paths relative to the root.
 
         Parameters
         ----------
@@ -323,8 +323,8 @@ class SpatialData:
 
         Returns
         -------
-        A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed), or
-        None if the element is not found.
+        A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed).
+        The list is empty if the element is not present.
         """
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
@@ -336,7 +336,7 @@ class SpatialData:
                     found_element_type.append(element_type)
                     found_element_name.append(element_name)
         if len(found) == 0:
-            return None
+            return []
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
     def _write_transformations_to_disk(self, element: SpatialElement) -> None:
@@ -353,7 +353,7 @@ class SpatialData:
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
         located = self.locate_element(element)
-        if located is None:
+        if len(located) == 0:
             raise ValueError(
                 "Cannot save the transformation to the element as it has not been found in the SpatialData object"
             )
