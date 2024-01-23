@@ -11,6 +11,7 @@ import pandas as pd
 from anndata import AnnData
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
 
@@ -34,11 +35,9 @@ __all__ = ["ImageTilesDataset"]
 
 class ImageTilesDataset(Dataset):
     """
-    Dataloader for SpatialData.
-
     :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
 
-    By default, the dataset returns spatialdata object, but when `return_image` and `return_annot`
+    By default, the dataset returns spatialdata object, but when `return_image` and `return_annotations`
     are set, the dataset returns a tuple containing:
 
         - the tile image, centered in the target coordinate system of the region.
@@ -49,14 +48,14 @@ class ImageTilesDataset(Dataset):
     sdata
         The SpatialData object.
     regions_to_images
-        A mapping between region and images. The regions are used to compute the tile centers, while the images are
+        A mapping between regions and images. The regions are used to compute the tile centers, while the images are
         used to get the pixel values.
     regions_to_coordinate_systems
         A mapping between regions and coordinate systems. The coordinate systems are used to transform both
         regions coordinates for tiles as well as images.
     tile_scale
         The scale of the tiles. This is used only if the `regions` are `shapes`.
-        It is a scaling factor applied to either the radius (spots) or length (polygons) of the `shapes`
+        It is a scaling factor applied to either the radius (circle) or length (polygons) of the `shapes`
         according to the geometry type of the `shapes` element:
 
             - if `shapes` are circles (spots), the radius is scaled by `tile_scale`.
@@ -67,22 +66,26 @@ class ImageTilesDataset(Dataset):
         The dimension of the requested tile in the units of the target coordinate system.
         This specifies the extent of the tile. This is not related the size in pixel of each returned tile.
     rasterize
-        If True, the images are rasterized using :func:`spatialdata.rasterize`.
-        If False, they are queried using :func:`spatialdata.bounding_box_query`.
+        If True, the images are rasterized using :func:`spatialdata.rasterize` into the target coordinate system;
+        this applies the coordinate transformations to the data.
+        If False, they are queried using :func:`spatialdata.bounding_box_query` from the pixel coordinate system; this
+        back-transforms the target tile into the pixel coordinates. If the back-transformed tile is not aligned with the
+        pixel grid, the returned tile will correspond to the bounding box of the back-transformed tile.
     return_annotations
-        If not None, a value from the table is returned together with the image tile.
+        If not None, one or more values from the table are returned together with the image tile.
         Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
         can be returned. If None, it will return a `SpatialData` object with only the tuple
-        containing the image and the table value.
+        containing the image and the table row.
     transform
+        A data transformations (for instance a normalization operation, not to be confused with a coordinate
+        transformation) to be applied to the image and the table value.
         A callable that takes as input the tuple (image, table_value) and returns a new tuple (when
         `return_annotations` is not None); a callable that takes as input the `SpatialData` object and
         returns a tuple when `return_annotations` is `None`.
-        This parameter can be used to apply data transformations (for instance a normalization operation) to the
-        image and the table value.
     rasterize_kwargs
         Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is True.
-        This argument can be used for instance to choose the pixel dimension of the image tile.
+        This argument can be used in particular to choose the pixel dimension of the image tile; please refer to the
+        :func:`spatialdata.rasterize` documentation.
 
     Returns
     -------
@@ -132,16 +135,33 @@ class ImageTilesDataset(Dataset):
         """Validate input parameters."""
         self._region_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
         self._instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-        available_regions = sdata.table.obs[self._region_key].cat.categories
+        if not isinstance(sdata.table.obs[self._region_key].dtype, CategoricalDtype):
+            raise TypeError(
+                f"The `regions_element` column `{self._region_key}` in the table must be a categorical dtype. "
+                f"Please convert it."
+            )
+        # available_regions = sdata.table.obs[self._region_key].cat.categories
         cs_region_image = []  # list of tuples (coordinate_system, region, image)
 
-        # check unique matching between regions and images and coordinate systems
-        assert len(set(regions_to_images.values())) == len(
-            regions_to_images.keys()
-        ), "One region cannot be paired to multiple images."
-        assert len(set(regions_to_coordinate_systems.values())) == len(
+        # check that the regions specified in the two dicts are the same
+        assert set(regions_to_images.keys()) == set(
             regions_to_coordinate_systems.keys()
-        ), "One region cannot be paired to multiple coordinate systems."
+        ), "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
+        self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
+        self.sdata = sdata
+        self.dataset_table = self.sdata.table[
+            self.sdata.table.obs[self._region_key].isin(self.regions)
+        ]  # filtered table for the data loader
+
+        # luca: commented out, this is always true because the dicts are unique keys, and I don't having duplicate
+        # values is a problem here
+        # # check unique matching between regions and images and coordinate systems
+        # assert len(set(regions_to_images.values())) == len(
+        #     regions_to_images.keys()
+        # ), "One region cannot be paired to multiple images."
+        # assert len(set(regions_to_coordinate_systems.values())) == len(
+        #     regions_to_coordinate_systems.keys()
+        # ), "One region cannot be paired to multiple coordinate systems."
 
         for region_key, image_key in regions_to_images.items():
             # get elements
@@ -158,8 +178,10 @@ class ImageTilesDataset(Dataset):
             if isinstance(image_elem, MultiscaleSpatialImage):
                 raise NotImplementedError("Multiscale images are not implemented yet.")
 
-            if region_key not in available_regions:
-                raise ValueError(f"region {region_key} not found in the spatialdata object.")
+            # if sdata[region_key] does not fail it means that the region is in the spatialdata object. If it's not in
+            # the table it may not be a problem
+            # if region_key not in available_regions:
+            #     raise ValueError(f"region {region_key} not found in the spatialdata object.")
 
             # check that the coordinate systems are valid for the elements
             try:
@@ -171,11 +193,6 @@ class ImageTilesDataset(Dataset):
             except KeyError as e:
                 raise KeyError(f"region {region_key} not found in `regions_to_coordinate_systems`") from e
 
-        self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
-        self.sdata = sdata
-        self.dataset_table = self.sdata.table[
-            self.sdata.table.obs[self._region_key].isin(self.regions)
-        ]  # filtered table for the data loader
         self._cs_region_image = tuple(cs_region_image)  # tuple of tuples (coordinate_system, region_key, image_key)
 
     def _preprocess(
@@ -270,6 +287,25 @@ class ImageTilesDataset(Dataset):
             max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
             target_coordinate_system=row["cs"],
         )
+        # ##
+        # import shapely
+        # min_y, min_x = t_coords[[f"min{i}" for i in self.dims]].values
+        # max_y, max_x = t_coords[[f"max{i}" for i in self.dims]].values
+        # polygon = shapely.Polygon(
+        #     [
+        #         (min_x, min_y),
+        #         (max_x, min_y),
+        #         (max_x, max_y),
+        #         (min_x, max_y),
+        #     ]
+        # )
+        # from spatialdata.transformations import Identity
+        # polygon = ShapesModel.parse(GeoDataFrame(geometry=[polygon]), transformations={row['cs']: Identity()})
+        # sdata_debug = SpatialData.init_from_elements({'image': image, 'polygon': polygon})
+        # from napari_spatialdata import Interactive
+        # Interactive(sdata_debug)
+        #
+        # ##
 
         if self.transform is not None:
             out = self._return(idx, tile)
@@ -396,6 +432,7 @@ def _get_tile_coords(
             )
 
     # transform extent
+    # TODO: review this, what is being dropped by the transformation?
     aff = transformation.to_affine_matrix(input_axes=tuple(dims[0]), output_axes=tuple(dims[0]))
     extent = _affine_matrix_multiplication(aff, np.array(extent)[:, np.newaxis])
 
