@@ -147,13 +147,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(f_store_path, f_elem.path)
-            if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore):
-                table = read_elem(f_elem)
-                # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
-                # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
-                # table = read_anndata_zarr(f_elem)
-            else:
-                table = read_anndata_zarr(f_elem_store)
+            table = read_anndata_zarr(f_elem_store)
             if TableModel.ATTRS_KEY in table.uns:
                 # fill out eventual missing attributes that has been omitted because their value was None
                 attrs = table.uns[TableModel.ATTRS_KEY]
