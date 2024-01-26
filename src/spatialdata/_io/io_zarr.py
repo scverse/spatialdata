@@ -7,7 +7,6 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger
@@ -37,6 +36,21 @@ def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, s
         f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
     f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
     return f, f_store_path
+
+
+def _get_substore(store: Union[str, Path, zarr.Group], path: Optional[str] = None) -> Union[str, zarr.storage.FSStore]:
+    if isinstance(store, (str, Path)):
+        store = zarr.open(store, mode="r").store
+    if isinstance(store, zarr.Group):
+        store = store.store
+    if isinstance(store, zarr.storage.DirectoryStore):
+        # if local store, use local sepertor
+        return os.path.join(store.path, path) if path else store.path
+    if isinstance(store, zarr.storage.FSStore):
+        # reuse the same fs object, assume '/' as separator
+        return zarr.storage.FSStore(url=store.path + "/" + path, fs=store.fs, mode="r")
+    # fallback to FSStore with standard fs, assume '/' as separator
+    return zarr.storage.FSStore(url=store.path + "/" + path, mode="r")
 
 
 def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
@@ -76,7 +90,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            f_elem_store = _get_substore(f, f_elem.path)
             element = _read_multiscale(f_elem_store, raster_type="image")
             images[subgroup_name] = element
             count += 1
@@ -92,7 +106,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
+                f_elem_store = _get_substore(f, f_elem.path)
                 labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                 count += 1
             logger.debug(f"Found {count} elements in {group}")
@@ -106,7 +120,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
             if Path(subgroup_name).name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            f_elem_store = _get_substore(f, f_elem.path)
             points[subgroup_name] = _read_points(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
@@ -119,7 +133,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            f_elem_store = _get_substore(f, f_elem.path)
             shapes[subgroup_name] = _read_shapes(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
