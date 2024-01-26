@@ -240,7 +240,7 @@ class BlobsDataset:
         arr = rng.integers(padding, length - padding, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
         points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int64)
-        genes = rng.choice(["a", "b"], size=arr.shape[0])
+        genes = rng.choice(["gene_a", "gene_b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
                 "genes": genes,
