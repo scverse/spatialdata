@@ -6,7 +6,7 @@ on:
         tags:
             - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
     pull_request:
-        branches: [main]
+        branches: "*"
 
 jobs:
     test:
@@ -63,7 +63,7 @@ jobs:
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  pytest -v --cov --color=yes --cov-report=xml
+                  pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v3.1.1
               with:

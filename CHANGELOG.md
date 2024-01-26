@@ -8,9 +8,25 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.0.15] - tbd
+## [0.0.x] - tbd
+
+### Minor
+
+-   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
 
 ### Added
+
+-   added SpatialData.subset() API
+-   added SpatialData.locate_element() API
+
+### Fixed
+
+-   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
+-   fixed warnings for categorical dtypes in tables in TableModel and PointsModel
+
+#### Minor
+
+-   refactored data loader for deep learning
 
 ## [0.0.14] - 2023-10-11
 

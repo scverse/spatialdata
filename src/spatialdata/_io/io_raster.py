@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
@@ -69,7 +68,8 @@ def _read_multiscale(
     # and for instance in the xenium example
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
-    name = os.path.basename(node.metadata["name"])
+    # TODO: what to do with name? For now remove?
+    # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     channels: Optional[list[Any]] = None
     if raster_type == "image" and channels_metadata is not None:
@@ -81,7 +81,7 @@ def _read_multiscale(
             data = node.load(Multiscales).array(resolution=d, version=fmt.version)
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
-                name=name,
+                name="image",
                 dims=axes,
                 coords={"c": channels} if channels is not None else {},
             )
@@ -91,7 +91,7 @@ def _read_multiscale(
     data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
     si = SpatialImage(
         data,
-        name=name,
+        name="image",
         dims=axes,
         coords={"c": channels} if channels is not None else {},
     )
