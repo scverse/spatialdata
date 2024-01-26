@@ -113,6 +113,7 @@ class SpatialData:
         shapes: dict[str, GeoDataFrame] | None = None,
         table: AnnData | None = None,
     ) -> None:
+        # TODO: remote paths should not be represented as Path objects and cannot be fully represented by them
         self._path: Path | None = None
 
         self._shared_keys: set[str | None] = set()

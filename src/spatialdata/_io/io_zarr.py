@@ -146,7 +146,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            f_elem_store = _get_substore(f, f_elem.path)
             table = read_anndata_zarr(f_elem_store)
             if TableModel.ATTRS_KEY in table.uns:
                 # fill out eventual missing attributes that has been omitted because their value was None
@@ -170,5 +170,5 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         shapes=shapes,
         table=table,
     )
-    sdata._path = Path(store)
+    sdata._path = Path(store._path if isinstance(store, zarr.Group) else store)
     return sdata
