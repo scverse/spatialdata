@@ -857,6 +857,14 @@ class TableModel:
             adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
+        if adata.obs[instance_key].dtype != int:
+            try:
+                warnings.warn(
+                    f"Converting `{cls.INSTANCE_KEY}: {instance_key}` to integer dtype.", UserWarning, stacklevel=2
+                )
+                adata.obs[instance_key] = adata.obs[instance_key].astype(int)
+            except ValueError:
+                logger.error(f"Values within table.obs['{instance_key}'] must be able to be coerced to int dtype.")
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
