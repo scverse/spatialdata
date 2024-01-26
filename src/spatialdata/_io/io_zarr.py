@@ -7,6 +7,7 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
+from anndata.experimental import read_elem
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger
@@ -49,6 +50,9 @@ def _get_substore(store: Union[str, Path, zarr.Group], path: Optional[str] = Non
     if isinstance(store, zarr.storage.FSStore):
         # reuse the same fs object, assume '/' as separator
         return zarr.storage.FSStore(url=store.path + "/" + path, fs=store.fs, mode="r")
+    if isinstance(store, zarr.storage.ConsolidatedMetadataStore):
+        # reuse the same fs object, assume '/' as separator
+        return store.store.path + path
     # fallback to FSStore with standard fs, assume '/' as separator
     return zarr.storage.FSStore(url=store.path + "/" + path, mode="r")
 
@@ -147,7 +151,13 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem = group[subgroup_name]
             f_elem_store = _get_substore(f, f_elem.path)
-            table = read_anndata_zarr(f_elem_store)
+            if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore):
+                table = read_elem(f_elem)
+                # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
+                # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
+                # table = read_anndata_zarr(f_elem)
+            else:
+                table = read_anndata_zarr(f_elem_store)
             if TableModel.ATTRS_KEY in table.uns:
                 # fill out eventual missing attributes that has been omitted because their value was None
                 attrs = table.uns[TableModel.ATTRS_KEY]
