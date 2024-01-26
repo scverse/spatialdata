@@ -989,11 +989,12 @@ def test_compose_in_xy_and_operate_in_cyx():
     )
 
 
-def test_keep_numerical_coordinates_c():
+@pytest.mark.parametrize("image_name", ["blobs_image", "blobs_multiscale_image"])
+def test_keep_numerical_coordinates_c(image_name):
     c_coords = range(3)
     sdata = blobs(n_channels=len(c_coords))
-    t = get_transformation(sdata.images["blobs_image"])
-    t_blobs = transform(sdata.images["blobs_image"], t)
+    t = get_transformation(sdata.images[image_name])
+    t_blobs = transform(sdata.images[image_name], t)
     assert np.array_equal(t_blobs.coords["c"], c_coords)
 
 
