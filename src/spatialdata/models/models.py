@@ -19,6 +19,7 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
+from pandas.errors import IntCastingNaNError
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -863,8 +864,8 @@ class TableModel:
                     f"Converting `{cls.INSTANCE_KEY}: {instance_key}` to integer dtype.", UserWarning, stacklevel=2
                 )
                 adata.obs[instance_key] = adata.obs[instance_key].astype(int)
-            except ValueError:
-                logger.error(f"Values within table.obs['{instance_key}'] must be able to be coerced to int dtype.")
+            except IntCastingNaNError as exc:
+                raise ValueError("Values within table.obs[] must be able to be coerced to int dtype.") from exc
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr

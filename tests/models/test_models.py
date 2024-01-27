@@ -319,6 +319,16 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+        obs["A"] = obs["A"].astype(str)
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.warns(UserWarning, match="Converting"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        obs["A"] = pd.Series(len([chr(ord("a") + i) for i in range(10)]))
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(ValueError, match="Values within"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
 
 def test_get_schema():
     images = _get_images()
