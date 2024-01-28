@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
+from enum import Enum
+from functools import partial
 from typing import Any
 
 import dask.array as da
@@ -47,6 +50,20 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
     table = table[table.obs[region_key].isin(element_names)].copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
+
+
+def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
+    if isinstance(element, SpatialImage):
+        # get unique labels value (including 0 if present)
+        instances = da.unique(element.data).compute()
+    else:
+        assert isinstance(element, MultiscaleSpatialImage)
+        v = element["scale0"].values()
+        assert len(v) == 1
+        xdata = next(iter(v))
+        # can be slow
+        instances = da.unique(xdata.data).compute()
+    return pd.Index(np.sort(instances))
 
 
 def _filter_table_by_elements(
@@ -127,6 +144,101 @@ def _filter_table_by_elements(
     table = table.copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
+
+
+def _create_element_dict(
+    element_type: str, name: str, element: SpatialElement | AnnData, elements_dict: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    if element_type not in elements_dict:
+        elements_dict[element_type] = {}
+    elements_dict[element_type][name] = element
+    return elements_dict
+
+
+def _left_inner_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData]:
+    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    groups_df = table.obs.groupby(by=region_column_name)
+    joined_indices = None
+    for element_type, name_element in element_dict.items():
+        for name, element in name_element.items():
+            if name in regions:
+                group_df = groups_df.get_group(name)
+                table_instance_key_column = group_df[instance_key]  # This is always a series
+                if element_type in ["points", "shapes"]:
+                    element_indices = element.index
+                else:
+                    element_indices = _get_unique_label_values_as_index(element)
+
+                mask = table_instance_key_column.isin(element_indices)
+                if joined_indices is None:
+                    joined_indices = table_instance_key_column[mask].index
+                else:
+                    # in place append does not work with pd.Index
+                    joined_indices = joined_indices.append(table_instance_key_column[mask].index)
+            else:
+                warnings.warn(
+                    f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
+                )
+        joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
+        joined_table = table[joined_indices, :].copy()
+
+        return element_dict, joined_table
+
+
+class JoinTypes(Enum):
+    """Available join types for matching elements to tables and vice versa."""
+
+    LEFT_INNER = left_inner = partial(_left_inner_join_spatialelement_table)
+
+    def __call__(self, *args):
+        self.value(*args)
+
+    @classmethod
+    def get(cls, key):
+        if key in cls.__members__:
+            return cls.__members__.get(key)
+        return None
+
+
+def join_sdata_spatialelement_table(
+    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "LEFT_INNER"
+) -> tuple[dict[str, Any], AnnData]:
+    assert sdata.tables.get(table_name), f"No table with {table_name} exists in the SpatialData object."
+    table = sdata.tables[table_name]
+    if isinstance(spatial_element_name, str):
+        spatial_element_name = [spatial_element_name]
+
+    elements_dict = {}
+    for name in spatial_element_name:
+        element_type, _, element = sdata._find_element(name)
+        elements_dict = _create_element_dict(element_type, name, element, elements_dict)
+    if "images" in elements_dict:
+        warnings.warn(
+            f"Images: `{', '.join(elements_dict['images'].keys())}` cannot be joined with a table",
+            UserWarning,
+            stacklevel=2,
+        )
+    if "tables" in elements_dict:
+        warnings.warn(
+            f"Tables: `{', '.join(elements_dict['tables'].keys())}` given in spatial_element_names cannot be "
+            f"joined with a table using this function.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if JoinTypes.get(how) is not None:
+        elements_dict, table = JoinTypes[how](elements_dict, table)
+    else:
+        raise ValueError(f"`{how}` is not a valid type of join.")
+
+    elements_dict = {
+        name: element for outer_key, dict_val in elements_dict.items() for name, element in dict_val.items()
+    }
+    return elements_dict, table
 
 
 def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
