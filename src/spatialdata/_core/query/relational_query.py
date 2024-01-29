@@ -155,7 +155,7 @@ def _create_element_dict(
     return elements_dict
 
 
-def _left_exclusive_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -215,6 +215,7 @@ class JoinTypes(Enum):
     """Available join types for matching elements to tables and vice versa."""
 
     LEFT = left = partial(_left_join_spatialelement_table)
+    LEFT_EXCLUSIVE = left_exclusive = partial(_left_exclusive_join_spatialelement_table)
 
     def __call__(self, *args):
         self.value(*args)
