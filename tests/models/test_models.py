@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from copy import deepcopy
 from functools import partial
@@ -305,7 +306,7 @@ class TestModels:
         region: str | np.ndarray,
     ) -> None:
         region_key = "reg"
-        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -318,6 +319,31 @@ class TestModels:
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
+
+        obs["A"] = obs["A"].astype(str)
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.warns(UserWarning, match="Converting"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        obs["A"] = pd.Series(len([chr(ord("a") + i) for i in range(10)]))
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(ValueError, match="Values within"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+    @pytest.mark.parametrize("model", [TableModel])
+    @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
+    def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
+        region_key = "region"
+        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs[region_key] = region
+        obs["A"] = [1] * 5 + list(range(5))
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        adata.obs["A"] = [1] * 10
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
 
 def test_get_schema():

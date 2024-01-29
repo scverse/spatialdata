@@ -19,6 +19,7 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
+from pandas.errors import IntCastingNaNError
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -857,6 +858,23 @@ class TableModel:
             adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
+        if adata.obs[instance_key].dtype != int:
+            try:
+                warnings.warn(
+                    f"Converting `{cls.INSTANCE_KEY}: {instance_key}` to integer dtype.", UserWarning, stacklevel=2
+                )
+                adata.obs[instance_key] = adata.obs[instance_key].astype(int)
+            except IntCastingNaNError as exc:
+                raise ValueError("Values within table.obs[] must be able to be coerced to int dtype.") from exc
+
+        grouped = adata.obs.groupby(region_key)
+        grouped_size = grouped.size()
+        grouped_nunique = grouped.nunique()
+        not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
+        if not_unique:
+            raise ValueError(
+                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique integers"
+            )
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr

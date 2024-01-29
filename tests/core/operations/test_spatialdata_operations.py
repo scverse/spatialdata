@@ -376,7 +376,7 @@ def test_subset(full_sdata: SpatialData) -> None:
 
     adata = AnnData(
         shape=(10, 0),
-        obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, "a", "b", "c", "d", "e"]},
+        obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]},
     )
     del full_sdata.table
     sdata_table = TableModel.parse(adata, region=["circles", "poly"], region_key="region", instance_key="instance_id")
