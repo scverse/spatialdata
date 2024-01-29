@@ -155,6 +155,45 @@ def _create_element_dict(
     return elements_dict
 
 
+def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData]:
+    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    groups_df = table.obs.groupby(by=region_column_name)
+    joined_indices = None
+    for element_type, name_element in element_dict.items():
+        for name, element in name_element.items():
+            if name in regions:
+                group_df = groups_df.get_group(name)
+                table_instance_key_column = group_df[instance_key]  # This is always a series
+                if element_type in ["points", "shapes"]:
+                    element_indices = element.index
+                else:
+                    warnings.warn(f"Element type `labels` not supported for left exclusive join. Skipping `{name}`",
+                                  UserWarning, stacklevel=2)
+                    continue
+
+                mask = table_instance_key_column.isin(element_indices)
+                masked_table_instance_key_column = table_instance_key_column[mask]
+                if joined_indices is None:
+                    joined_indices = masked_table_instance_key_column.index
+                else:
+                    # in place append does not work with pd.Index
+                    joined_indices = joined_indices.append(masked_table_instance_key_column.index)
+
+                masked_element = element.iloc[masked_table_instance_key_column.values, :]
+                element_dict[element_type][name] = masked_element
+            else:
+                warnings.warn(
+                    f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
+                )
+                continue
+    joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
+    joined_table = table[joined_indices, :].copy()
+    return element_dict, joined_table
+
+
 def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
@@ -173,9 +212,16 @@ def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, 
                     element_dict[element_type][name] = masked_element
                 else:
                     warnings.warn(f"Element type `labels` not supported for left exclusive join. Skipping `{name}`", UserWarning, stacklevel=2)
+                    continue
+            else:
+                warnings.warn(
+                    f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
+                )
+                continue
 
     joined_table = table[[False for i in range(table.n_obs)], :]
     return element_dict, joined_table
+
 
 def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
@@ -205,10 +251,11 @@ def _left_join_spatialelement_table(
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
                 )
-        joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
-        joined_table = table[joined_indices, :].copy()
+                continue
+    joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
+    joined_table = table[joined_indices, :].copy()
 
-        return element_dict, joined_table
+    return element_dict, joined_table
 
 
 class JoinTypes(Enum):
@@ -216,6 +263,7 @@ class JoinTypes(Enum):
 
     LEFT = left = partial(_left_join_spatialelement_table)
     LEFT_EXCLUSIVE = left_exclusive = partial(_left_exclusive_join_spatialelement_table)
+    INNER = inner = partial(_inner_join_spatialelement_table)
 
     def __call__(self, *args):
         self.value(*args)
