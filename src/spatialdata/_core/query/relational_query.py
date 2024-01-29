@@ -155,7 +155,7 @@ def _create_element_dict(
     return elements_dict
 
 
-def _left_inner_join_spatialelement_table(
+def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
@@ -192,7 +192,7 @@ def _left_inner_join_spatialelement_table(
 class JoinTypes(Enum):
     """Available join types for matching elements to tables and vice versa."""
 
-    LEFT_INNER = left_inner = partial(_left_inner_join_spatialelement_table)
+    LEFT = left = partial(_left_join_spatialelement_table)
 
     def __call__(self, *args):
         self.value(*args)
@@ -205,7 +205,7 @@ class JoinTypes(Enum):
 
 
 def join_sdata_spatialelement_table(
-    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "LEFT_INNER"
+    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "LEFT"
 ) -> tuple[dict[str, Any], AnnData]:
     assert sdata.tables.get(table_name), f"No table with {table_name} exists in the SpatialData object."
     table = sdata.tables[table_name]
