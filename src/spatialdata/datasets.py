@@ -1,4 +1,5 @@
 """SpatialData datasets."""
+
 from typing import Any, Optional, Union
 
 import numpy as np

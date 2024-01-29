@@ -1,4 +1,5 @@
 """Models and schema for SpatialData."""
+
 from __future__ import annotations
 
 import warnings

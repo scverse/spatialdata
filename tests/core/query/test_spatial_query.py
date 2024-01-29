@@ -209,11 +209,7 @@ def test_bounding_box_raster(n_channels: int, is_labels: bool, is_3d: bool, is_b
     model = (
         Labels3DModel
         if is_labels and is_3d
-        else Labels2DModel
-        if is_labels
-        else Image3DModel
-        if is_3d
-        else Image2DModel
+        else Labels2DModel if is_labels else Image3DModel if is_3d else Image2DModel
     )
 
     image_element = model.parse(image)
