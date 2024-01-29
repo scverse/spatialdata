@@ -459,14 +459,32 @@ def test_map_coordinate_systems_long_path(full_sdata):
     )
 
 
-def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
-    # TODO: we are just applying the transformation,
-    #  we are not checking it is correct. We could improve this test
-    scale = Scale([2], axes=("x",))
-    for element in sdata._gen_elements_values():
+@pytest.mark.parametrize("maintain_positioning", [True, False])
+def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialData, maintain_positioning: bool):
+    k = 10.0
+    scale = Scale([k], axes=("x",))
+    for element in full_sdata._gen_elements_values():
         set_transformation(element, scale, "my_space")
-        sdata.transform_element_to_coordinate_system(element, "my_space")
-    sdata.transform_to_coordinate_system("my_space")
+        transformed_element = full_sdata.transform_element_to_coordinate_system(
+            element, "my_space", maintain_positioning=maintain_positioning
+        )
+        t = get_transformation(transformed_element, to_coordinate_system="my_space")
+        a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
+        print(maintain_positioning)
+        if maintain_positioning:
+            assert np.allclose(a, np.array([[1 / k, 0], [0, 1]]))
+            t = get_transformation(transformed_element, to_coordinate_system="global")
+            a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
+            assert np.allclose(a, np.array([[1 / k, 0], [0, 1]]))
+        else:
+            assert np.allclose(a, np.array([[1, 0], [0, 1]]))
+            d = get_transformation(transformed_element, get_all=True)
+            assert isinstance(d, dict)
+            assert "global" not in d
+
+    # this calls transform_element_to_coordinate_system() internally()
+    transformed = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
+    # TODO: add test for element1 -> cs1 <- element2 -> cs2 and transforming element1 to cs2
 
 
 def test_transformations_between_coordinate_systems(images):
