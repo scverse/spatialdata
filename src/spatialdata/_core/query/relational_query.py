@@ -155,6 +155,28 @@ def _create_element_dict(
     return elements_dict
 
 
+def _left_exclusive_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData]:
+    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    groups_df = table.obs.groupby(by=region_column_name)
+    for element_type, name_element in element_dict.items():
+        for name, element in name_element.items():
+            if name in regions:
+                group_df = groups_df.get_group(name)
+                table_instance_key_column = group_df[instance_key]
+                if element_type in ["points", "shapes"]:
+                    mask = np.full(len(element), True, dtype=bool)
+                    mask[table_instance_key_column.values] = False
+                    masked_element = element.iloc[mask, :]
+                    element_dict[element_type][name] = masked_element
+                else:
+                    warnings.warn(f"Element type `labels` not supported for left exclusive join. Skipping `{name}`", UserWarning, stacklevel=2)
+
+    joined_table = table[[False for i in range(table.n_obs)], :]
+    return element_dict, joined_table
+
 def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
