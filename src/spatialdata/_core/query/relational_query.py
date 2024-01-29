@@ -155,6 +155,7 @@ def _create_element_dict(
     return elements_dict
 
 
+
 def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
@@ -194,7 +195,8 @@ def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], ta
     return element_dict, joined_table
 
 
-def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+def _left_exclusive_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
