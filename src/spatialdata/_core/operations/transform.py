@@ -271,6 +271,7 @@ def _(
 
     get_axes_names(data)
     transformed_dict = {}
+    raster_translation: Translation | None = None
     for k, v in data.items():
         assert len(v) == 1
         xdata = v.values().__iter__().__next__()
@@ -282,9 +283,11 @@ def _(
             scale = _get_scale(xdata.attrs["transform"])
             composed = Sequence([scale, transformation, scale.inverse()])
 
-        transformed_dask, raster_translation = _transform_raster(
+        transformed_dask, raster_translation_single_scale = _transform_raster(
             data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
         )
+        if raster_translation is None:
+            raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
         transformed_dict[k] = SpatialImage(
