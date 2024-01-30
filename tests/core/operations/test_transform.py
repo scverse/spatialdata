@@ -21,7 +21,14 @@ from spatialdata.transformations.operations import (
     remove_transformation,
     set_transformation,
 )
-from spatialdata.transformations.transformations import Affine, Identity, Scale, Sequence, Translation
+from spatialdata.transformations.transformations import (
+    Affine,
+    BaseTransformation,
+    Identity,
+    Scale,
+    Sequence,
+    Translation,
+)
 
 
 class TestElementsTransform:
@@ -116,6 +123,13 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
 from napari_spatialdata import Interactive
 
 
+def _set_transformation_for_all_elements(
+    sdata: SpatialData, transformation: BaseTransformation, to_coordinate_system: str
+):
+    for element in sdata._gen_elements_values():
+        set_transformation(element, transformation=transformation, to_coordinate_system=to_coordinate_system)
+
+
 def test_transform_image_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
     e = get_extent(sdata["image2d"])
@@ -138,10 +152,11 @@ def test_transform_image_spatial_image(images: SpatialData):
     #     sdata.images["face"] = im_element
 
     affine = _get_affine(small_translation=False)
-    sdata_transformed = transform(sdata, affine, maintain_positioning=False)
-    padded = transform(sdata_transformed, affine.inverse(), maintain_positioning=False)
+    _set_transformation_for_all_elements(sdata, affine, "transformed")
+    sdata_transformed = transform(sdata, to_coordinate_system="transformed")
+    _set_transformation_for_all_elements(sdata_transformed, affine.inverse(), "transformed_back")
+    padded = transform(sdata_transformed, to_coordinate_system="transformed_back")
     _unpad_rasters(padded)
-    Interactive([sdata, sdata_transformed])
     Interactive([sdata, padded])
     pass
     # raise NotImplementedError("TODO: plot the images")
@@ -155,7 +170,7 @@ def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
-    Interactive([padded, sdata])
+    # Interactive([padded, sdata])
     pass
     # TODO: unpad the image
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -168,7 +183,7 @@ def test_transform_labels_spatial_image(labels: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
-    Interactive([padded, sdata])
+    # Interactive([padded, sdata])
     pass
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
@@ -181,7 +196,7 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
-    Interactive([padded, sdata])
+    # Interactive([padded, sdata])
     pass
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")

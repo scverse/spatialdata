@@ -289,9 +289,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) ->
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    t = get_transformation(e, to_coordinate_system=coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    transformed = transform(e, t)
+    transformed = transform(e, to_coordinate_system=coordinate_system)
     return _get_extent_of_shapes(transformed)
 
 
@@ -305,9 +303,7 @@ def _(e: DaskDataFrame, coordinate_system: str = "global", exact: bool = True) -
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    t = get_transformation(e, to_coordinate_system=coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    transformed = transform(e, t)
+    transformed = transform(e, to_coordinate_system=coordinate_system)
     return _get_extent_of_points(transformed)
 
 

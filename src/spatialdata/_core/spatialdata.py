@@ -500,7 +500,6 @@ class SpatialData:
         The transformed element.
         """
         from spatialdata import transform
-        from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
         from spatialdata.transformations import Sequence
         from spatialdata.transformations.operations import (
             get_transformation,
@@ -510,13 +509,21 @@ class SpatialData:
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
-        transformed = transform(element, t, maintain_positioning=maintain_positioning)
+        if maintain_positioning:
+            transformed = transform(element, t, maintain_positioning=maintain_positioning)
+        else:
+            d = get_transformation(element, get_all=True)
+            assert isinstance(d, dict)
+            if target_coordinate_system not in d:
+                d[target_coordinate_system] = t
+            transformed = transform(
+                element, to_coordinate_system=target_coordinate_system, maintain_positioning=maintain_positioning
+            )
         if not maintain_positioning:
             d = get_transformation(transformed, get_all=True)
             assert isinstance(d, dict)
             assert len(d) == 1
-            assert list(d.keys())[0] == DEFAULT_COORDINATE_SYSTEM
-            t = d[DEFAULT_COORDINATE_SYSTEM]
+            t = list(d.values())[0]
             remove_transformation(transformed, remove_all=True)
             set_transformation(transformed, t, target_coordinate_system)
         else:

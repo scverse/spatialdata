@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
@@ -107,17 +108,18 @@ def _adjust_transformations(
     transformation: BaseTransformation,
     raster_translation: Translation | None,
     maintain_positioning: bool,
+    to_coordinate_system: str | None = None,
 ) -> None:
     """Adjust the transformations of an element after it has been transformed.
 
     Parameters
     ----------
     element
-        The SpatialElement to which the transformation should be prepended
+        The SpatialElement to which the transformation should be prepended.
     old_transformations
-        The transformations that were present in the element before the data was transformed
+        The transformations that were present in the element before the data was transformed.
     transformation
-        The transformation that was used to transform the data
+        The transformation that was used to transform the data.
     raster_translation
         If the data is non-raster this parameter must be None. If the data is raster, this translation is the one
         that would make the old data and the transformed data aligned. Note that if the transformation that was used
@@ -128,6 +130,9 @@ def _adjust_transformations(
         If True, the inverse of the transformation is prepended to the existing transformations of the element (after
         the eventual raster_translation). This is useful when the user wants to transform the actual data,
         but maintain the positioning of the element in the various coordinate systems.
+    to_coordinate_system
+        The coordinate system to which the data is to be transformed. This value must be None if maintain_positioning
+        is True.
     """
     from spatialdata.transformations import (
         BaseTransformation,
@@ -136,6 +141,9 @@ def _adjust_transformations(
         set_transformation,
     )
     from spatialdata.transformations.transformations import Identity, Sequence
+
+    if maintain_positioning:
+        assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
     if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
@@ -157,25 +165,97 @@ def _adjust_transformations(
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
     remove_transformation(element, remove_all=True)
 
-    # if maintain_positioning:
-    if True:
+    if maintain_positioning:
         for cs, t in old_transformations.items():
             new_t: BaseTransformation
             new_t = Sequence([to_prepend, t])
             set_transformation(element, new_t, to_coordinate_system=cs)
-    # else:
-    #     set_transformation(element, to_prepend, to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
+    else:
+        set_transformation(element, to_prepend, to_coordinate_system=to_coordinate_system)
+
+
+def _validate_target_coordinate_systems(
+    data: SpatialData | SpatialElement,
+    transformation: BaseTransformation | None,
+    maintain_positioning: bool,
+    to_coordinate_system: str | None,
+) -> tuple[BaseTransformation, str | None]:
+    from spatialdata.transformations import BaseTransformation, Identity, get_transformation, set_transformation
+
+    if transformation is None and to_coordinate_system is None:
+        raise ValueError("Both transformation and to_coordinate_system are not specified, please specify the latter.")
+
+    if transformation is not None and to_coordinate_system is not None:
+        raise ValueError("Both transformation and to_coordinate_system are specified, please specify only the latter.")
+
+    if maintain_positioning:
+        if transformation is not None:
+            return transformation, None
+        else:
+            t = get_transformation(data, to_coordinate_system=to_coordinate_system)
+            assert isinstance(t, BaseTransformation)
+            return t, None
+    elif to_coordinate_system is not None:
+        if isinstance(data, SpatialData):
+            return None, to_coordinate_system
+        else:
+            t = get_transformation(data, to_coordinate_system=to_coordinate_system)
+            assert isinstance(t, BaseTransformation)
+            return t, to_coordinate_system
+
+    if isinstance(data, SpatialData):
+        raise RuntimeError(
+            "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
+            "when transforming a SpatialData object you need to specify a target_coordinate_system instead of a"
+            " transformation. "
+        )
+
+    message = (
+        "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
+        "transform() requires the user to specify a target coordinate system instead of a transformation. "
+        "Please use `set_transformation(element, transformation=..., to_coordinate_system=...)` to assign a"
+        " transformation to an element, and then call `transform(element, to_coordinate_system=...)` to transform "
+        "the element.\n"
+        "To ease this transition, if you call `transform(element, transformation=...)` and if only one coordinate "
+        "system is present, and if it is mapped via an Identity() transformation, then the transformation will be "
+        "set to that coordinate system and the element will be transformed. This will raise a warning."
+    )
+
+    assert isinstance(data, SpatialElement)
+    assert transformation is not None
+    assert to_coordinate_system is None
+    assert not maintain_positioning
+    d = get_transformation(data, get_all=True)
+    assert isinstance(d, dict)
+    k = list(d.keys())[0]
+    assert isinstance(k, str)
+
+    if len(d) == 1 and isinstance(d[k], Identity):
+        set_transformation(data, transformation=transformation, to_coordinate_system=k)
+        warnings.warn(message)
+        t = d[k]
+        return t, k
+    else:
+        raise RuntimeError(message)
 
 
 @singledispatch
-def transform(data: Any, transformation: BaseTransformation, maintain_positioning: bool = False) -> Any:
+def transform(
+    data: Any,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
+) -> Any:
     """
     Transform a SpatialElement using this transformation and returns the transformed element.
 
     Parameters
     ----------
-    element
+    data
         SpatialElement to transform.
+    transformation
+        The transformation to apply to the element. This parameter is kept for backward compatibility and will be
+        deprecated. Please use the to_coordinate_system parameter instead.
     maintain_positioning
         If True, in the transformed element, each transformation that was present in the original element will be
         prepended with the inverse of the transformation used to transform the data (i.e. the current
@@ -188,6 +268,9 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
         being applied has a rotation-like component, then the translation will take into account for the fact that the
         rotated data will have some paddings on each corner, and so it's origin must be shifted accordingly.
         Please see notes for more details of how this parameter interact with xarray.DataArray for raster data.
+    to_coordinate_system
+        The coordinate system to which the data should be transformed. The coordinate system must be present in the
+        element.
 
     Returns
     -------
@@ -195,6 +278,9 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
 
     Notes
     -----
+    This function will be deprecated in the future, requiring the user to pass a target_coordinate_system instead of the
+    transformation.
+
     An affine transformation contains a linear transformation and a translation. For raster types,
     only the linear transformation is applied to the data (e.g. the data is rotated or resized), but not the
     translation part.
@@ -203,24 +289,48 @@ def transform(data: Any, transformation: BaseTransformation, maintain_positionin
     translation to the element in the new coordinate system (if maintain_positioning=False).
     We are considering to change this behavior by letting translations modify the coordinates stored with
     xarray.DataArray; this is tracked here: https://github.com/scverse/spatialdata/issues/308
+
+    Raises
+    ------
+    RuntimeError
+        If maintain_positioning=False and the element contains transformation to multiple coordinate systems, since this
+        would likely produce unexpected alignments for all but one coordinate system.
     """
     raise RuntimeError(f"Cannot transform {type(data)}")
 
 
 @transform.register(SpatialData)
-def _(data: SpatialData, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialData:
+def _(
+    data: SpatialData,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
+) -> SpatialData:
+    transformation, to_coordinate_system = _validate_target_coordinate_systems(
+        data, transformation, maintain_positioning, to_coordinate_system
+    )
     new_elements: dict[str, dict[str, Any]] = {}
     for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)
         if len(d) > 0:
             new_elements[element_type] = {}
         for k, v in d.items():
-            new_elements[element_type][k] = transform(v, transformation, maintain_positioning=maintain_positioning)
+            new_elements[element_type][k] = transform(
+                v, transformation, to_coordinate_system=to_coordinate_system, maintain_positioning=maintain_positioning
+            )
     return SpatialData(**new_elements)
 
 
 @transform.register(SpatialImage)
-def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialImage:
+def _(
+    data: SpatialImage,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
+) -> SpatialImage:
+    transformation, to_coordinate_system = _validate_target_coordinate_systems(
+        data, transformation, maintain_positioning, to_coordinate_system
+    )
     schema = get_model(data)
     from spatialdata.transformations import get_transformation
 
@@ -249,8 +359,14 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
 
 @transform.register(MultiscaleSpatialImage)
 def _(
-    data: MultiscaleSpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False
+    data: MultiscaleSpatialImage,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
 ) -> MultiscaleSpatialImage:
+    transformation, to_coordinate_system = _validate_target_coordinate_systems(
+        data, transformation, maintain_positioning, to_coordinate_system
+    )
     schema = get_model(data)
     from spatialdata.models import (
         Image2DModel,
@@ -315,11 +431,19 @@ def _(
 
 
 @transform.register(DaskDataFrame)
-def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> DaskDataFrame:
+def _(
+    data: DaskDataFrame,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
+) -> DaskDataFrame:
     from spatialdata.models import PointsModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
+    transformation, to_coordinate_system = _validate_target_coordinate_systems(
+        data, transformation, maintain_positioning, to_coordinate_system
+    )
     axes = get_axes_names(data)
     arrays = []
     for ax in axes:
@@ -349,11 +473,19 @@ def _(data: DaskDataFrame, transformation: BaseTransformation, maintain_position
 
 
 @transform.register(GeoDataFrame)
-def _(data: GeoDataFrame, transformation: BaseTransformation, maintain_positioning: bool = False) -> GeoDataFrame:
+def _(
+    data: GeoDataFrame,
+    transformation: BaseTransformation | None = None,
+    maintain_positioning: bool = False,
+    to_coordinate_system: str | None = None,
+) -> GeoDataFrame:
     from spatialdata.models import ShapesModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
+    transformation, to_coordinate_system = _validate_target_coordinate_systems(
+        data, transformation, maintain_positioning, to_coordinate_system
+    )
     ndim = len(get_axes_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings.
     # I ignored but we may want to fix this
