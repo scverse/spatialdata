@@ -4,14 +4,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import scipy.misc
+from geopandas import GeoDataFrame
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import Polygon
 from spatial_image import SpatialImage
-from spatialdata import transform
+from spatialdata import get_extent, transform
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
@@ -112,22 +113,37 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
     return SpatialData(images=new_images, labels=new_labels)
 
 
-# TODO: when the io for 3D images and 3D labels work, add those tests
+from napari_spatialdata import Interactive
+
+
 def test_transform_image_spatial_image(images: SpatialData):
     sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
+    e = get_extent(sdata["image2d"])
+    gdf = ShapesModel.parse(
+        GeoDataFrame(
+            geometry=[
+                Polygon(
+                    [(e["x"][0], e["y"][0]), (e["x"][1], e["y"][0]), (e["x"][1], e["y"][1]), (e["x"][0], e["y"][1])]
+                )
+            ]
+        )
+    )
+    sdata.shapes["polygon"] = gdf
 
-    VISUAL_DEBUG = False
-    if VISUAL_DEBUG:
-        im = scipy.misc.face()
-        im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
-        del sdata.images["image2d"]
-        sdata.images["face"] = im_element
+    # VISUAL_DEBUG = True
+    # if VISUAL_DEBUG:
+    #     im = scipy.misc.face()
+    #     im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
+    #     del sdata.images["image2d"]
+    #     sdata.images["face"] = im_element
 
     affine = _get_affine(small_translation=False)
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
+    sdata_transformed = transform(sdata, affine, maintain_positioning=False)
+    padded = transform(sdata_transformed, affine.inverse(), maintain_positioning=False)
     _unpad_rasters(padded)
+    Interactive([sdata, sdata_transformed])
+    Interactive([sdata, padded])
+    pass
     # raise NotImplementedError("TODO: plot the images")
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
@@ -139,6 +155,8 @@ def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
+    Interactive([padded, sdata])
+    pass
     # TODO: unpad the image
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
@@ -150,6 +168,8 @@ def test_transform_labels_spatial_image(labels: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
+    Interactive([padded, sdata])
+    pass
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
@@ -161,6 +181,8 @@ def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
         transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
     )
     _unpad_rasters(padded)
+    Interactive([padded, sdata])
+    pass
     # TODO: unpad the labels
     # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 

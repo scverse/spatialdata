@@ -157,13 +157,14 @@ def _adjust_transformations(
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
     remove_transformation(element, remove_all=True)
 
-    if maintain_positioning:
+    # if maintain_positioning:
+    if True:
         for cs, t in old_transformations.items():
             new_t: BaseTransformation
             new_t = Sequence([to_prepend, t])
             set_transformation(element, new_t, to_coordinate_system=cs)
-    else:
-        set_transformation(element, to_prepend, to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
+    # else:
+    #     set_transformation(element, to_prepend, to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
 
 
 @singledispatch
@@ -231,6 +232,7 @@ def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioni
     c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
+    assert isinstance(transformed_data, SpatialImage)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     _adjust_transformations(
