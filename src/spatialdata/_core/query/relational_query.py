@@ -155,8 +155,9 @@ def _create_element_dict(
     return elements_dict
 
 
-def _right_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
-) -> tuple[dict[str, Any], AnnData]:
+def _right_exclusive_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData | None]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
@@ -169,9 +170,7 @@ def _right_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str,
                 table_instance_key_column = group_df[instance_key]
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
-                    empty_element = element.drop(element.index)
-                    # TODO: Decide whether we support joins as in sql or not, e.g. returning empty table, ugly for labels.
-                    element_dict[element_type][name] = empty_element
+                    element_dict[element_type][name] = None
                 else:
                     element_indices = _get_unique_label_values_as_index(element)
                 submask = ~table_instance_key_column.isin(element_indices)
@@ -180,11 +179,14 @@ def _right_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str,
     if len(mask) != 0:
         mask = pd.concat(mask)
         exclusive_table = table[mask, :].copy()
+    else:
+        exclusive_table = None
 
     return element_dict, exclusive_table
 
 
-def _right_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+def _right_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -207,7 +209,11 @@ def _right_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], ta
 
                 mask = table_instance_key_column.isin(element_indices)
                 masked_table_instance_key_column = table_instance_key_column[mask]
-                masked_element = element.iloc[masked_table_instance_key_column.values, :]
+                masked_element = (
+                    element.iloc[mask_values, :]
+                    if len((mask_values := masked_table_instance_key_column.values)) != 0
+                    else None
+                )
                 element_dict[element_type][name] = masked_element
             else:
                 warnings.warn(
@@ -242,27 +248,31 @@ def _inner_join_spatialelement_table(
 
                 mask = table_instance_key_column.isin(element_indices)
                 masked_table_instance_key_column = table_instance_key_column[mask]
+
+                masked_element = (
+                    element.iloc[mask_values, :]
+                    if len((mask_values := masked_table_instance_key_column.values)) != 0
+                    else None
+                )
+                element_dict[element_type][name] = masked_element
+
                 if joined_indices is None:
                     joined_indices = masked_table_instance_key_column.index
                 else:
                     # in place append does not work with pd.Index
                     joined_indices = joined_indices.append(masked_table_instance_key_column.index)
-
-                masked_element = element.iloc[masked_table_instance_key_column.values, :]
-                element_dict[element_type][name] = masked_element
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
                 )
                 continue
-    joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
-    joined_table = table[joined_indices, :].copy()
+    joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     return element_dict, joined_table
 
 
 def _left_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
@@ -275,7 +285,7 @@ def _left_exclusive_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     mask = np.full(len(element), True, dtype=bool)
                     mask[table_instance_key_column.values] = False
-                    masked_element = element.iloc[mask, :]
+                    masked_element = element.iloc[mask, :] if mask.sum() != 0 else None
                     element_dict[element_type][name] = masked_element
                 else:
                     warnings.warn(
@@ -290,8 +300,7 @@ def _left_exclusive_join_spatialelement_table(
                 )
                 continue
 
-    joined_table = table[[False for i in range(table.n_obs)], :]
-    return element_dict, joined_table
+    return element_dict, None
 
 
 def _left_join_spatialelement_table(
@@ -323,8 +332,8 @@ def _left_join_spatialelement_table(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
                 )
                 continue
-    joined_indices = joined_indices if joined_indices is not None else [False for i in range(table.n_obs)]
-    joined_table = table[joined_indices, :].copy()
+
+    joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
 
     return element_dict, joined_table
 
