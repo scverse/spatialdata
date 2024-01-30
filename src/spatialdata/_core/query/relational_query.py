@@ -155,12 +155,40 @@ def _create_element_dict(
     return elements_dict
 
 
+def _right_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData]:
+    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    groups_df = table.obs.groupby(by=region_column_name)
+    mask = []
+    for element_type, name_element in element_dict.items():
+        for name, element in name_element.items():
+            if name in regions:
+                group_df = groups_df.get_group(name)
+                table_instance_key_column = group_df[instance_key]
+                if element_type in ["points", "shapes"]:
+                    element_indices = element.index
+                    empty_element = element.drop(element.index)
+                    # TODO: Decide whether we support joins as in sql or not, e.g. returning empty table, ugly for labels.
+                    element_dict[element_type][name] = empty_element
+                else:
+                    element_indices = _get_unique_label_values_as_index(element)
+                submask = ~table_instance_key_column.isin(element_indices)
+                mask.append(submask)
+
+    if len(mask) != 0:
+        mask = pd.concat(mask)
+        exclusive_table = table[mask, :].copy()
+
+    return element_dict, exclusive_table
+
+
 def _right_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-    joined_indices = None
     groups_df = table.obs.groupby(by=region_column_name)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -308,6 +336,7 @@ class JoinTypes(Enum):
     LEFT_EXCLUSIVE = left_exclusive = partial(_left_exclusive_join_spatialelement_table)
     INNER = inner = partial(_inner_join_spatialelement_table)
     RIGHT = right = partial(_right_join_spatialelement_table)
+    RIGHT_EXCLUSIVE = right_exclusive = partial(_right_exclusive_join_spatialelement_table)
 
     def __call__(self, *args):
         self.value(*args)
