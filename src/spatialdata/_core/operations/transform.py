@@ -129,24 +129,27 @@ def _adjust_transformations(
         the eventual raster_translation). This is useful when the user wants to transform the actual data,
         but maintain the positioning of the element in the various coordinate systems.
     """
-    from spatialdata.transformations import get_transformation, remove_transformation, set_transformation
+    from spatialdata.transformations import (
+        BaseTransformation,
+        get_transformation,
+        remove_transformation,
+        set_transformation,
+    )
     from spatialdata.transformations.transformations import Identity, Sequence
 
+    to_prepend: BaseTransformation | None
     if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
-
     elif isinstance(element, (GeoDataFrame, DaskDataFrame)):
         assert raster_translation is None
-        if maintain_positioning:
-            to_prepend = transformation.inverse()
-        else:
-            to_prepend = Identity()
+        to_prepend = transformation.inverse() if maintain_positioning else Identity()
     else:
         raise TypeError(f"Unsupported type {type(element)}")
+    assert isinstance(to_prepend, BaseTransformation)
 
     d = get_transformation(element, get_all=True)
     assert isinstance(d, dict)
@@ -218,22 +221,9 @@ def _(data: SpatialData, transformation: BaseTransformation, maintain_positionin
 @transform.register(SpatialImage)
 def _(data: SpatialImage, transformation: BaseTransformation, maintain_positioning: bool = False) -> SpatialImage:
     schema = get_model(data)
-    from spatialdata.models import (
-        Image2DModel,
-        Image3DModel,
-        Labels2DModel,
-        Labels3DModel,
-    )
     from spatialdata.transformations import get_transformation
 
-    # labels need to be preserved after the resizing of the image
-    if schema in (Labels2DModel, Labels3DModel):
-        kwargs = {"prefilter": False, "order": 0}
-    elif schema in (Image2DModel, Image3DModel):
-        kwargs = {}
-    else:
-        raise ValueError(f"Unsupported schema {schema}")
-
+    kwargs = {"prefilter": False, "order": 0}
     axes = get_axes_names(data)
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
