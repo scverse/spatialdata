@@ -175,7 +175,7 @@ def _adjust_transformations(
 
 
 def _validate_target_coordinate_systems(
-    data: SpatialData | SpatialElement,
+    data: SpatialElement,
     transformation: BaseTransformation | None,
     maintain_positioning: bool,
     to_coordinate_system: str | None,
@@ -191,17 +191,13 @@ def _validate_target_coordinate_systems(
     if maintain_positioning:
         if transformation is not None:
             return transformation, None
-        else:
-            t = get_transformation(data, to_coordinate_system=to_coordinate_system)
-            assert isinstance(t, BaseTransformation)
-            return t, None
-    elif to_coordinate_system is not None:
-        if isinstance(data, SpatialData):
-            return None, to_coordinate_system
-        else:
-            t = get_transformation(data, to_coordinate_system=to_coordinate_system)
-            assert isinstance(t, BaseTransformation)
-            return t, to_coordinate_system
+        t = get_transformation(data, to_coordinate_system=to_coordinate_system)
+        assert isinstance(t, BaseTransformation)
+        return t, None
+    if to_coordinate_system is not None:
+        t = get_transformation(data, to_coordinate_system=to_coordinate_system)
+        assert isinstance(t, BaseTransformation)
+        return t, to_coordinate_system
 
     if isinstance(data, SpatialData):
         raise RuntimeError(
@@ -221,7 +217,6 @@ def _validate_target_coordinate_systems(
         "set to that coordinate system and the element will be transformed. This will raise a warning."
     )
 
-    assert isinstance(data, SpatialElement)
     assert transformation is not None
     assert to_coordinate_system is None
     assert not maintain_positioning
@@ -232,11 +227,10 @@ def _validate_target_coordinate_systems(
 
     if len(d) == 1 and isinstance(d[k], Identity):
         set_transformation(data, transformation=transformation, to_coordinate_system=k)
-        warnings.warn(message)
+        warnings.warn(message, stacklevel=2)
         t = d[k]
         return t, k
-    else:
-        raise RuntimeError(message)
+    raise RuntimeError(message)
 
 
 @singledispatch
@@ -306,6 +300,15 @@ def _(
     maintain_positioning: bool = False,
     to_coordinate_system: str | None = None,
 ) -> SpatialData:
+    if not maintain_positioning:
+        message = (
+            "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
+            "SpatialData.transform_to_coordinate_system() should be used instead of transform()."
+        )
+        if transformation is None and to_coordinate_system is not None:
+            warnings.warn(message, stacklevel=2)
+            return data.transform_to_coordinate_system(target_coordinate_system=to_coordinate_system)
+        raise RuntimeError(message)
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )

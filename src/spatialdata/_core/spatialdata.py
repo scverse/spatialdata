@@ -510,15 +510,19 @@ class SpatialData:
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:
-            transformed = transform(element, t, maintain_positioning=maintain_positioning)
+            transformed = transform(element, transformation=t, maintain_positioning=maintain_positioning)
         else:
             d = get_transformation(element, get_all=True)
             assert isinstance(d, dict)
+            to_remove = False
             if target_coordinate_system not in d:
                 d[target_coordinate_system] = t
+                to_remove = True
             transformed = transform(
                 element, to_coordinate_system=target_coordinate_system, maintain_positioning=maintain_positioning
             )
+            if to_remove:
+                del d[target_coordinate_system]
         if not maintain_positioning:
             d = get_transformation(transformed, get_all=True)
             assert isinstance(d, dict)

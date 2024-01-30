@@ -4,10 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from geopandas import GeoDataFrame
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
-from shapely import Polygon
 from spatial_image import SpatialImage
 from spatialdata import get_extent, transform
 from spatialdata._core.spatialdata import SpatialData
@@ -120,94 +118,88 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
     return SpatialData(images=new_images, labels=new_labels)
 
 
-from napari_spatialdata import Interactive
-
-
-def _set_transformation_for_all_elements(
-    sdata: SpatialData, transformation: BaseTransformation, to_coordinate_system: str
+def _postpone_transformation(
+    sdata: SpatialData, from_coordinate_system: str, to_coordinate_system: str, transformation: BaseTransformation
 ):
     for element in sdata._gen_elements_values():
-        set_transformation(element, transformation=transformation, to_coordinate_system=to_coordinate_system)
+        d = get_transformation(element, get_all=True)
+        assert isinstance(d, dict)
+        assert len(d) == 1
+        t = d[from_coordinate_system]
+        sequence = Sequence([t, transformation])
+        set_transformation(element, sequence, to_coordinate_system)
 
 
-def test_transform_image_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
-    e = get_extent(sdata["image2d"])
-    gdf = ShapesModel.parse(
-        GeoDataFrame(
-            geometry=[
-                Polygon(
-                    [(e["x"][0], e["y"][0]), (e["x"][1], e["y"][0]), (e["x"][1], e["y"][1]), (e["x"][0], e["y"][1])]
-                )
-            ]
-        )
-    )
-    sdata.shapes["polygon"] = gdf
+def _remove_coordinate_system(sdata: SpatialData, coordinate_system: str):
+    for element in sdata._gen_elements_values():
+        remove_transformation(element, coordinate_system)
 
-    # VISUAL_DEBUG = True
-    # if VISUAL_DEBUG:
-    #     im = scipy.misc.face()
-    #     im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
-    #     del sdata.images["image2d"]
-    #     sdata.images["face"] = im_element
+
+def _compare_extents(sdata0: SpatialData, sdata1: SpatialData):
+    e0 = get_extent(sdata0)
+    e1 = get_extent(sdata1, coordinate_system="transformed_back")
+
+    # we are not pixel perfect here, but "0.1-pixel perfect", I think this is due to an equivalent bug than then one
+    # that appears with rasterize (https://github.com/scverse/spatialdata/issues/165), probably originating from
+    # ndinterp(), which is used both by rasterize() and by transform()
+    assert all(np.allclose(e0[k], e1[k], atol=0.1) for k in set(e0.keys()).union(e1.keys()))
+
+
+@pytest.mark.parametrize("element_type", ["image", "labels"])
+@pytest.mark.parametrize("multiscale", [False, True])
+def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale: bool):
+    datatype = MultiscaleSpatialImage if multiscale else SpatialImage
+
+    if element_type == "image":
+        sdata = SpatialData(images={k: v for k, v in full_sdata.images.items() if isinstance(v, datatype)})
+    else:
+        assert element_type == "labels"
+        sdata = SpatialData(labels={k: v for k, v in full_sdata.labels.items() if isinstance(v, datatype)})
 
     affine = _get_affine(small_translation=False)
-    _set_transformation_for_all_elements(sdata, affine, "transformed")
+
+    _postpone_transformation(
+        sdata, from_coordinate_system="global", to_coordinate_system="transformed", transformation=affine
+    )
     sdata_transformed = transform(sdata, to_coordinate_system="transformed")
-    _set_transformation_for_all_elements(sdata_transformed, affine.inverse(), "transformed_back")
+
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="transformed",
+        to_coordinate_system="transformed_back",
+        transformation=affine.inverse(),
+    )
     padded = transform(sdata_transformed, to_coordinate_system="transformed_back")
-    _unpad_rasters(padded)
-    Interactive([sdata, padded])
-    pass
-    # raise NotImplementedError("TODO: plot the images")
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
 
+    # cleanup to make the napari visualization less cluttered
+    _remove_coordinate_system(sdata, "transformed")
+    _remove_coordinate_system(sdata_transformed, "transformed_back")
 
-def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
-    _unpad_rasters(padded)
-    # Interactive([padded, sdata])
-    pass
-    # TODO: unpad the image
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    unpadded = _unpad_rasters(padded)
+    _compare_extents(sdata, unpadded)
 
-
-def test_transform_labels_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
-    _unpad_rasters(padded)
-    # Interactive([padded, sdata])
-    pass
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
-
-
-def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
-    _unpad_rasters(padded)
-    # Interactive([padded, sdata])
-    pass
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    # Interactive([sdata, unpadded])
+    # TODO: above we compared the alignment; compare also the data (this need to be tolerant to the interporalation and
+    #  should be done after https://github.com/scverse/spatialdata/issues/165 is fixed to have better results
 
 
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
-    new_points = transform(
-        transform(points, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+
+    _postpone_transformation(
+        points, from_coordinate_system="global", to_coordinate_system="global", transformation=affine
     )
+    sdata_transformed = transform(points, to_coordinate_system="global")
+
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="global",
+        to_coordinate_system="global",
+        transformation=affine.inverse(),
+    )
+    new_points = transform(sdata_transformed, to_coordinate_system="global")
+
     keys0 = list(points.points.keys())
     keys1 = list(new_points.points.keys())
     assert keys0 == keys1
@@ -225,9 +217,20 @@ def test_transform_points(points: SpatialData):
 
 def test_transform_shapes(shapes: SpatialData):
     affine = _get_affine()
-    new_shapes = transform(
-        transform(shapes, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+
+    _postpone_transformation(
+        shapes, from_coordinate_system="global", to_coordinate_system="global", transformation=affine
     )
+    sdata_transformed = transform(shapes, to_coordinate_system="global")
+
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="global",
+        to_coordinate_system="global",
+        transformation=affine.inverse(),
+    )
+    new_shapes = transform(sdata_transformed, to_coordinate_system="global")
+
     keys0 = list(shapes.shapes.keys())
     keys1 = list(new_shapes.shapes.keys())
     assert keys0 == keys1
@@ -549,6 +552,15 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             remove_transformation(element, "global")
 
     for element in full_sdata._gen_elements_values():
+        from spatialdata.transformations.operations import _build_transformations_graph
+
+        g = _build_transformations_graph(full_sdata)
+        import networkx as nx
+
+        nx.draw(g, with_labels=True)
+        import matplotlib.pyplot as plt
+
+        plt.show()
         transformed_element = full_sdata.transform_element_to_coordinate_system(
             element, "multi_hop_space", maintain_positioning=maintain_positioning
         )

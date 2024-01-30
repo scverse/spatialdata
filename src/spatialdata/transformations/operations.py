@@ -371,7 +371,8 @@ def get_transformation_between_landmarks(
             input_axes=("x", "y"),
             output_axes=("x", "y"),
         )
-        flipped_moving = transform(moving_coords, flip, maintain_positioning=False)
+        set_transformation(moving_coords, transformation=flip, to_coordinate_system="flipped")
+        flipped_moving = transform(moving_coords, to_coordinate_system="flipped")
         if isinstance(flipped_moving, GeoDataFrame):
             flipped_moving_xy = np.stack([flipped_moving.geometry.x, flipped_moving.geometry.y], axis=1)
         elif isinstance(flipped_moving, DaskDataFrame):
