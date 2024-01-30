@@ -155,6 +155,40 @@ def _create_element_dict(
     return elements_dict
 
 
+def _right_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+) -> tuple[dict[str, Any], AnnData]:
+    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
+    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    joined_indices = None
+    groups_df = table.obs.groupby(by=region_column_name)
+    for element_type, name_element in element_dict.items():
+        for name, element in name_element.items():
+            if name in regions:
+                group_df = groups_df.get_group(name)
+                table_instance_key_column = group_df[instance_key]
+                if element_type in ["points", "shapes"]:
+                    element_indices = element.index
+                else:
+                    warnings.warn(
+                        f"Element type `labels` not supported for left exclusive join. Skipping `{name}`",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    continue
+
+                mask = table_instance_key_column.isin(element_indices)
+                masked_table_instance_key_column = table_instance_key_column[mask]
+                masked_element = element.iloc[masked_table_instance_key_column.values, :]
+                element_dict[element_type][name] = masked_element
+            else:
+                warnings.warn(
+                    f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
+                )
+                continue
+    return element_dict, table
+
+
 def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
@@ -273,6 +307,7 @@ class JoinTypes(Enum):
     LEFT = left = partial(_left_join_spatialelement_table)
     LEFT_EXCLUSIVE = left_exclusive = partial(_left_exclusive_join_spatialelement_table)
     INNER = inner = partial(_inner_join_spatialelement_table)
+    RIGHT = right = partial(_right_join_spatialelement_table)
 
     def __call__(self, *args):
         self.value(*args)
