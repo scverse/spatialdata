@@ -37,12 +37,15 @@ def test_left_join(sdata_query_aggregation):
     assert table is None
     assert element_dict["by_polygons"] is sdata_query_aggregation["by_polygons"]
 
+    # Check multiple elements, one of which not annotated by table
     with pytest.warns(UserWarning, match="The element"):
         element_dict, table = join_sdata_spatialelement_table(
             sdata_query_aggregation, ["by_polygons", "values_polygons"], "table", "left"
         )
     assert "by_polygons" in element_dict
 
+    # check multiple elements joined to table.
+    sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"].drop([7, 8])
     element_dict, table = join_sdata_spatialelement_table(
         sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
     )
@@ -50,6 +53,36 @@ def test_left_join(sdata_query_aggregation):
         [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
     )
     assert all(table.obs["instance_id"] == indices.values)
+
+
+def test_left_exclusive_join(sdata_query_aggregation):
+    # Test case in which all table rows match rows in elements
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left_exclusive"
+    )
+    assert all(element_dict[key] is None for key in element_dict)
+    assert table is None
+
+    # Dropped indices correspond to instance ids 7, 8, 10 and 11
+    sdata_query_aggregation["table"] = sdata_query_aggregation["table"][
+        sdata_query_aggregation["table"].obs.index.drop(["7", "8", "19", "20"])
+    ]
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, "values_polygons", "table", "left_exclusive"
+    )
+    assert table is None
+    assert not set(element_dict["values_polygons"].index).issubset(sdata_query_aggregation["table"].obs["instance_id"])
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left_exclusive"
+    )
+    assert table is None
+    assert not np.array_equal(
+        sdata_query_aggregation["table"].obs.iloc[7:9, 1].values, element_dict["values_circles"].index.values
+    )
+    assert not np.array_equal(
+        sdata_query_aggregation["table"].obs.iloc[19:21, 1].values, element_dict["values_polygons"].index.values
+    )
 
 
 def test_locate_value(sdata_query_aggregation):
