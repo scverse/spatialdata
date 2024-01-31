@@ -155,7 +155,8 @@ def _create_element_dict(
     return elements_dict
 
 
-def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+def _inner_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -170,8 +171,11 @@ def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], ta
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    warnings.warn(f"Element type `labels` not supported for left exclusive join. Skipping `{name}`",
-                                  UserWarning, stacklevel=2)
+                    warnings.warn(
+                        f"Element type `labels` not supported for left exclusive join. Skipping `{name}`",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                     continue
 
                 mask = table_instance_key_column.isin(element_indices)
@@ -194,7 +198,8 @@ def _inner_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], ta
     return element_dict, joined_table
 
 
-def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, Any]], table: AnnData
+def _left_exclusive_join_spatialelement_table(
+    element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
     regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
     region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -211,7 +216,11 @@ def _left_exclusive_join_spatialelement_table(element_dict: dict[str, dict[str, 
                     masked_element = element.iloc[mask, :]
                     element_dict[element_type][name] = masked_element
                 else:
-                    warnings.warn(f"Element type `labels` not supported for left exclusive join. Skipping `{name}`", UserWarning, stacklevel=2)
+                    warnings.warn(
+                        f"Element type `labels` not supported for left exclusive join. Skipping `{name}`",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                     continue
             else:
                 warnings.warn(
