@@ -4,7 +4,7 @@ import warnings
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from typing import Any
+from typing import Any, Callable
 
 import dask.array as da
 import numpy as np
@@ -211,7 +211,7 @@ def _right_join_spatialelement_table(
                 masked_table_instance_key_column = table_instance_key_column[mask]
                 masked_element = (
                     element.iloc[mask_values, :]
-                    if len((mask_values := masked_table_instance_key_column.values)) != 0
+                    if len(mask_values := masked_table_instance_key_column.values) != 0
                     else None
                 )
                 element_dict[element_type][name] = masked_element
@@ -251,7 +251,7 @@ def _inner_join_spatialelement_table(
 
                 masked_element = (
                     element.iloc[mask_values, :]
-                    if len((mask_values := masked_table_instance_key_column.values)) != 0
+                    if len(mask_values := masked_table_instance_key_column.values) != 0
                     else None
                 )
                 element_dict[element_type][name] = masked_element
@@ -347,11 +347,11 @@ class JoinTypes(Enum):
     RIGHT = right = partial(_right_join_spatialelement_table)
     RIGHT_EXCLUSIVE = right_exclusive = partial(_right_exclusive_join_spatialelement_table)
 
-    def __call__(self, *args):
-        self.value(*args)
+    def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
+        return self.value(*args)
 
     @classmethod
-    def get(cls, key):
+    def get(cls, key: str) -> Callable[[dict[str, dict[str, Any]], AnnData], tuple[dict[str, Any], AnnData]] | None:
         if key in cls.__members__:
             return cls.__members__.get(key)
         return None
@@ -360,12 +360,12 @@ class JoinTypes(Enum):
 def join_sdata_spatialelement_table(
     sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "LEFT"
 ) -> tuple[dict[str, Any], AnnData]:
-    assert sdata.tables.get(table_name), f"No table with {table_name} exists in the SpatialData object."
+    assert sdata.tables.get(table_name), f"No table with `{table_name}` exists in the SpatialData object."
     table = sdata.tables[table_name]
     if isinstance(spatial_element_name, str):
         spatial_element_name = [spatial_element_name]
 
-    elements_dict = {}
+    elements_dict: dict[str, dict[str, Any]] = {}
     for name in spatial_element_name:
         element_type, _, element = sdata._find_element(name)
         elements_dict = _create_element_dict(element_type, name, element, elements_dict)
