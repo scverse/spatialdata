@@ -23,7 +23,7 @@ def test_match_table_to_element(sdata_query_aggregation):
     # TODO: add tests for labels
 
 
-def test_left_join(sdata_query_aggregation):
+def test_left_and_inner_join(sdata_query_aggregation):
     sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"].drop([10, 11])
     with pytest.raises(AssertionError, match="No table with"):
         join_sdata_spatialelement_table(sdata_query_aggregation, "values_polygons", "not_existing_table", "left")
@@ -48,6 +48,14 @@ def test_left_join(sdata_query_aggregation):
     sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"].drop([7, 8])
     element_dict, table = join_sdata_spatialelement_table(
         sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
+    )
+    indices = pd.concat(
+        [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
+    )
+    assert all(table.obs["instance_id"] == indices.values)
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner"
     )
     indices = pd.concat(
         [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
