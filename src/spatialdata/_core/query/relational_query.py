@@ -24,6 +24,7 @@ from spatialdata.models import (
     SpatialElement,
     TableModel,
     get_model,
+    get_table_keys,
 )
 
 
@@ -158,9 +159,7 @@ def _create_element_dict(
 def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData | None]:
-    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     mask = []
     for element_type, name_element in element_dict.items():
@@ -188,9 +187,7 @@ def _right_exclusive_join_spatialelement_table(
 def _right_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
-    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -226,9 +223,7 @@ def _right_join_spatialelement_table(
 def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
-    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -273,9 +268,7 @@ def _inner_join_spatialelement_table(
 def _left_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData | None]:
-    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -306,9 +299,7 @@ def _left_exclusive_join_spatialelement_table(
 def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData
 ) -> tuple[dict[str, Any], AnnData]:
-    regions = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
-    region_column_name = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     joined_indices = None
     for element_type, name_element in element_dict.items():
