@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
-from spatialdata._core.query.relational_query import _locate_value, _ValueOrigin
+from spatialdata._core.query.relational_query import _locate_value, _ValueOrigin, join_sdata_spatialelement_table
 from spatialdata.models.models import TableModel
 
 
@@ -21,6 +21,35 @@ def test_match_table_to_element(sdata_query_aggregation):
     assert matched_table.obs.index.tolist() == list(reversed(matched_table_reversed.obs.index.tolist()))
 
     # TODO: add tests for labels
+
+
+def test_left_join(sdata_query_aggregation):
+    sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"].drop([10, 11])
+    with pytest.raises(AssertionError, match="No table with"):
+        join_sdata_spatialelement_table(sdata_query_aggregation, "values_polygons", "not_existing_table", "left")
+
+    # Should we reindex before returning the table?
+    element_dict, table = join_sdata_spatialelement_table(sdata_query_aggregation, "values_polygons", "table", "left")
+    assert all(element_dict["values_polygons"].index == table.obs["instance_id"].values)
+
+    # Check no matches in table for element not annotated by table
+    element_dict, table = join_sdata_spatialelement_table(sdata_query_aggregation, "by_polygons", "table", "left")
+    assert table is None
+    assert element_dict["by_polygons"] is sdata_query_aggregation["by_polygons"]
+
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_sdata_spatialelement_table(
+            sdata_query_aggregation, ["by_polygons", "values_polygons"], "table", "left"
+        )
+    assert "by_polygons" in element_dict
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
+    )
+    indices = pd.concat(
+        [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
+    )
+    assert all(table.obs["instance_id"] == indices.values)
 
 
 def test_locate_value(sdata_query_aggregation):
