@@ -174,10 +174,16 @@ def _right_exclusive_join_spatialelement_table(
                     element_indices = _get_unique_label_values_as_index(element)
                 submask = ~table_instance_key_column.isin(element_indices)
                 mask.append(submask)
+            else:
+                warnings.warn(
+                    f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
+                )
+                element_dict[element_type][name] = None
+                continue
 
     if len(mask) != 0:
         mask = pd.concat(mask)
-        exclusive_table = table[mask, :].copy()
+        exclusive_table = table[mask, :].copy() if mask.sum() != 0 else None  # type: ignore[attr-defined]
     else:
         exclusive_table = None
 
@@ -260,6 +266,7 @@ def _inner_join_spatialelement_table(
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
                 )
+                element_dict[element_type][name] = None
                 continue
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     return element_dict, joined_table
@@ -374,6 +381,10 @@ def join_sdata_spatialelement_table(
             stacklevel=2,
         )
 
+    assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
+        "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
+        "`shapes`."
+    )
     if JoinTypes.get(how) is not None:
         elements_dict, table = JoinTypes[how](elements_dict, table)
     else:
