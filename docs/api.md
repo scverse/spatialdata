@@ -32,7 +32,6 @@ Operations on `SpatialData` objects.
     transform
     rasterize
     aggregate
-    filter_by_coordinate_system
 ```
 
 ### Operations Utilities
