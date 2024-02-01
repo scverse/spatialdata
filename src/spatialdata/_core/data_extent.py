@@ -20,9 +20,6 @@ from spatialdata.models import get_axes_names
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import PointsModel
 from spatialdata.transformations.operations import get_transformation
-from spatialdata.transformations.transformations import (
-    BaseTransformation,
-)
 
 BoundingBoxDescription = dict[str, tuple[float, float]]
 
@@ -349,8 +346,6 @@ def _compute_extent_in_coordinate_system(
     -------
     The bounding box description in the specified coordinate system.
     """
-    transformation = get_transformation(element, to_coordinate_system=coordinate_system)
-    assert isinstance(transformation, BaseTransformation)
     from spatialdata._core.query._utils import get_bounding_box_corners
 
     axes = get_axes_names(element)
@@ -364,8 +359,10 @@ def _compute_extent_in_coordinate_system(
         max_coordinate=max_coordinates,
     )
     df = pd.DataFrame(corners.data, columns=corners.axis.data.tolist())
-    points = PointsModel.parse(df, coordinates={k: k for k in axes})
-    transformed_corners = pd.DataFrame(transform(points, transformation).compute())
+    d = get_transformation(element, get_all=True)
+    assert isinstance(d, dict)
+    points = PointsModel.parse(df, coordinates={k: k for k in axes}, transformations=d)
+    transformed_corners = pd.DataFrame(transform(points, to_coordinate_system=coordinate_system).compute())
     # Make sure min and max values are in the same order as axes
     extent = {}
     for ax in axes:

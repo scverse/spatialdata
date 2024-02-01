@@ -523,7 +523,6 @@ def _(
     target_coordinate_system: str,
 ) -> DaskDataFrame | None:
     from spatialdata import transform
-    from spatialdata.transformations import BaseTransformation, get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -572,10 +571,8 @@ def _(
     points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
 
     # transform the element to the query coordinate system
-    transform_to_query_space = get_transformation(points, to_coordinate_system=target_coordinate_system)
-    assert isinstance(transform_to_query_space, BaseTransformation)
     points_query_coordinate_system = transform(
-        points_in_intrinsic_bounding_box, transform_to_query_space, maintain_positioning=False
+        points_in_intrinsic_bounding_box, to_coordinate_system=target_coordinate_system, maintain_positioning=False
     )  # type: ignore[union-attr]
 
     # get a mask for the points in the bounding box

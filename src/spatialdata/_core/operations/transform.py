@@ -30,6 +30,11 @@ if TYPE_CHECKING:
     )
 
 DEBUG_WITH_PLOTS = False
+ERROR_MSG_AFTER_0_0_15 = """\
+Starting after v0.0.15, `transform()` requires to specify `to_coordinate_system` instead of `transformation`, to avoid
+ambiguity when multiple transformations are available for an element. If the transformation is not present in the
+element, please add it with `set_transformation()`.
+"""
 
 
 def _transform_raster(
@@ -180,57 +185,27 @@ def _validate_target_coordinate_systems(
     maintain_positioning: bool,
     to_coordinate_system: str | None,
 ) -> tuple[BaseTransformation, str | None]:
-    from spatialdata.transformations import BaseTransformation, Identity, get_transformation, set_transformation
+    from spatialdata.transformations import BaseTransformation, get_transformation
 
-    if transformation is None and to_coordinate_system is None:
-        raise ValueError("Both transformation and to_coordinate_system are not specified, please specify the latter.")
-
-    if transformation is not None and to_coordinate_system is not None:
-        raise ValueError("Both transformation and to_coordinate_system are specified, please specify only the latter.")
-
-    if maintain_positioning:
-        if transformation is not None:
-            return transformation, None
-        t = get_transformation(data, to_coordinate_system=to_coordinate_system)
-        assert isinstance(t, BaseTransformation)
-        return t, None
-    if to_coordinate_system is not None:
-        t = get_transformation(data, to_coordinate_system=to_coordinate_system)
-        assert isinstance(t, BaseTransformation)
-        return t, to_coordinate_system
-
-    if isinstance(data, SpatialData):
-        raise RuntimeError(
-            "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
-            "when transforming a SpatialData object you need to specify a target_coordinate_system instead of a"
-            " transformation. "
-        )
-
-    message = (
-        "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
-        "transform() requires the user to specify a target coordinate system instead of a transformation. "
-        "Please use `set_transformation(element, transformation=..., to_coordinate_system=...)` to assign a"
-        " transformation to an element, and then call `transform(element, to_coordinate_system=...)` to transform "
-        "the element.\n"
-        "To ease this transition, if you call `transform(element, transformation=...)` and if only one coordinate "
-        "system is present, and if it is mapped via an Identity() transformation, then the transformation will be "
-        "set to that coordinate system and the element will be transformed. This will raise a warning."
-    )
-
-    assert transformation is not None
-    assert to_coordinate_system is None
-    assert not maintain_positioning
-    d = get_transformation(data, get_all=True)
-    assert isinstance(d, dict)
-    k = list(d.keys())[0]
-    assert isinstance(k, str)
-
-    if len(d) == 1 and isinstance(d[k], Identity):
-        set_transformation(data, transformation=transformation, to_coordinate_system=k)
-        warnings.warn(message, stacklevel=2)
-        t = d[k]
-        return t, k
-    raise RuntimeError(message)
+    if not maintain_positioning:
+        d = get_transformation(data, get_all=True)
+        assert isinstance(d, dict)
+        if transformation is None and to_coordinate_system is not None:
+            assert to_coordinate_system in d, f"Coordinate system {to_coordinate_system} not found in element"
+            return d[to_coordinate_system], to_coordinate_system
+        if transformation is not None and to_coordinate_system is None and len(d) == 1:
+            k = list(d.keys())[0]
+            if transformation == d[k]:
+                warnings.warn(ERROR_MSG_AFTER_0_0_15, stacklevel=2)
+                return transformation, k
+        raise RuntimeError(ERROR_MSG_AFTER_0_0_15)
+    s = "When maintain_positioning is True, only one of transformation and to_coordinate_system can be None"
+    assert bool(transformation is None) != bool(to_coordinate_system is None), s
+    if transformation is not None:
+        return transformation, to_coordinate_system
+    t = get_transformation(data, to_coordinate_system=to_coordinate_system)
+    assert isinstance(t, BaseTransformation)
+    return t, None
 
 
 @singledispatch
@@ -301,17 +276,12 @@ def _(
     to_coordinate_system: str | None = None,
 ) -> SpatialData:
     if not maintain_positioning:
-        message = (
-            "Starting after v0.0.15, when `maintain_positioning=False` (which is the most commonly desired behavior), "
-            "SpatialData.transform_to_coordinate_system() should be used instead of transform()."
-        )
         if transformation is None and to_coordinate_system is not None:
-            warnings.warn(message, stacklevel=2)
             return data.transform_to_coordinate_system(target_coordinate_system=to_coordinate_system)
-        raise RuntimeError(message)
-    transformation, to_coordinate_system = _validate_target_coordinate_systems(
-        data, transformation, maintain_positioning, to_coordinate_system
-    )
+        raise RuntimeError(ERROR_MSG_AFTER_0_0_15)
+    assert bool(transformation is None) != bool(
+        to_coordinate_system is None
+    ), "When maintain_positioning is True, only one of transformation and to_coordinate_system can be None"
     new_elements: dict[str, dict[str, Any]] = {}
     for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)

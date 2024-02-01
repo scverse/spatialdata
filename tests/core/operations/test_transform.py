@@ -552,15 +552,15 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             remove_transformation(element, "global")
 
     for element in full_sdata._gen_elements_values():
-        from spatialdata.transformations.operations import _build_transformations_graph
-
-        g = _build_transformations_graph(full_sdata)
-        import networkx as nx
-
-        nx.draw(g, with_labels=True)
-        import matplotlib.pyplot as plt
-
-        plt.show()
+        # from spatialdata.transformations.operations import _build_transformations_graph
+        #
+        # g = _build_transformations_graph(full_sdata)
+        # import networkx as nx
+        #
+        # nx.draw(g, with_labels=True)
+        # import matplotlib.pyplot as plt
+        #
+        # plt.show()
         transformed_element = full_sdata.transform_element_to_coordinate_system(
             element, "multi_hop_space", maintain_positioning=maintain_positioning
         )
@@ -663,3 +663,43 @@ def test_transformations_between_coordinate_systems(images):
                         write_to_sdata=sdata,
                     )
                 assert "global2" in images.coordinate_systems
+
+
+def test_transform_until_0_0_15(points):
+    from spatialdata._core.operations.transform import ERROR_MSG_AFTER_0_0_15
+
+    t0 = Identity()
+    t1 = Translation([10], axes=("x",))
+    # only one between `transformation` and `to_coordinate_system` can be passed
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points, transformation=t0, to_coordinate_system="t0")
+
+    # and need to pass at least one
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points)
+
+    # need to use `to_coordinate_system`, not transformation`
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points["points_0_1"], transformation=t1)
+
+    # except, for convenience to the user, when there is only a transformation in the element, and it coincides to the
+    # one passed as argument to `transformation`
+    transform(points["points_0"], transformation=t0)
+
+    # but not for spatialdata objects, here we need to use `to_coordinate_system`
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points, transformation=t0)
+
+    # correct way to use it
+    transform(points, to_coordinate_system="global")
+
+    # finally, when `maintain_positioning` is True, we can use either `transformation` or `to_coordinate_system`, as
+    # long as excatly one of them is passed
+    with pytest.raises(AssertionError, match="When maintain_positioning is True, only one "):
+        transform(points, maintain_positioning=True)
+
+    with pytest.raises(AssertionError, match="When maintain_positioning is True, only one "):
+        transform(points, transformation=t0, to_coordinate_system="global", maintain_positioning=True)
+
+    transform(points, transformation=t0, maintain_positioning=True)
+    transform(points, to_coordinate_system="global", maintain_positioning=True)

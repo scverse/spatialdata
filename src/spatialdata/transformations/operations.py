@@ -64,8 +64,10 @@ def set_transformation(
             transformations[to_coordinate_system] = transformation
             _set_transformations(element, transformations)
         else:
-            assert isinstance(transformation, dict)
-            assert to_coordinate_system is None
+            assert isinstance(transformation, dict), (
+                "If set_all=True, transformation must be of type " "dict[str, BaseTransformation]."
+            )
+            assert to_coordinate_system is None, "If set_all=True, to_coordinate_system must be None."
             _set_transformations(element, transformation)
     else:
         if len(write_to_sdata.locate_element(element)) == 0:
@@ -117,7 +119,7 @@ def get_transformation(
             raise ValueError(f"Transformation to {to_coordinate_system} not found in element {element}.")
         return transformations[to_coordinate_system]
     else:
-        assert to_coordinate_system is None
+        assert to_coordinate_system is None, "If get_all=True, to_coordinate_system must be None."
         # get the dict of all the transformations
         return transformations
 
@@ -161,7 +163,7 @@ def remove_transformation(
             del transformations[to_coordinate_system]
             _set_transformations(element, transformations)
         else:
-            assert to_coordinate_system is None
+            assert to_coordinate_system is None, "If remove_all=True, to_coordinate_system must be None."
             _set_transformations(element, {})
     else:
         if len(write_to_sdata.locate_element(element)) == 0:
