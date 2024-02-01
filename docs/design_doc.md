@@ -564,6 +564,7 @@ with coordinate systems:
     with axes: c, y, x
     with elements: /images/point8, /labels/point8
 """
+
 sdata0 = sdata.query.coordinate_system("point23", filter_rows=False)
 sdata1 = sdata.query.bounding_box((0, 20, 0, 300))
 sdata1 = sdata.query.polygon("/polygons/annotations")
