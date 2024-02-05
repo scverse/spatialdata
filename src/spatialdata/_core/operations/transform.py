@@ -216,27 +216,31 @@ def transform(
     to_coordinate_system: str | None = None,
 ) -> Any:
     """
-    Transform a SpatialElement using this transformation and returns the transformed element.
+    Transform a SpatialElement using the transformation to a coordinate system, and returns the transformed element.
 
     Parameters
     ----------
     data
         SpatialElement to transform.
     transformation
-        The transformation to apply to the element. This parameter is kept for backward compatibility and will be
-        deprecated. Please use the to_coordinate_system parameter instead.
+        The transformation to apply to the element. This parameter can be used only when `maintain_positioning=True`,
+        otherwise `to_coordinate_system` must be used.
     maintain_positioning
-        If True, in the transformed element, each transformation that was present in the original element will be
-        prepended with the inverse of the transformation used to transform the data (i.e. the current
-        transformation for which .transform() is called). In this way the data is transformed but the
-        positioning (for each coordinate system) is maintained. A use case is changing the orientation/scale/etc. of
-        the data but keeping the alignment of the data within each coordinate system.
-        If False, the data is simply transformed and the positioning changes; only the coordinate system in which the
-        data is transformed to is kept. For raster data, the translation part of the transformation is assigned to the
-        element (see Notes below for more details). Furthermore, again in the case of raster data, if the transformation
-        being applied has a rotation-like component, then the translation will take into account for the fact that the
-        rotated data will have some paddings on each corner, and so it's origin must be shifted accordingly.
-        Please see notes for more details of how this parameter interact with xarray.DataArray for raster data.
+        The default and recommended behavior is to leave this parameter to False.
+
+            - If True, in the transformed element, each transformation that was present in the original element will be
+              prepended with the inverse of the transformation used to transform the data (i.e. the current
+              transformation for which .transform() is called). In this way the data is transformed but the
+              positioning (for each coordinate system) is maintained. A use case is changing the orientation/scale/etc.
+              of the data but keeping the alignment of the data within each coordinate system.
+
+            - If False, the data is transformed and the positioning changes; only the coordinate system in which the
+              data is transformed to is kept. For raster data, the translation part of the transformation is assigned to
+              the element (see Notes below for more details). Furthermore, for raster data, the returned object will
+              have a translation to take into account for the pixel (0, 0) position. Also, rotated raster data will be
+              padded in the corners with a black color, such padding will be reflected into the rotation. Please
+               see notes for more details of how this parameter interact with xarray.DataArray for raster data.
+
     to_coordinate_system
         The coordinate system to which the data should be transformed. The coordinate system must be present in the
         element.
@@ -247,23 +251,15 @@ def transform(
 
     Notes
     -----
-    This function will be deprecated in the future, requiring the user to pass a target_coordinate_system instead of the
-    transformation.
-
     An affine transformation contains a linear transformation and a translation. For raster types,
     only the linear transformation is applied to the data (e.g. the data is rotated or resized), but not the
     translation part.
     This means that calling Translation(...).transform(raster_element) will have the same effect as pre-pending the
     translation to each transformation of the raster element (if maintain_positioning=True), or assigning this
-    translation to the element in the new coordinate system (if maintain_positioning=False).
+    translation to the element in the new coordinate system (if maintain_positioning=False). Analougous considerations
+    apply to the black corner padding due to the rotation part of the transformation.
     We are considering to change this behavior by letting translations modify the coordinates stored with
     xarray.DataArray; this is tracked here: https://github.com/scverse/spatialdata/issues/308
-
-    Raises
-    ------
-    RuntimeError
-        If maintain_positioning=False and the element contains transformation to multiple coordinate systems, since this
-        would likely produce unexpected alignments for all but one coordinate system.
     """
     raise RuntimeError(f"Cannot transform {type(data)}")
 
