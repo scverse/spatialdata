@@ -63,24 +63,27 @@ def transform_to_data_extent(
     sdata_raster = SpatialData(images=dict(sdata.images), labels=dict(sdata.labels))
     sdata_vector_transformed = sdata_vector.transform_to_coordinate_system(coordinate_system)
 
-    de = get_extent(sdata, coordinate_system=coordinate_system)
-    de_axes = tuple(de.keys())
-    translation_to_origin = Translation([-de[ax][0] for ax in de_axes], axes=de_axes)
+    data_extent = get_extent(sdata, coordinate_system=coordinate_system)
+    data_extent_axes = tuple(data_extent.keys())
+    translation_to_origin = Translation([-data_extent[ax][0] for ax in data_extent_axes], axes=data_extent_axes)
 
-    sizes = [de[ax][1] - de[ax][0] for ax in de_axes]
+    sizes = [data_extent[ax][1] - data_extent[ax][0] for ax in data_extent_axes]
     target_width, target_height, target_depth = _compute_target_dimensions(
-        spatial_axes=de_axes,
-        min_coordinate=[0 for _ in de_axes],
+        spatial_axes=data_extent_axes,
+        min_coordinate=[0 for _ in data_extent_axes],
         max_coordinate=sizes,
         target_unit_to_pixels=target_unit_to_pixels,
         target_width=target_width,
         target_height=target_height,
         target_depth=target_depth,
     )
-    scale_to_target_d = {"x": target_width / sizes[de_axes.index("x")], "y": target_height / sizes[de_axes.index("y")]}
+    scale_to_target_d = {
+        "x": target_width / sizes[data_extent_axes.index("x")],
+        "y": target_height / sizes[data_extent_axes.index("y")],
+    }
     if target_depth is not None:
-        scale_to_target_d["z"] = target_depth / sizes[de_axes.index("z")]
-    scale_to_target = Scale([scale_to_target_d[ax] for ax in de_axes], axes=de_axes)
+        scale_to_target_d["z"] = target_depth / sizes[data_extent_axes.index("z")]
+    scale_to_target = Scale([scale_to_target_d[ax] for ax in data_extent_axes], axes=data_extent_axes)
 
     for el in sdata_vector_transformed._gen_elements_values():
         t = get_transformation(el, to_coordinate_system=coordinate_system)
@@ -100,9 +103,9 @@ def transform_to_data_extent(
         if isinstance(element, (MultiscaleSpatialImage, SpatialImage)):
             rasterized = rasterize(
                 element,
-                axes=de_axes,
-                min_coordinate=[de[ax][0] for ax in de_axes],
-                max_coordinate=[de[ax][1] for ax in de_axes],
+                axes=data_extent_axes,
+                min_coordinate=[data_extent[ax][0] for ax in data_extent_axes],
+                max_coordinate=[data_extent[ax][1] for ax in data_extent_axes],
                 target_coordinate_system=coordinate_system,
                 target_unit_to_pixels=None,
                 target_width=target_width,

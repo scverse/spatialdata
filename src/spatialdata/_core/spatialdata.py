@@ -513,6 +513,7 @@ class SpatialData:
             transformed = transform(element, transformation=t, maintain_positioning=maintain_positioning)
         else:
             d = get_transformation(element, get_all=True)
+            assert isinstance(d, dict)
             to_remove = False
             if target_coordinate_system not in d:
                 d[target_coordinate_system] = t
@@ -524,6 +525,7 @@ class SpatialData:
                 del d[target_coordinate_system]
         if not maintain_positioning:
             d = get_transformation(transformed, get_all=True)
+            assert isinstance(d, dict)
             assert len(d) == 1
             t = list(d.values())[0]
             remove_transformation(transformed, remove_all=True)
@@ -534,6 +536,7 @@ class SpatialData:
             # system), then the transformation to the target coordinate system is not needed # because the data is now
             # already transformed; here we remove such transformation.
             d = get_transformation(transformed, get_all=True)
+            assert isinstance(d, dict)
             if target_coordinate_system in d:
                 # Because of how spatialdata._core.operations.transform._adjust_transformations() is implemented, we
                 # know that the transformation tt below is a sequence of transformations with two transformations,

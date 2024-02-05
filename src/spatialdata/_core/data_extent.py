@@ -360,7 +360,6 @@ def _compute_extent_in_coordinate_system(
     )
     df = pd.DataFrame(corners.data, columns=corners.axis.data.tolist())
     d = get_transformation(element, get_all=True)
-    assert isinstance(d, dict)
     points = PointsModel.parse(df, coordinates={k: k for k in axes}, transformations=d)
     transformed_corners = pd.DataFrame(transform(points, to_coordinate_system=coordinate_system).compute())
     # Make sure min and max values are in the same order as axes
