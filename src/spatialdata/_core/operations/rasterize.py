@@ -449,7 +449,6 @@ def _(
         kwargs = {"prefilter": False, "order": 0}
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {"order": 0}
-        # kwargs = {}
     else:
         raise ValueError(f"Unsupported schema {schema}")
 
