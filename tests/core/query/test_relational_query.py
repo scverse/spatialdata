@@ -67,6 +67,7 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert all(element_dict[key] is None for key in element_dict)
     assert all(table.obs.index == ["7", "8", "19", "20"])
 
+    # the triggered warning is: UserWarning: The element `{name}` is not annotated by the table. Skipping
     with pytest.warns(UserWarning, match="The element"):
         element_dict, table = join_sdata_spatialelement_table(
             sdata_query_aggregation, ["values_circles", "values_polygons", "by_polygons"], "table", "inner"
@@ -95,7 +96,7 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     assert all(element_dict[key] is None for key in element_dict)
     assert table is None
 
-    # Dropped indices correspond to instance ids 7, 8, 10 and 11
+    # Dropped indices correspond to instance ids 7, 8 for 'values_circles' and 10, 11 for 'values_polygons'
     sdata_query_aggregation["table"] = sdata_query_aggregation["table"][
         sdata_query_aggregation["table"].obs.index.drop(["7", "8", "19", "20"])
     ]
