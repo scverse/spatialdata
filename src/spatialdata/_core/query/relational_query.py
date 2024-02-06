@@ -339,11 +339,11 @@ def _left_join_spatialelement_table(
 class JoinTypes(Enum):
     """Available join types for matching elements to tables and vice versa."""
 
-    LEFT = left = partial(_left_join_spatialelement_table)
-    LEFT_EXCLUSIVE = left_exclusive = partial(_left_exclusive_join_spatialelement_table)
-    INNER = inner = partial(_inner_join_spatialelement_table)
-    RIGHT = right = partial(_right_join_spatialelement_table)
-    RIGHT_EXCLUSIVE = right_exclusive = partial(_right_exclusive_join_spatialelement_table)
+    left = partial(_left_join_spatialelement_table)
+    left_exclusive = partial(_left_exclusive_join_spatialelement_table)
+    inner = partial(_inner_join_spatialelement_table)
+    right = partial(_right_join_spatialelement_table)
+    right_exclusive = partial(_right_exclusive_join_spatialelement_table)
 
     def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
         return self.value(*args)
