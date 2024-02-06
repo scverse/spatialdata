@@ -356,8 +356,45 @@ class JoinTypes(Enum):
 
 
 def join_sdata_spatialelement_table(
-    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "LEFT"
+    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "left"
 ) -> tuple[dict[str, Any], AnnData]:
+    """
+    Join spatial element(s) and table together in SQL like manner.
+
+    The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
+    returned together in one dataframe like structure, but instead filtered elements are returned, e.g. in case of an
+    inner join of a SpatialElement and a table, for each an element is returned only containing the rows that are
+    present in both tables. To determine matches, for the SpatialElement the index is used and for the table the
+    region key column and instance key column.
+
+    For Points and Shapes elements every valid join for argument how is supported. For Label elements only  left joins
+    are fully supported.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object containing the tables and spatial elements.
+    spatial_element_name
+        The name(s) of the spatial elements to be joined with the table.
+    table_name
+        The name of the table to join with the spatial elements.
+    how
+        The type of SQL like join to perform, default is "left". Options are "left", "left_exclusive", "inner", "right"
+        and "right_exclusive".
+
+    Returns
+    -------
+    tuple[dict[str, Any], AnnData]
+        A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+
+    Raises
+    ------
+    AssertionError
+        If no table with the given table_name exists in the SpatialData object.
+    ValueError
+        If the provided join type is not supported.
+
+    """
     assert sdata.tables.get(table_name), f"No table with `{table_name}` exists in the SpatialData object."
     table = sdata.tables[table_name]
     if isinstance(spatial_element_name, str):
