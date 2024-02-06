@@ -118,13 +118,22 @@ def _get_polygon_in_intrinsic_coordinates(
 
     m_without_c_linear = m_without_c[:-1, :-1]
     case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
+    # as explained in https://github.com/scverse/spatialdata/pull/151#issuecomment-1444609101, this asserts that
+    # the transformation between the intrinsic coordinate system and the query space, restricted to the domain
+    # of the data, is invertible (either with dimension 2 or 3)
     assert case in [1, 5]
 
-    # we need to deal with the equivalent of _adjust_bounding_box_to_real_axes() to account for the fact that the
-    # intrinsic coordinate system of the points could be ('x', 'y', 'z'). The counter image of the polygon in such
-    # coordinate system could be not orthogonal to the 'z' axis; in such a case we would need to project the points to
-    # the plan in which the polygon live. Let's not handle this complexity and simply raise an error if the inverse
-    # transformation is mixing the 'z' axis with the other axes.
+    # since we asserted above that the transformation is invertible, then inverse image of the xy plane is a plane
+    # here, to keep the implementation simple, we want to restrict to the case that this preimage plane is parallel to
+    # the xy plane also in the intrinsic coordinate system.
+    # If in the future there is a need to implement the general case we could proceed as follows.
+    # 1. The data in the intrinsic coordinate system is necessarily points (because this function is not called for
+    # raster data and 3D polygons/meshes are not implemented).
+    # 2. We project the points to the preimage plane.
+    # 3. We query these new points in the preimage plane.
+    # Now, let's not handle this complexity and simply raise an error if, informally, the inverse transformation is
+    # "mixing" the 'z' axis with the other axes, or formally, if the vector part of the affine transformation is not a
+    # block diagonal matrix with one block for the z axis and one block for the x, y, c axes.
     sorted_input_axes_without_c = ("x", "y", "z")[: len(input_axes_without_c)]
     spatial_transform_bb_axes = Affine(
         spatial_transform.to_affine_matrix(input_axes=sorted_input_axes_without_c, output_axes=("x", "y")),
@@ -193,7 +202,7 @@ def _adjust_bounding_box_to_real_axes(
     """
     Adjust the bounding box to the real axes of the transformation.
 
-    The bounding box is defined by the user and it's axes may not coincide with the axes of the transformation.
+    The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
     if set(axes) != set(output_axes_without_c):
         axes_only_in_bb = set(axes) - set(output_axes_without_c)
@@ -657,10 +666,10 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
-    bounding_box_mask = np.where(bounding_box_mask.compute())[0]
-    if len(bounding_box_mask) == 0:
+    bounding_box_indices = np.where(bounding_box_mask.compute())[0]
+    if len(bounding_box_indices) == 0:
         return None
-    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_mask]
+    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_indices]
     old_transformations = get_transformation(points, get_all=True)
     assert isinstance(old_transformations, dict)
     # an alternative approach is to query for each partition in parallel
