@@ -359,16 +359,22 @@ def join_sdata_spatialelement_table(
     sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "left"
 ) -> tuple[dict[str, Any], AnnData]:
     """
-    Join spatial element(s) and table together in SQL like manner.
+    Join `SpatialElement`(s) and table together in SQL like manner.
 
     The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
-    returned together in one dataframe like structure, but instead filtered elements are returned, e.g. in case of an
-    inner join of a SpatialElement and a table, for each an element is returned only containing the rows that are
-    present in both tables. To determine matches, for the SpatialElement the index is used and for the table the
-    region key column and instance key column.
+    returned together in one dataframe like structure, but instead filtered elements are returned. To determine matches,
+    for the `SpatialElement` the index is used and for the table the region key column and instance key column. The
+    elements are not overwritten in the `SpatialData` object.
 
-    For Points and Shapes elements every valid join for argument how is supported. For Label elements only  left joins
-    are fully supported.
+    The following joins are supported: `left`, `left_exclusive`, `inner`, `right`
+    and `right_exclusive`. In case of a `left` join the `SpatialElements` are returned in a dictionary as is while the
+    table is filtered to only include matching rows. In case of `left_exclusive` join None is returned for table while
+    the `SpatialElements` returned are filtered to only include indices not present in the table. The cases for `right`
+    joins are symmetric to the `left` joins. In case of an `inner` join of `SpatialElement`(s) and a table, for each an
+    element is returned only containing the rows that are present in both the `SpatialElement` and table.
+
+    For `Points` and `Shapes` elements every valid join for argument how is supported. For `Label` elements only `left`
+    joins are fully supported.
 
     Parameters
     ----------
