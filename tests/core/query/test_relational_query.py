@@ -86,7 +86,7 @@ def test_join_spatialelement_table_fail(full_sdata):
         join_sdata_spatialelement_table(full_sdata, ["image2d", "labels2d"], "table", "left_exclusive")
     with pytest.warns(UserWarning, match="Tables:"):
         join_sdata_spatialelement_table(full_sdata, ["labels2d", "table"], "table", "left_exclusive")
-    with pytest.raises(ValueError, match="`not_join` is not a"):
+    with pytest.raises(TypeError, match="`not_join` is not a"):
         join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "not_join")
 
 

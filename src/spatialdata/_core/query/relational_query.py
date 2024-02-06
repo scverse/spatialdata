@@ -431,7 +431,7 @@ def join_sdata_spatialelement_table(
     if JoinTypes.get(how) is not None:
         elements_dict, table = JoinTypes[how](elements_dict, table)
     else:
-        raise ValueError(f"`{how}` is not a valid type of join.")
+        raise TypeError(f"`{how}` is not a valid type of join.")
 
     elements_dict = {
         name: element for outer_key, dict_val in elements_dict.items() for name, element in dict_val.items()
