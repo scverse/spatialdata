@@ -29,7 +29,6 @@ if TYPE_CHECKING:
         Translation,
     )
 
-DEBUG_WITH_PLOTS = False
 ERROR_MSG_AFTER_0_0_15 = """\
 Starting after v0.0.15, `transform()` requires to specify `to_coordinate_system` instead of `transformation`, to avoid
 ambiguity when multiple transformations are available for an element. If the transformation is not present in the
@@ -40,7 +39,6 @@ element, please add it with `set_transformation()`.
 def _transform_raster(
     data: DaskArray, axes: tuple[str, ...], transformation: BaseTransformation, **kwargs: Any
 ) -> tuple[DaskArray, Translation]:
-    # dims = {ch: axes.index(ch) for ch in axes}
     from spatialdata.transformations.transformations import Sequence, Translation
 
     n_spatial_dims = transformation._get_n_spatial_dims(axes)
@@ -50,20 +48,24 @@ def _transform_raster(
     c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
     v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
     matrix = transformation.to_affine_matrix(input_axes=axes, output_axes=axes)
-    inverse_matrix = transformation.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
     new_v = (matrix @ v.T).T
-    c_shape: tuple[int, ...]
-    c_shape = (data.shape[0],) if "c" in axes else ()
+    c_shape: tuple[int, ...] = (data.shape[0],) if "c" in axes else ()
     new_spatial_shape = tuple(
         int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
     )
     output_shape = c_shape + new_spatial_shape
     translation_vector = np.min(new_v[:, :-1], axis=0)
     translation = Translation(translation_vector, axes=axes)
+
+    spatial_axes = axes[-n_spatial_dims:]
+    pixel_offset = Translation([0.5 for _ in spatial_axes], axes=spatial_axes)
+
     inverse_matrix_adjusted = Sequence(
         [
+            # pixel_offset,
             translation,
             transformation.inverse(),
+            # pixel_offset.inverse(),
         ]
     ).to_affine_matrix(input_axes=axes, output_axes=axes)
 
@@ -77,34 +79,10 @@ def _transform_raster(
         # , output_chunks=output_chunks
     )
     assert isinstance(transformed_dask, DaskArray)
-
-    if DEBUG_WITH_PLOTS:
-        if n_spatial_dims == 2:
-            import matplotlib.pyplot as plt
-
-            plt.figure()
-            im = data
-            new_v_inverse = (inverse_matrix @ v.T).T
-            # min_x_inverse = np.min(new_v_inverse[:, 2])
-            # min_y_inverse = np.min(new_v_inverse[:, 1])
-
-            if "c" in axes:
-                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-            else:
-                plt.imshow(transformed_dask, origin="lower", alpha=0.5)
-                plt.imshow(im, origin="lower", alpha=0.5)
-            start_index = 1 if "c" in axes else 0
-            plt.scatter(v[:, start_index:-1][:, 1] - 0.5, v[:, start_index:-1][:, 0] - 0.5, c="r")
-            plt.scatter(new_v[:, start_index:-1][:, 1] - 0.5, new_v[:, start_index:-1][:, 0] - 0.5, c="g")
-            plt.scatter(
-                new_v_inverse[:, start_index:-1][:, 1] - 0.5, new_v_inverse[:, start_index:-1][:, 0] - 0.5, c="k"
-            )
-            plt.show()
-        else:
-            assert n_spatial_dims == 3
-            # raise NotImplementedError()
-    return transformed_dask, translation
+    new_pixel_sizes = np.array(new_spatial_shape) / np.array(spatial_shape)
+    new_pixel_size_offset = Translation(-new_pixel_sizes / 2 + 0.5, axes=spatial_axes)
+    raster_translation = Sequence([new_pixel_size_offset, translation])
+    return transformed_dask, raster_translation
 
 
 def _adjust_transformations(
