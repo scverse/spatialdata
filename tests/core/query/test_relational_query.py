@@ -66,6 +66,8 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
         )
     assert all(element_dict[key] is None for key in element_dict)
     assert all(table.obs.index == ["7", "8", "19", "20"])
+    assert all(table.obs["instance_id"].values == [7, 8, 10, 11])
+    assert all(table.obs["region"].values == ["values_circles", "values_circles", "values_polygons", "values_polygons"])
 
     # the triggered warning is: UserWarning: The element `{name}` is not annotated by the table. Skipping
     with pytest.warns(UserWarning, match="The element"):
