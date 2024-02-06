@@ -187,8 +187,8 @@ def _get_axes_of_tranformation(
     transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
     assert isinstance(transform_to_query_space, BaseTransformation)
     m = _get_affine_for_element(element, transform_to_query_space)
-    input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
-    output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
+    input_axes_without_c = tuple(ax for ax in m.input_axes if ax != "c")
+    output_axes_without_c = tuple(ax for ax in m.output_axes if ax != "c")
     m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
     return m_without_c, input_axes_without_c, output_axes_without_c
 
