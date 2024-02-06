@@ -367,3 +367,31 @@ def _compute_extent_in_coordinate_system(
     for ax in axes:
         extent[ax] = (transformed_corners[ax].min(), transformed_corners[ax].max())
     return extent
+
+
+def are_extents_equal(sdata0: SpatialData, sdata1: SpatialData, atol: float = 0.1) -> bool:
+    """
+    Check if the extents of two SpatialData objects are equal.
+
+    Parameters
+    ----------
+    sdata0
+        The first SpatialData object.
+    sdata1
+        The second SpatialData object.
+    atol
+        The absolute tolerance to use when comparing the extents.
+
+    Returns
+    -------
+    Whether the extents are equal or not.
+
+    Notes
+    -----
+    The default value of `atol` is currently high because of a bug of `rasterize()` that makes the extent of the
+    rasterized data slightly different from the extent of the original data. This bug is tracked in
+    https://github.com/scverse/spatialdata/issues/165
+    """
+    e0 = get_extent(sdata0)
+    e1 = get_extent(sdata1, coordinate_system="transformed_back")
+    return all(np.allclose(e0[k], e1[k], atol=atol) for k in set(e0.keys()).union(e1.keys()))

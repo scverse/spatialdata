@@ -29,11 +29,12 @@ __all__ = [
     "unpad_raster",
     "save_transformations",
     "get_dask_backing_files",
+    "are_extents_equal",
 ]
 
 from spatialdata import dataloader, models, transformations
 from spatialdata._core.concatenate import concatenate
-from spatialdata._core.data_extent import get_extent
+from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform

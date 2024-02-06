@@ -7,7 +7,8 @@ import pytest
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
-from spatialdata import get_extent, transform
+from spatialdata import transform
+from spatialdata._core.data_extent import are_extents_equal
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
 from spatialdata.models import PointsModel, ShapesModel, get_axes_names
@@ -17,6 +18,7 @@ from spatialdata.transformations.operations import (
     get_transformation_between_coordinate_systems,
     get_transformation_between_landmarks,
     remove_transformation,
+    remove_transformations_to_coordinate_system,
     set_transformation,
 )
 from spatialdata.transformations.transformations import (
@@ -130,21 +132,6 @@ def _postpone_transformation(
         set_transformation(element, sequence, to_coordinate_system)
 
 
-def _remove_coordinate_system(sdata: SpatialData, coordinate_system: str):
-    for element in sdata._gen_elements_values():
-        remove_transformation(element, coordinate_system)
-
-
-def _compare_extents(sdata0: SpatialData, sdata1: SpatialData):
-    e0 = get_extent(sdata0)
-    e1 = get_extent(sdata1, coordinate_system="transformed_back")
-
-    # we are not pixel perfect here, but "0.1-pixel perfect", I think this is due to an equivalent bug than then one
-    # that appears with rasterize (https://github.com/scverse/spatialdata/issues/165), probably originating from
-    # ndinterp(), which is used both by rasterize() and by transform()
-    assert all(np.allclose(e0[k], e1[k], atol=0.1) for k in set(e0.keys()).union(e1.keys()))
-
-
 @pytest.mark.parametrize("element_type", ["image", "labels"])
 @pytest.mark.parametrize("multiscale", [False, True])
 def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale: bool):
@@ -172,11 +159,11 @@ def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale
     padded = transform(sdata_transformed, to_coordinate_system="transformed_back")
 
     # cleanup to make the napari visualization less cluttered
-    _remove_coordinate_system(sdata, "transformed")
-    _remove_coordinate_system(sdata_transformed, "transformed_back")
+    remove_transformations_to_coordinate_system(sdata, "transformed")
+    remove_transformations_to_coordinate_system(sdata_transformed, "transformed_back")
 
     unpadded = _unpad_rasters(padded)
-    _compare_extents(sdata, unpadded)
+    assert are_extents_equal(sdata, unpadded)
 
     # Interactive([sdata, unpadded])
     # TODO: above we compared the alignment; compare also the data (this need to be tolerant to the interporalation and

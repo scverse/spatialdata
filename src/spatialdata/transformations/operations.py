@@ -460,3 +460,18 @@ def align_elements_using_landmarks(
             reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
         )
     return new_moving_transformation
+
+
+def remove_transformations_to_coordinate_system(sdata: SpatialData, coordinate_system: str) -> None:
+    """
+    Remove (inplace) all transformations to a specific coordinate system from all the elements of a SpatialData object.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object.
+    coordinate_system
+        The coordinate system to remove the transformations from.
+    """
+    for element in sdata._gen_elements_values():
+        remove_transformation(element, coordinate_system)
