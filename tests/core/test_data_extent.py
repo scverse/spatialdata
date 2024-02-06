@@ -262,8 +262,8 @@ def test_get_extent_affine_circles():
     # Create a Polygon from the points
     bounding_box = Polygon(points)
     gdf = GeoDataFrame(geometry=[bounding_box])
-    gdf = ShapesModel.parse(gdf)
-    transformed_bounding_box = transform(gdf, affine)
+    gdf = ShapesModel.parse(gdf, transformations={"transformed": affine})
+    transformed_bounding_box = transform(gdf, to_coordinate_system="transformed")
 
     transformed_bounding_box_extent = get_extent(transformed_bounding_box)
 

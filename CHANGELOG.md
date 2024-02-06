@@ -10,14 +10,18 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.0.x] - tbd
 
-### Minor
-
--   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
-
 ### Added
 
 -   added SpatialData.subset() API
 -   added SpatialData.locate_element() API
+-   added transform_to_data_extent()
+-   added utils function: are_extents_equal()
+-   added utils function: postpone_transformation()
+-   added utils function: remove_transformations_to_coordinate_system()
+
+### Minor
+
+-   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
 
 ### Fixed
 

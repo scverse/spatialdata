@@ -480,7 +480,7 @@ class SpatialData:
             set_transformation(element=element, transformation=new_transformations, set_all=True)
 
     def transform_element_to_coordinate_system(
-        self, element: SpatialElement, target_coordinate_system: str
+        self, element: SpatialElement, target_coordinate_system: str, maintain_positioning: bool = False
     ) -> SpatialElement:
         """
         Transform an element to a given coordinate system.
@@ -491,29 +491,72 @@ class SpatialData:
             The element to transform.
         target_coordinate_system
             The target coordinate system.
+        maintain_positioning
+            Default False (most common use case). If True, the data will be transformed but a transformation will be
+            added so that the positioning of the data in the target coordinate system will not change. If you want to
+            align datasets to a common coordinate system you should use the default value.
 
         Returns
         -------
         The transformed element.
         """
         from spatialdata import transform
-        from spatialdata.transformations import Identity
+        from spatialdata.transformations import Sequence
         from spatialdata.transformations.operations import (
+            get_transformation,
             get_transformation_between_coordinate_systems,
             remove_transformation,
             set_transformation,
         )
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
-        transformed = transform(element, t, maintain_positioning=False)
-        remove_transformation(transformed, remove_all=True)
-        set_transformation(transformed, Identity(), target_coordinate_system)
-
+        if maintain_positioning:
+            transformed = transform(element, transformation=t, maintain_positioning=maintain_positioning)
+        else:
+            d = get_transformation(element, get_all=True)
+            assert isinstance(d, dict)
+            to_remove = False
+            if target_coordinate_system not in d:
+                d[target_coordinate_system] = t
+                to_remove = True
+            transformed = transform(
+                element, to_coordinate_system=target_coordinate_system, maintain_positioning=maintain_positioning
+            )
+            if to_remove:
+                del d[target_coordinate_system]
+        if not maintain_positioning:
+            d = get_transformation(transformed, get_all=True)
+            assert isinstance(d, dict)
+            assert len(d) == 1
+            t = list(d.values())[0]
+            remove_transformation(transformed, remove_all=True)
+            set_transformation(transformed, t, target_coordinate_system)
+        else:
+            # When maintaining positioning is true, and if the element has a transformation to target_coordinate_system
+            # (this may not be the case because it could be that the element is not directly mapped to that coordinate
+            # system), then the transformation to the target coordinate system is not needed # because the data is now
+            # already transformed; here we remove such transformation.
+            d = get_transformation(transformed, get_all=True)
+            assert isinstance(d, dict)
+            if target_coordinate_system in d:
+                # Because of how spatialdata._core.operations.transform._adjust_transformations() is implemented, we
+                # know that the transformation tt below is a sequence of transformations with two transformations,
+                # with the second transformation equal to t.transformations[0]. Let's remove the second transformation.
+                # since target_coordinate_system is in d, we have that t is a Sequence with only one transformation.
+                assert isinstance(t, Sequence)
+                assert len(t.transformations) == 1
+                seq = get_transformation(transformed, to_coordinate_system=target_coordinate_system)
+                assert isinstance(seq, Sequence)
+                assert len(seq.transformations) == 2
+                assert seq.transformations[1] is t.transformations[0]
+                new_tt = seq.transformations[0]
+                set_transformation(transformed, new_tt, target_coordinate_system)
         return transformed
 
     def transform_to_coordinate_system(
         self,
         target_coordinate_system: str,
+        maintain_positioning: bool = False,
     ) -> SpatialData:
         """
         Transform the SpatialData to a given coordinate system.
@@ -522,6 +565,10 @@ class SpatialData:
         ----------
         target_coordinate_system
             The target coordinate system.
+        maintain_positioning
+            Default False (most common use case). If True, the data will be transformed but a transformation will be
+            added so that the positioning of the data in the target coordinate system will not change. If you want to
+            align datasets to a common coordinate system you should use the default value.
 
         Returns
         -------
@@ -530,7 +577,9 @@ class SpatialData:
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_table=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
         for element_type, element_name, element in sdata._gen_elements():
-            transformed = sdata.transform_element_to_coordinate_system(element, target_coordinate_system)
+            transformed = sdata.transform_element_to_coordinate_system(
+                element, target_coordinate_system, maintain_positioning=maintain_positioning
+            )
             if element_type not in elements:
                 elements[element_type] = {}
             elements[element_type][element_name] = transformed

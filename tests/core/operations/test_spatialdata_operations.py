@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 from anndata import AnnData
@@ -9,6 +11,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
 from spatialdata.models import (
@@ -19,7 +22,14 @@ from spatialdata.models import (
     TableModel,
 )
 from spatialdata.transformations.operations import get_transformation, set_transformation
-from spatialdata.transformations.transformations import Identity, Scale
+from spatialdata.transformations.transformations import (
+    Affine,
+    BaseTransformation,
+    Identity,
+    Scale,
+    Sequence,
+    Translation,
+)
 
 from tests.conftest import _get_table
 
@@ -385,3 +395,37 @@ def test_subset(full_sdata: SpatialData) -> None:
     assert subset1.table is not None
     assert len(subset1.table) == 5
     assert subset1.table.obs["region"].unique().tolist() == ["poly"]
+
+
+def test_transform_to_data_extent(full_sdata: SpatialData):
+    theta = math.pi / 6
+    rotation = Affine(
+        [
+            [math.cos(theta), -math.sin(theta), 0],
+            [math.sin(theta), math.cos(theta), 0],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+    scale = Scale([2.0], axes=("x",))
+    translation = Translation([-100.0, 200.0], axes=("x", "y"))
+    sequence = Sequence([rotation, scale, translation])
+    for el in full_sdata._gen_elements_values():
+        set_transformation(el, sequence, "global")
+    full_sdata = full_sdata.subset(
+        ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles", "multipoly", "poly"]
+    )
+    sdata = transform_to_data_extent(full_sdata, "global", target_width=1000)
+
+    matrices = []
+    for el in sdata._gen_elements_values():
+        t = get_transformation(el, to_coordinate_system="global")
+        assert isinstance(t, BaseTransformation)
+        a = t.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z"))
+        matrices.append(a)
+
+    first_a = matrices[0]
+    for a in matrices[1:]:
+        # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
+        assert np.allclose(a, first_a, rtol=0.005)

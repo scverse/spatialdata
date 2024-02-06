@@ -64,7 +64,8 @@ To get involved in the discussion, or if you need help to get started, you are w
 -   <ins>Zoom call</ins> as part of the SpatialData Community Meetings, held every 2 weeks on Thursday, [schedule here](https://hackmd.io/enWU826vRai-JYaL7TZaSw).
 
 Finally, especially relevant for for developers that are building a library upon `spatialdata`, please follow this channel for:
-- <ins>Announcements</ins> on new features and important changes [Zulip](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/spatialdata.20announcements).
+
+-   <ins>Announcements</ins> on new features and important changes [Zulip](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/spatialdata.20announcements).
 
 ## Citation
 
