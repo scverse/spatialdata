@@ -228,18 +228,18 @@ def transform(
     maintain_positioning
         The default and recommended behavior is to leave this parameter to False.
 
-            - If True, in the transformed element, each transformation that was present in the original element will be
-              prepended with the inverse of the transformation used to transform the data (i.e. the current
-              transformation for which .transform() is called). In this way the data is transformed but the
-              positioning (for each coordinate system) is maintained. A use case is changing the orientation/scale/etc.
-              of the data but keeping the alignment of the data within each coordinate system.
+        - If True, in the transformed element, each transformation that was present in the original element will be
+            prepended with the inverse of the transformation used to transform the data (i.e. the current
+            transformation for which .transform() is called). In this way the data is transformed but the
+            positioning (for each coordinate system) is maintained. A use case is changing the
+            orientation/scale/etc. of the data but keeping the alignment of the data within each coordinate system.
 
-            - If False, the data is transformed and the positioning changes; only the coordinate system in which the
-              data is transformed to is kept. For raster data, the translation part of the transformation is assigned to
-              the element (see Notes below for more details). Furthermore, for raster data, the returned object will
-              have a translation to take into account for the pixel (0, 0) position. Also, rotated raster data will be
-              padded in the corners with a black color, such padding will be reflected into the rotation. Please
-               see notes for more details of how this parameter interact with xarray.DataArray for raster data.
+        - If False, the data is transformed and the positioning changes; only the coordinate system in which the
+            data is transformed to is kept. For raster data, the translation part of the transformation is assigned
+            to the element (see Notes below for more details). Furthermore, for raster data, the returned object
+            will have a translation to take into account for the pixel (0, 0) position. Also, rotated raster data
+            will be padded in the corners with a black color, such padding will be reflected into the rotation.
+            Please see notes for more details of how this parameter interact with xarray.DataArray for raster data.
 
     to_coordinate_system
         The coordinate system to which the data should be transformed. The coordinate system must be present in the
