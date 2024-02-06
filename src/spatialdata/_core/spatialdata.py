@@ -16,6 +16,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
+from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes
@@ -1181,24 +1182,8 @@ class QueryManager:
         """
         Perform a bounding box query on the SpatialData object.
 
-        Parameters
-        ----------
-        axes
-            The axes `min_coordinate` and `max_coordinate` refer to.
-        min_coordinate
-            The minimum coordinates of the bounding box.
-        max_coordinate
-            The maximum coordinates of the bounding box.
-        target_coordinate_system
-            The coordinate system the bounding box is defined in.
-        filter_table
-            If `True`, the table is filtered to only contain rows that are annotating regions
-            contained within the bounding box.
-
-        Returns
-        -------
-        The SpatialData object containing the requested data.
-        Elements with no valid data are omitted.
+        Please see
+        :func:`spatialdata.bounding_box_query` for the complete docstring.
         """
         from spatialdata._core.query.spatial_query import bounding_box_query
 
@@ -1207,6 +1192,27 @@ class QueryManager:
             axes=axes,
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+            filter_table=filter_table,
+        )
+
+    def polygon(
+        self,
+        polygon: Polygon | MultiPolygon,
+        target_coordinate_system: str,
+        filter_table: bool = True,
+    ) -> SpatialData:
+        """
+        Perform a polygon query on the SpatialData object.
+
+        Please see
+        :func:`spatialdata.polygon_query` for the complete docstring.
+        """
+        from spatialdata._core.query.spatial_query import polygon_query
+
+        return polygon_query(  # type: ignore[return-value]
+            self._sdata,
+            polygon=polygon,
             target_coordinate_system=target_coordinate_system,
             filter_table=filter_table,
         )

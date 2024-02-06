@@ -222,8 +222,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
                 MultiPolygon(
                     [
                         Polygon(((0, 0), (0, 1), (1, 10))),
-                        Polygon(((0, 0), (0, 1), (1, 1))),
-                        Polygon(((0, 0), (0, 1), (1, 1), (1, 0), (1, 0))),
+                        Polygon(((0, 0), (1, 0), (1, 1))),
                     ]
                 ),
             ]
@@ -242,7 +241,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
         }
     )
     rng = np.random.default_rng(seed=0)
-    points["radius"] = rng.normal(size=(len(points), 1))
+    points["radius"] = np.abs(rng.normal(size=(len(points), 1)))
 
     out["poly"] = ShapesModel.parse(poly)
     out["poly"].index = ["a", "b", "c", "d", "e"]
