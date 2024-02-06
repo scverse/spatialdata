@@ -121,10 +121,12 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     )
     assert table is None
     assert not np.array_equal(
-        sdata_query_aggregation["table"].obs.iloc[7:9, 1].values, element_dict["values_circles"].index.values
+        sdata_query_aggregation["table"].obs.iloc[7:9]["instance_id"].values,
+        element_dict["values_circles"].index.values,
     )
     assert not np.array_equal(
-        sdata_query_aggregation["table"].obs.iloc[19:21, 1].values, element_dict["values_polygons"].index.values
+        sdata_query_aggregation["table"].obs.iloc[19:21]["instance_id"].values,
+        element_dict["values_polygons"].index.values,
     )
 
 
