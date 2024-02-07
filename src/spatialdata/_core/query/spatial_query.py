@@ -211,7 +211,7 @@ def _adjust_bounding_box_to_real_axes(
         # let's remove from the bounding box whose axes that are not in the output axes (e.g. querying 2D points with a
         # 3D bounding box)
         indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
-        axes = tuple([ax for ax in axes if ax not in axes_only_in_bb])
+        axes = tuple(ax for ax in axes if ax not in axes_only_in_bb)
         min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
         max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
 
