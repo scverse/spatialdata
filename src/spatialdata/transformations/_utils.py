@@ -10,12 +10,13 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import MappingToCoordinateSystem_t
-    from spatialdata.transformations.transformations import BaseTransformation, Scale
+    from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
@@ -219,3 +220,37 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
     # this is to trigger the validation of the dims
     _ = get_axes_names(msi)
     return msi
+
+
+def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> ArrayLike:
+    """
+    Scale the radii (of a list of points) by the average of the modules of the eigenvalues of an affine transformation.
+
+    Parameters
+    ----------
+    radii
+        radii of the points
+    affine
+        affine transformation
+    axes
+        axes of the points, e.g. ("x", "y") or ("x", "y", "z")
+
+    Returns
+    -------
+    scaled radii
+    """
+    matrix = affine.to_affine_matrix(input_axes=(axes), output_axes=(axes))
+    eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
+    modules = np.absolute(eigenvalues)
+    if not np.allclose(modules, modules[0]):
+        scale_factor = np.mean(modules)
+        logger.warning(
+            "The vector part of the transformation matrix is not isotropic, the radius will be scaled by the average "
+            f"of the modules of eigenvalues of the affine transformation matrix.\nmatrix={matrix}\n"
+            f"eigenvalues={eigenvalues}\nscale_factor={scale_factor}"
+        )
+    else:
+        scale_factor = modules[0]
+    new_radii = radii * scale_factor
+    assert isinstance(new_radii, np.ndarray)
+    return new_radii
