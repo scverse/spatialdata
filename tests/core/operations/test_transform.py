@@ -8,7 +8,7 @@ from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata import transform
-from spatialdata._core.data_extent import are_extents_equal
+from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
 from spatialdata.models import PointsModel, ShapesModel, get_axes_names
@@ -163,7 +163,10 @@ def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale
     remove_transformations_to_coordinate_system(sdata_transformed, "transformed_back")
 
     unpadded = _unpad_rasters(padded)
-    assert are_extents_equal(sdata, unpadded)
+
+    e0 = get_extent(sdata)
+    e1 = get_extent(unpadded, coordinate_system="transformed_back")
+    assert are_extents_equal(e0, e1)
 
     # Interactive([sdata, unpadded])
     # TODO: above we compared the alignment; compare also the data (this need to be tolerant to the interporalation and
@@ -539,15 +542,6 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             remove_transformation(element, "global")
 
     for element in full_sdata._gen_elements_values():
-        # from spatialdata.transformations.operations import _build_transformations_graph
-        #
-        # g = _build_transformations_graph(full_sdata)
-        # import networkx as nx
-        #
-        # nx.draw(g, with_labels=True)
-        # import matplotlib.pyplot as plt
-        #
-        # plt.show()
         transformed_element = full_sdata.transform_element_to_coordinate_system(
             element, "multi_hop_space", maintain_positioning=maintain_positioning
         )
@@ -559,33 +553,35 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             table=full_sdata.table,
         )
         temp["transformed_element"] = transformed_element
-        t = get_transformation_between_coordinate_systems(temp, temp["transformed_element"], "multi_hop_space")
-        a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
+        transformation = get_transformation_between_coordinate_systems(
+            temp, temp["transformed_element"], "multi_hop_space"
+        )
+        affine = transformation.to_affine_matrix(input_axes=("x",), output_axes=("x",))
         d = get_transformation(transformed_element, get_all=True)
         assert isinstance(d, dict)
         if maintain_positioning:
             if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
                 # non multi-hop case, since there is a direct transformation
                 assert set(d.keys()) == {"multi_hop_space", "my_space"}
-                a2 = d["my_space"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
+                affine2 = d["my_space"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
                 # I'd say that in the general case maybe they are not necessarily identical, but in this case they are
-                assert np.allclose(a, a2)
-                assert np.allclose(a, np.array([[1, -k], [0, 1]]))
+                assert np.allclose(affine, affine2)
+                assert np.allclose(affine, np.array([[1, -k], [0, 1]]))
             elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
                 assert set(d.keys()) == {"my_space"}
-                assert np.allclose(a, np.array([[1, k], [0, 1]]))
+                assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
                 assert set(d.keys()) == {"my_space"}
-                assert np.allclose(a, np.array([[1, 0], [0, 1]]))
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
         else:
             assert set(d.keys()) == {"multi_hop_space"}
             if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
                 # non multi-hop case, since there is a direct transformation
-                assert np.allclose(a, np.array([[1, 0], [0, 1]]))
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
             elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
-                assert np.allclose(a, np.array([[1, k], [0, 1]]))
+                assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
-                assert np.allclose(a, np.array([[1, 0], [0, 1]]))
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
 
 
 def test_transformations_between_coordinate_systems(images):

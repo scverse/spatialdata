@@ -171,7 +171,7 @@ def get_extent(
     The exact extent is the bounding box `[minx, miny, maxx, maxy] = [0, 0, 0, 1.414]`, while the approximate extent is
     the box `[minx, miny, maxx, maxy] = [-0.707, 0, 0.707, 1.414]`.
     """
-    raise ValueError("The object type is not supported.")
+    raise ValueError(f"The object type {type(e)} is not supported.")
 
 
 @get_extent.register
@@ -369,16 +369,16 @@ def _compute_extent_in_coordinate_system(
     return extent
 
 
-def are_extents_equal(sdata0: SpatialData, sdata1: SpatialData, atol: float = 0.1) -> bool:
+def are_extents_equal(extent0: BoundingBoxDescription, extent1: BoundingBoxDescription, atol: float = 0.1) -> bool:
     """
-    Check if the extents of two SpatialData objects are equal.
+    Check if two data extents, as returned by `get_extent()` are equal up to approximation errors.
 
     Parameters
     ----------
-    sdata0
-        The first SpatialData object.
-    sdata1
-        The second SpatialData object.
+    extent0
+        The first data extent.
+    extent1
+        The second data extent.
     atol
         The absolute tolerance to use when comparing the extents.
 
@@ -392,6 +392,4 @@ def are_extents_equal(sdata0: SpatialData, sdata1: SpatialData, atol: float = 0.
     rasterized data slightly different from the extent of the original data. This bug is tracked in
     https://github.com/scverse/spatialdata/issues/165
     """
-    e0 = get_extent(sdata0)
-    e1 = get_extent(sdata1, coordinate_system="transformed_back")
-    return all(np.allclose(e0[k], e1[k], atol=atol) for k in set(e0.keys()).union(e1.keys()))
+    return all(np.allclose(extent0[k], extent1[k], atol=atol) for k in set(extent0.keys()).union(extent1.keys()))

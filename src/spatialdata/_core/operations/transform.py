@@ -17,18 +17,17 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
-from spatialdata.transformations._utils import _get_scale, compute_coordinates
+from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
     from spatialdata.transformations.transformations import (
         BaseTransformation,
-        Translation,
     )
 
+DEBUG_WITH_PLOTS = False
 ERROR_MSG_AFTER_0_0_15 = """\
 Starting after v0.0.15, `transform()` requires to specify `to_coordinate_system` instead of `transformation`, to avoid
 ambiguity when multiple transformations are available for an element. If the transformation is not present in the
@@ -38,7 +37,7 @@ element, please add it with `set_transformation()`.
 
 def _transform_raster(
     data: DaskArray, axes: tuple[str, ...], transformation: BaseTransformation, **kwargs: Any
-) -> tuple[DaskArray, Translation]:
+) -> tuple[DaskArray, BaseTransformation]:
     from spatialdata.transformations.transformations import Sequence, Translation
 
     n_spatial_dims = transformation._get_n_spatial_dims(axes)
@@ -58,7 +57,7 @@ def _transform_raster(
     translation = Translation(translation_vector, axes=axes)
 
     spatial_axes = axes[-n_spatial_dims:]
-    pixel_offset = Translation([0.5 for _ in spatial_axes], axes=spatial_axes)
+    # pixel_offset = Translation([0.5 for _ in spatial_axes], axes=spatial_axes)
 
     inverse_matrix_adjusted = Sequence(
         [
@@ -85,15 +84,27 @@ def _transform_raster(
     return transformed_dask, raster_translation
 
 
-def _adjust_transformations(
+def _set_transformation_for_transformed_elements(
     element: SpatialElement,
     old_transformations: dict[str, BaseTransformation],
     transformation: BaseTransformation,
-    raster_translation: Translation | None,
+    raster_translation: BaseTransformation | None,
     maintain_positioning: bool,
     to_coordinate_system: str | None = None,
 ) -> None:
-    """Adjust the transformations of an element after it has been transformed.
+    """Transformed elements don't have transformations to the new coordinate system, so we need to set them.
+
+     By default, we add a identity transformation to the new coordinate system of the transformed element (if
+     maintain positioning is `False`), or we add all the transformations of the original element to the new
+     coordinate system of the transformed element, prepending the inverse of the transformation that was used to
+     transform the data (if maintain positioning is `True`).
+
+    In addition to this, when the transformed data is of raster type, we need to add a translation that takes into
+    account for several factors: new origin, padding (at the corners) due to rotation, and the fact that the (0, 0)
+    coordinate is the center of the (0, 0) pixel (this leads to small offsets that need to be compensated when scaling
+    or rotating the data).
+    All these factors are already contained in the `raster_translation` parameter, so we just need to prepend it to the
+    data.
 
     Parameters
     ----------
@@ -116,7 +127,7 @@ def _adjust_transformations(
     to_coordinate_system
         The coordinate system to which the data is to be transformed. This value must be None if maintain_positioning
         is True.
-    """
+    """  # noqa: D401
     from spatialdata.transformations import (
         BaseTransformation,
         get_transformation,
@@ -292,7 +303,7 @@ def _(
     assert isinstance(transformed_data, SpatialImage)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,
@@ -336,7 +347,7 @@ def _(
 
     get_axes_names(data)
     transformed_dict = {}
-    raster_translation: Translation | None = None
+    raster_translation: BaseTransformation | None = None
     for k, v in data.items():
         assert len(v) == 1
         xdata = v.values().__iter__().__next__()
@@ -365,7 +376,7 @@ def _(
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,
@@ -408,7 +419,7 @@ def _(
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,
         transformation,
@@ -430,13 +441,14 @@ def _(
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
+    axes = get_axes_names(data)
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
-    ndim = len(get_axes_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings.
     # I ignored but we may want to fix this
-    matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
+    affine = transformation.to_affine(axes, axes)  # type: ignore[arg-type]
+    matrix = affine.matrix
     shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
@@ -444,23 +456,13 @@ def _(
     transformed_data.geometry = transformed_geometry
 
     if isinstance(transformed_geometry.iloc[0], Point) and "radius" in transformed_data.columns:
-        old_radius = transformed_data["radius"]
-        eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
-        modules = np.absolute(eigenvalues)
-        if not np.allclose(modules, modules[0]):
-            logger.warning(
-                "The transformation matrix is not isotropic, the radius will be scaled by the average of the "
-                "eigenvalues of the affine transformation matrix"
-            )
-            scale_factor = np.mean(modules)
-        else:
-            scale_factor = modules[0]
-        new_radius = old_radius * scale_factor
-        transformed_data["radius"] = new_radius
+        old_radii = transformed_data["radius"].to_numpy()
+        new_radii = scale_radii(radii=old_radii, affine=affine, axes=axes)
+        transformed_data["radius"] = new_radii
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,

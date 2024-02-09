@@ -489,7 +489,8 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name:
 
     polygon = Polygon([(x0, y0), (x0, y1), (x1, y1), (x1, y0)])
     back_polygon = transform(
-        ShapesModel.parse(GeoDataFrame(geometry=[polygon])), transformation=t.inverse()
+        ShapesModel.parse(GeoDataFrame(geometry=[polygon]), transformations={"inverse": t.inverse()}),
+        to_coordinate_system="inverse",
     ).geometry.iloc[0]
 
     def _query(

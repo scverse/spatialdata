@@ -61,7 +61,7 @@ from tests.conftest import (
     _get_table,
 )
 
-RNG = default_rng()
+RNG = default_rng(seed=0)
 
 
 def test_validate_axis_name():
