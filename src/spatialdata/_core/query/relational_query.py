@@ -470,8 +470,8 @@ def join_sdata_spatialelement_table(
         The type of SQL like join to perform, default is "left". Options are "left", "left_exclusive", "inner", "right"
         and "right_exclusive".
     match_rows
-        Whether to match the indices of the element and table and if so how. If left, element_indices take priority and
-        if right table instance ids take priority.
+        Whether to match the indices of the element and table and if so how. If `left`, element_indices take priority
+        and if `right` table instance ids take priority.
 
     Returns
     -------
