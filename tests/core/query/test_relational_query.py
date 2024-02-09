@@ -159,6 +159,12 @@ def test_match_rows_join(sdata_query_aggregation):
     indices = [*element_dict["values_circles"].index, *element_dict[("values_polygons")].index]
     assert all(indices == table.obs["instance_id"])
 
+    # check whether table ordering is preserved if not matching
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
+    )
+    assert all(table.obs["instance_id"] == reversed_instance_id)
+
 
 def test_locate_value(sdata_query_aggregation):
     def _check_location(locations: list[_ValueOrigin], origin: str, is_categorical: bool):
