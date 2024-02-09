@@ -132,6 +132,34 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     )
 
 
+def test_match_rows_join(sdata_query_aggregation):
+    reversed_instance_id = [3, 4, 5, 6, 7, 8, 1, 2, 0] + list(reversed(range(12)))
+    original_instance_id = sdata_query_aggregation.table.obs["instance_id"]
+    sdata_query_aggregation.table.obs["instance_id"] = reversed_instance_id
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left", match_rows="left"
+    )
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right", match_rows="right"
+    )
+    indices = [*element_dict["values_circles"].index, *element_dict[("values_polygons")].index]
+    assert all(indices == table.obs["instance_id"])
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner", match_rows="left"
+    )
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner", match_rows="right"
+    )
+    indices = [*element_dict["values_circles"].index, *element_dict[("values_polygons")].index]
+    assert all(indices == table.obs["instance_id"])
+
+
 def test_locate_value(sdata_query_aggregation):
     def _check_location(locations: list[_ValueOrigin], origin: str, is_categorical: bool):
         assert len(locations) == 1

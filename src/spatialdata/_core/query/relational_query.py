@@ -150,7 +150,7 @@ def _filter_table_by_elements(
 
 
 def _right_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -184,7 +184,7 @@ def _right_exclusive_join_spatialelement_table(
 
 
 def _right_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -205,11 +205,11 @@ def _right_join_spatialelement_table(
 
                 mask = table_instance_key_column.isin(element_indices)
                 masked_table_instance_key_column = table_instance_key_column[mask]
-                masked_element = (
-                    element.iloc[mask_values, :]
-                    if len(mask_values := masked_table_instance_key_column.values) != 0
-                    else None
-                )
+                mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
+                if match_rows == "right":
+                    mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+
+                masked_element = element.iloc[mask_values, :]
                 element_dict[element_type][name] = masked_element
             else:
                 warnings.warn(
@@ -220,7 +220,7 @@ def _right_join_spatialelement_table(
 
 
 def _inner_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -243,18 +243,25 @@ def _inner_join_spatialelement_table(
                 mask = table_instance_key_column.isin(element_indices)
                 masked_table_instance_key_column = table_instance_key_column[mask]
 
-                masked_element = (
-                    element.iloc[mask_values, :]
-                    if len(mask_values := masked_table_instance_key_column.values) != 0
-                    else None
-                )
+                mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
+                if match_rows == "right":
+                    mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+
+                masked_element = element.iloc[mask_values, :]
                 element_dict[element_type][name] = masked_element
 
                 if joined_indices is None:
-                    joined_indices = masked_table_instance_key_column.index
+                    if match_rows == "left":
+                        joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+                    else:
+                        joined_indices = table_instance_key_column[mask].index
                 else:
+                    if match_rows == "left":
+                        add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+                        joined_indices = joined_indices.append(add_indices)
                     # in place append does not work with pd.Index
-                    joined_indices = joined_indices.append(masked_table_instance_key_column.index)
+                    else:
+                        joined_indices = joined_indices.append(table_instance_key_column[mask].index)
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
@@ -266,7 +273,7 @@ def _inner_join_spatialelement_table(
 
 
 def _left_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -314,10 +321,17 @@ def _left_join_spatialelement_table(
 
                 mask = table_instance_key_column.isin(element_indices)
                 if joined_indices is None:
-                    joined_indices = table_instance_key_column[mask].index
+                    if match_rows == "left":
+                        joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+                    else:
+                        joined_indices = table_instance_key_column[mask].index
                 else:
+                    if match_rows == "left":
+                        add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+                        joined_indices = joined_indices.append(add_indices)
                     # in place append does not work with pd.Index
-                    joined_indices = joined_indices.append(table_instance_key_column[mask].index)
+                    else:
+                        joined_indices = joined_indices.append(table_instance_key_column[mask].index)
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
@@ -327,6 +341,24 @@ def _left_join_spatialelement_table(
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
 
     return element_dict, joined_table
+
+
+def _match_rows(
+    table_instance_key_column: pd.Series,
+    mask: pd.Series,
+    element_indices: pd.RangeIndex,
+    match_rows: str,
+) -> pd.Index:
+    instance_id_df = pd.DataFrame(
+        {"instance_id": table_instance_key_column[mask].values, "index_right": table_instance_key_column[mask].index}
+    )
+    element_index_df = pd.DataFrame({"index_left": element_indices})
+    index_col = "index_left" if match_rows == "right" else "index_right"
+    return pd.Index(
+        pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)[
+            index_col
+        ]
+    )
 
 
 class JoinTypes(Enum):
@@ -433,7 +465,7 @@ def join_sdata_spatialelement_table(
         raise TypeError(
             f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, `left` or `right`"
         )
-    if how not in JoinTypes.__dict__["_member_names_"]:
+    if how in JoinTypes.__dict__["_member_names_"]:
         elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
