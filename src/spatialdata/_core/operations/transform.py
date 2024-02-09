@@ -17,11 +17,10 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
-from spatialdata.transformations._utils import _get_scale, compute_coordinates
+from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
     from spatialdata.transformations.transformations import (
@@ -452,13 +451,14 @@ def _(
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
+    axes = get_axes_names(data)
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
-    ndim = len(get_axes_names(data))
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings.
     # I ignored but we may want to fix this
-    matrix = transformation.to_affine_matrix(["x", "y", "z"][:ndim], ["x", "y", "z"][:ndim])  # type: ignore[arg-type]
+    affine = transformation.to_affine(axes, axes)  # type: ignore[arg-type]
+    matrix = affine.matrix
     shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
@@ -466,19 +466,9 @@ def _(
     transformed_data.geometry = transformed_geometry
 
     if isinstance(transformed_geometry.iloc[0], Point) and "radius" in transformed_data.columns:
-        old_radius = transformed_data["radius"]
-        eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
-        modules = np.absolute(eigenvalues)
-        if not np.allclose(modules, modules[0]):
-            logger.warning(
-                "The transformation matrix is not isotropic, the radius will be scaled by the average of the "
-                "eigenvalues of the affine transformation matrix"
-            )
-            scale_factor = np.mean(modules)
-        else:
-            scale_factor = modules[0]
-        new_radius = old_radius * scale_factor
-        transformed_data["radius"] = new_radius
+        old_radii = transformed_data["radius"].to_numpy()
+        new_radii = scale_radii(radii=old_radii, affine=affine, axes=axes)
+        transformed_data["radius"] = new_radii
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
