@@ -149,6 +149,81 @@ def _filter_table_by_elements(
     return table
 
 
+def _get_joined_table_indices(
+    joined_indices: pd.Index | None,
+    element_indices: pd.RangeIndex,
+    table_instance_key_column: pd.Series,
+    match_rows: Literal["left", "right"],
+) -> pd.Index:
+    """
+    Get indices of the table that are present in element_indices.
+
+    Parameters
+    ----------
+    joined_indices
+        Current indices that have been found to match indices of an element
+    element_indices
+        Element indices to match against table_instance_key_column.
+    table_instance_key_column
+        The column of a table containing the instance ids.
+    match_rows
+        Whether to match the indices of the element and table and if so how. If left, element_indices take priority and
+        if right table instance ids take priority.
+
+    Returns
+    -------
+        The indices that of the table that match the SpatialElement indices.
+    """
+    mask = table_instance_key_column.isin(element_indices)
+    if joined_indices is None:
+        if match_rows == "left":
+            joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+        else:
+            joined_indices = table_instance_key_column[mask].index
+    else:
+        if match_rows == "left":
+            add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+            joined_indices = joined_indices.append(add_indices)
+        # in place append does not work with pd.Index
+        else:
+            joined_indices = joined_indices.append(table_instance_key_column[mask].index)
+    return joined_indices
+
+
+def _get_masked_element(
+    element_indices: pd.RangeIndex,
+    element: SpatialElement,
+    table_instance_key_column: pd.Series,
+    match_rows: Literal["left", "right"],
+) -> SpatialElement:
+    """
+    Get element rows matching the instance ids in the table_instance_key_column.
+
+    Parameters
+    ----------
+    element_indices
+        The indices of an element.
+    element
+        The spatial element to be masked.
+    table_instance_key_column
+        The column of a table containing the instance ids
+    match_rows : Literal["left", "right"]
+         Whether to match the indices of the element and table and if so how. If left, element_indices take priority and
+        if right table instance ids take priority.
+
+    Returns
+    -------
+    The masked spatial element based on the provided indices and match rows.
+    """
+    mask = table_instance_key_column.isin(element_indices)
+    masked_table_instance_key_column = table_instance_key_column[mask]
+    mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
+    if match_rows == "right":
+        mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+
+    return element.iloc[mask_values, :]
+
+
 def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData | None]:
@@ -184,7 +259,7 @@ def _right_exclusive_join_spatialelement_table(
 
 
 def _right_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -203,13 +278,7 @@ def _right_join_spatialelement_table(
                     )
                     continue
 
-                mask = table_instance_key_column.isin(element_indices)
-                masked_table_instance_key_column = table_instance_key_column[mask]
-                mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
-                if match_rows == "right":
-                    mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-
-                masked_element = element.iloc[mask_values, :]
+                masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
                 element_dict[element_type][name] = masked_element
             else:
                 warnings.warn(
@@ -220,7 +289,7 @@ def _right_join_spatialelement_table(
 
 
 def _inner_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -240,34 +309,19 @@ def _inner_join_spatialelement_table(
                     )
                     continue
 
-                mask = table_instance_key_column.isin(element_indices)
-                masked_table_instance_key_column = table_instance_key_column[mask]
-
-                mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
-                if match_rows == "right":
-                    mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-
-                masked_element = element.iloc[mask_values, :]
+                masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
                 element_dict[element_type][name] = masked_element
 
-                if joined_indices is None:
-                    if match_rows == "left":
-                        joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-                    else:
-                        joined_indices = table_instance_key_column[mask].index
-                else:
-                    if match_rows == "left":
-                        add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-                        joined_indices = joined_indices.append(add_indices)
-                    # in place append does not work with pd.Index
-                    else:
-                        joined_indices = joined_indices.append(table_instance_key_column[mask].index)
+                joined_indices = _get_joined_table_indices(
+                    joined_indices, element_indices, table_instance_key_column, match_rows
+                )
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
                 )
                 element_dict[element_type][name] = None
                 continue
+
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     return element_dict, joined_table
 
@@ -304,7 +358,7 @@ def _left_exclusive_join_spatialelement_table(
 
 
 def _left_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -319,19 +373,9 @@ def _left_join_spatialelement_table(
                 else:
                     element_indices = _get_unique_label_values_as_index(element)
 
-                mask = table_instance_key_column.isin(element_indices)
-                if joined_indices is None:
-                    if match_rows == "left":
-                        joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-                    else:
-                        joined_indices = table_instance_key_column[mask].index
-                else:
-                    if match_rows == "left":
-                        add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-                        joined_indices = joined_indices.append(add_indices)
-                    # in place append does not work with pd.Index
-                    else:
-                        joined_indices = joined_indices.append(table_instance_key_column[mask].index)
+                joined_indices = _get_joined_table_indices(
+                    joined_indices, element_indices, table_instance_key_column, match_rows
+                )
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
