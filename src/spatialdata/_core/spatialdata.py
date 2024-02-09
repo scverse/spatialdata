@@ -1538,6 +1538,27 @@ class SpatialData:
         _, _, element = self._find_element(item)
         return element
 
+    def get(self, key: str, default_value: Any = None) -> SpatialElement | AnnData:
+        """
+        Get element from SpatialData object based on corresponding name.
+
+        Parameters
+        ----------
+        key
+            The key to lookup in the spatial elements.
+        default_value : SpatialElement | AnnData, optional
+            The default value to return if the key is not found. Default is None.
+
+        Returns
+        -------
+        The SpatialData element associated with the given key, if found. Otherwise, the default value is returned.
+        """
+        for _, element_name_, element in self.gen_elements():
+            if element_name_ == key:
+                return element
+        else:
+            return default_value
+
     def __setitem__(self, key: str, value: SpatialElement | AnnData) -> None:
         """
         Add the element to the SpatialData object.
