@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
@@ -399,11 +400,16 @@ def _match_rows(
     )
     element_index_df = pd.DataFrame({"index_left": element_indices})
     index_col = "index_left" if match_rows == "right" else "index_right"
-    return pd.Index(
-        pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)[
-            index_col
-        ]
-    )
+
+    merged_df = pd.merge(
+        element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows
+    )[index_col]
+
+    # With labels it can be that index 0 is NaN
+    if isinstance(merged_df.iloc[0], float) and math.isnan(merged_df.iloc[0]):
+        merged_df = merged_df.iloc[1:]
+
+    return pd.Index(merged_df)
 
 
 class JoinTypes(Enum):
@@ -521,7 +527,7 @@ def join_sdata_spatialelement_table(
     return elements_dict, table
 
 
-def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
+def match_table_to_element(sdata: SpatialData, element_name: str | list[str], table_name: str | None = None) -> AnnData:
     """
     Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
@@ -530,17 +536,24 @@ def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
     sdata
         SpatialData object
     element_name
-        Name of the element to match the table to
+        The name(s) of the spatial elements to be joined with the table.
+    table_name
+        The name of the table to join with the spatial elements.
 
     Returns
     -------
     Table with the rows matching the instances of the element
     """
-    assert sdata.table is not None, "No table found in the SpatialData"
-    element_type, _, element = sdata._find_element(element_name)
-    assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
-    elements_dict = {element_type: {element_name: element}}
-    return _filter_table_by_elements(sdata.table, elements_dict, match_rows=True)
+    if table_name is None:
+        warnings.warn(
+            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
+            "Please provide the name of the table as argument to table_name.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        table_name = "table"
+    _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
+    return table
 
 
 @dataclass

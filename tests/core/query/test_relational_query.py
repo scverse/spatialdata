@@ -8,12 +8,6 @@ from spatialdata.models.models import TableModel
 
 
 def test_match_table_to_element(sdata_query_aggregation):
-    # table can't annotate points
-    with pytest.raises(AssertionError):
-        match_table_to_element(sdata=sdata_query_aggregation, element_name="points")
-    # table is not annotating "by_circles"
-    with pytest.raises(AssertionError, match="No row matches in the table annotates the element"):
-        match_table_to_element(sdata=sdata_query_aggregation, element_name="by_circles")
     matched_table = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
     arr = np.array(list(reversed(sdata_query_aggregation["values_circles"].index)))
     sdata_query_aggregation["values_circles"].index = arr
