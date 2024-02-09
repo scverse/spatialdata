@@ -44,7 +44,7 @@ def _transform_raster(
     n_spatial_dims = transformation._get_n_spatial_dims(axes)
     binary: ArrayLike = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
     after_c = 1 if "c" in axes else 0
-    spatial_shape = data.shape[after_c :]
+    spatial_shape = data.shape[after_c:]
     binary *= np.array(spatial_shape)
     c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
     v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
@@ -65,7 +65,9 @@ def _transform_raster(
     new_real_origin = (matrix @ real_origin.T).T
 
     new_pixel_size = scipy.linalg.norm((new_v[1, after_c:-1] - new_v[0, after_c:-1]))
-    new_pixel_offset = Translation((new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]) / new_pixel_size, axes=spatial_axes)
+    new_pixel_offset = Translation(
+        (new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]) / new_pixel_size, axes=spatial_axes
+    )
 
     inverse_matrix_adjusted = Sequence(
         [
@@ -92,7 +94,8 @@ def _transform_raster(
     # new_pixel_size_offset = Translation(-new_pixel_sizes / 2 + 0.5, axes=spatial_axes)
     # raster_translation = Sequence([new_pixel_size_offset, translation])
     real_origin_offset = Translation(
-         new_pixel_offset.translation - pixel_offset.translation, axes=spatial_axes
+        new_pixel_offset.translation - pixel_offset.translation,
+        axes=spatial_axes,
         # new_real_origin[0, after_c : -1] - real_origin[0, after_c : -1], axes=spatial_axes
     )
     raster_translation = Sequence([real_origin_offset, translation])
