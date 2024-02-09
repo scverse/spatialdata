@@ -68,6 +68,7 @@ def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
     return pd.Index(np.sort(instances))
 
 
+# TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
 def _filter_table_by_elements(
     table: AnnData | None, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
 ) -> AnnData | None:
