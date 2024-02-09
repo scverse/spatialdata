@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
@@ -123,14 +124,14 @@ def _get_polygon_in_intrinsic_coordinates(
     # of the data, is invertible (either with dimension 2 or 3)
     assert case in [1, 5]
 
-    # since we asserted above that the transformation is invertible, then inverse image of the xy plane is a plane
-    # here, to keep the implementation simple, we want to restrict to the case that this preimage plane is parallel to
-    # the xy plane also in the intrinsic coordinate system.
+    # Since we asserted above that the transformation is invertible, then inverse image of the xy plane is a plane.
+    # Here, to keep the implementation simple, we want to restrict to the case in which this inverse image plane is
+    # parallel to the xy plane also in the intrinsic coordinate system.
     # If in the future there is a need to implement the general case we could proceed as follows.
     # 1. The data in the intrinsic coordinate system is necessarily points (because this function is not called for
     # raster data and 3D polygons/meshes are not implemented).
-    # 2. We project the points to the preimage plane.
-    # 3. We query these new points in the preimage plane.
+    # 2. We project the points to the inverse image plane.
+    # 3. We query these new points in the inverse image plane.
     # Now, let's not handle this complexity and simply raise an error if, informally, the inverse transformation is
     # "mixing" the 'z' axis with the other axes, or formally, if the vector part of the affine transformation is not a
     # block diagonal matrix with one block for the z axis and one block for the x, y, c axes.
@@ -230,11 +231,12 @@ def _get_case_of_bounding_box_query(
     input_axes_without_c: tuple[str, ...],
     output_axes_without_c: tuple[str, ...],
 ) -> int:
-    """Get the case of the current bounding box query.
-
-    See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
-    and for the cases the comments refer to.
     """
+    The bounding box query is handled in different ways depending on the "case" we are in, which we identify here.
+
+    See https://github.com/scverse/spatialdata/pull/151#issuecomment-1444609101 for a detailed overview of the logic of
+    this code, or see the comments below for an overview of the cases we consider.
+    """  # noqa: D401
     transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
     transform_coordinate_length = len(output_axes_without_c)
     data_dim = len(input_axes_without_c)
@@ -244,7 +246,15 @@ def _get_case_of_bounding_box_query(
     assert transform_coordinate_length in [2, 3]
     assert not (data_dim == 2 and transform_dimension == 3)
     assert not (transform_dimension == 3 and transform_coordinate_length == 2)
-    # see explanation in https://github.com/scverse/spatialdata/pull/151
+    # TL;DR of the GitHub comment linked in the docstring.
+    # the combinations of values for `data_dim`, `transform_dimension`, and `transform_coordinate_length` # lead to 8
+    # cases, but of these, 3 are not possible:
+    # a. transform_dimension == 3 and transform_coordinate_length == 2 (these are 2 cases)
+    # b. data_dim == 2 and transform_dimension == 3 (these are 2 cases, but one already covered by the previous point)
+    # what remains are the 5 cases of the if-elif-else below
+    # for simplicity we will start by implementing only the cases 1 and 5, which are the ones that correspond to
+    # invertible transformations, the other cases are not handled and will raise an error, and can be implemented in the
+    # future if needed. The GitHub discussion also contains a detailed explanation of the logic behind the cases.
     if data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 2:
         case = 1
     elif data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 3:
@@ -717,6 +727,19 @@ def _(
     return ShapesModel.parse(queried, transformations=old_transformations.copy())
 
 
+# TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter
+def _check_deprecated_kwargs(kwargs: dict[str, Any]) -> None:
+    deprecated_args = ["shapes", "points", "images", "labels"]
+    for arg in deprecated_args:
+        if arg in kwargs and kwargs[arg] is False:
+            warnings.warn(
+                f"The '{arg}' argument is deprecated and will be removed. Please filter the SpatialData object before "
+                "calling this function.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+
 @singledispatch
 def polygon_query(
     element: SpatialElement | SpatialData,
@@ -782,6 +805,7 @@ def _(
 ) -> SpatialData:
     from spatialdata._core.query.relational_query import _filter_table_by_elements
 
+    _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
@@ -809,7 +833,9 @@ def _(
     image: SpatialImage | MultiscaleSpatialImage,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
+    **kwargs: Any,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
+    _check_deprecated_kwargs(**kwargs)
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
     return bounding_box_query(
@@ -826,9 +852,11 @@ def _(
     points: DaskDataFrame,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
+    **kwargs: Any,
 ) -> DaskDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
+    _check_deprecated_kwargs(**kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
@@ -855,9 +883,11 @@ def _(
     element: GeoDataFrame,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
+    **kwargs: Any,
 ) -> GeoDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
+    _check_deprecated_kwargs(**kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 
