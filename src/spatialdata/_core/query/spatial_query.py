@@ -195,35 +195,35 @@ def _get_axes_of_tranformation(
 
 
 def _adjust_bounding_box_to_real_axes(
-    axes: tuple[str, ...],
+    axes_bb: tuple[str, ...],
     min_coordinate: ArrayLike,
     max_coordinate: ArrayLike,
-    output_axes_without_c: tuple[str, ...],
+    axes_out_without_c: tuple[str, ...],
 ) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
     """
     Adjust the bounding box to the real axes of the transformation.
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
-    if set(axes) != set(output_axes_without_c):
-        axes_only_in_bb = set(axes) - set(output_axes_without_c)
-        axes_only_in_output = set(output_axes_without_c) - set(axes)
+    if set(axes_bb) != set(axes_out_without_c):
+        axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
+        axes_only_in_output = set(axes_out_without_c) - set(axes_bb)
 
         # let's remove from the bounding box whose axes that are not in the output axes (e.g. querying 2D points with a
         # 3D bounding box)
-        indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
-        axes = tuple(ax for ax in axes if ax not in axes_only_in_bb)
+        indices_to_remove_from_bb = [axes_bb.index(ax) for ax in axes_only_in_bb]
+        axes_bb = tuple(ax for ax in axes_bb if ax not in axes_only_in_bb)
         min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
         max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
 
         # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
         # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
         for ax in axes_only_in_output:
-            axes = axes + (ax,)
+            axes_bb = axes_bb + (ax,)
             M = np.finfo(np.float32).max - 1
             min_coordinate = np.append(min_coordinate, -M)
             max_coordinate = np.append(max_coordinate, M)
-    return axes, min_coordinate, max_coordinate
+    return axes_bb, min_coordinate, max_coordinate
 
 
 def _get_case_of_bounding_box_query(
@@ -733,8 +733,8 @@ def _check_deprecated_kwargs(kwargs: dict[str, Any]) -> None:
     for arg in deprecated_args:
         if arg in kwargs and kwargs[arg] is False:
             warnings.warn(
-                f"The '{arg}' argument is deprecated and will be removed. Please filter the SpatialData object before "
-                "calling this function.",
+                f"The '{arg}' argument is deprecated and will be removed in one of the next following releases. Please "
+                f"filter the SpatialData object before calling this function.",
                 DeprecationWarning,
                 stacklevel=2,
             )
