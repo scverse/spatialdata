@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
-from typing import Any, Callable
+from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
@@ -297,7 +297,7 @@ def _left_exclusive_join_spatialelement_table(
 
 
 def _left_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -341,15 +341,21 @@ class JoinTypes(Enum):
     def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
         return self.value(*args)
 
-    @classmethod
-    def get(cls, key: str) -> Callable[[dict[str, dict[str, Any]], AnnData], tuple[dict[str, Any], AnnData]] | None:
-        if key in cls.__members__:
-            return cls.__members__.get(key)
-        return None
+
+class MatchTypes(Enum):
+    """Available match types for matching rows of elements and tables."""
+
+    left = "left"
+    right = "right"
+    no = "no"
 
 
 def join_sdata_spatialelement_table(
-    sdata: SpatialData, spatial_element_name: str | list[str], table_name: str, how: str = "left"
+    sdata: SpatialData,
+    spatial_element_name: str | list[str],
+    table_name: str,
+    how: str = "left",
+    match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
     """
     Join `SpatialElement`(s) and table together in SQL like manner.
@@ -422,8 +428,13 @@ def join_sdata_spatialelement_table(
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
         "`shapes`."
     )
-    if JoinTypes.get(how) is not None:
-        elements_dict, table = JoinTypes[how](elements_dict, table)
+
+    if match_rows not in MatchTypes.__dict__["_member_names_"]:
+        raise TypeError(
+            f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, `left` or `right`"
+        )
+    if how not in JoinTypes.__dict__["_member_names_"]:
+        elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
 
