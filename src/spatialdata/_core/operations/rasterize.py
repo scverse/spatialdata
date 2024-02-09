@@ -448,7 +448,7 @@ def _(
     if schema in (Labels2DModel, Labels3DModel):
         kwargs = {"prefilter": False, "order": 0}
     elif schema in (Image2DModel, Image3DModel):
-        kwargs = {}
+        kwargs = {"order": 0}
     else:
         raise ValueError(f"Unsupported schema {schema}")
 
