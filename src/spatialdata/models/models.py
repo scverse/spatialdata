@@ -1,4 +1,5 @@
 """Models and schema for SpatialData."""
+
 from __future__ import annotations
 
 import warnings
@@ -475,7 +476,7 @@ class PointsModel:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-            if not isinstance(data[feature_key], CategoricalDtype):
+            if not isinstance(data[feature_key].dtype, CategoricalDtype):
                 logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
 
     @singledispatchmethod
@@ -629,7 +630,7 @@ class PointsModel:
             #  Here we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known.
             # It also just changes the state of the series, so it is not a big deal.
-            if isinstance(data[c], CategoricalDtype) and not data[c].cat.known:
+            if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
                 try:
                     data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
                 except ValueError:
@@ -734,7 +735,7 @@ class TableModel:
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-        if not isinstance(adata.obs[region_key], CategoricalDtype):
+        if not isinstance(adata.obs[region_key].dtype, CategoricalDtype):
             warnings.warn(
                 f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
             )

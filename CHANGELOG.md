@@ -17,8 +17,12 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   added SpatialData.subset() API
+-   added SpatialData.locate_element() API
 
 ### Fixed
+
+-   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
+-   fixed warnings for categorical dtypes in tables in TableModel and PointsModel
 
 #### Minor
 

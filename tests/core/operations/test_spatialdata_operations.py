@@ -310,15 +310,14 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
-    assert full_sdata._locate_spatial_element(full_sdata.images["image2d"]) == ("image2d", "images")
+    assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
     del full_sdata.images["image2d"]
-    with pytest.raises(ValueError, match="Element not found in the SpatialData object."):
-        full_sdata._locate_spatial_element(im)
+    assert len(full_sdata.locate_element(im)) == 0
     full_sdata.images["image2d"] = im
     full_sdata.images["image2d_again"] = im
-    with pytest.raises(ValueError):
-        full_sdata._locate_spatial_element(im)
+    paths = full_sdata.locate_element(im)
+    assert len(paths) == 2
 
 
 def test_get_item(points: SpatialData) -> None:
