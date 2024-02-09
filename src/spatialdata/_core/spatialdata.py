@@ -1538,6 +1538,12 @@ class SpatialData:
         _, _, element = self._find_element(item)
         return element
 
+    def __contains__(self, key: str) -> bool:
+        element_dict = {
+            element_name: element_value for _, element_name, element_value in self._gen_elements(include_table=True)
+        }
+        return key in element_dict
+
     def get(self, key: str, default_value: Any = None) -> SpatialElement | AnnData:
         """
         Get element from SpatialData object based on corresponding name.
