@@ -835,7 +835,7 @@ def _(
     target_coordinate_system: str,
     **kwargs: Any,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
-    _check_deprecated_kwargs(**kwargs)
+    _check_deprecated_kwargs(kwargs)
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
     return bounding_box_query(
@@ -856,7 +856,7 @@ def _(
 ) -> DaskDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(**kwargs)
+    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
@@ -887,7 +887,7 @@ def _(
 ) -> GeoDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(**kwargs)
+    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 
