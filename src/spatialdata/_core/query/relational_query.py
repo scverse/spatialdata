@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
@@ -145,15 +146,6 @@ def _filter_table_by_elements(
     table = table.copy()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
-
-
-def _create_element_dict(
-    element_type: str, name: str, element: SpatialElement | AnnData, elements_dict: dict[str, dict[str, Any]]
-) -> dict[str, dict[str, Any]]:
-    if element_type not in elements_dict:
-        elements_dict[element_type] = {}
-    elements_dict[element_type][name] = element
-    return elements_dict
 
 
 def _right_exclusive_join_spatialelement_table(
@@ -406,23 +398,24 @@ def join_sdata_spatialelement_table(
     if isinstance(spatial_element_name, str):
         spatial_element_name = [spatial_element_name]
 
-    elements_dict: dict[str, dict[str, Any]] = {}
+    elements_dict: dict[str, dict[str, Any]] = defaultdict(lambda: defaultdict(dict))
     for name in spatial_element_name:
-        element_type, _, element = sdata._find_element(name)
-        elements_dict = _create_element_dict(element_type, name, element, elements_dict)
-    if "images" in elements_dict:
-        warnings.warn(
-            f"Images: `{', '.join(elements_dict['images'].keys())}` cannot be joined with a table",
-            UserWarning,
-            stacklevel=2,
-        )
-    if "tables" in elements_dict:
-        warnings.warn(
-            f"Tables: `{', '.join(elements_dict['tables'].keys())}` given in spatial_element_names cannot be "
-            f"joined with a table using this function.",
-            UserWarning,
-            stacklevel=2,
-        )
+        if name in sdata.tables:
+            warnings.warn(
+                f"Tables: `{', '.join(elements_dict['tables'].keys())}` given in spatial_element_names cannot be "
+                f"joined with a table using this function.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif name in sdata.images:
+            warnings.warn(
+                f"Images: `{', '.join(elements_dict['images'].keys())}` cannot be joined with a table",
+                UserWarning,
+                stacklevel=2,
+            )
+        else:
+            element_type, _, element = sdata._find_element(name)
+            elements_dict[element_type][name] = element
 
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
