@@ -11,6 +11,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
@@ -397,7 +398,8 @@ def test_subset(full_sdata: SpatialData) -> None:
     assert subset1.table.obs["region"].unique().tolist() == ["poly"]
 
 
-def test_transform_to_data_extent(full_sdata: SpatialData):
+@pytest.mark.parametrize("maintain_positioning", [True, False])
+def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning: bool) -> None:
     theta = math.pi / 6
     rotation = Affine(
         [
@@ -413,10 +415,18 @@ def test_transform_to_data_extent(full_sdata: SpatialData):
     sequence = Sequence([rotation, scale, translation])
     for el in full_sdata._gen_elements_values():
         set_transformation(el, sequence, "global")
-    full_sdata = full_sdata.subset(
-        ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles", "multipoly", "poly"]
-    )
-    sdata = transform_to_data_extent(full_sdata, "global", target_width=1000)
+    elements = [
+        "image2d",
+        "image2d_multiscale",
+        "labels2d",
+        "labels2d_multiscale",
+        "points_0",
+        "circles",
+        "multipoly",
+        "poly",
+    ]
+    full_sdata = full_sdata.subset(elements)
+    sdata = transform_to_data_extent(full_sdata, "global", target_width=1000, maintain_positioning=maintain_positioning)
 
     matrices = []
     for el in sdata._gen_elements_values():
@@ -429,3 +439,15 @@ def test_transform_to_data_extent(full_sdata: SpatialData):
     for a in matrices[1:]:
         # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
         assert np.allclose(a, first_a, rtol=0.005)
+    if not maintain_positioning:
+        assert np.allclose(first_a, np.eye(4))
+    else:
+        for element in elements:
+            before = full_sdata[element]
+            after = sdata[element]
+            data_extent_before = get_extent(before, coordinate_system="global")
+            data_extent_after = get_extent(after, coordinate_system="global")
+            # huge tolerance because of the bug with pixel perfectness
+            assert are_extents_equal(
+                data_extent_before, data_extent_after, atol=3
+            ), f"data_extent_before: {data_extent_before}, data_extent_after: {data_extent_after} for element {element}"

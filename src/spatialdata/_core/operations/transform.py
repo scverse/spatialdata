@@ -106,7 +106,7 @@ def _transform_raster(
     return transformed_dask, translation
 
 
-def _adjust_transformations(
+def _set_transformation_for_transformed_elements(
     element: SpatialElement,
     old_transformations: dict[str, BaseTransformation],
     transformation: BaseTransformation,
@@ -114,7 +114,19 @@ def _adjust_transformations(
     maintain_positioning: bool,
     to_coordinate_system: str | None = None,
 ) -> None:
-    """Adjust the transformations of an element after it has been transformed.
+    """Transformed elements don't have transformations to the new coordinate system, so we need to set them.
+
+     By default, we add a identity transformation to the new coordinate system of the transformed element (if
+     maintain positioning is `False`), or we add all the transformations of the original element to the new
+     coordinate system of the transformed element, prepending the inverse of the transformation that was used to
+     transform the data (if maintain positioning is `True`).
+
+    In addition to this, when the transformed data is of raster type, we need to add a translation that takes into
+    account for several factors: new origin, padding (at the corners) due to rotation, and the fact that the (0, 0)
+    coordinate is the center of the (0, 0) pixel (this leads to small offsets that need to be compensated when scaling
+    or rotating the data).
+    All these factors are already contained in the `raster_translation` parameter, so we just need to prepend it to the
+    data.
 
     Parameters
     ----------
@@ -137,7 +149,7 @@ def _adjust_transformations(
     to_coordinate_system
         The coordinate system to which the data is to be transformed. This value must be None if maintain_positioning
         is True.
-    """
+    """  # noqa: D401
     from spatialdata.transformations import (
         BaseTransformation,
         get_transformation,
@@ -313,7 +325,7 @@ def _(
     assert isinstance(transformed_data, SpatialImage)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,
@@ -386,7 +398,7 @@ def _(
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,
@@ -429,7 +441,7 @@ def _(
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,
         transformation,
@@ -472,7 +484,7 @@ def _(
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
-    _adjust_transformations(
+    _set_transformation_for_transformed_elements(
         transformed_data,
         old_transformations,
         transformation,
