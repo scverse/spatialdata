@@ -833,24 +833,6 @@ def _(
     image: SpatialImage | MultiscaleSpatialImage,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
-) -> SpatialImage | MultiscaleSpatialImage | None:
-    gdf = GeoDataFrame(geometry=[polygon])
-    min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
-    return bounding_box_query(
-        image,
-        min_coordinate=[min_x, min_y],
-        max_coordinate=[max_x, max_y],
-        axes=("x", "y"),
-        target_coordinate_system=target_coordinate_system,
-    )
-
-
-@polygon_query.register(SpatialImage)
-@polygon_query.register(MultiscaleSpatialImage)
-def _(
-    image: SpatialImage | MultiscaleSpatialImage,
-    polygon: Polygon | MultiPolygon,
-    target_coordinate_system: str,
     **kwargs: Any,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
     _check_deprecated_kwargs(kwargs)
