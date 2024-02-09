@@ -237,9 +237,10 @@ def _right_exclusive_join_spatialelement_table(
                 table_instance_key_column = group_df[instance_key]
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
-                    element_dict[element_type][name] = None
                 else:
                     element_indices = _get_unique_label_values_as_index(element)
+
+                element_dict[element_type][name] = None
                 submask = ~table_instance_key_column.isin(element_indices)
                 mask.append(submask)
             else:
