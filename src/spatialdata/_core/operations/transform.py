@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
+import scipy
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -42,7 +43,8 @@ def _transform_raster(
 
     n_spatial_dims = transformation._get_n_spatial_dims(axes)
     binary: ArrayLike = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
-    spatial_shape = data.shape[len(data.shape) - n_spatial_dims :]
+    after_c = 1 if "c" in axes else 0
+    spatial_shape = data.shape[after_c :]
     binary *= np.array(spatial_shape)
     c_channel = [np.zeros(len(binary)).reshape((-1, 1))] if "c" in axes else []
     v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
@@ -56,15 +58,23 @@ def _transform_raster(
     translation_vector = np.min(new_v[:, :-1], axis=0)
     translation = Translation(translation_vector, axes=axes)
 
-    spatial_axes = axes[-n_spatial_dims:]
-    # pixel_offset = Translation([0.5 for _ in spatial_axes], axes=spatial_axes)
+    spatial_axes = axes[after_c:]
+    pixel_offset = Translation([0.5 for _ in spatial_axes], axes=spatial_axes)
+
+    real_origin = np.atleast_2d(([0] if "c" in axes else []) + [-0.5 for _ in spatial_axes] + [1])
+    new_real_origin = (matrix @ real_origin.T).T
+
+    new_pixel_size = scipy.linalg.norm((new_v[1, after_c:-1] - new_v[0, after_c:-1]))
+    new_pixel_offset = Translation((new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]) / new_pixel_size, axes=spatial_axes)
 
     inverse_matrix_adjusted = Sequence(
         [
+            new_pixel_offset,
             # pixel_offset,
             translation,
             transformation.inverse(),
-            # pixel_offset.inverse(),
+            # new_pixel_offset
+            pixel_offset.inverse(),
         ]
     ).to_affine_matrix(input_axes=axes, output_axes=axes)
 
@@ -78,9 +88,14 @@ def _transform_raster(
         # , output_chunks=output_chunks
     )
     assert isinstance(transformed_dask, DaskArray)
-    new_pixel_sizes = np.array(new_spatial_shape) / np.array(spatial_shape)
-    new_pixel_size_offset = Translation(-new_pixel_sizes / 2 + 0.5, axes=spatial_axes)
-    raster_translation = Sequence([new_pixel_size_offset, translation])
+    # new_pixel_sizes = np.array(new_spatial_shape) / np.array(spatial_shape)
+    # new_pixel_size_offset = Translation(-new_pixel_sizes / 2 + 0.5, axes=spatial_axes)
+    # raster_translation = Sequence([new_pixel_size_offset, translation])
+    real_origin_offset = Translation(
+         new_pixel_offset.translation - pixel_offset.translation, axes=spatial_axes
+        # new_real_origin[0, after_c : -1] - real_origin[0, after_c : -1], axes=spatial_axes
+    )
+    raster_translation = Sequence([real_origin_offset, translation])
     return transformed_dask, raster_translation
 
 
