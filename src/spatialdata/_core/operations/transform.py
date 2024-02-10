@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, Any
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
-import scipy
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from scipy.linalg import norm
 from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -64,9 +64,16 @@ def _transform_raster(
     real_origin = np.atleast_2d(([0] if "c" in axes else []) + [-0.5 for _ in spatial_axes] + [1])
     new_real_origin = (matrix @ real_origin.T).T
 
-    new_pixel_size = scipy.linalg.norm((new_v[1, after_c:-1] - new_v[0, after_c:-1]))
+    new_pixel_sizes = {}
+    if "x" in axes:
+        new_pixel_sizes["x"] = norm(new_v[1, after_c:-1] - new_v[0, after_c:-1])
+    if "y" in axes:
+        new_pixel_sizes["y"] = norm(new_v[2, after_c:-1] - new_v[0, after_c:-1])
+    if "z" in axes:
+        new_pixel_sizes["z"] = norm(new_v[3, after_c:-1] - new_v[0, after_c:-1])
+    new_pixel_sizes_array = np.array([new_pixel_sizes[ax] for ax in spatial_axes])
     new_pixel_offset_new_coordinates = Translation(
-        (new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]) / (new_pixel_size / 2), axes=spatial_axes
+        (new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]) / (new_pixel_sizes_array / 2), axes=spatial_axes
     )
     new_pixel_offset_old_coordinates = Translation(
         (new_v[0, after_c:-1] - new_real_origin[0, after_c:-1]), axes=spatial_axes
