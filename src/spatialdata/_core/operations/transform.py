@@ -109,6 +109,7 @@ def _transform_raster(
         # new_real_origin[0, after_c : -1] - real_origin[0, after_c : -1], axes=spatial_axes
     )
     raster_translation = Sequence([real_origin_offset, translation])
+    # TODO: there is a bug with maintain_positioning
     return transformed_dask, raster_translation
 
 

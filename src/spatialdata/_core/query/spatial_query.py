@@ -556,7 +556,13 @@ def _(
         selection[axis_name] = slice(min_value, max_value)
 
         if min_value > 0:
-            translation_vector.append(np.ceil(min_value).item())
+            len(image.coords[axis_name] < min_value)
+            half_pixel = image.coords[axis_name][0]
+            offset = (
+                image.coords[axis_name][np.sum((image.coords[axis_name] < min_value).data)] - half_pixel
+            ).data.item()
+            translation_vector.append(offset)
+            # translation_vector.append(np.ceil(min_value).item())
         else:
             translation_vector.append(0)
 

@@ -19,6 +19,7 @@ from spatialdata.models import (
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
+    PointsModel,
     SpatialElement,
     get_axes_names,
     get_model,
@@ -419,15 +420,49 @@ def _(
         axes=axes,
         target_coordinate_system=target_coordinate_system,
     )
+    ##
+    import itertools
 
-    half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
+    from spatialdata import transform
+
+    n_spatial_dims = len(get_axes_names(data))
+    binary: ArrayLike = np.array(list(itertools.product([0, 1], repeat=n_spatial_dims)))
+    v = PointsModel.parse(binary, transformations={"transformed": corrected_affine})
+    new_v = transform(v, to_coordinate_system="transformed").compute().values
+    real_origin = PointsModel.parse(
+        np.array([[0.5 for _ in range(n_spatial_dims)]]), transformations={"transformed": corrected_affine}
+    )
+    new_real_origin = transform(real_origin, to_coordinate_system="transformed").compute().values
+
+    from scipy.linalg import norm
+
+    new_pixel_sizes = {}
+    if "x" in axes:
+        new_pixel_sizes["x"] = norm(new_v[1, :] - new_v[0, :])
+    if "y" in axes:
+        new_pixel_sizes["y"] = norm(new_v[2, :] - new_v[0, :])
+    if "z" in axes:
+        new_pixel_sizes["z"] = norm(new_v[3, :] - new_v[0, :])
+
+    new_pixel_sizes_array = np.array([new_pixel_sizes[ax] for ax in spatial_axes])
+    new_pixel_offset_new_coordinates = Translation(
+        (new_v[0, :] - new_real_origin[0, :]) / (new_pixel_sizes_array / 2), axes=spatial_axes
+    )
+    new_pixel_offset_old_coordinates = Translation((new_v[0, :] - new_real_origin[0, :]), axes=spatial_axes)
+    pixel_offset = Translation([0.5 for _ in axes], axes=axes)
+
+    ##
+
+    # half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
     sequence = Sequence(
         [
+            new_pixel_offset_new_coordinates,
             # half_pixel_offset.inverse(),
             scale,
             translation,
             corrected_affine.inverse(),
             # half_pixel_offset,
+            pixel_offset.inverse(),
         ]
         + extra
     )
@@ -464,7 +499,15 @@ def _(
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
 
-    sequence = Sequence([half_pixel_offset.inverse(), scale, translation, half_pixel_offset])
+    ##
+    real_origin_offset = Translation(
+        pixel_offset.translation - new_pixel_offset_old_coordinates.translation,
+        axes=spatial_axes,
+        # new_real_origin[0, after_c : -1] - real_origin[0, after_c : -1], axes=spatial_axes
+    )
+    sequence = Sequence([scale, translation, real_origin_offset.inverse()])
+    ##
+    # sequence = Sequence([half_pixel_offset.inverse(), scale, translation, half_pixel_offset])
     set_transformation(transformed_data, sequence, target_coordinate_system)
 
     transformed_data = compute_coordinates(transformed_data)
