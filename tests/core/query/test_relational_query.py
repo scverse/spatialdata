@@ -348,7 +348,7 @@ def test_labels_table_joins(full_sdata):
     )
     assert all(table.obs["instance_id"] == range(100))
 
-    full_sdata["table"].obs.sample(frac=1).reset_index(drop=True)
+    full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
 
     element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "left", match_rows="left")
     assert all(table.obs["instance_id"] == range(100))
@@ -365,4 +365,38 @@ def test_labels_table_joins(full_sdata):
     # all labels are present in table so shoudl return None
     element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right_exclusive")
     assert element_dict["labels2d"] is None
+    assert table is None
+
+
+def test_points_table_joins(full_sdata):
+    full_sdata["table"].uns["spatialdata_attrs"]["region"] = "points_0"
+    full_sdata["table"].obs["region"] = ["points_0"] * 100
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left")
+
+    # points should have the same number of rows as before and table as well
+    assert len(element_dict["points_0"]) == 300
+    assert all(table.obs["instance_id"] == range(100))
+
+    full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left", match_rows="left")
+    assert len(element_dict["points_0"]) == 300
+    assert all(table.obs["instance_id"] == range(100))
+
+    # We have 100 table instances so resulting length of points should be 200 as we started with 300
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left_exclusive")
+    assert len(element_dict["points_0"]) == 200
+    assert table is None
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "inner")
+    assert len(element_dict["points_0"]) == 100
+    assert all(table.obs["instance_id"] == list(reversed(range(100))))
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right")
+    assert len(element_dict["points_0"]) == 100
+    assert all(table.obs["instance_id"] == list(reversed(range(100))))
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right_exclusive")
+    assert element_dict["points_0"] is None
     assert table is None

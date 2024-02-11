@@ -222,7 +222,7 @@ def _get_masked_element(
     if match_rows == "right":
         mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
-    return element.iloc[mask_values, :]
+    return element.loc[mask_values, :]
 
 
 def _right_exclusive_join_spatialelement_table(
@@ -341,7 +341,7 @@ def _left_exclusive_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     mask = np.full(len(element), True, dtype=bool)
                     mask[table_instance_key_column.values] = False
-                    masked_element = element.iloc[mask, :] if mask.sum() != 0 else None
+                    masked_element = element.loc[mask, :] if mask.sum() != 0 else None
                     element_dict[element_type][name] = masked_element
                 else:
                     warnings.warn(
@@ -384,6 +384,7 @@ def _left_join_spatialelement_table(
                 )
                 continue
 
+    joined_indices = joined_indices.dropna() if joined_indices is not None else None
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
 
     return element_dict, joined_table
