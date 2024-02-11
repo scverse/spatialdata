@@ -456,7 +456,7 @@ def join_sdata_spatialelement_table(
     joins are symmetric to the `left` joins. In case of an `inner` join of `SpatialElement`(s) and a table, for each an
     element is returned only containing the rows that are present in both the `SpatialElement` and table.
 
-    For `Points` and `Shapes` elements every valid join for argument how is supported. For `Label` elements only the 
+    For `Points` and `Shapes` elements every valid join for argument how is supported. For `Label` elements only the
     `left` and `right_exclusive` joins are supported.
 
     Parameters
