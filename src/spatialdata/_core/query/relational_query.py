@@ -154,7 +154,7 @@ def _get_joined_table_indices(
     joined_indices: pd.Index | None,
     element_indices: pd.RangeIndex,
     table_instance_key_column: pd.Series,
-    match_rows: Literal["left", "right"],
+    match_rows: Literal["left", "no", "right"],
 ) -> pd.Index:
     """
     Get indices of the table that are present in element_indices.
@@ -195,7 +195,7 @@ def _get_masked_element(
     element_indices: pd.RangeIndex,
     element: SpatialElement,
     table_instance_key_column: pd.Series,
-    match_rows: Literal["left", "right"],
+    match_rows: Literal["left", "no", "right"],
 ) -> SpatialElement:
     """
     Get element rows matching the instance ids in the table_instance_key_column.
@@ -226,7 +226,7 @@ def _get_masked_element(
 
 
 def _right_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -261,7 +261,7 @@ def _right_exclusive_join_spatialelement_table(
 
 
 def _right_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -291,7 +291,7 @@ def _right_join_spatialelement_table(
 
 
 def _inner_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -329,7 +329,7 @@ def _inner_join_spatialelement_table(
 
 
 def _left_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: str
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
@@ -360,7 +360,7 @@ def _left_exclusive_join_spatialelement_table(
 
 
 def _left_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "right"]
+    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
