@@ -337,3 +337,32 @@ def test_filter_table_categorical_bug(shapes):
     adata_subset = adata[adata.obs["categorical"] == "a"].copy()
     shapes.table = adata_subset
     shapes.filter_by_coordinate_system("global")
+
+
+def test_labels_table_joins(full_sdata):
+    element_dict, table = join_sdata_spatialelement_table(
+        full_sdata,
+        "labels2d",
+        "table",
+        "left",
+    )
+    assert all(table.obs["instance_id"] == range(100))
+
+    full_sdata["table"].obs.sample(frac=1).reset_index(drop=True)
+
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "left", match_rows="left")
+    assert all(table.obs["instance_id"] == range(100))
+
+    with pytest.warns(UserWarning, match="Element type"):
+        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "left_exclusive")
+
+    with pytest.warns(UserWarning, match="Element type"):
+        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "inner")
+
+    with pytest.warns(UserWarning, match="Element type"):
+        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right")
+
+    # all labels are present in table so shoudl return None
+    element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right_exclusive")
+    assert element_dict["labels2d"] is None
+    assert table is None
