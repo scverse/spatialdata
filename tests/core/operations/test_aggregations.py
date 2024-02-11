@@ -124,6 +124,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
         )
 
 
+# TODO: refactor in smaller functions for easier understanding
 @pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
 @pytest.mark.parametrize("values_shapes", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize(

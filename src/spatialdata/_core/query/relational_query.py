@@ -529,30 +529,7 @@ def join_sdata_spatialelement_table(
     return elements_dict, table
 
 
-def match_element_to_table(
-    sdata: SpatialData, element_name: str | list[str], table_name: str
-) -> tuple[dict[str, Any], AnnData]:
-    """
-    Filter the elements and make the indices match those in the table.
-
-    Parameters
-    ----------
-    sdata
-       SpatialData object
-    element_name
-       The name(s) of the spatial elements to be joined with the table. Not supported for Label elements.
-    table_name
-       The name of the table to join with the spatial elements.
-
-    Returns
-    -------
-    A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
-    """
-    element_dict, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "right", match_rows="right")
-    return element_dict, table
-
-
-def match_table_to_element(sdata: SpatialData, element_name: str | list[str], table_name: str | None = None) -> AnnData:
+def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
     """
     Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
@@ -561,24 +538,28 @@ def match_table_to_element(sdata: SpatialData, element_name: str | list[str], ta
     sdata
         SpatialData object
     element_name
-        The name(s) of the spatial elements to be joined with the table.
-    table_name
-        The name of the table to join with the spatial elements.
+        The name of the spatial elements to be joined with the table.
 
     Returns
     -------
     Table with the rows matching the instances of the element
     """
-    if table_name is None:
-        warnings.warn(
-            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-            "Please provide the name of the table as argument to table_name.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        table_name = "table"
-    _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
-    return table
+    # TODO: refactor this to make use of the new join_sdata_spatialelement_table function.
+    # if table_name is None:
+    #     warnings.warn(
+    #         "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
+    #         "Please provide the name of the table as argument to table_name.",
+    #         DeprecationWarning,
+    #         stacklevel=2,
+    #     )
+    #     table_name = "table"
+    # _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
+    # return table
+    assert sdata.table is not None, "No table found in the SpatialData"
+    element_type, _, element = sdata._find_element(element_name)
+    assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
+    elements_dict = {element_type: {element_name: element}}
+    return _filter_table_by_elements(sdata.table, elements_dict, match_rows=True)
 
 
 @dataclass
