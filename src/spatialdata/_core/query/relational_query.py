@@ -562,6 +562,29 @@ def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
     return _filter_table_by_elements(sdata.table, elements_dict, match_rows=True)
 
 
+def match_element_to_table(
+    sdata: SpatialData, element_name: str | list[str], table_name: str
+) -> tuple[dict[str, Any], AnnData]:
+    """
+    Filter the elements and make the indices match those in the table.
+
+    Parameters
+    ----------
+    sdata
+       SpatialData object
+    element_name
+       The name(s) of the spatial elements to be joined with the table. Not supported for Label elements.
+    table_name
+       The name of the table to join with the spatial elements.
+
+    Returns
+    -------
+    A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+    """
+    element_dict, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "right", match_rows="right")
+    return element_dict, table
+
+
 @dataclass
 class _ValueOrigin:
     origin: str
