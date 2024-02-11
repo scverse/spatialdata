@@ -1544,7 +1544,7 @@ class SpatialData:
         }
         return key in element_dict
 
-    def get(self, key: str, default_value: Any = None) -> SpatialElement | AnnData:
+    def get(self, key: str, default_value: SpatialElement | AnnData | None = None) -> SpatialElement | AnnData:
         """
         Get element from SpatialData object based on corresponding name.
 
@@ -1552,8 +1552,8 @@ class SpatialData:
         ----------
         key
             The key to lookup in the spatial elements.
-        default_value : SpatialElement | AnnData, optional
-            The default value to return if the key is not found. Default is None.
+        default_value
+            The default value (a SpatialElement or a table) to return if the key is not found. Default is None.
 
         Returns
         -------
