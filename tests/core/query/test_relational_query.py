@@ -362,7 +362,7 @@ def test_labels_table_joins(full_sdata):
     with pytest.warns(UserWarning, match="Element type"):
         join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right")
 
-    # all labels are present in table so shoudl return None
+    # all labels are present in table so should return None
     element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right_exclusive")
     assert element_dict["labels2d"] is None
     assert table is None
