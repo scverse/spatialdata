@@ -401,7 +401,6 @@ def test_points_table_joins(full_sdata):
     assert all(element_dict["points_0"].index.values.compute() == list(reversed(range(100))))
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
-
     element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right_exclusive")
     assert element_dict["points_0"] is None
     assert table is None
