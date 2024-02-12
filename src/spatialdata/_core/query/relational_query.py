@@ -488,7 +488,6 @@ def join_sdata_spatialelement_table(
         If no table with the given table_name exists in the SpatialData object.
     ValueError
         If the provided join type is not supported.
-
     """
     assert sdata.tables.get(table_name), f"No table with `{table_name}` exists in the SpatialData object."
     table = sdata.tables[table_name]
