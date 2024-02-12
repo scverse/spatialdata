@@ -22,6 +22,8 @@ __all__ = [
     "bounding_box_query",
     "polygon_query",
     "get_values",
+    "join_sdata_spatialelement_table",
+    "match_element_to_table",
     "match_table_to_element",
     "SpatialData",
     "get_extent",
@@ -38,7 +40,12 @@ from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
-from spatialdata._core.query.relational_query import get_values, match_table_to_element
+from spatialdata._core.query.relational_query import (
+    get_values,
+    join_sdata_spatialelement_table,
+    match_element_to_table,
+    match_table_to_element,
+)
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import get_dask_backing_files, save_transformations
