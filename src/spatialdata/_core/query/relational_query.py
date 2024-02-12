@@ -263,6 +263,8 @@ def _right_exclusive_join_spatialelement_table(
 def _right_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
+    if match_rows == "left":
+        warnings.warn(f"Matching rows `left` is not supported for `right` join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     for element_type, name_element in element_dict.items():
@@ -362,6 +364,8 @@ def _left_exclusive_join_spatialelement_table(
 def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
+    if match_rows == "right":
+        warnings.warn(f"Matching rows `right` is not supported for `left` join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     joined_indices = None
