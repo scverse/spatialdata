@@ -445,8 +445,7 @@ def join_sdata_spatialelement_table(
     how: str = "left",
     match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
-    """
-    Join `SpatialElement`(s) and table together in SQL like manner.
+    """Join ``SpatialElement``(s) and table together in SQL like manner.
 
     The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
     returned together in one dataframe like structure, but instead filtered elements are returned. To determine matches,
