@@ -867,7 +867,7 @@ class TableModel:
             except IntCastingNaNError as exc:
                 raise ValueError("Values within table.obs[] must be able to be coerced to int dtype.") from exc
 
-        grouped = adata.obs.groupby(region_key)
+        grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
         not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
