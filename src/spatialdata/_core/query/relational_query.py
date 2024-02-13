@@ -264,7 +264,7 @@ def _right_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "left":
-        warnings.warn("Matching rows `'left'` is not supported for `'right'` join.", UserWarning, stacklevel=2)
+        warnings.warn("Matching rows `''left''` is not supported for `''right''` join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     for element_type, name_element in element_dict.items():
@@ -365,7 +365,7 @@ def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "right":
-        warnings.warn("Matching rows `'right'` is not supported for `'left'` join.", UserWarning, stacklevel=2)
+        warnings.warn("Matching rows `''right''` is not supported for `''left''` join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
     groups_df = table.obs.groupby(by=region_column_name)
     joined_indices = None
@@ -445,23 +445,23 @@ def join_sdata_spatialelement_table(
     how: str = "left",
     match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
-    """Join ``SpatialElement``(s) and table together in SQL like manner.
+    """Join `SpatialElement`(s) and table together in SQL like manner.
 
     The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
     returned together in one dataframe like structure, but instead filtered elements are returned. To determine matches,
-    for the ``SpatialElement`` the index is used and for the table the region key column and instance key column. The
+    for the `SpatialElement` the index is used and for the table the region key column and instance key column. The
     elements are not overwritten in the `SpatialData` object.
 
-    The following joins are supported: `'left'`, `'left_exclusive'`, `'inner'`, `'right'` and `'right_exclusive'`. In
-    case of a `'left'` join the `SpatialElements` are returned in a dictionary as is while the table is filtered to
-    only include matching rows. In case of `'left_exclusive'` join None is returned for table while the
-    ``SpatialElements`` returned are filtered to only include indices not present in the table. The cases for
-    `'right'` joins are symmetric to the `'left'` joins. In case of an `'inner'` join of `SpatialElement`(s) and a
-    table, for each an element is returned only containing the rows that are present in both the `SpatialElement` and
-    table.
+    The following joins are supported: `''left''`, `''left_exclusive''`, `''inner''`, `''right''` and
+    `''right_exclusive''`. In case of a `''left''` join the `SpatialElement`s are returned in a dictionary as is
+    while the table is filtered to only include matching rows. In case of `''left_exclusive''` join None is returned
+    for table while the `SpatialElement`s returned are filtered to only include indices not present in the table. The
+    cases for `''right''` joins are symmetric to the `''left''` joins. In case of an `''inner''` join of
+    `SpatialElement`(s) and a table, for each an element is returned only containing the rows that are present in
+    both the `SpatialElement` and table.
 
     For ``Points`` and ``Shapes`` elements every valid join for argument how is supported. For ``Labels`` elements only
-     the `'left'` and `'right_exclusive'` joins are supported.
+     the `''left''` and `''right_exclusive''` joins are supported.
 
     Parameters
     ----------
@@ -472,11 +472,11 @@ def join_sdata_spatialelement_table(
     table_name
         The name of the table to join with the spatial elements.
     how
-        The type of SQL like join to perform, default is `'left'`. Options are `'left'`, `'left_exclusive'`, `'inner'`,
-        `'right'` and `'right_exclusive'`.
+        The type of SQL like join to perform, default is `''left''`. Options are `''left''`, `''left_exclusive''`,
+        `''inner''`, `''right''` and `''right_exclusive''`.
     match_rows
-        Whether to match the indices of the element and table and if so how. If `'left'`, element_indices take priority
-        and if `'right'` table instance ids take priority.
+        Whether to match the indices of the element and table and if so how. If `''left''`, element_indices take
+        priority and if `''right''` table instance ids take priority.
 
     Returns
     -------
@@ -520,7 +520,7 @@ def join_sdata_spatialelement_table(
 
     if match_rows not in MatchTypes.__dict__["_member_names_"]:
         raise TypeError(
-            f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, `'left'` or `'right'`"
+            f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, `''left''` or `''right''`"
         )
     if how in JoinTypes.__dict__["_member_names_"]:
         elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
