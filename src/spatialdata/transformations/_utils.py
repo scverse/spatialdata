@@ -110,9 +110,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
     dims = get_axes_names(e)
     from spatialdata.transformations.transformations import Scale, Sequence
 
-    i = 0
     old_shape: Optional[ArrayLike] = None
-    for scale, node in dict(e).items():
+    for i, (scale, node) in enumerate(dict(e).items()):
         # this is to be sure that the pyramid levels are listed here in the correct order
         assert scale == f"scale{i}"
         assert len(dict(node)) == 1
@@ -135,7 +134,6 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
         else:
             _set_transformations_xarray(xdata, transformations)
             old_shape = new_shape
-        i += 1
 
 
 @_set_transformations.register(GeoDataFrame)
