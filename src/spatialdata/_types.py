@@ -11,7 +11,7 @@ __all__ = ["ArrayLike", "DTypeLike", "Raster_T"]
 try:
     from numpy.typing import DTypeLike, NDArray
 
-    ArrayLike = NDArray[np.float_]
+    ArrayLike = NDArray[np.float64]
 except (ImportError, TypeError):
     ArrayLike = np.ndarray  # type: ignore[misc]
     DTypeLike = np.dtype  # type: ignore[misc]

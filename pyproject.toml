@@ -136,6 +136,10 @@ exclude = [
     "dist",
     "setup.py",
 ]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
 ignore = [
     # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
     "E731",
@@ -154,7 +158,6 @@ ignore = [
     # Missing docstring in magic method
     "D105",
 ]
-line-length = 120
 select = [
     "D", # flake8-docstrings
     "I", # isort
@@ -175,7 +178,10 @@ select = [
     "PGH", # pygrep-hooks
 ]
 unfixable = ["B", "C4", "UP", "BLE", "T20", "RET"]
-target-version = "py39"
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [tool.ruff.per-file-ignores]
     "tests/*" = ["D", "PT", "B024"]
     "*/__init__.py" = ["F401", "D104", "D107", "E402"]
@@ -188,8 +194,7 @@ target-version = "py39"
     "src/spatialdata/dataloader/datasets.py" = ["D101"]
     "tests/test_models/test_models.py" = ["NPY002"]
     "tests/conftest.py"= ["E402"]
-[tool.ruff.pydocstyle]
-convention = "numpy"
+
 
 # pyupgrade typing rewrite TODO: remove at some point from per-file ignore
 # "UP006", "UP007"

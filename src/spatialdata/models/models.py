@@ -1,4 +1,5 @@
 """Models and schema for SpatialData."""
+
 from __future__ import annotations
 
 import warnings
@@ -71,14 +72,15 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
         and transformations is not None
         and len(transformations) > 0
     ):
+        # we can relax this and overwrite the transformations using the one passed as argument
         raise ValueError(
             "Transformations are both specified for the element and also passed as an argument to the parser. Please "
             "specify the transformations only once."
         )
-    if transformations_in_element is not None and len(transformations_in_element) > 0:
-        parsed_transformations = transformations_in_element
-    elif transformations is not None and len(transformations) > 0:
+    if transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
+    elif transformations_in_element is not None and len(transformations_in_element) > 0:
+        parsed_transformations = transformations_in_element
     else:
         parsed_transformations = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     _set_transformations(element, parsed_transformations)
@@ -322,8 +324,12 @@ class ShapesModel:
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}."
             )
-        if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
-            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(geom_, Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+            radii = data[cls.RADIUS_KEY].values
+            if np.any(radii <= 0):
+                raise ValueError("Radii of circles must be positive.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
