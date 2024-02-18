@@ -126,6 +126,8 @@ def aggregate(
     deepcopy
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
+    table_name
+        The name of the table resulting from the aggregation.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
