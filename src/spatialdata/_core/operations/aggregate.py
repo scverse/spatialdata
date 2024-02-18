@@ -64,6 +64,7 @@ def aggregate(
     region_key: str = "region",
     instance_key: str = "instance_id",
     deepcopy: bool = True,
+    table_name: str = "table",
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -218,6 +219,7 @@ def aggregate(
     shapes_name = by if isinstance(by, str) else "by"
     return _create_sdata_from_table_and_shapes(
         table=adata,
+        table_name=table_name,
         shapes_name=shapes_name,
         shapes=by_,
         region_key=region_key,
@@ -228,6 +230,7 @@ def aggregate(
 
 def _create_sdata_from_table_and_shapes(
     table: ad.AnnData,
+    table_name: str,
     shapes: GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
     shapes_name: str,
     region_key: str,
@@ -247,7 +250,7 @@ def _create_sdata_from_table_and_shapes(
     if deepcopy:
         shapes = _deepcopy_geodataframe(shapes)
 
-    return SpatialData.from_elements_dict({shapes_name: shapes, "table": table})
+    return SpatialData.from_elements_dict({shapes_name: shapes, table_name: table})
 
 
 def _aggregate_image_by_labels(
