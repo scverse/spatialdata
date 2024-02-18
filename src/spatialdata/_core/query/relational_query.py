@@ -533,7 +533,7 @@ def join_sdata_spatialelement_table(
     return elements_dict, table
 
 
-def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
+def match_table_to_element(sdata: SpatialData, element_name: str, table_name: str = "table") -> AnnData:
     """
     Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
@@ -543,6 +543,8 @@ def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
         SpatialData object
     element_name
         The name of the spatial elements to be joined with the table.
+    table_name
+        The name of the table to match to the element.
 
     Returns
     -------
@@ -559,11 +561,11 @@ def match_table_to_element(sdata: SpatialData, element_name: str) -> AnnData:
     #     table_name = "table"
     # _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
     # return table
-    assert sdata.table is not None, "No table found in the SpatialData"
+    assert sdata[table_name] is not None, "No table found in the SpatialData"
     element_type, _, element = sdata._find_element(element_name)
     assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
     elements_dict = {element_type: {element_name: element}}
-    return _filter_table_by_elements(sdata.table, elements_dict, match_rows=True)
+    return _filter_table_by_elements(sdata[table_name], elements_dict, match_rows=True)
 
 
 def match_element_to_table(
@@ -611,6 +613,7 @@ def _locate_value(
     element: SpatialElement | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
+    table_name: str = "table",
 ) -> list[_ValueOrigin]:
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     origins = []
@@ -625,7 +628,7 @@ def _locate_value(
 
     # adding from the obs columns or var
     if model in [ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
-        table = sdata.table
+        table = sdata[table_name]
         if table is not None:
             # check if the table is annotating the element
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
@@ -646,6 +649,7 @@ def get_values(
     element: SpatialElement | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
+    table_name: str = "table",
 ) -> pd.DataFrame:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
@@ -660,6 +664,8 @@ def get_values(
         SpatialData object; either element or (sdata, element_name) must be provided
     element_name
         Name of the element; either element or (sdata, element_name) must be provided
+    table_name
+        Name of the table to get the values from.
 
     Returns
     -------
@@ -674,7 +680,9 @@ def get_values(
     value_keys = [value_key] if isinstance(value_key, str) else value_key
     locations = []
     for vk in value_keys:
-        origins = _locate_value(value_key=vk, element=element, sdata=sdata, element_name=element_name)
+        origins = _locate_value(
+            value_key=vk, element=element, sdata=sdata, element_name=element_name, table_name=table_name
+        )
         if len(origins) > 1:
             raise ValueError(
                 f"{vk} has been found in multiple locations of (element, sdata, element_name) = "
@@ -706,7 +714,7 @@ def get_values(
         return df
     if sdata is not None:
         assert element_name is not None
-        matched_table = match_table_to_element(sdata=sdata, element_name=element_name)
+        matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
         region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
         instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
         obs = matched_table.obs
