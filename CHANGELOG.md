@@ -8,25 +8,25 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.1.0] - tbd
-
-### Added
+## [0.0.x] - tbd
 
 #### Major
 
--   Implemented support in SpatialData for storing multiple tables. These tables
-    can annotate a SpatialElement but not necessarily so.
--   Added SQL like joins that can be executed by calling one public function `join_sdata_spatialelement_table`. The following
-    joins are supported: `left`, `left_exclusive`, `right`, `right_exclusive` and `inner`. The function has an option to
-    match rows. For `left` only matching `left` is supported and for `right` join only `right` matching of rows is supported.
-    Not all joins are supported for `Labels` elements.
--   Added function `match_element_to_table` which allows the user to perform a right join of `SpatialElement`(s) with a table
-    with rows matching the row order in the table.
--   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically performed on-disk.
+-   Implemented support in SpatialData for storing multiple tables. These tables can annotate a SpatialElement but not
+    necessarily so.
+-   Added SQL like joins that can be executed by calling one public function `join_sdata_spatialelement_table`. The
+    following joins are supported: `left`, `left_exclusive`, `right`, `right_exclusive` and `inner`. The function has
+    an option to match rows. For `left` only matching `left` is supported and for `right` join only `right` matching of
+    rows is supported. Not all joins are supported for `Labels` elements.
+-   Added function `match_element_to_table` which allows the user to perform a right join of `SpatialElement`(s) with a
+    table with rows matching the row order in the table.
+-   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically
+    performed on-disk.
 
 #### Minor
 
--   Added public helper function get_table_keys in spatialdata.models to retrieve annotation information of a given table.
+-   Added public helper function get_table_keys in spatialdata.models to retrieve annotation information of a given
+    table.
 -   Added public helper function check_target_region_column_symmetry in spatialdata.models to check whether annotation
     metadata in table.uns['spatialdata_attrs'] corresponds with respective columns in table.obs.
 -   Added function validate_table_in_spatialdata in SpatialData to validate the annotation target of a table being
@@ -40,31 +40,30 @@ and this project adheres to [Semantic Versioning][].
 -   Added tables setter in SpatialData.
 -   Added gen_spatial_elements generator in SpatialData to generate the SpatialElements in a given SpatialData object.
 -   Added gen_elements generator in SpatialData to generate elements of a SpatialData object including tables.
+-   added SpatialData.subset() API
+-   added SpatialData.locate_element() API
+-   added utils function: transform_to_data_extent()
+-   added utils function: are_extents_equal()
+-   added utils function: postpone_transformation()
+-   added utils function: remove_transformations_to_coordinate_system()
 
 ### Changed
+
+#### Major
+
+-   refactored data loader for deep learning
 
 #### Minor
 
 -   Changed the string representation of SpatialData to reflect the changes in regard to multiple tables.
 
-## [0.0.x] - tbd
-
-### Minor
-
--   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
-
-### Added
-
--   added SpatialData.subset() API
--   added SpatialData.locate_element() API
-
 ### Fixed
 
+#### Major
+
+-   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
 -   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
-
-#### Minor
-
--   refactored data loader for deep learning
+-   fixed warnings for categorical dtypes in tables in TableModel and PointsModel
 
 ## [0.0.14] - 2023-10-11
 

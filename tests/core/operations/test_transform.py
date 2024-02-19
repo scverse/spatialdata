@@ -4,26 +4,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import scipy.misc
 from geopandas.testing import geom_almost_equals
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata import transform
+from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
     get_transformation_between_coordinate_systems,
     get_transformation_between_landmarks,
     remove_transformation,
+    remove_transformations_to_coordinate_system,
     set_transformation,
 )
 from spatialdata.transformations.transformations import (
     Affine,
+    BaseTransformation,
     Identity,
     Scale,
+    Sequence,
     Translation,
 )
 
@@ -117,65 +120,76 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
     return SpatialData(images=new_images, labels=new_labels)
 
 
-# TODO: when the io for 3D images and 3D labels work, add those tests
-def test_transform_image_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, SpatialImage)})
+def _postpone_transformation(
+    sdata: SpatialData, from_coordinate_system: str, to_coordinate_system: str, transformation: BaseTransformation
+):
+    for element in sdata._gen_elements_values():
+        d = get_transformation(element, get_all=True)
+        assert isinstance(d, dict)
+        assert len(d) == 1
+        t = d[from_coordinate_system]
+        sequence = Sequence([t, transformation])
+        set_transformation(element, sequence, to_coordinate_system)
 
-    VISUAL_DEBUG = False
-    if VISUAL_DEBUG:
-        im = scipy.misc.face()
-        im_element = Image2DModel.parse(im, dims=["y", "x", "c"])
-        del sdata.images["image2d"]
-        sdata.images["face"] = im_element
+
+@pytest.mark.parametrize("element_type", ["image", "labels"])
+@pytest.mark.parametrize("multiscale", [False, True])
+def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale: bool):
+    datatype = MultiscaleSpatialImage if multiscale else SpatialImage
+
+    if element_type == "image":
+        sdata = SpatialData(images={k: v for k, v in full_sdata.images.items() if isinstance(v, datatype)})
+    else:
+        assert element_type == "labels"
+        sdata = SpatialData(labels={k: v for k, v in full_sdata.labels.items() if isinstance(v, datatype)})
 
     affine = _get_affine(small_translation=False)
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+
+    _postpone_transformation(
+        sdata, from_coordinate_system="global", to_coordinate_system="transformed", transformation=affine
     )
-    _unpad_rasters(padded)
-    # raise NotImplementedError("TODO: plot the images")
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    sdata_transformed = transform(sdata, to_coordinate_system="transformed")
 
-
-def test_transform_image_spatial_multiscale_spatial_image(images: SpatialData):
-    sdata = SpatialData(images={k: v for k, v in images.images.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="transformed",
+        to_coordinate_system="transformed_back",
+        transformation=affine.inverse(),
     )
-    _unpad_rasters(padded)
-    # TODO: unpad the image
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    padded = transform(sdata_transformed, to_coordinate_system="transformed_back")
 
+    # cleanup to make the napari visualization less cluttered
+    remove_transformations_to_coordinate_system(sdata, "transformed")
+    remove_transformations_to_coordinate_system(sdata_transformed, "transformed_back")
 
-def test_transform_labels_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, SpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
-    _unpad_rasters(padded)
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    unpadded = _unpad_rasters(padded)
 
+    e0 = get_extent(sdata)
+    e1 = get_extent(unpadded, coordinate_system="transformed_back")
+    assert are_extents_equal(e0, e1)
 
-def test_transform_labels_spatial_multiscale_spatial_image(labels: SpatialData):
-    sdata = SpatialData(labels={k: v for k, v in labels.labels.items() if isinstance(v, MultiscaleSpatialImage)})
-    affine = _get_affine()
-    padded = transform(
-        transform(sdata, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
-    )
-    _unpad_rasters(padded)
-    # TODO: unpad the labels
-    # raise NotImplementedError("TODO: compare the transformed images with the original ones")
+    # Interactive([sdata, unpadded])
+    # TODO: above we compared the alignment; compare also the data (this need to be tolerant to the interporalation and
+    #  should be done after https://github.com/scverse/spatialdata/issues/165 is fixed to have better results
 
 
 # TODO: maybe add methods for comparing the coordinates of elements so the below code gets less verbose
 def test_transform_points(points: SpatialData):
     affine = _get_affine()
-    new_points = transform(
-        transform(points, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+
+    _postpone_transformation(
+        points, from_coordinate_system="global", to_coordinate_system="global", transformation=affine
     )
+    sdata_transformed = transform(points, to_coordinate_system="global")
+
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="global",
+        to_coordinate_system="global",
+        transformation=affine.inverse(),
+    )
+    new_points = transform(sdata_transformed, to_coordinate_system="global")
+
     keys0 = list(points.points.keys())
     keys1 = list(new_points.points.keys())
     assert keys0 == keys1
@@ -193,9 +207,20 @@ def test_transform_points(points: SpatialData):
 
 def test_transform_shapes(shapes: SpatialData):
     affine = _get_affine()
-    new_shapes = transform(
-        transform(shapes, affine, maintain_positioning=False), affine.inverse(), maintain_positioning=False
+
+    _postpone_transformation(
+        shapes, from_coordinate_system="global", to_coordinate_system="global", transformation=affine
     )
+    sdata_transformed = transform(shapes, to_coordinate_system="global")
+
+    _postpone_transformation(
+        sdata_transformed,
+        from_coordinate_system="global",
+        to_coordinate_system="global",
+        transformation=affine.inverse(),
+    )
+    new_shapes = transform(sdata_transformed, to_coordinate_system="global")
+
     keys0 = list(shapes.shapes.keys())
     keys1 = list(new_shapes.shapes.keys())
     assert keys0 == keys1
@@ -459,14 +484,104 @@ def test_map_coordinate_systems_long_path(full_sdata):
     )
 
 
-def test_transform_elements_and_entire_spatial_data_object(sdata: SpatialData):
-    # TODO: we are just applying the transformation,
-    #  we are not checking it is correct. We could improve this test
-    scale = Scale([2], axes=("x",))
-    for element in sdata._gen_spatial_element_values():
+@pytest.mark.parametrize("maintain_positioning", [True, False])
+def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialData, maintain_positioning: bool):
+    k = 10.0
+    scale = Scale([k], axes=("x",))
+    translation = Translation([k], axes=("x",))
+    sequence = Sequence([scale, translation])
+    for element in full_sdata._gen_elements_values():
+        set_transformation(element, sequence, "my_space")
+        transformed_element = full_sdata.transform_element_to_coordinate_system(
+            element, "my_space", maintain_positioning=maintain_positioning
+        )
+        t = get_transformation(transformed_element, to_coordinate_system="my_space")
+        a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
+        d = get_transformation(transformed_element, get_all=True)
+        assert isinstance(d, dict)
+        if maintain_positioning:
+            assert set(d.keys()) == {"global", "my_space"}
+            a2 = d["global"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
+            assert np.allclose(a, a2)
+            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                assert np.allclose(a, np.array([[1 / k, 0], [0, 1]]))
+            else:
+                assert np.allclose(a, np.array([[1 / k, -k / k], [0, 1]]))
+        else:
+            assert set(d.keys()) == {"my_space"}
+            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                assert np.allclose(a, np.array([[1, k], [0, 1]]))
+            else:
+                assert np.allclose(a, np.array([[1, 0], [0, 1]]))
+
+    # this calls transform_element_to_coordinate_system() internally()
+    _ = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
+
+
+@pytest.mark.parametrize("maintain_positioning", [True, False])
+def test_transform_elements_and_entire_spatial_data_object_multi_hop(
+    full_sdata: SpatialData, maintain_positioning: bool
+):
+    k = 10.0
+    scale = Scale([k], axes=("x",))
+    for element in full_sdata._gen_elements_values():
         set_transformation(element, scale, "my_space")
-        sdata.transform_element_to_coordinate_system(element, "my_space")
-    sdata.transform_to_coordinate_system("my_space")
+
+    # testing the scenario "element1 -> cs1 <- element2 -> cs2" and transforming element1 to cs2
+    translation = Translation([k], axes=("x",))
+    full_sdata["proxy_element"] = full_sdata.shapes["multipoly"].copy()
+    set_transformation(
+        full_sdata["proxy_element"], {"multi_hop_space": translation, "my_space": Identity()}, set_all=True
+    )
+
+    # otherwise we have multiple paths to go from my_space to multi_hop_space
+    for element in full_sdata._gen_elements_values():
+        d = get_transformation(element, get_all=True)
+        assert isinstance(d, dict)
+        if "global" in d:
+            remove_transformation(element, "global")
+
+    for element in full_sdata._gen_elements_values():
+        transformed_element = full_sdata.transform_element_to_coordinate_system(
+            element, "multi_hop_space", maintain_positioning=maintain_positioning
+        )
+        temp = SpatialData(
+            images=dict(full_sdata.images),
+            labels=dict(full_sdata.labels),
+            points=dict(full_sdata.points),
+            shapes=dict(full_sdata.shapes),
+            table=full_sdata.table,
+        )
+        temp["transformed_element"] = transformed_element
+        transformation = get_transformation_between_coordinate_systems(
+            temp, temp["transformed_element"], "multi_hop_space"
+        )
+        affine = transformation.to_affine_matrix(input_axes=("x",), output_axes=("x",))
+        d = get_transformation(transformed_element, get_all=True)
+        assert isinstance(d, dict)
+        if maintain_positioning:
+            if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
+                # non multi-hop case, since there is a direct transformation
+                assert set(d.keys()) == {"multi_hop_space", "my_space"}
+                affine2 = d["my_space"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
+                # I'd say that in the general case maybe they are not necessarily identical, but in this case they are
+                assert np.allclose(affine, affine2)
+                assert np.allclose(affine, np.array([[1, -k], [0, 1]]))
+            elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                assert set(d.keys()) == {"my_space"}
+                assert np.allclose(affine, np.array([[1, k], [0, 1]]))
+            else:
+                assert set(d.keys()) == {"my_space"}
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
+        else:
+            assert set(d.keys()) == {"multi_hop_space"}
+            if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
+                # non multi-hop case, since there is a direct transformation
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
+            elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                assert np.allclose(affine, np.array([[1, k], [0, 1]]))
+            else:
+                assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
 
 
 def test_transformations_between_coordinate_systems(images):
@@ -531,3 +646,43 @@ def test_transformations_between_coordinate_systems(images):
                         write_to_sdata=sdata,
                     )
                 assert "global2" in images.coordinate_systems
+
+
+def test_transform_until_0_0_15(points):
+    from spatialdata._core.operations.transform import ERROR_MSG_AFTER_0_0_15
+
+    t0 = Identity()
+    t1 = Translation([10], axes=("x",))
+    # only one between `transformation` and `to_coordinate_system` can be passed
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points, transformation=t0, to_coordinate_system="t0")
+
+    # and need to pass at least one
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points)
+
+    # need to use `to_coordinate_system`, not transformation`
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points["points_0_1"], transformation=t1)
+
+    # except, for convenience to the user, when there is only a transformation in the element, and it coincides to the
+    # one passed as argument to `transformation`
+    transform(points["points_0"], transformation=t0)
+
+    # but not for spatialdata objects, here we need to use `to_coordinate_system`
+    with pytest.raises(RuntimeError, match=ERROR_MSG_AFTER_0_0_15[:10]):
+        transform(points, transformation=t0)
+
+    # correct way to use it
+    transform(points, to_coordinate_system="global")
+
+    # finally, when `maintain_positioning` is True, we can use either `transformation` or `to_coordinate_system`, as
+    # long as excatly one of them is passed
+    with pytest.raises(AssertionError, match="When maintain_positioning is True, only one "):
+        transform(points, maintain_positioning=True)
+
+    with pytest.raises(AssertionError, match="When maintain_positioning is True, only one "):
+        transform(points, transformation=t0, to_coordinate_system="global", maintain_positioning=True)
+
+    transform(points, transformation=t0, maintain_positioning=True)
+    transform(points, to_coordinate_system="global", maintain_positioning=True)

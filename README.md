@@ -31,7 +31,7 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
--   **The library is currently under review.** We expect there to be changes as the community provides feedback.
+-   **The library is currently under review.** We expect there to be changes as the community provides feedback. We have an announcement channel for communicating these changes, please see the contact section below.
 -   The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
@@ -62,6 +62,10 @@ To get involved in the discussion, or if you need help to get started, you are w
 -   <ins>Forum post</ins> in the [scverse discourse forum](https://discourse.scverse.org/).
 -   <ins>Bug report/feature request</ins> via the [GitHub issue tracker][issue-tracker].
 -   <ins>Zoom call</ins> as part of the SpatialData Community Meetings, held every 2 weeks on Thursday, [schedule here](https://hackmd.io/enWU826vRai-JYaL7TZaSw).
+
+Finally, especially relevant for for developers that are building a library upon `spatialdata`, please follow this channel for:
+
+-   <ins>Announcements</ins> on new features and important changes [Zulip](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/spatialdata.20announcements).
 
 ## Citation
 

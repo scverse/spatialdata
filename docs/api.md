@@ -43,6 +43,7 @@ Operations on `SpatialData` objects.
     :toctree: generated
 
     unpad_raster
+    are_extents_equal
 ```
 
 ## Models
@@ -113,6 +114,7 @@ The transformations that can be defined between elements and coordinate systems 
     get_transformation_between_coordinate_systems
     get_transformation_between_landmarks
     align_elements_using_landmarks
+    remove_transformations_to_coordinate_system
 ```
 
 ## DataLoader
