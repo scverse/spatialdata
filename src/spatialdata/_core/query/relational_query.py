@@ -31,6 +31,20 @@ from spatialdata.models import (
 
 
 def _get_element_annotators(sdata: SpatialData, element_name: str) -> set[str]:
+    """
+    Retrieve names of tables that annotate a SpatialElement in a SpatialData object.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object.
+    element_name
+        The name of the SpatialElement.
+
+    Returns
+    -------
+    The names of the tables annotating the SpatialElement.
+    """
     table_names = set()
     for name, table in sdata.tables.items():
         if table.uns.get(TableModel.ATTRS_KEY):
