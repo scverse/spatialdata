@@ -442,6 +442,7 @@ class SpatialData:
         region_key: str = "region",
         instance_key: str = "instance_id",
         deepcopy: bool = True,
+        table_name: str = "table",
         **kwargs: Any,
     ) -> SpatialData:
         """
@@ -474,6 +475,7 @@ class SpatialData:
             region_key=region_key,
             instance_key=instance_key,
             deepcopy=deepcopy,
+            table_name=table_name,
             **kwargs,
         )
 
