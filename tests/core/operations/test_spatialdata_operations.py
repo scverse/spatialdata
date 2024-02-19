@@ -376,13 +376,14 @@ def test_init_from_elements(full_sdata: SpatialData) -> None:
 
 
 def test_subset(full_sdata: SpatialData) -> None:
-    element_names = ["image2d", "labels2d", "points_0", "circles", "poly"]
+    element_names = ["image2d", "points_0", "circles", "poly"]
     subset0 = full_sdata.subset(element_names)
     unique_names = set()
     for _, k, _ in subset0.gen_spatial_elements():
         unique_names.add(k)
     assert "image3d_xarray" in full_sdata.images
     assert unique_names == set(element_names)
+    # no table since the labels are not present in the subset
     assert subset0.table is None
 
     adata = AnnData(
@@ -415,7 +416,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
     scale = Scale([2.0], axes=("x",))
     translation = Translation([-100.0, 200.0], axes=("x", "y"))
     sequence = Sequence([rotation, scale, translation])
-    for el in full_sdata._gen_elements_values():
+    for el in full_sdata._gen_spatial_element_values():
         set_transformation(el, sequence, "global")
     elements = [
         "image2d",
@@ -431,7 +432,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
     sdata = transform_to_data_extent(full_sdata, "global", target_width=1000, maintain_positioning=maintain_positioning)
 
     matrices = []
-    for el in sdata._gen_elements_values():
+    for el in sdata._gen_spatial_element_values():
         t = get_transformation(el, to_coordinate_system="global")
         assert isinstance(t, BaseTransformation)
         a = t.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z"))

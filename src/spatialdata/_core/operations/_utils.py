@@ -112,7 +112,7 @@ def transform_to_data_extent(
         **sdata_vector_transformed_inplace.points,
     }
 
-    for _, element_name, element in sdata_raster._gen_elements():
+    for _, element_name, element in sdata_raster.gen_spatial_elements():
         if isinstance(element, (MultiscaleSpatialImage, SpatialImage)):
             rasterized = rasterize(
                 element,
@@ -128,9 +128,9 @@ def transform_to_data_extent(
             sdata_to_return_elements[element_name] = rasterized
         else:
             sdata_to_return_elements[element_name] = element
-    if sdata.table is not None:
-        sdata_to_return_elements["table"] = sdata.table
     if not maintain_positioning:
         for el in sdata_to_return_elements.values():
             set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
+    for k, v in sdata.tables.items():
+        sdata_to_return_elements[k] = v.copy()
     return SpatialData.from_elements_dict(sdata_to_return_elements)
