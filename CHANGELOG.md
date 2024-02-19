@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.0.x] - tbd
 
+### Added
+
 #### Major
 
 -   Implemented support in SpatialData for storing multiple tables. These tables can annotate a SpatialElement but not
