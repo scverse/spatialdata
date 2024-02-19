@@ -30,6 +30,16 @@ from spatialdata.models import (
 )
 
 
+def _get_element_annotators(sdata: SpatialData, element_name: str) -> set[str]:
+    table_names = set()
+    for name, table in sdata.tables.items():
+        if table.uns.get(TableModel.ATTRS_KEY):
+            regions, _, _ = get_table_keys(table)
+            if element_name in regions:
+                table_names.add(name)
+    return table_names
+
+
 def _filter_table_by_element_names(table: AnnData | None, element_names: str | list[str]) -> AnnData | None:
     """
     Filter an AnnData table to keep only the rows that are in the coordinate system.
