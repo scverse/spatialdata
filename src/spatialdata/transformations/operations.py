@@ -64,11 +64,13 @@ def set_transformation(
             transformations[to_coordinate_system] = transformation
             _set_transformations(element, transformations)
         else:
-            assert isinstance(transformation, dict)
-            assert to_coordinate_system is None
+            assert isinstance(transformation, dict), (
+                "If set_all=True, transformation must be of type " "dict[str, BaseTransformation]."
+            )
+            assert to_coordinate_system is None, "If set_all=True, to_coordinate_system must be None."
             _set_transformations(element, transformation)
     else:
-        if write_to_sdata.locate_element(element) is None:
+        if len(write_to_sdata.locate_element(element)) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
@@ -117,7 +119,7 @@ def get_transformation(
             raise ValueError(f"Transformation to {to_coordinate_system} not found in element {element}.")
         return transformations[to_coordinate_system]
     else:
-        assert to_coordinate_system is None
+        assert to_coordinate_system is None, "If get_all=True, to_coordinate_system must be None."
         # get the dict of all the transformations
         return transformations
 
@@ -161,10 +163,10 @@ def remove_transformation(
             del transformations[to_coordinate_system]
             _set_transformations(element, transformations)
         else:
-            assert to_coordinate_system is None
+            assert to_coordinate_system is None, "If remove_all=True, to_coordinate_system must be None."
             _set_transformations(element, {})
     else:
-        if write_to_sdata.locate_element(element) is None:
+        if len(write_to_sdata.locate_element(element)) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
@@ -371,7 +373,8 @@ def get_transformation_between_landmarks(
             input_axes=("x", "y"),
             output_axes=("x", "y"),
         )
-        flipped_moving = transform(moving_coords, flip, maintain_positioning=False)
+        set_transformation(moving_coords, transformation=flip, to_coordinate_system="flipped")
+        flipped_moving = transform(moving_coords, to_coordinate_system="flipped")
         if isinstance(flipped_moving, GeoDataFrame):
             flipped_moving_xy = np.stack([flipped_moving.geometry.x, flipped_moving.geometry.y], axis=1)
         elif isinstance(flipped_moving, DaskDataFrame):
@@ -457,3 +460,18 @@ def align_elements_using_landmarks(
             reference_element, new_reference_transformation, new_coordinate_system, write_to_sdata=write_to_sdata
         )
     return new_moving_transformation
+
+
+def remove_transformations_to_coordinate_system(sdata: SpatialData, coordinate_system: str) -> None:
+    """
+    Remove (inplace) all transformations to a specific coordinate system from all the elements of a SpatialData object.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object.
+    coordinate_system
+        The coordinate system to remove the transformations from.
+    """
+    for element in sdata._gen_spatial_element_values():
+        remove_transformation(element, coordinate_system)

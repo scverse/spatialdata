@@ -1,4 +1,5 @@
 """Models and schema for SpatialData."""
+
 from __future__ import annotations
 
 import warnings
@@ -72,14 +73,15 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
         and transformations is not None
         and len(transformations) > 0
     ):
+        # we can relax this and overwrite the transformations using the one passed as argument
         raise ValueError(
             "Transformations are both specified for the element and also passed as an argument to the parser. Please "
             "specify the transformations only once."
         )
-    if transformations_in_element is not None and len(transformations_in_element) > 0:
-        parsed_transformations = transformations_in_element
-    elif transformations is not None and len(transformations) > 0:
+    if transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
+    elif transformations_in_element is not None and len(transformations_in_element) > 0:
+        parsed_transformations = transformations_in_element
     else:
         parsed_transformations = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     _set_transformations(element, parsed_transformations)
@@ -323,8 +325,12 @@ class ShapesModel:
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}."
             )
-        if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
-            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(geom_, Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+            radii = data[cls.RADIUS_KEY].values
+            if np.any(radii <= 0):
+                raise ValueError("Radii of circles must be positive.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
@@ -472,7 +478,7 @@ class PointsModel:
             raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
-            if not isinstance(data[feature_key], CategoricalDtype):
+            if not isinstance(data[feature_key].dtype, CategoricalDtype):
                 logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
 
     @singledispatchmethod
@@ -626,7 +632,7 @@ class PointsModel:
             #  Here we are explicitly importing the categories
             #  but it is a convenient way to ensure that the categories are known.
             # It also just changes the state of the series, so it is not a big deal.
-            if isinstance(data[c], CategoricalDtype) and not data[c].cat.known:
+            if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
                 try:
                     data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
                 except ValueError:
@@ -851,7 +857,7 @@ class TableModel:
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-        if not isinstance(adata.obs[region_key], CategoricalDtype):
+        if not isinstance(adata.obs[region_key].dtype, CategoricalDtype):
             warnings.warn(
                 f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
             )

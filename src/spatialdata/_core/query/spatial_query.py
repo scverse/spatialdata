@@ -1,33 +1,41 @@
 from __future__ import annotations
 
+import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
 from typing import Any, Callable
 
 import dask.array as da
+import dask.dataframe as dd
 import numpy as np
-import pandas as pd
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
-from shapely.geometry import Polygon
+from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
-from tqdm import tqdm
 from xarray import DataArray
 
-from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
+from spatialdata._core.query._utils import (
+    _get_filtered_or_unfiltered_tables,
+    circles_to_polygons,
+    get_bounding_box_corners,
+)
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
+    PointsModel,
+    ShapesModel,
     SpatialElement,
     get_axes_names,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.transformations._utils import compute_coordinates
+from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
@@ -100,6 +108,184 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
 
     return intrinsic_bounding_box_corners, intrinsic_axes
+
+
+def _get_polygon_in_intrinsic_coordinates(
+    element: DaskDataFrame | GeoDataFrame, target_coordinate_system: str, polygon: Polygon | MultiPolygon
+) -> GeoDataFrame:
+    from spatialdata._core.operations.transform import transform
+
+    polygon_gdf = ShapesModel.parse(GeoDataFrame(geometry=[polygon]))
+
+    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
+        element, target_coordinate_system
+    )
+    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+
+    m_without_c_linear = m_without_c[:-1, :-1]
+    case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
+    # as explained in https://github.com/scverse/spatialdata/pull/151#issuecomment-1444609101, this asserts that
+    # the transformation between the intrinsic coordinate system and the query space, restricted to the domain
+    # of the data, is invertible (either with dimension 2 or 3)
+    assert case in [1, 5]
+
+    # Since we asserted above that the transformation is invertible, then inverse image of the xy plane is a plane.
+    # Here, to keep the implementation simple, we want to restrict to the case in which this inverse image plane is
+    # parallel to the xy plane also in the intrinsic coordinate system.
+    # If in the future there is a need to implement the general case we could proceed as follows.
+    # 1. The data in the intrinsic coordinate system is necessarily points (because this function is not called for
+    # raster data and 3D polygons/meshes are not implemented).
+    # 2. We project the points to the inverse image plane.
+    # 3. We query these new points in the inverse image plane.
+    # Now, let's not handle this complexity and simply raise an error if, informally, the inverse transformation is
+    # "mixing" the 'z' axis with the other axes, or formally, if the vector part of the affine transformation is not a
+    # block diagonal matrix with one block for the z axis and one block for the x, y, c axes.
+    sorted_input_axes_without_c = ("x", "y", "z")[: len(input_axes_without_c)]
+    spatial_transform_bb_axes = Affine(
+        spatial_transform.to_affine_matrix(input_axes=sorted_input_axes_without_c, output_axes=("x", "y")),
+        input_axes=sorted_input_axes_without_c,
+        output_axes=("x", "y"),
+    )
+    error_message = 'The transformation is mixing the "z" axis with the other axes. This case is not supported.'
+    assert spatial_transform_bb_axes.matrix[2, 0] == 0, error_message
+    assert spatial_transform_bb_axes.matrix[2, 1] == 0, error_message
+
+    # now that we checked the above, we can restrict the transformation to the "x" and "y" axes; this will make it
+    # invertible when the points to query are 3D
+    spatial_transform_bb_axes = spatial_transform_bb_axes.to_affine(input_axes=("x", "y"), output_axes=("x", "y"))
+
+    inverse = spatial_transform_bb_axes.inverse()
+    assert isinstance(inverse, Affine)
+    set_transformation(polygon_gdf, inverse, "inverse")
+
+    return transform(polygon_gdf, to_coordinate_system="inverse")
+
+
+def _get_axes_of_tranformation(
+    element: SpatialElement, target_coordinate_system: str
+) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
+    """
+    Get the transformation matrix and the transformation's axes (ignoring `c`).
+
+    The transformation is the one from the element's intrinsic coordinate system to the query coordinate space.
+    Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
+    transformation
+
+    Parameters
+    ----------
+    element
+        SpatialData element to be transformed.
+    target_coordinate_system
+        The target coordinate system for the transformation.
+
+    Returns
+    -------
+    m_without_c
+        The transformation from the element's intrinsic coordinate system to the query coordinate space, without the
+        "c" axis.
+    input_axes_without_c
+        The axes of the element's intrinsic coordinate system, without the "c" axis.
+    output_axes_without_c
+        The axes of the query coordinate system, without the "c" axis.
+
+    """
+    from spatialdata.transformations import get_transformation
+
+    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
+    assert isinstance(transform_to_query_space, BaseTransformation)
+    m = _get_affine_for_element(element, transform_to_query_space)
+    input_axes_without_c = tuple(ax for ax in m.input_axes if ax != "c")
+    output_axes_without_c = tuple(ax for ax in m.output_axes if ax != "c")
+    m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+    return m_without_c, input_axes_without_c, output_axes_without_c
+
+
+def _adjust_bounding_box_to_real_axes(
+    axes_bb: tuple[str, ...],
+    min_coordinate: ArrayLike,
+    max_coordinate: ArrayLike,
+    axes_out_without_c: tuple[str, ...],
+) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
+    """
+    Adjust the bounding box to the real axes of the transformation.
+
+    The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
+    """
+    if set(axes_bb) != set(axes_out_without_c):
+        axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
+        axes_only_in_output = set(axes_out_without_c) - set(axes_bb)
+
+        # let's remove from the bounding box whose axes that are not in the output axes (e.g. querying 2D points with a
+        # 3D bounding box)
+        indices_to_remove_from_bb = [axes_bb.index(ax) for ax in axes_only_in_bb]
+        axes_bb = tuple(ax for ax in axes_bb if ax not in axes_only_in_bb)
+        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
+        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
+
+        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
+        # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
+        for ax in axes_only_in_output:
+            axes_bb = axes_bb + (ax,)
+            M = np.finfo(np.float32).max - 1
+            min_coordinate = np.append(min_coordinate, -M)
+            max_coordinate = np.append(max_coordinate, M)
+    return axes_bb, min_coordinate, max_coordinate
+
+
+def _get_case_of_bounding_box_query(
+    m_without_c_linear: ArrayLike,
+    input_axes_without_c: tuple[str, ...],
+    output_axes_without_c: tuple[str, ...],
+) -> int:
+    """
+    The bounding box query is handled in different ways depending on the "case" we are in, which we identify here.
+
+    See https://github.com/scverse/spatialdata/pull/151#issuecomment-1444609101 for a detailed overview of the logic of
+    this code, or see the comments below for an overview of the cases we consider.
+    """  # noqa: D401
+    transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
+    transform_coordinate_length = len(output_axes_without_c)
+    data_dim = len(input_axes_without_c)
+
+    assert data_dim in [2, 3]
+    assert transform_dimension in [2, 3]
+    assert transform_coordinate_length in [2, 3]
+    assert not (data_dim == 2 and transform_dimension == 3)
+    assert not (transform_dimension == 3 and transform_coordinate_length == 2)
+    # TL;DR of the GitHub comment linked in the docstring.
+    # the combinations of values for `data_dim`, `transform_dimension`, and `transform_coordinate_length` # lead to 8
+    # cases, but of these, 3 are not possible:
+    # a. transform_dimension == 3 and transform_coordinate_length == 2 (these are 2 cases)
+    # b. data_dim == 2 and transform_dimension == 3 (these are 2 cases, but one already covered by the previous point)
+    # what remains are the 5 cases of the if-elif-else below
+    # for simplicity we will start by implementing only the cases 1 and 5, which are the ones that correspond to
+    # invertible transformations, the other cases are not handled and will raise an error, and can be implemented in the
+    # future if needed. The GitHub discussion also contains a detailed explanation of the logic behind the cases.
+    if data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 2:
+        case = 1
+    elif data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 3:
+        # currently not handled
+        case = 2
+    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 2:
+        # currently not handled
+        case = 3
+    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 3:
+        # currently not handled
+        case = 4
+    elif data_dim == 3 and transform_dimension == 3 and transform_coordinate_length == 3:
+        case = 5
+    else:
+        raise RuntimeError("This should not happen")
+
+    if case in [2, 3, 4]:
+        # to implement case 2: we need to intersect the plane in the extrinsic coordinate system with the 3D bounding
+        # box. The vertices of this polygon needs to be transformed to the intrinsic coordinate system
+        error_message = (
+            f"This case is not supported (data with dimension {data_dim} but transformation with rank "
+            f"{transform_dimension}. Please open a GitHub issue if you want to discuss a use case."
+        )
+        raise ValueError(error_message)
+    return case
 
 
 @dataclass(frozen=True)
@@ -223,10 +409,11 @@ def bounding_box_query(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
+    filter_table: bool = True,
     **kwargs: Any,
 ) -> SpatialElement | SpatialData | None:
     """
-    Perform a bounding box query on the SpatialData object.
+    Query a SpatialData object or SpatialElement within a bounding box.
 
     Parameters
     ----------
@@ -244,8 +431,8 @@ def bounding_box_query(
 
     Returns
     -------
-    The SpatialData object containing the requested data.
-    Elements with no valid data are omitted.
+    The SpatialData object or SpatialElement containing the requested data.
+    Eventual empty Elements are omitted by the SpatialData object.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -279,77 +466,6 @@ def _(
     return SpatialData(**new_elements, tables=tables)
 
 
-def _get_axes_of_tranformation(
-    element: SpatialElement, target_coordinate_system: str
-) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
-    """
-    Get the transformation matrix and the transformation's axes (ignoring `c`).
-
-    The transformation is the one from the element's intrinsic coordinate system to the query coordinate space.
-    Note that the axes which specify the query shape are not necessarily the same as the axes that are output of the
-    transformation
-
-    Parameters
-    ----------
-    element
-        SpatialData element to be transformed.
-    target_coordinate_system
-        The target coordinate system for the transformation.
-
-    Returns
-    -------
-    m_without_c
-        The transformation from the element's intrinsic coordinate system to the query coordinate space, without the
-        "c" axis.
-    input_axes_without_c
-        The axes of the element's intrinsic coordinate system, without the "c" axis.
-    output_axes_without_c
-        The axes of the query coordinate system, without the "c" axis.
-
-    """
-    from spatialdata.transformations import get_transformation
-
-    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
-    assert isinstance(transform_to_query_space, BaseTransformation)
-    m = _get_affine_for_element(element, transform_to_query_space)
-    input_axes_without_c = tuple([ax for ax in m.input_axes if ax != "c"])
-    output_axes_without_c = tuple([ax for ax in m.output_axes if ax != "c"])
-    m_without_c = m.to_affine_matrix(input_axes=input_axes_without_c, output_axes=output_axes_without_c)
-    return m_without_c, input_axes_without_c, output_axes_without_c
-
-
-def _adjust_bounding_box_to_real_axes(
-    axes: tuple[str, ...],
-    min_coordinate: ArrayLike,
-    max_coordinate: ArrayLike,
-    output_axes_without_c: tuple[str, ...],
-) -> tuple[tuple[str, ...], ArrayLike, ArrayLike]:
-    """
-    Adjust the bounding box to the real axes of the transformation.
-
-    The bounding box is defined by the user and it's axes may not coincide with the axes of the transformation.
-    """
-    if set(axes) != set(output_axes_without_c):
-        axes_only_in_bb = set(axes) - set(output_axes_without_c)
-        axes_only_in_output = set(output_axes_without_c) - set(axes)
-
-        # let's remove from the bounding box whose axes that are not in the output axes (e.g. querying 2D points with a
-        # 3D bounding box)
-        indices_to_remove_from_bb = [axes.index(ax) for ax in axes_only_in_bb]
-        axes = tuple([ax for ax in axes if ax not in axes_only_in_bb])
-        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
-        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
-
-        # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
-        # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
-        for ax in axes_only_in_output:
-            axes = axes + (ax,)
-            M = np.finfo(np.float32).max - 1
-            min_coordinate = np.append(min_coordinate, -M)
-            max_coordinate = np.append(max_coordinate, M)
-    return axes, min_coordinate, max_coordinate
-
-
 @bounding_box_query.register(SpatialImage)
 @bounding_box_query.register(MultiscaleSpatialImage)
 def _(
@@ -379,78 +495,51 @@ def _(
         max_coordinate=max_coordinate,
     )
 
+    # compute the output axes of the transformation, remove c from input and output axes, return the matrix without c
+    # and then build an affine transformation from that
     m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
         image, target_coordinate_system
     )
+    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+
+    # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
+    # transformations; we focus on them
     m_without_c_linear = m_without_c[:-1, :-1]
-    transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
-    transform_coordinate_length = len(output_axes_without_c)
-    data_dim = len(input_axes_without_c)
+    case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
+    assert case in [1, 5]
 
-    assert data_dim in [2, 3]
-    assert transform_dimension in [2, 3]
-    assert transform_coordinate_length in [2, 3]
-    assert not (data_dim == 2 and transform_dimension == 3)
-    assert not (transform_dimension == 3 and transform_coordinate_length == 2)
-    # see explanation in https://github.com/scverse/spatialdata/pull/151
-    if data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 2:
-        case = 1
-    elif data_dim == 2 and transform_dimension == 2 and transform_coordinate_length == 3:
-        case = 2
-    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 2:
-        case = 3
-    elif data_dim == 3 and transform_dimension == 2 and transform_coordinate_length == 3:
-        case = 4
-    elif data_dim == 3 and transform_dimension == 3 and transform_coordinate_length == 3:
-        case = 5
-    else:
-        raise RuntimeError("This should not happen")
-
-    if case in [3, 4]:
-        error_message = (
-            f"This case is not supported (data with dimension"
-            f"{data_dim} but transformation with rank {transform_dimension}."
-            f"Please open a GitHub issue if you want to discuss a use case."
-        )
-        raise ValueError(error_message)
-
+    # adjust the bounding box to the real axes, dropping or adding eventually mismatching axes; the order of the axes is
+    # not adjusted
     axes, min_coordinate, max_coordinate = _adjust_bounding_box_to_real_axes(
         axes, min_coordinate, max_coordinate, output_axes_without_c
     )
+    assert set(axes) == set(output_axes_without_c)
 
-    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+    # since the order of the axes is arbitrary, let's adjust the affine transformation without c to match those axes
     spatial_transform_bb_axes = Affine(
         spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
         input_axes=input_axes_without_c,
         output_axes=axes,
     )
-    assert case in [1, 2, 5]
-    if case in [1, 5]:
-        bounding_box_corners = get_bounding_box_corners(
-            min_coordinate=min_coordinate,
-            max_coordinate=max_coordinate,
-            axes=axes,
-        )
-    else:
-        assert case == 2
-        # TODO: we need to intersect the plane in the extrinsic coordinate system with the 3D bounding box. The
-        #  vertices of this polygons needs to be transformed to the intrinsic coordinate system
-        raise NotImplementedError(
-            "Case 2 (the transformation is embedding 2D data in the 3D space, is not "
-            "implemented yet. Please open a Github issue about this and we will prioritize the "
-            "development."
-        )
+
+    # let's get the bounding box corners and inverse transform then to the intrinsic coordinate system; since we are
+    # in case 1 or 5, the transformation is invertible
+    bounding_box_corners = get_bounding_box_corners(
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        axes=axes,
+    )
     inverse = spatial_transform_bb_axes.inverse()
     assert isinstance(inverse, Affine)
     rotation_matrix = inverse.matrix[0:-1, 0:-1]
     translation = inverse.matrix[0:-1, -1]
-
     intrinsic_bounding_box_corners = DataArray(
         bounding_box_corners.data @ rotation_matrix.T + translation,
         coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
     )
 
-    # build the request
+    # build the request: now that we have the bounding box corners in the intrinsic coordinate system, we can use them
+    # to build the request to query the raster data using the xarray APIs
     selection = {}
     translation_vector = []
     for axis_name in axes:
@@ -468,6 +557,7 @@ def _(
         else:
             translation_vector.append(0)
 
+    # query the data
     query_result = image.sel(selection)
     if isinstance(image, SpatialImage):
         if 0 in query_result.shape:
@@ -508,6 +598,10 @@ def _(
             )
             new_transformations[coordinate_system] = new_transformation
         set_transformation(query_result, new_transformations, set_all=True)
+    # let's make a copy of the transformations so that we don't modify the original object
+    t = get_transformation(query_result, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(query_result, t.copy(), set_all=True)
     return query_result
 
 
@@ -520,7 +614,7 @@ def _(
     target_coordinate_system: str,
 ) -> DaskDataFrame | None:
     from spatialdata import transform
-    from spatialdata.transformations import BaseTransformation, get_transformation
+    from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -551,28 +645,25 @@ def _(
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
     )
+    # if there aren't any points, just return
+    if in_intrinsic_bounding_box.sum() == 0:
+        return None
     points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
 
-    if in_intrinsic_bounding_box.sum() == 0:
-        # if there aren't any points, just return
-        return None
-
-    # we have to reset the index since we have subset
-    # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
-        points_in_intrinsic_bounding_box.idx.cumsum() - 1
-    )
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
-        lambda df: df.rename(index={"idx": None})
-    )
-    points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
+    # # we have to reset the index since we have subset
+    # # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
+    #     points_in_intrinsic_bounding_box.idx.cumsum() - 1
+    # )
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
+    #     lambda df: df.rename(index={"idx": None})
+    # )
+    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
 
     # transform the element to the query coordinate system
-    transform_to_query_space = get_transformation(points, to_coordinate_system=target_coordinate_system)
-    assert isinstance(transform_to_query_space, BaseTransformation)
     points_query_coordinate_system = transform(
-        points_in_intrinsic_bounding_box, transform_to_query_space, maintain_positioning=False
+        points_in_intrinsic_bounding_box, to_coordinate_system=target_coordinate_system, maintain_positioning=False
     )  # type: ignore[union-attr]
 
     # get a mask for the points in the bounding box
@@ -582,9 +673,14 @@ def _(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
     )
-    if bounding_box_mask.sum() == 0:
+    bounding_box_indices = np.where(bounding_box_mask.compute())[0]
+    if len(bounding_box_indices) == 0:
         return None
-    return points_in_intrinsic_bounding_box.loc[bounding_box_mask]
+    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_indices]
+    old_transformations = get_transformation(points, get_all=True)
+    assert isinstance(old_transformations, dict)
+    # an alternative approach is to query for each partition in parallel
+    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy())
 
 
 @bounding_box_query.register(GeoDataFrame)
@@ -595,6 +691,8 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> GeoDataFrame | None:
+    from spatialdata.transformations import get_transformation
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -616,102 +714,85 @@ def _(
     )
 
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    queried = polygons[polygons.geometry.within(bounding_box_non_axes_aligned)]
+    indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
+    queried = polygons[indices]
     if len(queried) == 0:
         return None
-    return queried
+    old_transformations = get_transformation(polygons, get_all=True)
+    assert isinstance(old_transformations, dict)
+    del queried.attrs[ShapesModel.TRANSFORM_KEY]
+    return ShapesModel.parse(queried, transformations=old_transformations.copy())
 
 
-def _polygon_query(
-    sdata: SpatialData,
-    polygon: Polygon,
-    target_coordinate_system: str,
-    filter_table: bool,
-    shapes: bool,
-    points: bool,
-    images: bool,
-    labels: bool,
-) -> SpatialData:
-    from spatialdata._core.query._utils import circles_to_polygons
-    from spatialdata.models import (
-        PointsModel,
-        ShapesModel,
-        points_dask_dataframe_to_geopandas,
-        points_geopandas_to_dask_dataframe,
-    )
-    from spatialdata.transformations import get_transformation, set_transformation
-
-    new_shapes = {}
-    if shapes:
-        for shapes_name, s in sdata.shapes.items():
-            buffered = circles_to_polygons(s) if ShapesModel.RADIUS_KEY in s.columns else s
-
-            if "__old_index" in buffered.columns:
-                assert np.all(s["__old_index"] == buffered.index)
-            else:
-                buffered["__old_index"] = buffered.index
-            indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
-            if np.sum(indices) == 0:
-                raise ValueError("we expect at least one shape")
-            queried_shapes = s[indices]
-            queried_shapes.index = buffered[indices]["__old_index"]
-            queried_shapes.index.name = None
-            del buffered["__old_index"]
-            if "__old_index" in queried_shapes.columns:
-                del queried_shapes["__old_index"]
-            transformation = get_transformation(buffered, target_coordinate_system)
-            queried_shapes = ShapesModel.parse(queried_shapes)
-            set_transformation(queried_shapes, transformation, target_coordinate_system)
-            new_shapes[shapes_name] = queried_shapes
-
-    new_points = {}
-    if points:
-        for points_name, p in sdata.points.items():
-            points_gdf = points_dask_dataframe_to_geopandas(p, suppress_z_warning=True)
-            indices = points_gdf.geometry.intersects(polygon)
-            if np.sum(indices) == 0:
-                raise ValueError("we expect at least one point")
-            queried_points = points_gdf[indices]
-            ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
-            transformation = get_transformation(p, target_coordinate_system)
-            if "z" in ddf.columns:
-                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
-            else:
-                ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
-            set_transformation(ddf, transformation, target_coordinate_system)
-            new_points[points_name] = ddf
-
-    new_images = {}
-    if images:
-        for images_name, im in sdata.images.items():
-            min_x, min_y, max_x, max_y = polygon.bounds
-            cropped = bounding_box_query(
-                im,
-                min_coordinate=[min_x, min_y],
-                max_coordinate=[max_x, max_y],
-                axes=("x", "y"),
-                target_coordinate_system=target_coordinate_system,
-            )
-            new_images[images_name] = cropped
-    if labels:
-        for labels_name, l in sdata.labels.items():
-            _ = labels_name
-            _ = l
-            raise NotImplementedError(
-                "labels=True is not implemented yet. If you encounter this error please open an "
-                "issue and we will prioritize the implementation."
+# TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter
+def _check_deprecated_kwargs(kwargs: dict[str, Any]) -> None:
+    deprecated_args = ["shapes", "points", "images", "labels"]
+    for arg in deprecated_args:
+        if arg in kwargs and kwargs[arg] is False:
+            warnings.warn(
+                f"The '{arg}' argument is deprecated and will be removed in one of the next following releases. Please "
+                f"filter the SpatialData object before calling this function.",
+                DeprecationWarning,
+                stacklevel=2,
             )
 
-    elements = {"shapes": new_shapes, "points": new_points}
-    tables = _get_filtered_or_unfiltered_tables(filter_table, elements, sdata)
 
-    return SpatialData(shapes=new_shapes, points=new_points, images=new_images, tables=tables)
-
-
-# this function is currently excluded from the API documentation. TODO: add it after the refactoring
+@singledispatch
 def polygon_query(
+    element: SpatialElement | SpatialData,
+    polygon: Polygon | MultiPolygon,
+    target_coordinate_system: str,
+    filter_table: bool = True,
+    shapes: bool = True,
+    points: bool = True,
+    images: bool = True,
+    labels: bool = True,
+) -> SpatialElement | SpatialData | None:
+    """
+    Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
+
+    Parameters
+    ----------
+    element
+        The SpatialElement or SpatialData object to query.
+    polygon
+        The polygon/multipolygon to query by.
+    target_coordinate_system
+        The coordinate system of the polygon/multipolygon.
+    filter_table
+        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
+        SpatialData object of the query.
+    shapes [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    points [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    images [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+    labels [Deprecated]
+        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
+        function.
+
+    Returns
+    -------
+    The queried SpatialData object or SpatialElement containing the requested data.
+    Eventual empty Elements are omitted by the SpatialData object.
+
+    Examples
+    --------
+    Here is an example for multipolygon use case. If you have a sequence of polygons/multipolygons, in particular a
+    GeoDataFrame, and you want to query the data that belongs to any one of these shapes, you can call this function
+    to the multipolygon obtained by merging all the polygons. To merge you can use a unary union.
+    """
+    raise RuntimeError("Unsupported type for polygon_query: " + str(type(element)) + ".")
+
+
+@polygon_query.register(SpatialData)
+def _(
     sdata: SpatialData,
-    polygons: Polygon | list[Polygon],
+    polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
     shapes: bool = True,
@@ -719,99 +800,108 @@ def polygon_query(
     images: bool = True,
     labels: bool = True,
 ) -> SpatialData:
-    """
-    Query a spatial data object by a polygon, filtering shapes and points.
 
-    Parameters
-    ----------
-    sdata
-        The SpatialData object to query
-    polygon
-        The polygon (or list of polygons) to query by
-    target_coordinate_system
-        The coordinate system of the polygon
-    filter_table
-        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
-        SpatialData object of the query.
-    shapes
-        Whether to filter shapes
-    points
-        Whether to filter points
-
-    Returns
-    -------
-    The queried SpatialData object with filtered shapes and points.
-
-    Notes
-    -----
-    This function will be refactored to be more general.
-    The table is not filtered by this function, but is passed as is, this will also changed during the refactoring
-    making this function more general and ergonomic.
-
-    """
-    # adjust coordinate transformation (this implementation can be made faster)
-    sdata = sdata.transform_to_coordinate_system(target_coordinate_system)
-
-    if isinstance(polygons, Polygon):
-        polygons = [polygons]
-
-    if len(polygons) == 1:
-        return _polygon_query(
-            sdata=sdata,
-            polygon=polygons[0],
+    _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
+    new_elements = {}
+    for element_type in ["points", "images", "labels", "shapes"]:
+        elements = getattr(sdata, element_type)
+        queried_elements = _dict_query_dispatcher(
+            elements,
+            polygon_query,
+            polygon=polygon,
             target_coordinate_system=target_coordinate_system,
-            filter_table=filter_table,
-            shapes=shapes,
-            points=points,
-            images=images,
-            labels=labels,
         )
-    # TODO: the performance for this case can be greatly improved by using the geopandas queries only once, and not
-    #  in a loop as done preliminarily here
-    if points or images or labels:
-        logger.warning(
-            "Spatial querying of images, points and labels is not implemented when querying by multiple polygons "
-            'simultaneously. You can silence this warning by setting "points=False, images=False, labels=False". If '
-            "you need this implementation please open an issue on GitHub."
-        )
-        points = False
-        images = False
-        labels = False
+        new_elements[element_type] = queried_elements
 
-    sdatas = []
-    for polygon in tqdm(polygons):
-        try:
-            # not filtering now, we filter below
-            queried_sdata = _polygon_query(
-                sdata=sdata,
-                polygon=polygon,
-                target_coordinate_system=target_coordinate_system,
-                filter_table=False,
-                shapes=shapes,
-                points=points,
-                images=images,
-                labels=labels,
-            )
-            sdatas.append(queried_sdata)
-        except ValueError as e:
-            if str(e) != "we expect at least one shape":
-                raise e
-            # print("skipping", end="")
-    geodataframe_pieces: dict[str, list[GeoDataFrame]] = {}
+    tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    for sdata in sdatas:
-        for shapes_name, shapes in sdata.shapes.items():
-            if shapes_name not in geodataframe_pieces:
-                geodataframe_pieces[shapes_name] = []
-            geodataframe_pieces[shapes_name].append(shapes)
+    return SpatialData(**new_elements, tables=tables)
 
-    geodataframes = {}
-    for k, v in geodataframe_pieces.items():
-        vv = pd.concat(v)
-        vv = vv[~vv.index.duplicated(keep="first")]
-        geodataframes[k] = vv
 
-    elements = {"shapes": geodataframes}
-    tables = _get_filtered_or_unfiltered_tables(filter_table, elements, sdata)
+@polygon_query.register(SpatialImage)
+@polygon_query.register(MultiscaleSpatialImage)
+def _(
+    image: SpatialImage | MultiscaleSpatialImage,
+    polygon: Polygon | MultiPolygon,
+    target_coordinate_system: str,
+    **kwargs: Any,
+) -> SpatialImage | MultiscaleSpatialImage | None:
+    _check_deprecated_kwargs(kwargs)
+    gdf = GeoDataFrame(geometry=[polygon])
+    min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
+    return bounding_box_query(
+        image,
+        min_coordinate=[min_x, min_y],
+        max_coordinate=[max_x, max_y],
+        axes=("x", "y"),
+        target_coordinate_system=target_coordinate_system,
+    )
 
-    return SpatialData(shapes=geodataframes, tables=tables)
+
+@polygon_query.register(DaskDataFrame)
+def _(
+    points: DaskDataFrame,
+    polygon: Polygon | MultiPolygon,
+    target_coordinate_system: str,
+    **kwargs: Any,
+) -> DaskDataFrame | None:
+    from spatialdata.transformations import get_transformation, set_transformation
+
+    _check_deprecated_kwargs(kwargs)
+    polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
+
+    points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
+    joined = polygon_gdf.sjoin(points_gdf)
+    if len(joined) == 0:
+        return None
+    assert len(joined.index.unique()) == 1
+    queried_points = points_gdf.loc[joined["index_right"]]
+    ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
+    transformation = get_transformation(points, target_coordinate_system)
+    if "z" in ddf.columns:
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+    else:
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+    set_transformation(ddf, transformation, target_coordinate_system)
+    t = get_transformation(ddf, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(ddf, t.copy(), set_all=True)
+    return ddf
+
+
+@polygon_query.register(GeoDataFrame)
+def _(
+    element: GeoDataFrame,
+    polygon: Polygon | MultiPolygon,
+    target_coordinate_system: str,
+    **kwargs: Any,
+) -> GeoDataFrame | None:
+    from spatialdata.transformations import get_transformation, set_transformation
+
+    _check_deprecated_kwargs(kwargs)
+    polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
+    polygon = polygon_gdf["geometry"].iloc[0]
+
+    buffered = circles_to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
+
+    OLD_INDEX = "__old_index"
+    if OLD_INDEX in buffered.columns:
+        assert np.all(element[OLD_INDEX] == buffered.index)
+    else:
+        buffered[OLD_INDEX] = buffered.index
+    indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
+    if np.sum(indices) == 0:
+        return None
+    queried_shapes = element[indices]
+    queried_shapes.index = buffered[indices][OLD_INDEX]
+    queried_shapes.index.name = None
+    del buffered[OLD_INDEX]
+    if OLD_INDEX in queried_shapes.columns:
+        del queried_shapes[OLD_INDEX]
+    transformation = get_transformation(buffered, target_coordinate_system)
+    queried_shapes = ShapesModel.parse(queried_shapes)
+    set_transformation(queried_shapes, transformation, target_coordinate_system)
+    t = get_transformation(queried_shapes, get_all=True)
+    assert isinstance(t, dict)
+    set_transformation(queried_shapes, t.copy(), set_all=True)
+    return queried_shapes

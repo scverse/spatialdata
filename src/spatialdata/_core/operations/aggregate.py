@@ -173,8 +173,8 @@ def aggregate(
         target_coordinate_system,  # type: ignore[assignment]
     )
     if not (by_transform == values_transform and isinstance(values_transform, Identity)):
-        by_ = transform(by_, by_transform)
-        values_ = transform(values_, values_transform)
+        by_ = transform(by_, to_coordinate_system=target_coordinate_system)
+        values_ = transform(values_, to_coordinate_system=target_coordinate_system)
 
     # dispatch
     adata = None

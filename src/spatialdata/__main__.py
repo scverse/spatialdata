@@ -5,6 +5,7 @@ This module provides command line interface (CLI) interactions for the SpatialDa
 various operations through a terminal. Currently, it implements the "peek" function, which allows users to inspect
 the contents of a SpatialData .zarr dataset. Additional CLI functionalities will be implemented in the future.
 """
+
 from typing import Literal
 
 import click
