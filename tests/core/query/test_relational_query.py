@@ -3,7 +3,12 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
-from spatialdata._core.query.relational_query import _locate_value, _ValueOrigin, join_sdata_spatialelement_table
+from spatialdata._core.query.relational_query import (
+    _get_element_annotators,
+    _locate_value,
+    _ValueOrigin,
+    join_sdata_spatialelement_table,
+)
 from spatialdata.models.models import TableModel
 
 
@@ -404,3 +409,16 @@ def test_points_table_joins(full_sdata):
     element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right_exclusive")
     assert element_dict["points_0"] is None
     assert table is None
+
+
+def test_get_element_annotators(full_sdata):
+    names = _get_element_annotators(full_sdata, "points_0")
+    assert len(names) == 0
+
+    names = _get_element_annotators(full_sdata, "labels2d")
+    assert names == {"table"}
+
+    another_table = full_sdata.tables["table"].copy()
+    full_sdata.tables["another_table"] = another_table
+    names = _get_element_annotators(full_sdata, "labels2d")
+    assert names == {"another_table", "table"}
