@@ -5,15 +5,11 @@ import math
 import numpy as np
 import pytest
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.delayed import Delayed
-from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._utils import _assert_spatialdata_objects_seem_identical, _assert_tables_seem_identical
 from spatialdata.datasets import blobs
 from spatialdata.models import (
     Image2DModel,
@@ -116,39 +112,6 @@ def test_element_names_unique() -> None:
     assert "shapes" not in sdata._shared_keys
 
 
-def _assert_elements_left_to_right_seem_identical(sdata0: SpatialData, sdata1: SpatialData) -> None:
-    for element_type, element_name, element in sdata0._gen_elements():
-        elements = sdata1.__getattribute__(element_type)
-        assert element_name in elements
-        element1 = elements[element_name]
-        if isinstance(element, (AnnData, SpatialImage, GeoDataFrame)):
-            assert element.shape == element1.shape
-        elif isinstance(element, DaskDataFrame):
-            for s0, s1 in zip(element.shape, element1.shape):
-                if isinstance(s0, Delayed):
-                    s0 = s0.compute()
-                if isinstance(s1, Delayed):
-                    s1 = s1.compute()
-                assert s0 == s1
-        elif isinstance(element, MultiscaleSpatialImage):
-            assert len(element) == len(element1)
-        else:
-            raise TypeError(f"Unsupported type {type(element)}")
-
-
-def _assert_tables_seem_identical(table0: AnnData | None, table1: AnnData | None) -> None:
-    assert table0 is None and table1 is None or table0.shape == table1.shape
-
-
-def _assert_spatialdata_objects_seem_identical(sdata0: SpatialData, sdata1: SpatialData) -> None:
-    # this is not a full comparison, but it's fine anyway
-    assert len(list(sdata0._gen_elements())) == len(list(sdata1._gen_elements()))
-    assert set(sdata0.coordinate_systems) == set(sdata1.coordinate_systems)
-    _assert_elements_left_to_right_seem_identical(sdata0, sdata1)
-    _assert_elements_left_to_right_seem_identical(sdata1, sdata0)
-    _assert_tables_seem_identical(sdata0.table, sdata1.table)
-
-
 def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
     _assert_spatialdata_objects_seem_identical(sdata, full_sdata)
@@ -160,7 +123,7 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     assert len(list(sdata_my_space.gen_elements())) == 3
-    _assert_tables_seem_identical(sdata_my_space.table, full_sdata.table)
+    _assert_tables_seem_identical(sdata_my_space, full_sdata)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
         coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False

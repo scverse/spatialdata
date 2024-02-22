@@ -18,6 +18,7 @@ from spatialdata._core.query.spatial_query import (
     polygon_query,
 )
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._utils import _assert_spatialdata_objects_seem_identical
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -30,9 +31,6 @@ from spatialdata.models import (
 from spatialdata.transformations import Identity, set_transformation
 
 from tests.conftest import _make_points, _make_squares
-from tests.core.operations.test_spatialdata_operations import (
-    _assert_spatialdata_objects_seem_identical,
-)
 
 
 def test_bounding_box_request_immutable():
