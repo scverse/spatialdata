@@ -1,14 +1,17 @@
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
 from spatialdata._core.centroids import get_centroids
-from spatialdata.models import TableModel, get_axes_names
+from spatialdata.models import Labels2DModel, Labels3DModel, TableModel, get_axes_names
 from spatialdata.transformations import Identity, get_transformation, set_transformation
 
 from tests.core.operations.test_transform import _get_affine
 
 RNG = default_rng(42)
+
+affine = _get_affine()
 
 
 @pytest.mark.parametrize("coordinate_system", ["global", "aligned"])
@@ -16,7 +19,6 @@ RNG = default_rng(42)
 def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
     element = points["points_0"]
 
-    affine = _get_affine()
     # by default, the coordinate system is global and the points are 2D; let's modify the points as instructed by the
     # test arguments
     if coordinate_system == "aligned":
@@ -48,24 +50,87 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
         assert np.allclose(centroids.compute().values, centroids_transformed)
 
 
-def test_get_centroids_circles():
-    pass
+@pytest.mark.parametrize("coordinate_system", ["global", "aligned"])
+@pytest.mark.parametrize("shapes_name", ["circles", "poly", "multipoly"])
+def test_get_centroids_shapes(shapes, coordinate_system: str, shapes_name: str):
+    element = shapes[shapes_name]
+    if coordinate_system == "aligned":
+        set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
+    centroids = get_centroids(element, coordinate_system=coordinate_system)
+
+    if shapes_name == "circles":
+        xy = element.geometry.get_coordinates().values
+    else:
+        assert shapes_name in ["poly", "multipoly"]
+        xy = element.geometry.centroid.get_coordinates().values
+
+    if coordinate_system == "global":
+        assert np.array_equal(centroids.compute().values, xy)
+    else:
+        matrix = affine.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+        centroids_transformed = np.dot(xy, matrix[:2, :2].T) + matrix[:2, 2]
+        assert np.allclose(centroids.compute().values, centroids_transformed)
 
 
-def test_get_centroids_polygons():
-    pass
+@pytest.mark.parametrize("coordinate_system", ["global", "aligned"])
+@pytest.mark.parametrize("is_multiscale", [False, True])
+@pytest.mark.parametrize("is_3d", [False, True])
+def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: bool, is_3d: bool):
+    scale_factors = [2] if is_multiscale else None
+    if is_3d:
+        model = Labels3DModel
+        array = np.array(
+            [
+                [
+                    [0, 0, 1, 1],
+                    [0, 0, 1, 1],
+                ],
+                [
+                    [2, 2, 1, 1],
+                    [2, 2, 1, 1],
+                ],
+            ]
+        )
+        expected_centroids = pd.DataFrame(
+            {
+                "x": [1, 3, 1],
+                "y": [1, 1.0, 1],
+                "z": [0.5, 1, 1.5],
+            },
+            index=[0, 1, 2],
+        )
+    else:
+        array = np.array(
+            [
+                [1, 1, 1, 1],
+                [2, 2, 2, 2],
+                [2, 2, 2, 2],
+                [2, 2, 2, 2],
+            ]
+        )
+        model = Labels2DModel
+        expected_centroids = pd.DataFrame(
+            {
+                "x": [2, 2],
+                "y": [0.5, 2.5],
+            },
+            index=[1, 2],
+        )
+    element = model.parse(array, scale_factors=scale_factors)
 
+    if coordinate_system == "aligned":
+        set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
+    centroids = get_centroids(element, coordinate_system=coordinate_system)
 
-def test_get_centroids_multipolygons():
-    pass
-
-
-def test_get_centroids_single_scale_labels():
-    pass
-
-
-def test_get_centroids_multiscale_labels():
-    pass
+    if coordinate_system == "global":
+        assert np.array_equal(centroids.compute().values, expected_centroids.values)
+    else:
+        axes = get_axes_names(element)
+        n = len(axes)
+        # the axes from the labels have 'x' last, but we want it first to manually transform the points, so we sort
+        matrix = affine.to_affine_matrix(input_axes=sorted(axes), output_axes=sorted(axes))
+        centroids_transformed = np.dot(expected_centroids.values, matrix[:n, :n].T) + matrix[:n, n]
+        assert np.allclose(centroids.compute().values, centroids_transformed)
 
 
 def test_get_centroids_invalid_element(images):
