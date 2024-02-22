@@ -29,6 +29,7 @@ Operations on `SpatialData` objects.
     get_extent
     join_sdata_spatialelement_table
     match_element_to_table
+    get_centroids
     match_table_to_element
     concatenate
     transform

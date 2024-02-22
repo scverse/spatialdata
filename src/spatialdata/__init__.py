@@ -27,6 +27,7 @@ __all__ = [
     "match_table_to_element",
     "SpatialData",
     "get_extent",
+    "get_centroids",
     "read_zarr",
     "unpad_raster",
     "save_transformations",
@@ -35,6 +36,7 @@ __all__ = [
 ]
 
 from spatialdata import dataloader, models, transformations
+from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.aggregate import aggregate

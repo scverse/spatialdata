@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning][].
 -   added utils function: are_extents_equal()
 -   added utils function: postpone_transformation()
 -   added utils function: remove_transformations_to_coordinate_system()
+-   added utils function: get_centroids()
 
 ### Changed
 
