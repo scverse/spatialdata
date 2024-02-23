@@ -64,7 +64,7 @@ def aggregate(
     region_key: str = "region",
     instance_key: str = "instance_id",
     deepcopy: bool = True,
-    table_name: str = "table",
+    table_name: str | None = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -151,6 +151,9 @@ def aggregate(
     to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
     changes required to address this behavior.
     """
+    if values_sdata is not None:
+        assert table_name is not None, f"The name of the table annotating `{values}` must be provided as `table_name`"
+
     values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
     by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
 
@@ -203,6 +206,7 @@ def aggregate(
             value_key=value_key,
             agg_func=agg_func,
             fractions=fractions,
+            table_name=table_name,
         )
 
         # eventually remove the colum of ones if it was added
@@ -217,6 +221,7 @@ def aggregate(
     if adata is None:
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
+    table_name = table_name if table_name is not None else "table"
     # create a SpatialData object with the aggregated table and the "by" shapes
     shapes_name = by if isinstance(by, str) else "by"
     return _create_sdata_from_table_and_shapes(
@@ -322,6 +327,7 @@ def _aggregate_shapes(
     by: gpd.GeoDataFrame,
     values_sdata: SpatialData | None = None,
     values_element_name: str | None = None,
+    table_name: str | None = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
     fractions: bool = False,
@@ -354,7 +360,9 @@ def _aggregate_shapes(
     assert value_key is not None
     assert (values_sdata is None) == (values_element_name is None)
     if values_sdata is not None:
-        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=values_element_name)
+        actual_values = get_values(
+            value_key=value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
+        )
     else:
         actual_values = get_values(value_key=value_key, element=values)
     assert isinstance(actual_values, pd.DataFrame), f"Expected pd.DataFrame, got {type(actual_values)}"

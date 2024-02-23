@@ -46,7 +46,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument
     result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum").tables["table"]
     result_adata_bis = aggregate(
-        values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum"
+        values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum", table_name="table"
     ).tables["table"]
     np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
@@ -147,7 +147,7 @@ def test_aggregate_shapes_by_shapes(
     values = _parse_shapes(sdata, values_shapes=values_shapes)
 
     result_adata = aggregate(
-        values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum"
+        values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum", table_name="table"
     ).tables["table"]
 
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument (only relevant when
@@ -255,7 +255,7 @@ def test_aggregate_shapes_by_shapes(
     # in the categorical case, check that sum and count behave the same
     if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
         result_adata_count = aggregate(
-            values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
+            values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count", table_name="table"
         ).tables["table"]
         assert_equal(result_adata, result_adata_count)
 
@@ -264,7 +264,14 @@ def test_aggregate_shapes_by_shapes(
     if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
         # can't aggregate multiple categorical values
         with pytest.raises(ValueError):
-            aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum")
+            aggregate(
+                values_sdata=sdata,
+                values=values_shapes,
+                by=by,
+                value_key=new_value_key,
+                agg_func="sum",
+                table_name="table",
+            )
     else:
         if value_key == "numerical_in_obs":
             sdata.tables["table"].obs["another_numerical_in_obs"] = 1.0
@@ -279,7 +286,7 @@ def test_aggregate_shapes_by_shapes(
             sdata.tables["table"] = new_table
 
         result_adata = aggregate(
-            values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum"
+            values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum", table_name="table"
         ).tables["table"]
         assert result_adata.var_names.to_list() == new_value_key
 
@@ -311,6 +318,7 @@ def test_aggregate_shapes_by_shapes(
                     by=by,
                     value_key=value_key,
                     agg_func="sum",
+                    table_name="table",
                 )
     # test we can't aggregate from mixed categorical and numerical sources (let's just test one case)
     with pytest.raises(ValueError):
@@ -320,6 +328,7 @@ def test_aggregate_shapes_by_shapes(
             by=by,
             value_key=["numerical_values_in_obs", "categorical_values_in_obs"],
             agg_func="sum",
+            table_name="table",
         )
 
 
@@ -494,6 +503,7 @@ def test_aggregate_considering_fractions_multiple_values(
         value_key=["numerical_in_var", "another_numerical_in_var"],
         agg_func="sum",
         fractions=True,
+        table_name="table",
     ).tables["table"]
     overlaps = np.array([0.655781239649211, 1.0000000000000002, 1.0000000000000004, 0.1349639285777728])
     row0 = np.sum(sdata.tables["table"].X[[0, 1, 2, 3], :] * overlaps.reshape(-1, 1), axis=0)
