@@ -1574,6 +1574,50 @@ class SpatialData:
         )
         return SpatialData(**elements_dict, tables=tables)
 
+    def validate_table_annotation_target(self, table_name: str) -> None:
+        """
+        Check if the targets of the table are present in the SpatialData object and if the dtype of instances match.
+
+        Parameters
+        ----------
+        table_name
+            The name of the table to validate.
+
+        Notes
+        -----
+        This method will raise a warning if the targets of the table are not present in the SpatialData object, or if
+        the dtype of the instances do not match the dtype of the indices/labels of the annotated elements.
+        """
+        assert table_name in self.tables, f"Table with name {table_name!r} not found in the SpatialData object."
+        table = self.tables[table_name]
+        region, region_key, instance_key = get_table_keys(table)
+        if not isinstance(region, list):
+            region = [region]
+        for r in region:
+            element = self.get(r)
+            if element is None:
+                warnings.warn(
+                    f"Region {r!r} in table {table_name!r} not found in the SpatialData object.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            else:
+                if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                    dtype = element.dtype
+                else:
+                    dtype = element.index.dtype
+                if dtype != table.obs[instance_key].dtype:
+                    warnings.warn(
+                        (
+                            f"Table {table_name!r} instance_key column ({instance_key}) has a dtype "
+                            f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of the "
+                            f"annotated element ({dtype}). Please note in the case of int16 vs int32 or similar cases"
+                            " may be tolerated in downstream methods, but it is recommended to make the dtypes match."
+                        ),
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
     def __getitem__(self, item: str) -> SpatialElement:
         """
         Return the element with the given name.

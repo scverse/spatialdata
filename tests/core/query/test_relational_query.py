@@ -5,10 +5,12 @@ from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _get_element_annotators,
+    _get_unique_label_values_as_index,
     _locate_value,
     _ValueOrigin,
     join_sdata_spatialelement_table,
 )
+from spatialdata.datasets import blobs
 from spatialdata.models.models import TableModel
 
 
@@ -422,3 +424,22 @@ def test_get_element_annotators(full_sdata):
     full_sdata.tables["another_table"] = another_table
     names = _get_element_annotators(full_sdata, "labels2d")
     assert names == {"another_table", "table"}
+
+
+def test_join_for_labels_dtype_bug():
+    # test against this bug: https://github.com/scverse/spatialdata/issues/467
+    sdata = blobs()
+    name = "blobs_labels"
+    instance_id = _get_unique_label_values_as_index(sdata[name]).to_numpy()
+    n = len(instance_id)
+    new_table = AnnData(shape=(n, 0), obs={"region": [name for _ in range(n)], "instance_id": instance_id})
+    new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
+    sdata["new_table"] = new_table
+
+    assert sdata[name].dtype == new_table.obs["instance_id"].dtype
+    assert sdata[name].dtype == np.dtype("int16")
+
+    joined_elements, new_table = join_sdata_spatialelement_table(
+        sdata=sdata, spatial_element_name=name, table_name="new_table", how="left", match_rows="left"
+    )
+    assert new_table is not None
