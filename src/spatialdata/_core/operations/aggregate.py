@@ -127,7 +127,7 @@ def aggregate(
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     table_name
-        The name of the table resulting from the aggregation.
+        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -355,6 +355,8 @@ def _aggregate_shapes(
         Column in value dataframe to perform aggregation on.
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
+    table_name
+        Name of the table optionally containing the value_key column.
     """
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
