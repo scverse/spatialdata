@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -419,9 +420,9 @@ def test_validate_table_annotation_target(full_sdata):
     assert region == "labels2d"
 
     # no warnings
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         full_sdata.validate_table_annotation_target("table")
-    assert len(record) == 0
 
     # dtype mismatch
     full_sdata.labels["labels2d"] = Labels2DModel.parse(full_sdata.labels["labels2d"].astype("int16"))
