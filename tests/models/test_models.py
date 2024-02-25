@@ -251,10 +251,13 @@ class TestModels:
         if coordinates is not None:
             coordinates = coordinates.copy()
         coords = ["A", "B", "C", "x", "y", "z"]
-        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 6)), columns=coords)
-        data["target"] = pd.Series(RNG.integers(0, 2, size=(10,))).astype(str)
-        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(10,))).astype(np.int_)
-        data["anno"] = pd.Series(RNG.integers(0, 1, size=(10,))).astype(np.int_)
+        n = 10
+        data = pd.DataFrame(RNG.integers(0, 101, size=(n, 6)), columns=coords)
+        data["target"] = pd.Series(RNG.integers(0, 2, size=(n,))).astype(str)
+        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(n,))).astype(np.int_)
+        data["anno"] = pd.Series(RNG.integers(0, 1, size=(n,))).astype(np.int_)
+        # to test for non-contiguous indices
+        data.drop(index=2, inplace=True)
         if not is_3d:
             if coordinates is not None:
                 del coordinates["z"]
@@ -296,6 +299,7 @@ class TestModels:
                 for axis in axes:
                     assert np.array_equal(points[axis], data[coordinates[axis]])
             self._passes_validation_after_io(model, points, "points")
+        assert np.all(points.index.compute() == data.index)
         assert "transform" in points.attrs
         if feature_key is not None and is_annotation:
             assert "spatialdata_attrs" in points.attrs
