@@ -182,7 +182,7 @@ unfixable = ["B", "C4", "UP", "BLE", "T20", "RET"]
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
     "tests/*" = ["D", "PT", "B024"]
     "*/__init__.py" = ["F401", "D104", "D107", "E402"]
     "docs/*" = ["D","B","E","A"]
