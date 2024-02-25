@@ -19,7 +19,7 @@ from xrspatial import zonal_stats
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query._utils import circles_to_polygons
-from spatialdata._core.query.relational_query import _get_element_annotators, get_values
+from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
@@ -151,10 +151,6 @@ def aggregate(
     to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
     changes required to address this behavior.
     """
-    if values_sdata is not None:
-        assert table_name is not None, f"The name of the table annotating `{values}` must be provided as `table_name`"
-        assert table_name in _get_element_annotators(values_sdata, values)
-
     values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
     by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
 
