@@ -414,7 +414,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
             ), f"data_extent_before: {data_extent_before}, data_extent_after: {data_extent_after} for element {element}"
 
 
-def test_validate_table_annotation_target(full_sdata):
+def test_validate_table_in_spatialdata(full_sdata):
     table = full_sdata["table"]
     region, region_key, _ = get_table_keys(table)
     assert region == "labels2d"
@@ -422,32 +422,32 @@ def test_validate_table_annotation_target(full_sdata):
     # no warnings
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
 
     # dtype mismatch
     full_sdata.labels["labels2d"] = Labels2DModel.parse(full_sdata.labels["labels2d"].astype("int16"))
     with pytest.warns(UserWarning, match="that does not match the dtype of the indices of the annotated element"):
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
 
     # region not found
     del full_sdata.labels["labels2d"]
     with pytest.warns(UserWarning, match="in the SpatialData object"):
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
 
     table.obs[region_key] = "points_0"
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
     # no warnings
     with pytest.warns(None) as record:
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
     assert len(record) == 0
 
     # dtype mismatch
     full_sdata.points["points_0"].index = full_sdata.points["points_0"].index.astype("int16")
     with pytest.warns(UserWarning, match="that does not match the dtype of the indices of the annotated element"):
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
 
     # region not found
     del full_sdata.points["points_0"]
     with pytest.warns(UserWarning, match="in the SpatialData object"):
-        full_sdata.validate_table_annotation_target("table")
+        full_sdata.validate_table_in_spatialdata(table)
