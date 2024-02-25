@@ -438,9 +438,9 @@ def test_validate_table_in_spatialdata(full_sdata):
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
     # no warnings
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         full_sdata.validate_table_in_spatialdata(table)
-    assert len(record) == 0
 
     # dtype mismatch
     full_sdata.points["points_0"].index = full_sdata.points["points_0"].index.astype("int16")
