@@ -173,45 +173,74 @@ def test_locate_value(sdata_query_aggregation):
 
     # var, numerical
     _check_location(
-        _locate_value(value_key="numerical_in_var", sdata=sdata_query_aggregation, element_name="values_circles"),
+        _locate_value(
+            value_key="numerical_in_var",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        ),
         origin="var",
         is_categorical=False,
     )
     # obs, categorical
     _check_location(
-        _locate_value(value_key="categorical_in_obs", sdata=sdata_query_aggregation, element_name="values_circles"),
+        _locate_value(
+            value_key="categorical_in_obs",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        ),
         origin="obs",
         is_categorical=True,
     )
     # obs, numerical
     _check_location(
-        _locate_value(value_key="numerical_in_obs", sdata=sdata_query_aggregation, element_name="values_circles"),
+        _locate_value(
+            value_key="numerical_in_obs",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        ),
         origin="obs",
         is_categorical=False,
     )
     # gdf, categorical
     # sdata + element_name
     _check_location(
-        _locate_value(value_key="categorical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles"),
+        _locate_value(
+            value_key="categorical_in_gdf",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        ),
         origin="df",
         is_categorical=True,
     )
     # element
     _check_location(
-        _locate_value(value_key="categorical_in_gdf", element=sdata_query_aggregation["values_circles"]),
+        _locate_value(
+            value_key="categorical_in_gdf", element=sdata_query_aggregation["values_circles"], table_name="table"
+        ),
         origin="df",
         is_categorical=True,
     )
     # gdf, numerical
     # sdata + element_name
     _check_location(
-        _locate_value(value_key="numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles"),
+        _locate_value(
+            value_key="numerical_in_gdf",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        ),
         origin="df",
         is_categorical=False,
     )
     # element
     _check_location(
-        _locate_value(value_key="numerical_in_gdf", element=sdata_query_aggregation["values_circles"]),
+        _locate_value(
+            value_key="numerical_in_gdf", element=sdata_query_aggregation["values_circles"], table_name="table"
+        ),
         origin="df",
         is_categorical=False,
     )
@@ -245,7 +274,9 @@ def test_locate_value(sdata_query_aggregation):
 
 def test_get_values_df(sdata_query_aggregation):
     # test with a single value, in the dataframe; using sdata + element_name
-    v = get_values(value_key="numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles")
+    v = get_values(
+        value_key="numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+    )
     assert v.shape == (9, 1)
 
     # test with multiple values, in the dataframe; using element
@@ -256,7 +287,9 @@ def test_get_values_df(sdata_query_aggregation):
     assert v.shape == (9, 2)
 
     # test with a single value, in the obs
-    v = get_values(value_key="numerical_in_obs", sdata=sdata_query_aggregation, element_name="values_circles")
+    v = get_values(
+        value_key="numerical_in_obs", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+    )
     assert v.shape == (9, 1)
 
     # test with multiple values, in the obs
@@ -265,11 +298,14 @@ def test_get_values_df(sdata_query_aggregation):
         value_key=["numerical_in_obs", "another_numerical_in_obs"],
         sdata=sdata_query_aggregation,
         element_name="values_circles",
+        table_name="table",
     )
     assert v.shape == (9, 2)
 
     # test with a single value, in the var
-    v = get_values(value_key="numerical_in_var", sdata=sdata_query_aggregation, element_name="values_circles")
+    v = get_values(
+        value_key="numerical_in_var", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+    )
     assert v.shape == (9, 1)
 
     # test with multiple values, in the var
@@ -287,6 +323,7 @@ def test_get_values_df(sdata_query_aggregation):
         value_key=["numerical_in_var", "another_numerical_in_var"],
         sdata=sdata_query_aggregation,
         element_name="values_circles",
+        table_name="table",
     )
     assert v.shape == (9, 2)
 
@@ -294,11 +331,18 @@ def test_get_values_df(sdata_query_aggregation):
     # value found in multiple locations
     sdata_query_aggregation.table.obs["another_numerical_in_gdf"] = np.zeros(21)
     with pytest.raises(ValueError):
-        get_values(value_key="another_numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles")
+        get_values(
+            value_key="another_numerical_in_gdf",
+            sdata=sdata_query_aggregation,
+            element_name="values_circles",
+            table_name="table",
+        )
 
     # value not found
     with pytest.raises(ValueError):
-        get_values(value_key="not_present", sdata=sdata_query_aggregation, element_name="values_circles")
+        get_values(
+            value_key="not_present", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+        )
 
     # mixing categorical and numerical values
     with pytest.raises(ValueError):
@@ -306,6 +350,7 @@ def test_get_values_df(sdata_query_aggregation):
             value_key=["numerical_in_gdf", "categorical_in_gdf"],
             sdata=sdata_query_aggregation,
             element_name="values_circles",
+            table_name="table",
         )
 
     # multiple categorical values
@@ -315,6 +360,7 @@ def test_get_values_df(sdata_query_aggregation):
             value_key=["categorical_in_gdf", "another_categorical_in_gdf"],
             sdata=sdata_query_aggregation,
             element_name="values_circles",
+            table_name="table",
         )
 
     # mixing different origins
@@ -323,6 +369,7 @@ def test_get_values_df(sdata_query_aggregation):
             value_key=["numerical_in_gdf", "numerical_in_obs"],
             sdata=sdata_query_aggregation,
             element_name="values_circles",
+            table_name="table",
         )
 
 
@@ -330,7 +377,7 @@ def test_get_values_labels_bug(sdata_blobs):
     # https://github.com/scverse/spatialdata-plot/issues/165
     from spatialdata import get_values
 
-    get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels")
+    get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels", table_name="table")
 
 
 def test_filter_table_categorical_bug(shapes):

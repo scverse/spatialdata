@@ -57,6 +57,7 @@ docs = [
     # For notebooks
     "ipython>=8.6.0",
     "sphinx-copybutton",
+    "sphinx-pytest",
 ]
 test = [
     "pytest",

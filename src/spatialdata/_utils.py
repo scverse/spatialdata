@@ -29,7 +29,7 @@ from spatialdata.transformations import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata import SpatialData
+    from spatialdata._core.spatialdata import SpatialData
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]

@@ -637,7 +637,7 @@ def _locate_value(
     element: SpatialElement | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
-    table_name: str = "table",
+    table_name: str | None = None,
 ) -> list[_ValueOrigin]:
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     origins = []
@@ -652,7 +652,7 @@ def _locate_value(
 
     # adding from the obs columns or var
     if model in [ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
-        table = sdata[table_name]
+        table = sdata.tables.get(table_name) if table_name is not None else None
         if table is not None:
             # check if the table is annotating the element
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
@@ -673,7 +673,7 @@ def get_values(
     element: SpatialElement | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
-    table_name: str = "table",
+    table_name: str | None = None,
 ) -> pd.DataFrame:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
@@ -736,7 +736,7 @@ def get_values(
         if isinstance(el, DaskDataFrame):
             df = df.compute()
         return df
-    if sdata is not None:
+    if sdata is not None and table_name is not None:
         assert element_name is not None
         matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
         region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]

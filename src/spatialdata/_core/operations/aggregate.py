@@ -64,7 +64,7 @@ def aggregate(
     region_key: str = "region",
     instance_key: str = "instance_id",
     deepcopy: bool = True,
-    table_name: str = "table",
+    table_name: str | None = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -127,7 +127,7 @@ def aggregate(
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     table_name
-        The name of the table resulting from the aggregation.
+        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -203,6 +203,7 @@ def aggregate(
             value_key=value_key,
             agg_func=agg_func,
             fractions=fractions,
+            table_name=table_name,
         )
 
         # eventually remove the colum of ones if it was added
@@ -217,6 +218,7 @@ def aggregate(
     if adata is None:
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
+    table_name = table_name if table_name is not None else "table"
     # create a SpatialData object with the aggregated table and the "by" shapes
     shapes_name = by if isinstance(by, str) else "by"
     return _create_sdata_from_table_and_shapes(
@@ -322,6 +324,7 @@ def _aggregate_shapes(
     by: gpd.GeoDataFrame,
     values_sdata: SpatialData | None = None,
     values_element_name: str | None = None,
+    table_name: str | None = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
     fractions: bool = False,
@@ -348,13 +351,17 @@ def _aggregate_shapes(
         Column in value dataframe to perform aggregation on.
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
+    table_name
+        Name of the table optionally containing the value_key column.
     """
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
     assert (values_sdata is None) == (values_element_name is None)
     if values_sdata is not None:
-        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=values_element_name)
+        actual_values = get_values(
+            value_key=value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
+        )
     else:
         actual_values = get_values(value_key=value_key, element=values)
     assert isinstance(actual_values, pd.DataFrame), f"Expected pd.DataFrame, got {type(actual_values)}"
