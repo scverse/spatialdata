@@ -159,41 +159,55 @@ class SpatialData:
 
         self._query = QueryManager(self)
 
-    def validate_table_in_spatialdata(self, data: AnnData) -> None:
+    def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
         Validate the presence of the annotation target of a SpatialData table in the SpatialData object.
 
         This method validates a table in the SpatialData object to ensure that if annotation metadata is present, the
-        annotation target (SpatialElement) is present in the SpatialData object. Otherwise, a warning is raised.
+        annotation target (SpatialElement) is present in the SpatialData object, the dtypes of the instance key column
+        in the table and the annotation target do not match. Otherwise, a warning is raised.
 
         Parameters
         ----------
-        data
+        table
             The table potentially annotating a SpatialElement
 
         Raises
         ------
         UserWarning
             If the table is annotating elements not present in the SpatialData object.
+        UserWarning
+            The dtypes of the instance key column in the table and the annotation target do not match.
         """
-        TableModel().validate(data)
-        element_names = [
-            element_name for element_type, element_name, _ in self._gen_elements() if element_type != "tables"
-        ]
-        if TableModel.ATTRS_KEY in data.uns:
-            attrs = data.uns[TableModel.ATTRS_KEY]
-            regions = (
-                attrs[TableModel.REGION_KEY]
-                if isinstance(attrs[TableModel.REGION_KEY], list)
-                else [attrs[TableModel.REGION_KEY]]
-            )
-            # TODO: check throwing error
-            if not all(element_name in element_names for element_name in regions):
-                warnings.warn(
-                    "The table is annotating an/some element(s) not present in the SpatialData object",
-                    UserWarning,
-                    stacklevel=2,
-                )
+        TableModel().validate(table)
+        if TableModel.ATTRS_KEY in table.uns:
+            region, _, instance_key = get_table_keys(table)
+            region = region if isinstance(region, list) else [region]
+            for r in region:
+                element = self.get(r)
+                if element is None:
+                    warnings.warn(
+                        f"The table is annotating {r!r}, which is not present in the SpatialData object.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                        dtype = element.dtype
+                    else:
+                        dtype = element.index.dtype
+                    if dtype != table.obs[instance_key].dtype:
+                        warnings.warn(
+                            (
+                                f"Table instance_key column ({instance_key}) has a dtype "
+                                f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
+                                f"the annotated element ({dtype}). Please note in the case of int16 vs int32 or "
+                                "similar cases may be tolerated in downstream methods, but it is recommended to make "
+                                "the dtypes match."
+                            ),
+                            UserWarning,
+                            stacklevel=2,
+                        )
 
     @staticmethod
     def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
@@ -417,7 +431,7 @@ class SpatialData:
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if region not in element_names:
-            raise ValueError(f"Annotation target '{region}' not present as SpatialElement in  " f"SpatialData object.")
+            raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):
             self._change_table_annotation_target(table, region, region_key, instance_key)

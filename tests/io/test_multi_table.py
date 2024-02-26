@@ -93,7 +93,7 @@ class TestMultiTable:
     def test_set_table_nonexisting_target(self, full_sdata):
         with pytest.raises(
             ValueError,
-            match="Annotation target 'non_existing' not present as SpatialElement in  " "SpatialData object.",
+            match="Annotation target 'non_existing' not present as SpatialElement in SpatialData object.",
         ):
             full_sdata.set_table_annotates_spatialelement("table", "non_existing")
 
@@ -150,9 +150,8 @@ class TestMultiTable:
         }
 
         if region == "non_existing":
-            with pytest.warns(
-                UserWarning, match=r"The table is annotating an/some element\(s\) not present in the SpatialData object"
-            ):
+            # annotation target not present in the SpatialData object
+            with pytest.warns(UserWarning, match=r", which is not present in the SpatialData object"):
                 SpatialData(
                     shapes=shapes_dict,
                     tables={"shape_annotate": table},
@@ -189,9 +188,8 @@ class TestMultiTable:
         table = _get_table(region="poly")
         table2 = _get_table(region="multipoly")
         table3 = _get_table(region="non_existing")
-        with pytest.warns(
-            UserWarning, match=r"The table is annotating an/some element\(s\) not present in the SpatialData object"
-        ):
+        # annotation target not present in the SpatialData object
+        with pytest.warns(UserWarning, match=r", which is not present in the SpatialData object"):
             SpatialData(
                 shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
                 table={"poly_annotate": table, "multipoly_annotate": table3},
