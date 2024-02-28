@@ -20,9 +20,6 @@ from spatialdata.models import get_axes_names
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import PointsModel
 from spatialdata.transformations.operations import get_transformation
-from spatialdata.transformations.transformations import (
-    BaseTransformation,
-)
 
 BoundingBoxDescription = dict[str, tuple[float, float]]
 
@@ -174,7 +171,7 @@ def get_extent(
     The exact extent is the bounding box `[minx, miny, maxx, maxy] = [0, 0, 0, 1.414]`, while the approximate extent is
     the box `[minx, miny, maxx, maxy] = [-0.707, 0, 0.707, 1.414]`.
     """
-    raise ValueError("The object type is not supported.")
+    raise ValueError(f"The object type {type(e)} is not supported.")
 
 
 @get_extent.register
@@ -289,9 +286,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) ->
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    t = get_transformation(e, to_coordinate_system=coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    transformed = transform(e, t)
+    transformed = transform(e, to_coordinate_system=coordinate_system)
     return _get_extent_of_shapes(transformed)
 
 
@@ -305,9 +300,7 @@ def _(e: DaskDataFrame, coordinate_system: str = "global", exact: bool = True) -
             coordinate_system=coordinate_system,
             extent=extent,
         )
-    t = get_transformation(e, to_coordinate_system=coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    transformed = transform(e, t)
+    transformed = transform(e, to_coordinate_system=coordinate_system)
     return _get_extent_of_points(transformed)
 
 
@@ -353,8 +346,6 @@ def _compute_extent_in_coordinate_system(
     -------
     The bounding box description in the specified coordinate system.
     """
-    transformation = get_transformation(element, to_coordinate_system=coordinate_system)
-    assert isinstance(transformation, BaseTransformation)
     from spatialdata._core.query._utils import get_bounding_box_corners
 
     axes = get_axes_names(element)
@@ -368,10 +359,37 @@ def _compute_extent_in_coordinate_system(
         max_coordinate=max_coordinates,
     )
     df = pd.DataFrame(corners.data, columns=corners.axis.data.tolist())
-    points = PointsModel.parse(df, coordinates={k: k for k in axes})
-    transformed_corners = pd.DataFrame(transform(points, transformation).compute())
+    d = get_transformation(element, get_all=True)
+    points = PointsModel.parse(df, coordinates={k: k for k in axes}, transformations=d)
+    transformed_corners = pd.DataFrame(transform(points, to_coordinate_system=coordinate_system).compute())
     # Make sure min and max values are in the same order as axes
     extent = {}
     for ax in axes:
         extent[ax] = (transformed_corners[ax].min(), transformed_corners[ax].max())
     return extent
+
+
+def are_extents_equal(extent0: BoundingBoxDescription, extent1: BoundingBoxDescription, atol: float = 0.1) -> bool:
+    """
+    Check if two data extents, as returned by `get_extent()` are equal up to approximation errors.
+
+    Parameters
+    ----------
+    extent0
+        The first data extent.
+    extent1
+        The second data extent.
+    atol
+        The absolute tolerance to use when comparing the extents.
+
+    Returns
+    -------
+    Whether the extents are equal or not.
+
+    Notes
+    -----
+    The default value of `atol` is currently high because of a bug of `rasterize()` that makes the extent of the
+    rasterized data slightly different from the extent of the original data. This bug is tracked in
+    https://github.com/scverse/spatialdata/issues/165
+    """
+    return all(np.allclose(extent0[k], extent1[k], atol=atol) for k in set(extent0.keys()).union(extent1.keys()))

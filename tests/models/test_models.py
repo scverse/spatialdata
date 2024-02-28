@@ -61,7 +61,7 @@ from tests.conftest import (
     _get_table,
 )
 
-RNG = default_rng()
+RNG = default_rng(seed=0)
 
 
 def test_validate_axis_name():
@@ -203,7 +203,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
-        radius = RNG.normal(size=(2,)) if path.name == "points.json" else None
+        radius = np.abs(RNG.normal(size=(2,))) if path.name == "points.json" else None
         self._parse_transformation_from_multiple_places(model, path)
         poly = model.parse(path, radius=radius)
         self._passes_validation_after_io(model, poly, "shapes")
@@ -219,6 +219,14 @@ class TestModels:
         other_poly = model.parse(poly)
         self._passes_validation_after_io(model, other_poly, "shapes")
         assert poly.equals(other_poly)
+
+        if ShapesModel.RADIUS_KEY in poly.columns:
+            poly[ShapesModel.RADIUS_KEY].iloc[0] = -1
+            with pytest.raises(ValueError, match="Radii of circles must be positive."):
+                ShapesModel.validate(poly)
+            poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
+            with pytest.raises(ValueError, match="Radii of circles must be positive."):
+                ShapesModel.validate(poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
@@ -243,10 +251,13 @@ class TestModels:
         if coordinates is not None:
             coordinates = coordinates.copy()
         coords = ["A", "B", "C", "x", "y", "z"]
-        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 6)), columns=coords)
-        data["target"] = pd.Series(RNG.integers(0, 2, size=(10,))).astype(str)
-        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(10,))).astype(np.int_)
-        data["anno"] = pd.Series(RNG.integers(0, 1, size=(10,))).astype(np.int_)
+        n = 10
+        data = pd.DataFrame(RNG.integers(0, 101, size=(n, 6)), columns=coords)
+        data["target"] = pd.Series(RNG.integers(0, 2, size=(n,))).astype(str)
+        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(n,))).astype(np.int_)
+        data["anno"] = pd.Series(RNG.integers(0, 1, size=(n,))).astype(np.int_)
+        # to test for non-contiguous indices
+        data.drop(index=2, inplace=True)
         if not is_3d:
             if coordinates is not None:
                 del coordinates["z"]
@@ -288,6 +299,7 @@ class TestModels:
                 for axis in axes:
                     assert np.array_equal(points[axis], data[coordinates[axis]])
             self._passes_validation_after_io(model, points, "points")
+        assert np.all(points.index.compute() == data.index)
         assert "transform" in points.attrs
         if feature_key is not None and is_annotation:
             assert "spatialdata_attrs" in points.attrs

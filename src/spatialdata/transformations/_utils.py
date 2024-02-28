@@ -10,12 +10,13 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import MappingToCoordinateSystem_t
-    from spatialdata.transformations.transformations import BaseTransformation, Scale
+    from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
@@ -109,9 +110,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
     dims = get_axes_names(e)
     from spatialdata.transformations.transformations import Scale, Sequence
 
-    i = 0
     old_shape: Optional[ArrayLike] = None
-    for scale, node in dict(e).items():
+    for i, (scale, node) in enumerate(dict(e).items()):
         # this is to be sure that the pyramid levels are listed here in the correct order
         assert scale == f"scale{i}"
         assert len(dict(node)) == 1
@@ -134,7 +134,6 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
         else:
             _set_transformations_xarray(xdata, transformations)
             old_shape = new_shape
-        i += 1
 
 
 @_set_transformations.register(GeoDataFrame)
@@ -194,7 +193,7 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
 @compute_coordinates.register(SpatialImage)
 def _(data: SpatialImage) -> SpatialImage:
     coords: dict[str, ArrayLike] = {
-        d: np.arange(data.sizes[d], dtype=np.float_) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
+        d: np.arange(data.sizes[d], dtype=np.float64) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 
@@ -219,3 +218,37 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
     # this is to trigger the validation of the dims
     _ = get_axes_names(msi)
     return msi
+
+
+def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> ArrayLike:
+    """
+    Scale the radii (of a list of points) by the average of the modules of the eigenvalues of an affine transformation.
+
+    Parameters
+    ----------
+    radii
+        radii of the points
+    affine
+        affine transformation
+    axes
+        axes of the points, e.g. ("x", "y") or ("x", "y", "z")
+
+    Returns
+    -------
+    scaled radii
+    """
+    matrix = affine.to_affine_matrix(input_axes=(axes), output_axes=(axes))
+    eigenvalues = np.linalg.eigvals(matrix[:-1, :-1])
+    modules = np.absolute(eigenvalues)
+    if not np.allclose(modules, modules[0]):
+        scale_factor = np.mean(modules)
+        logger.warning(
+            "The vector part of the transformation matrix is not isotropic, the radius will be scaled by the average "
+            f"of the modules of eigenvalues of the affine transformation matrix.\nmatrix={matrix}\n"
+            f"eigenvalues={eigenvalues}\nscale_factor={scale_factor}"
+        )
+    else:
+        scale_factor = modules[0]
+    new_radii = radii * scale_factor
+    assert isinstance(new_radii, np.ndarray)
+    return new_radii

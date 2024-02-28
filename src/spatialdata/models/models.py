@@ -1,4 +1,5 @@
 """Models and schema for SpatialData."""
+
 from __future__ import annotations
 
 import warnings
@@ -71,14 +72,15 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
         and transformations is not None
         and len(transformations) > 0
     ):
+        # we can relax this and overwrite the transformations using the one passed as argument
         raise ValueError(
             "Transformations are both specified for the element and also passed as an argument to the parser. Please "
             "specify the transformations only once."
         )
-    if transformations_in_element is not None and len(transformations_in_element) > 0:
-        parsed_transformations = transformations_in_element
-    elif transformations is not None and len(transformations) > 0:
+    if transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
+    elif transformations_in_element is not None and len(transformations_in_element) > 0:
+        parsed_transformations = transformations_in_element
     else:
         parsed_transformations = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     _set_transformations(element, parsed_transformations)
@@ -322,8 +324,12 @@ class ShapesModel:
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}."
             )
-        if isinstance(geom_, Point) and cls.RADIUS_KEY not in data.columns:
-            raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+        if isinstance(geom_, Point):
+            if cls.RADIUS_KEY not in data.columns:
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+            radii = data[cls.RADIUS_KEY].values
+            if np.any(radii <= 0):
+                raise ValueError("Radii of circles must be positive.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
 
@@ -492,7 +498,8 @@ class PointsModel:
                   with key as *valid axes* and value as column names in dataframe.
 
         annotation
-            Annotation dataframe. Only if `data` is :class:`numpy.ndarray`.
+            Annotation dataframe. Only if `data` is :class:`numpy.ndarray`. If data is an array, the index of the
+            annotations will be used as the index of the parsed points.
         coordinates
             Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
             :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
@@ -529,7 +536,8 @@ class PointsModel:
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes), **kwargs)  # type: ignore[attr-defined]
+        index = annotation.index if annotation is not None else None
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes, index=index), **kwargs)  # type: ignore[attr-defined]
         if annotation is not None:
             if feature_key is not None:
                 feature_categ = dd.from_pandas(  # type: ignore[attr-defined]
@@ -573,7 +581,8 @@ class PointsModel:
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
-                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
+                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
+                **kwargs,
             )
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
