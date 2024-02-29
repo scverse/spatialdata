@@ -96,6 +96,7 @@ def _(
     e: SpatialImage | MultiscaleSpatialImage,
     coordinate_system: str = "global",
 ) -> DaskDataFrame:
+    """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
     if model in [Image2DModel, Image3DModel]:
         raise ValueError("Cannot compute centroids for images.")
@@ -117,6 +118,7 @@ def _(
 
 @get_centroids.register(GeoDataFrame)
 def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
+    """Get the centroids of a Shapes element (circles or polygons/multipolygons)."""
     _validate_coordinate_system(e, coordinate_system)
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
@@ -125,7 +127,10 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     if isinstance(first_geometry, Point):
         xy = e.geometry.get_coordinates().values
     else:
-        assert isinstance(first_geometry, (Polygon, MultiPolygon))
+        assert isinstance(first_geometry, (Polygon, MultiPolygon)), (
+            f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
+            f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
+        )
         xy = e.centroid.get_coordinates().values
     points = PointsModel.parse(xy, transformations={coordinate_system: t})
     return transform(points, to_coordinate_system=coordinate_system)
@@ -133,6 +138,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
 
 @get_centroids.register(DaskDataFrame)
 def _(e: DaskDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
+    """Get the centroids of a Points element."""
     _validate_coordinate_system(e, coordinate_system)
     axes = get_axes_names(e)
     assert axes in [("x", "y"), ("x", "y", "z")]
