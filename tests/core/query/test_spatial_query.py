@@ -18,6 +18,7 @@ from spatialdata._core.query.spatial_query import (
     polygon_query,
 )
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._utils import _assert_spatialdata_objects_seem_identical
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -30,9 +31,6 @@ from spatialdata.models import (
 from spatialdata.transformations import Identity, set_transformation
 
 from tests.conftest import _make_points, _make_squares
-from tests.core.operations.test_spatialdata_operations import (
-    _assert_spatialdata_objects_seem_identical,
-)
 
 
 def test_bounding_box_request_immutable():
@@ -186,8 +184,6 @@ def test_query_points_no_points():
     assert request is None
 
 
-# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented
-#  (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 @pytest.mark.parametrize("is_labels", [True, False])
 @pytest.mark.parametrize("is_3d", [True, False])
@@ -421,7 +417,7 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        table=sdata.table,
+        tables=sdata.table,
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]

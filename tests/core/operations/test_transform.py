@@ -123,7 +123,7 @@ def _unpad_rasters(sdata: SpatialData) -> SpatialData:
 def _postpone_transformation(
     sdata: SpatialData, from_coordinate_system: str, to_coordinate_system: str, transformation: BaseTransformation
 ):
-    for element in sdata._gen_elements_values():
+    for element in sdata._gen_spatial_element_values():
         d = get_transformation(element, get_all=True)
         assert isinstance(d, dict)
         assert len(d) == 1
@@ -490,7 +490,7 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     scale = Scale([k], axes=("x",))
     translation = Translation([k], axes=("x",))
     sequence = Sequence([scale, translation])
-    for element in full_sdata._gen_elements_values():
+    for element in full_sdata._gen_spatial_element_values():
         set_transformation(element, sequence, "my_space")
         transformed_element = full_sdata.transform_element_to_coordinate_system(
             element, "my_space", maintain_positioning=maintain_positioning
@@ -524,7 +524,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
 ):
     k = 10.0
     scale = Scale([k], axes=("x",))
-    for element in full_sdata._gen_elements_values():
+    for element in full_sdata._gen_spatial_element_values():
         set_transformation(element, scale, "my_space")
 
     # testing the scenario "element1 -> cs1 <- element2 -> cs2" and transforming element1 to cs2
@@ -535,13 +535,13 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
     )
 
     # otherwise we have multiple paths to go from my_space to multi_hop_space
-    for element in full_sdata._gen_elements_values():
+    for element in full_sdata._gen_spatial_element_values():
         d = get_transformation(element, get_all=True)
         assert isinstance(d, dict)
         if "global" in d:
             remove_transformation(element, "global")
 
-    for element in full_sdata._gen_elements_values():
+    for element in full_sdata._gen_spatial_element_values():
         transformed_element = full_sdata.transform_element_to_coordinate_system(
             element, "multi_hop_space", maintain_positioning=maintain_positioning
         )

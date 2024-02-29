@@ -44,10 +44,10 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
     shapes = sdata[by_shapes]
 
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument
-    result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum").table
+    result_adata = aggregate(values=points, by=shapes, value_key=value_key, agg_func="sum").tables["table"]
     result_adata_bis = aggregate(
-        values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum"
-    ).table
+        values_sdata=sdata, values="points", by=shapes, value_key=value_key, agg_func="sum", table_name="table"
+    ).tables["table"]
     np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
     # check that the obs of aggregated values are correct
@@ -75,12 +75,12 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
 
     # id_key can be implicit for points
     points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
-    result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum").table
+    result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum").tables["table"]
     assert_equal(result_adata, result_adata_implicit)
 
     # in the categorical case, check that sum and count behave the same
     if value_key == "categorical_in_ddf":
-        result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count").table
+        result_adata_count = aggregate(values=points, by=shapes, value_key=value_key, agg_func="count").tables["table"]
         assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
@@ -91,7 +91,9 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
             aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum")
     else:
         points["another_" + value_key] = points[value_key] + 10
-        result_adata_multiple = aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum").table
+        result_adata_multiple = aggregate(values=points, by=shapes, value_key=new_value_key, agg_func="sum").tables[
+            "table"
+        ]
         assert result_adata_multiple.var_names.to_list() == new_value_key
         if by_shapes == "by_circles":
             row = (
@@ -124,6 +126,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
         )
 
 
+# TODO: refactor in smaller functions for easier understanding
 @pytest.mark.parametrize("by_shapes", ["by_circles", "by_polygons"])
 @pytest.mark.parametrize("values_shapes", ["values_circles", "values_polygons"])
 @pytest.mark.parametrize(
@@ -143,12 +146,14 @@ def test_aggregate_shapes_by_shapes(
     by = _parse_shapes(sdata, by_shapes=by_shapes)
     values = _parse_shapes(sdata, values_shapes=values_shapes)
 
-    result_adata = aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum").table
+    result_adata = aggregate(
+        values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="sum", table_name="table"
+    ).tables["table"]
 
     # testing that we can call aggregate with the two equivalent syntaxes for the values argument (only relevant when
     # the values to aggregate are not in the table, for which only one of the two syntaxes is possible)
     if value_key.endswith("_in_gdf"):
-        result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum").table
+        result_adata_bis = aggregate(values=values, by=by, value_key=value_key, agg_func="sum").tables["table"]
         np.testing.assert_equal(result_adata.X.A, result_adata_bis.X.A)
 
     # check that the obs of the aggregated values are correct
@@ -161,41 +166,41 @@ def test_aggregate_shapes_by_shapes(
     if value_key == "numerical_in_var":
         if values_shapes == "values_circles":
             if by_shapes == "by_circles":
-                s = sdata.table[np.array([0, 1, 2, 3]), "numerical_in_var"].X.sum()
+                s = sdata.tables["table"][np.array([0, 1, 2, 3]), "numerical_in_var"].X.sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
             else:
-                s0 = sdata.table[np.array([5, 6, 7, 8]), "numerical_in_var"].X.sum()
+                s0 = sdata.tables["table"][np.array([5, 6, 7, 8]), "numerical_in_var"].X.sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
         else:
             if by_shapes == "by_circles":
-                s = sdata.table[np.array([9, 10, 11, 12]), "numerical_in_var"].X.sum()
+                s = sdata.tables["table"][np.array([9, 10, 11, 12]), "numerical_in_var"].X.sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
             else:
-                s0 = sdata.table[np.array([14, 15, 16, 17]), "numerical_in_var"].X.sum()
-                s1 = sdata.table[np.array([20]), "numerical_in_var"].X.sum()
-                s2 = sdata.table[np.array([20]), "numerical_in_var"].X.sum()
+                s0 = sdata.tables["table"][np.array([14, 15, 16, 17]), "numerical_in_var"].X.sum()
+                s1 = sdata.tables["table"][np.array([20]), "numerical_in_var"].X.sum()
+                s2 = sdata.tables["table"][np.array([20]), "numerical_in_var"].X.sum()
                 s3 = 0
-                s4 = sdata.table[np.array([18, 19]), "numerical_in_var"].X.sum()
+                s4 = sdata.tables["table"][np.array([18, 19]), "numerical_in_var"].X.sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
     elif value_key == "numerical_in_obs":
         # these cases are basically identically to the one above
         if values_shapes == "values_circles":
             if by_shapes == "by_circles":
-                s = sdata.table[np.array([0, 1, 2, 3]), :].obs["numerical_in_obs"].sum()
+                s = sdata.tables["table"][np.array([0, 1, 2, 3]), :].obs["numerical_in_obs"].sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
             else:
-                s0 = sdata.table[np.array([5, 6, 7, 8]), :].obs["numerical_in_obs"].sum()
+                s0 = sdata.tables["table"][np.array([5, 6, 7, 8]), :].obs["numerical_in_obs"].sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [0]])))
         else:
             if by_shapes == "by_circles":
-                s = sdata.table[np.array([9, 10, 11, 12]), :].obs["numerical_in_obs"].sum()
+                s = sdata.tables["table"][np.array([9, 10, 11, 12]), :].obs["numerical_in_obs"].sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s], [0]])))
             else:
-                s0 = sdata.table[np.array([14, 15, 16, 17]), :].obs["numerical_in_obs"].sum()
-                s1 = sdata.table[np.array([20]), :].obs["numerical_in_obs"].sum()
-                s2 = sdata.table[np.array([20]), :].obs["numerical_in_obs"].sum()
+                s0 = sdata.tables["table"][np.array([14, 15, 16, 17]), :].obs["numerical_in_obs"].sum()
+                s1 = sdata.tables["table"][np.array([20]), :].obs["numerical_in_obs"].sum()
+                s2 = sdata.tables["table"][np.array([20]), :].obs["numerical_in_obs"].sum()
                 s3 = 0
-                s4 = sdata.table[np.array([18, 19]), :].obs["numerical_in_obs"].sum()
+                s4 = sdata.tables["table"][np.array([18, 19]), :].obs["numerical_in_obs"].sum()
                 assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [s1], [s2], [s3], [s4]])))
     elif value_key == "numerical_in_gdf":
         if values_shapes == "values_circles":
@@ -250,8 +255,8 @@ def test_aggregate_shapes_by_shapes(
     # in the categorical case, check that sum and count behave the same
     if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
         result_adata_count = aggregate(
-            values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count"
-        ).table
+            values_sdata=sdata, values=values_shapes, by=by, value_key=value_key, agg_func="count", table_name="table"
+        ).tables["table"]
         assert_equal(result_adata, result_adata_count)
 
     # querying multiple values at the same time
@@ -259,23 +264,30 @@ def test_aggregate_shapes_by_shapes(
     if value_key in ["categorical_in_obs", "categorical_in_gdf"]:
         # can't aggregate multiple categorical values
         with pytest.raises(ValueError):
-            aggregate(values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum")
+            aggregate(
+                values_sdata=sdata,
+                values=values_shapes,
+                by=by,
+                value_key=new_value_key,
+                agg_func="sum",
+                table_name="table",
+            )
     else:
         if value_key == "numerical_in_obs":
-            sdata.table.obs["another_numerical_in_obs"] = 1.0
+            sdata.tables["table"].obs["another_numerical_in_obs"] = 1.0
         elif value_key == "numerical_in_gdf":
             values["another_numerical_in_gdf"] = 1.0
         else:
             assert value_key == "numerical_in_var"
-            new_var = pd.concat((sdata.table.var, pd.DataFrame(index=["another_numerical_in_var"])))
-            new_x = np.concatenate((sdata.table.X, np.ones_like(sdata.table.X[:, :1])), axis=1)
-            new_table = AnnData(X=new_x, obs=sdata.table.obs, var=new_var, uns=sdata.table.uns)
-            del sdata.table
-            sdata.table = new_table
+            new_var = pd.concat((sdata.tables["table"].var, pd.DataFrame(index=["another_numerical_in_var"])))
+            new_x = np.concatenate((sdata.tables["table"].X, np.ones_like(sdata.tables["table"].X[:, :1])), axis=1)
+            new_table = AnnData(X=new_x, obs=sdata.tables["table"].obs, var=new_var, uns=sdata.tables["table"].uns)
+            del sdata.tables["table"]
+            sdata.tables["table"] = new_table
 
         result_adata = aggregate(
-            values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum"
-        ).table
+            values_sdata=sdata, values=values_shapes, by=by, value_key=new_value_key, agg_func="sum", table_name="table"
+        ).tables["table"]
         assert result_adata.var_names.to_list() == new_value_key
 
         # since we added only columns of 1., we just have 4 cases to check all the aggregations, and not 12 like before
@@ -306,6 +318,7 @@ def test_aggregate_shapes_by_shapes(
                     by=by,
                     value_key=value_key,
                     agg_func="sum",
+                    table_name="table",
                 )
     # test we can't aggregate from mixed categorical and numerical sources (let's just test one case)
     with pytest.raises(ValueError):
@@ -315,6 +328,7 @@ def test_aggregate_shapes_by_shapes(
             by=by,
             value_key=["numerical_values_in_obs", "categorical_values_in_obs"],
             agg_func="sum",
+            table_name="table",
         )
 
 
@@ -326,15 +340,16 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     image = image_schema.parse(image)
     labels = labels_schema.parse(labels_blobs)
 
-    out = aggregate(values=image, by=labels, agg_func="mean").table
+    out_sdata = aggregate(values=image, by=labels, agg_func="mean", table_name="aggregation")
+    out = out_sdata.tables["aggregation"]
     assert len(out) + 1 == len(np.unique(labels_blobs))
     assert isinstance(out, AnnData)
     np.testing.assert_array_equal(out.var_names, [f"channel_{i}_mean" for i in image.coords["c"].values])
 
-    out = aggregate(values=image, by=labels, agg_func=["mean", "sum", "count"]).table
+    out = aggregate(values=image, by=labels, agg_func=["mean", "sum", "count"]).tables["table"]
     assert len(out) + 1 == len(np.unique(labels_blobs))
 
-    out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3]).table
+    out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3]).tables["table"]
     assert len(out) == 3
 
 
@@ -352,7 +367,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
         assert by.attrs["transform"] is not values.attrs["transform"]
 
     sdata = SpatialData.init_from_elements({"values": values, "by": by})
-    out0 = aggregate(values=values, by=by, agg_func="sum").table
+    out0 = aggregate(values=values, by=by, agg_func="sum").tables["table"]
 
     theta = np.pi / 7
     affine = Affine(
@@ -374,12 +389,12 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
 
     # both values and by map to the "other" coordinate system, but they are not aligned
     set_transformation(by, Identity(), "other")
-    out1 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").table
+    out1 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").tables["table"]
     assert not np.allclose(out0.X.A, out1.X.A)
 
     # both values and by map to the "other" coordinate system, and they are aligned
     set_transformation(by, affine, "other")
-    out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").table
+    out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").tables["table"]
     assert np.allclose(out0.X.A, out2.X.A)
 
     # actually transforming the data still lead to a correct the result
@@ -387,7 +402,9 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
     # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
     # transformed sdata
-    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").table
+    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").tables[
+        "table"
+    ]
     assert np.allclose(out0.X.A, out3.X.A)
 
 
@@ -406,7 +423,7 @@ def test_aggregate_considering_fractions_single_values(
     sdata = sdata_query_aggregation
     values = sdata[values_name]
     by = sdata[by_name]
-    result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True).table
+    result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True).tables["table"]
     # to manually compute the fractions of overlap that we use to test that aggregate() works
     values = circles_to_polygons(values)
     values["__index"] = values.index
@@ -474,11 +491,11 @@ def test_aggregate_considering_fractions_multiple_values(
     sdata_query_aggregation: SpatialData, by_name, values_name, value_key
 ) -> None:
     sdata = sdata_query_aggregation
-    new_var = pd.concat((sdata.table.var, pd.DataFrame(index=["another_numerical_in_var"])))
-    new_x = np.concatenate((sdata.table.X, np.ones_like(sdata.table.X[:, :1])), axis=1)
-    new_table = AnnData(X=new_x, obs=sdata.table.obs, var=new_var, uns=sdata.table.uns)
-    del sdata.table
-    sdata.table = new_table
+    new_var = pd.concat((sdata.tables["table"].var, pd.DataFrame(index=["another_numerical_in_var"])))
+    new_x = np.concatenate((sdata.tables["table"].X, np.ones_like(sdata.tables["table"].X[:, :1])), axis=1)
+    new_table = AnnData(X=new_x, obs=sdata.tables["table"].obs, var=new_var, uns=sdata.tables["table"].uns)
+    del sdata.tables["table"]
+    sdata.tables["table"] = new_table
     out = aggregate(
         values_sdata=sdata,
         values="values_circles",
@@ -486,9 +503,10 @@ def test_aggregate_considering_fractions_multiple_values(
         value_key=["numerical_in_var", "another_numerical_in_var"],
         agg_func="sum",
         fractions=True,
-    ).table
+        table_name="table",
+    ).tables["table"]
     overlaps = np.array([0.655781239649211, 1.0000000000000002, 1.0000000000000004, 0.1349639285777728])
-    row0 = np.sum(sdata.table.X[[0, 1, 2, 3], :] * overlaps.reshape(-1, 1), axis=0)
+    row0 = np.sum(sdata.tables["table"].X[[0, 1, 2, 3], :] * overlaps.reshape(-1, 1), axis=0)
     assert np.all(np.isclose(out.X.A, np.array([row0, [0, 0]])))
 
 
@@ -529,19 +547,19 @@ def test_aggregate_spatialdata(sdata_blobs: SpatialData) -> None:
     sdata2 = sdata_blobs.aggregate(values="blobs_points", by=sdata_blobs["blobs_polygons"], agg_func="sum")
     sdata3 = sdata_blobs.aggregate(values=sdata_blobs["blobs_points"], by=sdata_blobs["blobs_polygons"], agg_func="sum")
 
-    assert_equal(sdata0.table, sdata1.table)
-    assert_equal(sdata2.table, sdata3.table)
+    assert_equal(sdata0.tables["table"], sdata1.tables["table"])
+    assert_equal(sdata2.tables["table"], sdata3.tables["table"])
 
     # in sdata2 the name of the "by" region was not passed, so a default one is used
-    assert sdata2.table.obs["region"].value_counts()["by"] == 3
+    assert sdata2.tables["table"].obs["region"].value_counts()["by"] == 3
     # let's change it so we can make the objects comparable
-    sdata2.table.obs["region"] = "blobs_polygons"
-    sdata2.table.obs["region"] = sdata2.table.obs["region"].astype("category")
-    sdata2.table.uns[TableModel.ATTRS_KEY]["region"] = "blobs_polygons"
-    assert_equal(sdata0.table, sdata2.table)
+    sdata2.tables["table"].obs["region"] = "blobs_polygons"
+    sdata2.tables["table"].obs["region"] = sdata2.tables["table"].obs["region"].astype("category")
+    sdata2.tables["table"].uns[TableModel.ATTRS_KEY]["region"] = "blobs_polygons"
+    assert_equal(sdata0.tables["table"], sdata2.tables["table"])
 
     assert len(sdata0.shapes["blobs_polygons"]) == 3
-    assert sdata0.table.shape == (3, 2)
+    assert sdata0.tables["table"].shape == (3, 2)
 
 
 def test_aggregate_deepcopy(sdata_blobs: SpatialData) -> None:

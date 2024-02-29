@@ -154,7 +154,7 @@ class BlobsDataset:
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
         multipolygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes, multipolygons=True)
-        adata = aggregate(values=image, by=labels).table
+        adata = aggregate(values=image, by=labels).tables["table"]
         adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
         del adata.uns[TableModel.ATTRS_KEY]
@@ -165,7 +165,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            table=table,
+            tables=table,
         )
 
     def _image_blobs(
@@ -241,7 +241,7 @@ class BlobsDataset:
         arr = rng.integers(padding, length - padding, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
         points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int64)
-        genes = rng.choice(["a", "b"], size=arr.shape[0])
+        genes = rng.choice(["gene_a", "gene_b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
                 "genes": genes,
