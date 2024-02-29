@@ -265,7 +265,7 @@ def test_get_extent_affine_circles():
     gdf = ShapesModel.parse(gdf, transformations={"transformed": affine})
     transformed_bounding_box = transform(gdf, to_coordinate_system="transformed")
 
-    transformed_bounding_box_extent = get_extent(transformed_bounding_box)
+    transformed_bounding_box_extent = get_extent(transformed_bounding_box, coordinate_system="transformed")
 
     assert transformed_axes == list(transformed_bounding_box_extent.keys())
     for ax in transformed_axes:
