@@ -133,10 +133,11 @@ html_static_path = ["_static"]
 html_title = project_name
 html_logo = "_static/img/spatialdata_horizontal.png"
 
-# html_theme_options = {
-# "repository_url": repository_url,
-# "use_repository_button": True,
-# }
+html_theme_options = {
+    "navigation_with_keys": True,
+    # "repository_url": repository_url,
+    # "use_repository_button": True,
+}
 
 pygments_style = "default"
 
