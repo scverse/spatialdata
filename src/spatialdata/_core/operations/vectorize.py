@@ -11,12 +11,14 @@ from spatial_image import SpatialImage
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.operations.transform import transform
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
     ShapesModel,
     SpatialElement,
     get_axes_names,
+    get_model,
     get_table_keys,
 )
 from spatialdata.transformations.transformations import (
@@ -49,7 +51,7 @@ def to_circles(
     The approximation is done by computing the centroids and the area/volume of the geometries. The geometries are then
     replaced by circles/spheres with the same centroids and area/volume.
     """
-    raise RuntimeError("Unsupported type: {type(data)}")
+    raise RuntimeError(f"Unsupported type: {type(data)}")
 
 
 @to_circles.register(SpatialImage)
@@ -58,6 +60,9 @@ def _(
     element: SpatialImage,
     target_coordinate_system: str,
 ) -> GeoDataFrame:
+    model = get_model(element)
+    if model in (Image2DModel, Image3DModel):
+        raise RuntimeError("Cannot apply to_circles() to images.")
     # find the area of labels, estimate the radius from it; find the centroids
     if isinstance(element, MultiscaleSpatialImage):
         shape = element["scale0"].values().__iter__().__next__().shape
@@ -101,7 +106,7 @@ def _(
     assert isinstance(element.geometry.iloc[0], Point), (
         f"Unsupported geometry type: " f"{type(element.geometry.iloc[0])}"
     )
-    return element
+    return transform(element, to_coordinate_system=target_coordinate_system)
 
 
 def _make_circles(

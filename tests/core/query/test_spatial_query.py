@@ -18,7 +18,6 @@ from spatialdata._core.query.spatial_query import (
     polygon_query,
 )
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import _assert_spatialdata_objects_seem_identical
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -28,6 +27,7 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, set_transformation
 
 from tests.conftest import _make_points, _make_squares
@@ -356,15 +356,15 @@ def test_query_spatial_data(full_sdata):
     result1 = full_sdata.query(request, filter_table=True)
     result2 = full_sdata.query.bounding_box(**request.to_dict(), filter_table=True)
 
-    _assert_spatialdata_objects_seem_identical(result0, result1)
-    _assert_spatialdata_objects_seem_identical(result0, result2)
+    assert_spatial_data_objects_are_identical(result0, result1)
+    assert_spatial_data_objects_are_identical(result0, result2)
 
     polygon = Polygon([(1, 2), (60, 2), (60, 40), (1, 40)])
     result3 = polygon_query(full_sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
     result4 = full_sdata.query.polygon(polygon=polygon, target_coordinate_system="global", filter_table=True)
 
-    _assert_spatialdata_objects_seem_identical(result0, result3)
-    _assert_spatialdata_objects_seem_identical(result0, result4)
+    assert_spatial_data_objects_are_identical(result0, result3)
+    assert_spatial_data_objects_are_identical(result0, result4)
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
