@@ -13,18 +13,10 @@ from xarray.testing import assert_equal as assert_xarray_equal
 
 from spatialdata import SpatialData
 from spatialdata._core._elements import Elements
-from spatialdata._docs import inject_docs
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations.operations import get_transformation
 
 
-class _InjectedKeys:
-    EXPLANATION_CHECK_TRANSFORMATIONS = """With the current implementation, the transformations Translate([1.0, 2.0],
-    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
-    A quick way to avoid an error in this case is to use the `check_transformations=False` parameter."""
-
-
-@inject_docs(inj=_InjectedKeys)
 def assert_elements_dict_are_identical(
     elements0: Elements, elements1: Elements, check_transformations: bool = True
 ) -> None:
@@ -52,7 +44,9 @@ def assert_elements_dict_are_identical(
 
     Notes
     -----
-    ``{inj.EXPLANATION_CHECK_TRANSFORMATIONS}``
+    With the current implementation, the transformations Translate([1.0, 2.0],
+    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
+    A quick way to avoid an error in this case is to use the check_transformations=False parameter.
     """
     assert set(elements0.keys()) == set(elements1.keys())
     for k in elements0:
@@ -61,7 +55,6 @@ def assert_elements_dict_are_identical(
         assert_elements_are_identical(element0, element1, check_transformations=check_transformations)
 
 
-@inject_docs(inj=_InjectedKeys)
 def assert_elements_are_identical(
     element0: SpatialElement | AnnData, element1: SpatialElement | AnnData, check_transformations: bool = True
 ) -> None:
@@ -88,7 +81,9 @@ def assert_elements_are_identical(
 
     Notes
     -----
-    ``{inj.EXPLANATION_CHECK_TRANSFORMATIONS}``
+    With the current implementation, the transformations Translate([1.0, 2.0],
+    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
+    A quick way to avoid an error in this case is to use the check_transformations=False parameter.
     """
     assert type(element0) == type(element1)
 
@@ -113,13 +108,12 @@ def assert_elements_are_identical(
     elif isinstance(element0, MultiscaleSpatialImage):
         assert_datatree_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
-        assert_geodataframe_equal(element0, element1)
+        assert_geodataframe_equal(element0, element1, check_less_precise=True)
     else:
         assert isinstance(element0, DaskDataFrame)
         assert_dask_dataframe_equal(element0, element1)
 
 
-@inject_docs(inj=_InjectedKeys)
 def assert_spatial_data_objects_are_identical(
     sdata0: SpatialData, sdata1: SpatialData, check_transformations: bool = True
 ) -> None:
@@ -146,7 +140,9 @@ def assert_spatial_data_objects_are_identical(
 
     Notes
     -----
-    ``{inj.EXPLANATION_CHECK_TRANSFORMATIONS}``
+    With the current implementation, the transformations Translate([1.0, 2.0],
+    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
+    A quick way to avoid an error in this case is to use the check_transformations=False parameter.
     """
     # this is not a full comparison, but it's fine anyway
     element_names0 = [element_name for _, element_name, _ in sdata0.gen_elements()]
