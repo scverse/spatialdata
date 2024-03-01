@@ -21,6 +21,7 @@ def test_labels_to_circles(is_3d: bool) -> None:
 
 
 def test_circles_to_circles() -> None:
+    # get the circles
     element = sdata["blobs_circles"].iloc[:2]
     set_transformation(element, affine, "aligned")
     new_circles = to_circles(element, target_coordinate_system="aligned")
@@ -37,6 +38,16 @@ def test_circles_to_circles() -> None:
 
 
 def test_polygons_to_circles() -> None:
+    # get the circles
+    # element = sdata['blobs_polygons'].iloc[:1]
+    element = sdata["blobs_polygons"]
+    set_transformation(element, affine, "aligned")
+    new_circles = to_circles(element, target_coordinate_system="aligned")
+
+    from napari_spatialdata import Interactive
+
+    sdata["new_circles"] = new_circles
+    Interactive([sdata])
     pass
 
 

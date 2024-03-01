@@ -21,8 +21,10 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
+from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import (
     Identity,
+    _get_affine_for_element,
 )
 
 
@@ -98,7 +100,10 @@ def _(
     target_coordinate_system: str,
 ) -> GeoDataFrame:
     if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
-        radius = np.sqrt(element.geometry.area / np.pi)
+        transformation = get_transformation(element, target_coordinate_system)
+        affine = _get_affine_for_element(element, transformation=transformation)
+        det = np.linalg.det(affine.matrix)
+        radius = np.sqrt(element.geometry.area * np.abs(det) / np.pi)
         centroids = get_centroids(element, coordinate_system=target_coordinate_system).compute()
         obs = pd.DataFrame({"radius": radius})
         obs = pd.merge(obs, centroids, left_index=True, right_index=True, how="inner")
