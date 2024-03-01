@@ -40,8 +40,7 @@ def to_circles(
 
     Returns
     -------
-    GeoDataFrame
-        The approximated circles/spheres.
+    The approximated circles/spheres.
 
     Notes
     -----
@@ -153,7 +152,6 @@ def to_polygons(
 
     Returns
     -------
-    GeoDataFrame
-        The approximated 2D polygons/multipolygons in the specified coordinate system.
+    The approximated 2D polygons/multipolygons in the specified coordinate system.
     """
     raise RuntimeError("Unsupported type: {type(data)}")
