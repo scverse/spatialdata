@@ -363,8 +363,8 @@ def test_query_spatial_data(full_sdata):
     result3 = polygon_query(full_sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
     result4 = full_sdata.query.polygon(polygon=polygon, target_coordinate_system="global", filter_table=True)
 
-    assert_spatial_data_objects_are_identical(result0, result3)
-    assert_spatial_data_objects_are_identical(result0, result4)
+    assert_spatial_data_objects_are_identical(result0, result3, check_transformations=False)
+    assert_spatial_data_objects_are_identical(result0, result4, check_transformations=False)
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])

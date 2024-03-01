@@ -35,6 +35,7 @@ Operations on `SpatialData` objects.
     concatenate
     transform
     rasterize
+    to_circles
     aggregate
 ```
 
@@ -141,4 +142,17 @@ The transformations that can be defined between elements and coordinate systems 
     read_zarr
     save_transformations
     get_dask_backing_files
+```
+
+## Testing utilities
+
+```{eval-rst}
+.. currentmodule:: spatialdata.testing
+
+.. autosummary::
+    :toctree: generated
+
+    assert_spatial_data_objects_are_identical
+    assert_elements_are_identical
+    assert_elements_dict_are_identical
 ```

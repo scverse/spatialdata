@@ -1,62 +1,68 @@
 import numpy as np
 import pytest
-from spatialdata._core.centroids import get_centroids
-from spatialdata._core.operations.transform import transform
+from geopandas import GeoDataFrame
+from shapely import Point
 from spatialdata._core.operations.vectorize import to_circles
 from spatialdata.datasets import blobs
+from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
-from spatialdata.transformations.operations import set_transformation
 
-from tests.core.operations.test_transform import _get_affine
-
-# the tests operate on different elements, hence we can initialize the data once without conflicts
+# each of the tests operates on different elements, hence we can initialize the data once without conflicts
 sdata = blobs()
-affine = _get_affine()
-matrix = affine.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
 
 
-@pytest.mark.parametrize("is_3d", [False, True])
-def test_labels_to_circles(is_3d: bool) -> None:
+@pytest.mark.parametrize("is_multiscale", [False, True])
+def test_labels_2d_to_circles(is_multiscale: bool) -> None:
+    key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
+    element = sdata[key]
+    new_circles = to_circles(element)
+
+    assert np.isclose(new_circles.loc[1].geometry.x, 330.59258152354386)
+    assert np.isclose(new_circles.loc[1].geometry.y, 78.85026897788404)
+    assert np.isclose(new_circles.loc[1].radius, 69.229993)
+    assert 7 not in new_circles.index
+
+
+@pytest.mark.skip(reason="Not implemented")
+# @pytest.mark.parametrize("background", [0, 1])
+# @pytest.mark.parametrize("is_multiscale", [False, True])
+def test_labels_3d_to_circles() -> None:
     pass
 
 
 def test_circles_to_circles() -> None:
-    # get the circles
-    element = sdata["blobs_circles"].iloc[:2]
-    set_transformation(element, affine, "aligned")
-    new_circles = to_circles(element, target_coordinate_system="aligned")
-
-    # compare the returned circles
-    old_centroids = get_centroids(element)
-    set_transformation(old_centroids, affine, "aligned")
-    old_centroids_transformed = transform(old_centroids, to_coordinate_system="aligned")
-
-    new_centroids = get_centroids(new_circles, coordinate_system="aligned")
-    assert_elements_are_identical(new_centroids, old_centroids_transformed)
-
-    np.allclose(new_circles.radius, 2 * element.radius)
+    element = sdata["blobs_circles"]
+    new_circles = to_circles(element)
+    assert_elements_are_identical(element, new_circles)
 
 
 def test_polygons_to_circles() -> None:
-    # get the circles
-    # element = sdata['blobs_polygons'].iloc[:1]
-    element = sdata["blobs_polygons"]
-    set_transformation(element, affine, "aligned")
-    new_circles = to_circles(element, target_coordinate_system="aligned")
+    element = sdata["blobs_polygons"].iloc[:2]
+    new_circles = to_circles(element)
 
-    from napari_spatialdata import Interactive
+    data = {
+        "geometry": [Point(315.8120722406787, 220.18894606643332), Point(270.1386975678398, 417.8747936281634)],
+        "radius": [16.608781, 17.541365],
+    }
+    expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
 
-    sdata["new_circles"] = new_circles
-    Interactive([sdata])
-    pass
+    assert_elements_are_identical(new_circles, expected)
 
 
 def test_multipolygons_to_circles() -> None:
-    pass
+    element = sdata["blobs_multipolygons"]
+    new_circles = to_circles(element)
+
+    data = {
+        "geometry": [Point(340.37951022629096, 250.76310705786318), Point(337.1680699150594, 316.39984581697314)],
+        "radius": [23.488363, 19.059285],
+    }
+    expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
+    assert_elements_are_identical(new_circles, expected)
 
 
 def test_points_images_to_circles() -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images."):
-        to_circles(sdata["blobs_image"], target_coordinate_system="global")
+        to_circles(sdata["blobs_image"])
     with pytest.raises(RuntimeError, match="Unsupported type"):
-        to_circles(sdata["blobs_points"], target_coordinate_system="global")
+        to_circles(sdata["blobs_points"])
