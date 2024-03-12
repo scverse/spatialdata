@@ -192,10 +192,10 @@ class SpatialData:
                         stacklevel=2,
                     )
                 else:
-                    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                    if isinstance(element, SpatialImage):
                         dtype = element.dtype
-                    else:
-                        dtype = element.index.dtype
+                    elif isinstance(element, MultiscaleSpatialImage):
+                        dtype = element.scale0.ds.dtypes["image"]
                     if dtype != table.obs[instance_key].dtype:
                         warnings.warn(
                             (
