@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Optional
 
 import geopandas
@@ -10,9 +9,9 @@ from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from spatialdata import aggregate
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import _deepcopy_geodataframe
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
@@ -362,8 +361,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     by = sdata_blobs[by]
     if id(values) == id(by):
         # warning: this will give problems when aggregation labels by labels (not supported yet), because of this: https://github.com/scverse/spatialdata/issues/269
-        by = deepcopy(by)
-        by = _deepcopy_geodataframe(by)
+        by = _deepcopy(by)
         assert by.attrs["transform"] is not values.attrs["transform"]
 
     sdata = SpatialData.init_from_elements({"values": values, "by": by})
