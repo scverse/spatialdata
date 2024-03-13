@@ -56,6 +56,10 @@ def _(element: SpatialImage) -> SpatialImage:
 
 @deepcopy.register(MultiscaleSpatialImage)
 def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+    raise NotImplementedError(
+        "Deepcopy of MultiscaleSpatialImage is deferred until the support of "
+        "multiscale_spatial_image 1.0.0 is added."
+    )
     model = get_model(element)
     for key in element:
         ds = element[key].ds
@@ -64,11 +68,6 @@ def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         if isinstance(element[key][variable].data, DaskArray):
             element[key][variable] = element[key][variable].compute()
     msi = multiscale_spatial_image_from_data_tree(element.copy(deep=True))
-    if not isinstance(msi, MultiscaleSpatialImage):
-        raise NotImplementedError(
-            "Deepcopy of MultiscaleSpatialImage is deferred until the support of "
-            "multiscale_spatial_image 1.0.0 is added."
-        )
     assert isinstance(model, RasterSchema)
     model.validate(msi)
     return msi
