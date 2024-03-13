@@ -96,4 +96,4 @@ def _(df: DaskDataFrame) -> DaskDataFrame:
 
 @deepcopy.register(AnnData)
 def _(adata: AnnData) -> AnnData:
-    return _deepcopy(adata)
+    return adata.copy()
