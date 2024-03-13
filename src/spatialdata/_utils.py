@@ -5,7 +5,7 @@ import re
 import warnings
 from collections.abc import Generator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
+from typing import Any, Callable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -24,9 +24,6 @@ from spatialdata.transformations import (
     get_transformation,
     set_transformation,
 )
-
-if TYPE_CHECKING:
-    pass
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]

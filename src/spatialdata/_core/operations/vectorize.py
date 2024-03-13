@@ -53,7 +53,7 @@ def to_circles(
 @to_circles.register(SpatialImage)
 @to_circles.register(MultiscaleSpatialImage)
 def _(
-    element: SpatialImage,
+    element: SpatialImage | MultiscaleSpatialImage,
 ) -> GeoDataFrame:
     model = get_model(element)
     if model in (Image2DModel, Image3DModel):
