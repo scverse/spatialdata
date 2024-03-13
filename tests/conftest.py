@@ -35,7 +35,7 @@ from xarray import DataArray
 from spatialdata.datasets import BlobsDataset
 import geopandas as gpd
 import dask.dataframe as dd
-from spatialdata._utils import _deepcopy_geodataframe
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
 RNG = default_rng(seed=0)
 
@@ -295,7 +295,7 @@ def _get_table(
 
 
 def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
-    adata = AnnData(np.random.default_rng().random(10, 20000))
+    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
@@ -313,7 +313,7 @@ def sdata_blobs() -> SpatialData:
 
     sdata = deepcopy(blobs(256, 300, 3))
     for k, v in sdata.shapes.items():
-        sdata.shapes[k] = _deepcopy_geodataframe(v)
+        sdata.shapes[k] = _deepcopy(v)
     from spatialdata._utils import multiscale_spatial_image_from_data_tree
 
     sdata.images["blobs_multiscale_image"] = multiscale_spatial_image_from_data_tree(

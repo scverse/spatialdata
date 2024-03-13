@@ -4,7 +4,6 @@ import functools
 import re
 import warnings
 from collections.abc import Generator
-from copy import deepcopy
 from typing import Any, Callable, TypeVar, Union
 
 import numpy as np
@@ -12,7 +11,6 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
-from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -162,7 +160,10 @@ def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSp
         assert len(v) == 1
         xdata = v.__iter__().__next__()
         d[k] = xdata
+    # this stopped working, we should add support for multiscale_spatial_image 1.0.0 so that the problem is solved
     return MultiscaleSpatialImage.from_dict(d)
+    # data_tree.__class__ = MultiscaleSpatialImage
+    # return cast(MultiscaleSpatialImage, data_tree)
 
 
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
@@ -211,26 +212,6 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c
     subset_adata.obs = obs
-
-
-def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
-    """
-    temporary fix for https://github.com/scverse/spatialdata/issues/286.
-
-    Parameters
-    ----------
-    gdf
-        The GeoDataFrame to deepcopy
-
-    Returns
-    -------
-    A deepcopy of the GeoDataFrame
-    """
-    #
-    new_gdf = deepcopy(gdf)
-    new_attrs = deepcopy(gdf.attrs)
-    new_gdf.attrs = new_attrs
-    return new_gdf
 
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080

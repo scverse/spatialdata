@@ -47,6 +47,7 @@ Operations on `SpatialData` objects.
 
     unpad_raster
     are_extents_equal
+    deepcopy
 ```
 
 ## Models

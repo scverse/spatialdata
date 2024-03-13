@@ -106,7 +106,7 @@ class TestImageTilesDataset:
     # TODO: consider adding this logic to blobs, to generate blobs with arbitrary table annotation
     def _annotate_shapes(self, sdata: SpatialData, shape: str) -> SpatialData:
         new_table = AnnData(
-            X=np.random.default_rng().random((len(sdata[shape]), 10)),
+            X=np.random.default_rng(0).random((len(sdata[shape]), 10)),
             obs=pd.DataFrame({"region": shape, "instance_id": sdata[shape].index.values}),
         )
         new_table = TableModel.parse(new_table, region=shape, region_key="region", instance_key="instance_id")

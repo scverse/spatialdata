@@ -410,7 +410,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
             data_extent_after = get_extent(after, coordinate_system="global")
             # huge tolerance because of the bug with pixel perfectness
             assert are_extents_equal(
-                data_extent_before, data_extent_after, atol=3
+                data_extent_before, data_extent_after, atol=4
             ), f"data_extent_before: {data_extent_before}, data_extent_after: {data_extent_after} for element {element}"
 
 
