@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy as _deepcopy
 from functools import singledispatch
 
 from anndata import AnnData
