@@ -82,7 +82,6 @@ def _(
     centroids = _get_centroids(element)
     if 0 in centroids.index:
         centroids = centroids.drop(index=0)
-    centroids.index = centroids.index
     # instance_id is the key used by the aggregation APIs
     aobs.index = aobs["instance_id"]
     aobs.index.name = None
