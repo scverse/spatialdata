@@ -42,6 +42,7 @@ dependencies = [
     "tqdm",
     "fsspec<=2023.6",
 	"dask<=2024.2.1"
+	"pooch",
 ]
 
 [project.optional-dependencies]
