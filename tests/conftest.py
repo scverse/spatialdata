@@ -295,7 +295,7 @@ def _get_table(
 
 
 def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
-    adata = AnnData(np.random.default_rng().random(10, 20000))
+    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
