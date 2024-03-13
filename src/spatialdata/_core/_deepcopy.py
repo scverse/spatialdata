@@ -53,7 +53,6 @@ def _(element: SpatialImage) -> SpatialImage:
     if isinstance(element.data, DaskArray):
         element = element.compute()
     copied = model.parse(element.copy(deep=True))
-    element.data = from_array(element.data)
     return copied
 
 
