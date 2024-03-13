@@ -41,6 +41,7 @@ dependencies = [
     "xarray-spatial>=0.3.5",
     "tqdm",
     "fsspec<=2023.6",
+	"dask<=2024.2.1"
 ]
 
 [project.optional-dependencies]
