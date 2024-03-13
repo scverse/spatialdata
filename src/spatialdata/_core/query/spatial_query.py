@@ -563,6 +563,8 @@ def _(
         if 0 in query_result.shape:
             return None
         assert isinstance(query_result, SpatialImage)
+        # rechunk the data to avoid irregular chunks
+        image.data = image.data.rechunk()
     else:
         assert isinstance(image, MultiscaleSpatialImage)
         assert isinstance(query_result, DataTree)
@@ -579,6 +581,9 @@ def _(
             else:
                 d[k] = xdata
         query_result = MultiscaleSpatialImage.from_dict(d)
+        # rechunk the data to avoid irregular chunks
+        for scale in query_result:
+            query_result[scale]["image"].data = query_result[scale]["image"].data.rechunk()
     query_result = compute_coordinates(query_result)
 
     # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
