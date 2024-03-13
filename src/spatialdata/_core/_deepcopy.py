@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy as _deepcopy
 from functools import singledispatch
 
 from anndata import AnnData
@@ -51,8 +52,10 @@ def _(element: SpatialImage) -> SpatialImage:
     model = get_model(element)
     if isinstance(element.data, DaskArray):
         element = element.compute()
-    copied = model.parse(element.copy(deep=True))
-    return copied
+    if model in [Image2DModel, Image3DModel]:
+        return model.parse(element.copy(deep=True), c_coords=element["c"])  # type: ignore[call-arg]
+    assert model in [Labels2DModel, Labels3DModel]
+    return model.parse(element.copy(deep=True))
 
 
 @deepcopy.register(MultiscaleSpatialImage)

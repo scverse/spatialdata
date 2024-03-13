@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning][].
 -   added utils function: remove_transformations_to_coordinate_system()
 -   added utils function: get_centroids()
 -   added utils function: deepcopy()
+-   added operation: to_circles()
+-   added testing utilities: assert_spatial_data_objects_are_identical(), assert_elements_are_identical(),
+    assert_elements_dict_are_identical()
 
 ### Changed
 

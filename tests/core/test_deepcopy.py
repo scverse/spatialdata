@@ -1,7 +1,5 @@
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
-
-# TODO: replace with spatialdata.testing.assert_equal when https://github.com/scverse/spatialdata/pull/473 is merged
-from spatialdata._utils import _assert_spatialdata_objects_seem_identical
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 
 
 def test_deepcopy(full_sdata):
@@ -14,8 +12,8 @@ def test_deepcopy(full_sdata):
     # missing, calling _deepcopy() again on the original data would fail. Here we check for that.
     copied_again = _deepcopy(full_sdata)
 
-    _assert_spatialdata_objects_seem_identical(full_sdata, copied)
-    _assert_spatialdata_objects_seem_identical(full_sdata, copied_again)
+    assert_spatial_data_objects_are_identical(full_sdata, copied)
+    assert_spatial_data_objects_are_identical(full_sdata, copied_again)
 
     for _, element_name, _ in full_sdata.gen_elements():
         assert full_sdata[element_name] is not copied[element_name]

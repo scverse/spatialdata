@@ -10,9 +10,9 @@ from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import _assert_spatialdata_objects_seem_identical, _assert_tables_seem_identical
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
@@ -109,7 +109,7 @@ def test_element_names_unique() -> None:
 
 def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
-    _assert_spatialdata_objects_seem_identical(sdata, full_sdata)
+    assert_spatial_data_objects_are_identical(sdata, full_sdata)
 
     scale = Scale([2.0], axes=("x",))
     set_transformation(full_sdata.images["image2d"], scale, "my_space0")
@@ -118,7 +118,7 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
 
     sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
     assert len(list(sdata_my_space.gen_elements())) == 3
-    _assert_tables_seem_identical(sdata_my_space, full_sdata)
+    assert_elements_dict_are_identical(sdata_my_space.tables, full_sdata.tables)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
         coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False

@@ -94,8 +94,7 @@ class TestElementsTransform:
         assert new_sdata.coordinate_systems["test"]._axes[0].unit == "micrometers"
 
 
-def _get_affine(small_translation: bool = True) -> Affine:
-    theta = math.pi / 18
+def _get_affine(small_translation: bool = True, theta: float = math.pi / 18) -> Affine:
     k = 10.0 if small_translation else 1.0
     return Affine(
         [
