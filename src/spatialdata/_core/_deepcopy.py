@@ -5,6 +5,7 @@ from functools import singledispatch
 
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
+from dask.array.core import from_array
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -13,7 +14,7 @@ from spatial_image import SpatialImage
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import PointsModel, RasterSchema, get_model
+from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
 
 
 @singledispatch
@@ -56,10 +57,10 @@ def _(element: SpatialImage) -> SpatialImage:
 
 @deepcopy.register(MultiscaleSpatialImage)
 def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    raise NotImplementedError(
-        "Deepcopy of MultiscaleSpatialImage is deferred until the support of "
-        "multiscale_spatial_image 1.0.0 is added."
-    )
+    # raise NotImplementedError(
+    #     "Deepcopy of MultiscaleSpatialImage is deferred until the support of "
+    #     "multiscale_spatial_image 1.0.0 is added."
+    # )
     model = get_model(element)
     for key in element:
         ds = element[key].ds
@@ -68,7 +69,11 @@ def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         if isinstance(element[key][variable].data, DaskArray):
             element[key][variable] = element[key][variable].compute()
     msi = multiscale_spatial_image_from_data_tree(element.copy(deep=True))
-    assert isinstance(model, RasterSchema)
+    for key in element:
+        ds = element[key].ds
+        variable = ds.__iter__().__next__()
+        element[key][variable] = from_array(element[key][variable])
+    assert isinstance(model, (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel))
     model.validate(msi)
     return msi
 
