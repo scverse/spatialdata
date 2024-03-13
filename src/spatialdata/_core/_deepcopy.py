@@ -52,15 +52,16 @@ def _(element: SpatialImage) -> SpatialImage:
     model = get_model(element)
     if isinstance(element.data, DaskArray):
         element = element.compute()
-    return model.parse(element.copy(deep=True))
+    copied = model.parse(element.copy(deep=True))
+    element.data = from_array(element.data)
+    return copied
 
 
 @deepcopy.register(MultiscaleSpatialImage)
 def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
-    # raise NotImplementedError(
-    #     "Deepcopy of MultiscaleSpatialImage is deferred until the support of "
-    #     "multiscale_spatial_image 1.0.0 is added."
-    # )
+    # the complexity here is due to the fact that the parsers don't accept MultiscaleSpatialImage types and that we need
+    # to convert the DataTree to a MultiscaleSpatialImage. This will be simplified once we support
+    # multiscale_spatial_image 1.0.0
     model = get_model(element)
     for key in element:
         ds = element[key].ds
@@ -69,12 +70,13 @@ def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         if isinstance(element[key][variable].data, DaskArray):
             element[key][variable] = element[key][variable].compute()
     msi = multiscale_spatial_image_from_data_tree(element.copy(deep=True))
-    for key in element:
-        ds = element[key].ds
+    for key in msi:
+        ds = msi[key].ds
         variable = ds.__iter__().__next__()
-        element[key][variable] = from_array(element[key][variable])
-    assert isinstance(model, (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel))
-    model.validate(msi)
+        msi[key][variable].data = from_array(msi[key][variable].data)
+        element[key][variable].data = from_array(element[key][variable].data)
+    assert model in [Image2DModel, Image3DModel, Labels2DModel, Labels3DModel]
+    model().validate(msi)
     return msi
 
 
