@@ -18,7 +18,7 @@ from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel,
 
 
 @singledispatch
-def deepcopy(element: SpatialData | SpatialElement) -> SpatialData | SpatialElement:
+def deepcopy(element: SpatialData | SpatialElement | AnnData) -> SpatialData | SpatialElement | AnnData:
     """
     Deepcopy a SpatialData or SpatialElement object.
 
