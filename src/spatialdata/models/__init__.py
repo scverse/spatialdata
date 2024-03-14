@@ -21,7 +21,9 @@ from spatialdata.models.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    check_target_region_column_symmetry,
     get_model,
+    get_table_keys,
 )
 
 __all__ = [
@@ -44,4 +46,6 @@ __all__ = [
     "get_axes_names",
     "points_geopandas_to_dask_dataframe",
     "points_dask_dataframe_to_geopandas",
+    "check_target_region_column_symmetry",
+    "get_table_keys",
 ]

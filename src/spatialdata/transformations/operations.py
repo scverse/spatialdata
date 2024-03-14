@@ -16,8 +16,8 @@ from spatialdata.transformations._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
-    from spatialdata.models import SpatialElement
-    from spatialdata.transformations import Affine, BaseTransformation
+    from spatialdata.models._utils import SpatialElement
+    from spatialdata.transformations.transformations import Affine, BaseTransformation
 
 
 def set_transformation(
@@ -180,7 +180,7 @@ def remove_transformation(
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
     g = nx.DiGraph()
-    gen = sdata._gen_elements_values()
+    gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
         g.add_node(cs)
     for e in gen:
@@ -329,7 +329,7 @@ def get_transformation_between_landmarks(
     example on how to call this function on two sets of numpy arrays describing x, y coordinates.
     >>> import numpy as np
     >>> from spatialdata.models import PointsModel
-    >>> from spatialdata.transform import get_transformation_between_landmarks
+    >>> from spatialdata.transformations import get_transformation_between_landmarks
     >>> points_moving = np.array([[0, 0], [1, 1], [2, 2]])
     >>> points_reference = np.array([[0, 0], [10, 10], [20, 20]])
     >>> moving_coords = PointsModel(points_moving)
@@ -473,5 +473,5 @@ def remove_transformations_to_coordinate_system(sdata: SpatialData, coordinate_s
     coordinate_system
         The coordinate system to remove the transformations from.
     """
-    for element in sdata._gen_elements_values():
+    for element in sdata._gen_spatial_element_values():
         remove_transformation(element, coordinate_system)
