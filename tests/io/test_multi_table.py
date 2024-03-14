@@ -11,9 +11,6 @@ from tests.conftest import _get_shapes, _get_table
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734
 test_shapes = _get_shapes()
 
-# shuffle the indices of the dataframe
-# np.random.default_rng(0).shuffle(test_shapes["poly"].index)
-
 
 class TestMultiTable:
     def test_set_get_tables_from_spatialdata(self, full_sdata: SpatialData, tmp_path: str):
@@ -167,22 +164,6 @@ class TestMultiTable:
         assert isinstance(sdata["shape_annotate"], AnnData)
         assert_equal(test_sdata["shape_annotate"], sdata["shape_annotate"])
 
-        # note (to keep in the code): these tests here should silmulate the interactions from teh users; if the syntax
-        # here we are matching the table to the shapes and viceversa (= subset + reordeing)
-        # there is already a function to do one of these two join operations which is match_table_to_element()
-        # is too verbose/complex we need to adjust the internals to make it smoother
-        # # use case example 1
-        # # sorting the shapes to match the order of the table
-        # alternatively, we can have a helper function (join, and simpler ones "match_table_to_element()"
-        # "match_element_to_table()", "match_annotations_order(...)", "mathc_reference_eleemnt_order??(...)")
-        # sdata["visium0"][SpatialData.get_instance_key_column(sdata.table['visium0'])]
-        # assert ...
-        # # use case example 2
-        # # sorting the table to match the order of the shapes
-        # sdata.table.obs.set_index(keys=["__instance_id__"])
-        # sdata.table.obs[sdata["visium0"]]
-        # assert ...
-
     def test_paired_elements_tables(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table = _get_table(region="poly")
@@ -218,17 +199,6 @@ class TestMultiTable:
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)
-
-        # # use case example 1
-        # # sorting the shapes visium0 to match the order of the table
-        # sdata["visium0"][sdata.table.obs["__instance_id__"][sdata.table.obs["__spatial_element__"] == "visium0"]]
-        # assert ...
-        # # use case example 2
-        # # subsetting and sorting the table to match the order of the shapes visium0
-        # sub_table = sdata.table[sdata.table.obs["__spatial_element"] == "visium0"]
-        # sub_table.set_index(keys=["__instance_id__"])
-        # sub_table.obs[sdata["visium0"]]
-        # assert ...
 
     def test_multiple_table_without_element(self, tmp_path: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"
