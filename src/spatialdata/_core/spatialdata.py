@@ -1477,7 +1477,8 @@ class SpatialData:
 
         Returns
         -------
-        A generator that yields tuples containing the name, description, and SpatialElement objects themselves.
+        A generator that yields tuples containing the element_type (string), name, and SpatialElement objects
+        themselves.
         """
         return self._gen_elements()
 

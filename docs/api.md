@@ -27,6 +27,7 @@ Operations on `SpatialData` objects.
     polygon_query
     get_values
     get_extent
+    get_centroids
     join_sdata_spatialelement_table
     match_element_to_table
     get_centroids
@@ -34,6 +35,7 @@ Operations on `SpatialData` objects.
     concatenate
     transform
     rasterize
+    to_circles
     aggregate
 ```
 
@@ -45,6 +47,7 @@ Operations on `SpatialData` objects.
 
     unpad_raster
     are_extents_equal
+    deepcopy
 ```
 
 ## Models
@@ -140,4 +143,17 @@ The transformations that can be defined between elements and coordinate systems 
     read_zarr
     save_transformations
     get_dask_backing_files
+```
+
+## Testing utilities
+
+```{eval-rst}
+.. currentmodule:: spatialdata.testing
+
+.. autosummary::
+    :toctree: generated
+
+    assert_spatial_data_objects_are_identical
+    assert_elements_are_identical
+    assert_elements_dict_are_identical
 ```

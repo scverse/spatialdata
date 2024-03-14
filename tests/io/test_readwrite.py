@@ -23,7 +23,7 @@ from spatialdata.transformations.transformations import Identity, Scale
 
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
-RNG = default_rng()
+RNG = default_rng(0)
 
 
 class TestReadWrite:

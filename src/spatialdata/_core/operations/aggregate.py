@@ -241,7 +241,7 @@ def _create_sdata_from_table_and_shapes(
     instance_key: str,
     deepcopy: bool,
 ) -> SpatialData:
-    from spatialdata._utils import _deepcopy_geodataframe
+    from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
     table.obs[instance_key] = table.obs_names.copy()
     table.obs[region_key] = shapes_name
@@ -252,7 +252,7 @@ def _create_sdata_from_table_and_shapes(
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:
-        shapes = _deepcopy_geodataframe(shapes)
+        shapes = _deepcopy(shapes)
 
     return SpatialData.from_elements_dict({shapes_name: shapes, table_name: table})
 

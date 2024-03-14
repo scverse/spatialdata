@@ -7,7 +7,7 @@ from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData, get_extent, transform
-from spatialdata._utils import _deepcopy_geodataframe
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations import Affine, Translation, remove_transformation, set_transformation
@@ -237,7 +237,7 @@ def test_get_extent_affine_circles():
     affine = _get_affine(small_translation=True)
 
     # let's do a deepcopy of the circles since we don't want to modify the original data
-    circles = _deepcopy_geodataframe(sdata["blobs_circles"])
+    circles = _deepcopy(sdata["blobs_circles"])
 
     set_transformation(element=circles, transformation=affine, to_coordinate_system="transformed")
 
@@ -304,8 +304,8 @@ def test_get_extent_affine_sdata():
     # let's make a copy since we don't want to modify the original data
     sdata2 = SpatialData(
         shapes={
-            "circles": _deepcopy_geodataframe(sdata["blobs_circles"]),
-            "polygons": _deepcopy_geodataframe(sdata["blobs_polygons"]),
+            "circles": _deepcopy(sdata["blobs_circles"]),
+            "polygons": _deepcopy(sdata["blobs_polygons"]),
         }
     )
     translation0 = Translation([10], axes=("x",))
