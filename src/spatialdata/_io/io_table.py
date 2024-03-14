@@ -4,6 +4,7 @@ from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 
 from spatialdata._io.format import CurrentTablesFormat
+from spatialdata.models import TableModel
 
 
 def write_table(
@@ -13,10 +14,13 @@ def write_table(
     group_type: str = "ngff:regions_table",
     fmt: Format = CurrentTablesFormat(),
 ) -> None:
-    region = table.uns["spatialdata_attrs"]["region"]
-    region_key = table.uns["spatialdata_attrs"].get("region_key", None)
-    instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
-    fmt.validate_table(table, region_key, instance_key)
+    if TableModel.ATTRS_KEY in table.uns:
+        region = table.uns["spatialdata_attrs"]["region"]
+        region_key = table.uns["spatialdata_attrs"].get("region_key", None)
+        instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
+        fmt.validate_table(table, region_key, instance_key)
+    else:
+        region, region_key, instance_key = (None, None, None)
     write_adata(group, name, table)  # creates group[name]
     tables_group = group[name]
     tables_group.attrs["spatialdata-encoding-type"] = group_type

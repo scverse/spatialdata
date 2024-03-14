@@ -41,7 +41,8 @@ dependencies = [
     "xarray-spatial>=0.3.5",
     "tqdm",
     "fsspec<=2023.6",
-	"dask<=2024.2.1"
+	"dask<=2024.2.1",
+	"pooch",
 ]
 
 [project.optional-dependencies]
@@ -58,6 +59,7 @@ docs = [
     # For notebooks
     "ipython>=8.6.0",
     "sphinx-copybutton",
+    "sphinx-pytest",
 ]
 test = [
     "pytest",
