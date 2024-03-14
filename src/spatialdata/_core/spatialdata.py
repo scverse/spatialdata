@@ -199,6 +199,13 @@ class SpatialData:
                     else:
                         dtype = element.index.dtype
                     if dtype != table.obs[instance_key].dtype:
+                        if dtype == str or table.obs[instance_key].dtype == str:
+                            raise TypeError(
+                                f"Table instance_key column ({instance_key}) has a dtype "
+                                f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
+                                f"the annotated element ({dtype})."
+                            )
+
                         warnings.warn(
                             (
                                 f"Table instance_key column ({instance_key}) has a dtype "
