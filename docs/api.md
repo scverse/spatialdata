@@ -27,6 +27,7 @@ Operations on `SpatialData` objects.
     polygon_query
     get_values
     get_extent
+    get_centroids
     match_table_to_element
     concatenate
     transform
