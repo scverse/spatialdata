@@ -33,6 +33,11 @@ def deepcopy(element: SpatialData | SpatialElement | AnnData) -> SpatialData | S
     Returns
     -------
     A deepcopy of the SpatialData or SpatialElement object
+
+    Notes
+    -----
+    The order of the columns for a deepcopied points element may be differ from the original one, please see more here:
+    https://github.com/scverse/spatialdata/issues/486
     """
     raise RuntimeError(f"Wrong type for deepcopy: {type(element)}")
 
