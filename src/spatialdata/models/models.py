@@ -519,6 +519,11 @@ class PointsModel:
         Returns
         -------
         :class:`dask.dataframe.core.DataFrame`
+
+        Notes
+        -----
+        The order of the columns of the dataframe returned by the parser is not guaranteed to be the same as the order
+        of the columns in the dataframe passed as an argument.
         """
         raise NotImplementedError()
 
@@ -610,10 +615,13 @@ class PointsModel:
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
 
-        # reorder the columns to respect the original order
-        old_columns = list(data.columns)
-        col_order = [col for col in old_columns if col in data.columns]
-        table = table[col_order]
+        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
+        # here I tried to fix https://github.com/scverse/spatialdata/issues/486, didn't work
+        # old_columns = list(data.columns)
+        # new_columns = list(table.columns)
+        # if new_columns == set(old_columns) and new_columns != old_columns:
+        #     col_order = [col for col in old_columns if col in new_columns]
+        #     table = table[col_order]
 
         return cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
