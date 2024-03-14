@@ -12,7 +12,7 @@ from tests.conftest import _get_shapes, _get_table
 test_shapes = _get_shapes()
 
 # shuffle the indices of the dataframe
-# np.random.default_rng().shuffle(test_shapes["poly"].index)
+# np.random.default_rng(0).shuffle(test_shapes["poly"].index)
 
 
 class TestMultiTable:

@@ -86,7 +86,7 @@ class RaccoonDataset:
         self,
     ) -> SpatialData:
         """Raccoon dataset."""
-        im_data = scipy.misc.face()
+        im_data = scipy.datasets.face()
         im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
         labels = Labels2DModel.parse(labels_data, dims=["y", "x"])
