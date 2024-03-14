@@ -246,29 +246,3 @@ def test_concatenate_sdata_multitables():
     assert merged_sdata.tables["table2"].n_obs == 300
     assert all(merged_sdata.tables["table"].obs.region.unique() == ["poly_1", "poly_2", "poly_3"])
     assert all(merged_sdata.tables["table2"].obs.region.unique() == ["multipoly_1", "multipoly_2", "multipoly_3"])
-
-
-#     The following use cases needs to be put in the tutorial notebook, let's keep the comment here until we have the
-#     notebook ready.
-#     # these use cases could be the preferred one for the users; we need to choose one/two preferred ones (either this,
-#     either helper function, ...)
-#     # use cases
-#     # use case example 1
-#     # sorting the shapes to match the order of the table
-#     sdata["visium0"][sdata.table.obs["__instance_id__"]]
-#     assert ...
-#     # use case example 2
-#     # sorting the table to match the order of the shapes
-#     sdata.table.obs.set_index(keys=["__instance_id__"])
-#     sdata.table.obs[sdata["visium0"]]
-#     assert ...
-#
-#     We can postpone the implemntation of this test when the functions "match_table_to_element" etc. are ready.
-# def test_partial_match():
-#     # the function spatialdata._core.query.relational_query.match_table_to_element(no s) needs to be modified (will be
-#     # simpler), we need also a function match_element_to_table. Maybe we can have just one function doing both the
-#     things,
-#     # called match_table_and_elements test that tables and elements do not need to have the same indices
-#     pass
-#     # the test would check that we cna call SpatiaLData() on such combinations of mismatching elements and that the
-#     # match_table_to_element-like functions return the correct subset of the data
