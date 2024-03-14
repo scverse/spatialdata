@@ -23,13 +23,12 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
+    store: Union[str, Path, zarr.storage.BaseStore, zarr.Group],  # type: ignore[type-arg]
     fmt: SpatialDataFormatV01 = CurrentShapesFormat(),
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    assert isinstance(store, (str, Path))
-    f = zarr.open(store, mode="r")
-
+    assert isinstance(store, (str, Path, MutableMapping, zarr.Group))
+    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
     coords = np.array(f["coords"])
     index = np.array(f["Index"])
     typ = fmt.attrs_from_dict(f.attrs.asdict())
