@@ -609,6 +609,12 @@ class PointsModel:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
+
+        # reorder the columns to respect the original order
+        old_columns = list(data.columns)
+        col_order = [col for col in old_columns if col in data.columns]
+        table = table[col_order]
+
         return cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
         )
