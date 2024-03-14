@@ -20,7 +20,6 @@ from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
-from pandas.errors import IntCastingNaNError
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -781,6 +780,11 @@ class TableModel:
             raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
         if attr[self.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+        if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [np.int16, np.int32, np.int64, str]:
+            raise TypeError(
+                f"Only np.int16, np.int32, np.int64 or string allowed as dtype for "
+                f"instance_key column in obs. Dtype found to be {dtype}"
+            )
         expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
         found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
         if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
@@ -867,14 +871,6 @@ class TableModel:
             adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
-        if adata.obs[instance_key].dtype != int:
-            try:
-                warnings.warn(
-                    f"Converting `{cls.INSTANCE_KEY}: {instance_key}` to integer dtype.", UserWarning, stacklevel=2
-                )
-                adata.obs[instance_key] = adata.obs[instance_key].astype(int)
-            except IntCastingNaNError as exc:
-                raise ValueError("Values within table.obs[] must be able to be coerced to int dtype.") from exc
 
         grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
@@ -887,6 +883,7 @@ class TableModel:
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
+        cls().validate(adata)
         return adata
 
 

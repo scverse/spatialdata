@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import warnings
 
 import numpy as np
 import pytest
@@ -419,10 +418,7 @@ def test_validate_table_in_spatialdata(full_sdata):
     region, region_key, _ = get_table_keys(table)
     assert region == "labels2d"
 
-    # no warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        full_sdata.validate_table_in_spatialdata(table)
+    full_sdata.validate_table_in_spatialdata(table)
 
     # dtype mismatch
     full_sdata.labels["labels2d"] = Labels2DModel.parse(full_sdata.labels["labels2d"].astype("int16"))
@@ -437,10 +433,7 @@ def test_validate_table_in_spatialdata(full_sdata):
     table.obs[region_key] = "points_0"
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
-    # no warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        full_sdata.validate_table_in_spatialdata(table)
+    full_sdata.validate_table_in_spatialdata(table)
 
     # dtype mismatch
     full_sdata.points["points_0"].index = full_sdata.points["points_0"].index.astype("int16")

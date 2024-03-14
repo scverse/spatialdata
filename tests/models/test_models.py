@@ -318,6 +318,14 @@ class TestModels:
         region: str | np.ndarray,
     ) -> None:
         region_key = "reg"
+        obs = pd.DataFrame(
+            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False), columns=["A", "B", "C"]
+        )
+        obs[region_key] = region
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(TypeError, match="Only np.int16"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
         obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
@@ -331,16 +339,6 @@ class TestModels:
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
-
-        obs["A"] = obs["A"].astype(str)
-        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
-        with pytest.warns(UserWarning, match="Converting"):
-            model.parse(adata, region=region, region_key=region_key, instance_key="A")
-
-        obs["A"] = pd.Series(len([chr(ord("a") + i) for i in range(10)]))
-        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
-        with pytest.raises(ValueError, match="Values within"):
-            model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])

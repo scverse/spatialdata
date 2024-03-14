@@ -243,7 +243,14 @@ def _create_sdata_from_table_and_shapes(
 ) -> SpatialData:
     from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
-    table.obs[instance_key] = table.obs_names.copy()
+    shapes_index_dtype = shapes.index.dtype if isinstance(shapes, GeoDataFrame) else shapes.dtype
+    try:
+        table.obs[instance_key] = table.obs_names.copy().astype(shapes_index_dtype)
+    except ValueError as err:
+        raise TypeError(
+            f"Instance key column dtype in table resulting from aggregation cannot be cast to the dtype of"
+            f"element {shapes_name}.index"
+        ) from err
     table.obs[region_key] = shapes_name
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
