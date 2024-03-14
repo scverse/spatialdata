@@ -22,6 +22,37 @@ def test_match_table_to_element(sdata_query_aggregation):
     # TODO: add tests for labels
 
 
+def test_join_using_string_instance_id_and_index(sdata_query_aggregation):
+    sdata_query_aggregation["table"].obs["instance_id"] = [
+        f"string_{i}" for i in sdata_query_aggregation["table"].obs["instance_id"]
+    ]
+    sdata_query_aggregation["values_circles"].index = pd.Index(
+        [f"string_{i}" for i in sdata_query_aggregation["values_circles"].index]
+    )
+    sdata_query_aggregation["values_polygons"].index = pd.Index(
+        [f"string_{i}" for i in sdata_query_aggregation["values_polygons"].index]
+    )
+
+    sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
+    sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"][:5]
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner"
+    )
+    # Note that we started with 21 n_obs.
+    assert table.n_obs == 10
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right_exclusive"
+    )
+    assert table.n_obs == 11
+
+    element_dict, table = join_sdata_spatialelement_table(
+        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right"
+    )
+    assert table.n_obs == 21
+
+
 def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     element_dict, table = join_sdata_spatialelement_table(
         sdata_query_aggregation, "values_polygons", "table", "right_exclusive"
