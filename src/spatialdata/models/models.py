@@ -498,7 +498,8 @@ class PointsModel:
                   with key as *valid axes* and value as column names in dataframe.
 
         annotation
-            Annotation dataframe. Only if `data` is :class:`numpy.ndarray`.
+            Annotation dataframe. Only if `data` is :class:`numpy.ndarray`. If data is an array, the index of the
+            annotations will be used as the index of the parsed points.
         coordinates
             Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
             :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
@@ -535,7 +536,8 @@ class PointsModel:
         assert len(data.shape) == 2
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes), **kwargs)  # type: ignore[attr-defined]
+        index = annotation.index if annotation is not None else None
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes, index=index), **kwargs)  # type: ignore[attr-defined]
         if annotation is not None:
             if feature_key is not None:
                 feature_categ = dd.from_pandas(  # type: ignore[attr-defined]
@@ -579,7 +581,8 @@ class PointsModel:
         axes = [X, Y, Z][:ndim]
         if isinstance(data, pd.DataFrame):
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
-                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes), **kwargs
+                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
+                **kwargs,
             )
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
