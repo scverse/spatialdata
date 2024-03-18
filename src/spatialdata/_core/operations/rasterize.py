@@ -230,7 +230,7 @@ def _(
             )
             new_name = f"{name}_rasterized_{element_type}"
             new_images[new_name] = rasterized
-    return SpatialData(images=new_images, table=sdata.table)
+    return SpatialData(images=new_images, tables=sdata.tables)
 
     # get xdata
 

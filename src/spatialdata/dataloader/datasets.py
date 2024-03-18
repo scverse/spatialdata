@@ -133,14 +133,14 @@ class ImageTilesDataset(Dataset):
         regions_to_coordinate_systems: dict[str, str],
     ) -> None:
         """Validate input parameters."""
-        self._region_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-        self._instance_key = sdata.table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        self._region_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        self._instance_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
         if not isinstance(sdata.table.obs[self._region_key].dtype, CategoricalDtype):
             raise TypeError(
                 f"The `regions_element` column `{self._region_key}` in the table must be a categorical dtype. "
                 f"Please convert it."
             )
-        # available_regions = sdata.table.obs[self._region_key].cat.categories
+        # available_regions = sdata.tables["table"].obs[self._region_key].cat.categories
         cs_region_image = []  # list of tuples (coordinate_system, region, image)
 
         # check that the regions specified in the two dicts are the same
@@ -193,6 +193,11 @@ class ImageTilesDataset(Dataset):
             except KeyError as e:
                 raise KeyError(f"region {region_key} not found in `regions_to_coordinate_systems`") from e
 
+        self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
+        self.sdata = sdata
+        self.dataset_table = self.sdata.tables["table"][
+            self.sdata.tables["table"].obs[self._region_key].isin(self.regions)
+        ]  # filtered table for the data loader
         self._cs_region_image = tuple(cs_region_image)  # tuple of tuples (coordinate_system, region_key, image_key)
 
     def _preprocess(
@@ -205,7 +210,7 @@ class ImageTilesDataset(Dataset):
         tile_coords_df = []
         dims_l = []
         shapes_l = []
-
+        table = self.sdata.tables["table"]
         for cs, region, image in self._cs_region_image:
             # get dims and transformations for the region element
             dims = get_axes_names(self.sdata[region])
@@ -214,7 +219,7 @@ class ImageTilesDataset(Dataset):
             assert isinstance(t, BaseTransformation)
 
             # get instances from region
-            inst = self.sdata.table.obs[self.sdata.table.obs[self._region_key] == region][self._instance_key].values
+            inst = table.obs[table.obs[self._region_key] == region][self._instance_key].values
 
             # subset the regions by instances
             subset_region = self.sdata[region].iloc[inst]
@@ -236,7 +241,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         self.tiles_coords = pd.concat(tile_coords_df).reset_index(drop=True)
         # get table filtered by regions
-        self.filtered_table = self.sdata.table.obs[self.sdata.table.obs[self._region_key].isin(self.regions)]
+        self.filtered_table = table.obs[table.obs[self._region_key].isin(self.regions)]
 
         assert len(self.tiles_coords) == len(self.dataset_index)
         dims_ = set(chain(*dims_l))

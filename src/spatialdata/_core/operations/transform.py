@@ -331,6 +331,7 @@ def _(
         transformation,
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
+        to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
     schema().validate(transformed_data)
@@ -404,6 +405,7 @@ def _(
         transformation,
         raster_translation=raster_translation,
         maintain_positioning=maintain_positioning,
+        to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
     schema().validate(transformed_data)
@@ -447,6 +449,7 @@ def _(
         transformation,
         raster_translation=None,
         maintain_positioning=maintain_positioning,
+        to_coordinate_system=to_coordinate_system,
     )
     PointsModel.validate(transformed)
     return transformed
@@ -490,6 +493,7 @@ def _(
         transformation,
         raster_translation=None,
         maintain_positioning=maintain_positioning,
+        to_coordinate_system=to_coordinate_system,
     )
     ShapesModel.validate(transformed_data)
     return transformed_data

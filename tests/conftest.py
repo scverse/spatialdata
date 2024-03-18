@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # isort: off
 import os
+from typing import Any
+from collections.abc import Sequence
 
 os.environ["USE_PYGEOS"] = "0"
 # isort:on
@@ -33,7 +35,7 @@ from xarray import DataArray
 from spatialdata.datasets import BlobsDataset
 import geopandas as gpd
 import dask.dataframe as dd
-from spatialdata._utils import _deepcopy_geodataframe
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
 RNG = default_rng(seed=0)
 
@@ -64,12 +66,12 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(table=_get_table(region="sample1"))
+    return SpatialData(tables=_get_table(region="labels2d"))
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["sample1", "sample2"]))
+    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
 
 
 @pytest.fixture()
@@ -91,7 +93,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        table=_get_table(region="sample1"),
+        tables=_get_table(region="labels2d"),
     )
 
 
@@ -126,7 +128,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            table=_get_table("sample1"),
+            tables=_get_table("labels2d"),
         )
     if request.param == "empty":
         return SpatialData()
@@ -244,7 +246,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
     points["radius"] = np.abs(rng.normal(size=(len(points), 1)))
 
     out["poly"] = ShapesModel.parse(poly)
-    out["poly"].index = ["a", "b", "c", "d", "e"]
+    out["poly"].index = [0, 1, 2, 3, 4]
     out["multipoly"] = ShapesModel.parse(multipoly)
     out["circles"] = ShapesModel.parse(points)
 
@@ -277,17 +279,24 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_table(
-    region: str | list[str] = "sample1",
-    region_key: str = "region",
-    instance_key: str = "instance_id",
+    region: None | str | list[str] = "sample1",
+    region_key: None | str = "region",
+    instance_key: None | str = "instance_id",
 ) -> AnnData:
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    if not all(var for var in (region, region_key, instance_key)):
+        return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
     if isinstance(region, str):
         adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
+
+
+def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
+    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
+    return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
 @pytest.fixture()
@@ -304,7 +313,7 @@ def sdata_blobs() -> SpatialData:
 
     sdata = deepcopy(blobs(256, 300, 3))
     for k, v in sdata.shapes.items():
-        sdata.shapes[k] = _deepcopy_geodataframe(v)
+        sdata.shapes[k] = _deepcopy(v)
     from spatialdata._utils import multiscale_spatial_image_from_data_tree
 
     sdata.images["blobs_multiscale_image"] = multiscale_spatial_image_from_data_tree(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import pathlib
+import re
 import tempfile
 from copy import deepcopy
 from functools import partial
@@ -119,7 +119,7 @@ class TestModels:
                 str,
                 np.ndarray,
                 dask.array.core.Array,
-                pathlib.PosixPath,
+                Path,
                 pd.DataFrame,
             )
         ):
@@ -251,10 +251,13 @@ class TestModels:
         if coordinates is not None:
             coordinates = coordinates.copy()
         coords = ["A", "B", "C", "x", "y", "z"]
-        data = pd.DataFrame(RNG.integers(0, 101, size=(10, 6)), columns=coords)
-        data["target"] = pd.Series(RNG.integers(0, 2, size=(10,))).astype(str)
-        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(10,))).astype(np.int_)
-        data["anno"] = pd.Series(RNG.integers(0, 1, size=(10,))).astype(np.int_)
+        n = 10
+        data = pd.DataFrame(RNG.integers(0, 101, size=(n, 6)), columns=coords)
+        data["target"] = pd.Series(RNG.integers(0, 2, size=(n,))).astype(str)
+        data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(n,))).astype(np.int_)
+        data["anno"] = pd.Series(RNG.integers(0, 1, size=(n,))).astype(np.int_)
+        # to test for non-contiguous indices
+        data.drop(index=2, inplace=True)
         if not is_3d:
             if coordinates is not None:
                 del coordinates["z"]
@@ -296,6 +299,7 @@ class TestModels:
                 for axis in axes:
                     assert np.array_equal(points[axis], data[coordinates[axis]])
             self._passes_validation_after_io(model, points, "points")
+        assert np.all(points.index.compute() == data.index)
         assert "transform" in points.attrs
         if feature_key is not None and is_annotation:
             assert "spatialdata_attrs" in points.attrs
@@ -314,7 +318,15 @@ class TestModels:
         region: str | np.ndarray,
     ) -> None:
         region_key = "reg"
-        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs = pd.DataFrame(
+            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False), columns=["A", "B", "C"]
+        )
+        obs[region_key] = region
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(TypeError, match="Only np.int16"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -327,6 +339,21 @@ class TestModels:
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
+
+    @pytest.mark.parametrize("model", [TableModel])
+    @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
+    def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
+        region_key = "region"
+        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs[region_key] = region
+        obs["A"] = [1] * 5 + list(range(5))
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        adata.obs["A"] = [1] * 10
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
 
 def test_get_schema():
