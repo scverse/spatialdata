@@ -332,6 +332,15 @@ class ShapesModel:
                 raise ValueError("Radii of circles must be positive.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+        if len(data) > 0:
+            n = data.geometry.iloc[0]._ndim
+            if n != 2:
+                warnings.warn(
+                    f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
+                    "discarding the third dimension as it could led to unexpected behaviors.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     @singledispatchmethod
     @classmethod

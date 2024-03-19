@@ -414,3 +414,16 @@ def test_points_and_shapes_conversions(shapes, points):
     t2 = get_transformation(points2, get_all=True)
     assert t0 == t1
     assert t0 == t2
+
+
+def test_model_polygon_z():
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    polygon = Polygon([(0, 0, 0), (1, 1, 0), (2, 0, 0)])
+
+    with pytest.warns(
+        UserWarning,
+        match="The geometry column of the GeoDataFrame has 3 dimensions, while 2 is expected. Please consider",
+    ):
+        _ = ShapesModel.parse(gpd.GeoDataFrame(geometry=[polygon]))
