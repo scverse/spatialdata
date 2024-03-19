@@ -54,9 +54,10 @@ def test_get_extent_shapes(shape_type):
     )
 
 
-def test_get_extent_points():
+@pytest.mark.parametrize("exact", [True, False])
+def test_get_extent_points(exact: bool):
     # 2d case
-    extent = get_extent(sdata["blobs_points"])
+    extent = get_extent(sdata["blobs_points"], exact=exact)
     check_test_results0(
         extent,
         min_coordinates=np.array([3.0, 4.0]),
@@ -68,7 +69,7 @@ def test_get_extent_points():
     data = np.array([[1, 2, 3], [4, 5, 6]])
     df = pd.DataFrame(data, columns=["zeta", "x", "y"])
     points_3d = PointsModel.parse(df, coordinates={"x": "x", "y": "y", "z": "zeta"})
-    extent_3d = get_extent(points_3d)
+    extent_3d = get_extent(points_3d, exact=exact)
     check_test_results0(
         extent_3d,
         min_coordinates=np.array([2, 3, 1]),
