@@ -37,8 +37,8 @@ class ImageTilesDataset(Dataset):
     """
     :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
 
-    By default, the dataset returns spatialdata object, but when `return_image` and `return_annotations`
-    are set, the dataset returns a tuple containing:
+    By default, the dataset returns a :class:`spatialdata.SpatialData` object, but when `return_annotations` is not
+    `None`, the dataset returns a tuple containing:
 
         - the tile image, centered in the target coordinate system of the region.
         - a vector or scalar value from the table.
@@ -46,46 +46,47 @@ class ImageTilesDataset(Dataset):
     Parameters
     ----------
     sdata
-        The SpatialData object.
+        The :class:`spatialdata.SpatialData` object.
     regions_to_images
-        A mapping between regions and images. The regions are used to compute the tile centers, while the images are
-        used to get the pixel values.
+        A mapping between regions (labels, shapes) and images.
+        The regions' centroids will be the tile centers, while the images will be used to get the pixel values.
     regions_to_coordinate_systems
-        A mapping between regions and coordinate systems. The coordinate systems are used to transform both
-        regions coordinates for tiles as well as images.
+        A mapping between regions and coordinate systems.
+        The coordinate systems are used to transform both the centroid coordinates of the regions and the images.
     tile_scale
-        The scale of the tiles. This is used only if the `regions` are `shapes`.
-        It is a scaling factor applied to either the radius (circle) or length (polygons) of the `shapes`
-        according to the geometry type of the `shapes` element:
+        It is a 1D scaling factor applied to the regions.
+        For example:
 
-            - if `shapes` are circles (spots), the radius is scaled by `tile_scale`.
-            - if `shapes` are polygons, the length of the polygon is scaled by `tile_scale`.
+            - if `shapes` are circles, the radius is scaled by `tile_scale`.
+            - if `shapes` are polygons/multipolygon, the perimeter of the polygon is scaled by `tile_scale`.
 
         If `tile_dim_in_units` is passed, `tile_scale` is ignored.
     tile_dim_in_units
         The dimension of the requested tile in the units of the target coordinate system.
-        This specifies the extent of the tile. This is not related the size in pixel of each returned tile.
+        This specifies the extent of the tile; this parameter is not related to the size in pixel of each returned tile.
+        If `tile_dim_in_units` is passed, `tile_scale` is ignored.
     rasterize
-        If True, the images are rasterized using :func:`spatialdata.rasterize` into the target coordinate system;
+        If `True`, the images are rasterized using :func:`spatialdata.rasterize` into the target coordinate system;
         this applies the coordinate transformations to the data.
-        If False, they are queried using :func:`spatialdata.bounding_box_query` from the pixel coordinate system; this
-        back-transforms the target tile into the pixel coordinates. If the back-transformed tile is not aligned with the
-        pixel grid, the returned tile will correspond to the bounding box of the back-transformed tile.
+        If `False`, the images are queried using :func:`spatialdata.bounding_box_query` from the pixel coordinate
+        system; this back-transforms the target tile into the pixel coordinates. If the back-transformed tile is not
+        aligned with the pixel grid, the returned tile will correspond to the bounding box of the back-transformed tile
+        (so that the returned tile is axis-aligned to the pixel grid).
     return_annotations
-        If not None, one or more values from the table are returned together with the image tile.
-        Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X`
-        can be returned. If None, it will return a `SpatialData` object with only the tuple
-        containing the image and the table row.
+        If not `None`, one or more values from the table are returned together with the image tile in a tuple.
+        Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X` can be returned.
+        If `None`, it will return a `SpatialData` object with the table consisting of the row that annotates the region
+        from which the tile was extracted.
     transform
-        A data transformations (for instance a normalization operation, not to be confused with a coordinate
+        A data transformations (for instance, a normalization operation; not to be confused with a coordinate
         transformation) to be applied to the image and the table value.
-        A callable that takes as input the tuple (image, table_value) and returns a new tuple (when
-        `return_annotations` is not None); a callable that takes as input the `SpatialData` object and
-        returns a tuple when `return_annotations` is `None`.
+        It is a `Callable`, with `Any` as return type, that takes as input the (image, table_value) tuple (when
+        `return_annotations` is not `None`) or a `Callable` that takes as input the `SpatialData` object (when
+        `return_annotations` is `None`).
     rasterize_kwargs
-        Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is True.
-        This argument can be used in particular to choose the pixel dimension of the image tile; please refer to the
-        :func:`spatialdata.rasterize` documentation.
+        Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is `True`.
+        This argument can be used in particular to choose the pixel dimension of the produced image tiles; please refer
+        to the :func:`spatialdata.rasterize` documentation for this use case.
 
     Returns
     -------
