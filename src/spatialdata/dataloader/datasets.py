@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
@@ -20,8 +19,7 @@ from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
-    Labels2DModel,
-    Labels3DModel,
+    PointsModel,
     ShapesModel,
     TableModel,
     get_axes_names,
@@ -77,6 +75,10 @@ class ImageTilesDataset(Dataset):
         Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X` can be returned.
         If `None`, it will return a `SpatialData` object with the table consisting of the row that annotates the region
         from which the tile was extracted.
+    table_name
+        The name of the table in the `SpatialData` object to be used for the annotations. Currently only a single table
+        is supported. If you have multiple tables, you can concatenate them into a single table that annotates multiple
+        regions.
     transform
         A data transformations (for instance, a normalization operation; not to be confused with a coordinate
         transformation) to be applied to the image and the table value.
@@ -107,13 +109,14 @@ class ImageTilesDataset(Dataset):
         tile_dim_in_units: float | None = None,
         rasterize: bool = False,
         return_annotations: str | list[str] | None = None,
+        table_name: str | None = None,
         transform: Callable[[Any], Any] | None = None,
         rasterize_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         from spatialdata import bounding_box_query
         from spatialdata._core.operations.rasterize import rasterize as rasterize_fn
 
-        self._validate(sdata, regions_to_images, regions_to_coordinate_systems)
+        self._validate(sdata, regions_to_images, regions_to_coordinate_systems, table_name)
         self._preprocess(tile_scale, tile_dim_in_units)
 
         self._crop_image: Callable[..., Any] = (
@@ -132,70 +135,54 @@ class ImageTilesDataset(Dataset):
         sdata: SpatialData,
         regions_to_images: dict[str, str],
         regions_to_coordinate_systems: dict[str, str],
+        table_name: str | None = None,
     ) -> None:
         """Validate input parameters."""
-        self._region_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-        self._instance_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-        if not isinstance(sdata.table.obs[self._region_key].dtype, CategoricalDtype):
-            raise TypeError(
-                f"The `regions_element` column `{self._region_key}` in the table must be a categorical dtype. "
-                f"Please convert it."
-            )
-        # available_regions = sdata.tables["table"].obs[self._region_key].cat.categories
-        cs_region_image = []  # list of tuples (coordinate_system, region, image)
+        self.sdata = sdata
 
         # check that the regions specified in the two dicts are the same
         assert set(regions_to_images.keys()) == set(
             regions_to_coordinate_systems.keys()
         ), "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
         self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
-        self.sdata = sdata
-        self.dataset_table = self.sdata.table[
-            self.sdata.table.obs[self._region_key].isin(self.regions)
-        ]  # filtered table for the data loader
 
-        # luca: commented out, this is always true because the dicts are unique keys, and I don't having duplicate
-        # values is a problem here
-        # # check unique matching between regions and images and coordinate systems
-        # assert len(set(regions_to_images.values())) == len(
-        #     regions_to_images.keys()
-        # ), "One region cannot be paired to multiple images."
-        # assert len(set(regions_to_coordinate_systems.values())) == len(
-        #     regions_to_coordinate_systems.keys()
-        # ), "One region cannot be paired to multiple coordinate systems."
+        cs_region_image = []  # list of tuples (coordinate_system, region, image)
+        for region_key in self.regions:
+            image_key = regions_to_images[region_key]
 
-        for region_key, image_key in regions_to_images.items():
             # get elements
             region_elem = sdata[region_key]
             image_elem = sdata[image_key]
 
             # check that the elements are supported
-            if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
-                raise NotImplementedError("labels elements are not implemented yet.")
-            if get_model(region_elem) not in [ShapesModel]:
-                raise ValueError("`regions_element` must be a shapes element.")
+            if get_model(region_elem) not in [PointsModel]:
+                raise ValueError(
+                    "`regions_element` must be a shapes or labels element, points are currently not supported."
+                )
             if get_model(image_elem) not in [Image2DModel, Image3DModel]:
                 raise ValueError("`images_element` must be an image element.")
-            if isinstance(image_elem, MultiscaleSpatialImage):
-                raise NotImplementedError("Multiscale images are not implemented yet.")
-
-            # if sdata[region_key] does not fail it means that the region is in the spatialdata object. If it's not in
-            # the table it may not be a problem
-            # if region_key not in available_regions:
-            #     raise ValueError(f"region {region_key} not found in the spatialdata object.")
 
             # check that the coordinate systems are valid for the elements
-            try:
-                cs = regions_to_coordinate_systems[region_key]
-                region_trans = get_transformation(region_elem, cs)
-                image_trans = get_transformation(image_elem, cs)
-                if isinstance(region_trans, BaseTransformation) and isinstance(image_trans, BaseTransformation):
-                    cs_region_image.append((cs, region_key, image_key))
-            except KeyError as e:
-                raise KeyError(f"region {region_key} not found in `regions_to_coordinate_systems`") from e
+            cs = regions_to_coordinate_systems[region_key]
+            region_trans = get_transformation(region_elem, cs, get_all=True)
+            image_trans = get_transformation(image_elem, cs, get_all=True)
+            if cs in region_trans and cs in image_trans:
+                cs_region_image.append((cs, region_key, image_key))
+            else:
+                raise ValueError(
+                    f"The coordinate system `{cs}` is not valid for the region `{region_key}` and image `{image_key}`."
+                )
+            # TODOOOOOOOOOOOOOOOOOOOO: join table
 
-        self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
-        self.sdata = sdata
+        self._region_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        self._instance_key = sdata.tables["table"].uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+        if not isinstance(sdata.tables["table"].obs[self._region_key].dtype, CategoricalDtype):
+            raise TypeError(
+                f"The `regions_element` column `{self._region_key}` in the table must be a categorical dtype. "
+                f"Please convert it."
+            )
+        # available_regions = sdata.tables["table"].obs[self._region_key].cat.categories
+
         self.dataset_table = self.sdata.tables["table"][
             self.sdata.tables["table"].obs[self._region_key].isin(self.regions)
         ]  # filtered table for the data loader
