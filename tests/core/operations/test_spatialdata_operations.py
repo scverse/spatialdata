@@ -420,11 +420,6 @@ def test_validate_table_in_spatialdata(full_sdata):
 
     full_sdata.validate_table_in_spatialdata(table)
 
-    # dtype mismatch
-    full_sdata.labels["labels2d"] = Labels2DModel.parse(full_sdata.labels["labels2d"].astype("int16"))
-    with pytest.warns(UserWarning, match="that does not match the dtype of the indices of the annotated element"):
-        full_sdata.validate_table_in_spatialdata(table)
-
     # region not found
     del full_sdata.labels["labels2d"]
     with pytest.warns(UserWarning, match="in the SpatialData object"):
@@ -434,11 +429,6 @@ def test_validate_table_in_spatialdata(full_sdata):
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
     full_sdata.validate_table_in_spatialdata(table)
-
-    # dtype mismatch
-    full_sdata.points["points_0"].index = full_sdata.points["points_0"].index.astype("int16")
-    with pytest.warns(UserWarning, match="that does not match the dtype of the indices of the annotated element"):
-        full_sdata.validate_table_in_spatialdata(table)
 
     # region not found
     del full_sdata.points["points_0"]

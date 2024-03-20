@@ -198,24 +198,13 @@ class SpatialData:
                         dtype = element.scale0.ds.dtypes["image"]
                     else:
                         dtype = element.index.dtype
-                    if dtype != table.obs[instance_key].dtype:
-                        if dtype == str or table.obs[instance_key].dtype == str:
-                            raise TypeError(
-                                f"Table instance_key column ({instance_key}) has a dtype "
-                                f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
-                                f"the annotated element ({dtype})."
-                            )
-
-                        warnings.warn(
-                            (
-                                f"Table instance_key column ({instance_key}) has a dtype "
-                                f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
-                                f"the annotated element ({dtype}). Please note in the case of int16 vs int32 or "
-                                "similar cases may be tolerated in downstream methods, but it is recommended to make "
-                                "the dtypes match."
-                            ),
-                            UserWarning,
-                            stacklevel=2,
+                    if dtype != table.obs[instance_key].dtype and (
+                        dtype == str or table.obs[instance_key].dtype == str
+                    ):
+                        raise TypeError(
+                            f"Table instance_key column ({instance_key}) has a dtype "
+                            f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
+                            f"the annotated element ({dtype})."
                         )
 
     @staticmethod
