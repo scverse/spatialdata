@@ -267,50 +267,6 @@ class ImageTilesDataset(Dataset):
         assert np.all([i in self.tiles_coords for i in dims_])
         self.dims = list(dims_)
 
-        # get table filtered by regions
-        # self.filtered_table = table.obs[table.obs[self._region_key].isin(self.regions)]
-
-        # index_df = []
-        # tile_coords_df = []
-        # dims_l = []
-        # shapes_l = []
-        # for cs, region, image in self._cs_region_image:
-        #     # get dims and transformations for the region element
-        #     dims = get_axes_names(self.sdata[region])
-        #     dims_l.append(dims)
-        #     t = get_transformation(self.sdata[region], cs)
-        #     assert isinstance(t, BaseTransformation)
-        #
-        #     # get instances from region
-        #     inst = table.obs[table.obs[self._region_key] == region][self._instance_key].values
-        #
-        #     # subset the regions by instances
-        #     subset_region = self.sdata[region].iloc[inst]
-        #     # get coordinates of centroids and extent for tiles
-        #     tile_coords = _get_tile_coords(subset_region, t, dims, tile_scale, tile_dim_in_units)
-        #     tile_coords_df.append(tile_coords)
-        #
-        #     # get shapes
-        #     shapes_l.append(self.sdata[region])
-        #
-        #     # get index dictionary, with `instance_id`, `cs`, `region`, and `image`
-        #     df = pd.DataFrame({self.INSTANCE_KEY: inst})
-        #     df[self.CS_KEY] = cs
-        #     df[self.REGION_KEY] = region
-        #     df[self.IMAGE_KEY] = image
-        #     index_df.append(df)
-        #
-        # # concatenate and assign to self
-        # self.dataset_index = pd.concat(index_df).reset_index(drop=True)
-        # self.tiles_coords = pd.concat(tile_coords_df).reset_index(drop=True)
-        # # get table filtered by regions
-        # self.filtered_table = table.obs[table.obs[self._region_key].isin(self.regions)]
-        #
-        # assert len(self.tiles_coords) == len(self.dataset_index)
-        # dims_ = set(chain(*dims_l))
-        # assert np.all([i in self.tiles_coords for i in dims_])
-        # self.dims = list(dims_)
-
     def _get_return(
         self,
         return_annot: str | list[str] | None,
@@ -359,26 +315,6 @@ class ImageTilesDataset(Dataset):
             max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
             target_coordinate_system=row["cs"],
         )
-        # ##
-        # import shapely
-        # min_y, min_x = t_coords[[f"min{i}" for i in self.dims]].values
-        # max_y, max_x = t_coords[[f"max{i}" for i in self.dims]].values
-        # polygon = shapely.Polygon(
-        #     [
-        #         (min_x, min_y),
-        #         (max_x, min_y),
-        #         (max_x, max_y),
-        #         (min_x, max_y),
-        #     ]
-        # )
-        # from spatialdata.transformations import Identity
-        # polygon = ShapesModel.parse(GeoDataFrame(geometry=[polygon]), transformations={row['cs']: Identity()})
-        # sdata_debug = SpatialData.init_from_elements({'image': image, 'polygon': polygon})
-        # from napari_spatialdata import Interactive
-        # Interactive(sdata_debug)
-        #
-        # ##
-
         if self.transform is not None:
             out = self._return(idx, tile)
             return self.transform(out)
@@ -492,47 +428,17 @@ def _get_tile_coords(
         back_transformation = transformation.inverse()
         set_transformation(circles, back_transformation, to_coordinate_system="intrinsic_of_element")
         transform(circles, to_coordinate_system="intrinsic_of_element")
+
     # extent, aka the tile size
     extent = (circles.radius * 2).values.reshape(-1, 1)
-    # get centroids and transform them
-    # centroids = elem.centroid.get_coordinates().values
-    # aff = transformation.to_affine_matrix(input_axes=dims, output_axes=dims)
-    # centroids = _affine_matrix_multiplication(aff, centroids)
-    #
-    # # get extent, first by checking shape defaults, then by using the `tile_dim_in_units`
-    # if tile_dim_in_units is None:
-    #     if elem.iloc[0, 0].geom_type == "Point":
-    #         extent = elem[ShapesModel.RADIUS_KEY].values * tile_scale
-    #     elif elem.iloc[0, 0].geom_type in ["Polygon", "MultiPolygon"]:
-    #         extent = elem[ShapesModel.GEOMETRY_KEY].length * tile_scale
-    #     else:
-    #         raise ValueError("Only point and polygon shapes are supported.")
-    # if tile_dim_in_units is not None:
-    #     if isinstance(tile_dim_in_units, (float, int)):
-    #         extent = np.repeat(tile_dim_in_units, len(centroids))
-    #     else:
-    #         raise TypeError(
-    #             f"`tile_dim_in_units` must be a `float`, `int`, `list`, `tuple` or `np.ndarray`, "
-    #             f"not {type(tile_dim_in_units)}."
-    #         )
-    #     if len(extent) != len(centroids):
-    #         raise ValueError(
-    #             f"the number of elements in the region ({len(extent)}) does not match"
-    #             f" the number of instances ({len(centroids)})."
-    #         )
-    #
-    # # transform extent
-    # # TODO: review this, what is being dropped by the transformation?
-    # aff = transformation.to_affine_matrix(input_axes=tuple(dims[0]), output_axes=tuple(dims[0]))
     centroids_points = get_centroids(circles)
     axes = get_axes_names(centroids_points)
     centroids_numpy = centroids_points.compute().values
-    # extent = _affine_matrix_multiplication(aff, np.array(extent)[:, np.newaxis])
-    #
-    # # get min and max coordinates
+
+    # get min and max coordinates
     min_coordinates = np.array(centroids_numpy) - extent / 2
     max_coordinates = np.array(centroids_numpy) + extent / 2
-    #
+
     # return a dataframe with columns e.g.  ["x", "y", "extent", "minx", "miny", "maxx", "maxy"]
     return pd.DataFrame(
         np.hstack([centroids_numpy, extent, min_coordinates, max_coordinates]),
