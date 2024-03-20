@@ -354,7 +354,7 @@ class ImageTilesDataset(Dataset):
         image = self.sdata[row["image"]]
         tile = self._crop_image(
             image,
-            axes=self.dims,
+            axes=tuple(self.dims),
             min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
             max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
             target_coordinate_system=row["cs"],

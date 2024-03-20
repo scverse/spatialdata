@@ -116,3 +116,29 @@ class TestImageTilesDataset:
         if return_annot is not None:
             return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
             assert annot.shape[1] == len(return_annot)
+
+    @pytest.mark.parametrize("rasterize", [True, False])
+    @pytest.mark.parametrize("return_annot", [None, "region"])
+    def test_multiscale_images(self, sdata_blobs, rasterize: bool, return_annot):
+        sdata = blobs_annotating_element("blobs_circles")
+        ds = ImageTilesDataset(
+            sdata=sdata,
+            regions_to_images={"blobs_circles": "blobs_multiscale_image"},
+            regions_to_coordinate_systems={"blobs_circles": "global"},
+            rasterize=rasterize,
+            return_annotations=return_annot,
+            table_name="table" if return_annot is not None else None,
+            rasterize_kwargs={"target_unit_to_pixels": 1} if rasterize else None,
+        )
+        if return_annot is None:
+            sdata_tile = ds[0]
+            if rasterize:
+                # rasterize transforms teh multiscale image into a single scale image
+                tile = sdata_tile["blobs_multiscale_image"]
+            else:
+                tile = next(iter(sdata_tile["blobs_multiscale_image"]["scale0"].ds.values()))
+        else:
+            tile, annot = ds[0]
+            if not rasterize:
+                tile = next(iter(tile["scale0"].ds.values()))
+        assert tile.shape == (3, 10, 10)
