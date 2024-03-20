@@ -408,9 +408,6 @@ def _get_tile_coords(
     circles: GeoDataFrame,
     cs: str,
     rasterize: bool,
-    # elem: GeoDataFrame,
-    # transformation: BaseTransformation,
-    # dims: tuple[str, ...],
     tile_scale: float | None = None,
     tile_dim_in_units: float | None = None,
 ) -> pd.DataFrame:
