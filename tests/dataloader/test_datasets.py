@@ -132,13 +132,7 @@ class TestImageTilesDataset:
         )
         if return_annot is None:
             sdata_tile = ds[0]
-            if rasterize:
-                # rasterize transforms teh multiscale image into a single scale image
-                tile = sdata_tile["blobs_multiscale_image"]
-            else:
-                tile = next(iter(sdata_tile["blobs_multiscale_image"]["scale0"].ds.values()))
+            tile = sdata_tile["blobs_multiscale_image"]
         else:
             tile, annot = ds[0]
-            if not rasterize:
-                tile = next(iter(tile["scale0"].ds.values()))
         assert tile.shape == (3, 10, 10)
