@@ -471,7 +471,7 @@ def _get_tile_coords(
 
     # extent, aka the tile size
     extent = (circles.radius * 2).values.reshape(-1, 1)
-    centroids_points = get_centroids(circles)
+    centroids_points = get_centroids(circles, coordinate_system=cs)
     axes = get_axes_names(centroids_points)
     centroids_numpy = centroids_points.compute().values
 
