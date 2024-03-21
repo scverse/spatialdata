@@ -176,6 +176,8 @@ def aggregate(
         by_ = transform(by_, to_coordinate_system=target_coordinate_system)
         values_ = transform(values_, to_coordinate_system=target_coordinate_system)
 
+    table_name = table_name if table_name is not None else "table"
+
     # dispatch
     adata = None
     if by_type is ShapesModel and values_type in [PointsModel, ShapesModel]:
@@ -218,7 +220,6 @@ def aggregate(
     if adata is None:
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
 
-    table_name = table_name if table_name is not None else "table"
     # create a SpatialData object with the aggregated table and the "by" shapes
     shapes_name = by if isinstance(by, str) else "by"
     return _create_sdata_from_table_and_shapes(
