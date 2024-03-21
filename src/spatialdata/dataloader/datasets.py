@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from functools import partial
 from itertools import chain
@@ -27,6 +28,7 @@ from spatialdata.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
+    TableModel,
     get_axes_names,
     get_model,
     get_table_keys,
@@ -127,6 +129,14 @@ class ImageTilesDataset(Dataset):
 
         self._validate(sdata, regions_to_images, regions_to_coordinate_systems, return_annotations, table_name)
         self._preprocess(tile_scale, tile_dim_in_units, rasterize, table_name)
+
+        if rasterize_kwargs is not None and len(rasterize_kwargs) > 0 and rasterize is False:
+            warnings.warn(
+                "rasterize_kwargs are passed to the rasterize function, but rasterize is set to False. The arguments "
+                "will be ignored. If you want to use the rasterize function, please set rasterize to True.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         self._crop_image: Callable[..., Any] = (
             partial(
@@ -277,26 +287,27 @@ class ImageTilesDataset(Dataset):
             return SpatialImage(next(iter(data["scale0"].ds.values())))
         raise ValueError(f"Expected a SpatialImage or MultiscaleSpatialImage, got {type(data)}.")
 
-    def _get_return(
-        self,
-        return_annot: str | list[str] | None,
+    @staticmethod
+    def _return_function(
+        idx: int,
+        tile: Any,
+        dataset_table: AnnData,
+        dataset_index: pd.DataFrame,
         table_name: str | None,
-    ) -> Callable[[int, Any], tuple[Any, Any] | SpatialData]:
-        """Get function to return values from the table of the dataset."""
+        return_annot: str | list[str] | None,
+    ) -> tuple[Any, Any] | SpatialData:
+        tile = ImageTilesDataset._ensure_single_scale(tile)
         if return_annot is not None:
             # table is always returned as array shape (1, len(return_annot))
             # where return_table can be a single column or a list of columns
             return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
             # return tuple of (tile, table)
-            if np.all([i in self.dataset_table.obs for i in return_annot]):
-                return lambda x, tile: (
-                    self._ensure_single_scale(tile),
-                    self.dataset_table.obs[return_annot].iloc[x].values.reshape(1, -1),
-                )
-            if np.all([i in self.dataset_table.var_names for i in return_annot]):
-                if issparse(self.dataset_table.X):
-                    return lambda x, tile: (self._ensure_single_scale(tile), self.dataset_table[x, return_annot].X.A)
-                return lambda x, tile: (self._ensure_single_scale(tile), self.dataset_table[x, return_annot].X)
+            if np.all([i in dataset_table.obs for i in return_annot]):
+                return tile, dataset_table.obs[return_annot].iloc[idx].values.reshape(1, -1)
+            if np.all([i in dataset_table.var_names for i in return_annot]):
+                if issparse(dataset_table.X):
+                    return tile, dataset_table[idx, return_annot].X.A
+                return tile, dataset_table[idx, return_annot].X
             raise ValueError(
                 f"If `return_annot` is a `str`, it must be a column name in the table or a variable name in the table. "
                 f"If it is a `list` of `str`, each element should be as above, and they should all be entirely in obs "
@@ -304,12 +315,29 @@ class ImageTilesDataset(Dataset):
             )
         # return spatialdata consisting of the image tile and, if available, the associated table
         if table_name:
-            return lambda x, tile: SpatialData(
-                images={self.dataset_index.iloc[x][self.IMAGE_KEY]: self._ensure_single_scale(tile)},
-                table=self.dataset_table[x],
+            # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
+            table_row = dataset_table[idx].copy()
+            del table_row.uns[TableModel.ATTRS_KEY]
+            # TODO: add the shape used for constructing the tile; in the case of the label consider adding the circles
+            # or a crop of the label
+            return SpatialData(
+                images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile},
+                table=table_row,
             )
-        return lambda x, tile: SpatialData(
-            images={self.dataset_index.iloc[x][self.IMAGE_KEY]: self._ensure_single_scale(tile)}
+        return SpatialData(images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile})
+
+    def _get_return(
+        self,
+        return_annot: str | list[str] | None,
+        table_name: str | None,
+    ) -> Callable[[int, Any], tuple[Any, Any] | SpatialData]:
+        """Get function to return values from the table of the dataset."""
+        return partial(
+            ImageTilesDataset._return_function,
+            dataset_table=self.dataset_table if table_name else None,
+            dataset_index=self.dataset_index,
+            table_name=table_name,
+            return_annot=return_annot,
         )
 
     def __len__(self) -> int:

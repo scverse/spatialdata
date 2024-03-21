@@ -580,6 +580,21 @@ def _(
                     return None
             else:
                 d[k] = xdata
+        # the list of scales may not be contiguous when the data has small shape (for instance with yx = 22 and
+        # rotations we may end up having scale0 and scale2 but not scale1. Practically this may occur in torch tiler if
+        # the tiles are request to be too small).
+        # Here we remove scales after we found a scale missing
+        scales_to_keep = []
+        for i, scale_name in enumerate(d.keys()):
+            if scale_name == f"scale{i}":
+                scales_to_keep.append(scale_name)
+            else:
+                break
+        # case in which scale0 is not present but other scales are
+        if len(scales_to_keep) == 0:
+            return None
+        d = {k: d[k] for k in scales_to_keep}
+
         query_result = MultiscaleSpatialImage.from_dict(d)
         # rechunk the data to avoid irregular chunks
         for scale in query_result:

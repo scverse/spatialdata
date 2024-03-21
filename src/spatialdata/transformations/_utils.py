@@ -113,6 +113,8 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
     old_shape: Optional[ArrayLike] = None
     for i, (scale, node) in enumerate(dict(e).items()):
         # this is to be sure that the pyramid levels are listed here in the correct order
+        if scale != f"scale{i}":
+            pass
         assert scale == f"scale{i}"
         assert len(dict(node)) == 1
         xdata = list(node.values())[0]

@@ -1,15 +1,31 @@
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
 from spatialdata._core.centroids import get_centroids
-from spatialdata.models import Labels2DModel, Labels3DModel, TableModel, get_axes_names
-from spatialdata.transformations import Identity, get_transformation, set_transformation
-
-from tests.core.operations.test_transform import _get_affine
+from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
+from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
+from spatialdata.transformations import Affine, Identity, get_transformation, set_transformation
 
 RNG = default_rng(42)
+
+
+def _get_affine() -> Affine:
+    theta: float = math.pi / 18
+    k = 10.0
+    return Affine(
+        [
+            [2 * math.cos(theta), 2 * math.sin(-theta), -1000 / k],
+            [2 * math.sin(theta), 2 * math.cos(theta), 300 / k],
+            [0, 0, 1],
+        ],
+        input_axes=("x", "y"),
+        output_axes=("x", "y"),
+    )
+
 
 affine = _get_affine()
 
@@ -17,7 +33,9 @@ affine = _get_affine()
 @pytest.mark.parametrize("coordinate_system", ["global", "aligned"])
 @pytest.mark.parametrize("is_3d", [False, True])
 def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
-    element = points["points_0"]
+    element = points["points_0"].compute()
+    element.index = np.arange(len(element)) + 10
+    element = PointsModel.parse(element)
 
     # by default, the coordinate system is global and the points are 2D; let's modify the points as instructed by the
     # test arguments
@@ -31,6 +49,9 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
 
     # the axes of the centroids should be the same as the axes of the element
     assert centroids.columns.tolist() == list(axes)
+
+    # check the index is preserved
+    assert np.array_equal(centroids.index.values, element.index.values)
 
     # the centroids should not contain extra columns
     assert "genes" in element.columns and "genes" not in centroids.columns
@@ -54,9 +75,13 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
 @pytest.mark.parametrize("shapes_name", ["circles", "poly", "multipoly"])
 def test_get_centroids_shapes(shapes, coordinate_system: str, shapes_name: str):
     element = shapes[shapes_name]
+    element.index = np.arange(len(element)) + 10
+
     if coordinate_system == "aligned":
         set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
     centroids = get_centroids(element, coordinate_system=coordinate_system)
+
+    assert np.array_equal(centroids.index.values, element.index.values)
 
     if shapes_name == "circles":
         xy = element.geometry.get_coordinates().values
@@ -82,12 +107,12 @@ def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: boo
         array = np.array(
             [
                 [
-                    [0, 0, 1, 1],
-                    [0, 0, 1, 1],
+                    [0, 0, 10, 10],
+                    [0, 0, 10, 10],
                 ],
                 [
-                    [2, 2, 1, 1],
-                    [2, 2, 1, 1],
+                    [20, 20, 10, 10],
+                    [20, 20, 10, 10],
                 ],
             ]
         )
@@ -102,10 +127,10 @@ def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: boo
     else:
         array = np.array(
             [
-                [1, 1, 1, 1],
-                [2, 2, 2, 2],
-                [2, 2, 2, 2],
-                [2, 2, 2, 2],
+                [10, 10, 10, 10],
+                [20, 20, 20, 20],
+                [20, 20, 20, 20],
+                [20, 20, 20, 20],
             ]
         )
         model = Labels2DModel
@@ -121,6 +146,9 @@ def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: boo
     if coordinate_system == "aligned":
         set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
     centroids = get_centroids(element, coordinate_system=coordinate_system)
+
+    labels_indices = _get_unique_label_values_as_index(element)
+    assert np.array_equal(centroids.index.values, labels_indices)
 
     if coordinate_system == "global":
         assert np.array_equal(centroids.compute().values, expected_centroids.values)
