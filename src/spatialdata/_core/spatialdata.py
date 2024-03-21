@@ -507,7 +507,23 @@ class SpatialData:
     @property
     def path(self) -> Path | None:
         """Path to the Zarr storage."""
-        return self._path
+        if self._path is None:
+            return None
+        if isinstance(self._path, str):
+            return Path(self._path)
+        if isinstance(self._path, Path):
+            return self._path
+        raise ValueError(f"Unexpected type for path: {type(self._path)}")
+
+    @path.setter
+    def path(self, value: Path | None) -> None:
+        self._path = value
+        if not self.is_self_contained():
+            logger.info(
+                "The SpatialData object is not self-contained (i.e. it contains some elements that are Dask-backed from"
+                f" locations outside {self._path}). Please see the documentation of `is_self_contained()` to understand"
+                f" the implications of working with SpatialData objects that are not self-contained."
+            )
 
     # TODO: from a commennt from Giovanni: consolite somewhere in
     #  a future PR (luca: also _init_add_element could be cleaned)
@@ -524,11 +540,11 @@ class SpatialData:
 
         Returns
         -------
-        either the existing Zarr sub-group or a new one.
+        either the existing Zarr subgroup or a new one.
         """
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
         element_type_group = root.require_group(element_type)
         return element_type_group.require_group(name)
 
@@ -549,36 +565,37 @@ class SpatialData:
         """
         store = parse_url(self.path, mode="r").store
         root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
         return element_type in root and name in root[element_type]
 
-    def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
-        store = parse_url(self.path, mode="r+").store
-        root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "shapes"]
-        # not need to create the group for labels as it is already handled by ome-zarr-py
-        if element_type != "labels":
-            elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
-        if overwrite:
-            if element_type == "labels" and element_type in root:
-                elem_group = root[element_type]
-            if name in elem_group:
-                del elem_group[name]
-        else:
-            # bypass is to ensure that elem_group is defined. I don't want to define it as None but either having it
-            # or not having it, so if the code tries to access it and it should not be there, it will raise an error
-            bypass = False
-            if element_type == "labels":
-                if element_type in root:
-                    elem_group = root[element_type]
-                else:
-                    bypass = True
-            if not bypass and name in elem_group:
-                raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
-
-        if element_type != "labels":
-            return elem_group
-        return root
+    #
+    # def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
+    #     store = parse_url(self.path, mode="r+").store
+    #     root = zarr.group(store=store)
+    #     assert element_type in ["images", "labels", "points", "shapes"]
+    #     # not need to create the group for labels as it is already handled by ome-zarr-py
+    #     if element_type != "labels":
+    #         elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
+    #     if overwrite:
+    #         if element_type == "labels" and element_type in root:
+    #             elem_group = root[element_type]
+    #         if name in elem_group:
+    #             del elem_group[name]
+    #     else:
+    #         # bypass is to ensure that elem_group is defined. I don't want to define it as None but either having it
+    #         # or not having it, so if the code tries to access it and it should not be there, it will raise an error
+    #         bypass = False
+    #         if element_type == "labels":
+    #             if element_type in root:
+    #                 elem_group = root[element_type]
+    #             else:
+    #                 bypass = True
+    #         if not bypass and name in elem_group:
+    #             raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
+    #
+    #     if element_type != "labels":
+    #         return elem_group
+    #     return root
 
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
@@ -931,155 +948,129 @@ class SpatialData:
                 elements[element_type][element_name] = transformed
         return SpatialData(**elements, tables=sdata.tables)
 
-    def write(
+    def is_self_contained(self) -> bool:
+        """
+        Check if a SpatialData object is self-contained.
+
+        A SpatialData object is said to be self-contained if all its SpatialElements are self-contained.
+        A SpatialElement is said to be self-contained when it does not depend on a Dask computational graph (i.e. it is
+        not "lazy") or when it is Dask-backed and each file that is read by the Dask computational graph is contained
+        within the Zarr store associated with the SpatialElement.
+
+        Returns
+        -------
+        A boolean value indicating whether the SpatialData object is self-contained.
+
+        Notes
+        -----
+        Generally, it is preferred to work with self-contained SpatialData objects; working with non-self-contained
+        SpatialData objects is possible but requires more care and understanding of the implications.
+
+        Common scenarios.
+
+            1.  SpatialData objects right after they are read with `read_zarr()` are self-contained.
+            2.  SpatialData objects that are entirely stored in-memory and that are written to disk with `write()` are
+                self-contained.
+            3.  Objects that have Dask-backed elements and that are written to disk with `write()` are not
+                self-contained. For example, a `SpatialData` object returned from a reader from `spatialdata_io`, such
+                as `visium()`, is not self-contained. To make it self-contained, use `write()` followed by
+                `read_zarr()`.
+
+        Implications.
+
+            1. Visualizing a non-self-contained SpatialData object in napari is not guaranteed to be performant as this
+                depends on the disk layout of the Dask-backed files. If the Dask-backed files are from other SpatialData
+                objects, visualization will be performant, if they are external large Tiff files, visualization may be
+                slow.
+            2.  When incrementally adding SpatialElements to a SpatialData object, or when resaving a SpatialElement to
+                disk, or when resaving the metadata of a SpatialElement (such as the coordiante system/transformation
+                information), the disk locations that will be updated are child directories of the Zarr store associated
+                to the SpatialData object. When the SpatialData object is not self-contained, it is important to be
+                aware that only the files that are contained within the Zarr store will be updated.
+        """
+        from spatialdata._io._utils import _backed_elements_contained_in_path
+
+        if not self.is_backed():
+            return True
+
+        self_contained = True
+        for element_type, element_name, element in self.gen_elements():
+            element_path = Path(self.path) / element_type / element_name
+            element_is_self_contained = all(_backed_elements_contained_in_path(path=element_path, object=element))
+            self_contained = self_contained and element_is_self_contained
+        return self_contained
+
+    def _validate_can_safely_write_to_path(
         self,
         file_path: str | Path,
-        storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
-        consolidate_metadata: bool = True,
+        saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
-        from spatialdata._io._utils import get_dask_backing_files
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
 
-        """Write the SpatialData object to Zarr."""
         if isinstance(file_path, str):
             file_path = Path(file_path)
-        assert isinstance(file_path, Path)
 
-        if self.is_backed() and str(self.path) != str(file_path):
-            logger.info(f"The Zarr file used for backing will now change from {self.path} to {file_path}")
-
-        # old code to support overwriting the backing file
-        # target_path = None
-        # tmp_zarr_file = None
+        if not isinstance(file_path, Path):
+            raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r") is None:
                 raise ValueError(
-                    "The target file path specified already exists, and it has been detected to not be "
-                    "a Zarr store. Overwriting non-Zarr stores is not supported to prevent accidental "
-                    "data loss."
+                    "The target file path specified already exists, and it has been detected to not be a Zarr store. "
+                    "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
                 )
             if not overwrite:
                 raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
-            if self.is_backed() and str(self.path) == str(file_path):
-                raise ValueError(
-                    "The file path specified is the same as the one used for backing. "
-                    "Overwriting the backing file is not supported to prevent accidental data loss."
-                    "We are discussing how to support this use case in the future, if you would like us to "
-                    "support it please leave a comment on https://github.com/scverse/spatialdata/pull/138"
-                )
-            if any(Path(fp).resolve().is_relative_to(file_path.resolve()) for fp in get_dask_backing_files(self)):
+            if any(_backed_elements_contained_in_path(path=file_path, object=self)):
                 raise ValueError(
                     "The file path specified is a parent directory of one or more files used for backing for one or "
-                    "more elements in the SpatialData object. You can either load every element of the SpatialData "
-                    "object in memory, or save the current spatialdata object to a different path."
+                    "more elements in the SpatialData object. Please save the data to a different location."
+                )
+            if self.is_backed() and (
+                _is_subfolder(parent=self.path, child=file_path) or _is_subfolder(parent=file_path, child=self.path)
+            ):
+                if saving_an_element and _is_subfolder(parent=self.path, child=file_path):
+                    raise ValueError(
+                        "Currently, overwriting existing elements is not supported. It is recommended to manually save "
+                        "the element in a different location and then eventually copy it to the original desired "
+                        "location. Deleting the old element and saving the new element to the same location is not "
+                        "advised because data loss may occur if the execution is interrupted during writing."
+                    )
+                raise ValueError(
+                    "The file path specified either contains either is contained in the one used for backing. "
+                    "Currently, overwriting the backing Zarr store is not supported to prevent accidental data loss "
+                    "that could occur if the execution is interrupted during writing. Please save the data to a "
+                    "different location."
                 )
 
-            # old code to support overwriting the backing file
-            # else:
-            #     target_path = tempfile.TemporaryDirectory()
-            #     tmp_zarr_file = Path(target_path.name) / "data.zarr"
+    def write(
+        self,
+        file_path: str | Path,
+        overwrite: bool = False,
+        consolidate_metadata: bool = True,
+    ) -> None:
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+        self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
 
-        # old code to support overwriting the backing file
-        # if target_path is None:
-        #     store = parse_url(file_path, mode="w").store
-        # else:
-        #     store = parse_url(tmp_zarr_file, mode="w").store
-        # store = parse_url(file_path, mode="w").store
-        # root = zarr.group(store=store)
         store = parse_url(file_path, mode="w").store
-
-        root = zarr.group(store=store, overwrite=overwrite)
+        _ = zarr.group(store=store, overwrite=overwrite)
         store.close()
 
-        # old code to support overwriting the backing file
-        # if target_path is None:
-        #     self.path = str(file_path)
-        # else:
-        #     self.path = str(tmp_zarr_file)
-        self._path = Path(file_path)
-        try:
-            if len(self.images):
-                root.create_group(name="images")
-                # add_image_in_memory will delete and replace the same key in self.images,
-                # so we need to make a copy of the keys. Same for the other elements
-                keys = self.images.keys()
+        for element_type, element_name, element in self.gen_elements():
+            self._write_element(
+                element=element,
+                zarr_container_path=file_path,
+                element_type=element_type,
+                element_name=element_name,
+                overwrite=False,
+            )
 
-                for name in keys:
-                    elem_group = self._init_add_element(name=name, element_type="images", overwrite=overwrite)
-                    write_image(
-                        image=self.images[name],
-                        group=elem_group,
-                        name=name,
-                        storage_options=storage_options,
-                    )
-
-                    # TODO(giovp): fix or remove
-                    # reload the image from the Zarr storage so that now the element is lazy loaded,
-                    # and most importantly, from the correct storage
-                    # element_path = Path(self.path) / "images" / name
-                    # _read_multiscale(element_path, raster_type="image")
-
-            if len(self.labels):
-                root.create_group(name="labels")
-                # keys = list(self.labels.keys())
-                keys = self.labels.keys()
-
-                for name in keys:
-                    elem_group = self._init_add_element(name=name, element_type="labels", overwrite=overwrite)
-                    write_labels(
-                        labels=self.labels[name],
-                        group=elem_group,
-                        name=name,
-                        storage_options=storage_options,
-                    )
-
-                    # TODO(giovp): fix or remove
-                    # reload the labels from the Zarr storage so that now the element is lazy loaded,
-                    #  and most importantly, from the correct storage
-                    # element_path = Path(self.path) / "labels" / name
-                    # _read_multiscale(element_path, raster_type="labels")
-
-            if len(self.points):
-                root.create_group(name="points")
-                # keys = list(self.points.keys())
-                keys = self.points.keys()
-
-                for name in keys:
-                    elem_group = self._init_add_element(name=name, element_type="points", overwrite=overwrite)
-                    write_points(
-                        points=self.points[name],
-                        group=elem_group,
-                        name=name,
-                    )
-                    # TODO(giovp): fix or remove
-                    # element_path = Path(self.path) / "points" / name
-
-                    # # reload the points from the Zarr storage so that the element is lazy loaded,
-                    # # and most importantly, from the correct storage
-                    # _read_points(element_path)
-
-            if len(self.shapes):
-                root.create_group(name="shapes")
-                # keys = list(self.shapes.keys())
-                keys = self.shapes.keys()
-                for name in keys:
-                    elem_group = self._init_add_element(name=name, element_type="shapes", overwrite=overwrite)
-                    write_shapes(
-                        shapes=self.shapes[name],
-                        group=elem_group,
-                        name=name,
-                    )
-
-            if len(self.tables):
-                elem_group = root.create_group(name="tables")
-                for key in self.tables:
-                    write_table(table=self.tables[key], group=elem_group, name=key)
-
-        except Exception as e:  # noqa: B902
-            self._path = None
-            raise e
+        if self.path != file_path:
+            old_path = self.path
+            self.path = file_path
+            logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
 
         if consolidate_metadata:
             # consolidate metadata to more easily support remote reading
@@ -1087,39 +1078,67 @@ class SpatialData:
             # see discussion https://github.com/zarr-developers/zarr-python/issues/1121
             zarr.consolidate_metadata(store, metadata_key=".zmetadata")
 
-        # old code to support overwriting the backing file
-        # if target_path is not None:
-        #     if os.path.isdir(file_path):
-        #         assert overwrite is True
-        #         store = parse_url(file_path, mode="w").store
-        #         _ = zarr.group(store=store, overwrite=overwrite)
-        #         store.close()
-        #     for file in os.listdir(str(tmp_zarr_file)):
-        #         assert isinstance(tmp_zarr_file, Path)
-        #         src_file = tmp_zarr_file / file
-        #         tgt_file = file_path / file
-        #         os.rename(src_file, tgt_file)
-        #     target_path.cleanup()
-        #
-        #     self.path = str(file_path)
-        #     # elements that need to be reloaded are: images, labels, points
-        #     # non-backed elements don't need to be reloaded: table, shapes, polygons
-        #
-        #     from spatialdata._io.read import _read_multiscale, _read_points
-        #
-        #     for element_type in ["images", "labels", "points"]:
-        #         names = list(self.__getattribute__(element_type).keys())
-        #         for name in names:
-        #             path = file_path / element_type / name
-        #             if element_type in ["images", "labels"]:
-        #                 raster_type = element_type if element_type == "labels" else "image"
-        #                 element = _read_multiscale(str(path), raster_type=raster_type)  # type: ignore[arg-type]
-        #             elif element_type == "points":
-        #                 element = _read_points(str(path))
-        #             else:
-        #                 raise ValueError(f"Unknown element type {element_type}")
-        #             self.__getattribute__(element_type)[name] = element
-        assert isinstance(self.path, Path)
+    def _write_element(
+        self,
+        element: SpatialElement | AnnData,
+        zarr_container_path: Path,
+        element_type: str,
+        element_name: str,
+        overwrite: bool,
+    ) -> None:
+        if not isinstance(zarr_container_path, Path):
+            raise ValueError(
+                f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
+            )
+        file_path_of_element = zarr_container_path / element_type / element_name
+        self._validate_can_safely_write_to_path(
+            file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
+        )
+
+        element_group = self._get_group_for_element(name=element_name, element_type=element_type)
+        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+
+        if element_type == "images":
+            write_image(image=element, group=element_group, name=element_name)
+        elif element_type == "labels":
+            write_labels(labels=element, group=element_group, name=element_name)
+        elif element_type == "points":
+            write_points(points=element, group=element_group, name=element_name)
+        elif element_type == "shapes":
+            write_shapes(shapes=element, group=element_group, name=element_name)
+        elif element_type == "tables":
+            write_table(table=element, group=element_group, name=element_name)
+        else:
+            raise ValueError(f"Unknown element type: {element_type}")
+
+    def write_element(self, element_name: str, overwrite: bool = False) -> None:
+        """
+        Write a single element to Zarr.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write.
+        overwrite
+            If True, overwrite the element if it already exists.
+        """
+        # this internally ensures the name is unique
+        element = self[element_name]
+        element_type = None
+        for _element_type, _element_name, _ in self._gen_elements():
+            if _element_name == element_name:
+                element_type = _element_type
+                break
+        if element_type is None:
+            raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+
+        self._write_element(
+            element=element,
+            zarr_container_path=self.path,
+            element_type=element.element_type,
+            element_name=element_name,
+            overwrite=overwrite,
+        )
 
     @property
     def tables(self) -> Tables:
@@ -1453,6 +1472,18 @@ class SpatialData:
                 descr += f", with elements:\n        {elements}"
             if i < len(coordinate_systems) - 1:
                 descr += "\n"
+
+        from spatialdata._io._utils import get_dask_backing_files
+
+        descr += "\nbacking information:\n"
+        descr += (
+            f"backing Zarr store: {self.path} (the object is {'not ' if not self.is_self_contained() else ''}"
+            "self contained)\n"
+        )
+        descr += "Dask-backing files:\n"
+        backing_files = get_dask_backing_files(self)
+        for backing_file in backing_files:
+            descr += f"▸ {backing_file}\n"
         return descr
 
     def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
@@ -1520,7 +1551,7 @@ class SpatialData:
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
-        Retrieve element from the SpatialData instance matching element_name.
+        Retrieve SpatialElement or Table from the SpatialData instance matching element_name.
 
         Parameters
         ----------
@@ -1531,16 +1562,26 @@ class SpatialData:
         -------
         A tuple containing the element type, element name, and the retrieved element itself.
 
+        Notes
+        -----
+        Valid types are "images", "labels", "points", "shapes", and "tables".
+
         Raises
         ------
         KeyError
             If the element with the given name cannot be found.
         """
+        found = []
         for element_type, element_name_, element in self.gen_elements():
             if element_name_ == element_name:
-                return element_type, element_name_, element
+                found.append(element_type, element_name_, element)
         else:
             raise KeyError(f"Could not find element with name {element_name!r}")
+
+        if len(found) > 1:
+            raise ValueError(f"Found multiple elements with name {element_name!r}")
+
+        return found[0]
 
     @classmethod
     @deprecation_alias(table="tables")
@@ -1637,7 +1678,7 @@ class SpatialData:
         }
         return key in element_dict
 
-    def get(self, key: str, default_value: SpatialElement | AnnData | None = None) -> SpatialElement | AnnData:
+    def get(self, key: str, default_value: SpatialElement | AnnData | None = None) -> SpatialElement | AnnData | None:
         """
         Get element from SpatialData object based on corresponding name.
 

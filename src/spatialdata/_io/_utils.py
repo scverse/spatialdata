@@ -8,6 +8,7 @@ import tempfile
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,6 +18,7 @@ from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
@@ -28,6 +30,7 @@ from spatialdata._utils import iterate_pyramid_levels
 from spatialdata.models import TableModel
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
+    SpatialElement,
     ValidAxis_t,
     _validate_mapping_to_coordinate_system_type,
 )
@@ -210,7 +213,7 @@ def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
 
 
 @singledispatch
-def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
+def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> list[str]:
     """
     Get the backing files that appear in the Dask computational graph of an element/any element of a SpatialData object.
 
@@ -255,6 +258,12 @@ def _(element: DaskDataFrame) -> list[str]:
     return _get_backing_files(element)
 
 
+@get_dask_backing_files.register(AnnData)
+@get_dask_backing_files.register(GeoDataFrame)
+def _(element: AnnData | GeoDataFrame) -> list[str]:
+    return []
+
+
 def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     files = []
     for k, v in element.dask.layers.items():
@@ -269,6 +278,55 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
             parquet_file = t[0]
             files.append(os.path.realpath(parquet_file))
     return files
+
+
+def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
+    """
+    Returns the list of boolean values indicating if backing files for an object are child directory of a path.
+
+    Parameters
+    ----------
+    path
+        The path to check if the backing files are contained in.
+    object
+        The object to check the backing files of.
+
+    Returns
+    -------
+    List of boolean values for each of the backing files.
+
+    Notes
+    -----
+    If an object does not have a Dask computational graph, it will return an empty list.
+    It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
+    """
+    if not isinstance(path, Path):
+        raise TypeError(f"Expected a Path object, got {type(path)}")
+    return [_is_subfolder(parent=path, child=fp) for fp in get_dask_backing_files(object)]
+
+
+def _is_subfolder(parent: Path, child: Path) -> bool:
+    """
+    Check if a path is a subfolder of another path.
+
+    Parameters
+    ----------
+    parent
+        The parent folder.
+    child
+        The child folder.
+
+    Returns
+    -------
+    True if the child is a subfolder of the parent.
+    """
+    if isinstance(child, str):
+        child = Path(child)
+    if isinstance(parent, str):
+        parent = Path(parent)
+    if not isinstance(parent, Path) or not isinstance(child, Path):
+        raise TypeError(f"Expected a Path object, got {type(parent)} and {type(child)}")
+    return child.resolve().is_relative_to(parent.resolve())
 
 
 @singledispatch
