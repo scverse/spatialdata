@@ -532,6 +532,26 @@ class SpatialData:
         element_type_group = root.require_group(element_type)
         return element_type_group.require_group(name)
 
+    def _group_for_element_exists(self, name: str, element_type: str) -> bool:
+        """
+        Check if the group for an element exists.
+
+        Parameters
+        ----------
+        name
+            name of the element
+        element_type
+            type of the element. Should be in ["images", "labels", "points", "polygons", "shapes"].
+
+        Returns
+        -------
+        True if the group exists, False otherwise.
+        """
+        store = parse_url(self.path, mode="r").store
+        root = zarr.group(store=store)
+        assert element_type in ["images", "labels", "points", "polygons", "shapes"]
+        return element_type in root and name in root[element_type]
+
     def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
         store = parse_url(self.path, mode="r+").store
         root = zarr.group(store=store)
@@ -608,24 +628,32 @@ class SpatialData:
         if self.path is not None:
             for path in located:
                 found_element_type, found_element_name = path.split("/")
-                group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
-                axes = get_axes_names(element)
-                if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
-                    from spatialdata._io._utils import (
-                        overwrite_coordinate_transformations_raster,
-                    )
+                if self._group_for_element_exists(found_element_name, found_element_type):
+                    group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+                    axes = get_axes_names(element)
+                    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+                        from spatialdata._io._utils import (
+                            overwrite_coordinate_transformations_raster,
+                        )
 
-                    overwrite_coordinate_transformations_raster(group=group, axes=axes, transformations=transformations)
-                elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
-                    from spatialdata._io._utils import (
-                        overwrite_coordinate_transformations_non_raster,
-                    )
+                        overwrite_coordinate_transformations_raster(
+                            group=group, axes=axes, transformations=transformations
+                        )
+                    elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+                        from spatialdata._io._utils import (
+                            overwrite_coordinate_transformations_non_raster,
+                        )
 
-                    overwrite_coordinate_transformations_non_raster(
-                        group=group, axes=axes, transformations=transformations
-                    )
+                        overwrite_coordinate_transformations_non_raster(
+                            group=group, axes=axes, transformations=transformations
+                        )
+                    else:
+                        raise ValueError("Unknown element type")
                 else:
-                    raise ValueError("Unknown element type")
+                    logger.info(
+                        f"Not saving the transformation to element {found_element_type}/{found_element_name} as it is"
+                        " not found in Zarr storage"
+                    )
 
     @deprecation_alias(filter_table="filter_tables")
     def filter_by_coordinate_system(
