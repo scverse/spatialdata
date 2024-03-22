@@ -132,9 +132,13 @@ class SpatialData:
         if isinstance(tables, AnnData):
             tables = {"table": tables}
 
-        self._validate_unique_element_names(
-            list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
-        )
+        element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
+
+        if len(element_names) != len(set(element_names)):
+            duplicates = {x for x in element_names if element_names.count(x) > 1}
+            raise KeyError(
+                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
+            )
 
         if images is not None:
             for k, v in images.items():
@@ -492,17 +496,9 @@ class SpatialData:
             **kwargs,
         )
 
-    @staticmethod
-    def _validate_unique_element_names(element_names: list[str]) -> None:
-        if len(element_names) != len(set(element_names)):
-            duplicates = {x for x in element_names if element_names.count(x) > 1}
-            raise KeyError(
-                f"Element names must be unique. The following element names are used multiple times: {duplicates}"
-            )
-
     def is_backed(self) -> bool:
         """Check if the data is backed by a Zarr storage or if it is in-memory."""
-        return self._path is not None
+        return self.path is not None
 
     @property
     def path(self) -> Path | None:
@@ -525,77 +521,58 @@ class SpatialData:
                 f" the implications of working with SpatialData objects that are not self-contained."
             )
 
-    # TODO: from a commennt from Giovanni: consolite somewhere in
-    #  a future PR (luca: also _init_add_element could be cleaned)
-    def _get_group_for_element(self, name: str, element_type: str) -> zarr.Group:
+    def _get_groups_for_element(
+        self, zarr_path: Path, element_type: str, element_name: str
+    ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
-        Get the group for an element, creates a new one if the element doesn't exist.
+        Get the Zarr groups for the root, element_type and element for a specific element.
+
+        The store must exist, but creates the element type group and the element group if they don't exist.
 
         Parameters
         ----------
-        name
-            name of the element
+        zarr_path
+            The path to the Zarr storage.
         element_type
-            type of the element. Should be in ["images", "labels", "points", "polygons", "shapes"].
+            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+        element_name
+            name of the element
 
         Returns
         -------
         either the existing Zarr subgroup or a new one.
         """
-        store = parse_url(self.path, mode="r+").store
+        if not isinstance(zarr_path, Path):
+            raise ValueError("zarr_path should be a Path object")
+        store = parse_url(zarr_path, mode="r+").store
         root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
+        if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
+            raise ValueError(f"Unknown element type {element_type}")
         element_type_group = root.require_group(element_type)
-        return element_type_group.require_group(name)
+        element_name_group = element_type_group.require_group(element_name)
+        return root, element_type_group, element_name_group
 
-    def _group_for_element_exists(self, name: str, element_type: str) -> bool:
+    def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:
         """
         Check if the group for an element exists.
 
         Parameters
         ----------
-        name
-            name of the element
         element_type
-            type of the element. Should be in ["images", "labels", "points", "polygons", "shapes"].
+            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+        element_name
+            name of the element
 
         Returns
         -------
         True if the group exists, False otherwise.
         """
-        store = parse_url(self.path, mode="r").store
+        store = parse_url(zarr_path, mode="r").store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
-        return element_type in root and name in root[element_type]
-
-    #
-    # def _init_add_element(self, name: str, element_type: str, overwrite: bool) -> zarr.Group:
-    #     store = parse_url(self.path, mode="r+").store
-    #     root = zarr.group(store=store)
-    #     assert element_type in ["images", "labels", "points", "shapes"]
-    #     # not need to create the group for labels as it is already handled by ome-zarr-py
-    #     if element_type != "labels":
-    #         elem_group = root.create_group(name=element_type) if element_type not in root else root[element_type]
-    #     if overwrite:
-    #         if element_type == "labels" and element_type in root:
-    #             elem_group = root[element_type]
-    #         if name in elem_group:
-    #             del elem_group[name]
-    #     else:
-    #         # bypass is to ensure that elem_group is defined. I don't want to define it as None but either having it
-    #         # or not having it, so if the code tries to access it and it should not be there, it will raise an error
-    #         bypass = False
-    #         if element_type == "labels":
-    #             if element_type in root:
-    #                 elem_group = root[element_type]
-    #             else:
-    #                 bypass = True
-    #         if not bypass and name in elem_group:
-    #             raise ValueError(f"Element {name} already exists, use overwrite=True to overwrite it")
-    #
-    #     if element_type != "labels":
-    #         return elem_group
-    #     return root
+        exists = element_type in root and element_name in root[element_type]
+        store.close()
+        return exists
 
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
@@ -645,8 +622,12 @@ class SpatialData:
         if self.path is not None:
             for path in located:
                 found_element_type, found_element_name = path.split("/")
-                if self._group_for_element_exists(found_element_name, found_element_type):
-                    group = self._get_group_for_element(name=found_element_name, element_type=found_element_type)
+                if self._group_for_element_exists(
+                    zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
+                ):
+                    _, _, element_group = self._get_groups_for_element(
+                        zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
+                    )
                     axes = get_axes_names(element)
                     if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
                         from spatialdata._io._utils import (
@@ -654,7 +635,7 @@ class SpatialData:
                         )
 
                         overwrite_coordinate_transformations_raster(
-                            group=group, axes=axes, transformations=transformations
+                            group=element_group, axes=axes, transformations=transformations
                         )
                     elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
                         from spatialdata._io._utils import (
@@ -662,7 +643,7 @@ class SpatialData:
                         )
 
                         overwrite_coordinate_transformations_non_raster(
-                            group=group, axes=axes, transformations=transformations
+                            group=element_group, axes=axes, transformations=transformations
                         )
                     else:
                         raise ValueError("Unknown element type")
@@ -952,10 +933,13 @@ class SpatialData:
         """
         Check if a SpatialData object is self-contained.
 
-        A SpatialData object is said to be self-contained if all its SpatialElements are self-contained.
-        A SpatialElement is said to be self-contained when it does not depend on a Dask computational graph (i.e. it is
-        not "lazy") or when it is Dask-backed and each file that is read by the Dask computational graph is contained
-        within the Zarr store associated with the SpatialElement.
+        A SpatialData object is said to be self-contained if all its SpatialElements or AnnData tables are
+        self-contained. A SpatialElement or AnnData table is said to be self-contained when it does not depend on a
+        Dask computational graph (i.e. it is not "lazy") or when it is Dask-backed and each file that is read by the
+        Dask computational graph is contained within the Zarr store associated with the SpatialElement.
+
+        Currently, Points, Labels and Images are always represented lazily, while Shapes and Tables are always
+        in-memory. Therefore, the latter are always self-contained.
 
         Returns
         -------
@@ -990,7 +974,7 @@ class SpatialData:
         """
         from spatialdata._io._utils import _backed_elements_contained_in_path
 
-        if not self.is_backed():
+        if self.path is None:
             return True
 
         self_contained = True
@@ -1027,7 +1011,7 @@ class SpatialData:
                     "The file path specified is a parent directory of one or more files used for backing for one or "
                     "more elements in the SpatialData object. Please save the data to a different location."
                 )
-            if self.is_backed() and (
+            if self.path is not None and (
                 _is_subfolder(parent=self.path, child=file_path) or _is_subfolder(parent=file_path, child=self.path)
             ):
                 if saving_an_element and _is_subfolder(parent=self.path, child=file_path):
@@ -1095,25 +1079,29 @@ class SpatialData:
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
         )
 
-        element_group = self._get_group_for_element(name=element_name, element_type=element_type)
+        root_group, element_type_group, _ = self._get_groups_for_element(
+            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
+        )
         from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
 
         if element_type == "images":
-            write_image(image=element, group=element_group, name=element_name)
+            write_image(image=element, group=element_type_group, name=element_name)
         elif element_type == "labels":
-            write_labels(labels=element, group=element_group, name=element_name)
+            write_labels(labels=element, group=root_group, name=element_name)
         elif element_type == "points":
-            write_points(points=element, group=element_group, name=element_name)
+            write_points(points=element, group=element_type_group, name=element_name)
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_group, name=element_name)
+            write_shapes(shapes=element, group=element_type_group, name=element_name)
         elif element_type == "tables":
-            write_table(table=element, group=element_group, name=element_name)
+            write_table(table=element, group=element_type_group, name=element_name)
         else:
             raise ValueError(f"Unknown element type: {element_type}")
 
     def write_element(self, element_name: str, overwrite: bool = False) -> None:
         """
-        Write a single element to Zarr.
+        Write a single element to the Zarr store used for backing.
+
+        The element must already be present in the SpatialData object.
 
         Parameters
         ----------
@@ -1122,8 +1110,17 @@ class SpatialData:
         overwrite
             If True, overwrite the element if it already exists.
         """
-        # this internally ensures the name is unique
-        element = self[element_name]
+        self._validate_element_names_are_unique()
+        element = self.get(element_name)
+        if element is None:
+            raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+
+        if self.path is None:
+            raise ValueError(
+                "The SpatialData object appears not to be backed by a Zarr storage, so elements cannot be written to "
+                "disk."
+            )
+
         element_type = None
         for _element_type, _element_name, _ in self._gen_elements():
             if _element_name == element_name:
@@ -1139,6 +1136,29 @@ class SpatialData:
             element_name=element_name,
             overwrite=overwrite,
         )
+
+    def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
+        """
+        Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write. If None, write the metadata of all elements.
+        consolidate_metadata
+            If True, consolidate the metadata to more easily support remote reading. By default write the metadata
+            only if the metadata was already consolidated.
+
+        Notes
+        -----
+        When using the methods `write()` and `write_element()`, the metadata is written automatically.
+        """
+        # TODO: write transformations
+        # TODO: write .uns metadata for AnnData
+        # TODO: write .attrs metadata for the rest
+        # TODO: refresh consolidated metadata
+        # TODO: write omero metadata
+        pass
 
     @property
     def tables(self) -> Tables:
@@ -1549,6 +1569,21 @@ class SpatialData:
         """
         return self._gen_elements(include_table=True)
 
+    def _validate_element_names_are_unique(self) -> None:
+        """
+        Validate that the element names are unique.
+
+        Raises
+        ------
+        ValueError
+            If the element names are not unique.
+        """
+        element_names = set()
+        for _, element_name, _ in self.gen_elements():
+            if element_name in element_names:
+                raise ValueError(f"Element name {element_name!r} is not unique.")
+            element_names.add(element_name)
+
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
         Retrieve SpatialElement or Table from the SpatialData instance matching element_name.
@@ -1574,8 +1609,9 @@ class SpatialData:
         found = []
         for element_type, element_name_, element in self.gen_elements():
             if element_name_ == element_name:
-                found.append(element_type, element_name_, element)
-        else:
+                found.append((element_type, element_name_, element))
+
+        if len(found) == 0:
             raise KeyError(f"Could not find element with name {element_name!r}")
 
         if len(found) > 1:

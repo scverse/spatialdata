@@ -266,7 +266,10 @@ class TestReadWrite:
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
             full_sdata.write(f)
-            with pytest.raises(ValueError, match="The file path specified is the same as the one used for backing."):
+            with pytest.raises(
+                ValueError,
+                match="The file path specified either contains either is contained in the one used for backing.",
+            ):
                 full_sdata.write(f, overwrite=True)
 
         # support for overwriting backed sdata has been temporarily removed

@@ -282,7 +282,7 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
 
 def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
     """
-    Returns the list of boolean values indicating if backing files for an object are child directory of a path.
+    Return the list of boolean values indicating if backing files for an object are child directory of a path.
 
     Parameters
     ----------
@@ -302,7 +302,7 @@ def _backed_elements_contained_in_path(path: Path, object: SpatialData | Spatial
     """
     if not isinstance(path, Path):
         raise TypeError(f"Expected a Path object, got {type(path)}")
-    return [_is_subfolder(parent=path, child=fp) for fp in get_dask_backing_files(object)]
+    return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
 def _is_subfolder(parent: Path, child: Path) -> bool:
@@ -368,6 +368,12 @@ def save_transformations(sdata: SpatialData) -> None:
     """
     from spatialdata.transformations import get_transformation, set_transformation
 
+    # warnings.warn(
+    #     "This function is deprecated and should be replaced by `SpatialData.write_metadata()` or
+    #     `SpatialData.write_element_metadata()`, which gives more control over which metadata to write.",
+    #     DeprecationWarning,
+    #     stacklevel=2,
+    # )
     for element in sdata._gen_spatial_element_values():
         transformations = get_transformation(element, get_all=True)
         set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
