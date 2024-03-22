@@ -7,14 +7,13 @@ import pytest
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq
-from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
-from shapely.geometry import Point
 from spatial_image import SpatialImage
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical
 from spatialdata.models import Image2DModel, TableModel
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
     set_transformation,
@@ -28,38 +27,24 @@ RNG = default_rng(0)
 
 class TestReadWrite:
     def test_images(self, tmp_path: str, images: SpatialData) -> None:
-        """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        assert images.images.keys() == sdata.images.keys()
-        for k in images.images:
-            assert images.images[k].equals(sdata.images[k])
+        assert_spatial_data_objects_are_identical(images, sdata)
 
     def test_labels(self, tmp_path: str, labels: SpatialData) -> None:
-        """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
         labels.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        assert labels.labels.keys() == sdata.labels.keys()
-        for k in labels.labels:
-            assert labels.labels[k].equals(sdata.labels[k])
+        assert_spatial_data_objects_are_identical(labels, sdata)
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
-        """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
         shapes.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        assert shapes.shapes.keys() == sdata.shapes.keys()
-        for k in shapes.shapes:
-            assert isinstance(sdata.shapes[k], GeoDataFrame)
-            assert shapes.shapes[k].equals(sdata.shapes[k])
-            if "radius" in shapes.shapes["circles"].columns:
-                assert shapes.shapes["circles"]["radius"].equals(sdata.shapes["circles"]["radius"])
-                assert isinstance(sdata.shapes["circles"]["geometry"][0], Point)
+        assert_spatial_data_objects_are_identical(shapes, sdata)
 
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
-        """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)

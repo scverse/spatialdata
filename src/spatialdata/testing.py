@@ -13,12 +13,13 @@ from xarray.testing import assert_equal as assert_xarray_equal
 
 from spatialdata import SpatialData
 from spatialdata._core._elements import Elements
+from spatialdata.models import PointsModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations.operations import get_transformation
 
 
 def assert_elements_dict_are_identical(
-    elements0: Elements, elements1: Elements, check_transformations: bool = True
+    elements0: Elements, elements1: Elements, check_transformations: bool = True, check_metadata: bool = True
 ) -> None:
     """
     Compare two dictionaries of elements and assert that they are identical (except for the order of the keys).
@@ -32,6 +33,10 @@ def assert_elements_dict_are_identical(
         The first dictionary of elements.
     elements1
         The second dictionary of elements.
+    check_transformations
+        Whether to check if the transformations are identical, for each element.
+    check_metadata
+        Whether to check if the metadata is identical, for each element.
 
     Returns
     -------
@@ -44,19 +49,23 @@ def assert_elements_dict_are_identical(
 
     Notes
     -----
-    With the current implementation, the transformations Translate([1.0, 2.0],
-    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
-    A quick way to avoid an error in this case is to use the check_transformations=False parameter.
+    Please see
+    :func:`spatialdata.testing.assert_spatial_data_objects_are_identical` for additional comments.
     """
     assert set(elements0.keys()) == set(elements1.keys())
     for k in elements0:
         element0 = elements0[k]
         element1 = elements1[k]
-        assert_elements_are_identical(element0, element1, check_transformations=check_transformations)
+        assert_elements_are_identical(
+            element0, element1, check_transformations=check_transformations, check_metadata=check_metadata
+        )
 
 
 def assert_elements_are_identical(
-    element0: SpatialElement | AnnData, element1: SpatialElement | AnnData, check_transformations: bool = True
+    element0: SpatialElement | AnnData,
+    element1: SpatialElement | AnnData,
+    check_transformations: bool = True,
+    check_metadata: bool = True,
 ) -> None:
     """
     Compare two elements (two SpatialElements or two tables) and assert that they are identical.
@@ -68,7 +77,9 @@ def assert_elements_are_identical(
     element1
         The second element.
     check_transformations
-        Whether to check if the transformations are identical, for each element.
+        Whether to check if the transformations of the elements are identical.
+    check_metadata
+        Whether to check if the metadata of the elements is identical.
 
     Returns
     -------
@@ -81,11 +92,12 @@ def assert_elements_are_identical(
 
     Notes
     -----
-    With the current implementation, the transformations Translate([1.0, 2.0],
-    axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
-    A quick way to avoid an error in this case is to use the check_transformations=False parameter.
+    Please see
+    :func:`spatialdata.testing.assert_spatial_data_objects_are_identical` for additional comments.
     """
     assert type(element0) == type(element1)
+    if check_transformations and not check_metadata:
+        raise ValueError("check_transformations cannot be True if check_metadata is False")
 
     # compare transformations (only for SpatialElements)
     if not isinstance(element0, AnnData):
@@ -106,16 +118,22 @@ def assert_elements_are_identical(
     elif isinstance(element0, SpatialImage):
         assert_xarray_equal(element0, element1)
     elif isinstance(element0, MultiscaleSpatialImage):
-        assert_datatree_equal(element0, element1)
+        try:
+            assert_datatree_equal(element0, element1)
+        except ValueError as e:
+            pass
+            raise e
     elif isinstance(element0, GeoDataFrame):
         assert_geodataframe_equal(element0, element1, check_less_precise=True)
     else:
         assert isinstance(element0, DaskDataFrame)
         assert_dask_dataframe_equal(element0, element1)
+        if PointsModel.ATTRS_KEY in element0.attrs or PointsModel.ATTRS_KEY in element1.attrs:
+            assert element0.attrs[PointsModel.ATTRS_KEY] == element1.attrs[PointsModel.ATTRS_KEY]
 
 
 def assert_spatial_data_objects_are_identical(
-    sdata0: SpatialData, sdata1: SpatialData, check_transformations: bool = True
+    sdata0: SpatialData, sdata1: SpatialData, check_transformations: bool = True, check_metadata: bool = True
 ) -> None:
     """
     Compare two SpatialData objects and assert that they are identical.
@@ -128,6 +146,8 @@ def assert_spatial_data_objects_are_identical(
         The second SpatialData object.
     check_transformations
         Whether to check if the transformations are identical, for each element.
+    check_metadata
+        Whether to check if the metadata is identical, for each element.
 
     Returns
     -------
@@ -140,6 +160,9 @@ def assert_spatial_data_objects_are_identical(
 
     Notes
     -----
+    If `check_metadata` is `True` but `check_transformations` is `False`, the metadata will be compared with
+    the exclusion of the transformations.
+
     With the current implementation, the transformations Translate([1.0, 2.0],
     axes=('x', 'y')) and Translate([2.0, 1.0], axes=('y', 'x')) are considered different.
     A quick way to avoid an error in this case is to use the check_transformations=False parameter.
@@ -153,4 +176,6 @@ def assert_spatial_data_objects_are_identical(
     for element_name in element_names0:
         element0 = sdata0[element_name]
         element1 = sdata1[element_name]
-        assert_elements_are_identical(element0, element1, check_transformations=check_transformations)
+        assert_elements_are_identical(
+            element0, element1, check_transformations=check_transformations, check_metadata=check_metadata
+        )

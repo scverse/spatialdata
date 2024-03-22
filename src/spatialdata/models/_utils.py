@@ -255,6 +255,12 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
     assert "y" not in ddf.columns
     ddf["x"] = gdf.geometry.x
     ddf["y"] = gdf.geometry.y
+
+    # reorder columns
+    axes = ["x", "y", "z"] if "z" in ddf.columns else ["x", "y"]
+    non_axes = [c for c in ddf.columns if c not in axes]
+    ddf = ddf[axes + non_axes]
+
     # parse
     if "z" in ddf.columns:
         if not suppress_z_warning:

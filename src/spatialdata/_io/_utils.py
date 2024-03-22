@@ -329,6 +329,12 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
     return child.resolve().is_relative_to(parent.resolve())
 
 
+def is_element_self_contained(
+    element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+) -> bool:
+    return all(_backed_elements_contained_in_path(path=element_path, object=element))
+
+
 @singledispatch
 def get_channels(data: Any) -> list[Any]:
     """Get channels from data.
@@ -355,7 +361,7 @@ def _(data: MultiscaleSpatialImage) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
     channels = {tuple(data[i][name].coords["c"].values) for i in data}
     if len(channels) > 1:
-        raise ValueError("TODO")
+        raise ValueError(f"Channels are not consistent across scales: {channels}")
     return list(next(iter(channels)))
 
 

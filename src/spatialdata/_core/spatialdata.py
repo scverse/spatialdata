@@ -929,19 +929,20 @@ class SpatialData:
                 elements[element_type][element_name] = transformed
         return SpatialData(**elements, tables=sdata.tables)
 
-    def is_self_contained(self) -> bool:
-        # TODO: not true that if the object is self-contained then the performance is necessarily good. It needs to have
+    def is_self_contained(self: SpatialData) -> bool:
         # things backed
         """
-        Check if a SpatialData object is self-contained.
+        Check if a SpatialData object is self-contained; self-contained objects have a simpler disk storage layout.
 
         A SpatialData object is said to be self-contained if all its SpatialElements or AnnData tables are
         self-contained. A SpatialElement or AnnData table is said to be self-contained when it does not depend on a
-        Dask computational graph (i.e. it is not "lazy") or when it is Dask-backed and each file that is read by the
+        Dask computational graph (i.e. it is not "lazy") or when it is Dask-backed and each file that is read in the
         Dask computational graph is contained within the Zarr store associated with the SpatialElement.
 
         Currently, Points, Labels and Images are always represented lazily, while Shapes and Tables are always
         in-memory. Therefore, the latter are always self-contained.
+
+        Printing a SpatialData object will show if any of its elements are not self-contained.
 
         Returns
         -------
@@ -950,31 +951,15 @@ class SpatialData:
         Notes
         -----
         Generally, it is preferred to work with self-contained SpatialData objects; working with non-self-contained
-        SpatialData objects is possible but requires more care and understanding of the implications.
+        SpatialData objects is possible but requires more care when performing IO operations:
 
-        Common scenarios.
-
-            1.  SpatialData objects right after they are read with `read_zarr()` are self-contained.
-            2.  SpatialData objects that are entirely stored in-memory and that are written to disk with `write()` are
-                self-contained.
-            3.  Objects that have Dask-backed elements and that are written to disk with `write()` are not
-                self-contained. For example, a `SpatialData` object returned from a reader from `spatialdata_io`, such
-                as `visium()`, is not self-contained. To make it self-contained, use `write()` followed by
-                `read_zarr()`.
-
-        Implications.
-
-            1. Visualizing a non-self-contained SpatialData object in napari is not guaranteed to be performant as this
-                depends on the disk layout of the Dask-backed files. If the Dask-backed files are from other SpatialData
-                objects, visualization will be performant, if they are external large Tiff files, visualization may be
-                slow.
-            2.  When incrementally adding SpatialElements to a SpatialData object, or when resaving a SpatialElement to
-                disk, or when resaving the metadata of a SpatialElement (such as the coordiante system/transformation
-                information), the disk locations that will be updated are child directories of the Zarr store associated
-                to the SpatialData object. When the SpatialData object is not self-contained, it is important to be
-                aware that only the files that are contained within the Zarr store will be updated.
+            1.  Non-self-contained elements depend on files outside the Zarr store associated with the SpatialData
+                object. Therefore, changes on these external files (such as deletion), will be reflected in the
+                SpatialData object.
+            2.  When calling `write_element()` and `write_element()` metadata, the changes will be applied to the Zarr
+                store associated with the SpatialData object, not on the external files.
         """
-        from spatialdata._io._utils import _backed_elements_contained_in_path
+        from spatialdata._io._utils import is_element_self_contained
 
         if self.path is None:
             return True
@@ -982,7 +967,7 @@ class SpatialData:
         self_contained = True
         for element_type, element_name, element in self.gen_elements():
             element_path = Path(self.path) / element_type / element_name
-            element_is_self_contained = all(_backed_elements_contained_in_path(path=element_path, object=element))
+            element_is_self_contained = is_element_self_contained(element=element, element_path=element_path)
             self_contained = self_contained and element_is_self_contained
         return self_contained
 
@@ -1384,7 +1369,9 @@ class SpatialData:
         def h(s: str) -> str:
             return hashlib.md5(repr(s).encode()).hexdigest()
 
-        descr = "SpatialData object with:"
+        descr = "SpatialData object"
+        if self.path is not None:
+            descr += f", with associated Zarr store: {self.path.resolve()}"
 
         non_empty_elements = self._non_empty_elements()
         last_element_index = len(non_empty_elements) - 1
@@ -1495,19 +1482,16 @@ class SpatialData:
             if i < len(coordinate_systems) - 1:
                 descr += "\n"
 
-        from spatialdata._io._utils import get_dask_backing_files
+        from spatialdata._io._utils import get_dask_backing_files, is_element_self_contained
 
-        descr += f"\nwith associated Zarr store (root): {self.path}"
-        # TODO: inform on the external dask backin files, hide the ones that are in the same path
-        # TODO: add lazy-read, lazy-computed vs "" non-lazy in the description
-        descr += "\nwith Dask-backing files:\n"
-        backing_files = get_dask_backing_files(self)
-        for backing_file in backing_files:
-            if self.path is not None and backing_file.startswith(str(self.path.resolve())):
-                backing_file = backing_file[len(str(self.path.resolve())) + 1 :]
-            descr += f"    ▸ {backing_file}\n"
         if not self.is_self_contained():
-            descr += "The SpatialData object is not self-contained\n"
+            assert self.path is not None
+            descr += "\nwith the following Dask-backed elements not being self-contained:\n"
+            for element_type, element_name, element in self.gen_elements():
+                element_path = Path(self.path) / element_type / element_name
+                if not is_element_self_contained(element, element_path):
+                    backing_files = ", ".join(get_dask_backing_files(element))
+                    descr += f"    ▸ {element_name}: {backing_files} \n"
         return descr
 
     def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
