@@ -599,59 +599,9 @@ class SpatialData:
                     found_element_name.append(element_name)
         if len(found) == 0:
             return []
+        if any("/" in found_element_name[i] or "/" in found_element_type[i] for i in range(len(found))):
+            raise ValueError("Found an element name with a '/' character. This is not allowed.")
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
-
-    def _write_transformations_to_disk(self, element: SpatialElement) -> None:
-        """
-        Write transformations to disk for an element.
-
-        Parameters
-        ----------
-        element
-            The SpatialElement object for which the transformations to be written
-        """
-        from spatialdata.transformations.operations import get_transformation
-
-        transformations = get_transformation(element, get_all=True)
-        assert isinstance(transformations, dict)
-        located = self.locate_element(element)
-        if len(located) == 0:
-            raise ValueError(
-                "Cannot save the transformation to the element as it has not been found in the SpatialData object"
-            )
-        if self.path is not None:
-            for path in located:
-                found_element_type, found_element_name = path.split("/")
-                if self._group_for_element_exists(
-                    zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
-                ):
-                    _, _, element_group = self._get_groups_for_element(
-                        zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
-                    )
-                    axes = get_axes_names(element)
-                    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
-                        from spatialdata._io._utils import (
-                            overwrite_coordinate_transformations_raster,
-                        )
-
-                        overwrite_coordinate_transformations_raster(
-                            group=element_group, axes=axes, transformations=transformations
-                        )
-                    elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
-                        from spatialdata._io._utils import (
-                            overwrite_coordinate_transformations_non_raster,
-                        )
-
-                        overwrite_coordinate_transformations_non_raster(
-                            group=element_group, axes=axes, transformations=transformations
-                        )
-                    else:
-                        raise ValueError("Unknown element type")
-                else:
-                    logger.info(
-                        f"Not saving the transformation to element {found_element_type}/{found_element_name} as it is"
-                        " not found in Zarr storage"
-                    )
 
     @deprecation_alias(filter_table="filter_tables")
     def filter_by_coordinate_system(
@@ -930,7 +880,6 @@ class SpatialData:
         return SpatialData(**elements, tables=sdata.tables)
 
     def is_self_contained(self: SpatialData) -> bool:
-        # things backed
         """
         Check if a SpatialData object is self-contained; self-contained objects have a simpler disk storage layout.
 
@@ -1044,10 +993,7 @@ class SpatialData:
             logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
 
         if consolidate_metadata:
-            # consolidate metadata to more easily support remote reading
-            # bug in zarr, 'zmetadata' is written instead of '.zmetadata'
-            # see discussion https://github.com/zarr-developers/zarr-python/issues/1121
-            zarr.consolidate_metadata(store, metadata_key=".zmetadata")
+            self.write_consolidated_metadata()
 
     def _write_element(
         self,
@@ -1124,9 +1070,115 @@ class SpatialData:
             overwrite=overwrite,
         )
 
+    def write_consolidated_metadata(self) -> None:
+        store = parse_url(self.path, mode="r+").store
+        # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
+        # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
+        zarr.consolidate_metadata(store, metadata_key=".zmetadata")
+        store.close()
+
+    def write_transformations(self, element_name: str | None = None) -> None:
+        """
+        Write transformations to disk for a single element, or for all elements, without rewriting the data.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write. If None, write the transformations of all elements.
+        """
+        from spatialdata._io._utils import is_element_self_contained
+        from spatialdata.transformations.operations import get_transformation
+
+        # recursively write the transformation for all the SpatialElement
+        if element_name is None:
+            for _, element_name, _ in self._gen_elements():
+                self.write_transformations(element_name)
+            return
+
+        # check the element exists in the SpatialData object
+        element = self.get(element_name)
+        if element is None:
+            raise ValueError(
+                "Cannot save the transformation to the element as it has not been found in the SpatialData object"
+            )
+
+        # check there is a Zarr store for the SpatialData object
+        if self.path is None:
+            warnings.warn(
+                "The SpatialData object appears not to be backed by a Zarr storage, so transformations cannot be "
+                "written",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
+
+        transformations = get_transformation(element, get_all=True)
+        assert isinstance(transformations, dict)
+
+        # (redundant) safety check, we should always expect no duplicate names for elements
+        located = self.locate_element(element)
+        if len(located) != 1:
+            raise ValueError(
+                f"Expected to find exactly one element with name {element_name}, but found {len(located)} elements."
+            )
+        path = located[0]
+        found_element_type, found_element_name = path.split("/")
+
+        # check if the element exists in the Zarr storage
+        if not self._group_for_element_exists(
+            zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
+        ):
+            warnings.warn(
+                f"Not saving the transformation to element {found_element_type}/{found_element_name} as it is"
+                " not found in Zarr storage. You may choose to call write_element() first.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
+
+        # warn the users if the element is not self-contained, that is, it is Dask-backed by files outside the Zarr
+        # group for the element
+        element_zarr_path = Path(self.path) / found_element_type / found_element_name
+        if not is_element_self_contained(element=element, element_path=element_zarr_path):
+            logger.info(
+                f"Element {found_element_type}/{found_element_name} is not self-contained. The transformation will be"
+                " saved to the Zarr group of the element in the SpatialData Zarr store. The data outside the element "
+                "Zarr group will not be affected."
+            )
+
+        _, _, element_group = self._get_groups_for_element(
+            zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
+        )
+        axes = get_axes_names(element)
+        if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+            from spatialdata._io._utils import (
+                overwrite_coordinate_transformations_raster,
+            )
+
+            overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
+        elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+            from spatialdata._io._utils import (
+                overwrite_coordinate_transformations_non_raster,
+            )
+
+            overwrite_coordinate_transformations_non_raster(
+                group=element_group, axes=axes, transformations=transformations
+            )
+        else:
+            raise ValueError(f"Unknown element type {type(element)}")
+
     def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
+
+        Currently only the transformations and the consolidated metadata can be re-written without re-writing the data.
+
+        Future versions of SpatialData will support writing the following metadata without requiring a rewrite of the
+        data:
+
+            - .uns['spatialdata_attrs'] metadata for AnnData;
+            - .attrs['spatialdata_attrs'] metadata for DaskDataFrame;
+            - OMERO metadata for the channel name of images.
 
         Parameters
         ----------
@@ -1140,12 +1192,18 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
-        # TODO: write transformations
-        # TODO: write .uns metadata for AnnData
-        # TODO: write .attrs metadata for the rest
-        # TODO: refresh consolidated metadata
-        # TODO: write omero metadata
-        pass
+        self.write_transformations(element_name)
+        # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
+        # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
+        # TODO: write omero metadata for the channel name of images.
+
+        if consolidate_metadata is None:
+            store = parse_url(self.path, mode="r").store
+            if "zmetadata" in store:
+                consolidate_metadata = True
+            store.close()
+        if consolidate_metadata:
+            self.write_consolidated_metadata()
 
     @property
     def tables(self) -> Tables:

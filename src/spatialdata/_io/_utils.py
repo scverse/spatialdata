@@ -5,6 +5,7 @@ import logging
 import os.path
 import re
 import tempfile
+import warnings
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
@@ -372,17 +373,14 @@ def save_transformations(sdata: SpatialData) -> None:
     sdata
         The SpatialData object
     """
-    from spatialdata.transformations import get_transformation, set_transformation
-
-    # warnings.warn(
-    #     "This function is deprecated and should be replaced by `SpatialData.write_metadata()` or
-    #     `SpatialData.write_element_metadata()`, which gives more control over which metadata to write.",
-    #     DeprecationWarning,
-    #     stacklevel=2,
-    # )
-    for element in sdata._gen_spatial_element_values():
-        transformations = get_transformation(element, get_all=True)
-        set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
+    warnings.warn(
+        "This function is deprecated and should be replaced by `SpatialData.write_transformations()` or "
+        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. The execution will "
+        "conitnue by calling the former",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    sdata.write_transformations()
 
 
 def read_table_and_validate(
