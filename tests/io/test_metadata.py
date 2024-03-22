@@ -118,8 +118,15 @@ def test_save_channel_names_incremental(images: SpatialData) -> None:
 
 
 # test io for consolidated metadata
-# def test_consolidated_metadata(full_sdata: SpatialData) -> None:
-#     with tempfile.TemporaryDirectory() as tmp_dir:
-#         f = os.path.join(tmp_dir, "data.zarr")
-#         full_sdata.write(f)
-#         pass
+def test_consolidated_metadata(full_sdata: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "data0.zarr")
+        full_sdata.write(f0)
+        assert full_sdata.has_consolidated_metadata()
+
+        f1 = os.path.join(tmp_dir, "data1.zarr")
+        full_sdata.write(f1, consolidate_metadata=False)
+        assert not full_sdata.has_consolidated_metadata()
+
+        full_sdata.write_metadata(consolidate_metadata=True)
+        assert full_sdata.has_consolidated_metadata()

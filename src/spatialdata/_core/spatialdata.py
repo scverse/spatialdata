@@ -1077,6 +1077,14 @@ class SpatialData:
         zarr.consolidate_metadata(store, metadata_key=".zmetadata")
         store.close()
 
+    def has_consolidated_metadata(self) -> bool:
+        return_value = False
+        store = parse_url(self.path, mode="r").store
+        if "zmetadata" in store:
+            return_value = True
+        store.close()
+        return return_value
+
     def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
         """Validate if metadata can be written on an element, returns None if it cannot be written."""
         from spatialdata._io._utils import is_element_self_contained
@@ -1215,11 +1223,8 @@ class SpatialData:
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
         # TODO: write omero metadata for the channel name of images.
 
-        if consolidate_metadata is None:
-            store = parse_url(self.path, mode="r").store
-            if "zmetadata" in store:
-                consolidate_metadata = True
-            store.close()
+        if consolidate_metadata is None and self.has_consolidated_metadata():
+            consolidate_metadata = True
         if consolidate_metadata:
             self.write_consolidated_metadata()
 
