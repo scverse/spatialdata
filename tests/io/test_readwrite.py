@@ -6,12 +6,10 @@ import dask.dataframe as dd
 import numpy as np
 import pytest
 from anndata import AnnData
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
-from spatial_image import SpatialImage
-from spatialdata import SpatialData, read_zarr
-from spatialdata._io._utils import _are_directories_identical, get_channels
-from spatialdata.models import Image2DModel, TableModel
+from spatialdata import SpatialData
+from spatialdata._io._utils import _are_directories_identical, get_channels, get_dask_backing_files
+from spatialdata.models import Image2DModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
@@ -79,7 +77,6 @@ class TestReadWrite:
         sdata_tables = SpatialData(tables={str(i): tables[i] for i in range(len(tables))})
         self._test_table(tmp_path, sdata_tables)
 
-    # @pytest.mark.skip("waiting for the new points implementation")
     def test_roundtrip(
         self,
         tmp_path: str,
@@ -87,67 +84,90 @@ class TestReadWrite:
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
-        # TODO: not checking for consistency ATM
         sdata.write(tmpdir)
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2)
         _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
-    def test_incremental_io(
+    def test_incremental_io_in_memory(
         self,
-        tmp_path: str,
         full_sdata: SpatialData,
     ) -> None:
-        tmpdir = Path(tmp_path) / "tmp.zarr"
         sdata = full_sdata
 
-        sdata.images["sdata_not_saved_yet"] = _get_images().values().__iter__().__next__()
-        sdata.write(tmpdir)
-
         for k, v in _get_images().items():
-            if isinstance(v, SpatialImage):
-                v.name = f"incremental_{k}"
-            elif isinstance(v, MultiscaleSpatialImage):
-                for scale in v:
-                    names = list(v[scale].keys())
-                    assert len(names) == 1
-                    name = names[0]
-                    v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.images[f"incremental_{k}"] = v
+            sdata.images[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
-                sdata.images[f"incremental_{k}"] = v
-                sdata[f"incremental_{k}"] = v
+                sdata.images[f"additional_{k}"] = v
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `table` already exists."):
+                sdata["table"] = v
 
         for k, v in _get_labels().items():
-            if isinstance(v, SpatialImage):
-                v.name = f"incremental_{k}"
-            elif isinstance(v, MultiscaleSpatialImage):
-                for scale in v:
-                    names = list(v[scale].keys())
-                    assert len(names) == 1
-                    name = names[0]
-                    v[scale] = v[scale].rename_vars({name: f"incremental_{k}"})
-            sdata.labels[f"incremental_{k}"] = v
+            sdata.labels[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
-                sdata.labels[f"incremental_{k}"] = v
-                sdata[f"incremental_{k}"] = v
+                sdata.labels[f"additional_{k}"] = v
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `table` already exists."):
+                sdata["table"] = v
 
         for k, v in _get_shapes().items():
-            sdata.shapes[f"incremental_{k}"] = v
+            sdata.shapes[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
-                sdata.shapes[f"incremental_{k}"] = v
-                sdata[f"incremental_{k}"] = v
-            break
+                sdata.shapes[f"additional_{k}"] = v
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `table` already exists."):
+                sdata["table"] = v
 
         for k, v in _get_points().items():
-            sdata.points[f"incremental_{k}"] = v
+            sdata.points[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
-                sdata.points[f"incremental_{k}"] = v
-                sdata[f"incremental_{k}"] = v
-            break
+                sdata.points[f"additional_{k}"] = v
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `table` already exists."):
+                sdata["table"] = v
 
-    def test_incremental_io_table(self, table_single_annotation: SpatialData) -> None:
+    def test_incremental_io_on_disk(self, tmp_path: str, full_sdata: SpatialData):
+        tmpdir = Path(tmp_path) / "incremental_io.zarr"
+        sdata = SpatialData()
+        sdata.write(tmpdir)
+
+        for name in [
+            "image2d",
+            "image3d_multiscale_xarray",
+            "labels2d",
+            "labels3d_multiscale_xarray",
+            "points_0",
+            "multipoly",
+            "table",
+        ]:
+            sdata[name] = full_sdata[name]
+            sdata.write_element(name)
+
+            with pytest.raises(
+                ValueError, match="The Zarr store already exists. Use `overwrite=True` to try overwriting the store."
+            ):
+                sdata.write_element(name)
+
+            with pytest.raises(ValueError, match="Currently, overwriting existing elements is not supported."):
+                sdata.write_element(name, overwrite=True)
+
+            # workaround 1, mostly safe (no guarantee: untested for Windows platform, network drives, multi-threaded
+            # setups, ...)
+            new_name = f"{name}_new_place"
+            sdata[new_name] = sdata[name]
+            sdata.write_element(new_name)
+            # TODO: del sdata[name] on-disk
+            # TODO: sdata.write(name)
+            # TODO: del sdata['new_place'] on-disk
+            # TODO: del sdata['new_place']
+
+            # workaround 2, unsafe but sometimes acceptable depending on the user's workflow
+            # TODO: del[sdata] on-diks
+            # TODO: sdata.write(name)
+
+    def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
         t = s.table[:10, :].copy()
         with pytest.raises(ValueError):
@@ -175,44 +195,49 @@ class TestReadWrite:
             dask0 = points.points[elem_name]
             points.write(f)
             assert all("read-parquet" not in key for key in dask0.dask.layers)
-            dask1 = read_zarr(f).points[elem_name]
+            assert len(get_dask_backing_files(points)) == 0
+
+            sdata2 = SpatialData.read(f)
+            dask1 = sdata2[elem_name]
             assert any("read-parquet" in key for key in dask1.dask.layers)
+            assert len(get_dask_backing_files(sdata2)) > 0
 
     def test_io_and_lazy_loading_raster(self, images, labels):
-        # addresses bug https://github.com/scverse/spatialdata/issues/117
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
             d = sdata.__getattribute__(k)
             elem_name = list(d.keys())[0]
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
-                dask0 = d[elem_name].data
+                dask0 = sdata[elem_name].data
                 sdata.write(f)
-                dask1 = d[elem_name].data
                 assert all("from-zarr" not in key for key in dask0.dask.layers)
-                dask1 = read_zarr(f)[elem_name].data
+                assert len(get_dask_backing_files(sdata)) == 0
+
+                sdata2 = SpatialData.read(f)
+                dask1 = sdata2[elem_name].data
                 assert any("from-zarr" in key for key in dask1.dask.layers)
+                assert len(get_dask_backing_files(sdata2)) > 0
 
     def test_replace_transformation_on_disk_raster(self, images, labels):
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
             d = sdata.__getattribute__(k)
-            # unlike the non-raster case we are testing all the elements (2d and 3d, multiscale and not)
-            # TODO: we can actually later on merge this test and the one below keepin the logic of this function here
+            # unlike the non-raster case, we are testing all the elements (2d and 3d, multiscale and not)
             for elem_name in d:
                 kwargs = {k: {elem_name: d[elem_name]}}
                 single_sdata = SpatialData(**kwargs)
                 with tempfile.TemporaryDirectory() as td:
                     f = os.path.join(td, "data.zarr")
                     single_sdata.write(f)
-                    t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                    t0 = get_transformation(SpatialData.read(f)[elem_name])
                     assert type(t0) == Identity
                     set_transformation(
-                        single_sdata.__getattribute__(k)[elem_name],
+                        single_sdata[elem_name],
                         Scale([2.0], axes=("x",)),
                         write_to_sdata=single_sdata,
                     )
-                    t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                    t1 = get_transformation(SpatialData.read(f)[elem_name])
                     assert type(t1) == Scale
 
     def test_replace_transformation_on_disk_non_raster(self, shapes, points):
@@ -225,39 +250,57 @@ class TestReadWrite:
                 sdata.write(f)
                 t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
                 assert type(t0) == Identity
-                set_transformation(
-                    sdata.__getattribute__(k)[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata
-                )
-                t1 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                set_transformation(sdata[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
+                t1 = get_transformation(SpatialData.read(f)[elem_name])
                 assert type(t1) == Scale
 
-    def test_overwrite_files_without_backed_data(self, full_sdata):
+    def test_overwrite_works_when_no_zarr_store(self, full_sdata):
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
             old_data = SpatialData()
             old_data.write(f)
-            # Since not backed, no risk of overwriting backing data.
+            # Since no, no risk of overwriting backing data.
             # Should not raise "The file path specified is the same as the one used for backing."
             full_sdata.write(f, overwrite=True)
 
-    def test_not_overwrite_files_without_backed_data_but_with_dask_backed_data(self, full_sdata, points):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            f = os.path.join(tmpdir, "data.zarr")
-            points.write(f)
-            points2 = SpatialData.read(f)
-            p = points2["points_0"]
-            full_sdata["points_0"] = p
-            with pytest.raises(
-                ValueError,
-                match="The file path specified is a parent directory of one or more files used for backing for one or ",
-            ):
-                full_sdata.write(f, overwrite=True)
+    def test_overwrite_fails_when_no_zarr_store_bug_dask_backed_data(self, full_sdata, points, images, labels):
+        sdatas = {"images": images, "labels": labels, "points": points}
+        elements = {"images": "image2d", "labels": "labels2d", "points": "points_0"}
+        for k, sdata in sdatas.items():
+            element = elements[k]
+            with tempfile.TemporaryDirectory() as tmpdir:
+                f = os.path.join(tmpdir, "data.zarr")
+                sdata.write(f)
 
-    def test_overwrite_files_with_backed_data(self, full_sdata):
+                # now we have a sdata with dask-backed elements
+                sdata2 = SpatialData.read(f)
+                p = sdata2[element]
+                full_sdata[element] = p
+                with pytest.raises(
+                    ValueError,
+                    match="The Zarr store already exists. Use `overwrite=True` to try overwriting the store.",
+                ):
+                    full_sdata.write(f)
+
+                with pytest.raises(
+                    ValueError,
+                    match="The file path specified is a parent directory of one or more files used for backing for one "
+                    "or ",
+                ):
+                    full_sdata.write(f, overwrite=True)
+
+    def test_overwrite_fails_when_zarr_store_present(self, full_sdata):
         # addressing https://github.com/scverse/spatialdata/issues/137
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
             full_sdata.write(f)
+
+            with pytest.raises(
+                ValueError,
+                match="The Zarr store already exists. Use `overwrite=True` to try overwriting the store.",
+            ):
+                full_sdata.write(f)
+
             with pytest.raises(
                 ValueError,
                 match="The file path specified either contains either is contained in the one used for backing.",
@@ -280,40 +323,29 @@ class TestReadWrite:
         #     )
         #     sdata2.write(f, overwrite=True)
 
-    def test_overwrite_onto_non_zarr_file(self, full_sdata):
+    def test_overwrite_fails_onto_non_zarr_file(self, full_sdata):
+        ERROR_MESSAGE = (
+            "The target file path specified already exists, and it has been detected to not be a Zarr store."
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             f0 = os.path.join(tmpdir, "test.txt")
             with open(f0, "w"):
-                with pytest.raises(ValueError):
+                with pytest.raises(
+                    ValueError,
+                    match=ERROR_MESSAGE,
+                ):
                     full_sdata.write(f0)
-                with pytest.raises(ValueError):
+                with pytest.raises(
+                    ValueError,
+                    match=ERROR_MESSAGE,
+                ):
                     full_sdata.write(f0, overwrite=True)
             f1 = os.path.join(tmpdir, "test.zarr")
             os.mkdir(f1)
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=ERROR_MESSAGE):
                 full_sdata.write(f1)
-
-
-def test_io_table(shapes):
-    adata = AnnData(X=RNG.normal(size=(5, 10)))
-    adata.obs["region"] = "circles"
-    adata.obs["instance"] = shapes.shapes["circles"].index
-    adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")
-    shapes.table = adata
-    del shapes.table
-    shapes.table = adata
-    with tempfile.TemporaryDirectory() as tmpdir:
-        f = os.path.join(tmpdir, "data.zarr")
-        shapes.write(f)
-        shapes2 = SpatialData.read(f)
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
-
-        del shapes2.table
-        assert shapes2.table is None
-        shapes2.table = adata
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
+            with pytest.raises(ValueError, match=ERROR_MESSAGE):
+                full_sdata.write(f1, overwrite=True)
 
 
 def test_bug_rechunking_after_queried_raster():
@@ -329,7 +361,3 @@ def test_bug_rechunking_after_queried_raster():
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         queried.write(f)
-
-    ##
-
-    pass

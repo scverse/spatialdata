@@ -992,7 +992,7 @@ class SpatialData:
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
                 )
             if not overwrite:
-                raise ValueError("The Zarr store already exists. Use `overwrite=True` to overwrite the store.")
+                raise ValueError("The Zarr store already exists. Use `overwrite=True` to try overwriting the store.")
             if any(_backed_elements_contained_in_path(path=file_path, object=self)):
                 raise ValueError(
                     "The file path specified is a parent directory of one or more files used for backing for one or "
@@ -1109,7 +1109,7 @@ class SpatialData:
             )
 
         element_type = None
-        for _element_type, _element_name, _ in self._gen_elements():
+        for _element_type, _element_name, _ in self.gen_elements():
             if _element_name == element_name:
                 element_type = _element_type
                 break
