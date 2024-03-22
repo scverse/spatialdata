@@ -2,16 +2,15 @@ import os
 import tempfile
 from pathlib import Path
 
-import pandas as pd
+import dask.dataframe as dd
+import numpy as np
 import pytest
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
-from dask.dataframe.utils import assert_eq
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from spatial_image import SpatialImage
 from spatialdata import SpatialData, read_zarr
-from spatialdata._io._utils import _are_directories_identical
+from spatialdata._io._utils import _are_directories_identical, get_channels
 from spatialdata.models import Image2DModel, TableModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
@@ -28,6 +27,11 @@ RNG = default_rng(0)
 class TestReadWrite:
     def test_images(self, tmp_path: str, images: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
+
+        # ensures that we are inplicitly testing the read and write of channel names
+        assert get_channels(images["image2d"]) == ["r", "g", "b"]
+        assert get_channels(images["image2d_multiscale"]) == ["r", "g", "b"]
+
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(images, sdata)
@@ -40,37 +44,40 @@ class TestReadWrite:
 
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
+
+        # check the index is correctly written and then read
+        shapes["circles"].index = np.arange(1, len(shapes["circles"]) + 1)
+
         shapes.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(shapes, sdata)
 
     def test_points(self, tmp_path: str, points: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
+
+        # check the index is correctly written and then read
+        new_index = dd.from_array(np.arange(1, len(points["points_0"]) + 1))
+        points["points_0"] = points["points_0"].set_index(new_index)
+
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        assert points.points.keys() == sdata.points.keys()
-        for k in points.points:
-            assert isinstance(sdata.points[k], DaskDataFrame)
-            assert assert_eq(points.points[k], sdata.points[k], check_divisions=False)
-            assert points.points[k].attrs == points.points[k].attrs
+        assert_spatial_data_objects_are_identical(points, sdata)
 
     def _test_table(self, tmp_path: str, table: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        pd.testing.assert_frame_equal(table.table.obs, sdata.table.obs)
-        try:
-            assert table.table.uns == sdata.table.uns
-        except ValueError as e:
-            raise e
+        assert_spatial_data_objects_are_identical(table, sdata)
 
-    def test_table_single_annotation(self, tmp_path: str, table_single_annotation: SpatialData) -> None:
-        """Test read/write."""
+    def test_single_table_single_annotation(self, tmp_path: str, table_single_annotation: SpatialData) -> None:
         self._test_table(tmp_path, table_single_annotation)
 
-    def test_table_multiple_annotations(self, tmp_path: str, table_multiple_annotations: SpatialData) -> None:
-        """Test read/write."""
+    def test_single_table_multiple_annotations(self, tmp_path: str, table_multiple_annotations: SpatialData) -> None:
         self._test_table(tmp_path, table_multiple_annotations)
+
+    def test_multiple_tables(self, tmp_path: str, tables: list[AnnData]) -> None:
+        sdata_tables = SpatialData(tables={str(i): tables[i] for i in range(len(tables))})
+        self._test_table(tmp_path, sdata_tables)
 
     # @pytest.mark.skip("waiting for the new points implementation")
     def test_roundtrip(

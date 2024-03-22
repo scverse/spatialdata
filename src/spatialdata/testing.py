@@ -118,16 +118,12 @@ def assert_elements_are_identical(
     elif isinstance(element0, SpatialImage):
         assert_xarray_equal(element0, element1)
     elif isinstance(element0, MultiscaleSpatialImage):
-        try:
-            assert_datatree_equal(element0, element1)
-        except ValueError as e:
-            pass
-            raise e
+        assert_datatree_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
         assert_geodataframe_equal(element0, element1, check_less_precise=True)
     else:
         assert isinstance(element0, DaskDataFrame)
-        assert_dask_dataframe_equal(element0, element1)
+        assert_dask_dataframe_equal(element0, element1, check_divisions=False)
         if PointsModel.ATTRS_KEY in element0.attrs or PointsModel.ATTRS_KEY in element1.attrs:
             assert element0.attrs[PointsModel.ATTRS_KEY] == element1.attrs[PointsModel.ATTRS_KEY]
 
