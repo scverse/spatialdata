@@ -1077,6 +1077,51 @@ class SpatialData:
         zarr.consolidate_metadata(store, metadata_key=".zmetadata")
         store.close()
 
+    def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
+        """Validate if metadata can be written on an element, returns None if it cannot be written."""
+        from spatialdata._io._utils import is_element_self_contained
+
+        # check the element exists in the SpatialData object
+        element = self.get(element_name)
+        if element is None:
+            raise ValueError(
+                "Cannot save the metadata to the element as it has not been found in the SpatialData object."
+            )
+
+        # check there is a Zarr store for the SpatialData object
+        if self.path is None:
+            warnings.warn(
+                "The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be " "written.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return None
+
+        element_type = self._element_type_from_element_name(element_name)
+
+        # check if the element exists in the Zarr storage
+        if not self._group_for_element_exists(
+            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+        ):
+            warnings.warn(
+                f"Not saving the metadata to element {element_type}/{element_name} as it is"
+                " not found in Zarr storage. You may choose to call write_element() first.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return None
+
+        # warn the users if the element is not self-contained, that is, it is Dask-backed by files outside the Zarr
+        # group for the element
+        element_zarr_path = Path(self.path) / element_type / element_name
+        if not is_element_self_contained(element=element, element_path=element_zarr_path):
+            logger.info(
+                f"Element {element_type}/{element_name} is not self-contained. The metadata will be"
+                " saved to the Zarr group of the element in the SpatialData Zarr store. The data outside the element "
+                "Zarr group will not be affected."
+            )
+        return element_type, element
+
     def write_transformations(self, element_name: str | None = None) -> None:
         """
         Write transformations to disk for a single element, or for all elements, without rewriting the data.
@@ -1086,68 +1131,25 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
-        from spatialdata._io._utils import is_element_self_contained
-        from spatialdata.transformations.operations import get_transformation
-
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
             for _, element_name, _ in self._gen_elements():
                 self.write_transformations(element_name)
             return
 
-        # check the element exists in the SpatialData object
-        element = self.get(element_name)
-        if element is None:
-            raise ValueError(
-                "Cannot save the transformation to the element as it has not been found in the SpatialData object"
-            )
-
-        # check there is a Zarr store for the SpatialData object
-        if self.path is None:
-            warnings.warn(
-                "The SpatialData object appears not to be backed by a Zarr storage, so transformations cannot be "
-                "written",
-                UserWarning,
-                stacklevel=2,
-            )
+        validation_result = self._validate_can_write_metadata_on_element(element_name)
+        if validation_result is None:
             return
+        element_type, element = validation_result
+
+        from spatialdata.transformations.operations import get_transformation
 
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
 
-        # (redundant) safety check, we should always expect no duplicate names for elements
-        located = self.locate_element(element)
-        if len(located) != 1:
-            raise ValueError(
-                f"Expected to find exactly one element with name {element_name}, but found {len(located)} elements."
-            )
-        path = located[0]
-        found_element_type, found_element_name = path.split("/")
-
-        # check if the element exists in the Zarr storage
-        if not self._group_for_element_exists(
-            zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
-        ):
-            warnings.warn(
-                f"Not saving the transformation to element {found_element_type}/{found_element_name} as it is"
-                " not found in Zarr storage. You may choose to call write_element() first.",
-                UserWarning,
-                stacklevel=2,
-            )
-            return
-
-        # warn the users if the element is not self-contained, that is, it is Dask-backed by files outside the Zarr
-        # group for the element
-        element_zarr_path = Path(self.path) / found_element_type / found_element_name
-        if not is_element_self_contained(element=element, element_path=element_zarr_path):
-            logger.info(
-                f"Element {found_element_type}/{found_element_name} is not self-contained. The transformation will be"
-                " saved to the Zarr group of the element in the SpatialData Zarr store. The data outside the element "
-                "Zarr group will not be affected."
-            )
-
+        assert self.path is not None
         _, _, element_group = self._get_groups_for_element(
-            zarr_path=Path(self.path), element_type=found_element_type, element_name=found_element_name
+            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
         if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
@@ -1166,6 +1168,22 @@ class SpatialData:
             )
         else:
             raise ValueError(f"Unknown element type {type(element)}")
+
+    def _element_type_from_element_name(self, element_name: str) -> str:
+        self._validate_element_names_are_unique()
+        element = self.get(element_name)
+        if element is None:
+            raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+
+        located = self.locate_element(element)
+        element_type = None
+        for path in located:
+            found_element_type, found_element_name = path.split("/")
+            if element_name == found_element_name:
+                element_type = found_element_type
+                break
+        assert element_type is not None
+        return element_type
 
     def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
         """
