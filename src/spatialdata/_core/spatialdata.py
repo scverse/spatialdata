@@ -930,6 +930,8 @@ class SpatialData:
         return SpatialData(**elements, tables=sdata.tables)
 
     def is_self_contained(self) -> bool:
+        # TODO: not true that if the object is self-contained then the performance is necessarily good. It needs to have
+        # things backed
         """
         Check if a SpatialData object is self-contained.
 
@@ -1132,7 +1134,7 @@ class SpatialData:
         self._write_element(
             element=element,
             zarr_container_path=self.path,
-            element_type=element.element_type,
+            element_type=element_type,
             element_name=element_name,
             overwrite=overwrite,
         )
@@ -1467,7 +1469,7 @@ class SpatialData:
         coordinate_systems = self.coordinate_systems.copy()
         coordinate_systems.sort(key=_natural_keys)
         for i, cs in enumerate(coordinate_systems):
-            descr += f"▸ {cs!r}"
+            descr += f"    ▸ {cs!r}"
             gen = self._gen_elements()
             elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
@@ -1495,15 +1497,17 @@ class SpatialData:
 
         from spatialdata._io._utils import get_dask_backing_files
 
-        descr += "\nbacking information:\n"
-        descr += (
-            f"backing Zarr store: {self.path} (the object is {'not ' if not self.is_self_contained() else ''}"
-            "self contained)\n"
-        )
-        descr += "Dask-backing files:\n"
+        descr += f"\nwith associated Zarr store (root): {self.path}"
+        # TODO: inform on the external dask backin files, hide the ones that are in the same path
+        # TODO: add lazy-read, lazy-computed vs "" non-lazy in the description
+        descr += "\nwith Dask-backing files:\n"
         backing_files = get_dask_backing_files(self)
         for backing_file in backing_files:
-            descr += f"▸ {backing_file}\n"
+            if self.path is not None and backing_file.startswith(str(self.path.resolve())):
+                backing_file = backing_file[len(str(self.path.resolve())) + 1 :]
+            descr += f"    ▸ {backing_file}\n"
+        if not self.is_self_contained():
+            descr += "The SpatialData object is not self-contained\n"
         return descr
 
     def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
