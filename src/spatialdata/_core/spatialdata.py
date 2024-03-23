@@ -1275,7 +1275,7 @@ class SpatialData:
         # check there is a Zarr store for the SpatialData object
         if self.path is None:
             warnings.warn(
-                "The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be " "written.",
+                "The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be written.",
                 UserWarning,
                 stacklevel=2,
             )
