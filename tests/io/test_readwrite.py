@@ -1,6 +1,7 @@
 import os
 import tempfile
 from pathlib import Path
+from typing import Any, Callable
 
 import dask.dataframe as dd
 import numpy as np
@@ -9,6 +10,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 from spatialdata import SpatialData
 from spatialdata._io._utils import _are_directories_identical, get_channels, get_dask_backing_files
+from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
@@ -496,3 +498,87 @@ def test_change_path_of_subset(full_sdata: SpatialData) -> None:
         set_transformation(sdata2["labels2d"], scale)
         assert not isinstance(get_transformation(full_sdata["labels2d"]), Scale)
         assert not isinstance(get_transformation(subset["labels2d"]), Scale)
+
+
+def _check_valid_name(f: Callable[[str], Any]) -> None:
+    with pytest.raises(TypeError, match="Name must be a string, not "):
+        f(2)
+    with pytest.raises(ValueError, match="Name cannot be an empty string."):
+        f("")
+    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
+        f("not valid")
+    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
+        f("this/is/not/valid")
+
+
+def test_incremental_io_valid_name(points: SpatialData) -> None:
+    _check_valid_name(points.write_element)
+    _check_valid_name(points.write_metadata)
+    _check_valid_name(points.write_transformations)
+    _check_valid_name(points.delete_element_from_disk)
+
+
+cached_sdata_blobs = blobs()
+
+
+@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
+def test_delete_element_from_disk(full_sdata, element_name: str) -> None:
+    # can't delete an element for a SpatialData object without associated Zarr store
+    with pytest.raises(ValueError, match="The SpatialData object is not backed by a Zarr store."):
+        full_sdata.delete_element_from_disk("image2d")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        # cannot delete an element which is in-memory, but not in the Zarr store
+        subset = full_sdata.subset(["points_0_1"])
+        f2 = os.path.join(tmpdir, "data2.zarr")
+        subset.write(f2)
+        full_sdata.path = Path(f2)
+        with pytest.raises(
+            ValueError,
+            match=f"Element {element_name} is not found in the Zarr store associated with the SpatialData object.",
+        ):
+            subset.delete_element_from_disk(element_name)
+        full_sdata.path = Path(f)
+
+        # cannot delete an element which is not in the Zarr store (and not even in-memory)
+        with pytest.raises(
+            ValueError,
+            match="Element not_existing is not found in the Zarr store associated with the SpatialData object.",
+        ):
+            full_sdata.delete_element_from_disk("not_existing")
+
+        # can delete an element present both in-memory and on-disk
+        full_sdata.delete_element_from_disk(element_name)
+        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        element_type = full_sdata._element_type_from_element_name(element_name)
+        element_path = f"{element_type}/{element_name}"
+        assert element_path in only_in_memory
+
+        # resave it
+        full_sdata.write_element(element_name)
+
+        # now delete it from memory, and then show it can still be deleted on-disk
+        backup = full_sdata[element_name]
+        del getattr(full_sdata, element_type)[element_name]
+        full_sdata.delete_element_from_disk(element_name)
+        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        assert element_path not in only_on_disk
+
+        # constructing a corrupted object (element present both on disk and in-memory but with different type)
+        # and attempting to delete it will raise an error later on we will prevent this to happen entirely:
+        # https://github.com/scverse/spatialdata/issues/504
+        wrong_group = "images" if element_type == "tables" else "tables"
+        getattr(full_sdata, element_type)[element_name] = backup
+        full_sdata.write_element(element_name)
+        del getattr(full_sdata, element_type)[element_name]
+        getattr(full_sdata, wrong_group)[element_name] = (
+            getattr(cached_sdata_blobs, wrong_group).values().__iter__().__next__()
+        )
+        with pytest.raises(
+            ValueError,
+            match="The in-memory object should have a different name.",
+        ):
+            full_sdata.delete_element_from_disk(element_name)

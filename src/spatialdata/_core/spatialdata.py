@@ -591,7 +591,7 @@ class SpatialData:
         found: list[SpatialElement] = []
         found_element_type: list[str] = []
         found_element_name: list[str] = []
-        for element_type in ["images", "labels", "points", "shapes"]:
+        for element_type in ["images", "labels", "points", "shapes", "tables"]:
             for element_name, element_value in getattr(self, element_type).items():
                 if id(element_value) == id(element):
                     found.append(element_value)
@@ -943,27 +943,34 @@ class SpatialData:
 
         return all(description.values())
 
-    def symmetric_difference_with_zarr_store(self) -> tuple[list[str], list[str]]:
+    def elements_paths_in_memory(self) -> list[str]:
         """
-        Determine if elements in the SpatialData object are different from elements saved in the Zarr store.
+        Get the paths of the elements in the SpatialData object.
 
         Returns
         -------
-        A tuple of two lists:
+        A list of paths of the elements in the SpatialData object.
 
-            - The first list contains the paths of the elements that are in the SpatialData object but not in the Zarr
-              store.
-            - The second list contains the paths of the elements that are in the Zarr store but not in the SpatialData
-              object.
+        Notes
+        -----
+        The paths are relative to the root of the SpatialData object and are in the format "element_type/element_name".
         """
-        if self.path is None:
-            raise ValueError("The SpatialData object is not backed by a Zarr store.")
-
         elements_in_sdata = []
         for element_type in ["images", "labels", "points", "shapes", "tables"]:
             for element_name in getattr(self, element_type):
                 elements_in_sdata.append(f"{element_type}/{element_name}")
+        return elements_in_sdata
 
+    def elements_paths_on_disk(self) -> list[str]:
+        """
+        Get the paths of the elements saved in the Zarr store.
+
+        Returns
+        -------
+        A list of paths of the elements saved in the Zarr store.
+        """
+        if self.path is None:
+            raise ValueError("The SpatialData object is not backed by a Zarr store.")
         store = parse_url(self.path, mode="r").store
         root = zarr.group(store=store)
         elements_in_zarr = []
@@ -976,6 +983,27 @@ class SpatialData:
 
         root.visit(lambda path: find_groups(root[path], path))
         store.close()
+        return elements_in_zarr
+
+    def symmetric_difference_with_zarr_store(self) -> tuple[list[str], list[str]]:
+        """
+        Determine if elements in the SpatialData object are different from elements saved in the Zarr store.
+
+        Returns
+        -------
+        A tuple of two lists:
+
+            - The first list contains the paths of the elements that are in the SpatialData object but not in the Zarr
+              store.
+            - The second list contains the paths of the elements that are in the Zarr store but not in the SpatialData
+              object.
+
+        Notes
+        -----
+        The paths are relative to the root of the SpatialData object and are in the format "element_type/element_name".
+        """
+        elements_in_sdata = self.elements_paths_in_memory()
+        elements_in_zarr = self.elements_paths_on_disk()
 
         elements_only_in_sdata = list(set(elements_in_sdata).difference(set(elements_in_zarr)))
         elements_only_in_zarr = list(set(elements_in_zarr).difference(set(elements_in_sdata)))
@@ -1104,6 +1132,9 @@ class SpatialData:
         overwrite
             If True, overwrite the element if it already exists.
         """
+        from spatialdata._core._elements import Elements
+
+        Elements._check_valid_name(element_name)
         self._validate_element_names_are_unique()
         element = self.get(element_name)
         if element is None:
@@ -1130,6 +1161,90 @@ class SpatialData:
             element_name=element_name,
             overwrite=overwrite,
         )
+
+    def delete_element_from_disk(self, element_name: str) -> None:
+        """
+        Delete an element from the Zarr store associated with the SpatialData object.
+
+        The element must be available in-memory and will not be removed from the SpatialData object in-memory storage.
+
+        Parameters
+        ----------
+        element_name
+
+        Notes
+        -----
+        In general, it is not recommended to delete an element from the Zarr store with the intention of saving an
+        updated version of the element that is available only in-memory. This is because data loss may occur if the
+         execution is interrupted during writing.
+
+        Here are some recommendations:
+
+            - the above scenario may be acceptable when the element to save can be easily recreated from the data;
+            - if data recreation is not possible or computationally expensive, it is recommended to first save the
+                element to a different location and then eventually copy it to the original desired location. Please
+                note that this approach is not guaranteed to be always safe (e.g. if multiple processes are trying to
+                write to the same Zarr store simultaneously, then the backup data may become corrupted).
+
+        Ultimately, it is the responsibility of the user to consider the implications of the current computational
+        environment (e.g. operating system, local vs network storage, file permissions, ...) and call this function
+        appropriately (or implement a tailored solution), to prevent data loss.
+        """
+        from spatialdata._core._elements import Elements
+        from spatialdata._io._utils import _backed_elements_contained_in_path
+
+        Elements._check_valid_name(element_name)
+
+        if self.path is None:
+            raise ValueError("The SpatialData object is not backed by a Zarr store.")
+
+        on_disk = self.elements_paths_on_disk()
+        one_disk_names = [self._element_type_and_name_from_element_path(path)[1] for path in on_disk]
+        in_memory = self.elements_paths_in_memory()
+        in_memory_names = [self._element_type_and_name_from_element_path(path)[1] for path in in_memory]
+        only_in_memory_names = list(set(in_memory_names).difference(set(one_disk_names)))
+        only_on_disk_names = list(set(one_disk_names).difference(set(in_memory_names)))
+
+        ERROR_MESSAGE = f"Element {element_name} is not found in the Zarr store associated with the SpatialData object."
+        if element_name in only_in_memory_names:
+            raise ValueError(ERROR_MESSAGE)
+
+        found = self.get(element_name) is not None
+        if not found and element_name not in only_on_disk_names:
+            raise ValueError(ERROR_MESSAGE)
+
+        element_type = None
+        on_disk = self.elements_paths_on_disk()
+        for path in on_disk:
+            _element_type, _element_name = self._element_type_and_name_from_element_path(path)
+            if _element_name == element_name:
+                element_type = _element_type
+                break
+        assert element_type is not None
+
+        if element_name not in only_on_disk_names:
+            in_memory_element_type = self._element_type_from_element_name(element_name)
+            if in_memory_element_type != element_type:
+                raise ValueError(
+                    f"Element {element_name} is found in-memory as a {in_memory_element_type}, but it is not found in "
+                    f"the Zarr store as a {element_type}. The in-memory object should have a different name."
+                )
+
+        file_path_of_element = self.path / element_type / element_name
+        if any(_backed_elements_contained_in_path(path=file_path_of_element, object=self)):
+            raise ValueError(
+                "The file path specified is a parent directory of one or more files used for backing for one or "
+                "more elements in the SpatialData object. Deleting the data would corrupt the SpatialData object."
+            )
+
+        # delete the element
+        store = parse_url(self.path, mode="r+").store
+        root = zarr.group(store=store)
+        root[element_type].pop(element_name)
+        store.close()
+
+        if self.has_consolidated_metadata():
+            self.write_consolidated_metadata()
 
     def write_consolidated_metadata(self) -> None:
         store = parse_url(self.path, mode="r+").store
@@ -1200,6 +1315,11 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
+        from spatialdata._core._elements import Elements
+
+        if element_name is not None:
+            Elements._check_valid_name(element_name)
+
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
             for _, element_name, _ in self._gen_elements():
@@ -1251,8 +1371,14 @@ class SpatialData:
             if element_name == found_element_name:
                 element_type = found_element_type
                 break
+        if element_type is None:
+            pass
         assert element_type is not None
         return element_type
+
+    def _element_type_and_name_from_element_path(self, element_path: str) -> tuple[str, str]:
+        element_type, element_name = element_path.split("/")
+        return element_type, element_name
 
     def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
         """
@@ -1279,6 +1405,11 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
+        from spatialdata._core._elements import Elements
+
+        if element_name is not None:
+            Elements._check_valid_name(element_name)
+
         self.write_transformations(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
