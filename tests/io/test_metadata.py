@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 from spatialdata import SpatialData, read_zarr
-from spatialdata._io._utils import is_element_self_contained
+from spatialdata._io._utils import _is_element_self_contained
 from spatialdata._logging import logger
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
@@ -94,7 +94,7 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
         # (points, images, labels)
         element_type = sdata2._element_type_from_element_name(element_name)
         element_path = sdata2.path / element_type / element_name
-        element_self_contained = is_element_self_contained(sdata2[element_name], element_path=element_path)
+        element_self_contained = _is_element_self_contained(sdata2[element_name], element_path=element_path)
         if element_name == "circles":
             assert element_self_contained
         else:
@@ -128,5 +128,28 @@ def test_consolidated_metadata(full_sdata: SpatialData) -> None:
         full_sdata.write(f1, consolidate_metadata=False)
         assert not full_sdata.has_consolidated_metadata()
 
+        full_sdata.write_metadata(consolidate_metadata=True)
+        assert full_sdata.has_consolidated_metadata()
+
+
+def test_save_all_metadata(full_sdata: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # write
+        f = os.path.join(tmp_dir, "data.zarr")
+        full_sdata.write(f, consolidate_metadata=False)
+
+        # set transformations in memory
+        scale = Scale([2, 2], axes=("x", "y"))
+        for _, _, element in full_sdata.gen_spatial_elements():
+            set_transformation(element, scale)
+
+        # write transformations, read, check that transformations are correct
+        full_sdata.write_transformations()
+        sdata0 = read_zarr(f)
+        assert not sdata0.has_consolidated_metadata()
+        for _, _, element in sdata0.gen_spatial_elements():
+            assert isinstance(get_transformation(element), Scale)
+
+        # write metadata, check that consolidated metadata is correct
         full_sdata.write_metadata(consolidate_metadata=True)
         assert full_sdata.has_consolidated_metadata()

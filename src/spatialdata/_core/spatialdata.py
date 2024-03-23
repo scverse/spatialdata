@@ -869,7 +869,7 @@ class SpatialData:
         """
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_tables=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
-        for element_type, element_name, element in sdata._gen_elements():
+        for element_type, element_name, element in sdata.gen_elements():
             if element_type != "tables":
                 transformed = sdata.transform_element_to_coordinate_system(
                     element, target_coordinate_system, maintain_positioning=maintain_positioning
@@ -879,9 +879,29 @@ class SpatialData:
                 elements[element_type][element_name] = transformed
         return SpatialData(**elements, tables=sdata.tables)
 
-    def is_self_contained(self: SpatialData) -> bool:
+    def describe_elements_are_self_contained(self) -> dict[str, bool]:
         """
-        Check if a SpatialData object is self-contained; self-contained objects have a simpler disk storage layout.
+        Describe if elements are self-contained as a dict of element_name to bool.
+
+        Returns
+        -------
+        A dictionary of element_name to boolean values indicating whether the elements are self-contained.
+        """
+        from spatialdata._io._utils import _is_element_self_contained
+
+        if self.path is None:
+            return {element_name: True for _, element_name, _ in self.gen_elements()}
+
+        self._validate_element_names_are_unique()
+        description = {}
+        for element_type, element_name, element in self.gen_elements():
+            element_path = self.path / element_type / element_name
+            description[element_name] = _is_element_self_contained(element, element_path)
+        return description
+
+    def is_self_contained(self, element_name: str | None = None) -> bool:
+        """
+        Check if an object is self-contained; self-contained objects have a simpler disk storage layout.
 
         A SpatialData object is said to be self-contained if all its SpatialElements or AnnData tables are
         self-contained. A SpatialElement or AnnData table is said to be self-contained when it does not depend on a
@@ -892,6 +912,11 @@ class SpatialData:
         in-memory. Therefore, the latter are always self-contained.
 
         Printing a SpatialData object will show if any of its elements are not self-contained.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to check. If `None`, the SpatialData object is checked instead.
 
         Returns
         -------
@@ -908,17 +933,53 @@ class SpatialData:
             2.  When calling `write_element()` and `write_element()` metadata, the changes will be applied to the Zarr
                 store associated with the SpatialData object, not on the external files.
         """
-        from spatialdata._io._utils import is_element_self_contained
-
         if self.path is None:
             return True
 
-        self_contained = True
-        for element_type, element_name, element in self.gen_elements():
-            element_path = Path(self.path) / element_type / element_name
-            element_is_self_contained = is_element_self_contained(element=element, element_path=element_path)
-            self_contained = self_contained and element_is_self_contained
-        return self_contained
+        description = self.describe_elements_are_self_contained()
+
+        if element_name is not None:
+            return description[element_name]
+
+        return all(description.values())
+
+    def symmetric_difference_with_zarr_store(self) -> tuple[list[str], list[str]]:
+        """
+        Determine if elements in the SpatialData object are different from elements saved in the Zarr store.
+
+        Returns
+        -------
+        A tuple of two lists:
+
+            - The first list contains the paths of the elements that are in the SpatialData object but not in the Zarr
+              store.
+            - The second list contains the paths of the elements that are in the Zarr store but not in the SpatialData
+              object.
+        """
+        if self.path is None:
+            raise ValueError("The SpatialData object is not backed by a Zarr store.")
+
+        elements_in_sdata = []
+        for element_type in ["images", "labels", "points", "shapes", "tables"]:
+            for element_name in getattr(self, element_type):
+                elements_in_sdata.append(f"{element_type}/{element_name}")
+
+        store = parse_url(self.path, mode="r").store
+        root = zarr.group(store=store)
+        elements_in_zarr = []
+
+        def find_groups(obj: zarr.Group, path: str) -> None:
+            # with the current implementation, a path of a zarr group if the path for an element if and only if its
+            # string representation contains exactly one "/"
+            if isinstance(obj, zarr.Group) and path.count("/") == 1:
+                elements_in_zarr.append(path)
+
+        root.visit(lambda path: find_groups(root[path], path))
+        store.close()
+
+        elements_only_in_sdata = list(set(elements_in_sdata).difference(set(elements_in_zarr)))
+        elements_only_in_zarr = list(set(elements_in_zarr).difference(set(elements_in_sdata)))
+        return elements_only_in_sdata, elements_only_in_zarr
 
     def _validate_can_safely_write_to_path(
         self,
@@ -1087,7 +1148,7 @@ class SpatialData:
 
     def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
         """Validate if metadata can be written on an element, returns None if it cannot be written."""
-        from spatialdata._io._utils import is_element_self_contained
+        from spatialdata._io._utils import _is_element_self_contained
 
         # check the element exists in the SpatialData object
         element = self.get(element_name)
@@ -1122,7 +1183,7 @@ class SpatialData:
         # warn the users if the element is not self-contained, that is, it is Dask-backed by files outside the Zarr
         # group for the element
         element_zarr_path = Path(self.path) / element_type / element_name
-        if not is_element_self_contained(element=element, element_path=element_zarr_path):
+        if not _is_element_self_contained(element=element, element_path=element_zarr_path):
             logger.info(
                 f"Element {element_type}/{element_name} is not self-contained. The metadata will be"
                 " saved to the Zarr group of the element in the SpatialData Zarr store. The data outside the element "
@@ -1563,16 +1624,31 @@ class SpatialData:
             if i < len(coordinate_systems) - 1:
                 descr += "\n"
 
-        from spatialdata._io._utils import get_dask_backing_files, is_element_self_contained
+        from spatialdata._io._utils import get_dask_backing_files
+
+        def _element_path_to_element_name_with_type(element_path: str) -> str:
+            element_type, element_name = element_path.split("/")
+            return f"{element_name} ({element_type.capitalize()})"
 
         if not self.is_self_contained():
             assert self.path is not None
-            descr += "\nwith the following Dask-backed elements not being self-contained:\n"
-            for element_type, element_name, element in self.gen_elements():
-                element_path = Path(self.path) / element_type / element_name
-                if not is_element_self_contained(element, element_path):
+            descr += "\nwith the following Dask-backed elements not being self-contained:"
+            description = self.describe_elements_are_self_contained()
+            for _, element_name, element in self.gen_elements():
+                if not description[element_name]:
                     backing_files = ", ".join(get_dask_backing_files(element))
-                    descr += f"    ▸ {element_name}: {backing_files} \n"
+                    descr += f"\n    ▸ {element_name}: {backing_files}"
+
+        if self.path is not None:
+            elements_only_in_sdata, elements_only_in_zarr = self.symmetric_difference_with_zarr_store()
+            if len(elements_only_in_sdata) > 0:
+                descr += "\nwith the following elements not in the Zarr store:"
+                for element_path in elements_only_in_sdata:
+                    descr += f"\n    ▸ {_element_path_to_element_name_with_type(element_path)}"
+            if len(elements_only_in_zarr) > 0:
+                descr += "\nwith the following elements in the Zarr store but not in the SpatialData object:"
+                for element_path in elements_only_in_zarr:
+                    descr += f"\n    ▸ {_element_path_to_element_name_with_type(element_path)}"
         return descr
 
     def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:

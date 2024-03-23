@@ -330,7 +330,7 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
     return child.resolve().is_relative_to(parent.resolve())
 
 
-def is_element_self_contained(
+def _is_element_self_contained(
     element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
 ) -> bool:
     return all(_backed_elements_contained_in_path(path=element_path, object=element))

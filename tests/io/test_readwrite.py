@@ -361,3 +361,138 @@ def test_bug_rechunking_after_queried_raster():
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         queried.write(f)
+
+
+def test_self_contained(full_sdata: SpatialData) -> None:
+    # data only in-memory, so the SpatialData object and all its elements are self-contained
+    assert full_sdata.is_self_contained()
+    description = full_sdata.describe_elements_are_self_contained()
+    assert all(description.values())
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # data saved to disk, it's self contained
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+        full_sdata.is_self_contained()
+
+        # we read the data, so it's self-contained
+        sdata2 = SpatialData.read(f)
+        assert sdata2.is_self_contained()
+
+        # we save the data to a new location, so it's not self-contained anymore
+        f2 = os.path.join(tmpdir, "data2.zarr")
+        sdata2.write(f2)
+        assert not sdata2.is_self_contained()
+
+        # because of the images, labels and points
+        description = sdata2.describe_elements_are_self_contained()
+        for element_name, self_contained in description.items():
+            if any(element_name.startswith(prefix) for prefix in ["image", "labels", "points"]):
+                assert not self_contained
+            else:
+                assert self_contained
+
+        # but if we read it again, it's self-contained
+        sdata3 = SpatialData.read(f2)
+        assert sdata3.is_self_contained()
+
+        # or if we do some more targeted manipulation
+        sdata2.path = Path(f)
+        assert sdata2.is_self_contained()
+
+        # finally, an example of a non-self-contained element which is not depending on files external to the Zarr store
+        # here we create an element which combines lazily 3 elements of the Zarr store; it will be a nonsense element,
+        # but good for testing
+        v = sdata2["points_0"]["x"].loc[0].values
+        v.compute_chunk_sizes()
+
+        combined = (
+            v
+            + sdata2["labels2d"].expand_dims("c", 1).transpose("c", "y", "x")
+            + sdata2["image2d"].sel(c="r").expand_dims("c", 1)
+            + v
+        )
+        combined = Image2DModel.parse(combined)
+        assert len(get_dask_backing_files(combined)) == 3
+
+        sdata2["combined"] = combined
+
+        assert not sdata2.is_self_contained()
+        description = sdata2.describe_elements_are_self_contained()
+        assert description["combined"] is False
+        assert all(description[element_name] for element_name in description if element_name != "combined")
+
+
+def test_symmetric_different_with_zarr_store(full_sdata: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        # the list of element on-disk and in-memory is the same
+        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        assert len(only_in_memory) == 0
+        assert len(only_on_disk) == 0
+
+        full_sdata["new_image2d"] = full_sdata.images["image2d"]
+        full_sdata["new_labels2d"] = full_sdata.labels["labels2d"]
+        full_sdata["new_points_0"] = full_sdata.points["points_0"]
+        full_sdata["new_circles"] = full_sdata.shapes["circles"]
+        full_sdata["new_table"] = full_sdata.tables["table"]
+        del full_sdata.images["image2d"]
+        del full_sdata.labels["labels2d"]
+        del full_sdata.points["points_0"]
+        del full_sdata.shapes["circles"]
+        del full_sdata.tables["table"]
+
+        # now the list of element on-disk and in-memory is different
+        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        assert set(only_in_memory) == {
+            "images/new_image2d",
+            "labels/new_labels2d",
+            "points/new_points_0",
+            "shapes/new_circles",
+            "tables/new_table",
+        }
+        assert set(only_on_disk) == {
+            "images/image2d",
+            "labels/labels2d",
+            "points/points_0",
+            "shapes/circles",
+            "tables/table",
+        }
+
+
+def test_change_path_of_subset(full_sdata: SpatialData) -> None:
+    """A subset SpatialData object has not Zarr path associated, show that we can reassign the path"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        subset = full_sdata.subset(["image2d", "labels2d", "points_0", "circles", "table"])
+
+        assert subset.path is None
+        subset.path = Path(f)
+
+        assert subset.is_self_contained()
+        only_in_memory, only_on_disk = subset.symmetric_difference_with_zarr_store()
+        assert len(only_in_memory) == 0
+        assert len(only_on_disk) > 0
+
+        f2 = os.path.join(tmpdir, "data2.zarr")
+        subset.write(f2)
+        assert subset.is_self_contained()
+        only_in_memory, only_on_disk = subset.symmetric_difference_with_zarr_store()
+        assert len(only_in_memory) == 0
+        assert len(only_on_disk) == 0
+
+        # changes in the subset object will be reflected in the original object (in-memory, on-disk only if we save
+        # them with .write_element())
+        scale = Scale([2.0], axes=("x",))
+        set_transformation(subset["image2d"], scale)
+        assert isinstance(get_transformation(full_sdata["image2d"]), Scale)
+
+        # if we don't want this, we can read the data again from the new path
+        sdata2 = SpatialData.read(f2)
+        set_transformation(sdata2["labels2d"], scale)
+        assert not isinstance(get_transformation(full_sdata["labels2d"]), Scale)
+        assert not isinstance(get_transformation(subset["labels2d"]), Scale)
