@@ -1059,6 +1059,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
     ) -> None:
+        """Write to a Zarr store."""
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
@@ -1523,6 +1524,7 @@ class SpatialData:
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
+        """Deprecated. Use `sdata[name] = image` instead."""  # noqa: D401
         _error_message_add_element()
 
     def add_labels(
@@ -1532,6 +1534,7 @@ class SpatialData:
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
+        """Deprecated. Use `sdata[name] = labels` instead."""  # noqa: D401
         _error_message_add_element()
 
     def add_points(
@@ -1540,6 +1543,7 @@ class SpatialData:
         points: DaskDataFrame,
         overwrite: bool = False,
     ) -> None:
+        """Deprecated. Use `sdata[name] = points` instead."""  # noqa: D401
         _error_message_add_element()
 
     def add_shapes(
@@ -1548,6 +1552,7 @@ class SpatialData:
         shapes: GeoDataFrame,
         overwrite: bool = False,
     ) -> None:
+        """Deprecated. Use `sdata[name] = shapes` instead."""  # noqa: D401
         _error_message_add_element()
 
     @property

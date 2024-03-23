@@ -272,3 +272,37 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
     else:
         ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
     return ddf
+
+
+@singledispatch
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data for an image element (both single and multiscale).
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+
+    Notes
+    -----
+    For multiscale images, the channels are validated to be consistent across scales.
+    """
+    raise ValueError(f"Cannot get channels from {type(data)}")
+
+
+@get_channels.register
+def _(data: SpatialImage) -> list[Any]:
+    return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
+
+
+@get_channels.register
+def _(data: MultiscaleSpatialImage) -> list[Any]:
+    name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
+    channels = {tuple(data[i][name].coords["c"].values) for i in data}
+    if len(channels) > 1:
+        raise ValueError(f"Channels are not consistent across scales: {channels}")
+    return list(next(iter(channels)))

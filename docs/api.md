@@ -6,7 +6,7 @@
 
 ## SpatialData
 
-The `SpatialData` class.
+The `SpatialData` class (follow the link to explore its methods).
 
 ```{eval-rst}
 .. autosummary::
@@ -83,6 +83,7 @@ The elements (building-blocks) that consitute `SpatialData`.
     get_spatial_axes
     points_geopandas_to_dask_dataframe
     points_dask_dataframe_to_geopandas
+    get_channels
 ```
 
 ## Transformations

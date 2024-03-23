@@ -9,9 +9,10 @@ import pytest
 from anndata import AnnData
 from numpy.random import default_rng
 from spatialdata import SpatialData
-from spatialdata._io._utils import _are_directories_identical, get_channels, get_dask_backing_files
+from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
+from spatialdata.models._utils import get_channels
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
