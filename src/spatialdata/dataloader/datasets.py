@@ -61,13 +61,13 @@ class ImageTilesDataset(Dataset):
     tile_scale
         This parameter is used to determine the size (width and height) of the tiles.
         Each tile will have size in units equal to tile_scale times the diameter of the circle that approximates (=same
-         area) the region that defines the tile.
+        area) the region that defines the tile.
 
         For example, suppose the regions to be multiscale labels; this is how the tiles are created:
 
             1) for each tile, each label region is approximated with a circle with the same area of the label region.
             2) The tile is then created as having the width/height equal to the diameter of the circle,
-                multiplied by `tile_scale`.
+               multiplied by `tile_scale`.
 
         If `tile_dim_in_units` is passed, `tile_scale` is ignored.
     tile_dim_in_units

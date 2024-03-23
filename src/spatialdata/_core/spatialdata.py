@@ -1179,15 +1179,15 @@ class SpatialData:
         -----
         In general, it is not recommended to delete an element from the Zarr store with the intention of saving an
         updated version of the element that is available only in-memory. This is because data loss may occur if the
-         execution is interrupted during writing.
+        execution is interrupted during writing.
 
         Here are some recommendations:
 
             - the above scenario may be acceptable when the element to save can be easily recreated from the data;
             - if data recreation is not possible or computationally expensive, it is recommended to first save the
-                element to a different location and then eventually copy it to the original desired location. Please
-                note that this approach is not guaranteed to be always safe (e.g. if multiple processes are trying to
-                write to the same Zarr store simultaneously, then the backup data may become corrupted).
+              element to a different location and then eventually copy it to the original desired location. Please
+              note that this approach is not guaranteed to be always safe (e.g. if multiple processes are trying to
+              write to the same Zarr store simultaneously, then the backup data may become corrupted).
 
         Ultimately, it is the responsibility of the user to consider the implications of the current computational
         environment (e.g. operating system, local vs network storage, file permissions, ...) and call this function
