@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning][].
     table with rows matching the row order in the table.
 -   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically
     performed on-disk.
+-   Incremental IO of data and metadata:
+    -   new methods `write_element()`, `write_transformations()`, `write_metadata()`, `remove_element_from_disk()`
+    -   new methods `write_consolidated_metadata()` and `has_consolidated_metadata()`
+    -   improved `__repr__()` with information on Zarr storage and Dask-backed files
+    -   new utils `is_self_contained()`, `describe_elements_are_self_contained()`
+    -   new utils `element_paths_in_memory()`, `element_paths_on_disk()`
 
 #### Minor
 

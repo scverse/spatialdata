@@ -155,19 +155,23 @@ class TestReadWrite:
             with pytest.raises(ValueError, match="Currently, overwriting existing elements is not supported."):
                 sdata.write_element(name, overwrite=True)
 
-            # workaround 1, mostly safe (no guarantee: untested for Windows platform, network drives, multi-threaded
+            # workaround 1, mostly safe (untested for Windows platform, network drives, multi-threaded
             # setups, ...)
             new_name = f"{name}_new_place"
+            # write a copy of the data
             sdata[new_name] = sdata[name]
             sdata.write_element(new_name)
-            # TODO: del sdata[name] on-disk
-            # TODO: sdata.write(name)
-            # TODO: del sdata['new_place'] on-disk
-            # TODO: del sdata['new_place']
+            # rewrite the original data
+            sdata.delete_element_from_disk(name)
+            sdata.write_element(name)
+            # remove the copy
+            sdata.delete_element_from_disk(new_name)
+            element_type = sdata._element_type_from_element_name(new_name)
+            del getattr(sdata, element_type)[new_name]
 
             # workaround 2, unsafe but sometimes acceptable depending on the user's workflow
-            # TODO: del[sdata] on-diks
-            # TODO: sdata.write(name)
+            sdata.delete_element_from_disk(name)
+            sdata.write_element(name)
 
     def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
@@ -207,7 +211,7 @@ class TestReadWrite:
     def test_io_and_lazy_loading_raster(self, images, labels):
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
-            d = sdata.__getattribute__(k)
+            d = getattr(sdata, k)
             elem_name = list(d.keys())[0]
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
@@ -224,7 +228,7 @@ class TestReadWrite:
     def test_replace_transformation_on_disk_raster(self, images, labels):
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
-            d = sdata.__getattribute__(k)
+            d = getattr(sdata, k)
             # unlike the non-raster case, we are testing all the elements (2d and 3d, multiscale and not)
             for elem_name in d:
                 kwargs = {k: {elem_name: d[elem_name]}}
@@ -431,7 +435,7 @@ def test_symmetric_different_with_zarr_store(full_sdata: SpatialData) -> None:
         full_sdata.write(f)
 
         # the list of element on-disk and in-memory is the same
-        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
         assert len(only_in_memory) == 0
         assert len(only_on_disk) == 0
 
@@ -447,7 +451,7 @@ def test_symmetric_different_with_zarr_store(full_sdata: SpatialData) -> None:
         del full_sdata.tables["table"]
 
         # now the list of element on-disk and in-memory is different
-        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
         assert set(only_in_memory) == {
             "images/new_image2d",
             "labels/new_labels2d",
@@ -476,14 +480,14 @@ def test_change_path_of_subset(full_sdata: SpatialData) -> None:
         subset.path = Path(f)
 
         assert subset.is_self_contained()
-        only_in_memory, only_on_disk = subset.symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = subset._symmetric_difference_with_zarr_store()
         assert len(only_in_memory) == 0
         assert len(only_on_disk) > 0
 
         f2 = os.path.join(tmpdir, "data2.zarr")
         subset.write(f2)
         assert subset.is_self_contained()
-        only_in_memory, only_on_disk = subset.symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = subset._symmetric_difference_with_zarr_store()
         assert len(only_in_memory) == 0
         assert len(only_on_disk) == 0
 
@@ -552,7 +556,7 @@ def test_delete_element_from_disk(full_sdata, element_name: str) -> None:
 
         # can delete an element present both in-memory and on-disk
         full_sdata.delete_element_from_disk(element_name)
-        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
         element_type = full_sdata._element_type_from_element_name(element_name)
         element_path = f"{element_type}/{element_name}"
         assert element_path in only_in_memory

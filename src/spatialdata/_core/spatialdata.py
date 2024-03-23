@@ -985,7 +985,7 @@ class SpatialData:
         store.close()
         return elements_in_zarr
 
-    def symmetric_difference_with_zarr_store(self) -> tuple[list[str], list[str]]:
+    def _symmetric_difference_with_zarr_store(self) -> tuple[list[str], list[str]]:
         """
         Determine if elements in the SpatialData object are different from elements saved in the Zarr store.
 
@@ -1781,7 +1781,7 @@ class SpatialData:
                     descr += f"\n    ▸ {element_name}: {backing_files}"
 
         if self.path is not None:
-            elements_only_in_sdata, elements_only_in_zarr = self.symmetric_difference_with_zarr_store()
+            elements_only_in_sdata, elements_only_in_zarr = self._symmetric_difference_with_zarr_store()
             if len(elements_only_in_sdata) > 0:
                 descr += "\nwith the following elements not in the Zarr store:"
                 for element_path in elements_only_in_sdata:
