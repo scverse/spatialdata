@@ -561,24 +561,50 @@ def test_delete_element_from_disk(full_sdata, element_name: str) -> None:
         full_sdata.write_element(element_name)
 
         # now delete it from memory, and then show it can still be deleted on-disk
-        backup = full_sdata[element_name]
         del getattr(full_sdata, element_type)[element_name]
         full_sdata.delete_element_from_disk(element_name)
-        only_in_memory, only_on_disk = full_sdata.symmetric_difference_with_zarr_store()
-        assert element_path not in only_on_disk
+        on_disk = full_sdata.elements_paths_on_disk()
+        assert element_path not in on_disk
 
-        # constructing a corrupted object (element present both on disk and in-memory but with different type)
-        # and attempting to delete it will raise an error later on we will prevent this to happen entirely:
-        # https://github.com/scverse/spatialdata/issues/504
+
+@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
+def test_element_already_on_disk_different_type(full_sdata, element_name: str) -> None:
+    # Constructing a corrupted object (element present both on disk and in-memory but with different type).
+    # Attempting to perform and IO operation will trigger an error.
+    # The checks assessed in this test will not be needed anymore after
+    # https://github.com/scverse/spatialdata/issues/504 is addressed
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        full_sdata.write(f)
+
+        element_type = full_sdata._element_type_from_element_name(element_name)
         wrong_group = "images" if element_type == "tables" else "tables"
-        getattr(full_sdata, element_type)[element_name] = backup
-        full_sdata.write_element(element_name)
         del getattr(full_sdata, element_type)[element_name]
         getattr(full_sdata, wrong_group)[element_name] = (
             getattr(cached_sdata_blobs, wrong_group).values().__iter__().__next__()
         )
+        ERROR_MSG = "The in-memory object should have a different name."
+
         with pytest.raises(
             ValueError,
-            match="The in-memory object should have a different name.",
+            match=ERROR_MSG,
         ):
             full_sdata.delete_element_from_disk(element_name)
+
+        with pytest.raises(
+            ValueError,
+            match=ERROR_MSG,
+        ):
+            full_sdata.write_element(element_name)
+
+        with pytest.raises(
+            ValueError,
+            match=ERROR_MSG,
+        ):
+            full_sdata.write_metadata(element_name)
+
+        with pytest.raises(
+            ValueError,
+            match=ERROR_MSG,
+        ):
+            full_sdata.write_transformations(element_name)

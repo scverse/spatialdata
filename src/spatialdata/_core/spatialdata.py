@@ -1154,6 +1154,8 @@ class SpatialData:
         if element_type is None:
             raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
 
+        self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
+
         self._write_element(
             element=element,
             zarr_container_path=self.path,
@@ -1213,6 +1215,10 @@ class SpatialData:
         if not found and element_name not in only_on_disk_names:
             raise ValueError(ERROR_MESSAGE)
 
+        if found:
+            _element_type = self._element_type_from_element_name(element_name)
+            self._check_element_not_on_disk_with_different_type(element_type=_element_type, element_name=element_name)
+
         element_type = None
         on_disk = self.elements_paths_on_disk()
         for path in on_disk:
@@ -1221,14 +1227,6 @@ class SpatialData:
                 element_type = _element_type
                 break
         assert element_type is not None
-
-        if element_name not in only_on_disk_names:
-            in_memory_element_type = self._element_type_from_element_name(element_name)
-            if in_memory_element_type != element_type:
-                raise ValueError(
-                    f"Element {element_name} is found in-memory as a {in_memory_element_type}, but it is not found in "
-                    f"the Zarr store as a {element_type}. The in-memory object should have a different name."
-                )
 
         file_path_of_element = self.path / element_type / element_name
         if any(_backed_elements_contained_in_path(path=file_path_of_element, object=self)):
@@ -1245,6 +1243,16 @@ class SpatialData:
 
         if self.has_consolidated_metadata():
             self.write_consolidated_metadata()
+
+    def _check_element_not_on_disk_with_different_type(self, element_type: str, element_name: str) -> None:
+        only_on_disk = self.elements_paths_on_disk()
+        for disk_path in only_on_disk:
+            disk_element_type, disk_element_name = self._element_type_and_name_from_element_path(disk_path)
+            if disk_element_name == element_name and disk_element_type != element_type:
+                raise ValueError(
+                    f"Element {element_name} is found in the Zarr store as a {disk_element_type}, but it is found "
+                    f"in-memory as a {element_type}. The in-memory object should have a different name."
+                )
 
     def write_consolidated_metadata(self) -> None:
         store = parse_url(self.path, mode="r+").store
@@ -1282,6 +1290,8 @@ class SpatialData:
             return None
 
         element_type = self._element_type_from_element_name(element_name)
+
+        self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
         # check if the element exists in the Zarr storage
         if not self._group_for_element_exists(
