@@ -323,7 +323,7 @@ class TestModels:
         )
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
-        with pytest.raises(TypeError, match="Only np.int16"):
+        with pytest.raises(TypeError, match="Only int"):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
         obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
