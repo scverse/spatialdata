@@ -286,7 +286,7 @@ class SpatialData:
             If the region key column is not found in table.obs.
         """
         _, region_key, _ = get_table_keys(table)
-        if table.obs.get(region_key):
+        if table.obs.get(region_key) is not None:
             return table.obs[region_key]
         raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
 
@@ -311,7 +311,7 @@ class SpatialData:
 
         """
         _, _, instance_key = get_table_keys(table)
-        if table.obs.get(instance_key):
+        if table.obs.get(instance_key) is not None:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
