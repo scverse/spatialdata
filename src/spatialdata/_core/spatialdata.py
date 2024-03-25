@@ -424,7 +424,7 @@ class SpatialData:
         region_key = region_key if region_key else attrs[TableModel.REGION_KEY_KEY]
         if attrs[TableModel.REGION_KEY_KEY] != region_key:
             attrs[TableModel.REGION_KEY_KEY] = region_key
-        attrs[TableModel.REGION_KEY] = table.obs[region_key].unique()
+        attrs[TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
         return table
 
     def set_table_annotates_spatialelement(
