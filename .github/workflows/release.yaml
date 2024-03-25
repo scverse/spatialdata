@@ -1,14 +1,14 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+    release:
+        types: [published]
 
 jobs:
-  release:
-    # requires that you have put your twine API key in your
-    # github secrets (see readme for details)
-    runs-on: ubuntu-latest
+    release:
+        # requires that you have put your twine API key in your
+        # github secrets (see readme for details)
+        runs-on: ubuntu-latest
         if: contains(github.ref, 'tags')
         steps:
             - name: Checkout code
