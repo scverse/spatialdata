@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## [0.1.1] - xxxx-xx-xx
+
+### Added
+
+####
+
+-   Added method `update_annotated_regions_metadata() which updates the `region`value automatically from the `region_key` columns
+
 ## [0.1.0] - 2024-03-24
 
 ### Added
@@ -38,8 +46,6 @@ and this project adheres to [Semantic Versioning][].
 -   Added function get_instance_key_column in SpatialData to get the instance_key column in table.obs.
 -   Added function set_table_annotates_spatialelement in SpatialData to either set or change the annotation metadata of
     a table in a given SpatialData object.
--   Added function table_annotates_spatialelement which slightly differs from function above as it takes the table object
-    as argument instead of the table_name.
 -   Added table_name parameter to the aggregate function to allow users to give a custom table name to table resulting
     from aggregation.
 -   Added table_name parameter to the get_values function.
