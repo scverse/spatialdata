@@ -73,9 +73,9 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        pd.testing.assert_frame_equal(table.table.obs, sdata.table.obs)
+        pd.testing.assert_frame_equal(table["table"].obs, sdata["table"].obs)
         try:
-            assert table.table.uns == sdata.table.uns
+            assert table["table"].uns == sdata["table"].uns
         except ValueError as e:
             raise e
 

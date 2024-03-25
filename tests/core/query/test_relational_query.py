@@ -467,7 +467,7 @@ def test_get_values_df(sdata_query_aggregation):
     assert v.shape == (9, 1)
 
     # test with multiple values, in the obs
-    sdata_query_aggregation.table.obs["another_numerical_in_obs"] = v
+    sdata_query_aggregation["table"].obs["another_numerical_in_obs"] = v
     v = get_values(
         value_key=["numerical_in_obs", "another_numerical_in_obs"],
         sdata=sdata_query_aggregation,
@@ -484,13 +484,13 @@ def test_get_values_df(sdata_query_aggregation):
 
     # test with multiple values, in the var
     # prepare the data
-    adata = sdata_query_aggregation.table
+    adata = sdata_query_aggregation["table"]
     X = adata.X
     new_X = np.hstack([X, X[:, 0:1]])
     new_adata = AnnData(
         X=new_X, obs=adata.obs, var=pd.DataFrame(index=["numerical_in_var", "another_numerical_in_var"]), uns=adata.uns
     )
-    del sdata_query_aggregation.table
+    del sdata_query_aggregation.tables["table"]
     sdata_query_aggregation.table = new_adata
     # test
     v = get_values(
@@ -503,7 +503,7 @@ def test_get_values_df(sdata_query_aggregation):
 
     # test exceptions
     # value found in multiple locations
-    sdata_query_aggregation.table.obs["another_numerical_in_gdf"] = np.zeros(21)
+    sdata_query_aggregation["table"].obs["another_numerical_in_gdf"] = np.zeros(21)
     with pytest.raises(ValueError):
         get_values(
             value_key="another_numerical_in_gdf",
