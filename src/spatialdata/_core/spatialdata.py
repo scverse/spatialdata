@@ -397,9 +397,9 @@ class SpatialData:
         attrs[TableModel.REGION_KEY] = region
 
     @staticmethod
-    def table_annotates_spatialelement(table: AnnData, region_key: str | None = None) -> AnnData:
+    def update_annotated_regions_metadata(table: AnnData, region_key: str | None = None) -> AnnData:
         """
-        Set the annotation target of the table using the region_key column in table.obs.
+        Update the annotation target of the table using the region_key column in table.obs.
 
         The table must already contain annotation metadata, e.g. the region, region_key and instance_key
         must already be specified for the table. If this is not the case please use TableModel.parse instead
