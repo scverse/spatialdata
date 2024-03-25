@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning][].
 -   Added function get_instance_key_column in SpatialData to get the instance_key column in table.obs.
 -   Added function set_table_annotates_spatialelement in SpatialData to either set or change the annotation metadata of
     a table in a given SpatialData object.
+-   Added function table_annotates_spatialelement which slightly differs from function above as it takes the table object
+    as argument instead of the table_name.
 -   Added table_name parameter to the aggregate function to allow users to give a custom table name to table resulting
     from aggregation.
 -   Added table_name parameter to the get_values function.
