@@ -305,20 +305,20 @@ def test_io_table(shapes):
     adata.obs["instance"] = shapes.shapes["circles"].index
     adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")
     shapes.table = adata
-    del shapes.table
+    del shapes.tables["table"]
     shapes.table = adata
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         shapes.write(f)
         shapes2 = SpatialData.read(f)
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
+        assert "table" in shapes2.tables
+        assert shapes2["table"].shape == (5, 10)
 
-        del shapes2.table
-        assert shapes2.table is None
+        del shapes2.tables["table"]
+        assert "table" not in shapes2.tables
         shapes2.table = adata
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
+        assert "table" in shapes2.tables
+        assert shapes2["table"].shape == (5, 10)
 
 
 def test_bug_rechunking_after_queried_raster():

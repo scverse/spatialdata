@@ -491,7 +491,7 @@ def test_get_values_df(sdata_query_aggregation):
         X=new_X, obs=adata.obs, var=pd.DataFrame(index=["numerical_in_var", "another_numerical_in_var"]), uns=adata.uns
     )
     del sdata_query_aggregation.tables["table"]
-    sdata_query_aggregation.table = new_adata
+    sdata_query_aggregation["table"] = new_adata
     # test
     v = get_values(
         value_key=["numerical_in_var", "another_numerical_in_var"],
@@ -561,7 +561,7 @@ def test_filter_table_categorical_bug(shapes):
     adata.obs["cell_id"] = np.arange(len(adata))
     adata = TableModel.parse(adata, region=["circles"], region_key="region", instance_key="cell_id")
     adata_subset = adata[adata.obs["categorical"] == "a"].copy()
-    shapes.table = adata_subset
+    shapes["table"] = adata_subset
     shapes.filter_by_coordinate_system("global")
 
 
