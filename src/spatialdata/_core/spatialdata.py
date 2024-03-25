@@ -411,7 +411,8 @@ class SpatialData:
             The AnnData table for which to set the annotation target.
         region_key
             The column in table.obs containing the rows specifying the SpatialElements being annotated.
-            If None the current value for region_key in the annotation metadata of the table is used.
+            If None the current value for region_key in the annotation metadata of the table is used. If
+            specified but different from the current region_key, the current region_key is overwritten.
 
         Returns
         -------
@@ -421,6 +422,8 @@ class SpatialData:
         if attrs is None:
             raise ValueError("The table has no annotation metadata. Please parse the table using `TableModel.parse`.")
         region_key = region_key if region_key else attrs[TableModel.REGION_KEY_KEY]
+        if attrs[TableModel.REGION_KEY_KEY] != region_key:
+            attrs[TableModel.REGION_KEY_KEY] = region_key
         attrs[TableModel.REGION_KEY] = table.obs[region_key].unique()
         return table
 
