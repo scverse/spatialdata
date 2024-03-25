@@ -468,7 +468,7 @@ def join_spatialelement_table(
     spatial_element_names: str | list[str],
     elements: SpatialElement | list[SpatialElement],
     table: AnnData,
-    how: str = "left",
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
     """
@@ -552,23 +552,7 @@ def join_spatialelement_table(
             element_type = "shapes"
         elements_dict[element_type][name] = element
 
-    assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
-        "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
-        "`shapes`."
-    )
-
-    if match_rows not in MatchTypes.__dict__["_member_names_"]:
-        raise TypeError(
-            f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, ``'left'`` or ``'right'``"
-        )
-    if how in JoinTypes.__dict__["_member_names_"]:
-        elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
-    else:
-        raise TypeError(f"`{how}` is not a valid type of join.")
-
-    elements_dict = {
-        name: element for outer_key, dict_val in elements_dict.items() for name, element in dict_val.items()
-    }
+    elements_dict, table = _call_join(elements_dict, table, how, match_rows)
     return elements_dict, table
 
 
@@ -576,7 +560,7 @@ def join_sdata_spatialelement_table(
     sdata: SpatialData,
     spatial_element_name: str | list[str],
     table_name: str,
-    how: str = "left",
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
     """
@@ -637,14 +621,14 @@ def join_sdata_spatialelement_table(
     for name in spatial_element_name:
         if name in sdata.tables:
             warnings.warn(
-                f"Tables: `{', '.join(elements_dict['tables'].keys())}` given in spatial_element_names cannot be "
+                f"Table: `{name}` given in spatial_element_names cannot be "
                 f"joined with a table using this function.",
                 UserWarning,
                 stacklevel=2,
             )
         elif name in sdata.images:
             warnings.warn(
-                f"Images: `{', '.join(elements_dict['images'].keys())}` cannot be joined with a table",
+                f"Image: `{name}` cannot be joined with a table",
                 UserWarning,
                 stacklevel=2,
             )
@@ -652,6 +636,13 @@ def join_sdata_spatialelement_table(
             element_type, _, element = sdata._find_element(name)
             elements_dict[element_type][name] = element
 
+    elements_dict, table = _call_join(elements_dict, table, how, match_rows)
+    return elements_dict, table
+
+
+def _call_join(
+    elements_dict: dict[str, dict[str, Any]], table: AnnData, how: str, match_rows: Literal["no", "left", "right"]
+) -> tuple[dict[str, Any], AnnData]:
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
         "`shapes`."
