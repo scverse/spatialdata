@@ -19,6 +19,8 @@ from spatial_image import SpatialImage
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
+    Image2DModel,
+    Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
@@ -462,6 +464,114 @@ class MatchTypes(Enum):
     no = "no"
 
 
+def join_spatialelement_table(
+    spatial_element_names: str | list[str],
+    elements: SpatialElement | list[SpatialElement],
+    table: AnnData,
+    how: str = "left",
+    match_rows: Literal["no", "left", "right"] = "no",
+) -> tuple[dict[str, Any], AnnData]:
+    """
+    Join SpatialElement(s) and table together in SQL like manner.
+
+    The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
+    returned together in one dataframe like structure, but instead filtered elements are returned. To determine matches,
+    for the SpatialElement the index is used and for the table the region key column and instance key column. The
+    elements are not overwritten in the `SpatialData` object.
+
+    The following joins are supported: ``'left'``, ``'left_exclusive'``, ``'inner'``, ``'right'`` and
+    ``'right_exclusive'``. In case of a ``'left'`` join the SpatialElements are returned in a dictionary as is
+    while the table is filtered to only include matching rows. In case of ``'left_exclusive'`` join None is returned
+    for table while the SpatialElements returned are filtered to only include indices not present in the table. The
+    cases for ``'right'`` joins are symmetric to the ``'left'`` joins. In case of an ``'inner'`` join of
+    SpatialElement(s) and a table, for each an element is returned only containing the rows that are present in
+    both the SpatialElement and table.
+
+    For Points and Shapes elements every valid join for argument how is supported. For Labels elements only
+     the ``'left'`` and ``'right_exclusive'`` joins are supported.
+
+    Parameters
+    ----------
+    spatial_element_names
+        The name(s) of the spatial elements to be joined with the table. If a list of names the indices must match
+        with the list of SpatialElements passed on by the argument elements.
+    elements
+        The SpatialElement(s) to be joined with the table. In case of a list of SpatialElements the indices
+        must match exactly with the indices in the list of spatial_element_names.
+    table_name
+        The name of the table to join with the spatial elements.
+    how
+        The type of SQL like join to perform, default is ``'left'``. Options are ``'left'``, ``'left_exclusive'``,
+        ``'inner'``, ``'right'`` and ``'right_exclusive'``.
+    match_rows
+        Whether to match the indices of the element and table and if so how. If ``'left'``, element_indices take
+        priority and if ``'right'`` table instance ids take priority.
+
+    Returns
+    -------
+    A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+
+    Raises
+    ------
+    ValueError
+        If no valid elements are provided for the join operation
+    ValueError
+        If the provided join type is not supported.
+    ValueError
+        If an incorrect value is given for match_rows
+    """
+    spatial_element_names = (
+        spatial_element_names if isinstance(spatial_element_names, list) else [spatial_element_names]
+    )
+    elements = elements if isinstance(elements, list) else [elements]
+
+    elements_dict: dict[str, dict[str, Any]] = defaultdict(lambda: defaultdict(dict))
+    for name, element in zip(spatial_element_names, elements):
+        model = get_model(element)
+
+        if model == TableModel:
+            warnings.warn(
+                f"Table: `{name}` given in spatial_element_name cannot be " f"joined with a table using this function.",
+                UserWarning,
+                stacklevel=2,
+            )
+            continue
+        if model in [Image2DModel, Image3DModel]:
+            warnings.warn(
+                f"Image: `{name}` cannot be joined with a table",
+                UserWarning,
+                stacklevel=2,
+            )
+            continue
+
+        if model in [Labels2DModel, Labels3DModel]:
+            element_type = "labels"
+        elif model == PointsModel:
+            element_type = "points"
+        elif model == ShapesModel:
+            element_type = "shapes"
+        elements_dict[element_type][name] = element
+
+    assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
+        "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
+        "`shapes`."
+    )
+
+    if match_rows not in MatchTypes.__dict__["_member_names_"]:
+        raise TypeError(
+            f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, ``'left'`` or ``'right'``"
+        )
+    if how in JoinTypes.__dict__["_member_names_"]:
+        elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
+    else:
+        raise TypeError(f"`{how}` is not a valid type of join.")
+
+    elements_dict = {
+        name: element for outer_key, dict_val in elements_dict.items() for name, element in dict_val.items()
+    }
+    return elements_dict, table
+
+
 def join_sdata_spatialelement_table(
     sdata: SpatialData,
     spatial_element_name: str | list[str],
@@ -469,7 +579,8 @@ def join_sdata_spatialelement_table(
     how: str = "left",
     match_rows: Literal["no", "left", "right"] = "no",
 ) -> tuple[dict[str, Any], AnnData]:
-    """Join SpatialElement(s) and table together in SQL like manner.
+    """
+    Join SpatialElement(s) and table in SpatialData object together in SQL like manner.
 
     The function allows the user to perform SQL like joins of SpatialElements and a table. The elements are not
     returned together in one dataframe like structure, but instead filtered elements are returned. To determine matches,
@@ -511,7 +622,11 @@ def join_sdata_spatialelement_table(
     AssertionError
         If no table with the given table_name exists in the SpatialData object.
     ValueError
+        If no valid elements are provided for the join operation
+    ValueError
         If the provided join type is not supported.
+    ValueError
+        If an incorrect value is given for match_rows
     """
     assert sdata.tables.get(table_name), f"No table with `{table_name}` exists in the SpatialData object."
     table = sdata.tables[table_name]
