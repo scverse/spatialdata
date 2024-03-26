@@ -7,7 +7,7 @@ from spatialdata._core.query.relational_query import (
     _get_element_annotators,
     _locate_value,
     _ValueOrigin,
-    join_sdata_spatialelement_table,
+    join_spatialelement_table,
 )
 from spatialdata.models.models import TableModel
 
@@ -36,54 +36,110 @@ def test_join_using_string_instance_id_and_index(sdata_query_aggregation):
     sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
     sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"][:5]
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata_query_aggregation,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
     )
     # Note that we started with 21 n_obs.
     assert table.n_obs == 10
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right_exclusive"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata_query_aggregation,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="right_exclusive",
     )
     assert table.n_obs == 11
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata_query_aggregation,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="right",
     )
     assert table.n_obs == 21
 
 
 def test_left_inner_right_exclusive_join(sdata_query_aggregation):
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, "values_polygons", "table", "right_exclusive"
+    sdata = sdata_query_aggregation
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="values_polygons", table_name="table", how="right_exclusive"
     )
     assert table is None
     assert all(element_dict[key] is None for key in element_dict)
 
-    sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"].drop([10, 11])
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_polygons"],
+        elements=[sdata["values_polygons"]],
+        table=sdata["table"],
+        how="right_exclusive",
+    )
+    assert table is None
+    assert all(element_dict[key] is None for key in element_dict)
+
+    sdata["values_polygons"] = sdata["values_polygons"].drop([10, 11])
     with pytest.raises(AssertionError, match="No table with"):
-        join_sdata_spatialelement_table(sdata_query_aggregation, "values_polygons", "not_existing_table", "left")
+        join_spatialelement_table(
+            sdata=sdata, spatial_element_names="values_polygons", table_name="not_existing_table", how="left"
+        )
 
     # Should we reindex before returning the table?
-    element_dict, table = join_sdata_spatialelement_table(sdata_query_aggregation, "values_polygons", "table", "left")
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="values_polygons", table_name="table", how="left"
+    )
+    assert all(element_dict["values_polygons"].index == table.obs["instance_id"].values)
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_polygons"], elements=[sdata["values_polygons"]], table=sdata["table"], how="left"
+    )
     assert all(element_dict["values_polygons"].index == table.obs["instance_id"].values)
 
     # Check no matches in table for element not annotated by table
-    element_dict, table = join_sdata_spatialelement_table(sdata_query_aggregation, "by_polygons", "table", "left")
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="by_polygons", table_name="table", how="left"
+    )
     assert table is None
-    assert element_dict["by_polygons"] is sdata_query_aggregation["by_polygons"]
+    assert element_dict["by_polygons"] is sdata["by_polygons"]
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["by_polygons"], elements=[sdata["by_polygons"]], table=sdata["table"], how="left"
+    )
+    assert table is None
+    assert element_dict["by_polygons"] is sdata["by_polygons"]
 
     # Check multiple elements, one of which not annotated by table
     with pytest.warns(UserWarning, match="The element"):
-        element_dict, table = join_sdata_spatialelement_table(
-            sdata_query_aggregation, ["by_polygons", "values_polygons"], "table", "left"
+        element_dict, table = join_spatialelement_table(
+            sdata=sdata, spatial_element_names=["by_polygons", "values_polygons"], table_name="table", how="left"
+        )
+    assert "by_polygons" in element_dict
+
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_spatialelement_table(
+            spatial_element_names=["by_polygons", "values_polygons"],
+            elements=[sdata["by_polygons"], sdata["values_polygons"]],
+            table=sdata["table"],
+            how="left",
         )
     assert "by_polygons" in element_dict
 
     # check multiple elements joined to table.
-    sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"].drop([7, 8])
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
+    sdata["values_circles"] = sdata["values_circles"].drop([7, 8])
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names=["values_circles", "values_polygons"], table_name="table", how="left"
+    )
+    indices = pd.concat(
+        [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
+    )
+    assert all(table.obs["instance_id"] == indices.values)
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="left",
     )
     indices = pd.concat(
         [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
@@ -91,8 +147,23 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert all(table.obs["instance_id"] == indices.values)
 
     with pytest.warns(UserWarning, match="The element"):
-        element_dict, table = join_sdata_spatialelement_table(
-            sdata_query_aggregation, ["values_circles", "values_polygons", "by_polygons"], "table", "right_exclusive"
+        element_dict, table = join_spatialelement_table(
+            sdata=sdata,
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            table_name="table",
+            how="right_exclusive",
+        )
+    assert all(element_dict[key] is None for key in element_dict)
+    assert all(table.obs.index == ["7", "8", "19", "20"])
+    assert all(table.obs["instance_id"].values == [7, 8, 10, 11])
+    assert all(table.obs["region"].values == ["values_circles", "values_circles", "values_polygons", "values_polygons"])
+
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_spatialelement_table(
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            elements=[sdata["values_circles"], sdata["values_polygons"], sdata["by_polygons"]],
+            table=sdata["table"],
+            how="right_exclusive",
         )
     assert all(element_dict[key] is None for key in element_dict)
     assert all(table.obs.index == ["7", "8", "19", "20"])
@@ -101,8 +172,24 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
 
     # the triggered warning is: UserWarning: The element `{name}` is not annotated by the table. Skipping
     with pytest.warns(UserWarning, match="The element"):
-        element_dict, table = join_sdata_spatialelement_table(
-            sdata_query_aggregation, ["values_circles", "values_polygons", "by_polygons"], "table", "inner"
+        element_dict, table = join_spatialelement_table(
+            sdata=sdata,
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            table_name="table",
+            how="inner",
+        )
+    indices = pd.concat(
+        [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
+    )
+    assert all(table.obs["instance_id"] == indices.values)
+    assert element_dict["by_polygons"] is None
+
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_spatialelement_table(
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            elements=[sdata["values_circles"], sdata["values_polygons"], sdata["by_polygons"]],
+            table=sdata["table"],
+            how="inner",
         )
     indices = pd.concat(
         [element_dict["values_circles"].index.to_series(), element_dict["values_polygons"].index.to_series()]
@@ -112,86 +199,210 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
 
 
 def test_join_spatialelement_table_fail(full_sdata):
-    with pytest.warns(UserWarning, match="Images:"):
-        join_sdata_spatialelement_table(full_sdata, ["image2d", "labels2d"], "table", "left_exclusive")
-    with pytest.warns(UserWarning, match="Tables:"):
-        join_sdata_spatialelement_table(full_sdata, ["labels2d", "table"], "table", "left_exclusive")
+    with pytest.warns(UserWarning, match="Image:"):
+        join_spatialelement_table(
+            sdata=full_sdata, spatial_element_names=["image2d", "labels2d"], table_name="table", how="left_exclusive"
+        )
+    with pytest.warns(UserWarning, match="Table:"):
+        join_spatialelement_table(
+            sdata=full_sdata, spatial_element_names=["labels2d", "table"], table_name="table", how="left_exclusive"
+        )
     with pytest.raises(TypeError, match="`not_join` is not a"):
-        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "not_join")
+        join_spatialelement_table(
+            sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="not_join"
+        )
 
 
 def test_left_exclusive_and_right_join(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
     # Test case in which all table rows match rows in elements
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left_exclusive"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="left_exclusive",
+    )
+    assert all(element_dict[key] is None for key in element_dict)
+    assert table is None
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="left_exclusive",
     )
     assert all(element_dict[key] is None for key in element_dict)
     assert table is None
 
     # Dropped indices correspond to instance ids 7, 8 for 'values_circles' and 10, 11 for 'values_polygons'
-    sdata_query_aggregation["table"] = sdata_query_aggregation["table"][
-        sdata_query_aggregation["table"].obs.index.drop(["7", "8", "19", "20"])
-    ]
+    sdata["table"] = sdata["table"][sdata["table"].obs.index.drop(["7", "8", "19", "20"])]
     with pytest.warns(UserWarning, match="The element"):
-        element_dict, table = join_sdata_spatialelement_table(
-            sdata_query_aggregation, ["values_polygons", "by_polygons"], "table", "left_exclusive"
+        element_dict, table = join_spatialelement_table(
+            sdata=sdata,
+            spatial_element_names=["values_polygons", "by_polygons"],
+            table_name="table",
+            how="left_exclusive",
         )
     assert table is None
-    assert not set(element_dict["values_polygons"].index).issubset(sdata_query_aggregation["table"].obs["instance_id"])
+    assert not set(element_dict["values_polygons"].index).issubset(sdata["table"].obs["instance_id"])
+
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_spatialelement_table(
+            spatial_element_names=["values_polygons", "by_polygons"],
+            elements=[sdata["values_polygons"], sdata["by_polygons"]],
+            table=sdata["table"],
+            how="left_exclusive",
+        )
+    assert table is None
+    assert not set(element_dict["values_polygons"].index).issubset(sdata["table"].obs["instance_id"])
 
     # test right join
     with pytest.warns(UserWarning, match="The element"):
-        element_dict, table = join_sdata_spatialelement_table(
-            sdata_query_aggregation, ["values_circles", "values_polygons", "by_polygons"], "table", "right"
+        element_dict, table = join_spatialelement_table(
+            sdata=sdata,
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            table_name="table",
+            how="right",
         )
-    assert table is sdata_query_aggregation["table"]
+    assert table is sdata["table"]
     assert not {7, 8}.issubset(element_dict["values_circles"].index)
     assert not {10, 11}.issubset(element_dict["values_polygons"].index)
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left_exclusive"
+    with pytest.warns(UserWarning, match="The element"):
+        element_dict, table = join_spatialelement_table(
+            spatial_element_names=["values_circles", "values_polygons", "by_polygons"],
+            elements=[sdata["values_circles"], sdata["values_polygons"], sdata["by_polygons"]],
+            table=sdata["table"],
+            how="right",
+        )
+    assert table is sdata["table"]
+    assert not {7, 8}.issubset(element_dict["values_circles"].index)
+    assert not {10, 11}.issubset(element_dict["values_polygons"].index)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="left_exclusive",
     )
     assert table is None
     assert not np.array_equal(
-        sdata_query_aggregation["table"].obs.iloc[7:9]["instance_id"].values,
+        sdata["table"].obs.iloc[7:9]["instance_id"].values,
         element_dict["values_circles"].index.values,
     )
     assert not np.array_equal(
-        sdata_query_aggregation["table"].obs.iloc[19:21]["instance_id"].values,
+        sdata["table"].obs.iloc[19:21]["instance_id"].values,
+        element_dict["values_polygons"].index.values,
+    )
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="left_exclusive",
+    )
+    assert table is None
+    assert not np.array_equal(
+        sdata["table"].obs.iloc[7:9]["instance_id"].values,
+        element_dict["values_circles"].index.values,
+    )
+    assert not np.array_equal(
+        sdata["table"].obs.iloc[19:21]["instance_id"].values,
         element_dict["values_polygons"].index.values,
     )
 
 
 def test_match_rows_join(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
     reversed_instance_id = [3, 4, 5, 6, 7, 8, 1, 2, 0] + list(reversed(range(12)))
-    original_instance_id = sdata_query_aggregation.table.obs["instance_id"]
-    sdata_query_aggregation.table.obs["instance_id"] = reversed_instance_id
+    original_instance_id = sdata["table"].obs["instance_id"]
+    sdata["table"].obs["instance_id"] = reversed_instance_id
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left", match_rows="left"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="left",
+        match_rows="left",
     )
     assert all(table.obs["instance_id"].values == original_instance_id.values)
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "right", match_rows="right"
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="left",
+        match_rows="left",
+    )
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="right",
+        match_rows="right",
     )
     indices = [*element_dict["values_circles"].index, *element_dict[("values_polygons")].index]
     assert all(indices == table.obs["instance_id"])
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner", match_rows="left"
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="right",
+        match_rows="right",
+    )
+    assert all(indices == table.obs["instance_id"])
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="left",
     )
     assert all(table.obs["instance_id"].values == original_instance_id.values)
 
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "inner", match_rows="right"
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="inner",
+        match_rows="left",
+    )
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="right",
     )
     indices = [*element_dict["values_circles"].index, *element_dict[("values_polygons")].index]
+    assert all(indices == table.obs["instance_id"])
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="inner",
+        match_rows="right",
+    )
     assert all(indices == table.obs["instance_id"])
 
     # check whether table ordering is preserved if not matching
-    element_dict, table = join_sdata_spatialelement_table(
-        sdata_query_aggregation, ["values_circles", "values_polygons"], "table", "left"
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names=["values_circles", "values_polygons"], table_name="table", how="left"
+    )
+    assert all(table.obs["instance_id"] == reversed_instance_id)
+
+    element_dict, table = join_spatialelement_table(
+        spatial_element_names=["values_circles", "values_polygons"],
+        elements=[sdata["values_circles"], sdata["values_polygons"]],
+        table=sdata["table"],
+        how="left",
     )
     assert all(table.obs["instance_id"] == reversed_instance_id)
 
@@ -324,7 +535,7 @@ def test_get_values_df(sdata_query_aggregation):
     assert v.shape == (9, 1)
 
     # test with multiple values, in the obs
-    sdata_query_aggregation.table.obs["another_numerical_in_obs"] = v
+    sdata_query_aggregation["table"].obs["another_numerical_in_obs"] = v
     v = get_values(
         value_key=["numerical_in_obs", "another_numerical_in_obs"],
         sdata=sdata_query_aggregation,
@@ -341,14 +552,14 @@ def test_get_values_df(sdata_query_aggregation):
 
     # test with multiple values, in the var
     # prepare the data
-    adata = sdata_query_aggregation.table
+    adata = sdata_query_aggregation["table"]
     X = adata.X
     new_X = np.hstack([X, X[:, 0:1]])
     new_adata = AnnData(
         X=new_X, obs=adata.obs, var=pd.DataFrame(index=["numerical_in_var", "another_numerical_in_var"]), uns=adata.uns
     )
-    del sdata_query_aggregation.table
-    sdata_query_aggregation.table = new_adata
+    del sdata_query_aggregation.tables["table"]
+    sdata_query_aggregation["table"] = new_adata
     # test
     v = get_values(
         value_key=["numerical_in_var", "another_numerical_in_var"],
@@ -360,7 +571,7 @@ def test_get_values_df(sdata_query_aggregation):
 
     # test exceptions
     # value found in multiple locations
-    sdata_query_aggregation.table.obs["another_numerical_in_gdf"] = np.zeros(21)
+    sdata_query_aggregation["table"].obs["another_numerical_in_gdf"] = np.zeros(21)
     with pytest.raises(ValueError):
         get_values(
             value_key="another_numerical_in_gdf",
@@ -418,35 +629,41 @@ def test_filter_table_categorical_bug(shapes):
     adata.obs["cell_id"] = np.arange(len(adata))
     adata = TableModel.parse(adata, region=["circles"], region_key="region", instance_key="cell_id")
     adata_subset = adata[adata.obs["categorical"] == "a"].copy()
-    shapes.table = adata_subset
+    shapes["table"] = adata_subset
     shapes.filter_by_coordinate_system("global")
 
 
 def test_labels_table_joins(full_sdata):
-    element_dict, table = join_sdata_spatialelement_table(
-        full_sdata,
-        "labels2d",
-        "table",
-        "left",
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata,
+        spatial_element_names="labels2d",
+        table_name="table",
+        how="left",
     )
     assert all(table.obs["instance_id"] == range(100))
 
     full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "left", match_rows="left")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="left", match_rows="left"
+    )
     assert all(table.obs["instance_id"] == range(100))
 
     with pytest.warns(UserWarning, match="Element type"):
-        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "left_exclusive")
+        join_spatialelement_table(
+            sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="left_exclusive"
+        )
 
     with pytest.warns(UserWarning, match="Element type"):
-        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "inner")
+        join_spatialelement_table(sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="inner")
 
     with pytest.warns(UserWarning, match="Element type"):
-        join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right")
+        join_spatialelement_table(sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="right")
 
     # all labels are present in table so should return None
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "labels2d", "table", "right_exclusive")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="right_exclusive"
+    )
     assert element_dict["labels2d"] is None
     assert table is None
 
@@ -455,7 +672,9 @@ def test_points_table_joins(full_sdata):
     full_sdata["table"].uns["spatialdata_attrs"]["region"] = "points_0"
     full_sdata["table"].obs["region"] = ["points_0"] * 100
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="left"
+    )
 
     # points should have the same number of rows as before and table as well
     assert len(element_dict["points_0"]) == 300
@@ -463,28 +682,40 @@ def test_points_table_joins(full_sdata):
 
     full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left", match_rows="left")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="left", match_rows="left"
+    )
     assert len(element_dict["points_0"]) == 300
     assert all(table.obs["instance_id"] == range(100))
 
     # We have 100 table instances so resulting length of points should be 200 as we started with 300
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "left_exclusive")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="left_exclusive"
+    )
     assert len(element_dict["points_0"]) == 200
     assert table is None
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "inner")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="inner"
+    )
     assert len(element_dict["points_0"]) == 100
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="right"
+    )
     assert len(element_dict["points_0"]) == 100
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right", match_rows="right")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="right", match_rows="right"
+    )
     assert all(element_dict["points_0"].index.values.compute() == list(reversed(range(100))))
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
-    element_dict, table = join_sdata_spatialelement_table(full_sdata, "points_0", "table", "right_exclusive")
+    element_dict, table = join_spatialelement_table(
+        sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="right_exclusive"
+    )
     assert element_dict["points_0"] is None
     assert table is None
 

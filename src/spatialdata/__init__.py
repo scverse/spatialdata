@@ -23,7 +23,7 @@ __all__ = [
     "bounding_box_query",
     "polygon_query",
     "get_values",
-    "join_sdata_spatialelement_table",
+    "join_spatialelement_table",
     "match_element_to_table",
     "match_table_to_element",
     "SpatialData",
@@ -49,7 +49,7 @@ from spatialdata._core.operations.vectorize import to_circles
 from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
 from spatialdata._core.query.relational_query import (
     get_values,
-    join_sdata_spatialelement_table,
+    join_spatialelement_table,
     match_element_to_table,
     match_table_to_element,
 )
