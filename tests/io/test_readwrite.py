@@ -147,7 +147,7 @@ class TestReadWrite:
         ]:
             sdata[name] = full_sdata[name]
             sdata.write_element(name)
-            sdata=read_zarr( sdata.path )
+            sdata = read_zarr(sdata.path)
 
             with pytest.raises(
                 ValueError, match="The Zarr store already exists. Use `overwrite=True` to try overwriting the store."
@@ -163,25 +163,24 @@ class TestReadWrite:
             # write a copy of the data
             sdata[new_name] = sdata[name]
             sdata.write_element(new_name)
-            sdata=read_zarr( sdata.path )
+            sdata = read_zarr(sdata.path)
             # rewrite the original data
             element_type = sdata._element_type_from_element_name(name)
             del getattr(sdata, element_type)[name]
             sdata.delete_element_from_disk(name)
             sdata[name] = sdata[new_name]
             sdata.write_element(name)
-            sdata=read_zarr( sdata.path )
+            sdata = read_zarr(sdata.path)
             # remove the copy
             element_type = sdata._element_type_from_element_name(new_name)
             del getattr(sdata, element_type)[new_name]
             sdata.delete_element_from_disk(new_name)
 
-
             # workaround 2, unsafe but sometimes acceptable depending on the user's workflow
-            if name == "points_0": # TODO fails for points
+            if name == "points_0":  # TODO fails for points
                 continue
-            sdata=read_zarr( sdata.path )
-            element=sdata[name]
+            sdata = read_zarr(sdata.path)
+            element = sdata[name]
             element_type = sdata._element_type_from_element_name(name)
             del getattr(sdata, element_type)[name]
             sdata.delete_element_from_disk(name)
