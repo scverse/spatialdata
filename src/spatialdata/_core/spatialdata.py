@@ -290,7 +290,7 @@ class SpatialData:
             If the region key column is not found in table.obs.
         """
         _, region_key, _ = get_table_keys(table)
-        if table.obs.get(region_key):
+        if table.obs.get(region_key) is not None:
             return table.obs[region_key]
         raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
 
@@ -315,7 +315,7 @@ class SpatialData:
 
         """
         _, _, instance_key = get_table_keys(table)
-        if table.obs.get(instance_key):
+        if table.obs.get(instance_key) is not None:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
@@ -399,6 +399,37 @@ class SpatialData:
         TableModel()._validate_set_instance_key(table, instance_key)
         check_target_region_column_symmetry(table, table_region_key, region)
         attrs[TableModel.REGION_KEY] = region
+
+    @staticmethod
+    def update_annotated_regions_metadata(table: AnnData, region_key: str | None = None) -> AnnData:
+        """
+        Update the annotation target of the table using the region_key column in table.obs.
+
+        The table must already contain annotation metadata, e.g. the region, region_key and instance_key
+        must already be specified for the table. If this is not the case please use TableModel.parse instead
+        and specify the annotation metadata by passing the correct arguments to that function.
+
+        Parameters
+        ----------
+        table
+            The AnnData table for which to set the annotation target.
+        region_key
+            The column in table.obs containing the rows specifying the SpatialElements being annotated.
+            If None the current value for region_key in the annotation metadata of the table is used. If
+            specified but different from the current region_key, the current region_key is overwritten.
+
+        Returns
+        -------
+        The table for which the annotation target has been set.
+        """
+        attrs = table.uns.get(TableModel.ATTRS_KEY)
+        if attrs is None:
+            raise ValueError("The table has no annotation metadata. Please parse the table using `TableModel.parse`.")
+        region_key = region_key if region_key else attrs[TableModel.REGION_KEY_KEY]
+        if attrs[TableModel.REGION_KEY_KEY] != region_key:
+            attrs[TableModel.REGION_KEY_KEY] = region_key
+        attrs[TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
+        return table
 
     def set_table_annotates_spatialelement(
         self,
@@ -503,21 +534,19 @@ class SpatialData:
     @property
     def path(self) -> Path | None:
         """Path to the Zarr storage."""
-        if self._path is None:
-            return None
-        if isinstance(self._path, str):
-            return Path(self._path)
-        if isinstance(self._path, Path):
-            return self._path
-        raise ValueError(f"Unexpected type for path: {type(self._path)}")
+        return self._path
 
     @path.setter
     def path(self, value: Path | None) -> None:
-        self._path = value
+        if value is None or isinstance(value, (str, Path)):
+            self._path = value
+        else:
+            raise TypeError("Path must be `None`, a `str` or a `Path` object.")
+
         if not self.is_self_contained():
             logger.info(
                 "The SpatialData object is not self-contained (i.e. it contains some elements that are Dask-backed from"
-                f" locations outside {self._path}). Please see the documentation of `is_self_contained()` to understand"
+                f" locations outside {self.path}). Please see the documentation of `is_self_contained()` to understand"
                 f" the implications of working with SpatialData objects that are not self-contained."
             )
 
@@ -879,7 +908,7 @@ class SpatialData:
                 elements[element_type][element_name] = transformed
         return SpatialData(**elements, tables=sdata.tables)
 
-    def describe_elements_are_self_contained(self) -> dict[str, bool]:
+    def elements_are_self_contained(self) -> dict[str, bool]:
         """
         Describe if elements are self-contained as a dict of element_name to bool.
 
@@ -936,7 +965,7 @@ class SpatialData:
         if self.path is None:
             return True
 
-        description = self.describe_elements_are_self_contained()
+        description = self.elements_are_self_contained()
 
         if element_name is not None:
             return description[element_name]
@@ -1779,7 +1808,7 @@ class SpatialData:
         if not self.is_self_contained():
             assert self.path is not None
             descr += "\nwith the following Dask-backed elements not being self-contained:"
-            description = self.describe_elements_are_self_contained()
+            description = self.elements_are_self_contained()
             for _, element_name, element in self.gen_elements():
                 if not description[element_name]:
                     backing_files = ", ".join(get_dask_backing_files(element))
