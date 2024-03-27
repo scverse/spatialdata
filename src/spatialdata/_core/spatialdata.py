@@ -1059,27 +1059,34 @@ class SpatialData:
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
                 )
             if not overwrite:
-                raise ValueError("The Zarr store already exists. Use `overwrite=True` to try overwriting the store.")
+                raise ValueError(
+                    "The Zarr store already exists. Use `overwrite=True` to try overwriting the store."
+                    "Please note that only Zarr stores not currently in used by the current SpatialData object can be "
+                    "overwritten."
+                )
+            ERROR_MSG = (
+                "Cannot overwrite. The target path of the write operation is in use. Please save the data to a "
+                "different location. "
+            )
+            WORKAROUND = (
+                "\nWorkaround: please see discussion here https://github.com/scverse/spatialdata/discussions/520."
+            )
             if any(_backed_elements_contained_in_path(path=file_path, object=self)):
                 raise ValueError(
-                    "The file path specified is a parent directory of one or more files used for backing for one or "
-                    "more elements in the SpatialData object. Please save the data to a different location."
+                    ERROR_MSG + "\nDetails: the target path contains one or more files that Dask use for "
+                    "backing elements in the SpatialData object." + WORKAROUND
                 )
             if self.path is not None and (
                 _is_subfolder(parent=self.path, child=file_path) or _is_subfolder(parent=file_path, child=self.path)
             ):
                 if saving_an_element and _is_subfolder(parent=self.path, child=file_path):
                     raise ValueError(
-                        "Currently, overwriting existing elements is not supported. It is recommended to manually save "
-                        "the element in a different location and then eventually copy it to the original desired "
-                        "location. Deleting the old element and saving the new element to the same location is not "
-                        "advised because data loss may occur if the execution is interrupted during writing."
+                        ERROR_MSG + "\nDetails: the target path in which to save an element is a subfolder "
+                        "of the current Zarr store." + WORKAROUND
                     )
                 raise ValueError(
-                    "The file path specified either contains either is contained in the one used for backing. "
-                    "Currently, overwriting the backing Zarr store is not supported to prevent accidental data loss "
-                    "that could occur if the execution is interrupted during writing. Please save the data to a "
-                    "different location."
+                    ERROR_MSG + "\nDetails: the target path either contains, coincides or is contained in"
+                    " the current Zarr store." + WORKAROUND
                 )
 
     def write(
@@ -2079,6 +2086,18 @@ class SpatialData:
             self.tables[key] = value
         else:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
+
+    def __delitem__(self, key: str) -> None:
+        """
+        Delete the element from the SpatialData object.
+
+        Parameters
+        ----------
+        key
+            The name of the element to delete.
+        """
+        element_type, _, _ = self._find_element(key)
+        getattr(self, element_type).__delitem__(key)
 
 
 class QueryManager:
