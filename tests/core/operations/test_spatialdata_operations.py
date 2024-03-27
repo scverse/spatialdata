@@ -316,6 +316,15 @@ def test_set_item(full_sdata: SpatialData) -> None:
             full_sdata[name] = full_sdata[name]
 
 
+def test_del_item(full_sdata: SpatialData) -> None:
+    for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
+        del full_sdata[name]
+        with pytest.raises(KeyError):
+            del full_sdata[name]
+    with pytest.raises(KeyError, match="Could not find element with name"):
+        _ = full_sdata["not_present"]
+
+
 def test_no_shared_transformations() -> None:
     """Test transformation dictionary copy for transformations not to be shared."""
     sdata = blobs()

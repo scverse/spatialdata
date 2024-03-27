@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
-from spatialdata import SpatialData
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
@@ -131,7 +131,20 @@ class TestReadWrite:
             with pytest.raises(KeyError, match="Key `table` already exists."):
                 sdata["table"] = v
 
-    def test_incremental_io_on_disk(self, tmp_path: str, full_sdata: SpatialData):
+    @pytest.mark.parametrize("dask_backed", [True, False])
+    @pytest.mark.parametrize("workaround", [1, 2])
+    def test_incremental_io_on_disk(
+        self, tmp_path: str, full_sdata: SpatialData, dask_backed: bool, workaround: int
+    ) -> None:
+        """
+        This tests shows workaround on how to rewrite existing data on disk.
+
+        The user is recommended to study them, understand the implications and eventually adapt them to their use case.
+        We are working on simpler workarounds and on a more robust solution to this problem, but unfortunately it is not
+        yet available.
+
+        In particular the complex "dask-backed" case for workaround 1 could be simplified once
+        """
         tmpdir = Path(tmp_path) / "incremental_io.zarr"
         sdata = SpatialData()
         sdata.write(tmpdir)
@@ -147,32 +160,63 @@ class TestReadWrite:
         ]:
             sdata[name] = full_sdata[name]
             sdata.write_element(name)
+            if dask_backed:
+                # this forces the element to write to be dask-backed from disk. In this case, overwriting the data is
+                # more laborious because we are writing the data to the same location that defines the data!
+                sdata = read_zarr(sdata.path)
 
             with pytest.raises(
                 ValueError, match="The Zarr store already exists. Use `overwrite=True` to try overwriting the store."
             ):
                 sdata.write_element(name)
 
-            with pytest.raises(ValueError, match="Currently, overwriting existing elements is not supported."):
+            with pytest.raises(ValueError, match="Cannot overwrite."):
                 sdata.write_element(name, overwrite=True)
 
-            # workaround 1, mostly safe (untested for Windows platform, network drives, multi-threaded
-            # setups, ...)
-            new_name = f"{name}_new_place"
-            # write a copy of the data
-            sdata[new_name] = sdata[name]
-            sdata.write_element(new_name)
-            # rewrite the original data
-            sdata.delete_element_from_disk(name)
-            sdata.write_element(name)
-            # remove the copy
-            sdata.delete_element_from_disk(new_name)
-            element_type = sdata._element_type_from_element_name(new_name)
-            del getattr(sdata, element_type)[new_name]
+            if workaround == 1:
+                new_name = f"{name}_new_place"
+                # workaround 1, mostly safe (untested for Windows platform, network drives, multi-threaded
+                # setups, ...). If the scenario matches your use case, please use with caution.
 
-            # workaround 2, unsafe but sometimes acceptable depending on the user's workflow
-            sdata.delete_element_from_disk(name)
-            sdata.write_element(name)
+                if not dask_backed:  # easier case
+                    # a. write a backup copy of the data
+                    sdata[new_name] = sdata[name]
+                    sdata.write_element(new_name)
+                    # b. rewrite the original data
+                    sdata.delete_element_from_disk(name)
+                    sdata.write_element(name)
+                    # c. remove the backup copy
+                    del sdata[new_name]
+                    sdata.delete_element_from_disk(new_name)
+                else:  # dask-backed case, more complex
+                    # a. write a backup copy of the data
+                    sdata[new_name] = sdata[name]
+                    sdata.write_element(new_name)
+                    # a2. remove the in-memory copy from the SpatialData object (note,
+                    # at this point the backup copy still exists on-disk)
+                    del sdata[new_name]
+                    del sdata[name]
+                    # a3 load the backup copy into memory
+                    sdata_copy = read_zarr(sdata.path)
+                    # b1. rewrite the original data
+                    sdata.delete_element_from_disk(name)
+                    sdata[name] = sdata_copy[new_name]
+                    sdata.write_element(name)
+                    # b2. reload the new data into memory (because it has been written but in-memory it still points
+                    # from the backup location)
+                    sdata = read_zarr(sdata.path)
+                    # c. remove the backup copy
+                    del sdata[new_name]
+                    sdata.delete_element_from_disk(new_name)
+            elif workaround == 2:
+                # workaround 2, unsafe but sometimes acceptable depending on the user's workflow.
+
+                # this works only if the data is not dask-backed, otherwise an exception will be raised because the code
+                # would be trying to delete the data that the Dask object is pointing to!
+                if not dask_backed:
+                    # a. rewrite the original data (risky!)
+                    sdata.delete_element_from_disk(name)
+                    sdata.write_element(name)
 
     def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
@@ -291,8 +335,7 @@ class TestReadWrite:
 
                 with pytest.raises(
                     ValueError,
-                    match="The file path specified is a parent directory of one or more files used for backing for one "
-                    "or ",
+                    match="Cannot overwrite.",
                 ):
                     full_sdata.write(f, overwrite=True)
 
@@ -310,7 +353,7 @@ class TestReadWrite:
 
             with pytest.raises(
                 ValueError,
-                match="The file path specified either contains either is contained in the one used for backing.",
+                match="Cannot overwrite.",
             ):
                 full_sdata.write(f, overwrite=True)
 
