@@ -81,5 +81,5 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 [link-api]: https://spatialdata.scverse.org/en/latest/api.html
 [link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
 [link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
-[badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test_and_deploy.yaml/badge.svg
-[link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test_and_deplot.yaml
+[badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
+[link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
