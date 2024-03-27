@@ -334,8 +334,7 @@ class TestReadWrite:
 
                 with pytest.raises(
                     ValueError,
-                    match="The file path specified is a parent directory of one or more files used for backing for one "
-                    "or ",
+                    match="Cannot overwrite.",
                 ):
                     full_sdata.write(f, overwrite=True)
 
@@ -353,7 +352,7 @@ class TestReadWrite:
 
             with pytest.raises(
                 ValueError,
-                match="The file path specified either contains either is contained in the one used for backing.",
+                match="Cannot overwrite.",
             ):
                 full_sdata.write(f, overwrite=True)
 
