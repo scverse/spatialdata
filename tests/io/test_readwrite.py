@@ -373,7 +373,7 @@ def test_bug_rechunking_after_queried_raster():
 def test_self_contained(full_sdata: SpatialData) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained
     assert full_sdata.is_self_contained()
-    description = full_sdata.describe_elements_are_self_contained()
+    description = full_sdata.elements_are_self_contained()
     assert all(description.values())
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -392,7 +392,7 @@ def test_self_contained(full_sdata: SpatialData) -> None:
         assert not sdata2.is_self_contained()
 
         # because of the images, labels and points
-        description = sdata2.describe_elements_are_self_contained()
+        description = sdata2.elements_are_self_contained()
         for element_name, self_contained in description.items():
             if any(element_name.startswith(prefix) for prefix in ["image", "labels", "points"]):
                 assert not self_contained
@@ -425,7 +425,7 @@ def test_self_contained(full_sdata: SpatialData) -> None:
         sdata2["combined"] = combined
 
         assert not sdata2.is_self_contained()
-        description = sdata2.describe_elements_are_self_contained()
+        description = sdata2.elements_are_self_contained()
         assert description["combined"] is False
         assert all(description[element_name] for element_name in description if element_name != "combined")
 
