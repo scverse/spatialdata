@@ -54,6 +54,10 @@ pip install "spatialdata[extra]"
 
 Note: if you are using a Mac with an M1/M2 chip, please follow the installation instructions.
 
+## Limitations
+
+- Windows support. Currently the framework is tested on Linux and macOS machines, not Windows machines. Users have reported bugs in read/write operations (27 March 2024).
+
 ## Contact
 
 To get involved in the discussion, or if you need help to get started, you are welcome to use the following options.
