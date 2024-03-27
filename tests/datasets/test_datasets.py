@@ -5,7 +5,7 @@ def test_datasets() -> None:
     extra_cs = "test"
     sdata_blobs = blobs(extra_coord_system=extra_cs)
 
-    assert len(sdata_blobs.table) == 26
+    assert len(sdata_blobs["table"]) == 26
     assert len(sdata_blobs.shapes["blobs_circles"]) == 5
     assert len(sdata_blobs.shapes["blobs_polygons"]) == 5
     assert len(sdata_blobs.shapes["blobs_multipolygons"]) == 2
@@ -19,7 +19,7 @@ def test_datasets() -> None:
     _ = str(sdata_blobs)
 
     sdata_raccoon = raccoon()
-    assert sdata_raccoon.table is None
+    assert "table" not in sdata_raccoon.tables
     assert len(sdata_raccoon.shapes["circles"]) == 4
     assert sdata_raccoon.images["raccoon"].shape == (3, 768, 1024)
     assert sdata_raccoon.labels["segmentation"].shape == (768, 1024)

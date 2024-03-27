@@ -136,10 +136,10 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     from spatialdata.models import TableModel
 
     rng = np.random.default_rng(seed=0)
-    full_sdata.table.obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata.table.shape[0])
-    adata = full_sdata.table
+    full_sdata["table"].obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
+    adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
-    del full_sdata.table
+    del full_sdata.tables["table"]
     full_sdata.table = TableModel.parse(
         adata, region=["circles", "poly"], region_key="annotated_shapes", instance_key="instance_id"
     )
@@ -152,8 +152,8 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
     filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
 
-    assert len(filtered_sdata0.table) + len(filtered_sdata1.table) == len(full_sdata.table)
-    assert len(filtered_sdata2.table) == len(full_sdata.table)
+    assert len(filtered_sdata0["table"]) + len(filtered_sdata1["table"]) == len(full_sdata["table"])
+    assert len(filtered_sdata2["table"]) == len(full_sdata["table"])
 
 
 def test_rename_coordinate_systems(full_sdata: SpatialData) -> None:
@@ -264,7 +264,7 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(shapes={"circles": full_sdata.shapes["circles"]})])
 
-    assert concatenate([full_sdata, SpatialData()]).table is not None
+    assert concatenate([full_sdata, SpatialData()])["table"] is not None
 
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
@@ -275,11 +275,11 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     # this is needed cause we can't handle regions with same name.
     # TODO: fix this
     new_region = "sample2"
-    table_new = filtered1.table.copy()
-    del filtered1.table
-    filtered1.table = table_new
-    filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
-    filtered1.table.obs[filtered1.table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
+    table_new = filtered1["table"].copy()
+    del filtered1.tables["table"]
+    filtered1["table"] = table_new
+    filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
+    filtered1["table"].obs[filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
     concatenated = concatenate([filtered0, filtered1], concatenate_tables=True)
     assert len(list(concatenated.gen_elements())) == 3
 
@@ -348,20 +348,20 @@ def test_subset(full_sdata: SpatialData) -> None:
     assert "image3d_xarray" in full_sdata.images
     assert unique_names == set(element_names)
     # no table since the labels are not present in the subset
-    assert subset0.table is None
+    assert "table" not in subset0.tables
 
     adata = AnnData(
         shape=(10, 0),
         obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]},
     )
-    del full_sdata.table
+    del full_sdata.tables["table"]
     sdata_table = TableModel.parse(adata, region=["circles", "poly"], region_key="region", instance_key="instance_id")
-    full_sdata.table = sdata_table
+    full_sdata["table"] = sdata_table
     full_sdata.tables["second_table"] = sdata_table
     subset1 = full_sdata.subset(["poly", "second_table"])
-    assert subset1.table is not None
-    assert len(subset1.table) == 5
-    assert subset1.table.obs["region"].unique().tolist() == ["poly"]
+    assert subset1["table"] is not None
+    assert len(subset1["table"]) == 5
+    assert subset1["table"].obs["region"].unique().tolist() == ["poly"]
     assert len(subset1["second_table"]) == 10
 
 

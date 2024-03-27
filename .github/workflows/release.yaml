@@ -1,0 +1,31 @@
+name: Release
+
+on:
+    release:
+        types: [published]
+
+jobs:
+    release:
+        # requires that you have put your twine API key in your
+        # github secrets (see readme for details)
+        runs-on: ubuntu-latest
+        if: contains(github.ref, 'tags')
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+
+            - name: Set up Python 3.10
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.10"
+
+            - name: Install hatch
+              run: pip install hatch
+
+            - name: Build project for distribution
+              run: hatch build
+
+            - name: Publish a Python distribution to PyPI
+              uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                  password: ${{ secrets.PYPI_API_TOKEN }}
