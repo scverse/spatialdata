@@ -211,7 +211,8 @@ class TestReadWrite:
             elif workaround == 2:
                 # workaround 2, unsafe but sometimes acceptable depending on the user's workflow.
 
-                # cannot be used if the data is dask-backed!
+                # this works only if the data is not dask-backed, otherwise an exception will be raised because the code
+                # would be trying to delete the data that the Dask object is pointing to!
                 if not dask_backed:
                     # a. rewrite the original data (risky!)
                     sdata.delete_element_from_disk(name)
