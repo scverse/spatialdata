@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning][].
 
 ### Added
 
-####
-
 -   Added method `update_annotated_regions_metadata() which updates the `region`value automatically from the `region_key` columns
+
+### Changed
+
+-   Renamed `join_sdata_spatialelement_table` to `join_spatialelement_table`, and made it work also without `SpatialData` objects.
 
 ## [0.1.0] - 2024-03-24
 
@@ -24,7 +26,7 @@ and this project adheres to [Semantic Versioning][].
 
 -   Implemented support in SpatialData for storing multiple tables. These tables can annotate a SpatialElement but not
     necessarily so.
--   Added SQL like joins that can be executed by calling one public function `join_spatialelement_table`. The
+-   Added SQL like joins that can be executed by calling one public function `join_sdata_spatialelement_table`. The
     following joins are supported: `left`, `left_exclusive`, `right`, `right_exclusive` and `inner`. The function has
     an option to match rows. For `left` only matching `left` is supported and for `right` join only `right` matching of
     rows is supported. Not all joins are supported for `Labels` elements. The elements and table can either exist within

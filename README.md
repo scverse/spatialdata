@@ -56,7 +56,7 @@ Note: if you are using a Mac with an M1/M2 chip, please follow the installation 
 
 ## Limitations
 
-- Windows support. Currently the framework is tested on Linux and macOS machines, not Windows machines. Users have reported bugs in read/write operations (27 March 2024).
+-   Windows support. Currently the framework is tested on Linux and macOS machines, not Windows machines. Users have reported bugs in read/write operations (27 March 2024).
 
 ## Contact
 
