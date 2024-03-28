@@ -120,6 +120,10 @@ class RasterSchema(DataArraySchema):
             Method to use for multiscale.
         chunks
             Chunks to use for dask array.
+        kwargs
+            Additional arguments for :func:`to_spatial_image`. In particular the `c_coords` kwargs argument (an
+            iterable) can be used to set the channel coordinates for image data. `c_coords` is not available for labels
+            data as labels do not have channels.
 
         Returns
         -------

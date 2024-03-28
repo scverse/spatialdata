@@ -10,13 +10,15 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.2] - 2024-xx-xx
 
+### Minor
 
+-   Made `get_channels()` public.
 
 ## [0.1.1] - 2024-03-28
 
 ### Added
 
--   Added method `update_annotated_regions_metadata() which updates the `region` value automatically from the `region_key` columns
+-   Added method `update_annotated_regions_metadata() which updates the `region`value automatically from the`region_key` columns
 
 ### Changed
 
