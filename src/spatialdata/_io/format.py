@@ -1,13 +1,10 @@
 from typing import Any, Optional, Union
 
 from anndata import AnnData
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import CurrentFormat
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
-from spatial_image import SpatialImage
 
-from spatialdata._io._utils import get_channels
 from spatialdata.models import PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
@@ -71,29 +68,6 @@ class RasterFormatV01(SpatialDataFormatV01):
             import numpy as np
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
-
-    def channels_to_metadata(
-        self,
-        data: Union[SpatialImage, MultiscaleSpatialImage],
-        channels_metadata: Optional[dict[str, Any]] = None,
-    ) -> dict[str, Union[int, str]]:
-        """Convert channels to omero metadata."""
-        channels = get_channels(data)
-        metadata: dict[str, Any] = {"channels": []}
-        if channels_metadata is not None:
-            if set(channels_metadata.keys()).symmetric_difference(set(channels)):
-                for c in channels:
-                    metadata["channels"].append({"label": c} | channels_metadata[c])
-            else:
-                raise ValueError("Channels metadata must contain all channels.")
-        else:
-            for c in channels:
-                metadata["channels"].append({"label": c})
-        return metadata
-
-    def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
-        """Convert channels from omero metadata."""
-        return [d["label"] for d in omero_metadata["channels"]]
 
 
 class ShapesFormatV01(SpatialDataFormatV01):
