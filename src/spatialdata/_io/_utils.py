@@ -271,36 +271,6 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     return files
 
 
-@singledispatch
-def get_channels(data: Any) -> list[Any]:
-    """Get channels from data.
-
-    Parameters
-    ----------
-    data
-        data to get channels from
-
-    Returns
-    -------
-    List of channels
-    """
-    raise ValueError(f"Cannot get channels from {type(data)}")
-
-
-@get_channels.register
-def _(data: SpatialImage) -> list[Any]:
-    return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
-
-
-@get_channels.register
-def _(data: MultiscaleSpatialImage) -> list[Any]:
-    name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
-    channels = {tuple(data[i][name].coords["c"].values) for i in data}
-    if len(channels) > 1:
-        raise ValueError("TODO")
-    return list(next(iter(channels)))
-
-
 def save_transformations(sdata: SpatialData) -> None:
     """
     Save all the transformations of a SpatialData object to disk.
