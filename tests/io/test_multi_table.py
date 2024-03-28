@@ -246,3 +246,24 @@ def test_concatenate_sdata_multitables():
     assert merged_sdata.tables["table2"].n_obs == 300
     assert all(merged_sdata.tables["table"].obs.region.unique() == ["poly_1", "poly_2", "poly_3"])
     assert all(merged_sdata.tables["table2"].obs.region.unique() == ["multipoly_1", "multipoly_2", "multipoly_3"])
+
+
+def test_static_set_annotation_target():
+    test_sdata = SpatialData(
+        shapes={
+            "test_shapes": test_shapes["poly"],
+        }
+    )
+    table = _get_table(region="test_non_shapes")
+    table_target = table.copy()
+    table_target.obs["region"] = "test_shapes"
+    table_target = SpatialData.update_annotated_regions_metadata(table_target)
+    assert table_target.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
+
+    test_sdata["another_table"] = table_target
+
+    table.obs["diff_region"] = "test_shapes"
+    table = SpatialData.update_annotated_regions_metadata(table, region_key="diff_region")
+    assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
+
+    test_sdata["yet_another_table"] = table

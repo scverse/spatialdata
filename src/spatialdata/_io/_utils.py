@@ -345,8 +345,8 @@ def save_transformations(sdata: SpatialData) -> None:
     """
     warnings.warn(
         "This function is deprecated and should be replaced by `SpatialData.write_transformations()` or "
-        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. The execution will "
-        "conitnue by calling the former",
+        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. This function will call"
+        " `SpatialData.write_transformations()`; please call this function directly.",
         DeprecationWarning,
         stacklevel=2,
     )

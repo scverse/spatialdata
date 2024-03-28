@@ -409,15 +409,15 @@ def test_query_filter_table(with_polygon_query: bool):
             target_coordinate_system="global",
         )
 
-    assert len(queried0.table) == 1
-    assert len(queried1.table) == 3
+    assert len(queried0["table"]) == 1
+    assert len(queried1["table"]) == 3
 
 
 def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        tables=sdata.table,
+        tables=sdata["table"],
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -432,19 +432,19 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
-    assert len(queried.table) == 8
+    assert len(queried["table"]) == 8
 
     multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
-    assert len(queried.table) == 16
+    assert len(queried["table"]) == 16
 
     multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
-    assert len(queried.table) == 8
+    assert len(queried["table"]) == 8
 
     PLOT = False
     if PLOT:

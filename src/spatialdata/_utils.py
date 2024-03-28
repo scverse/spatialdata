@@ -156,11 +156,7 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
 def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSpatialImage:
     d = {}
     for k, dt in data_tree.items():
-        try:
-            v = dt.values()
-        except TypeError as e:
-            pass
-            raise e
+        v = dt.values()
         assert len(v) == 1
         xdata = v.__iter__().__next__()
         d[k] = xdata
