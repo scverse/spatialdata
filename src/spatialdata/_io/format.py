@@ -7,8 +7,8 @@ from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 from spatial_image import SpatialImage
 
-from spatialdata._io._utils import get_channels
 from spatialdata.models import PointsModel, ShapesModel
+from spatialdata.models._utils import get_channels
 
 CoordinateTransform_t = list[dict[str, Any]]
 

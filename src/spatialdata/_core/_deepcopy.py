@@ -90,14 +90,17 @@ def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
 def _(gdf: GeoDataFrame) -> GeoDataFrame:
     new_gdf = _deepcopy(gdf)
     # temporary fix for https://github.com/scverse/spatialdata/issues/286.
-    new_attrs = _deepcopy(gdf.attrs)
-    new_gdf.attrs = new_attrs
+    new_gdf.attrs = _deepcopy(gdf.attrs)
     return new_gdf
 
 
 @deepcopy.register(DaskDataFrame)
 def _(df: DaskDataFrame) -> DaskDataFrame:
-    return PointsModel.parse(df.compute().copy(deep=True))
+    # bug: the parser may change the order of the columns
+    new_ddf = PointsModel.parse(df.compute().copy(deep=True))
+    # the problem is not .copy(deep=True), but the parser, which discards some metadata https://github.com/scverse/spatialdata/issues/503#issuecomment-2015275322
+    new_ddf.attrs = _deepcopy(df.attrs)
+    return new_ddf
 
 
 @deepcopy.register(AnnData)

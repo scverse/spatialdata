@@ -106,6 +106,13 @@ def test_element_names_unique() -> None:
     assert "shapes" not in sdata._shared_keys
 
 
+def test_element_type_from_element_name(points: SpatialData) -> None:
+    with pytest.raises(ValueError, match="not found in SpatialData object."):
+        points._element_type_from_element_name("invalid")
+    points["copy"] = points["points_0"]
+    assert points._element_type_from_element_name("points_0") == "points"
+
+
 def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
     assert_spatial_data_objects_are_identical(sdata, full_sdata)
@@ -307,6 +314,15 @@ def test_set_item(full_sdata: SpatialData) -> None:
         full_sdata[name + "_again"] = full_sdata[name]
         with pytest.warns(UserWarning):
             full_sdata[name] = full_sdata[name]
+
+
+def test_del_item(full_sdata: SpatialData) -> None:
+    for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
+        del full_sdata[name]
+        with pytest.raises(KeyError):
+            del full_sdata[name]
+    with pytest.raises(KeyError, match="Could not find element with name"):
+        _ = full_sdata["not_present"]
 
 
 def test_no_shared_transformations() -> None:
