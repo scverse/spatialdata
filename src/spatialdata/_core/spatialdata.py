@@ -1069,7 +1069,7 @@ class SpatialData:
                 "different location. "
             )
             WORKAROUND = (
-                "\nWorkaround: please see discussion here https://github.com/scverse/spatialdata/discussions/520."
+                "\nWorkaround: please see discussion here https://github.com/scverse/spatialdata/discussions/520 ."
             )
             if any(_backed_elements_contained_in_path(path=file_path, object=self)):
                 raise ValueError(
