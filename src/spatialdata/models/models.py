@@ -214,7 +214,10 @@ class RasterSchema(DataArraySchema):
         ValueError
             If data is not valid.
         """
-        raise ValueError(f"Unsupported data type: {type(data)}.")
+        raise ValueError(
+            f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, Labels2DModel "
+            "or Labels3DModel to construct data that is guaranteed to be valid."
+        )
 
     @validate.register(SpatialImage)
     def _(self, data: SpatialImage) -> None:
@@ -316,26 +319,27 @@ class ShapesModel:
         -------
         None
         """
+        SUGGESTION = " Please use ShapesModel.parse() to construct data that is guaranteed to be valid."
         if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
+            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`." + SUGGESTION)
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries." + SUGGESTION)
         if len(data[cls.GEOMETRY_KEY]) == 0:
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
-                f"but it contains {type(geom_)}."
+                f"but it contains {type(geom_)}." + SUGGESTION
             )
         if isinstance(geom_, Point):
             if cls.RADIUS_KEY not in data.columns:
-                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
             radii = data[cls.RADIUS_KEY].values
             if np.any(radii <= 0):
-                raise ValueError("Radii of circles must be positive.")
+                raise ValueError("Radii of circles must be positive." + SUGGESTION)
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:
             n = data.geometry.iloc[0]._ndim
             if n != 2:
@@ -482,12 +486,15 @@ class PointsModel:
         -------
         None
         """
+        SUGGESTION = " Please use PointsModel.parse() to construct data that is guaranteed to be valid."
         for ax in [X, Y, Z]:
-            if ax in data.columns:
-                # TODO: check why this can return int32 on windows.
-                assert data[ax].dtype in [np.int32, np.float32, np.float64, np.int64]
+            # TODO: check why this can return int32 on windows.
+            if ax in data.columns and data[ax].dtype not in [np.int32, np.float32, np.float64, np.int64]:
+                raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
+            raise ValueError(
+                f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
+            )
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
             if not isinstance(data[feature_key].dtype, CategoricalDtype):
@@ -794,19 +801,20 @@ class TableModel:
         it is an internal validation of the annotation metadata of the table.
 
         """
+        SUGGESTION = " Please use TableModel.parse() to construct data that is guaranteed to be valid."
         attr = data.uns[self.ATTRS_KEY]
 
         if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
         if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
         if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
 
         if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
         if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [int, np.int16, np.int32, np.int64, "O"] or (
             dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) != str
         ):

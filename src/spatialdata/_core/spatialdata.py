@@ -56,10 +56,20 @@ class SpatialData:
     """
     The SpatialData object.
 
-    The SpatialData object is a modular container for arbitrary combinations of SpatialElements. The elements
-    can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
+    The SpatialData object is a modular container for arbitrary combinations of SpatialElements and annotation tables.
+    The elements can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
     :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
+    The elements need to pass a validation step. To construct valid elements you can use the parsers that we
+    provide:
+
+        - :class:`~spatialdata.Image2DModel`,
+        - :class:`~spatialdata.Image3DModel`,
+        - :class:`~spatialdata.Labels2DModel`,
+        - :class:`~spatialdata.Labels3DModel`,
+        - :class:`~spatialdata.PointsModel`,
+        - :class:`~spatialdata.ShapesModel`,
+        - :class:`~spatialdata.TableModel`
 
     Parameters
     ----------
@@ -96,18 +106,6 @@ class SpatialData:
     The table can annotate regions (shapesor labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
-
-    The elements need to pass a validation step. To construct valid elements you can use the parsers that we
-    provide:
-
-        - :class:`~spatialdata.Image2DModel`,
-        - :class:`~spatialdata.Image3DModel`,
-        - :class:`~spatialdata.Labels2DModel`,
-        - :class:`~spatialdata.Labels3DModel`,
-        - :class:`~spatialdata.PointsModel`,
-        - :class:`~spatialdata.ShapesModel`,
-        - :class:`~spatialdata.TableModel`
-
     """
 
     @deprecation_alias(table="tables")
