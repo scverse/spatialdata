@@ -1,3 +1,4 @@
+from spatialdata._io._manager import ImageLayerManager, LabelLayerManager
 from spatialdata._io._utils import get_dask_backing_files
 from spatialdata._io.format import SpatialDataFormatV01
 from spatialdata._io.io_points import write_points
@@ -13,4 +14,6 @@ __all__ = [
     "write_table",
     "SpatialDataFormatV01",
     "get_dask_backing_files",
+    "ImageLayerManager",
+    "LabelLayerManager",
 ]

@@ -656,3 +656,61 @@ def test_element_already_on_disk_different_type(full_sdata, element_name: str) -
             match=ERROR_MSG,
         ):
             full_sdata.write_transformations(element_name)
+
+
+# backed
+def test_add_image_layer_backed(full_sdata, tmp_path):
+    from spatialdata import read_zarr
+    tmpdir = Path(tmp_path) / "add_image.zarr"
+    full_sdata.write(tmpdir)
+    full_sdata=read_zarr( full_sdata.path )
+
+    name = "image2d"
+    new_name = f"{name}_processed" # also works for new_name == name
+
+    # define some graph
+    arr = full_sdata[name].data
+    arr = arr + 1
+    full_sdata = full_sdata.add_image_layer(
+        arr=arr,
+        output_layer=new_name,
+        overwrite=True,
+    )
+
+    assert full_sdata.is_backed()
+    assert new_name in [*full_sdata.images]
+
+    # check if it contains non-zero elements.
+    assert full_sdata[new_name].any().compute()
+
+    # check if graph is computed
+    for name, layer in full_sdata[new_name].data.__dask_graph__().layers.items():
+        if name.startswith("from-zarr"):
+            assert not layer.is_materialized()
+        else:
+            assert layer.is_materialized()
+
+
+# no backed
+def test_add_image_layer_no_backed(full_sdata):
+    name = "image2d"
+    new_name = f"{name}_processed" # also works for new_name == name
+
+    assert not full_sdata.is_backed()
+
+    # define some graph
+    arr = full_sdata[name].data
+    arr = arr + 1
+
+    full_sdata = full_sdata.add_image_layer( arr=arr, output_layer=new_name)
+
+    assert new_name in [*full_sdata.images]
+
+    # check if if contains non zero elements
+    assert full_sdata[new_name].any().compute()
+
+    for name, layer in full_sdata[new_name].data.__dask_graph__().layers.items():
+        if name.startswith("from-zarr"):
+            assert not layer.is_materialized()
+        else:
+            assert layer.is_materialized()

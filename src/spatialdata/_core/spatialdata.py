@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from dask.array import Array
 from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
@@ -38,9 +39,11 @@ from spatialdata.models import (
     get_table_keys,
 )
 from spatialdata.models._utils import SpatialElement, get_axes_names
+from spatialdata.models.models import ScaleFactors_t
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
+    from spatialdata.transformations.transformations import BaseTransformation
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -1088,6 +1091,56 @@ class SpatialData:
                     ERROR_MSG + "\nDetails: the target path either contains, coincides or is contained in"
                     " the current Zarr store." + WORKAROUND
                 )
+
+    def add_image_layer(
+        self,
+        arr: Array,
+        output_layer: str,
+        dims: tuple[str, ...] | None = None,
+        chunks: str | tuple[int, int, int] | int | None = None,
+        transformation: BaseTransformation | dict[str, BaseTransformation] = None,
+        scale_factors: ScaleFactors_t | None = None,
+        c_coords: list[str] | None = None,
+        overwrite: bool = False,
+    )->SpatialData:
+        from spatialdata._io import ImageLayerManager
+        manager=ImageLayerManager()
+        # for backed sdata, the graph will not be materialized for the in memory sdata,
+        # therefore need to do sdata=sdata.add_image_layer( arr=arr, output_layer=output_layer)
+        return manager.add_layer(
+            self,
+            arr=arr,
+            output_layer=output_layer,
+            dims=dims,
+            chunks=chunks,
+            transformation=transformation,
+            scale_factors=scale_factors,
+            c_coords=c_coords,
+            overwrite=overwrite,
+                )
+
+    def add_label_layer(
+        self,
+        arr: Array,
+        output_layer: str,
+        dims: tuple[str, ...] | None = None,
+        chunks: str | tuple[int, int] | int | None = None,
+        transformation: BaseTransformation | dict[str, BaseTransformation] = None,
+        scale_factors: ScaleFactors_t | None = None,
+        overwrite: bool = False,
+    )->SpatialData:
+        from spatialdata._io import LabelLayerManager
+        manager = LabelLayerManager()
+        return manager.add_layer(
+            self,
+            arr=arr,
+            output_layer=output_layer,
+            dims=dims,
+            chunks=chunks,
+            transformation=transformation,
+            scale_factors=scale_factors,
+            overwrite=overwrite,
+        )
 
     def write(
         self,
