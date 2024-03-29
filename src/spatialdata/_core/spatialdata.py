@@ -1102,9 +1102,10 @@ class SpatialData:
         scale_factors: ScaleFactors_t | None = None,
         c_coords: list[str] | None = None,
         overwrite: bool = False,
-    )->SpatialData:
+    ) -> SpatialData:
         from spatialdata._io import ImageLayerManager
-        manager=ImageLayerManager()
+
+        manager = ImageLayerManager()
         # for backed sdata, the graph will not be materialized for the in memory sdata,
         # therefore need to do sdata=sdata.add_image_layer( arr=arr, output_layer=output_layer)
         return manager.add_layer(
@@ -1117,7 +1118,7 @@ class SpatialData:
             scale_factors=scale_factors,
             c_coords=c_coords,
             overwrite=overwrite,
-                )
+        )
 
     def add_label_layer(
         self,
@@ -1128,8 +1129,9 @@ class SpatialData:
         transformation: BaseTransformation | dict[str, BaseTransformation] = None,
         scale_factors: ScaleFactors_t | None = None,
         overwrite: bool = False,
-    )->SpatialData:
+    ) -> SpatialData:
         from spatialdata._io import LabelLayerManager
+
         manager = LabelLayerManager()
         return manager.add_layer(
             self,

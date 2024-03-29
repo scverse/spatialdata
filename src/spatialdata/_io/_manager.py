@@ -35,8 +35,9 @@ class LayerManager(ABC):
     ) -> SpatialData:
         chunks = chunks or arr.chunksize
         if dims is None:
-            logger.warning("No dims parameter specified. "
-                           "Assuming order of dimension of provided array is (c, (z), y, x)")
+            logger.warning(
+                "No dims parameter specified. " "Assuming order of dimension of provided array is (c, (z), y, x)"
+            )
             dims = self.get_dims(arr)
 
         intermediate_output_layer = None
@@ -175,6 +176,7 @@ class ImageLayerManager(LayerManager):
         overwrite: bool = False,
     ) -> SpatialData:
         from spatialdata import read_zarr
+
         # given a spatial_element with some graph defined on it.
         if output_layer in [*sdata.images]:
             if sdata.is_backed():
@@ -242,6 +244,7 @@ class LabelLayerManager(LayerManager):
         overwrite: bool = False,
     ) -> SpatialData:
         from spatialdata import read_zarr
+
         # given a spatial_element with some graph defined on it.
         if output_layer in [*sdata.labels]:
             if sdata.is_backed():
@@ -270,8 +273,9 @@ def _incremental_io_on_disk(
     sdata: SpatialData,
     output_layer: str,
     element: SpatialImage | MultiscaleSpatialImage | DataFrame | GeoDataFrame | AnnData,
-)->spatialdata:
+) -> spatialdata:
     from spatialdata import read_zarr
+
     new_output_layer = f"{output_layer}_{uuid.uuid4()}"
     # a. write a backup copy of the data
     sdata[new_output_layer] = element

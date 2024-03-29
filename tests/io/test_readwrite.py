@@ -661,12 +661,13 @@ def test_element_already_on_disk_different_type(full_sdata, element_name: str) -
 # backed
 def test_add_image_layer_backed(full_sdata, tmp_path):
     from spatialdata import read_zarr
+
     tmpdir = Path(tmp_path) / "add_image.zarr"
     full_sdata.write(tmpdir)
-    full_sdata=read_zarr( full_sdata.path )
+    full_sdata = read_zarr(full_sdata.path)
 
     name = "image2d"
-    new_name = f"{name}_processed" # also works for new_name == name
+    new_name = f"{name}_processed"  # also works for new_name == name
 
     # define some graph
     arr = full_sdata[name].data
@@ -694,7 +695,7 @@ def test_add_image_layer_backed(full_sdata, tmp_path):
 # no backed
 def test_add_image_layer_no_backed(full_sdata):
     name = "image2d"
-    new_name = f"{name}_processed" # also works for new_name == name
+    new_name = f"{name}_processed"  # also works for new_name == name
 
     assert not full_sdata.is_backed()
 
@@ -702,7 +703,7 @@ def test_add_image_layer_no_backed(full_sdata):
     arr = full_sdata[name].data
     arr = arr + 1
 
-    full_sdata = full_sdata.add_image_layer( arr=arr, output_layer=new_name)
+    full_sdata = full_sdata.add_image_layer(arr=arr, output_layer=new_name)
 
     assert new_name in [*full_sdata.images]
 
