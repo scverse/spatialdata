@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
-from spatialdata import SpatialData, read_zarr, read_zarr
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
