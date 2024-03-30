@@ -345,7 +345,9 @@ class ShapesModel:
             if n != 2:
                 warnings.warn(
                     f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
-                    "discarding the third dimension as it could led to unexpected behaviors.",
+                    "discarding the third dimension as it could led to unexpected behaviors. To achieve so, you can use"
+                    " `.force_2d()` if you are using `geopandas > 0.14.3, otherwise you can use `force_2d()` from "
+                    "`spatialdata.models`.",
                     UserWarning,
                     stacklevel=2,
                 )
