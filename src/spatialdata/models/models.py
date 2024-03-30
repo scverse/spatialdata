@@ -512,11 +512,12 @@ class PointsModel:
             Data to parse:
 
                 - If :class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
-                  must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                  can be provided, as well as a `feature_key` column in the `annotation` dataframe. Furthermore,
                   :class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
                   "x", "y" and optionally "z".
-                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
-                  with key as *valid axes* and value as column names in dataframe.
+                - If :class:`pandas.DataFrame`, a `coordinates` mapping can be provided
+                  with key as *valid axes* ('x', 'y', 'z') and value as column names in dataframe. If the dataframe
+                  already has columns named 'x', 'y' and 'z', the mapping can be omitted.
 
         annotation
             Annotation dataframe. Only if `data` is :class:`numpy.ndarray`. If data is an array, the index of the
@@ -524,12 +525,15 @@ class PointsModel:
         coordinates
             Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
             :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
-            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optinally `z` are column names,
+            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optionally `z` are column names,
             then they will be used as coordinates.
         feature_key
-            Feature key in `annotation` or `data`.
+            Optional, feature key in `annotation` or `data`. Example use case: gene id categorical column describing the
+            gene identity of each point.
         instance_key
-            Instance key in `annotation` or `data`.
+            Optional, instance key in `annotation` or `data`. Example use case: cell id column, describing which cell
+            a point belongs to. This argument is likely going to be deprecated:
+            https://github.com/scverse/spatialdata/issues/503.
         transformations
             Transformations of points.
         kwargs
