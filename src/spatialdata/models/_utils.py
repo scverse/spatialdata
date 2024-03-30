@@ -5,9 +5,11 @@ from typing import Any, Union
 
 import dask.dataframe as dd
 import geopandas
+import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 
 from spatialdata._logging import logger
@@ -296,3 +298,40 @@ def _(data: MultiscaleSpatialImage) -> list[Any]:
     if len(channels) > 1:
         raise ValueError("TODO")
     return list(next(iter(channels)))
+
+
+def force_2d(gdf: GeoDataFrame) -> None:
+    """
+    Force the geometries of a shapes object GeoDataFrame to be 2D by modifying the geometries in place.
+
+    Geopandas introduced a method called `force_2d()` to drop the z dimension.
+    Unfortunately, this feature, as of geopandas == 0.14.3, is still not released.
+    Similarly, the recently released shapely >= 2.0.3 implemented `force_2d()`, but currently there are installation
+    errors.
+
+    A similar function has been developed in When `.force_2d()`
+
+    Parameters
+    ----------
+    gdf
+        GeoDataFrame with 2D or 3D geometries
+
+    """
+    new_shapes = []
+    any_3d = False
+    for shape in gdf.geometry:
+        if shape.has_z:
+            any_3d = True
+            if isinstance(shape, Point):
+                new_shape = Point(shape.x, shape.y)
+            elif isinstance(shape, Polygon):
+                new_shape = Polygon(np.array(shape.exterior.coords.xy).T)
+            elif isinstance(shape, MultiPolygon):
+                new_shape = MultiPolygon([Polygon(np.array(p.exterior.coords.xy).T) for p in shape.geoms])
+            else:
+                raise ValueError(f"Unsupported geometry type: {type(shape)}")
+            new_shapes.append(new_shape)
+        else:
+            new_shapes.append(shape)
+    if any_3d:
+        gdf.geometry = new_shapes

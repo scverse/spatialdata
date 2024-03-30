@@ -84,6 +84,7 @@ The elements (building-blocks) that consitute `SpatialData`.
     points_geopandas_to_dask_dataframe
     points_dask_dataframe_to_geopandas
     get_channels
+    force_2d
 ```
 
 ## Transformations
