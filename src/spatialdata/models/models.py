@@ -398,7 +398,7 @@ class ShapesModel:
         -------
         :class:`geopandas.GeoDataFrame`
         """
-        raise NotImplementedError()
+        raise TypeError(f"ShapesModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
@@ -550,7 +550,7 @@ class PointsModel:
         The order of the columns of the dataframe returned by the parser is not guaranteed to be the same as the order
         of the columns in the dataframe passed as an argument.
         """
-        raise NotImplementedError()
+        raise TypeError(f"PointsModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
