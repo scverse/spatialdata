@@ -1,5 +1,6 @@
 from typing import Any, Optional, Union
 
+import zarr
 from anndata import AnnData
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import CurrentFormat
@@ -7,13 +8,19 @@ from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 from spatial_image import SpatialImage
 
-from spatialdata.models import PointsModel, ShapesModel
 from spatialdata.models._utils import get_channels
+from spatialdata.models.models import ATTRS_KEY, PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
 
 Shapes_s = ShapesModel()
 Points_s = PointsModel()
+
+
+def _parse_version(group: zarr.Group) -> str:
+    version = group.attrs[ATTRS_KEY]["version"]
+    assert isinstance(version, str)
+    return version
 
 
 class SpatialDataFormatV01(CurrentFormat):
@@ -122,6 +129,18 @@ class ShapesFormatV01(SpatialDataFormatV01):
         return {Shapes_s.GEOS_KEY: {Shapes_s.NAME_KEY: geometry.name, Shapes_s.TYPE_KEY: geometry.value}}
 
 
+class ShapesFormatV02(SpatialDataFormatV01):
+    """Formatter for shapes."""
+
+    @property
+    def version(self) -> str:
+        return "0.2"
+
+    # no need for attrs_from_dict as we are not saving metadata except for the coordinate transformations
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, Union[str, dict[str, Any]]]:
+        return {}
+
+
 class PointsFormatV01(SpatialDataFormatV01):
     """Formatter for points."""
 
@@ -175,6 +194,20 @@ class TablesFormatV01(SpatialDataFormatV01):
 
 
 CurrentRasterFormat = RasterFormatV01
-CurrentShapesFormat = ShapesFormatV01
+CurrentShapesFormat = ShapesFormatV02
 CurrentPointsFormat = PointsFormatV01
 CurrentTablesFormat = TablesFormatV01
+
+ShapesFormats = {
+    "0.1": ShapesFormatV01(),
+    "0.2": ShapesFormatV02(),
+}
+PointsFormats = {
+    "0.1": PointsFormatV01(),
+}
+TablesFormats = {
+    "0.1": TablesFormatV01(),
+}
+RasterFormats = {
+    "0.1": RasterFormatV01(),
+}
