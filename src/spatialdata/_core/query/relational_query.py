@@ -142,6 +142,8 @@ def _filter_table_by_elements(
                 instances = np.sort(instances)
             elif get_model(element) == ShapesModel:
                 instances = element.index.to_numpy()
+            elif get_model(element) == PointsModel:
+                instances = element.compute().index.to_numpy()
             else:
                 continue
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
@@ -655,8 +657,13 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     # _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
     # return table
     assert sdata[table_name] is not None, "No table found in the SpatialData"
+    instance_key = sdata[table_name].uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+    if sdata[element_name].index.dtype != sdata[table_name].obs[instance_key].dtype:
+        raise ValueError(
+            f"Table index type: {sdata[table_name].obs[instance_key].dtype} does not match the element index type: {sdata[element_name].index.dtype}"
+        )
     element_type, _, element = sdata._find_element(element_name)
-    assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
+    assert element_type in ["labels", "shapes", "points"], f"Element {element_name} ({element_type}) is not supported"
     elements_dict = {element_type: {element_name: element}}
     return _filter_table_by_elements(sdata[table_name], elements_dict, match_rows=True)
 
@@ -722,7 +729,7 @@ def _locate_value(
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
 
     # adding from the obs columns or var
-    if model in [ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
+    if model in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
         table = sdata.tables.get(table_name) if table_name is not None else None
         if table is not None:
             # check if the table is annotating the element
