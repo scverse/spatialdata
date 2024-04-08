@@ -1156,19 +1156,25 @@ class SpatialData:
         else:
             raise ValueError(f"Unknown element type: {element_type}")
 
-    def write_element(self, element_name: str, overwrite: bool = False) -> None:
+    def write_element(self, element_name: str | list[str], overwrite: bool = False) -> None:
         """
-        Write a single element to the Zarr store used for backing.
+        Write a single element, or a list of elements, to the Zarr store used for backing.
 
         The element must already be present in the SpatialData object.
 
         Parameters
         ----------
         element_name
-            The name of the element to write.
+            The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
         """
+        if isinstance(element_name, list):
+            for name in element_name:
+                assert isinstance(name, str)
+                self.write_element(name, overwrite=overwrite)
+            return
+
         from spatialdata._core._elements import Elements
 
         Elements._check_valid_name(element_name)
@@ -1201,15 +1207,16 @@ class SpatialData:
             overwrite=overwrite,
         )
 
-    def delete_element_from_disk(self, element_name: str) -> None:
+    def delete_element_from_disk(self, element_name: str | list[str]) -> None:
         """
-        Delete an element from the Zarr store associated with the SpatialData object.
+        Delete an element, or list of elements, from the Zarr store associated with the SpatialData object.
 
         The element must be available in-memory and will not be removed from the SpatialData object in-memory storage.
 
         Parameters
         ----------
         element_name
+            The name(s) of the element(s) to delete.
 
         Notes
         -----
@@ -1229,6 +1236,12 @@ class SpatialData:
         environment (e.g. operating system, local vs network storage, file permissions, ...) and call this function
         appropriately (or implement a tailored solution), to prevent data loss.
         """
+        if isinstance(element_name, list):
+            for name in element_name:
+                assert isinstance(name, str)
+                self.delete_element_from_disk(name)
+            return
+
         from spatialdata._core._elements import Elements
         from spatialdata._io._utils import _backed_elements_contained_in_path
 

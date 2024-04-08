@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
-from spatialdata import SpatialData, read_zarr
+from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
@@ -130,6 +130,25 @@ class TestReadWrite:
                 sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` already exists."):
                 sdata["table"] = v
+
+    def test_incremental_io_list_of_elements(self, shapes: SpatialData) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = os.path.join(tmpdir, "data.zarr")
+            shapes.write(f)
+            new_shapes0 = deepcopy(shapes["circles"])
+            new_shapes1 = deepcopy(shapes["poly"])
+            shapes["new_shapes0"] = new_shapes0
+            shapes["new_shapes1"] = new_shapes1
+            assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
+
+            shapes.write_element(["new_shapes0", "new_shapes1"])
+            assert "shapes/new_shapes0" in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" in shapes.elements_paths_on_disk()
+
+            shapes.delete_element_from_disk(["new_shapes0", "new_shapes1"])
+            assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
 
     @pytest.mark.parametrize("dask_backed", [True, False])
     @pytest.mark.parametrize("workaround", [1, 2])
