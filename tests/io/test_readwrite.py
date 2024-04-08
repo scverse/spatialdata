@@ -45,6 +45,7 @@ class TestReadWrite:
         for k in labels.labels:
             assert labels.labels[k].equals(sdata.labels[k])
 
+    @pytest.mark.parametrize()
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         """Test read/write."""
         tmpdir = Path(tmp_path) / "tmp.zarr"
