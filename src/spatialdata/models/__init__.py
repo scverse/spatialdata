@@ -6,6 +6,7 @@ from spatialdata.models._utils import (
     X,
     Y,
     Z,
+    force_2d,
     get_axes_names,
     get_channels,
     get_spatial_axes,
@@ -50,4 +51,5 @@ __all__ = [
     "check_target_region_column_symmetry",
     "get_table_keys",
     "get_channels",
+    "force_2d",
 ]

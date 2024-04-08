@@ -120,6 +120,10 @@ class RasterSchema(DataArraySchema):
             Method to use for multiscale.
         chunks
             Chunks to use for dask array.
+        kwargs
+            Additional arguments for :func:`to_spatial_image`. In particular the `c_coords` kwargs argument (an
+            iterable) can be used to set the channel coordinates for image data. `c_coords` is not available for labels
+            data as labels do not have channels.
 
         Returns
         -------
@@ -210,7 +214,10 @@ class RasterSchema(DataArraySchema):
         ValueError
             If data is not valid.
         """
-        raise ValueError(f"Unsupported data type: {type(data)}.")
+        raise ValueError(
+            f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, Labels2DModel "
+            "or Labels3DModel to construct data that is guaranteed to be valid."
+        )
 
     @validate.register(SpatialImage)
     def _(self, data: SpatialImage) -> None:
@@ -312,32 +319,35 @@ class ShapesModel:
         -------
         None
         """
+        SUGGESTION = " Please use ShapesModel.parse() to construct data that is guaranteed to be valid."
         if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
+            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`." + SUGGESTION)
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries." + SUGGESTION)
         if len(data[cls.GEOMETRY_KEY]) == 0:
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
-                f"but it contains {type(geom_)}."
+                f"but it contains {type(geom_)}." + SUGGESTION
             )
         if isinstance(geom_, Point):
             if cls.RADIUS_KEY not in data.columns:
-                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
             radii = data[cls.RADIUS_KEY].values
             if np.any(radii <= 0):
-                raise ValueError("Radii of circles must be positive.")
+                raise ValueError("Radii of circles must be positive." + SUGGESTION)
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:
             n = data.geometry.iloc[0]._ndim
             if n != 2:
                 warnings.warn(
                     f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
-                    "discarding the third dimension as it could led to unexpected behaviors.",
+                    "discarding the third dimension as it could led to unexpected behaviors. To achieve so, you can use"
+                    " `.force_2d()` if you are using `geopandas > 0.14.3, otherwise you can use `force_2d()` from "
+                    "`spatialdata.models`.",
                     UserWarning,
                     stacklevel=2,
                 )
@@ -388,7 +398,7 @@ class ShapesModel:
         -------
         :class:`geopandas.GeoDataFrame`
         """
-        raise NotImplementedError()
+        raise TypeError(f"ShapesModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
@@ -478,12 +488,15 @@ class PointsModel:
         -------
         None
         """
+        SUGGESTION = " Please use PointsModel.parse() to construct data that is guaranteed to be valid."
         for ax in [X, Y, Z]:
-            if ax in data.columns:
-                # TODO: check why this can return int32 on windows.
-                assert data[ax].dtype in [np.int32, np.float32, np.float64, np.int64]
+            # TODO: check why this can return int32 on windows.
+            if ax in data.columns and data[ax].dtype not in [np.int32, np.float32, np.float64, np.int64]:
+                raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
+            raise ValueError(
+                f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
+            )
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
             if not isinstance(data[feature_key].dtype, CategoricalDtype):
@@ -501,11 +514,12 @@ class PointsModel:
             Data to parse:
 
                 - If :class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
-                  must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                  can be provided, as well as a `feature_key` column in the `annotation` dataframe. Furthermore,
                   :class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
                   "x", "y" and optionally "z".
-                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
-                  with key as *valid axes* and value as column names in dataframe.
+                - If :class:`pandas.DataFrame`, a `coordinates` mapping can be provided
+                  with key as *valid axes* ('x', 'y', 'z') and value as column names in dataframe. If the dataframe
+                  already has columns named 'x', 'y' and 'z', the mapping can be omitted.
 
         annotation
             Annotation dataframe. Only if `data` is :class:`numpy.ndarray`. If data is an array, the index of the
@@ -513,12 +527,15 @@ class PointsModel:
         coordinates
             Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
             :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
-            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optinally `z` are column names,
+            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optionally `z` are column names,
             then they will be used as coordinates.
         feature_key
-            Feature key in `annotation` or `data`.
+            Optional, feature key in `annotation` or `data`. Example use case: gene id categorical column describing the
+            gene identity of each point.
         instance_key
-            Instance key in `annotation` or `data`.
+            Optional, instance key in `annotation` or `data`. Example use case: cell id column, describing which cell
+            a point belongs to. This argument is likely going to be deprecated:
+            https://github.com/scverse/spatialdata/issues/503.
         transformations
             Transformations of points.
         kwargs
@@ -533,7 +550,7 @@ class PointsModel:
         The order of the columns of the dataframe returned by the parser is not guaranteed to be the same as the order
         of the columns in the dataframe passed as an argument.
         """
-        raise NotImplementedError()
+        raise TypeError(f"PointsModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
@@ -790,19 +807,20 @@ class TableModel:
         it is an internal validation of the annotation metadata of the table.
 
         """
+        SUGGESTION = " Please use TableModel.parse() to construct data that is guaranteed to be valid."
         attr = data.uns[self.ATTRS_KEY]
 
         if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
         if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
         if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
 
         if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
         if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [int, np.int16, np.int32, np.int64, "O"] or (
             dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) != str
         ):

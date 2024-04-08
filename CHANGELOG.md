@@ -8,11 +8,20 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.1.1] - xxxx-xx-xx
+## [0.1.3] - 2024-xx-xx
+
+## [0.1.2] - 2024-03-30
+
+### Minor
+
+-   Made `get_channels()` public.
+-   Added utils `force_2d()` to force 3D shapes to 2D (this is a temporary solution until `.force_2d()` is available in `geopandas`).
+
+## [0.1.1] - 2024-03-28
 
 ### Added
 
--   Added method `update_annotated_regions_metadata() which updates the `region`value automatically from the `region_key` columns
+-   Added method `update_annotated_regions_metadata() which updates the `region`value automatically from the`region_key` columns
 
 ### Changed
 
