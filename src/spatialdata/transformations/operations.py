@@ -9,6 +9,7 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from skimage.transform import estimate_transform
 
+from spatialdata._logging import logger
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
@@ -70,7 +71,8 @@ def set_transformation(
             assert to_coordinate_system is None, "If set_all=True, to_coordinate_system must be None."
             _set_transformations(element, transformation)
     else:
-        if len(write_to_sdata.locate_element(element)) == 0:
+        located = write_to_sdata.locate_element(element)
+        if len(located) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
@@ -78,8 +80,15 @@ def set_transformation(
                 "in-memory (write_to_sdata=None), or in-memory and to disk; this last case requires the element "
                 "to belong to the SpatialData object that is backed."
             )
+        if len(located) > 1:
+            logger.info(
+                "The element is found multiple times in the SpatialData object. The transformation will be removed "
+                "from all the copies."
+            )
         set_transformation(element, transformation, to_coordinate_system, set_all, None)
-        write_to_sdata._write_transformations_to_disk(element)
+        for location in located:
+            element_type, element_name = location.split("/")
+            write_to_sdata.write_transformations(element_name=element_name)
 
 
 def get_transformation(
@@ -166,7 +175,8 @@ def remove_transformation(
             assert to_coordinate_system is None, "If remove_all=True, to_coordinate_system must be None."
             _set_transformations(element, {})
     else:
-        if len(write_to_sdata.locate_element(element)) == 0:
+        located = write_to_sdata.locate_element(element)
+        if len(located) == 0:
             raise RuntimeError("The element is not found in the SpatialData object.")
         if not write_to_sdata.is_backed():
             raise ValueError(
@@ -174,8 +184,15 @@ def remove_transformation(
                 "element in-memory (write_to_sdata=None), or in-memory and from disk; this last case requires the "
                 "element to belong to the SpatialData object that is backed."
             )
+        if len(located) > 1:
+            logger.info(
+                "The element is found multiple times in the SpatialData object. The transformation will be removed "
+                "from all the copies."
+            )
         remove_transformation(element, to_coordinate_system, remove_all, None)
-        write_to_sdata._write_transformations_to_disk(element)
+        for location in located:
+            element_type, element_name = location.split("/")
+            write_to_sdata.write_transformations(element_name=element_name)
 
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
