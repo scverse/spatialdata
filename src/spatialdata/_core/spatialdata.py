@@ -1166,6 +1166,11 @@ class SpatialData:
             The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
+
+        Notes
+        -----
+        If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
+        an element, the writing of the remaining elements will not be attempted.
         """
         if isinstance(element_name, list):
             for name in element_name:
@@ -1218,6 +1223,10 @@ class SpatialData:
 
         Notes
         -----
+        If you pass a list of names, the elements will be deleted one by one. If an error occurs during the deletion of
+        an element, the deletion of the remaining elements will not be attempted.
+
+        Important note on overwriting elements saved on disk.
         In general, it is not recommended to delete an element from the Zarr store with the intention of saving an
         updated version of the element that is available only in-memory. This is because data loss may occur if the
         execution is interrupted during writing.
