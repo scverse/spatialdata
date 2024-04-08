@@ -16,7 +16,7 @@ from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_n
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._io import SpatialDataFormatV01
+from spatialdata._io import SpatialDataFormat
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _iter_multiscale,
@@ -32,7 +32,7 @@ from spatialdata.transformations._utils import (
 
 
 def _read_multiscale(
-    store: Union[str, Path], raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
+    store: Union[str, Path], raster_type: Literal["image", "labels"], format: SpatialDataFormat = CurrentRasterFormat()
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
     assert isinstance(store, (str, Path))
     assert raster_type in ["image", "labels"]
@@ -71,12 +71,12 @@ def _read_multiscale(
     # if image, read channels metadata
     channels: Optional[list[Any]] = None
     if raster_type == "image" and channels_metadata is not None:
-        channels = fmt.channels_from_metadata(channels_metadata)
+        channels = format.channels_from_metadata(channels_metadata)
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
         for i, d in enumerate(datasets):
-            data = node.load(Multiscales).array(resolution=d, version=fmt.version)
+            data = node.load(Multiscales).array(resolution=d, version=format.version)
             multiscale_image[f"scale{i}"] = DataArray(
                 data,
                 name="image",
@@ -86,7 +86,7 @@ def _read_multiscale(
         msi = MultiscaleSpatialImage.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
-    data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
+    data = node.load(Multiscales).array(resolution=datasets[0], version=format.version)
     si = SpatialImage(
         data,
         name="image",
@@ -102,7 +102,7 @@ def _write_raster(
     raster_data: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = CurrentRasterFormat(),
+    format: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     channels_metadata: Optional[JSONDict] = None,
@@ -132,14 +132,14 @@ def _write_raster(
 
     # convert channel names to channel metadata
     if raster_type == "image":
-        group_data.attrs["channels_metadata"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+        group_data.attrs["channels_metadata"] = format.channels_to_metadata(raster_data, channels_metadata)
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
         transformations = _get_transformations(raster_data)
         input_axes: tuple[str, ...] = tuple(raster_data.dims)
         chunks = raster_data.chunks
-        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         if storage_options is not None:
             if "chunks" not in storage_options and isinstance(storage_options, dict):
                 storage_options["chunks"] = chunks
@@ -152,7 +152,7 @@ def _write_raster(
         write_single_scale_ngff(
             group=group_data,
             scaler=None,
-            fmt=fmt,
+            fmt=format,
             axes=parsed_axes,
             coordinate_transformations=None,
             storage_options=storage_options,
@@ -176,12 +176,12 @@ def _write_raster(
         assert len(transformations) > 0
         chunks = _iter_multiscale(raster_data, "chunks")
         # coords = _iter_multiscale(raster_data, "coords")
-        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=fmt)
+        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
             pyramid=data,
             group=group_data,
-            fmt=fmt,
+            fmt=format,
             axes=parsed_axes,
             coordinate_transformations=None,
             storage_options=storage_options,
@@ -199,7 +199,7 @@ def write_image(
     image: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = CurrentRasterFormat(),
+    format: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
@@ -208,7 +208,7 @@ def write_image(
         raster_data=image,
         group=group,
         name=name,
-        fmt=fmt,
+        format=format,
         storage_options=storage_options,
         **metadata,
     )
@@ -218,7 +218,7 @@ def write_labels(
     labels: Union[SpatialImage, MultiscaleSpatialImage],
     group: zarr.Group,
     name: str,
-    fmt: Format = CurrentRasterFormat(),
+    format: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
     **metadata: JSONDict,
@@ -228,7 +228,7 @@ def write_labels(
         raster_data=labels,
         group=group,
         name=name,
-        fmt=fmt,
+        format=format,
         storage_options=storage_options,
         label_metadata=label_metadata,
         **metadata,

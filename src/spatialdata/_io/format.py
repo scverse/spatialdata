@@ -1,4 +1,6 @@
-from typing import Any, Optional, Union
+from __future__ import annotations
+
+from typing import Any
 
 import zarr
 from anndata import AnnData
@@ -23,14 +25,14 @@ def _parse_version(group: zarr.Group) -> str:
     return version
 
 
-class SpatialDataFormatV01(CurrentFormat):
-    """SpatialDataFormat defines the format of the spatialdata package."""
+class SpatialDataFormat(CurrentFormat):
+    pass
 
 
-class RasterFormatV01(SpatialDataFormatV01):
+class RasterFormatV01(SpatialDataFormat):
     """Formatter for raster data."""
 
-    def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> Optional[list[list[dict[str, Any]]]]:
+    def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> None | list[list[dict[str, Any]]]:
         data_shape = shapes[0]
         coordinate_transformations: list[list[dict[str, Any]]] = []
         # calculate minimal 'scale' transform based on pyramid dims
@@ -46,7 +48,7 @@ class RasterFormatV01(SpatialDataFormatV01):
         self,
         ndim: int,
         nlevels: int,
-        coordinate_transformations: Optional[list[list[dict[str, Any]]]] = None,
+        coordinate_transformations: None | list[list[dict[str, Any]]] = None,
     ) -> None:
         """
         Validate that a list of dicts contains a 'scale' transformation.
@@ -81,9 +83,9 @@ class RasterFormatV01(SpatialDataFormatV01):
 
     def channels_to_metadata(
         self,
-        data: Union[SpatialImage, MultiscaleSpatialImage],
-        channels_metadata: Optional[dict[str, Any]] = None,
-    ) -> dict[str, Union[int, str]]:
+        data: SpatialImage | MultiscaleSpatialImage,
+        channels_metadata: None | dict[str, Any] = None,
+    ) -> dict[str, int | str]:
         """Convert channels to omero metadata."""
         channels = get_channels(data)
         metadata: dict[str, Any] = {"channels": []}
@@ -103,7 +105,7 @@ class RasterFormatV01(SpatialDataFormatV01):
         return [d["label"] for d in omero_metadata["channels"]]
 
 
-class ShapesFormatV01(SpatialDataFormatV01):
+class ShapesFormatV01(SpatialDataFormat):
     """Formatter for shapes."""
 
     @property
@@ -125,11 +127,11 @@ class ShapesFormatV01(SpatialDataFormatV01):
         assert self.version == metadata_["version"]
         return typ
 
-    def attrs_to_dict(self, geometry: GeometryType) -> dict[str, Union[str, dict[str, Any]]]:
+    def attrs_to_dict(self, geometry: GeometryType) -> dict[str, str | dict[str, Any]]:
         return {Shapes_s.GEOS_KEY: {Shapes_s.NAME_KEY: geometry.name, Shapes_s.TYPE_KEY: geometry.value}}
 
 
-class ShapesFormatV02(SpatialDataFormatV01):
+class ShapesFormatV02(SpatialDataFormat):
     """Formatter for shapes."""
 
     @property
@@ -137,11 +139,11 @@ class ShapesFormatV02(SpatialDataFormatV01):
         return "0.2"
 
     # no need for attrs_from_dict as we are not saving metadata except for the coordinate transformations
-    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, Union[str, dict[str, Any]]]:
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, str | dict[str, Any]]:
         return {}
 
 
-class PointsFormatV01(SpatialDataFormatV01):
+class PointsFormatV01(SpatialDataFormat):
     """Formatter for points."""
 
     @property
@@ -170,7 +172,7 @@ class PointsFormatV01(SpatialDataFormatV01):
         return d
 
 
-class TablesFormatV01(SpatialDataFormatV01):
+class TablesFormatV01(SpatialDataFormat):
     """Formatter for the table."""
 
     @property
@@ -180,8 +182,8 @@ class TablesFormatV01(SpatialDataFormatV01):
     def validate_table(
         self,
         table: AnnData,
-        region_key: Optional[str] = None,
-        instance_key: Optional[str] = None,
+        region_key: None | str = None,
+        instance_key: None | str = None,
     ) -> None:
         if not isinstance(table, AnnData):
             raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
@@ -211,3 +213,45 @@ TablesFormats = {
 RasterFormats = {
     "0.1": RasterFormatV01(),
 }
+
+
+def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
+    parsed = {
+        "raster": CurrentRasterFormat(),
+        "shapes": CurrentShapesFormat(),
+        "points": CurrentPointsFormat(),
+        "tables": CurrentTablesFormat(),
+    }
+    if formats is None:
+        return parsed
+    if not isinstance(formats, list):
+        formats = [formats]
+
+    modified = {
+        "raster": False,
+        "shapes": False,
+        "points": False,
+        "tables": False,
+    }
+
+    def _check_modified(type: str) -> None:
+        if modified[type]:
+            raise ValueError(f"Duplicate format {type} in input argument.")
+        modified[type] = True
+
+    for fmt in formats:
+        if isinstance(fmt, ShapesFormatV01):
+            _check_modified("shapes")
+            parsed["shapes"] = fmt
+        elif isinstance(fmt, PointsFormatV01):
+            _check_modified("points")
+            parsed["points"] = fmt
+        elif isinstance(fmt, TablesFormatV01):
+            _check_modified("tables")
+            parsed["tables"] = fmt
+        elif isinstance(fmt, RasterFormatV01):
+            _check_modified("raster")
+            parsed["raster"] = fmt
+        else:
+            raise ValueError(f"Unsupported format {fmt}")
+    return parsed

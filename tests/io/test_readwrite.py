@@ -43,7 +43,7 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(labels, sdata)
 
-    @pytest.mark.parametrize()
+    # @pytest.mark.parametrize()
     def test_shapes(self, tmp_path: str, shapes: SpatialData) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 

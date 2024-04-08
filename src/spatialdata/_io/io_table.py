@@ -12,13 +12,13 @@ def write_table(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
-    fmt: Format = CurrentTablesFormat(),
+    format: Format = CurrentTablesFormat(),
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
         region = table.uns["spatialdata_attrs"]["region"]
         region_key = table.uns["spatialdata_attrs"].get("region_key", None)
         instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
-        fmt.validate_table(table, region_key, instance_key)
+        format.validate_table(table, region_key, instance_key)
     else:
         region, region_key, instance_key = (None, None, None)
     write_adata(group, name, table)  # creates group[name]
@@ -27,4 +27,4 @@ def write_table(
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
-    tables_group.attrs["version"] = fmt.version
+    tables_group.attrs["version"] = format.version
