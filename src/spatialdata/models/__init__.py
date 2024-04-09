@@ -6,7 +6,9 @@ from spatialdata.models._utils import (
     X,
     Y,
     Z,
+    force_2d,
     get_axes_names,
+    get_channels,
     get_spatial_axes,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
@@ -21,7 +23,9 @@ from spatialdata.models.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    check_target_region_column_symmetry,
     get_model,
+    get_table_keys,
 )
 
 __all__ = [
@@ -44,4 +48,8 @@ __all__ = [
     "get_axes_names",
     "points_geopandas_to_dask_dataframe",
     "points_dask_dataframe_to_geopandas",
+    "check_target_region_column_symmetry",
+    "get_table_keys",
+    "get_channels",
+    "force_2d",
 ]

@@ -1,10 +1,11 @@
 """SpatialData datasets."""
 
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
 import scipy
+from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
@@ -15,6 +16,7 @@ from skimage.segmentation import slic
 from spatial_image import SpatialImage
 
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
@@ -86,7 +88,7 @@ class RaccoonDataset:
         self,
     ) -> SpatialData:
         """Raccoon dataset."""
-        im_data = scipy.misc.face()
+        im_data = scipy.datasets.face()
         im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
         labels = Labels2DModel.parse(labels_data, dims=["y", "x"])
@@ -154,7 +156,7 @@ class BlobsDataset:
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
         multipolygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes, multipolygons=True)
-        adata = aggregate(values=image, by=labels).table
+        adata = aggregate(values=image, by=labels).tables["table"]
         adata.obs["region"] = pd.Categorical(["blobs_labels"] * len(adata))
         adata.obs["instance_id"] = adata.obs_names.astype(int)
         del adata.uns[TableModel.ATTRS_KEY]
@@ -165,7 +167,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            table=table,
+            tables=table,
         )
 
     def _image_blobs(
@@ -241,7 +243,7 @@ class BlobsDataset:
         arr = rng.integers(padding, length - padding, size=(n_points, 2)).astype(np.int64)
         # randomly assign some values from v to the points
         points_assignment0 = rng.integers(0, 10, size=arr.shape[0]).astype(np.int64)
-        genes = rng.choice(["a", "b"], size=arr.shape[0])
+        genes = rng.choice(["gene_a", "gene_b"], size=arr.shape[0])
         annotation = pd.DataFrame(
             {
                 "genes": genes,
@@ -342,3 +344,22 @@ class BlobsDataset:
             point = Point(x, y)
             points.append(point)
         return points
+
+
+BlobsTypes = Literal[
+    "blobs_labels", "blobs_multiscale_labels", "blobs_circles", "blobs_polygons", "blobs_multipolygons"
+]
+
+
+def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
+    sdata = blobs(length=50)
+    if name in ["blobs_labels", "blobs_multiscale_labels"]:
+        instance_id = _get_unique_label_values_as_index(sdata[name]).tolist()
+    else:
+        instance_id = sdata[name].index.tolist()
+    n = len(instance_id)
+    new_table = AnnData(shape=(n, 0), obs={"region": [name for _ in range(n)], "instance_id": instance_id})
+    new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
+    del sdata.tables["table"]
+    sdata["table"] = new_table
+    return sdata

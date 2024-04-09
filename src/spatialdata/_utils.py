@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import functools
 import re
+import warnings
 from collections.abc import Generator
-from copy import deepcopy
-from typing import Union
+from typing import Any, Callable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
-from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -25,6 +25,7 @@ from spatialdata.transformations import (
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = Union[int, float]
+RT = TypeVar("RT")
 
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
@@ -159,7 +160,10 @@ def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSp
         assert len(v) == 1
         xdata = v.__iter__().__next__()
         d[k] = xdata
+    # this stopped working, we should add support for multiscale_spatial_image 1.0.0 so that the problem is solved
     return MultiscaleSpatialImage.from_dict(d)
+    # data_tree.__class__ = MultiscaleSpatialImage
+    # return cast(MultiscaleSpatialImage, data_tree)
 
 
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
@@ -210,24 +214,67 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     subset_adata.obs = obs
 
 
-def _deepcopy_geodataframe(gdf: GeoDataFrame) -> GeoDataFrame:
+# TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
+def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
     """
-    temporary fix for https://github.com/scverse/spatialdata/issues/286.
+    Decorate a function to warn user of use of arguments set for deprecation.
 
     Parameters
     ----------
-    gdf
-        The GeoDataFrame to deepcopy
+    aliases
+        Deprecation argument aliases to be mapped to the new arguments.
 
     Returns
     -------
-    A deepcopy of the GeoDataFrame
+    A decorator that can be used to mark an argument for deprecation and substituting it with the new argument.
+
+    Raises
+    ------
+    TypeError
+        If the provided aliases are not of string type.
+
+    Example
+    -------
+    Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
+
+    ```python
+    @deprecation_alias(table="tables")
+    def my_function(tables: AnnData | dict[str, AnnData]):
+        pass
+    ```
     """
-    #
-    new_gdf = deepcopy(gdf)
-    new_attrs = deepcopy(gdf.attrs)
-    new_gdf.attrs = new_attrs
-    return new_gdf
+
+    def deprecation_decorator(f: Callable[..., RT]) -> Callable[..., RT]:
+        @functools.wraps(f)
+        def wrapper(*args: Any, **kwargs: Any) -> RT:
+            class_name = f.__qualname__
+            rename_kwargs(f.__name__, kwargs, aliases, class_name)
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return deprecation_decorator
+
+
+def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str) -> None:
+    """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
+    for alias, new in aliases.items():
+        if alias in kwargs:
+            class_name = class_name + "." if class_name else ""
+            if new in kwargs:
+                raise TypeError(
+                    f"{class_name}{func_name} received both {alias} and {new} as arguments!"
+                    f" {alias} is being deprecated in SpatialData version 0.1, only use {new} instead."
+                )
+            warnings.warn(
+                message=(
+                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in SpatialData "
+                    f"version 0.1, switch to `{new}` instead."
+                ),
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
+            kwargs[new] = kwargs.pop(alias)
 
 
 def _error_message_add_element() -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import pathlib
+import re
 import tempfile
 from copy import deepcopy
 from functools import partial
@@ -20,25 +20,30 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from pandas.api.types import is_categorical_dtype
+from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
-from spatialdata.models import (
+from spatialdata.models._utils import (
+    force_2d,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
+    validate_axis_name,
+)
+from spatialdata.models.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
+    RasterSchema,
     ShapesModel,
     TableModel,
     get_axes_names,
     get_model,
-    points_dask_dataframe_to_geopandas,
-    points_geopandas_to_dask_dataframe,
 )
-from spatialdata.models._utils import validate_axis_name
-from spatialdata.models.models import RasterSchema
+from spatialdata.testing import assert_elements_are_identical
 from spatialdata.transformations._utils import (
     _set_transformations,
     _set_transformations_xarray,
@@ -119,7 +124,7 @@ class TestModels:
                 str,
                 np.ndarray,
                 dask.array.core.Array,
-                pathlib.PosixPath,
+                Path,
                 pd.DataFrame,
             )
         ):
@@ -318,7 +323,15 @@ class TestModels:
         region: str | np.ndarray,
     ) -> None:
         region_key = "reg"
-        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs = pd.DataFrame(
+            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False), columns=["A", "B", "C"]
+        )
+        obs[region_key] = region
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(TypeError, match="Only int"):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -331,6 +344,21 @@ class TestModels:
         assert TableModel.REGION_KEY in table.uns[TableModel.ATTRS_KEY]
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
+
+    @pytest.mark.parametrize("model", [TableModel])
+    @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
+    def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
+        region_key = "region"
+        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs[region_key] = region
+        obs["A"] = [1] * 5 + list(range(5))
+        adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        adata.obs["A"] = [1] * 10
+        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
 
 def test_get_schema():
@@ -391,3 +419,48 @@ def test_points_and_shapes_conversions(shapes, points):
     t2 = get_transformation(points2, get_all=True)
     assert t0 == t1
     assert t0 == t2
+
+
+def test_model_polygon_z():
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    polygon = Polygon([(0, 0, 0), (1, 1, 0), (2, 0, 0)])
+
+    with pytest.warns(
+        UserWarning,
+        match="The geometry column of the GeoDataFrame has 3 dimensions, while 2 is expected. Please consider",
+    ):
+        _ = ShapesModel.parse(gpd.GeoDataFrame(geometry=[polygon]))
+
+
+def test_force2d():
+    # let's create a shapes object (circles) constructed from 3D points (let's mix 2D and 3D)
+    circles_3d = ShapesModel.parse(GeoDataFrame({"geometry": (Point(1, 1, 1), Point(2, 2)), "radius": [2, 2]}))
+
+    polygon1 = Polygon([(0, 0, 0), (1, 0, 0), (1, 1, 0)])
+    polygon2 = Polygon([(0, 0), (1, 0), (1, 1)])
+
+    # let's create a shapes object (polygons) constructed from 3D polygons
+    polygons_3d = ShapesModel.parse(GeoDataFrame({"geometry": [polygon1, polygon2]}))
+
+    # let's create a shapes object (multipolygons) constructed from 3D multipolygons
+    multipolygons_3d = ShapesModel.parse(GeoDataFrame({"geometry": [MultiPolygon([polygon1, polygon2])]}))
+
+    force_2d(circles_3d)
+    force_2d(polygons_3d)
+    force_2d(multipolygons_3d)
+
+    expected_circles_2d = ShapesModel.parse(GeoDataFrame({"geometry": (Point(1, 1), Point(2, 2)), "radius": [2, 2]}))
+    expected_polygons_2d = ShapesModel.parse(
+        GeoDataFrame({"geometry": [Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])]})
+    )
+    expected_multipolygons_2d = ShapesModel.parse(
+        GeoDataFrame(
+            {"geometry": [MultiPolygon([Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])])]}
+        )
+    )
+
+    assert_elements_are_identical(circles_3d, expected_circles_2d)
+    assert_elements_are_identical(polygons_3d, expected_polygons_2d)
+    assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)

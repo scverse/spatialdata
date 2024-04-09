@@ -3,12 +3,12 @@ from typing import Any, Optional, Union
 from anndata import AnnData
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import CurrentFormat
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 from spatial_image import SpatialImage
 
-from spatialdata._io._utils import get_channels
 from spatialdata.models import PointsModel, ShapesModel
+from spatialdata.models._utils import get_channels
 
 CoordinateTransform_t = list[dict[str, Any]]
 
@@ -166,7 +166,7 @@ class TablesFormatV01(SpatialDataFormatV01):
     ) -> None:
         if not isinstance(table, AnnData):
             raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
-        if region_key is not None and not is_categorical_dtype(table.obs[region_key]):
+        if region_key is not None and not isinstance(table.obs[region_key].dtype, CategoricalDtype):
             raise ValueError(
                 f"`table.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
             )

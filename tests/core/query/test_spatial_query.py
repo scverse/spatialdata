@@ -27,12 +27,10 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, set_transformation
 
 from tests.conftest import _make_points, _make_squares
-from tests.core.operations.test_spatialdata_operations import (
-    _assert_spatialdata_objects_seem_identical,
-)
 
 
 def test_bounding_box_request_immutable():
@@ -186,8 +184,6 @@ def test_query_points_no_points():
     assert request is None
 
 
-# TODO: more tests can be added for spatial queries after the cases 2, 3, 4 are implemented
-#  (see https://github.com/scverse/spatialdata/pull/151, also for details on more tests)
 @pytest.mark.parametrize("n_channels", [1, 2, 3])
 @pytest.mark.parametrize("is_labels", [True, False])
 @pytest.mark.parametrize("is_3d", [True, False])
@@ -360,15 +356,15 @@ def test_query_spatial_data(full_sdata):
     result1 = full_sdata.query(request, filter_table=True)
     result2 = full_sdata.query.bounding_box(**request.to_dict(), filter_table=True)
 
-    _assert_spatialdata_objects_seem_identical(result0, result1)
-    _assert_spatialdata_objects_seem_identical(result0, result2)
+    assert_spatial_data_objects_are_identical(result0, result1)
+    assert_spatial_data_objects_are_identical(result0, result2)
 
     polygon = Polygon([(1, 2), (60, 2), (60, 40), (1, 40)])
     result3 = polygon_query(full_sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
     result4 = full_sdata.query.polygon(polygon=polygon, target_coordinate_system="global", filter_table=True)
 
-    _assert_spatialdata_objects_seem_identical(result0, result3)
-    _assert_spatialdata_objects_seem_identical(result0, result4)
+    assert_spatial_data_objects_are_identical(result0, result3, check_transformations=False)
+    assert_spatial_data_objects_are_identical(result0, result4, check_transformations=False)
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
@@ -413,15 +409,15 @@ def test_query_filter_table(with_polygon_query: bool):
             target_coordinate_system="global",
         )
 
-    assert len(queried0.table) == 1
-    assert len(queried1.table) == 3
+    assert len(queried0["table"]) == 1
+    assert len(queried1["table"]) == 3
 
 
 def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        table=sdata.table,
+        tables=sdata["table"],
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -436,19 +432,19 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
-    assert len(queried.table) == 8
+    assert len(queried["table"]) == 8
 
     multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
-    assert len(queried.table) == 16
+    assert len(queried["table"]) == 16
 
     multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
-    assert len(queried.table) == 8
+    assert len(queried["table"]) == 8
 
     PLOT = False
     if PLOT:

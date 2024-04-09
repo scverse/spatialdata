@@ -14,7 +14,7 @@ from shapely.geometry import Point
 from spatial_image import SpatialImage
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _are_directories_identical
-from spatialdata.models import TableModel
+from spatialdata.models import Image2DModel, TableModel
 from spatialdata.transformations.operations import (
     get_transformation,
     set_transformation,
@@ -23,7 +23,7 @@ from spatialdata.transformations.transformations import Identity, Scale
 
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
-RNG = default_rng()
+RNG = default_rng(0)
 
 
 class TestReadWrite:
@@ -73,9 +73,9 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         table.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
-        pd.testing.assert_frame_equal(table.table.obs, sdata.table.obs)
+        pd.testing.assert_frame_equal(table["table"].obs, sdata["table"].obs)
         try:
-            assert table.table.uns == sdata.table.uns
+            assert table["table"].uns == sdata["table"].uns
         except ValueError as e:
             raise e
 
@@ -305,17 +305,36 @@ def test_io_table(shapes):
     adata.obs["instance"] = shapes.shapes["circles"].index
     adata = TableModel().parse(adata, region="circles", region_key="region", instance_key="instance")
     shapes.table = adata
-    del shapes.table
+    del shapes.tables["table"]
     shapes.table = adata
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         shapes.write(f)
         shapes2 = SpatialData.read(f)
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
+        assert "table" in shapes2.tables
+        assert shapes2["table"].shape == (5, 10)
 
-        del shapes2.table
-        assert shapes2.table is None
+        del shapes2.tables["table"]
+        assert "table" not in shapes2.tables
         shapes2.table = adata
-        assert shapes2.table is not None
-        assert shapes2.table.shape == (5, 10)
+        assert "table" in shapes2.tables
+        assert shapes2["table"].shape == (5, 10)
+
+
+def test_bug_rechunking_after_queried_raster():
+    # https://github.com/scverse/spatialdata-io/issues/117
+    ##
+    single_scale = Image2DModel.parse(RNG.random((100, 10, 10)), chunks=(5, 5, 5))
+    multi_scale = Image2DModel.parse(RNG.random((100, 10, 10)), scale_factors=[2, 2], chunks=(5, 5, 5))
+    images = {"single_scale": single_scale, "multi_scale": multi_scale}
+    sdata = SpatialData(images=images)
+    queried = sdata.query.bounding_box(
+        axes=("x", "y"), min_coordinate=[2, 5], max_coordinate=[12, 12], target_coordinate_system="global"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        queried.write(f)
+
+    ##
+
+    pass

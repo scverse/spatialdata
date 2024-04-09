@@ -120,6 +120,10 @@ class RasterSchema(DataArraySchema):
             Method to use for multiscale.
         chunks
             Chunks to use for dask array.
+        kwargs
+            Additional arguments for :func:`to_spatial_image`. In particular the `c_coords` kwargs argument (an
+            iterable) can be used to set the channel coordinates for image data. `c_coords` is not available for labels
+            data as labels do not have channels.
 
         Returns
         -------
@@ -210,7 +214,10 @@ class RasterSchema(DataArraySchema):
         ValueError
             If data is not valid.
         """
-        raise ValueError(f"Unsupported data type: {type(data)}.")
+        raise ValueError(
+            f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, Labels2DModel "
+            "or Labels3DModel to construct data that is guaranteed to be valid."
+        )
 
     @validate.register(SpatialImage)
     def _(self, data: SpatialImage) -> None:
@@ -312,26 +319,38 @@ class ShapesModel:
         -------
         None
         """
+        SUGGESTION = " Please use ShapesModel.parse() to construct data that is guaranteed to be valid."
         if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`.")
+            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`." + SUGGESTION)
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries." + SUGGESTION)
         if len(data[cls.GEOMETRY_KEY]) == 0:
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty.")
+            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
         if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
-                f"but it contains {type(geom_)}."
+                f"but it contains {type(geom_)}." + SUGGESTION
             )
         if isinstance(geom_, Point):
             if cls.RADIUS_KEY not in data.columns:
-                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
+                raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
             radii = data[cls.RADIUS_KEY].values
             if np.any(radii <= 0):
-                raise ValueError("Radii of circles must be positive.")
+                raise ValueError("Radii of circles must be positive." + SUGGESTION)
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`.")
+            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
+        if len(data) > 0:
+            n = data.geometry.iloc[0]._ndim
+            if n != 2:
+                warnings.warn(
+                    f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
+                    "discarding the third dimension as it could led to unexpected behaviors. To achieve so, you can use"
+                    " `.force_2d()` if you are using `geopandas > 0.14.3, otherwise you can use `force_2d()` from "
+                    "`spatialdata.models`.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     @singledispatchmethod
     @classmethod
@@ -379,7 +398,7 @@ class ShapesModel:
         -------
         :class:`geopandas.GeoDataFrame`
         """
-        raise NotImplementedError()
+        raise TypeError(f"ShapesModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
@@ -469,11 +488,15 @@ class PointsModel:
         -------
         None
         """
+        SUGGESTION = " Please use PointsModel.parse() to construct data that is guaranteed to be valid."
         for ax in [X, Y, Z]:
-            if ax in data.columns:
-                assert data[ax].dtype in [np.float32, np.float64, np.int64]
+            # TODO: check why this can return int32 on windows.
+            if ax in data.columns and data[ax].dtype not in [np.int32, np.float32, np.float64, np.int64]:
+                raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`.")
+            raise ValueError(
+                f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
+            )
         if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
             feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
             if not isinstance(data[feature_key].dtype, CategoricalDtype):
@@ -491,11 +514,12 @@ class PointsModel:
             Data to parse:
 
                 - If :class:`numpy.ndarray`, an `annotation` :class:`pandas.DataFrame`
-                  must be provided, as well as the `feature_key` in the `annotation`. Furthermore,
+                  can be provided, as well as a `feature_key` column in the `annotation` dataframe. Furthermore,
                   :class:`numpy.ndarray` is assumed to have shape `(n_points, axes)`, with `axes` being
                   "x", "y" and optionally "z".
-                - If :class:`pandas.DataFrame`, a `coordinates` mapping must be provided
-                  with key as *valid axes* and value as column names in dataframe.
+                - If :class:`pandas.DataFrame`, a `coordinates` mapping can be provided
+                  with key as *valid axes* ('x', 'y', 'z') and value as column names in dataframe. If the dataframe
+                  already has columns named 'x', 'y' and 'z', the mapping can be omitted.
 
         annotation
             Annotation dataframe. Only if `data` is :class:`numpy.ndarray`. If data is an array, the index of the
@@ -503,12 +527,15 @@ class PointsModel:
         coordinates
             Mapping of axes names (keys) to column names (valus) in `data`. Only if `data` is
             :class:`pandas.DataFrame`. Example: {'x': 'my_x_column', 'y': 'my_y_column'}.
-            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optinally `z` are column names,
+            If not provided and `data` is :class:`pandas.DataFrame`, and `x`, `y` and optionally `z` are column names,
             then they will be used as coordinates.
         feature_key
-            Feature key in `annotation` or `data`.
+            Optional, feature key in `annotation` or `data`. Example use case: gene id categorical column describing the
+            gene identity of each point.
         instance_key
-            Instance key in `annotation` or `data`.
+            Optional, instance key in `annotation` or `data`. Example use case: cell id column, describing which cell
+            a point belongs to. This argument is likely going to be deprecated:
+            https://github.com/scverse/spatialdata/issues/503.
         transformations
             Transformations of points.
         kwargs
@@ -517,8 +544,13 @@ class PointsModel:
         Returns
         -------
         :class:`dask.dataframe.core.DataFrame`
+
+        Notes
+        -----
+        The order of the columns of the dataframe returned by the parser is not guaranteed to be the same as the order
+        of the columns in the dataframe passed as an argument.
         """
-        raise NotImplementedError()
+        raise TypeError(f"PointsModel.parse() does not support the type {type(data)}")
 
     @parse.register(np.ndarray)
     @classmethod
@@ -607,6 +639,15 @@ class PointsModel:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
+
+        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
+        # here I tried to fix https://github.com/scverse/spatialdata/issues/486, didn't work
+        # old_columns = list(data.columns)
+        # new_columns = list(table.columns)
+        # if new_columns == set(old_columns) and new_columns != old_columns:
+        #     col_order = [col for col in old_columns if col in new_columns]
+        #     table = table[col_order]
+
         return cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
         )
@@ -651,6 +692,148 @@ class TableModel:
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
 
+    def _validate_set_region_key(self, data: AnnData, region_key: str | None = None) -> None:
+        """
+        Validate the region key in table.uns or set a new region key as the region key column.
+
+        Parameters
+        ----------
+        data
+            The AnnData table.
+        region_key
+            The region key to be validated and set in table.uns.
+
+
+        Raises
+        ------
+        ValueError
+            If no region_key is found in table.uns and no region_key is provided as an argument.
+        ValueError
+            If the specified region_key in table.uns is not present as a column in table.obs.
+        ValueError
+            If the specified region key column is not present in table.obs.
+        """
+        attrs = data.uns.get(self.ATTRS_KEY)
+        if attrs is None:
+            data.uns[self.ATTRS_KEY] = attrs = {}
+        table_region_key = attrs.get(self.REGION_KEY_KEY)
+        if not region_key:
+            if not table_region_key:
+                raise ValueError(
+                    "No region_key in table.uns and no region_key provided as argument. Please specify 'region_key'."
+                )
+            if data.obs.get(attrs[TableModel.REGION_KEY_KEY]) is None:
+                raise ValueError(
+                    f"Specified region_key in table.uns '{table_region_key}' is not "
+                    f"present as column in table.obs. Please specify region_key."
+                )
+        else:
+            if region_key not in data.obs:
+                raise ValueError(f"'{region_key}' column not present in table.obs")
+            attrs[self.REGION_KEY_KEY] = region_key
+
+    def _validate_set_instance_key(self, data: AnnData, instance_key: str | None = None) -> None:
+        """
+        Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
+
+        If no instance_key is provided as argument, the presence of instance_key in table.uns is checked and validated.
+        If instance_key is provided, presence in table.obs will be validated and if present it will be set as the new
+        instance_key in table.uns.
+
+        Parameters
+        ----------
+        data
+            The AnnData table.
+
+        instance_key
+            The instance_key to be validated and set in table.uns.
+
+        Raises
+        ------
+        ValueError
+            If no instance_key is provided as argument and no instance_key is found in the `uns` attribute of table.
+        ValueError
+            If no instance_key is provided and the instance_key in table.uns does not match any column in table.obs.
+        ValueError
+            If provided instance_key is not present as table.obs column.
+        """
+        attrs = data.uns.get(self.ATTRS_KEY)
+        if attrs is None:
+            data.uns[self.ATTRS_KEY] = {}
+
+        if not instance_key:
+            if not attrs.get(TableModel.INSTANCE_KEY):
+                raise ValueError(
+                    "No instance_key in table.uns and no instance_key provided as argument. Please "
+                    "specify instance_key."
+                )
+            if data.obs.get(attrs[self.INSTANCE_KEY]) is None:
+                raise ValueError(
+                    f"Specified instance_key in table.uns '{attrs.get(self.INSTANCE_KEY)}' is not present"
+                    f" as column in table.obs. Please specify instance_key."
+                )
+        if instance_key:
+            if instance_key in data.obs:
+                attrs[self.INSTANCE_KEY] = instance_key
+            else:
+                raise ValueError(f"Instance key column '{instance_key}' not found in table.obs.")
+
+    def _validate_table_annotation_metadata(self, data: AnnData) -> None:
+        """
+        Validate annotation metadata.
+
+        Parameters
+        ----------
+        data
+            The AnnData object containing the table annotation data.
+
+        Raises
+        ------
+        ValueError
+            If any of the required metadata keys are not found in the `adata.uns` dictionary or the `adata.obs`
+            dataframe.
+
+            - If "region" is not found in `adata.uns['ATTRS_KEY']`.
+            - If "region_key" is not found in `adata.uns['ATTRS_KEY']`.
+            - If "instance_key" is not found in `adata.uns['ATTRS_KEY']`.
+            - If `attr[self.REGION_KEY_KEY]` is not found in `adata.obs`, with attr = adata.uns['ATTRS_KEY']
+            - If `attr[self.INSTANCE_KEY]` is not found in `adata.obs`.
+            - If the regions in `adata.uns['ATTRS_KEY']['self.REGION_KEY']` and the unique values of
+                `attr[self.REGION_KEY_KEY]` do not match.
+
+        Notes
+        -----
+        This does not check whether the annotation target of the table is present in a given SpatialData object. Rather
+        it is an internal validation of the annotation metadata of the table.
+
+        """
+        SUGGESTION = " Please use TableModel.parse() to construct data that is guaranteed to be valid."
+        attr = data.uns[self.ATTRS_KEY]
+
+        if "region" not in attr:
+            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+        if "region_key" not in attr:
+            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+        if "instance_key" not in attr:
+            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+
+        if attr[self.REGION_KEY_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
+        if attr[self.INSTANCE_KEY] not in data.obs:
+            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
+        if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [int, np.int16, np.int32, np.int64, "O"] or (
+            dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) != str
+        ):
+            dtype = dtype if dtype != "O" else val_dtype
+            raise TypeError(
+                f"Only int, np.int16, np.int32, np.int64 or string allowed as dtype for "
+                f"instance_key column in obs. Dtype found to be {dtype}"
+            )
+        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
+        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
+        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
+            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+
     def validate(
         self,
         data: AnnData,
@@ -668,24 +851,9 @@ class TableModel:
         The validated data.
         """
         if self.ATTRS_KEY not in data.uns:
-            raise ValueError(f"`{self.ATTRS_KEY}` not found in `adata.uns`.")
-        attr = data.uns[self.ATTRS_KEY]
+            return data
 
-        if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-        if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-        if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`.")
-
-        if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`.")
-        if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`.")
-        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
-        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
-        if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
-            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+        self._validate_table_annotation_metadata(data)
 
         return data
 
@@ -713,15 +881,17 @@ class TableModel:
 
         Returns
         -------
-        :class:`anndata.AnnData`.
+        The parsed data.
         """
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
+        if n_args == 0:
+            return adata
         if n_args > 0:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
-                    f"Either pass `{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and `{cls.INSTANCE_KEY}`"
-                    f"as arguments or have them in `adata.uns[{cls.ATTRS_KEY!r}]`."
+                    f"`{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and / or `{cls.INSTANCE_KEY}` is/has been passed as"
+                    f"as argument(s). However, `adata.uns[{cls.ATTRS_KEY!r}]` has already been set."
                 )
         elif cls.ATTRS_KEY in adata.uns:
             attr = adata.uns[cls.ATTRS_KEY]
@@ -746,8 +916,18 @@ class TableModel:
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
+        grouped = adata.obs.groupby(region_key, observed=True)
+        grouped_size = grouped.size()
+        grouped_nunique = grouped.nunique()
+        not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
+        if not_unique:
+            raise ValueError(
+                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique integers"
+            )
+
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
+        cls().validate(adata)
         return adata
 
 
@@ -801,3 +981,73 @@ def get_model(
     if isinstance(e, AnnData):
         return _validate_and_return(TableModel, e)
     raise TypeError(f"Unsupported type {type(e)}")
+
+
+def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
+    """
+    Get the table keys giving information about what spatial element is annotated.
+
+    The first element returned gives information regarding which spatial elements are annotated by the table, the second
+    element gives information which column in table.obs contains the information which spatial element is annotated
+    by each row in the table and the instance key indicates the column in obs giving information of the id of each row.
+
+    Parameters
+    ----------
+    table:
+        AnnData table for which to retrieve the spatialdata_attrs keys.
+
+    Returns
+    -------
+    The keys in table.uns['spatialdata_attrs']
+    """
+    if table.uns.get(TableModel.ATTRS_KEY):
+        attrs = table.uns[TableModel.ATTRS_KEY]
+        return attrs[TableModel.REGION_KEY], attrs[TableModel.REGION_KEY_KEY], attrs[TableModel.INSTANCE_KEY]
+
+    raise ValueError(
+        "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."
+    )
+
+
+def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
+    """
+    Check region and region_key column symmetry.
+
+    This checks whether the specified targets are also present in the region key column in obs and raises an error
+    if this is not the case.
+
+    Parameters
+    ----------
+    table
+        Table annotating specific SpatialElements
+    region_key
+        The column in obs containing for each row which SpatialElement is annotated by that row.
+    target
+         Name of target(s) SpatialElement(s)
+
+    Raises
+    ------
+    ValueError
+        If there is a mismatch between specified target regions and regions in the region key column of table.obs.
+
+    Example
+    -------
+    Assuming we have a table with region column in obs given by `region_key` called 'region' for which we want to check
+    whether it contains the specified annotation targets in the `target` variable as `pd.Series['region1', 'region2']`:
+
+    ```python
+    check_target_region_column_symmetry(table, region_key=region_key, target=target)
+    ```
+
+    This returns None if both specified targets are present in the region_key obs column. In this case the annotation
+    targets can be safely set. If not then a ValueError is raised stating the elements that are not shared between
+    the region_key column in obs and the specified targets.
+    """
+    found_regions = set(table.obs[region_key].unique().tolist())
+    target_element_set = [target] if isinstance(target, str) else target
+    symmetric_difference = found_regions.symmetric_difference(target_element_set)
+    if symmetric_difference:
+        raise ValueError(
+            f"Mismatch(es) found between regions in region column in obs and target element: "
+            f"{', '.join(diff for diff in symmetric_difference)}"
+        )

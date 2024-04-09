@@ -1,19 +1,25 @@
 from __future__ import annotations
 
+from typing import Any
+
 import geopandas as gpd
+from anndata import AnnData
 from xarray import DataArray
 
+from spatialdata._core._elements import Tables
+from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 
 
-def circles_to_polygons(df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+# TODO: move this function into "to_polygons()"
+def circles_to_polygons(df: gpd.GeoDataFrame, buffer_resolution: int = 16) -> gpd.GeoDataFrame:
     # We should only be buffering points, not polygons. Unfortunately this is an expensive check.
     from spatialdata.models import ShapesModel
 
     values_geotypes = list(df.geom_type.unique())
     if values_geotypes == ["Point"]:
-        buffered_df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY]))
+        buffered_df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY], resolution=buffer_resolution))
         # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
         buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = df.attrs[ShapesModel.TRANSFORM_KEY]
         return buffered_df
@@ -78,3 +84,39 @@ def get_bounding_box_corners(
         ],
         coords={"corner": range(8), "axis": list(axes)},
     )
+
+
+def _get_filtered_or_unfiltered_tables(
+    filter_table: bool, elements: dict[str, Any], sdata: SpatialData
+) -> dict[str, AnnData] | Tables:
+    """
+    Get the tables in a SpatialData object.
+
+    The tables of the SpatialData object can either be filtered to only include the tables that annotate an element in
+    elements or all tables are returned.
+
+    Parameters
+    ----------
+    filter_table
+        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
+        SpatialData object of the query.
+    elements
+        A dictionary containing the elements to use for filtering the tables.
+    sdata
+        The SpatialData object that contains the tables to filter.
+
+    Returns
+    -------
+    A dictionary containing the filtered or unfiltered tables based on the value of the 'filter_table' parameter.
+
+    """
+    if filter_table:
+        from spatialdata._core.query.relational_query import _filter_table_by_elements
+
+        return {
+            name: filtered_table
+            for name, table in sdata.tables.items()
+            if (filtered_table := _filter_table_by_elements(table, elements)) and len(filtered_table) != 0
+        }
+
+    return sdata.tables

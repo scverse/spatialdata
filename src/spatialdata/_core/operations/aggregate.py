@@ -64,6 +64,8 @@ def aggregate(
     region_key: str = "region",
     instance_key: str = "instance_id",
     deepcopy: bool = True,
+    table_name: str | None = None,
+    buffer_resolution: int = 16,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -125,6 +127,11 @@ def aggregate(
     deepcopy
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
+    table_name
+        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
+    buffer_resolution
+        Resolution parameter to pass to the of the .buffer() method to convert circles to polygons. A higher value
+        results in a more accurate representation of the circle, but also in a more complex polygon and computation.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -173,6 +180,8 @@ def aggregate(
         by_ = transform(by_, to_coordinate_system=target_coordinate_system)
         values_ = transform(values_, to_coordinate_system=target_coordinate_system)
 
+    table_name = table_name if table_name is not None else "table"
+
     # dispatch
     adata = None
     if by_type is ShapesModel and values_type in [PointsModel, ShapesModel]:
@@ -200,6 +209,7 @@ def aggregate(
             value_key=value_key,
             agg_func=agg_func,
             fractions=fractions,
+            table_name=table_name,
         )
 
         # eventually remove the colum of ones if it was added
@@ -218,6 +228,7 @@ def aggregate(
     shapes_name = by if isinstance(by, str) else "by"
     return _create_sdata_from_table_and_shapes(
         table=adata,
+        table_name=table_name,
         shapes_name=shapes_name,
         shapes=by_,
         region_key=region_key,
@@ -228,15 +239,23 @@ def aggregate(
 
 def _create_sdata_from_table_and_shapes(
     table: ad.AnnData,
+    table_name: str,
     shapes: GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
     shapes_name: str,
     region_key: str,
     instance_key: str,
     deepcopy: bool,
 ) -> SpatialData:
-    from spatialdata._utils import _deepcopy_geodataframe
+    from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
-    table.obs[instance_key] = table.obs_names.copy()
+    shapes_index_dtype = shapes.index.dtype if isinstance(shapes, GeoDataFrame) else shapes.dtype
+    try:
+        table.obs[instance_key] = table.obs_names.copy().astype(shapes_index_dtype)
+    except ValueError as err:
+        raise TypeError(
+            f"Instance key column dtype in table resulting from aggregation cannot be cast to the dtype of"
+            f"element {shapes_name}.index"
+        ) from err
     table.obs[region_key] = shapes_name
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
@@ -245,9 +264,9 @@ def _create_sdata_from_table_and_shapes(
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:
-        shapes = _deepcopy_geodataframe(shapes)
+        shapes = _deepcopy(shapes)
 
-    return SpatialData.from_elements_dict({shapes_name: shapes, "": table})
+    return SpatialData.from_elements_dict({shapes_name: shapes, table_name: table})
 
 
 def _aggregate_image_by_labels(
@@ -317,9 +336,11 @@ def _aggregate_shapes(
     by: gpd.GeoDataFrame,
     values_sdata: SpatialData | None = None,
     values_element_name: str | None = None,
+    table_name: str | None = None,
     value_key: str | list[str] | None = None,
     agg_func: str | list[str] = "count",
     fractions: bool = False,
+    buffer_resolution: int = 16,
 ) -> ad.AnnData:
     """
     Inner function to aggregate geopandas objects.
@@ -343,13 +364,17 @@ def _aggregate_shapes(
         Column in value dataframe to perform aggregation on.
     agg_func
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
+    table_name
+        Name of the table optionally containing the value_key column.
     """
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
     assert (values_sdata is None) == (values_element_name is None)
     if values_sdata is not None:
-        actual_values = get_values(value_key=value_key, sdata=values_sdata, element_name=values_element_name)
+        actual_values = get_values(
+            value_key=value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
+        )
     else:
         actual_values = get_values(value_key=value_key, element=values)
     assert isinstance(actual_values, pd.DataFrame), f"Expected pd.DataFrame, got {type(actual_values)}"
@@ -358,10 +383,10 @@ def _aggregate_shapes(
     if isinstance(values, DaskDataFrame):
         values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
     elif isinstance(values, GeoDataFrame):
-        values = circles_to_polygons(values)
+        values = circles_to_polygons(values, buffer_resolution=buffer_resolution)
     else:
         raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
-    by = circles_to_polygons(by)
+    by = circles_to_polygons(by, buffer_resolution=buffer_resolution)
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 

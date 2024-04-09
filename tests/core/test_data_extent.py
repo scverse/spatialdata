@@ -7,7 +7,7 @@ from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatialdata import SpatialData, get_extent, transform
-from spatialdata._utils import _deepcopy_geodataframe
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations import Affine, Translation, remove_transformation, set_transformation
@@ -54,9 +54,10 @@ def test_get_extent_shapes(shape_type):
     )
 
 
-def test_get_extent_points():
+@pytest.mark.parametrize("exact", [True, False])
+def test_get_extent_points(exact: bool):
     # 2d case
-    extent = get_extent(sdata["blobs_points"])
+    extent = get_extent(sdata["blobs_points"], exact=exact)
     check_test_results0(
         extent,
         min_coordinates=np.array([3.0, 4.0]),
@@ -68,7 +69,7 @@ def test_get_extent_points():
     data = np.array([[1, 2, 3], [4, 5, 6]])
     df = pd.DataFrame(data, columns=["zeta", "x", "y"])
     points_3d = PointsModel.parse(df, coordinates={"x": "x", "y": "y", "z": "zeta"})
-    extent_3d = get_extent(points_3d)
+    extent_3d = get_extent(points_3d, exact=exact)
     check_test_results0(
         extent_3d,
         min_coordinates=np.array([2, 3, 1]),
@@ -237,7 +238,7 @@ def test_get_extent_affine_circles():
     affine = _get_affine(small_translation=True)
 
     # let's do a deepcopy of the circles since we don't want to modify the original data
-    circles = _deepcopy_geodataframe(sdata["blobs_circles"])
+    circles = _deepcopy(sdata["blobs_circles"])
 
     set_transformation(element=circles, transformation=affine, to_coordinate_system="transformed")
 
@@ -304,8 +305,8 @@ def test_get_extent_affine_sdata():
     # let's make a copy since we don't want to modify the original data
     sdata2 = SpatialData(
         shapes={
-            "circles": _deepcopy_geodataframe(sdata["blobs_circles"]),
-            "polygons": _deepcopy_geodataframe(sdata["blobs_polygons"]),
+            "circles": _deepcopy(sdata["blobs_circles"]),
+            "polygons": _deepcopy(sdata["blobs_polygons"]),
         }
     )
     translation0 = Translation([10], axes=("x",))

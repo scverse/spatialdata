@@ -132,7 +132,8 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
             f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
         )
         xy = e.centroid.get_coordinates().values
-    points = PointsModel.parse(xy, transformations={coordinate_system: t})
+    xy_df = pd.DataFrame(xy, columns=["x", "y"], index=e.index.copy())
+    points = PointsModel.parse(xy_df, transformations={coordinate_system: t})
     return transform(points, to_coordinate_system=coordinate_system)
 
 
@@ -142,7 +143,7 @@ def _(e: DaskDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     _validate_coordinate_system(e, coordinate_system)
     axes = get_axes_names(e)
     assert axes in [("x", "y"), ("x", "y", "z")]
-    coords = e[list(axes)].compute().values
+    coords = e[list(axes)].compute()
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
     centroids = PointsModel.parse(coords, transformations={coordinate_system: t})

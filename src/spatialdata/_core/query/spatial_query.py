@@ -17,7 +17,11 @@ from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
 
-from spatialdata._core.query._utils import circles_to_polygons, get_bounding_box_corners
+from spatialdata._core.query._utils import (
+    _get_filtered_or_unfiltered_tables,
+    circles_to_polygons,
+    get_bounding_box_corners,
+)
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
@@ -442,8 +446,6 @@ def _(
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
@@ -459,14 +461,9 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    if sdata.table is not None:
-        table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
-        if len(table) == 0:
-            table = None
-    else:
-        table = None
+    tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, table=table)
+    return SpatialData(**new_elements, tables=tables)
 
 
 @bounding_box_query.register(SpatialImage)
@@ -566,6 +563,8 @@ def _(
         if 0 in query_result.shape:
             return None
         assert isinstance(query_result, SpatialImage)
+        # rechunk the data to avoid irregular chunks
+        image = image.chunk("auto")
     else:
         assert isinstance(image, MultiscaleSpatialImage)
         assert isinstance(query_result, DataTree)
@@ -581,7 +580,25 @@ def _(
                     return None
             else:
                 d[k] = xdata
+        # the list of scales may not be contiguous when the data has small shape (for instance with yx = 22 and
+        # rotations we may end up having scale0 and scale2 but not scale1. Practically this may occur in torch tiler if
+        # the tiles are request to be too small).
+        # Here we remove scales after we found a scale missing
+        scales_to_keep = []
+        for i, scale_name in enumerate(d.keys()):
+            if scale_name == f"scale{i}":
+                scales_to_keep.append(scale_name)
+            else:
+                break
+        # case in which scale0 is not present but other scales are
+        if len(scales_to_keep) == 0:
+            return None
+        d = {k: d[k] for k in scales_to_keep}
+
         query_result = MultiscaleSpatialImage.from_dict(d)
+        # rechunk the data to avoid irregular chunks
+        for scale in query_result:
+            query_result[scale]["image"] = query_result[scale]["image"].chunk("auto")
     query_result = compute_coordinates(query_result)
 
     # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
@@ -763,8 +780,8 @@ def polygon_query(
     target_coordinate_system
         The coordinate system of the polygon/multipolygon.
     filter_table
-        If `True`, the table is filtered to only contain rows that are annotating regions
-        contained within the query polygon/multipolygon.
+        Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
+        SpatialData object of the query.
     shapes [Deprecated]
         This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
         function.
@@ -803,7 +820,6 @@ def _(
     images: bool = True,
     labels: bool = True,
 ) -> SpatialData:
-    from spatialdata._core.query.relational_query import _filter_table_by_elements
 
     _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
@@ -817,14 +833,9 @@ def _(
         )
         new_elements[element_type] = queried_elements
 
-    if sdata.table is not None:
-        table = _filter_table_by_elements(sdata.table, new_elements) if filter_table else sdata.table
-        if len(table) == 0:
-            table = None
-    else:
-        table = None
+    tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, table=table)
+    return SpatialData(**new_elements, tables=tables)
 
 
 @polygon_query.register(SpatialImage)
