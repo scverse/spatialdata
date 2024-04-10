@@ -36,7 +36,6 @@ def _read_multiscale(
     raster_type: Literal["image", "labels"],
     fmt: SpatialDataFormatV01 = CurrentRasterFormat(),
 ) -> Union[SpatialImage, MultiscaleSpatialImage]:
-    assert isinstance(store, (str, Path, zarr.storage.BaseStore))
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)

@@ -23,11 +23,11 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
+    store: Union[str, Path, MutableMapping, zarr.Group, zarr.storage.BaseStore],  # type: ignore[type-arg]
     fmt: SpatialDataFormatV01 = CurrentPointsFormat(),
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, (str, Path))
+    assert isinstance(store, (str, Path, MutableMapping, zarr.Group, zarr.storage.BaseStore))
     f = zarr.open(store, mode="r")
 
     path = os.path.join(f._store.path, f.path, "points.parquet")

@@ -20,6 +20,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
+from upath import UPath
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
@@ -1555,7 +1556,7 @@ class SpatialData:
             raise KeyError("table with name 'table' not present in the SpatialData object.")
 
     @staticmethod
-    def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
+    def read(file_path: str | Path | zarr.Group | UPath, selection: tuple[str] | None = None) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
 

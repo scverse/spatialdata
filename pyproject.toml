@@ -32,6 +32,8 @@ dependencies = [
     "networkx",
     "numpy",
     "ome_zarr>=0.7.0",
+    "universal_pathlib>=0.2.0",
+    "fsspec[s3,http]",
     "pandas",
     "pooch",
     "pyarrow",
