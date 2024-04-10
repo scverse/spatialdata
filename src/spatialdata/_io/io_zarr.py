@@ -163,5 +163,5 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         shapes=shapes,
         tables=tables,
     )
-    sdata._path = Path(store._path if isinstance(store, zarr.Group) else store)
+    sdata.path = Path(store._path if isinstance(store, zarr.Group) else store)
     return sdata
