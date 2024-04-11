@@ -460,7 +460,12 @@ def _(
         **kwargs,
     )
     assert isinstance(transformed_dask, DaskArray)
-    transformed_data = schema.parse(transformed_dask, dims=xdata.dims)  # type: ignore[call-arg,arg-type]
+    try:
+        channels = xdata.coords["c"].values
+    except KeyError:
+        channels = None
+    transformed_data = schema.parse(transformed_dask, dims=xdata.dims, c_coords=channels)  # type: ignore[call-arg,arg-type]
+
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
 
