@@ -1,13 +1,13 @@
 import os
-from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Union
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defined]
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
+from upath import UPath
 
+from spatialdata._core._utils import _open_zarr_store
 from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -23,17 +23,23 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group, zarr.storage.BaseStore],  # type: ignore[type-arg]
+    path: UPath,
     fmt: SpatialDataFormatV01 = CurrentPointsFormat(),
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, (str, Path, MutableMapping, zarr.Group, zarr.storage.BaseStore))
-    f = zarr.open(store, mode="r")
+    store = _open_zarr_store(path)
+    f = zarr.group(store)
 
-    path = os.path.join(f._store.path, f.path, "points.parquet")
-    # cache on remote file needed for parquet reader to work
-    # TODO: allow reading in the metadata without caching all the data
-    table = read_parquet("simplecache::" + path if "http" in path else path)
+    if isinstance(store, UPath):
+        path = store / "points.parquet"
+        read_str = "simplecache::" + path.as_posix() if "http" in path.protocol else path.as_posix()
+        table = read_parquet(read_str)
+    else:
+        # TODO: remove this old code path
+        path = os.path.join(f._store.path, f.path, "points.parquet")
+        # cache on remote file needed for parquet reader to work
+        # TODO: allow reading in the metadata without caching all the data
+        table = read_parquet("simplecache::" + path if "http" in path else path)
     assert isinstance(table, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])

@@ -37,7 +37,7 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
     if isinstance(store, (zarr.Group)):
         logger.debug("No support for converting zarr.Group to UPath. Using the store object as is.")
         f = store.store
-        f_store_path = UPath(f._path)
+        f_store_path = UPath(f.store.path if isinstance(f, zarr.storage.ConsolidatedMetadataStore) else f.path)
     else:
         f_store_path = UPath(store) if not isinstance(store, UPath) else store
         f = _open_zarr_store(f_store_path)
@@ -92,8 +92,7 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
             if subgroup_name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem_store = _open_zarr_store(f_store_path / f_elem.path)
-            points[subgroup_name] = _read_points(f_elem_store)
+            points[subgroup_name] = _read_points(f_store_path / f_elem.path)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
 
