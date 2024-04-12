@@ -16,7 +16,6 @@ import numpy as np
 import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -24,7 +23,9 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
 from spatial_image import SpatialImage
+from upath import UPath
 
+from spatialdata._core._utils import _open_zarr_store
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._utils import iterate_pyramid_levels
@@ -354,7 +355,7 @@ def save_transformations(sdata: SpatialData) -> None:
 
 
 def read_table_and_validate(
-    zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
+    zarr_store_path: UPath, subgroup: zarr.Group, tables: dict[str, AnnData]
 ) -> dict[str, AnnData]:
     """
     Read in tables in the tables Zarr.group of a SpatialData Zarr store.
@@ -377,14 +378,10 @@ def read_table_and_validate(
     count = 0
     for table_name in subgroup:
         f_elem = subgroup[table_name]
-        f_elem_store = os.path.join(zarr_store_path, f_elem.path)
-        if isinstance(group.store, zarr.storage.ConsolidatedMetadataStore):
-            tables[table_name] = read_elem(f_elem)
-            # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
-            # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
-            # table = read_anndata_zarr(f_elem)
-        else:
-            tables[table_name] = read_anndata_zarr(f_elem_store)
+        f_elem_store = _open_zarr_store(zarr_store_path / f_elem.path)
+        # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
+        # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
+        tables[table_name] = read_anndata_zarr(f_elem_store)
         if TableModel.ATTRS_KEY in tables[table_name].uns:
             # fill out eventual missing attributes that has been omitted because their value was None
             attrs = tables[table_name].uns[TableModel.ATTRS_KEY]

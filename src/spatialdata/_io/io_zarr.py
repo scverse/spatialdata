@@ -7,60 +7,14 @@ import zarr
 import zarr.storage
 from anndata import AnnData
 from upath import UPath
-from zarr.storage import FSStore
 
+from spatialdata._core._utils import _open_zarr_store
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._logging import logger
-
-
-def _open_zarr_store(store: Union[str, Path, zarr.Group, UPath]) -> tuple[zarr.Group, UPath]:
-    """
-    Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
-
-    Parameters
-    ----------
-    store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
-
-    Returns
-    -------
-    A tuple of the zarr.Group object and the UPath to the store.
-    """
-    if isinstance(store, (str, Path)):
-        f_store_path = UPath(store)
-    elif isinstance(store, UPath):
-        f_store_path = store
-    if isinstance(store, zarr.Group):
-        f_store_path = UPath(store._path)
-        f = store
-    else:
-        fsstore = FSStore(url=f_store_path.path, fs=f_store_path.fs)
-        f = zarr.open(fsstore, mode="r")
-    return f, f_store_path
-
-
-def _get_substore(upath: UPath, subpath: str) -> tuple[zarr.storage.BaseStore, UPath]:
-    f, f_store_path = _open_zarr_store(upath / subpath)
-    return f.store, f_store_path
-    # if isinstance(store, (str, Path)):
-    #     store = zarr.open(store, mode="r").store
-    # if isinstance(store, zarr.Group):
-    #     store = store.store
-    # if isinstance(store, zarr.storage.DirectoryStore):
-    #     # if local store, use local sepertor
-    #     return os.path.join(store.path, path) if path else store.path
-    # if isinstance(store, zarr.storage.FSStore):
-    #     # reuse the same fs object, assume '/' as separator
-    #     return zarr.storage.FSStore(url=store.path + "/" + path, fs=store.fs, mode="r")
-    # if isinstance(store, zarr.storage.ConsolidatedMetadataStore):
-    #     # reuse the same fs object, assume '/' as separator
-    #     return store.store.path + path
-    # # fallback to FSStore with standard fs, assume '/' as separator
-    # return zarr.storage.FSStore(url=store.path + "/" + path, mode="r")
 
 
 def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tuple[str]] = None) -> SpatialData:
@@ -80,7 +34,14 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
     -------
     A SpatialData object.
     """
-    f, f_store_path = _open_zarr_store(store)
+    if isinstance(store, (zarr.Group)):
+        logger.debug("No support for converting zarr.Group to UPath. Using the store object as is.")
+        f = store.store
+        f_store_path = UPath(f._path)
+    else:
+        f_store_path = UPath(store) if not isinstance(store, UPath) else store
+        f = _open_zarr_store(f_store_path)
+    root = zarr.group(f)
 
     images = {}
     labels = {}
@@ -93,15 +54,15 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
     logger.debug(f"Reading selection {selector}")
 
     # read multiscale images
-    if "images" in selector and "images" in f:
-        group = f["images"]
+    if "images" in selector and "images" in root:
+        group = root["images"]
         count = 0
         for subgroup_name in group:
-            if Path(subgroup_name).name.startswith("."):
+            if subgroup_name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store, _ = _get_substore(f_store_path, f_elem.path)
+            f_elem_store = _open_zarr_store(f_store_path / f_elem.path)
             element = _read_multiscale(f_elem_store, raster_type="image")
             images[subgroup_name] = element
             count += 1
@@ -109,50 +70,50 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
 
     # read multiscale labels
     with ome_zarr_logger(logging.ERROR):
-        if "labels" in selector and "labels" in f:
-            group = f["labels"]
+        if "labels" in selector and "labels" in root:
+            group = root["labels"]
             count = 0
             for subgroup_name in group:
-                if Path(subgroup_name).name.startswith("."):
+                if subgroup_name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store, _ = _get_substore(f_store_path, f_elem.path)
+                f_elem_store = _open_zarr_store(f_store_path / f_elem.path)
                 labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                 count += 1
             logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
-    if "points" in selector and "points" in f:
-        group = f["points"]
+    if "points" in selector and "points" in root:
+        group = root["points"]
         count = 0
         for subgroup_name in group:
             f_elem = group[subgroup_name]
-            if Path(subgroup_name).name.startswith("."):
+            if subgroup_name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem_store, _ = _get_substore(f_store_path, f_elem.path)
+            f_elem_store = _open_zarr_store(f_store_path / f_elem.path)
             points[subgroup_name] = _read_points(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
 
-    if "shapes" in selector and "shapes" in f:
-        group = f["shapes"]
+    if "shapes" in selector and "shapes" in root:
+        group = root["shapes"]
         count = 0
         for subgroup_name in group:
-            if Path(subgroup_name).name.startswith("."):
+            if subgroup_name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem = group[subgroup_name]
-            f_elem_store, _ = _get_substore(f_store_path, f_elem.path)
+            f_elem_store = _open_zarr_store(f_store_path / f_elem.path)
             shapes[subgroup_name] = _read_shapes(f_elem_store)
             count += 1
         logger.debug(f"Found {count} elements in {group}")
-    if "tables" in selector and "tables" in f:
-        group = f["tables"]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
+    if "tables" in selector and "tables" in root:
+        group = root["tables"]
+        tables = read_table_and_validate(f_store_path, group, tables)
 
-    if "table" in selector and "table" in f:
+    if "table" in selector and "table" in root:
         warnings.warn(
             f"Table group found in zarr store at location {f_store_path}. Please update the zarr store"
             f"to use tables instead.",
@@ -161,8 +122,7 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
         )
         subgroup_name = "table"
         group = f[subgroup_name]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
-
+        tables = read_table_and_validate(f_store_path, group, tables)
         logger.debug(f"Found {count} elements in {group}")
 
     sdata = SpatialData(
@@ -172,5 +132,5 @@ def read_zarr(store: Union[str, Path, zarr.Group, UPath], selection: Optional[tu
         shapes=shapes,
         tables=tables,
     )
-    sdata.path = Path(store._path if isinstance(store, zarr.Group) else store)
+    sdata.path = f_store_path
     return sdata

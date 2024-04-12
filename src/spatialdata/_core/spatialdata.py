@@ -16,13 +16,13 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
-from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 from upath import UPath
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
+from spatialdata._core._utils import _open_zarr_store
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _error_message_add_element, deprecation_alias
@@ -118,8 +118,7 @@ class SpatialData:
         shapes: dict[str, GeoDataFrame] | None = None,
         tables: dict[str, AnnData] | Tables | None = None,
     ) -> None:
-        # TODO: remote paths should not be represented as Path objects and cannot be fully represented by them
-        self._path: Path | None = None
+        self._path: UPath | None = None
 
         self._shared_keys: set[str | None] = set()
         self._images: Images = Images(shared_keys=self._shared_keys)
@@ -537,11 +536,15 @@ class SpatialData:
         return self._path
 
     @path.setter
-    def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, (str, Path)):
+    def path(self, value: str | Path | UPath | None) -> None:
+        if value is None:
+            self._path = None
+        if isinstance(value, (str, Path)):
+            self._path = UPath(value)
+        elif isinstance(value, UPath):
             self._path = value
         else:
-            raise TypeError("Path must be `None`, a `str` or a `Path` object.")
+            raise TypeError("Path must be `None`, a `str`, `Path` or `UPath` object.")
 
         if not self.is_self_contained():
             logger.info(
@@ -551,7 +554,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
+        self, zarr_path: str | Path | UPath, element_type: str, element_name: str
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
@@ -571,9 +574,9 @@ class SpatialData:
         -------
         either the existing Zarr subgroup or a new one.
         """
-        if not isinstance(zarr_path, Path):
-            raise ValueError("zarr_path should be a Path object")
-        store = parse_url(zarr_path, mode="r+").store
+        if not isinstance(zarr_path, UPath):
+            zarr_path = UPath(zarr_path)
+        store = _open_zarr_store(zarr_path, mode="r+")
         root = zarr.group(store=store)
         if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
             raise ValueError(f"Unknown element type {element_type}")
@@ -581,7 +584,7 @@ class SpatialData:
         element_name_group = element_type_group.require_group(element_name)
         return root, element_type_group, element_name_group
 
-    def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:
+    def _group_for_element_exists(self, zarr_path: UPath, element_type: str, element_name: str) -> bool:
         """
         Check if the group for an element exists.
 
@@ -596,7 +599,7 @@ class SpatialData:
         -------
         True if the group exists, False otherwise.
         """
-        store = parse_url(zarr_path, mode="r").store
+        store = _open_zarr_store(zarr_path, mode="r")
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
         exists = element_type in root and element_name in root[element_type]
@@ -1000,7 +1003,7 @@ class SpatialData:
         """
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
-        store = parse_url(self.path, mode="r").store
+        store = _open_zarr_store(self.path, mode="r")
         root = zarr.group(store=store)
         elements_in_zarr = []
 
@@ -1040,20 +1043,24 @@ class SpatialData:
 
     def _validate_can_safely_write_to_path(
         self,
-        file_path: str | Path,
+        file_path: str | Path | UPath,
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
         from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
 
-        if isinstance(file_path, str):
-            file_path = Path(file_path)
+        if isinstance(file_path, (str, Path)):
+            file_path = UPath(file_path)
 
-        if not isinstance(file_path, Path):
-            raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
+        if not isinstance(file_path, UPath):
+            raise ValueError(
+                f"file_path must be a string, Path or a UPath object, type(file_path) = {type(file_path)}."
+            )
 
-        if os.path.exists(file_path):
-            if parse_url(file_path, mode="r") is None:
+        if file_path.exists():
+            store = _open_zarr_store(file_path, mode="r")
+            # Assume the file_path is not a Zarr store if there are no groups in the store.
+            if not zarr.storage.contains_group(store):
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
@@ -1091,16 +1098,16 @@ class SpatialData:
 
     def write(
         self,
-        file_path: str | Path,
+        file_path: str | Path | UPath,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
     ) -> None:
         """Write to a Zarr store."""
-        if isinstance(file_path, str):
-            file_path = Path(file_path)
+        if isinstance(file_path, (str, Path)):
+            file_path = UPath(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
 
-        store = parse_url(file_path, mode="w").store
+        store = _open_zarr_store(file_path, mode="w")
         _ = zarr.group(store=store, overwrite=overwrite)
         store.close()
 
@@ -1124,14 +1131,14 @@ class SpatialData:
     def _write_element(
         self,
         element: SpatialElement | AnnData,
-        zarr_container_path: Path,
+        zarr_container_path: UPath,
         element_type: str,
         element_name: str,
         overwrite: bool,
     ) -> None:
-        if not isinstance(zarr_container_path, Path):
+        if not isinstance(zarr_container_path, UPath):
             raise ValueError(
-                f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
+                f"zarr_container_path must be a UPath object, type(zarr_container_path) = {type(zarr_container_path)}."
             )
         file_path_of_element = zarr_container_path / element_type / element_name
         self._validate_can_safely_write_to_path(
@@ -1295,7 +1302,7 @@ class SpatialData:
             )
 
         # delete the element
-        store = parse_url(self.path, mode="r+").store
+        store = _open_zarr_store(self.path, mode="r+")
         root = zarr.group(store=store)
         root[element_type].pop(element_name)
         store.close()
@@ -1314,7 +1321,7 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        store = parse_url(self.path, mode="r+").store
+        store = _open_zarr_store(self.path, mode="r+")
         # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
         # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
         zarr.consolidate_metadata(store, metadata_key=".zmetadata")
@@ -1322,8 +1329,9 @@ class SpatialData:
 
     def has_consolidated_metadata(self) -> bool:
         return_value = False
-        store = parse_url(self.path, mode="r").store
-        if "zmetadata" in store:
+        store = _open_zarr_store(self.path, mode="r")
+        root = zarr.group(store=store)
+        if "zmetadata" in root:
             return_value = True
         store.close()
         return return_value
@@ -1354,7 +1362,7 @@ class SpatialData:
 
         # check if the element exists in the Zarr storage
         if not self._group_for_element_exists(
-            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            zarr_path=self.path, element_type=element_type, element_name=element_name
         ):
             warnings.warn(
                 f"Not saving the metadata to element {element_type}/{element_name} as it is"

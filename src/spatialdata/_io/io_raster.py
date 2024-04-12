@@ -3,6 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import zarr
+import zarr.storage
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation

@@ -1,6 +1,6 @@
 from typing import Any
 
-import zarr
+import zarr.storage
 from upath import UPath
 from zarr.storage import FSStore
 
