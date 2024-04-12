@@ -1322,16 +1322,20 @@ class SpatialData:
 
     def write_consolidated_metadata(self) -> None:
         store = _open_zarr_store(self.path, mode="r+")
-        # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
-        # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
-        zarr.consolidate_metadata(store, metadata_key=".zmetadata")
+        # consolidate metadata to more easily support remote reading bug in zarr.
+        # TODO: Because of bug https://github.com/zarr-developers/zarr-python/issues/1121
+        # .zmetadata is not supported when using an FSStore.
+        # Here we explicitly using zmetadata as the metadata key until this is fixed upstream.
+        zarr.consolidate_metadata(store, metadata_key="zmetadata")
         store.close()
 
     def has_consolidated_metadata(self) -> bool:
         return_value = False
         store = _open_zarr_store(self.path, mode="r")
-        root = zarr.group(store=store)
-        if "zmetadata" in root:
+        # TODO: Because of bug https://github.com/zarr-developers/zarr-python/issues/1121
+        # .zmetadata is not supported when using an FSStore.
+        # Here we explicitly using zmetadata as the metadata key until this is fixed upstream.
+        if "zmetadata" in store:
             return_value = True
         store.close()
         return return_value
