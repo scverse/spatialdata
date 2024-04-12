@@ -26,14 +26,13 @@ dependencies = [
     "click",
     "dask-image",
     "dask<=2024.2.1",
-    "fsspec<=2023.6",
+    "fsspec[s3,http]<=2023.6",
     "geopandas",
     "multiscale_spatial_image==0.11.2",
     "networkx",
     "numpy",
     "ome_zarr>=0.7.0",
     "universal_pathlib>=0.2.0",
-    "fsspec[s3,http]",
     "pandas",
     "pooch",
     "pyarrow",
@@ -70,6 +69,7 @@ docs = [
 test = [
     "pytest",
     "pytest-cov",
+    "moto[s3,server]",
 ]
 torch = [
     "torch"
