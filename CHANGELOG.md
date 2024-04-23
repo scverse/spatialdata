@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.3] - 2024-xx-xx
 
+### Minor
+
+-   Channel coordinate annotations on images now persist through `rasterize()`.
+
 ## [0.1.2] - 2024-03-30
 
 ### Minor
