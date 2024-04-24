@@ -22,9 +22,3 @@ jobs:
               run: python -m build
             - name: Check package
               run: twine check --strict dist/*.whl
-            - name: Upload code coverage
-              uses: codecov/codecov-action@v4
-              with:
-                  fail_ci_if_error: true
-              env:
-                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
