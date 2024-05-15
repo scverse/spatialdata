@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.3] - 2024-xx-xx
 
+### Minor
+
+-   Added operation: `to_polygons()`
+
 ## [0.1.2] - 2024-03-30
 
 ### Minor

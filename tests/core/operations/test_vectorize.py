@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from geopandas import GeoDataFrame
 from shapely import Point
-from spatialdata._core.operations.vectorize import to_circles
+from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
@@ -21,6 +21,20 @@ def test_labels_2d_to_circles(is_multiscale: bool) -> None:
     assert np.isclose(new_circles.loc[1].geometry.y, 78.85026897788404)
     assert np.isclose(new_circles.loc[1].radius, 69.229993)
     assert 7 not in new_circles.index
+
+
+@pytest.mark.parametrize("is_multiscale", [False, True])
+def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
+    key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
+    element = sdata[key]
+    new_polygons = to_polygons(element)
+
+    assert 7 not in new_polygons.index
+
+    unique, counts = np.unique(sdata["blobs_labels"].compute().data, return_counts=True)
+    new_polygons.loc[unique[1:], "pixel_count"] = counts[1:]
+
+    assert ((new_polygons.area - new_polygons.pixel_count) / new_polygons.pixel_count < 0.01).all()
 
 
 @pytest.mark.skip(reason="Not implemented")

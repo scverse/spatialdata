@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import Any
 
+import dask.array as da
 import numpy as np
 import pandas as pd
+import shapely
+import skimage.measure
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
+from skimage.measure._regionprops import RegionProperties
 from spatial_image import SpatialImage
 
 from spatialdata._core.centroids import get_centroids
@@ -137,7 +142,6 @@ def _make_circles(element: SpatialImage | MultiscaleSpatialImage | GeoDataFrame,
 @singledispatch
 def to_polygons(
     data: SpatialElement,
-    target_coordinate_system: str,
 ) -> GeoDataFrame:
     """
     Convert a set of geometries (2D labels, 2D shapes) to approximated 2D polygons/multypolygons.
@@ -146,11 +150,86 @@ def to_polygons(
     ----------
     data
         The SpatialElement representing the geometries to approximate as 2D polygons/multipolygons.
-    target_coordinate_system
-        The coordinate system to which the geometries to consider should be transformed.
 
     Returns
     -------
     The approximated 2D polygons/multipolygons in the specified coordinate system.
     """
-    raise RuntimeError("Unsupported type: {type(data)}")
+    raise RuntimeError(f"Unsupported type: {type(data)}")
+
+
+@to_polygons.register(SpatialImage)
+@to_polygons.register(MultiscaleSpatialImage)
+def _(
+    element: SpatialImage | MultiscaleSpatialImage,
+) -> GeoDataFrame:
+    model = get_model(element)
+    if model in (Image2DModel, Image3DModel):
+        raise RuntimeError("Cannot apply to_polygons() to images.")
+    if model == Labels3DModel:
+        raise RuntimeError("to_polygons() is not yet implemented for 3D labels.")
+
+    # reduce to the single scale case
+    if isinstance(element, MultiscaleSpatialImage):
+        element_single_scale = SpatialImage(element["scale0"].values().__iter__().__next__())
+    else:
+        element_single_scale = element
+
+    gdf_chunks = []
+
+    def _vectorize_chunk(
+        chunk: np.ndarray,  # type: ignore[type-arg]
+        block_info: dict[int | None, Any] | None = None,
+    ) -> da.Array:
+        if block_info is not None:
+            (yoff, _), (xoff, _) = block_info[0]["array-location"]
+            gdf = _vectorize_mask(chunk)
+            gdf["chunk-location"] = str(block_info[0]["chunk-location"])
+            gdf.geometry = gdf.translate(xoff, yoff)
+            gdf_chunks.append(gdf)
+        return da.zeros(chunk.shape)
+
+    element_single_scale.data.map_blocks(_vectorize_chunk).compute()
+
+    gdf = pd.concat(gdf_chunks)
+    gdf = GeoDataFrame([_dissolve_on_overlaps(*item) for item in gdf.groupby("label")], columns=["label", "geometry"])
+    gdf.index = gdf["label"]
+
+    transformations = get_transformation(element_single_scale, get_all=True)
+
+    assert isinstance(transformations, dict)
+
+    return ShapesModel.parse(gdf, transformations=transformations.copy())
+
+
+def _region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
+    mask = np.pad(region_props.image, 1)
+    contours = skimage.measure.find_contours(mask, 0.5)
+
+    polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
+
+    yoff, xoff, *_ = region_props.bbox
+    return [shapely.affinity.translate(poly, xoff, yoff) for poly in polygons]
+
+
+def _vectorize_mask(
+    mask: np.ndarray,  # type: ignore[type-arg]
+) -> GeoDataFrame:
+    if mask.max() == 0:
+        return GeoDataFrame(geometry=[])
+
+    regions = skimage.measure.regionprops(mask)
+
+    polygons_list = [_region_props_to_polygons(region) for region in regions]
+    geoms = [poly for polygons in polygons_list for poly in polygons]
+    labels = [region.label for i, region in enumerate(regions) for _ in range(len(polygons_list[i]))]
+
+    return GeoDataFrame({"label": labels}, geometry=geoms)
+
+
+def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
+    if len(group) == 1:
+        return (label, group.geometry.iloc[0])
+    if len(np.unique(group["chunk-location"])) == 1:
+        return (label, MultiPolygon(list(group.geometry)))
+    return (label, group.dissolve().geometry.iloc[0])
