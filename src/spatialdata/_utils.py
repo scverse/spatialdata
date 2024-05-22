@@ -239,7 +239,7 @@ def _deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable
     Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
 
     ```python
-    @_deprecation_alias(table="tables", version="version 0.1.0")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def my_function(tables: AnnData | dict[str, AnnData]):
         pass
     ```
@@ -250,10 +250,11 @@ def _deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable
         def wrapper(*args: Any, **kwargs: Any) -> RT:
             class_name = f.__qualname__
             library = f.__module__.split(".")[0]
-            version = aliases.pop("version") if aliases.get("version") is not None else None
+            alias_copy = aliases.copy()
+            version = alias_copy.pop("version") if alias_copy.get("version") is not None else None
             if version is None:
                 raise ValueError("version for deprecation must be specified")
-            rename_kwargs(f.__name__, kwargs, aliases, class_name, library, version)
+            rename_kwargs(f.__name__, kwargs, alias_copy, class_name, library, version)
             return f(*args, **kwargs)
 
         return wrapper
