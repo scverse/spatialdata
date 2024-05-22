@@ -1,8 +1,9 @@
 from functools import singledispatch
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 from warnings import warn
 
 import dask_image.ndinterp
+import datashader as ds
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -11,6 +12,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
@@ -25,14 +27,11 @@ from spatialdata.models import (
 )
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations._utils import _get_scale, compute_coordinates
-from spatialdata.transformations.operations import (
-    get_transformation,
-    remove_transformation,
-    set_transformation,
-)
+from spatialdata.transformations.operations import get_transformation, remove_transformation, set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
+    Identity,
     Scale,
     Sequence,
     Translation,
@@ -498,6 +497,9 @@ def _(
     raise NotImplementedError()
 
 
+VALUES_COLUMN = "__values_column"
+
+
 @rasterize.register(GeoDataFrame)
 def _(
     data: GeoDataFrame,
@@ -505,11 +507,18 @@ def _(
     min_coordinate: Union[list[Number], ArrayLike],
     max_coordinate: Union[list[Number], ArrayLike],
     target_coordinate_system: str,
+    value_key: str | None = None,
+    values_sdata: SpatialData | None = None,
+    agg_func: str | Callable | None = None,
+    instance_key_as_default_value_key: bool = False,
+    return_single_channel: bool = True,
+    table_name: str | None = None,
+    return_as_labels: bool = False,
     target_unit_to_pixels: Optional[float] = None,
     target_width: Optional[float] = None,
     target_height: Optional[float] = None,
     target_depth: Optional[float] = None,
-) -> SpatialImage:
+) -> SpatialImage | Image2DModel:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
@@ -521,4 +530,71 @@ def _(
         target_height=target_height,
         target_depth=target_depth,
     )
-    raise NotImplementedError()
+
+    transform: BaseTransformation = get_transformation(data, target_coordinate_system)
+    if not isinstance(transform, Identity):
+        data = transform(data, to_coordinate_system=target_coordinate_system)
+
+    table_name = table_name if table_name is not None else "table"
+
+    assert (
+        VALUES_COLUMN not in data.columns
+    ), f"Column name {VALUES_COLUMN} is reserved for internal use. Please rename your column."
+
+    if value_key is not None:
+        data[VALUES_COLUMN] = get_values(value_key, element=data, sdata=values_sdata, table_name=table_name)
+    elif instance_key_as_default_value_key:
+        value_key = VALUES_COLUMN
+        data[VALUES_COLUMN] = data.index.astype("category")
+
+    if agg_func is None:
+        agg_func = _default_agg_func(data, value_key, return_single_channel)
+    elif isinstance(agg_func, str):
+        AGGREGATIONS = ["sum", "count", "count_cat", "first"]
+
+        assert np.isin(
+            agg_func, AGGREGATIONS
+        ), f"Aggregation function must be one of {', '.join(AGGREGATIONS)}. Found {agg_func}"
+
+        assert agg_func == "count" or value_key is not None, f"value_key cannot be done for agg_func={agg_func}"
+
+        agg_func = getattr(ds, agg_func)(column=value_key)
+
+    agg = ds.Canvas(
+        plot_height=int(target_width), plot_width=int(target_height), x_range=[0, 512], y_range=[0, 512]
+    ).polygons(data, "geometry", agg=agg_func)
+
+    if VALUES_COLUMN in data:
+        data.drop(columns=[VALUES_COLUMN], inplace=True)
+
+    transformations = {target_coordinate_system: Identity()} # TODO: translate
+
+    if isinstance(agg_func, ds.count_cat):
+        assert not return_single_channel, "Cannot return one channel when using count_cat aggregation"
+        assert not return_as_labels, "Cannot return labels when using count_cat aggregation"
+
+        agg = agg.rename({VALUES_COLUMN: "c"}).transpose("c", "y", "x")
+
+        return Image2DModel.parse(agg, transformations=transformations)
+
+    agg = agg.fillna(0)
+
+    if return_as_labels:
+        return Labels2DModel.parse(agg, transformations=transformations)
+
+    agg = agg.expand_dims(dim={"c": 1}).transpose("c", "y", "x")
+    return Image2DModel.parse(agg, transformations=transformations)
+
+
+def _default_agg_func(data: GeoDataFrame, value_key: str | None, return_single_channel: bool):
+    if value_key is None:
+        return ds.count()
+
+    if data[VALUES_COLUMN].dtype != "category":
+        return ds.sum(VALUES_COLUMN)
+
+    if return_single_channel:
+        data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.codes
+        return ds.first(VALUES_COLUMN)
+
+    return ds.count_cat(VALUES_COLUMN)
