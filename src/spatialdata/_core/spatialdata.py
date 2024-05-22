@@ -108,7 +108,7 @@ class SpatialData:
     annotation directly.
     """
 
-    @_deprecation_alias(table="tables", version="version 0.1.0")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -684,7 +684,7 @@ class SpatialData:
                         " not found in Zarr storage"
                     )
 
-    @_deprecation_alias(filter_table="filter_tables", version="version 0.1.0")
+    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
         self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
     ) -> SpatialData:
@@ -1572,7 +1572,7 @@ class SpatialData:
             raise KeyError(f"Could not find element with name {element_name!r}")
 
     @classmethod
-    @_deprecation_alias(table="tables", version="version 0.1.0")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
         cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
     ) -> SpatialData:
