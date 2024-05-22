@@ -250,7 +250,7 @@ def _deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable
         def wrapper(*args: Any, **kwargs: Any) -> RT:
             class_name = f.__qualname__
             library = f.__module__.split(".")[0]
-            version = aliases.pop("test") if aliases.get("version") is not None else None
+            version = aliases.pop("version") if aliases.get("version") is not None else None
             if version is None:
                 raise ValueError("version for deprecation must be specified")
             rename_kwargs(f.__name__, kwargs, aliases, class_name, library, version)
