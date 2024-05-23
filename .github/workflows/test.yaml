@@ -70,4 +70,3 @@ jobs:
               with:
                   name: coverage
                   verbose: true
-                  slug: scverse/spatialdata
