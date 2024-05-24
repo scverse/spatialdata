@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from functools import singledispatch
-from typing import Callable, Optional, Union
 from warnings import warn
 
 import dask_image.ndinterp
@@ -44,13 +45,13 @@ VALUES_COLUMN = "__values_column"
 
 def _compute_target_dimensions(
     spatial_axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
-    target_unit_to_pixels: Optional[float],
-    target_width: Optional[float],
-    target_height: Optional[float],
-    target_depth: Optional[float],
-) -> tuple[float, float, Optional[float]]:
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
+    target_unit_to_pixels: float | None,
+    target_width: float | None,
+    target_height: float | None,
+    target_depth: float | None,
+) -> tuple[float, float, float | None]:
     """
     Compute the pixel sizes (width, height, depth) of the image that will be produced by the rasterization.
 
@@ -149,16 +150,16 @@ def _compute_target_dimensions(
 
 @singledispatch
 def rasterize(
-    data: Union[SpatialData, SpatialElement],
+    data: SpatialData | SpatialElement,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
-) -> Union[SpatialData, SpatialImage]:
+    target_unit_to_pixels: float | None = None,
+    target_width: float | None = None,
+    target_height: float | None = None,
+    target_depth: float | None = None,
+) -> SpatialData | SpatialImage:
     """
     Rasterize a SpatialData object or a SpatialElement (image, labels, points, shapes).
 
@@ -201,13 +202,13 @@ def rasterize(
 def _(
     sdata: SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
+    target_unit_to_pixels: float | None = None,
+    target_width: float | None = None,
+    target_height: float | None = None,
+    target_depth: float | None = None,
 ) -> SpatialData:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -238,13 +239,13 @@ def _(
 
 
 def _get_xarray_data_to_rasterize(
-    data: Union[SpatialImage, MultiscaleSpatialImage],
+    data: SpatialImage | MultiscaleSpatialImage,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
-    target_sizes: dict[str, Optional[float]],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
+    target_sizes: dict[str, float | None],
     target_coordinate_system: str,
-) -> tuple[DataArray, Optional[Scale]]:
+) -> tuple[DataArray, Scale | None]:
     """Make the DataArray to rasterize from either a SpatialImage or a MultiscaleSpatialImage.
 
     If from a pyramid level, computes scale factor.
@@ -276,7 +277,7 @@ def _get_xarray_data_to_rasterize(
         xdata = data
         pyramid_scale = None
     elif isinstance(data, MultiscaleSpatialImage):
-        latest_scale: Optional[str] = None
+        latest_scale: str | None = None
         for scale in reversed(list(data.keys())):
             data_tree = data[scale]
             latest_scale = scale
@@ -330,7 +331,7 @@ def _get_xarray_data_to_rasterize(
 
 
 def _get_corrected_affine_matrix(
-    data: Union[SpatialImage, MultiscaleSpatialImage],
+    data: SpatialImage | MultiscaleSpatialImage,
     axes: tuple[str, ...],
     target_coordinate_system: str,
 ) -> tuple[Affine, tuple[str, ...]]:
@@ -370,13 +371,13 @@ def _get_corrected_affine_matrix(
 def _(
     data: SpatialImage,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
+    target_unit_to_pixels: float | None = None,
+    target_width: float | None = None,
+    target_height: float | None = None,
+    target_depth: float | None = None,
 ) -> SpatialImage:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -478,13 +479,13 @@ def _(
 def _(
     data: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
+    target_unit_to_pixels: float | None = None,
+    target_width: float | None = None,
+    target_height: float | None = None,
+    target_depth: float | None = None,
 ) -> SpatialImage:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -504,20 +505,20 @@ def _(
 def _(
     data: GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: Union[list[Number], ArrayLike],
-    max_coordinate: Union[list[Number], ArrayLike],
+    min_coordinate: list[Number] | ArrayLike,
+    max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     value_key: str | None = None,
     values_sdata: SpatialData | None = None,
-    agg_func: str | Callable | None = None,
+    agg_func: str | ds.reductions.Reduction | None = None,
     instance_key_as_default_value_key: bool = False,
     return_single_channel: bool = True,
     table_name: str | None = None,
     return_as_labels: bool = False,
-    target_unit_to_pixels: Optional[float] = None,
-    target_width: Optional[float] = None,
-    target_height: Optional[float] = None,
-    target_depth: Optional[float] = None,
+    target_unit_to_pixels: float | None = None,
+    target_width: float | None = None,
+    target_height: float | None = None,
+    target_depth: float | None = None,
 ) -> SpatialImage | Image2DModel:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -535,7 +536,7 @@ def _(
     y_range = [min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]]
     x_range = [min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]]
 
-    t: BaseTransformation = get_transformation(data, target_coordinate_system)
+    t = get_transformation(data, target_coordinate_system)
     if not isinstance(t, Identity):
         data = transform(data, to_coordinate_system=target_coordinate_system)
 
@@ -572,7 +573,7 @@ def _(
 
     scale = Scale([(y_range[1] - y_range[0]) / plot_height, (x_range[1] - x_range[0]) / plot_width], axes=("y", "x"))
     translation = Translation([y_range[0], x_range[0]], axes=("y", "x"))
-    transformations = {target_coordinate_system: Sequence([scale, translation])}
+    transformations: dict[str, BaseTransformation] = {target_coordinate_system: Sequence([scale, translation])}
 
     if isinstance(agg_func, ds.count_cat):
         assert not return_single_channel, "Cannot return one channel when using count_cat aggregation"
@@ -591,7 +592,9 @@ def _(
     return Image2DModel.parse(agg, transformations=transformations)
 
 
-def _default_agg_func(data: GeoDataFrame, value_key: str | None, return_single_channel: bool):
+def _default_agg_func(
+    data: GeoDataFrame, value_key: str | None, return_single_channel: bool
+) -> ds.reductions.Reduction:
     if value_key is None:
         return ds.count()
 
