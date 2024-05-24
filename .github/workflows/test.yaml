@@ -70,3 +70,5 @@ jobs:
               with:
                   name: coverage
                   verbose: true
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
