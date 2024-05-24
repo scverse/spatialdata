@@ -76,12 +76,12 @@ def test_rasterize_raster(_get_raster):
 
 
 def test_rasterize_shapes():
-    square_one = box(0, 10, 20, 40)
-    square_two = box(5, 35, 15, 45)
-    square_three = box(0, 0, 2, 2)
-    square_four = box(0, 2, 2, 4)
+    box_one = box(0, 10, 20, 40)
+    box_two = box(5, 35, 15, 45)
+    box_three = box(0, 0, 2, 2)
+    box_four = box(0, 2, 2, 4)
 
-    gdf = GeoDataFrame(geometry=[square_one, MultiPolygon([square_two, square_three]), square_four])
+    gdf = GeoDataFrame(geometry=[box_one, MultiPolygon([box_two, box_three]), box_four])
     gdf["values"] = [0.1, 0.3, 0]
     gdf["cat_values"] = ["gene_a", "gene_a", "gene_b"]
     gdf["cat_values"] = gdf["cat_values"].astype("category")
