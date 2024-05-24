@@ -96,6 +96,9 @@ class ImageTilesDataset(Dataset):
         It is a `Callable`, with `Any` as return type, that takes as input the (image, table_value) tuple (when
         `return_annotations` is not `None`) or a `Callable` that takes as input the `SpatialData` object (when
         `return_annotations` is `None`).
+    return_array
+        If `True`, the tile is returned as an :class:`dask.array.Array` object; otherwise, it is returned as a
+        :class:`spatial_image.SpatialImage` object.
     rasterize_kwargs
         Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is `True`.
         This argument can be used in particular to choose the pixel dimension of the produced image tiles; please refer
@@ -122,6 +125,7 @@ class ImageTilesDataset(Dataset):
         return_annotations: str | list[str] | None = None,
         table_name: str | None = None,
         transform: Callable[[Any], Any] | None = None,
+        return_array: bool = False,
         rasterize_kwargs: Mapping[str, Any] = MappingProxyType({}),
     ):
         from spatialdata import bounding_box_query
@@ -144,9 +148,9 @@ class ImageTilesDataset(Dataset):
                 **dict(rasterize_kwargs),
             )
             if rasterize
-            else bounding_box_query  # type: ignore[assignment]
+            else partial(bounding_box_query, return_array=return_array)
         )
-        self._return = self._get_return(return_annotations, table_name)
+        self._return = self._get_return(return_annotations, table_name, return_array=return_array)
         self.transform = transform
 
     def _validate(
@@ -299,8 +303,10 @@ class ImageTilesDataset(Dataset):
         dataset_index: pd.DataFrame,
         table_name: str | None,
         return_annot: str | list[str] | None,
+        return_array: bool = False,
     ) -> tuple[Any, Any] | SpatialData:
-        tile = ImageTilesDataset._ensure_single_scale(tile)
+        if not return_array:
+            tile = ImageTilesDataset._ensure_single_scale(tile)
         if return_annot is not None:
             # table is always returned as array shape (1, len(return_annot))
             # where return_table can be a single column or a list of columns
@@ -334,6 +340,7 @@ class ImageTilesDataset(Dataset):
         self,
         return_annot: str | list[str] | None,
         table_name: str | None,
+        return_array: bool = False,
     ) -> Callable[[int, Any], tuple[Any, Any] | SpatialData]:
         """Get function to return values from the table of the dataset."""
         return partial(
@@ -342,6 +349,7 @@ class ImageTilesDataset(Dataset):
             dataset_index=self.dataset_index,
             table_name=table_name,
             return_annot=return_annot,
+            return_array=return_array,
         )
 
     def __len__(self) -> int:

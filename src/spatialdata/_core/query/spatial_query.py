@@ -474,6 +474,7 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
+    return_array: bool = False,
 ) -> SpatialImage | MultiscaleSpatialImage | None:
     """Implement bounding box query for SpatialImage.
 
@@ -481,6 +482,21 @@ def _(
     -----
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
+
+    Parameters
+    ----------
+    image
+        The image to query.
+    axes
+        The axes the coordinates are expressed in.
+    min_coordinate
+        The upper left hand corner of the bounding box (i.e., minimum coordinates along all dimensions).
+    max_coordinate
+        The lower right hand corner of the bounding box (i.e., the maximum coordinates along all dimensions
+    target_coordinate_system
+        The coordinate system the bounding box is defined in.
+    return_array
+        If `True`, return the query result as a `numpy.ndarray` and it does not parse it into a SpatialImage.
     """
     from spatialdata.transformations import get_transformation, set_transformation
 
@@ -563,6 +579,8 @@ def _(
         if 0 in query_result.shape:
             return None
         assert isinstance(query_result, SpatialImage)
+        if return_array:
+            return query_result.data
         # rechunk the data to avoid irregular chunks
         image = image.chunk("auto")
     else:
@@ -580,6 +598,8 @@ def _(
                     return None
             else:
                 d[k] = xdata
+            if return_array and k == "scale0":
+                return xdata.data
         # the list of scales may not be contiguous when the data has small shape (for instance with yx = 22 and
         # rotations we may end up having scale0 and scale2 but not scale1. Practically this may occur in torch tiler if
         # the tiles are request to be too small).
@@ -820,7 +840,6 @@ def _(
     images: bool = True,
     labels: bool = True,
 ) -> SpatialData:
-
     _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
