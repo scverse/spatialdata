@@ -3,12 +3,12 @@ import pytest
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
-
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
+
 from tests.conftest import _get_images, _get_labels
 
 
