@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage

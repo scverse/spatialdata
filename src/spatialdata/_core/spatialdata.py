@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
-from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage

@@ -14,7 +14,7 @@ import pandas as pd
 from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
@@ -661,6 +661,10 @@ class PointsModel:
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
+        # TODO: this is just a temporary workaround to avoid a top-level error when running tests, this should not be
+        # used. Let's use instead what is suggested here:
+        if not hasattr(data, "attrs"):
+            data.attrs = {}
         if feature_key is not None or instance_key is not None:
             data.attrs[cls.ATTRS_KEY] = {}
         if feature_key is not None:

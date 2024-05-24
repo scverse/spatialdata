@@ -16,7 +16,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
 from dask.array.core import Array as DaskArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes

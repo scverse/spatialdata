@@ -9,7 +9,7 @@ import dask.array as da
 import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
