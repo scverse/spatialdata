@@ -12,7 +12,9 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
+from spatialdata._core.query.spatial_query import _adjust_bounding_box_to_real_axes, _get_axes_of_tranformation
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
@@ -37,6 +39,8 @@ from spatialdata.transformations.transformations import (
     Translation,
     _get_affine_for_element,
 )
+
+VALUES_COLUMN = "__values_column"
 
 
 def _compute_target_dimensions(
@@ -497,9 +501,6 @@ def _(
     raise NotImplementedError()
 
 
-VALUES_COLUMN = "__values_column"
-
-
 @rasterize.register(GeoDataFrame)
 def _(
     data: GeoDataFrame,
@@ -531,8 +532,12 @@ def _(
         target_depth=target_depth,
     )
 
-    transform: BaseTransformation = get_transformation(data, target_coordinate_system)
-    if not isinstance(transform, Identity):
+    plot_width, plot_height = int(target_width), int(target_height)
+    y_range = [min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]]
+    x_range = [min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]]
+
+    t: BaseTransformation = get_transformation(data, target_coordinate_system)
+    if not isinstance(t, Identity):
         data = transform(data, to_coordinate_system=target_coordinate_system)
 
     table_name = table_name if table_name is not None else "table"
@@ -560,14 +565,15 @@ def _(
 
         agg_func = getattr(ds, agg_func)(column=value_key)
 
-    agg = ds.Canvas(
-        plot_height=int(target_width), plot_width=int(target_height), x_range=[0, 512], y_range=[0, 512]
-    ).polygons(data, "geometry", agg=agg_func)
+    cnv = ds.Canvas(plot_height=plot_height, plot_width=plot_width, x_range=x_range, y_range=y_range)
+    agg = cnv.polygons(data, "geometry", agg=agg_func)
 
     if VALUES_COLUMN in data:
         data.drop(columns=[VALUES_COLUMN], inplace=True)
 
-    transformations = {target_coordinate_system: Identity()} # TODO: translate
+    scale = Scale([(y_range[1] - y_range[0]) / plot_height, (x_range[1] - x_range[0]) / plot_width], axes=("y", "x"))
+    translation = Translation([y_range[0], x_range[0]], axes=("y", "x"))
+    transformations = {target_coordinate_system: Sequence([scale, translation])}
 
     if isinstance(agg_func, ds.count_cat):
         assert not return_single_channel, "Cannot return one channel when using count_cat aggregation"
@@ -594,7 +600,7 @@ def _default_agg_func(data: GeoDataFrame, value_key: str | None, return_single_c
         return ds.sum(VALUES_COLUMN)
 
     if return_single_channel:
-        data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.codes
+        data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.codes + 1
         return ds.first(VALUES_COLUMN)
 
     return ds.count_cat(VALUES_COLUMN)

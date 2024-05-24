@@ -1,11 +1,14 @@
 import numpy as np
 import pytest
+from geopandas import GeoDataFrame
+from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
+
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
-from spatialdata.models import get_axes_names
+from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
-
+from spatialdata.transformations import MapAxis
 from tests.conftest import _get_images, _get_labels
 
 
@@ -72,9 +75,84 @@ def test_rasterize_raster(_get_raster):
                 )
 
 
-@pytest.mark.skip(reason="Not implemented yet")
-def test_rasterize_shapes(shapes):
-    pass
+def test_rasterize_shapes():
+    square_one = box(0, 10, 20, 40)
+    square_two = box(5, 35, 15, 45)
+    square_three = box(0, 0, 2, 2)
+    square_four = box(0, 2, 2, 4)
+
+    gdf = GeoDataFrame(geometry=[square_one, MultiPolygon([square_two, square_three]), square_four])
+    gdf["values"] = [0.1, 0.3, 0]
+    gdf["cat_values"] = ["gene_a", "gene_a", "gene_b"]
+    gdf["cat_values"] = gdf["cat_values"].astype("category")
+    gdf = ShapesModel.parse(gdf, transformations={"global": MapAxis({"y": "x", "x": "y"})})
+
+    res = rasterize(gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1).data.compute()
+
+    assert res[0, 0, 0] == 1
+    assert res[0, 30, 10] == 0
+    assert res[0, 10, 30] == 1
+    assert res[0, 10, 37] == 2
+
+    res = rasterize(
+        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, instance_key_as_default_value_key=True
+    ).data.compute()
+
+    assert res[0, 0, 0] == 2
+    assert res[0, 30, 10] == 0
+    assert res[0, 10, 30] == 1
+    assert res[0, 10, 37] == 2
+
+    res = rasterize(
+        gdf,
+        ["x", "y"],
+        [0, 0],
+        [50, 40],
+        "global",
+        target_unit_to_pixels=1,
+        instance_key_as_default_value_key=True,
+        return_single_channel=False,
+    ).data.compute()
+
+    assert res.shape == (3, 40, 50)
+    assert res.max() == 1
+
+    res = rasterize(
+        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, return_as_labels=True
+    ).data.compute()
+
+    assert res.shape == (40, 50)
+
+    res = rasterize(
+        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, value_key="values"
+    ).data.compute()
+
+    assert res[0, 0, 0] == 0.3
+    assert res[0, 30, 10] == 0
+    assert res[0, 10, 30] == 0.1
+    assert res[0, 10, 37] == 0.4
+
+    res = rasterize(
+        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, value_key="cat_values"
+    ).data.compute()
+
+    assert res[0, 0, 3] == 2
+    assert res[0, 10, 37] == 1
+
+    res = rasterize(
+        gdf,
+        ["x", "y"],
+        [0, 0],
+        [50, 40],
+        "global",
+        target_unit_to_pixels=1,
+        value_key="cat_values",
+        return_single_channel=False,
+    ).data.compute()
+
+    assert res.shape == (2, 40, 50)
+    assert res[0].max() == 2
+    assert res[1].max() == 1
 
 
 @pytest.mark.skip(reason="Not implemented yet")
