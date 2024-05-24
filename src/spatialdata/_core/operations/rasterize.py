@@ -14,7 +14,6 @@ from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
-from spatialdata._core.query.spatial_query import _adjust_bounding_box_to_real_axes, _get_axes_of_tranformation
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
