@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.3] - 2024-xx-xx
 
+### Added
+
+-   Added operation: `to_polygons()` @quentinblampey #560
+
 ### Minor
 
--   Added operation: `to_polygons()`
+-   Removed `pygeos` dependency @omsai #545
+-   Channel coordinate annotations on images now persist through `rasterize()` @clwgg #544
 
 ## [0.1.2] - 2024-03-30
 
