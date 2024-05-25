@@ -496,7 +496,8 @@ def _(
     target_coordinate_system
         The coordinate system the bounding box is defined in.
     return_array
-        If `True`, return the query result as a `numpy.ndarray` and it does not parse it into a SpatialImage.
+        If `True`, return the query result as a `numpy.ndarray` and it does not parse it into a `SpatialImage`
+        or `MultiscaleSpatialImage`.
     """
     from spatialdata.transformations import get_transformation, set_transformation
 
