@@ -64,7 +64,7 @@ def _(
     if model in (Image2DModel, Image3DModel):
         raise RuntimeError("Cannot apply to_circles() to images.")
     if model == Labels3DModel:
-        raise RuntimeError("to_circles() is not yet implemented for 3D labels.")
+        raise RuntimeError("to_circles() is not implemented for 3D labels.")
 
     # reduce to the single scale case
     if isinstance(element, MultiscaleSpatialImage):
@@ -167,7 +167,7 @@ def _(
     if model in (Image2DModel, Image3DModel):
         raise RuntimeError("Cannot apply to_polygons() to images.")
     if model == Labels3DModel:
-        raise RuntimeError("to_polygons() is not yet implemented for 3D labels.")
+        raise RuntimeError("to_polygons() is not implemented for 3D labels.")
 
     # reduce to the single scale case
     if isinstance(element, MultiscaleSpatialImage):

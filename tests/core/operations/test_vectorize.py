@@ -37,13 +37,6 @@ def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
     assert ((new_polygons.area - new_polygons.pixel_count) / new_polygons.pixel_count < 0.01).all()
 
 
-@pytest.mark.skip(reason="Not implemented")
-# @pytest.mark.parametrize("background", [0, 1])
-# @pytest.mark.parametrize("is_multiscale", [False, True])
-def test_labels_3d_to_circles() -> None:
-    pass
-
-
 def test_circles_to_circles() -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
