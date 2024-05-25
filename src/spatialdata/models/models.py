@@ -569,23 +569,23 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         index = annotation.index if annotation is not None else None
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes, index=index), **kwargs)  # type: ignore[attr-defined]
+        df_dict = {ax: data[:, i] for i, ax in enumerate(axes)}
+        df_kwargs = {"data": df_dict, "index": index}
+
         if annotation is not None:
             if feature_key is not None:
-                feature_categ = dd.from_pandas(  # type: ignore[attr-defined]
-                    annotation[feature_key].astype(str).astype("category"), **kwargs
-                )
-                table[feature_key] = feature_categ
+                df_dict[feature_key] = annotation[feature_key].astype(str).astype("category")
             if instance_key is not None:
-                table[instance_key] = annotation[instance_key]
+                df_dict[instance_key] = annotation[instance_key]
             if Z not in axes and Z in annotation.columns:
                 logger.info(f"Column `{Z}` in `annotation` will be ignored since the data is 2D.")
             for c in set(annotation.columns) - {feature_key, instance_key, X, Y, Z}:
-                table[c] = dd.from_pandas(annotation[c], **kwargs)  # type: ignore[attr-defined]
-            return cls._add_metadata_and_validate(
-                table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
-            )
-        return cls._add_metadata_and_validate(table, transformations=transformations)
+                df_dict[c] = annotation[c]
+
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+        )
 
     @parse.register(pd.DataFrame)
     @parse.register(DaskDataFrame)
@@ -661,8 +661,8 @@ class PointsModel:
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
-        # TODO: this is just a temporary workaround to avoid a top-level error when running tests, this should not be
-        # used. Let's use instead what is suggested here:
+        # TODO: this is just a temporary workaround to avoid a top-level error when running tests, the solution should
+        # come upstream with https://github.com/dask/dask/issues/11146
         if not hasattr(data, "attrs"):
             data.attrs = {}
         if feature_key is not None or instance_key is not None:

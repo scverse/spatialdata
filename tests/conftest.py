@@ -405,10 +405,12 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     by_squares.loc[len(by_squares)] = [polygon]
     ShapesModel.validate(by_squares)
 
-    s = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
-    values_points["categorical_in_ddf"] = dd.from_pandas(s, npartitions=1)
-    s = pd.Series(RNG.random(20))
-    values_points["numerical_in_ddf"] = dd.from_pandas(s, npartitions=1)
+    s_cat = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
+    s_num = pd.Series(RNG.random(20))
+    # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
+    values_points = PointsModel.parse(
+        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+    )
 
     sdata = SpatialData(
         points={"points": values_points},

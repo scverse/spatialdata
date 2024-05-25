@@ -1391,8 +1391,8 @@ class SpatialData:
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                 elif attr == "points":
                     length: int | None = None
-                    if len(v.dask.layers) == 1:
-                        name, layer = v.dask.layers.items().__iter__().__next__()
+                    if len(v.dask) == 1:
+                        name, layer = v.dask.items().__iter__().__next__()
                         if "read-parquet" in name:
                             t = layer.creation_info["args"]
                             assert isinstance(t, tuple)

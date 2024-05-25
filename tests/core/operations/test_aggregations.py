@@ -73,6 +73,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
             assert np.all(np.isclose(result_adata.X.A, np.array([[s0], [0], [0], [0], [s4]])))
 
     # id_key can be implicit for points
+    points.attrs[PointsModel.ATTRS_KEY] = {}
     points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
     result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum").tables["table"]
     assert_equal(result_adata, result_adata_implicit)

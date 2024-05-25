@@ -257,7 +257,13 @@ def _(element: DaskDataFrame) -> list[str]:
 
 def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     files = []
-    for k, v in element.dask.layers.items():
+    if isinstance(element, DaskArray):
+        items = element.dask.layers.items()
+    elif isinstance(element, DaskDataFrame):
+        items = element.dask.items()
+    else:
+        raise TypeError(f"Unsupported type: {type(element)}")
+    for k, v in items:
         if k.startswith("original-from-zarr-"):
             mapping = v.mapping[k]
             path = mapping.store.path
