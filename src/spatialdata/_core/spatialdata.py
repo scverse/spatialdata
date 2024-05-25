@@ -24,7 +24,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _error_message_add_element, deprecation_alias
+from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -56,10 +56,20 @@ class SpatialData:
     """
     The SpatialData object.
 
-    The SpatialData object is a modular container for arbitrary combinations of SpatialElements. The elements
-    can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
+    The SpatialData object is a modular container for arbitrary combinations of SpatialElements and annotation tables.
+    The elements can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
     :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
+    The elements need to pass a validation step. To construct valid elements you can use the parsers that we
+    provide:
+
+        - :class:`~spatialdata.Image2DModel`,
+        - :class:`~spatialdata.Image3DModel`,
+        - :class:`~spatialdata.Labels2DModel`,
+        - :class:`~spatialdata.Labels3DModel`,
+        - :class:`~spatialdata.PointsModel`,
+        - :class:`~spatialdata.ShapesModel`,
+        - :class:`~spatialdata.TableModel`
 
     Parameters
     ----------
@@ -96,21 +106,9 @@ class SpatialData:
     The table can annotate regions (shapesor labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
-
-    The elements need to pass a validation step. To construct valid elements you can use the parsers that we
-    provide:
-
-        - :class:`~spatialdata.Image2DModel`,
-        - :class:`~spatialdata.Image3DModel`,
-        - :class:`~spatialdata.Labels2DModel`,
-        - :class:`~spatialdata.Labels3DModel`,
-        - :class:`~spatialdata.PointsModel`,
-        - :class:`~spatialdata.ShapesModel`,
-        - :class:`~spatialdata.TableModel`
-
     """
 
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -686,7 +684,7 @@ class SpatialData:
                         " not found in Zarr storage"
                     )
 
-    @deprecation_alias(filter_table="filter_tables")
+    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
         self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
     ) -> SpatialData:
@@ -1574,7 +1572,7 @@ class SpatialData:
             raise KeyError(f"Could not find element with name {element_name!r}")
 
     @classmethod
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
         cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
     ) -> SpatialData:

@@ -20,10 +20,10 @@ from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _iter_multiscale,
-    get_channels,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import CurrentRasterFormat
+from spatialdata.models._utils import get_channels
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,

@@ -2,6 +2,7 @@
 
 from typing import Any, Literal, Optional, Union
 
+import dask.dataframe.core
 import numpy as np
 import pandas as pd
 import scipy
@@ -356,7 +357,8 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
         instance_id = _get_unique_label_values_as_index(sdata[name]).tolist()
     else:
-        instance_id = sdata[name].index.tolist()
+        index = sdata[name].index
+        instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.core.Index) else index.tolist()
     n = len(instance_id)
     new_table = AnnData(shape=(n, 0), obs={"region": [name for _ in range(n)], "instance_id": instance_id})
     new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
