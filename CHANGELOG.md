@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning][].
 ### Minor
 
 -   Removed `pygeos` dependency @omsai #545
+-   Channel coordinate annotations on images now persist through `rasterize()` @clwgg #544
 
 ## [0.1.2] - 2024-03-30
 
