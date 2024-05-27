@@ -37,6 +37,19 @@ def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
     assert ((new_polygons.area - new_polygons.pixel_count) / new_polygons.pixel_count < 0.01).all()
 
 
+def test_chunked_labels_2d_to_polygons() -> None:
+    no_chunks_polygons = to_polygons(sdata["blobs_labels"])
+
+    sdata["blobs_labels_chunked"] = sdata["blobs_labels"].copy()
+    sdata["blobs_labels_chunked"].data = sdata["blobs_labels_chunked"].data.rechunk((200, 200))
+
+    chunks_polygons = to_polygons(sdata["blobs_labels_chunked"])
+
+    union = chunks_polygons.union(no_chunks_polygons)
+
+    (no_chunks_polygons.area == union.area).all()
+
+
 def test_circles_to_circles() -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)

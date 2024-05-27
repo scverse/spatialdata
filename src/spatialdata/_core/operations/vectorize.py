@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any
 
-import dask.array as da
+import dask
 import numpy as np
 import pandas as pd
 import shapely
@@ -176,20 +175,20 @@ def _(
         element_single_scale = element
 
     gdf_chunks = []
+    chunk_sizes = element_single_scale.data.chunks
 
-    def _vectorize_chunk(
-        chunk: np.ndarray,  # type: ignore[type-arg]
-        block_info: dict[int | None, Any] | None = None,
-    ) -> da.Array:
-        if block_info is not None:
-            (yoff, _), (xoff, _) = block_info[0]["array-location"]
-            gdf = _vectorize_mask(chunk)
-            gdf["chunk-location"] = str(block_info[0]["chunk-location"])
-            gdf.geometry = gdf.translate(xoff, yoff)
-            gdf_chunks.append(gdf)
-        return da.zeros(chunk.shape)
+    def _vectorize_chunk(chunk: np.ndarray, yoff: int, xoff: int) -> None:  # type: ignore[type-arg]
+        gdf = _vectorize_mask(chunk)
+        gdf["chunk-location"] = f"({yoff}, {xoff})"
+        gdf.geometry = gdf.translate(xoff, yoff)
+        gdf_chunks.append(gdf)
 
-    element_single_scale.data.map_blocks(_vectorize_chunk).compute()
+    tasks = [
+        dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[1][:iy]), sum(chunk_sizes[0][:ix]))
+        for iy, row in enumerate(element_single_scale.data.to_delayed())
+        for ix, chunk in enumerate(row)
+    ]
+    dask.compute(tasks)
 
     gdf = pd.concat(gdf_chunks)
     gdf = GeoDataFrame([_dissolve_on_overlaps(*item) for item in gdf.groupby("label")], columns=["label", "geometry"])
