@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 from geopandas import GeoDataFrame
@@ -52,8 +54,6 @@ def test_chunked_labels_2d_to_polygons() -> None:
 
 
 # conversion from circles
-
-
 def test_circles_to_circles() -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
@@ -61,12 +61,13 @@ def test_circles_to_circles() -> None:
 
 
 def test_circles_to_polygons() -> None:
-    pass
+    element = sdata["blobs_circles"]
+    polygons = to_polygons(element, buffer_resolution=1000)
+    areas = element.radius**2 * math.pi
+    assert np.allclose(polygons.area, areas)
 
 
 # conversion from polygons/multipolygons
-
-
 def test_polygons_to_circles() -> None:
     element = sdata["blobs_polygons"].iloc[:2]
     new_circles = to_circles(element)
@@ -93,14 +94,15 @@ def test_multipolygons_to_circles() -> None:
 
 
 def test_polygons_multipolygons_to_polygons() -> None:
-    pass
+    polygons = sdata["blobs_multipolygons"]
+    assert polygons is to_polygons(polygons)
 
 
 # conversion from points
-def test_points_to_circles(points) -> None:
+def test_points_to_circles() -> None:
     element = sdata["blobs_points"]
-    with pytest.raises(ValueError, match="`radius` must either be provided, either be a column"):
-        _ = to_circles(element)
+    with pytest.raises(RuntimeError, match="`radius` must either be provided, either be a column"):
+        to_circles(element)
     circles = to_circles(element, radius=1)
     x = circles.geometry.x
     y = circles.geometry.y
@@ -109,28 +111,30 @@ def test_points_to_circles(points) -> None:
     assert np.array_equal(np.ones_like(x), circles["radius"])
 
 
-def test_points_to_polygons(points) -> None:
-    pass
+def test_points_to_polygons() -> None:
+    with pytest.raises(RuntimeError, match="Cannot convert points to polygons"):
+        to_polygons(sdata["blobs_points"])
 
 
 # conversion from images (invalid)
-
-
 def test_images_to_circles() -> None:
-    with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images."):
+    with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images"):
         to_circles(sdata["blobs_image"])
 
 
-def test_imges_to_polygons() -> None:
-    pass
+def test_images_to_polygons() -> None:
+    with pytest.raises(RuntimeError, match=r"Cannot apply to_polygons\(\) to images"):
+        to_polygons(sdata["blobs_image"])
 
 
 # conversion from other types (invalid)
-def test_invalid_to_circles() -> None:
+def test_invalid_geodataframe_to_circles() -> None:
     gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
-    with pytest.raises(ValueError, match="Unsupported"):
+    with pytest.raises(RuntimeError, match="Unsupported geometry type"):
         to_circles(gdf)
 
 
-def test_invalid_to_polygons() -> None:
-    pass
+def test_invalid_geodataframe_to_polygons() -> None:
+    gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
+    with pytest.raises(RuntimeError, match="Unsupported geometry type"):
+        to_polygons(gdf)

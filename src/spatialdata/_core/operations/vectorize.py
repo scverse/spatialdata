@@ -114,7 +114,7 @@ def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
         return _make_circles(element, obs)
     if isinstance(element.geometry.iloc[0], Point):
         return element
-    raise ValueError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
+    raise RuntimeError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
 
 
 @to_circles.register(DaskDataFrame)
@@ -123,7 +123,9 @@ def _(element: DaskDataFrame, radius: float | ArrayLike | None = None) -> GeoDat
     if ShapesModel.RADIUS_KEY in gdf.columns and radius is None:
         logger.info(f"{ShapesModel.RADIUS_KEY} already found in the object, ignoring the provided {radius} argument.")
     elif radius is None:
-        raise ValueError("When calling `to_circles()` on points, `radius` must either be provided, either be a column.")
+        raise RuntimeError(
+            "When calling `to_circles()` on points, `radius` must either be provided, either be a column."
+        )
     else:
         gdf[ShapesModel.RADIUS_KEY] = radius
     return gdf
@@ -155,9 +157,7 @@ def _make_circles(element: SpatialImage | MultiscaleSpatialImage | GeoDataFrame,
 
 
 @singledispatch
-def to_polygons(
-    data: SpatialElement,
-) -> GeoDataFrame:
+def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> GeoDataFrame:
     """
     Convert a set of geometries (2D labels, 2D shapes) to approximated 2D polygons/multypolygons.
 
@@ -165,6 +165,9 @@ def to_polygons(
     ----------
     data
         The SpatialElement representing the geometries to approximate as 2D polygons/multipolygons.
+    buffer_resolution
+        Used only when constructing polygons from circles. Value of the `resolution` parement for the `buffer()`
+        internal call.
 
     Returns
     -------
@@ -177,7 +180,9 @@ def to_polygons(
 @to_polygons.register(MultiscaleSpatialImage)
 def _(
     element: SpatialImage | MultiscaleSpatialImage,
+    **kwargs: Any,
 ) -> GeoDataFrame:
+    assert len(kwargs) == 0
     model = get_model(element)
     if model in (Image2DModel, Image3DModel):
         raise RuntimeError("Cannot apply to_polygons() to images.")
@@ -252,18 +257,27 @@ def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
 
 
 @to_polygons.register(GeoDataFrame)
-def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
-    assert len(kwargs) == 0
-    if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
-        pass
-    if isinstance(element.geometry.iloc[0], Point):
-        pass
-    raise ValueError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
+def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
+    if isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon)):
+        return gdf
+    if isinstance(gdf.geometry.iloc[0], Point):
+        ShapesModel.validate_shapes_not_mixed_types(gdf)
+        if isinstance(gdf.geometry.iloc[0], Point):
+            buffered_df = gdf.set_geometry(
+                gdf.geometry.buffer(gdf[ShapesModel.RADIUS_KEY], resolution=buffer_resolution)
+            )
+            # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
+            buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = gdf.attrs[ShapesModel.TRANSFORM_KEY]
+            return buffered_df
+        assert isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon))
+        return gdf
+    raise RuntimeError("Unsupported geometry type: " f"{type(gdf.geometry.iloc[0])}")
 
 
 @to_polygons.register(DaskDataFrame)
-def _(element: DaskDataFrame) -> GeoDataFrame:
-    raise TypeError(
+def _(element: DaskDataFrame, **kwargs: Any) -> None:
+    assert len(kwargs) == 0
+    raise RuntimeError(
         "Cannot convert points to polygons. To overcome this you can construct circles from points with `to_circles()` "
         "and then call `to_polygons()`."
     )

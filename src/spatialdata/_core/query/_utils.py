@@ -2,29 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-import geopandas as gpd
 from anndata import AnnData
-from shapely import MultiPolygon, Point, Polygon
 from xarray import DataArray
 
 from spatialdata._core._elements import Tables
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
-
-
-# TODO: move this function into "to_polygons()"
-def circles_to_polygons(df: gpd.GeoDataFrame, buffer_resolution: int = 16) -> gpd.GeoDataFrame:
-    from spatialdata.models import ShapesModel
-
-    ShapesModel.validate_shapes_not_mixed_types(df)
-    if isinstance(df.geometry.iloc[0], Point):
-        buffered_df = df.set_geometry(df.geometry.buffer(df[ShapesModel.RADIUS_KEY], resolution=buffer_resolution))
-        # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
-        buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = df.attrs[ShapesModel.TRANSFORM_KEY]
-        return buffered_df
-    assert isinstance(df.geometry.iloc[0], (Polygon, MultiPolygon))
-    return df
 
 
 def get_bounding_box_corners(
