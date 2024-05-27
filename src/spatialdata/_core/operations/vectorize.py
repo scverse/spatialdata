@@ -205,6 +205,7 @@ def _region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
     mask = np.pad(region_props.image, 1)
     contours = skimage.measure.find_contours(mask, 0.5)
 
+    # shapes with <= 3 vertices, i.e. lines, can't be converted into a polygon
     polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
 
     yoff, xoff, *_ = region_props.bbox
