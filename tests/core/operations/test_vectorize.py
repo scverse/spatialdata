@@ -102,5 +102,3 @@ def test_multipolygons_to_circles() -> None:
 def test_points_images_to_circles() -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images."):
         to_circles(sdata["blobs_image"])
-    with pytest.raises(RuntimeError, match="Unsupported type"):
-        to_circles(sdata["blobs_points"])

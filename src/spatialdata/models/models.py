@@ -352,6 +352,36 @@ class ShapesModel:
                     stacklevel=2,
                 )
 
+    @classmethod
+    def validate_shapes_not_mixed_types(cls, gdf: GeoDataFrame) -> None:
+        """
+        Check that the Shapes element is either composed of Point or Polygon/MultiPolygon.
+
+        Parameters
+        ----------
+        gdf
+            The Shapes element.
+
+        Raises
+        ------
+        ValueError
+            When the geometry column composing the object does not satisfy the type requirements.
+
+        Notes
+        -----
+        This function is not called by ShapesModel.validate() because computing the unique types by default could be
+        expensive.
+        """
+        values_geotypes = list(gdf.geom_type.unique())
+        if values_geotypes == ["Point"]:
+            return
+        if set(values_geotypes).issubset(["Polygon", "MultiPolygon"]):
+            return
+        raise ValueError(
+            "The geometry column of a Shapes element should either be composed of Point, either of "
+            f"Polygon/MultyPolygon. Found: {values_geotypes}"
+        )
+
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
