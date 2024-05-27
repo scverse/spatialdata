@@ -11,6 +11,7 @@ from spatialdata.testing import assert_elements_are_identical
 sdata = blobs()
 
 
+# conversion from labels
 @pytest.mark.parametrize("is_multiscale", [False, True])
 def test_labels_2d_to_circles(is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
@@ -50,28 +51,20 @@ def test_chunked_labels_2d_to_polygons() -> None:
     (no_chunks_polygons.area == union.area).all()
 
 
+# conversion from circles
+
+
 def test_circles_to_circles() -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
     assert_elements_are_identical(element, new_circles)
 
 
-def test_points_to_circles(points) -> None:
-    element = sdata["blobs_points"]
-    with pytest.raises(ValueError, match="`radius` must either be provided, either be a column"):
-        _ = to_circles(element)
-    circles = to_circles(element, radius=1)
-    x = circles.geometry.x
-    y = circles.geometry.y
-    assert np.array_equal(element["x"], x)
-    assert np.array_equal(element["y"], y)
-    assert np.array_equal(np.ones_like(x), circles["radius"])
+def test_circles_to_polygons() -> None:
+    pass
 
 
-def test_invalid_to_circles() -> None:
-    gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
-    with pytest.raises(ValueError, match="Unsupported"):
-        to_circles(gdf)
+# conversion from polygons/multipolygons
 
 
 def test_polygons_to_circles() -> None:
@@ -99,6 +92,45 @@ def test_multipolygons_to_circles() -> None:
     assert_elements_are_identical(new_circles, expected)
 
 
-def test_points_images_to_circles() -> None:
+def test_polygons_multipolygons_to_polygons() -> None:
+    pass
+
+
+# conversion from points
+def test_points_to_circles(points) -> None:
+    element = sdata["blobs_points"]
+    with pytest.raises(ValueError, match="`radius` must either be provided, either be a column"):
+        _ = to_circles(element)
+    circles = to_circles(element, radius=1)
+    x = circles.geometry.x
+    y = circles.geometry.y
+    assert np.array_equal(element["x"], x)
+    assert np.array_equal(element["y"], y)
+    assert np.array_equal(np.ones_like(x), circles["radius"])
+
+
+def test_points_to_polygons(points) -> None:
+    pass
+
+
+# conversion from images (invalid)
+
+
+def test_images_to_circles() -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images."):
         to_circles(sdata["blobs_image"])
+
+
+def test_imges_to_polygons() -> None:
+    pass
+
+
+# conversion from other types (invalid)
+def test_invalid_to_circles() -> None:
+    gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
+    with pytest.raises(ValueError, match="Unsupported"):
+        to_circles(gdf)
+
+
+def test_invalid_to_polygons() -> None:
+    pass

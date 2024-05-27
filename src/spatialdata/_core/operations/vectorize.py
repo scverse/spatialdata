@@ -154,8 +154,6 @@ def _make_circles(element: SpatialImage | MultiscaleSpatialImage | GeoDataFrame,
     )
 
 
-# TODO: depending of the implementation, add a parameter to control the degree of approximation of the constructed
-# polygons/multipolygons
 @singledispatch
 def to_polygons(
     data: SpatialElement,
@@ -251,3 +249,21 @@ def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
     if len(np.unique(group["chunk-location"])) == 1:
         return (label, MultiPolygon(list(group.geometry)))
     return (label, group.dissolve().geometry.iloc[0])
+
+
+@to_polygons.register(GeoDataFrame)
+def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
+    assert len(kwargs) == 0
+    if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
+        pass
+    if isinstance(element.geometry.iloc[0], Point):
+        pass
+    raise ValueError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
+
+
+@to_polygons.register(DaskDataFrame)
+def _(element: DaskDataFrame) -> GeoDataFrame:
+    raise TypeError(
+        "Cannot convert points to polygons. To overcome this you can construct circles from points with `to_circles()` "
+        "and then call `to_polygons()`."
+    )
