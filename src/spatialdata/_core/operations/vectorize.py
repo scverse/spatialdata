@@ -184,7 +184,7 @@ def _(
         gdf_chunks.append(gdf)
 
     tasks = [
-        dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[1][:iy]), sum(chunk_sizes[0][:ix]))
+        dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[0][:iy]), sum(chunk_sizes[1][:ix]))
         for iy, row in enumerate(element_single_scale.data.to_delayed())
         for ix, chunk in enumerate(row)
     ]
