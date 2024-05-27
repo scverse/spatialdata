@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.3] - 2024-xx-xx
 
+### Added
+
+-   Added operation: `to_polygons()` @quentinblampey #560
+
 ### Minor
 
 -   Removed `pygeos` dependency @omsai #545

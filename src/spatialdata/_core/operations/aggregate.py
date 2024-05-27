@@ -18,7 +18,6 @@ from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations.transform import transform
-from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -367,6 +366,7 @@ def _aggregate_shapes(
     table_name
         Name of the table optionally containing the value_key column.
     """
+    from spatialdata._core.operations.vectorize import to_polygons
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
@@ -383,10 +383,10 @@ def _aggregate_shapes(
     if isinstance(values, DaskDataFrame):
         values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
     elif isinstance(values, GeoDataFrame):
-        values = circles_to_polygons(values, buffer_resolution=buffer_resolution)
+        values = to_polygons(values, buffer_resolution=buffer_resolution)
     else:
         raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
-    by = circles_to_polygons(by, buffer_resolution=buffer_resolution)
+    by = to_polygons(by, buffer_resolution=buffer_resolution)
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 
