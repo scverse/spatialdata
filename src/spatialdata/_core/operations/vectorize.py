@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import Any
 
 import dask
 import numpy as np
 import pandas as pd
 import shapely
 import skimage.measure
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
@@ -15,6 +17,8 @@ from spatial_image import SpatialImage
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._logging import logger
+from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -24,6 +28,7 @@ from spatialdata.models import (
     get_axes_names,
     get_model,
 )
+from spatialdata.models._utils import points_dask_dataframe_to_geopandas
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import Identity
 
@@ -33,6 +38,7 @@ INTRINSIC_COORDINATE_SYSTEM = "__intrinsic"
 @singledispatch
 def to_circles(
     data: SpatialElement,
+    radius: float | ArrayLike | None = None,
 ) -> GeoDataFrame:
     """
     Convert a set of geometries (2D/3D labels, 2D shapes) to approximated circles/spheres.
@@ -41,6 +47,9 @@ def to_circles(
     ----------
     data
         The SpatialElement representing the geometries to approximate as circles/spheres.
+    radius
+        Radius/radii for the circles. For points elements, radius can either be specified as an argument, or be a column
+         of the dataframe. For non-points elements, radius must be `None`.
 
     Returns
     -------
@@ -56,14 +65,13 @@ def to_circles(
 
 @to_circles.register(SpatialImage)
 @to_circles.register(MultiscaleSpatialImage)
-def _(
-    element: SpatialImage | MultiscaleSpatialImage,
-) -> GeoDataFrame:
+def _(element: SpatialImage | MultiscaleSpatialImage, **kwargs: Any) -> GeoDataFrame:
+    assert len(kwargs) == 0
     model = get_model(element)
     if model in (Image2DModel, Image3DModel):
         raise RuntimeError("Cannot apply to_circles() to images.")
     if model == Labels3DModel:
-        raise RuntimeError("to_circles() is not implemented for 3D labels.")
+        raise RuntimeError("to_circles() is not supported for 3D labels.")
 
     # reduce to the single scale case
     if isinstance(element, MultiscaleSpatialImage):
@@ -96,19 +104,29 @@ def _(
 
 
 @to_circles.register(GeoDataFrame)
-def _(
-    element: GeoDataFrame,
-) -> GeoDataFrame:
+def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
+    assert len(kwargs) == 0
     if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
         radius = np.sqrt(element.geometry.area / np.pi)
         centroids = _get_centroids(element)
         obs = pd.DataFrame({"radius": radius})
         obs = pd.merge(obs, centroids, left_index=True, right_index=True, how="inner")
         return _make_circles(element, obs)
-    assert isinstance(element.geometry.iloc[0], Point), (
-        f"Unsupported geometry type: " f"{type(element.geometry.iloc[0])}"
-    )
-    return element
+    if isinstance(element.geometry.iloc[0], Point):
+        return element
+    raise ValueError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
+
+
+@to_circles.register(DaskDataFrame)
+def _(element: DaskDataFrame, radius: float | ArrayLike | None = None) -> GeoDataFrame:
+    gdf = points_dask_dataframe_to_geopandas(element)
+    if ShapesModel.RADIUS_KEY in gdf.columns and radius is None:
+        logger.info(f"{ShapesModel.RADIUS_KEY} already found in the object, ignoring the provided {radius} argument.")
+    elif radius is None:
+        raise ValueError("When calling `to_circles()` on points, `radius` must either be provided, either be a column.")
+    else:
+        gdf[ShapesModel.RADIUS_KEY] = radius
+    return gdf
 
 
 def _get_centroids(element: SpatialElement) -> pd.DataFrame:
@@ -166,7 +184,7 @@ def _(
     if model in (Image2DModel, Image3DModel):
         raise RuntimeError("Cannot apply to_polygons() to images.")
     if model == Labels3DModel:
-        raise RuntimeError("to_polygons() is not implemented for 3D labels.")
+        raise RuntimeError("to_polygons() is not supported for 3D labels.")
 
     # reduce to the single scale case
     if isinstance(element, MultiscaleSpatialImage):

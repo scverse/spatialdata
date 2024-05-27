@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from geopandas import GeoDataFrame
-from shapely import Point
+from shapely import MultiPoint, Point
 from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
@@ -54,6 +54,24 @@ def test_circles_to_circles() -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
     assert_elements_are_identical(element, new_circles)
+
+
+def test_points_to_circles(points) -> None:
+    element = sdata["blobs_points"]
+    with pytest.raises(ValueError, match="`radius` must either be provided, either be a column"):
+        _ = to_circles(element)
+    circles = to_circles(element, radius=1)
+    x = circles.geometry.x
+    y = circles.geometry.y
+    assert np.array_equal(element["x"], x)
+    assert np.array_equal(element["y"], y)
+    assert np.array_equal(np.ones_like(x), circles["radius"])
+
+
+def test_invalid_to_circles() -> None:
+    gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
+    with pytest.raises(ValueError, match="Unsupported"):
+        to_circles(gdf)
 
 
 def test_polygons_to_circles() -> None:
