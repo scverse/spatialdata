@@ -36,6 +36,7 @@ Operations on `SpatialData` objects.
     transform
     rasterize
     to_circles
+    to_polygons
     aggregate
 ```
 

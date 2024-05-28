@@ -248,6 +248,8 @@ def _get_masked_element(
     if match_rows == "right":
         mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
+    if isinstance(element, DaskDataFrame):
+        return element.map_partitions(lambda df: df.loc[mask_values], meta=element)
     return element.loc[mask_values, :]
 
 

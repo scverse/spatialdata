@@ -23,6 +23,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import CurrentRasterFormat
+from spatialdata.models._utils import get_channels
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
@@ -58,7 +59,8 @@ def _read_multiscale(
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
-    channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)
+    omero_metadata = node.load(Multiscales).zarr.root_attrs.get("omero", None)
+    legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
     # something that doesn't have coordinateTransformations in top level
@@ -70,8 +72,11 @@ def _read_multiscale(
     # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     channels: Optional[list[Any]] = None
-    if raster_type == "image" and channels_metadata is not None:
-        channels = fmt.channels_from_metadata(channels_metadata)
+    if raster_type == "image":
+        if legacy_channels_metadata is not None:
+            channels = [d["label"] for d in legacy_channels_metadata["channels"]]
+        if omero_metadata is not None:
+            channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -105,7 +110,6 @@ def _write_raster(
     fmt: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
-    channels_metadata: Optional[JSONDict] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
     assert raster_type in ["image", "labels"]
@@ -130,9 +134,12 @@ def _write_raster(
             return group.require_group(name)
         return group["labels"][name]
 
-    # convert channel names to channel metadata
+    # convert channel names to channel metadata in omero
     if raster_type == "image":
-        group_data.attrs["channels_metadata"] = fmt.channels_to_metadata(raster_data, channels_metadata)
+        metadata["metadata"] = {"omero": {"channels": []}}
+        channels = get_channels(raster_data)
+        for c in channels:
+            metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
     if isinstance(raster_data, SpatialImage):
         data = raster_data.data
