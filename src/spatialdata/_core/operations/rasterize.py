@@ -541,6 +541,9 @@ def _(
         target_depth=target_depth,
     )
 
+    GEOMETRY_COLUMNS = ["x", "y"] if isinstance(data, DaskDataFrame) else ["geometry"]
+    data = data[GEOMETRY_COLUMNS + [value_key] if value_key in data else GEOMETRY_COLUMNS]
+
     plot_width, plot_height = int(target_width), int(target_height)
     y_range = [min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]]
     x_range = [min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]]
@@ -550,10 +553,6 @@ def _(
         data = transform(data, to_coordinate_system=target_coordinate_system)
 
     table_name = table_name if table_name is not None else "table"
-
-    assert (
-        VALUES_COLUMN not in data.columns
-    ), f"Column name {VALUES_COLUMN} is reserved for internal use. Please rename your column."
 
     if value_key is not None:
         data[VALUES_COLUMN] = get_values(value_key, element=data, sdata=values_sdata, table_name=table_name).iloc[:, 0]
@@ -587,9 +586,6 @@ def _(
 
     if label_index_to_category is not None and isinstance(agg_func, ds.first):
         agg.attrs["label_index_to_category"] = label_index_to_category
-
-    if VALUES_COLUMN in data and isinstance(data, GeoDataFrame):
-        data.drop(columns=[VALUES_COLUMN], inplace=True)
 
     scale = Scale([(y_range[1] - y_range[0]) / plot_height, (x_range[1] - x_range[0]) / plot_width], axes=("y", "x"))
     translation = Translation([y_range[0], x_range[0]], axes=("y", "x"))
