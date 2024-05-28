@@ -81,6 +81,10 @@ class ImageTilesDataset(Dataset):
         system; this back-transforms the target tile into the pixel coordinates. If the back-transformed tile is not
         aligned with the pixel grid, the returned tile will correspond to the bounding box of the back-transformed tile
         (so that the returned tile is axis-aligned to the pixel grid).
+    return_genes:
+        If not `None`, return the gene expression values from the table. The dictionary should have the following
+        structure: `{"layer_name": None}` or `{"layer": ["gene_name1", "gene_name2"]}`.
+        If the value is `None`, all the genes are returned.
     return_annotations
         If not `None`, one or more values from the table are returned together with the image tile in a tuple.
         Only columns in :attr:`anndata.AnnData.obs` and :attr:`anndata.AnnData.X` can be returned.
@@ -122,6 +126,7 @@ class ImageTilesDataset(Dataset):
         tile_scale: float = 1.0,
         tile_dim_in_units: float | None = None,
         rasterize: bool = False,
+        return_genes: Mapping[str, list[str] | None] | None = None,
         return_annotations: str | list[str] | None = None,
         table_name: str | None = None,
         transform: Callable[[Any], Any] | None = None,
@@ -158,13 +163,14 @@ class ImageTilesDataset(Dataset):
         sdata: SpatialData,
         regions_to_images: dict[str, str],
         regions_to_coordinate_systems: dict[str, str],
+        return_genes: Mapping[str, list[str] | None] | None,
         return_annotations: str | list[str] | None,
         table_name: str | None,
     ) -> None:
         """Validate input parameters."""
         self.sdata = sdata
-        if return_annotations is not None and table_name is None:
-            raise ValueError("`table_name` must be provided if `return_annotations` is not `None`.")
+        if (return_annotations is not None) or (return_genes is None) and table_name is None:
+            raise ValueError("`table_name` must be provided if `return_annotations` or `return_genes` is not `None`.")
 
         # check that the regions specified in the two dicts are the same
         assert set(regions_to_images.keys()) == set(
@@ -264,6 +270,7 @@ class ImageTilesDataset(Dataset):
 
             if table_name is not None:
                 table_subset = filtered_table[filtered_table.obs[region_key] == region_name]
+                table_subset.uns["spatialdata_attrs"]["region"] = region_name
                 circles_sdata = SpatialData.init_from_elements({region_name: circles}, tables=table_subset.copy())
                 _, table = join_spatialelement_table(
                     sdata=circles_sdata,
@@ -302,6 +309,7 @@ class ImageTilesDataset(Dataset):
         dataset_table: AnnData,
         dataset_index: pd.DataFrame,
         table_name: str | None,
+        return_genes: Mapping[str, list[str] | None],
         return_annot: str | list[str] | None,
         return_array: bool = False,
     ) -> tuple[Any, Any] | SpatialData:
@@ -312,7 +320,7 @@ class ImageTilesDataset(Dataset):
             # where return_table can be a single column or a list of columns
             return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
             # return tuple of (tile, table)
-            if np.all([i in dataset_table.obs for i in return_annot]):
+            if np.all(dataset_table.obs.columns.isin(return_annot)):
                 return tile, dataset_table.obs[return_annot].iloc[idx].values.reshape(1, -1)
             if np.all([i in dataset_table.var_names for i in return_annot]):
                 if issparse(dataset_table.X):
@@ -335,6 +343,43 @@ class ImageTilesDataset(Dataset):
                 table=table_row,
             )
         return SpatialData(images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile})
+
+    @staticmethod
+    def _return_annotations(
+        idx: int,
+        dataset_table: AnnData,
+        dataset_index: pd.DataFrame,
+        table_name: str | None,
+        return_annot: str | list[str],
+    ) -> pd.DataFrame:
+        # table is always returned as array shape (1, len(return_annot))
+        # where return_table can be a single column or a list of columns
+        return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
+        # return tuple of (tile, table)
+        if np.all(dataset_table.obs.columns.isin(return_annot)):
+            return dataset_table.obs[return_annot].iloc[idx].values.reshape(1, -1)
+        else:
+            raise KeyError("Missing some valid annotations in the table.")
+
+    @staticmethod
+    def _return_genes(
+        idx: int,
+        dataset_table: AnnData,
+        dataset_index: pd.DataFrame,
+        table_name: str | None,
+        return_genes: Mapping[str, list[str] | None],
+    ) -> pd.DataFrame:
+        k, v = next(iter(return_genes.items()))
+        layer = dataset_table.X if k == "X" else dataset_table.layers[k].X
+        if v is None:
+            if issparse(layer):
+                return layer[idx].X.A
+            return layer[idx].X
+        if isinstance(v, list) and np.all(dataset_table.var_names.isin(v)):
+            if issparse(layer):
+                return layer[idx, v].X.A
+            return layer[idx, v].X
+        raise KeyError("Missing some valid genes in the table.")
 
     def _get_return(
         self,
