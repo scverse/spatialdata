@@ -561,6 +561,10 @@ def _(
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
 
+    label_index_to_category = None
+    if VALUES_COLUMN in data and data[VALUES_COLUMN].dtype == "category":
+        label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
+
     if agg_func is None:
         agg_func = _default_agg_func(data, value_key, return_single_channel)
     elif isinstance(agg_func, str):
@@ -580,6 +584,9 @@ def _(
         agg = cnv.polygons(data, "geometry", agg=agg_func)
     else:
         agg = cnv.points(data, x="x", y="y", agg=agg_func)
+
+    if label_index_to_category is not None and isinstance(agg_func, ds.first):
+        agg.attrs["label_index_to_category"] = label_index_to_category
 
     if VALUES_COLUMN in data and isinstance(data, GeoDataFrame):
         data.drop(columns=[VALUES_COLUMN], inplace=True)
