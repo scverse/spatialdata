@@ -90,8 +90,9 @@ def aggregate(
         The key can be:
 
              - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
-             - the name of obs column(s) in the associated `AnnData` table (for shapes and labels);
-             - the name of a var(s), referring to the column(s) of the X matrix in the table (for shapes and labels).
+             - the name of obs column(s) in the associated `AnnData` table (for points, shapes and labels);
+             - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes and
+               labels).
 
         If nothing is passed here, it defaults to the equivalent of a column of ones.
         Defaults to `FEATURE_KEY` for points (if present).
@@ -127,7 +128,7 @@ def aggregate(
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     table_name
-        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
+        The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
     buffer_resolution
         Resolution parameter to pass to the of the .buffer() method to convert circles to polygons. A higher value
         results in a more accurate representation of the circle, but also in a more complex polygon and computation.

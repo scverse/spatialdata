@@ -151,13 +151,13 @@ def _compute_target_dimensions(
 
 @singledispatch
 def rasterize(
-    data: SpatialData | SpatialElement,
+    values: SpatialData | SpatialElement,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    value_key: str | None = None,
     values_sdata: SpatialData | None = None,
+    value_key: str | None = None,
     agg_func: str | ds.reductions.Reduction | None = None,
     instance_key_as_default_value_key: bool = False,
     return_single_channel: bool = True,
@@ -169,14 +169,15 @@ def rasterize(
     target_depth: float | None = None,
 ) -> SpatialData | SpatialImage:
     """
-    Rasterize a SpatialData object or a SpatialElement (image, labels, points, shapes).
+    Rasterize a `SpatialData` object or a `SpatialElement` (image, labels, points, shapes).
 
     Parameters
     ----------
-    data
-        The SpatialData object or SpatialElement to rasterize.
+    values
+        The `SpatialData` object or `SpatialElement` to rasterize. In alternative, the name of the `SpatialElement` in
+        the `SpatialData` object, when the `SpatialData` object is passed to `values_sdata`.
     axes
-        The axes that min_coordinate and max_coordinate refer to.
+        The axes that `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
         The minimum coordinates of the bounding box.
     max_coordinate
@@ -184,6 +185,8 @@ def rasterize(
     target_coordinate_system
         The coordinate system in which we define the bounding box. This will also be the coordinate system of the
         produced rasterized image.
+    values_sdata
+        `SpatialData` object containing the values to aggregate if `value_key` refers to values from a table.
     value_key
         Name of the column containing the values to aggregate; can refer both to numerical or
         categorical values.
@@ -191,42 +194,45 @@ def rasterize(
         The key can be:
 
              - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
-             - the name of obs column(s) in the associated `AnnData` table (for shapes and labels);
-             - the name of a var(s), referring to the column(s) of the X matrix in the table (for shapes and labels).
+             - the name of obs column(s) in the associated `AnnData` table (for points, shapes and labels);
+             - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes and
+               labels).
 
-        If nothing is passed here, it defaults to the equivalent of a column of ones.
-    values_sdata
-        SpatialData object containing the values to aggregate if `value_key` refers to values from a table
+        See the notes for more details on the default behavior.
     agg_func
-        A reduction function from datashader (its name, or a Callable)
+        Available only when rasterizing points and shapes. A reduction function from datashader (its name, or a
+        `Callable`). See the notes for more details on the default behavior. For labels, the behavior is equivalent to
+        `agg_func="first"`.
     instance_key_as_default_value_key
-        If `True`, the geometry indices are used as a `value_key`
+        If `True`, the geometry indices are used as a `value_key` and treated as a categorical column. By default, this
+        is `True`.
     return_single_channel
-        If `False`, each category will be count in a separate channel
+        Only used when `value_key` refers to a categorical column (so also when `instance_key_as_default_value_key` is
+        `True`). If `False`, each category will be rasterized in a separate channel.
     table_name
-        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
+        The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
     return_as_labels
         If `True`, returns labels of shape `(y, x)` instead of an image of shape `(c, y, x)`
     target_unit_to_pixels
         The number of pixels per unit that the target image should have. It is mandatory to specify precisely one of
-        the following options: target_unit_to_pixels, target_width, target_height, target_depth.
+        the following options: `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
     target_width
         The width of the target image in units. It is mandatory to specify precisely one of the following options:
-        target_unit_to_pixels, target_width, target_height, target_depth.
+        `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
     target_height
         The height of the target image in units. It is mandatory to specify precisely one of the following options:
-        target_unit_to_pixels, target_width, target_height, target_depth.
+        `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
     target_depth
         The depth of the target image in units. It is mandatory to specify precisely one of the following options:
-        target_unit_to_pixels, target_width, target_height, target_depth.
+        `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
 
     Returns
     -------
-    The rasterized SpatialData object or SpatialImage. Each SpatialElement will be rasterized into a
-    SpatialImage. So if a SpatialData object with elements is passed, a SpatialData object with images will be
-    returned.
+    The rasterized `SpatialData` object or `SpatialImage`. Each `SpatialElement` will be rasterized into a
+    `SpatialImage` (not a `MultiscaleSpatialImage`). So if a `SpatialData` object with elements is passed, a
+    `SpatialData` object with single-scale images and labels will be returned.
     """
-    raise RuntimeError("Unsupported type: {type(data)}")
+    raise RuntimeError(f"Unsupported type: {type(values)}")
 
 
 @rasterize.register(SpatialData)
@@ -245,6 +251,7 @@ def _(
     max_coordinate = _parse_list_into_array(max_coordinate)
 
     new_images = {}
+    new_labels = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         if element_type in ["points", "shapes"]:
             warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
@@ -263,10 +270,14 @@ def _(
                 target_depth=target_depth,
             )
             new_name = f"{name}_rasterized_{element_type}"
-            new_images[new_name] = rasterized
-    return SpatialData(images=new_images, tables=sdata.tables)
-
-    # get xdata
+            model = get_model(rasterized)
+            if model in (Image2DModel, Image3DModel):
+                new_images[new_name] = rasterized
+            elif model in (Labels2DModel, Labels3DModel):
+                new_labels[new_name] = rasterized
+            else:
+                raise RuntimeError(f"Unsupported model {model} detected as return type of rasterize()")
+    return SpatialData(images=new_images, labels=new_labels)
 
 
 def _get_xarray_data_to_rasterize(
@@ -293,9 +304,6 @@ def _get_xarray_data_to_rasterize(
         The maximum coordinates of the bounding box for the data to be rasterized.
     target_sizes
         A dictionary containing the target size (in pixels) of each axis after rasterization.
-    corrected_affine
-        The affine matrix that maps the intrinsic coordinates of the data to the axes of the target coordinate
-        system, excluding the eventual channel axis (c).
 
     Returns
     -------
@@ -397,6 +405,8 @@ def _get_corrected_affine_matrix(
     return corrected_affine, target_axes
 
 
+# TODO: rename this function to an internatl function and invoke this function from a function that has arguments
+#  values, values_sdata
 @rasterize.register(SpatialImage)
 @rasterize.register(MultiscaleSpatialImage)
 def _(
@@ -509,6 +519,7 @@ def _(
     return transformed_data
 
 
+# TODO: same here as above
 @rasterize.register(DaskDataFrame)
 @rasterize.register(GeoDataFrame)
 def _(

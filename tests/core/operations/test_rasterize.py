@@ -58,7 +58,7 @@ def test_rasterize_raster(_get_raster):
             # 0.1: the z dim of the data is 2, the z dim of the target image is 20, because target_unit_to_pixels
             # is 2 and the bounding box is a square with size 10 x 10
             # 0.2: the z dim of the data is 2, the z dim of the target image is 10, because target_width is 10 and
-            # the boundigbox is a square
+            # the bounding box is a square
             target_ratio = (0.1 if "target_unit_to_pixels" in kwargs else 0.2) if "z" in dims else 1
 
             # image case (not labels)
@@ -92,10 +92,10 @@ def test_rasterize_shapes():
 
     res = rasterize(gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1).data.compute()
 
-    assert res[0, 0, 0] == 1
-    assert res[0, 30, 10] == 0
-    assert res[0, 10, 30] == 1
-    assert res[0, 10, 37] == 2
+    assert res[0, 0, 0] == 1  # in box_three
+    assert res[0, 30, 10] == 0  # in no box
+    assert res[0, 10, 30] == 1  # in box_one
+    assert res[0, 10, 37] == 2  # in box_one and box_two
 
     res = rasterize(
         gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, instance_key_as_default_value_key=True
