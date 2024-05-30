@@ -1,11 +1,13 @@
+import dask.dataframe as dd
 import numpy as np
+import pandas as pd
 import pytest
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
-from spatialdata.models import ShapesModel, get_axes_names
+from spatialdata.models import PointsModel, ShapesModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
 
@@ -158,9 +160,111 @@ def test_rasterize_shapes():
     assert res[1].max() == 1
 
 
-@pytest.mark.skip(reason="Not implemented yet")
-def test_rasterize_points(points):
-    pass
+def test_rasterize_points():
+    data = {
+        "x": [0, 1, 0, 1, 2, 3, 3, 5.1],
+        "y": [0, 0, 1, 1, 1, 1, 1, 5.1],
+        "gene": ["A", "A", "B", "B", "C", "C", "C", "D"],
+        "value": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.6, 0.8],
+    }
+    df = pd.DataFrame(data)
+    df["gene"] = df["gene"].astype("category")
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = PointsModel.parse(ddf)
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+    ).data.compute()
+
+    assert res.max() == 2
+    assert res[0, 1, 3] == 2
+    assert res[0, -1, -1] == 0
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=0.5,
+    ).data.compute()
+
+    assert res[0, 0, 0] == 5
+    assert res[0, 0, 1] == 2
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        instance_key_as_default_value_key=True,
+    ).data.compute()
+
+    assert res.max() == 6
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        return_single_channel=False,
+        instance_key_as_default_value_key=True,
+    ).data.compute()
+
+    assert res.shape == (len(ddf), 5, 5)
+    assert res.max() == 1
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        return_single_channel=False,
+        value_key="gene",
+    ).data.compute()
+
+    assert res[0].max() == 1
+    assert res[1].max() == 1
+    assert res[2].max() == 2
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        value_key="gene",
+    ).data.compute()
+
+    assert res[0, 0, 0] == 1
+    assert res[0, 1, 0] == 2
+    assert res[0, 1, 2] == 3
+
+    res = rasterize(
+        ddf,
+        ["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        value_key="value",
+    ).data.compute()
+
+    assert res[0, 0, 1] == 0.2
+    assert res[0, 1, 3] == 1.2
 
 
 @pytest.mark.skip(reason="Not implemented yet")
