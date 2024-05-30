@@ -203,9 +203,6 @@ def rasterize(
         Available only when rasterizing points and shapes. A reduction function from datashader (its name, or a
         `Callable`). See the notes for more details on the default behavior. For labels, the behavior is equivalent to
         `agg_func="first"`.
-    instance_key_as_default_value_key
-        If `True`, the geometry indices are used as a `value_key` and treated as a categorical column. By default, this
-        is `True`.
     return_single_channel
         Only used when `value_key` refers to a categorical column (so also when `instance_key_as_default_value_key` is
         `True`). If `False`, each category will be rasterized in a separate channel.
