@@ -573,6 +573,8 @@ def _(
 
     label_index_to_category = None
     if VALUES_COLUMN in data and data[VALUES_COLUMN].dtype == "category":
+        if isinstance(data, DaskDataFrame):
+            data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
         label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
 
     if agg_func is None:
