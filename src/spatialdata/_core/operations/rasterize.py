@@ -159,7 +159,6 @@ def rasterize(
     values_sdata: SpatialData | None = None,
     value_key: str | None = None,
     agg_func: str | ds.reductions.Reduction | None = None,
-    instance_key_as_default_value_key: bool = False,
     return_single_channel: bool = True,
     table_name: str | None = None,
     return_as_labels: bool = False,
@@ -204,8 +203,8 @@ def rasterize(
         `Callable`). See the notes for more details on the default behavior. For labels, the behavior is equivalent to
         `agg_func="first"`.
     return_single_channel
-        Only used when `value_key` refers to a categorical column (so also when `instance_key_as_default_value_key` is
-        `True`). If `False`, each category will be rasterized in a separate channel.
+        Only used when `value_key` refers to a categorical column, or if shapes are being rasterized and
+        `value_key is None`. If `False`, each category will be rasterized in a separate channel.
     table_name
         The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
     return_as_labels
@@ -528,7 +527,6 @@ def _(
     value_key: str | None = None,
     values_sdata: SpatialData | None = None,
     agg_func: str | ds.reductions.Reduction | None = None,
-    instance_key_as_default_value_key: bool = False,
     return_single_channel: bool = True,
     table_name: str | None = None,
     return_as_labels: bool = False,
@@ -564,9 +562,12 @@ def _(
 
     if value_key is not None:
         data[VALUES_COLUMN] = get_values(value_key, element=data, sdata=values_sdata, table_name=table_name).iloc[:, 0]
-    elif instance_key_as_default_value_key:
+    elif isinstance(data, GeoDataFrame):
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
+    else:
+        value_key = VALUES_COLUMN
+        data[VALUES_COLUMN] = 1
 
     label_index_to_category = None
     if VALUES_COLUMN in data and data[VALUES_COLUMN].dtype == "category":

@@ -94,15 +94,6 @@ def test_rasterize_shapes():
 
     res = rasterize(gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1).data.compute()
 
-    assert res[0, 0, 0] == 1  # in box_three
-    assert res[0, 30, 10] == 0  # in no box
-    assert res[0, 10, 30] == 1  # in box_one
-    assert res[0, 10, 37] == 2  # in box_one and box_two
-
-    res = rasterize(
-        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, instance_key_as_default_value_key=True
-    ).data.compute()
-
     assert res[0, 0, 0] == 2
     assert res[0, 30, 10] == 0
     assert res[0, 10, 30] == 1
@@ -115,7 +106,6 @@ def test_rasterize_shapes():
         [50, 40],
         "global",
         target_unit_to_pixels=1,
-        instance_key_as_default_value_key=True,
         return_single_channel=False,
     ).data.compute()
 
@@ -197,32 +187,6 @@ def test_rasterize_points():
 
     assert res[0, 0, 0] == 5
     assert res[0, 0, 1] == 2
-
-    res = rasterize(
-        ddf,
-        ["x", "y"],
-        min_coordinate=[0, 0],
-        max_coordinate=[5, 5],
-        target_coordinate_system="global",
-        target_unit_to_pixels=1.0,
-        instance_key_as_default_value_key=True,
-    ).data.compute()
-
-    assert res.max() == 6
-
-    res = rasterize(
-        ddf,
-        ["x", "y"],
-        min_coordinate=[0, 0],
-        max_coordinate=[5, 5],
-        target_coordinate_system="global",
-        target_unit_to_pixels=1.0,
-        return_single_channel=False,
-        instance_key_as_default_value_key=True,
-    ).data.compute()
-
-    assert res.shape == (len(ddf), 5, 5)
-    assert res.max() == 1
 
     res = rasterize(
         ddf,
