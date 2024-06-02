@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from functools import singledispatch
-from typing import Any
-from warnings import warn
-
 import dask_image.ndinterp
 import datashader as ds
 import numpy as np
@@ -14,6 +10,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
@@ -24,6 +21,8 @@ from spatialdata.models import (
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
+    PointsModel,
+    ShapesModel,
     SpatialElement,
     get_axes_names,
     get_model,
@@ -149,30 +148,32 @@ def _compute_target_dimensions(
     return np.round(target_width), np.round(target_height), np.round(target_depth) if target_depth is not None else None
 
 
-@singledispatch
 def rasterize(
-    values: SpatialData | SpatialElement,
+    # required arguments
+    data: SpatialData | SpatialElement | str,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    values_sdata: SpatialData | None = None,
-    value_key: str | None = None,
-    agg_func: str | ds.reductions.Reduction | None = None,
-    return_single_channel: bool = True,
-    table_name: str | None = None,
-    return_as_labels: bool = False,
     target_unit_to_pixels: float | None = None,
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
+    # extra arguments
+    sdata: SpatialData | None = None,
+    value_key: str | None = None,
+    table_name: str | None = None,
+    return_regions_as_labels: bool = True,
+    # extra arguments only for shapes and points
+    agg_func: str | ds.reductions.Reduction | None = None,
+    return_single_channel: bool | None = None,
 ) -> SpatialData | SpatialImage:
     """
     Rasterize a `SpatialData` object or a `SpatialElement` (image, labels, points, shapes).
 
     Parameters
     ----------
-    values
+    data
         The `SpatialData` object or `SpatialElement` to rasterize. In alternative, the name of the `SpatialElement` in
         the `SpatialData` object, when the `SpatialData` object is passed to `values_sdata`.
     axes
@@ -184,31 +185,6 @@ def rasterize(
     target_coordinate_system
         The coordinate system in which we define the bounding box. This will also be the coordinate system of the
         produced rasterized image.
-    values_sdata
-        `SpatialData` object containing the values to aggregate if `value_key` refers to values from a table.
-    value_key
-        Name of the column containing the values to aggregate; can refer both to numerical or
-        categorical values.
-
-        The key can be:
-
-             - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
-             - the name of obs column(s) in the associated `AnnData` table (for points, shapes and labels);
-             - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes and
-               labels).
-
-        See the notes for more details on the default behavior.
-    agg_func
-        Available only when rasterizing points and shapes. A reduction function from datashader (its name, or a
-        `Callable`). See the notes for more details on the default behavior. For labels, the behavior is equivalent to
-        `agg_func="first"`.
-    return_single_channel
-        Only used when `value_key` refers to a categorical column, or if shapes are being rasterized and
-        `value_key is None`. If `False`, each category will be rasterized in a separate channel.
-    table_name
-        The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
-    return_as_labels
-        If `True`, returns labels of shape `(y, x)` instead of an image of shape `(c, y, x)`
     target_unit_to_pixels
         The number of pixels per unit that the target image should have. It is mandatory to specify precisely one of
         the following options: `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
@@ -221,59 +197,165 @@ def rasterize(
     target_depth
         The depth of the target image in units. It is mandatory to specify precisely one of the following options:
         `target_unit_to_pixels`, `target_width`, `target_height`, `target_depth`.
+    sdata
+        `SpatialData` object containing the values to aggregate if `value_key` refers to values from a table. Must
+        be `None` when `data` is a `SpatialData` object.
+    value_key
+        Name of the column containing the values to aggregate; can refer both to numerical or
+        categorical values.
+
+        The key can be:
+
+        - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
+        - the name of obs column(s) in the associated `AnnData` table (for points, shapes, and labels);
+        - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes, and
+          labels).
+
+        See the notes for more details on the default behavior.
+        Must be `None` when `data` is a `SpatialData` object.
+    table_name
+        The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
+        Must be `None` when `data` is a `SpatialData` object, otherwise it assumes the default value of `'table'`.
+    return_regions_as_labels
+        By default, single-scale images of shape `(c, y, x)` are returned. If `True`, returns labels and shapes as
+        labels of shape `(y, x)` as opposed to an image of shape `(c, y, x)`. Points and images are always returned
+        as images, and multiscale raster data is always returned as single-scale data.
+    agg_func
+        Available only when rasterizing points and shapes. A reduction function from datashader (its name, or a
+        `Callable`). See the notes for more details on the default behavior.
+        Must be `None` when `data` is a `SpatialData` object.
+    return_single_channel
+        Only used when rasterizing points and shapes and when `value_key` refers to a categorical column. If `False`,
+        each category will be rasterized in a separate channel.
 
     Returns
     -------
     The rasterized `SpatialData` object or `SpatialImage`. Each `SpatialElement` will be rasterized into a
-    `SpatialImage` (not a `MultiscaleSpatialImage`). So if a `SpatialData` object with elements is passed, a
-    `SpatialData` object with single-scale images and labels will be returned.
+    `SpatialImage` (not a `MultiscaleSpatialImage`). So if a `SpatialData` object with elements is passed,
+    a `SpatialData` object with single-scale images and labels will be returned.
+
+    Notes
+    -----
+    For images and labels, the parameters `value_key`, `table_name`, `agg_func`, and `return_single_channel` are not
+    used.
+
+    Instead, when rasterizing shapes and points, the following table clarifies the default datashader reduction used
+    for various combinations of parameters.
+
+    In particular, the first two rows refer to the default behavior when the parameters (`value_key`, 'table_name',
+    `returned_single_channel`, `agg_func`) are kept to their default values.
+
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | value_key  | Shapes or Points           | return_single_chan  | datashader reduct.  | table_name |
+    +============+============================+=====================+=====================+============+
+    | None*      | Point (default)            | NA                  | count               | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | None**     | Shapes (default)           | True                | first               | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | None**     | Shapes                     | False               | count_cat           | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | category   | NA                         | True                | first               | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | category   | NA                         | False               | count_cat           | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+    | int/float  | NA                         | NA                  | sum                 | 'table'    |
+    +------------+----------------------------+---------------------+---------------------+------------+
+
+    Explicitly, the default behaviors are as follows.
+
+    - for points, each pixel counts the number of points belonging to it, (the `count` function is applied to an
+      artificial column of ones);
+    - for shapes, each pixel gets a single index among the ones of the shapes that intersect it (the index of the
+      shapes is interpreted as a categorical column and then the `first` function is used).
     """
-    raise RuntimeError(f"Unsupported type: {type(values)}")
+    if isinstance(data, SpatialData):
+        if sdata is not None:
+            raise ValueError("When data is a SpatialData object, sdata must be None.")
+        if value_key is not None:
+            raise ValueError("When data is a SpatialData object, value_key must be None.")
+        if table_name is not None:
+            raise ValueError("When data is a SpatialData object, table_name must be None.")
+        if agg_func is not None:
+            raise ValueError("When data is a SpatialData object, agg_func must be None.")
+        new_images = {}
+        new_labels = {}
+        for element_type in ["points", "images", "labels", "shapes"]:
+            elements = getattr(data, element_type)
+            for name, element in elements.items():
+                rasterized = rasterize(
+                    data=name,
+                    axes=axes,
+                    min_coordinate=min_coordinate,
+                    max_coordinate=max_coordinate,
+                    target_coordinate_system=target_coordinate_system,
+                    target_unit_to_pixels=target_unit_to_pixels,
+                    target_width=target_width,
+                    target_height=target_height,
+                    target_depth=target_depth,
+                    sdata=data,
+                    return_regions_as_labels=return_regions_as_labels,
+                    return_single_channel=return_single_channel if element in ("points", "shapes") else None,
+                )
+                new_name = f"{name}_rasterized_{element_type}"
+                model = get_model(rasterized)
+                if model in (Image2DModel, Image3DModel):
+                    new_images[new_name] = rasterized
+                elif model in (Labels2DModel, Labels3DModel):
+                    new_labels[new_name] = rasterized
+                else:
+                    raise RuntimeError(f"Unsupported model {model} detected as return type of rasterize().")
+        return SpatialData(images=new_images, labels=new_labels, tables=data.tables)
 
-
-@rasterize.register(SpatialData)
-def _(
-    sdata: SpatialData,
-    axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
-    target_coordinate_system: str,
-    target_unit_to_pixels: float | None = None,
-    target_width: float | None = None,
-    target_height: float | None = None,
-    target_depth: float | None = None,
-) -> SpatialData:
-    min_coordinate = _parse_list_into_array(min_coordinate)
-    max_coordinate = _parse_list_into_array(max_coordinate)
-
-    new_images = {}
-    new_labels = {}
-    for element_type in ["points", "images", "labels", "shapes"]:
-        if element_type in ["points", "shapes"]:
-            warn("Rasterizing points and shapes is not supported yet. Skipping.", UserWarning, stacklevel=2)
-            continue
-        elements = getattr(sdata, element_type)
-        for name, element in elements.items():
-            rasterized = rasterize(
-                element,
-                axes=axes,
-                min_coordinate=min_coordinate,
-                max_coordinate=max_coordinate,
-                target_coordinate_system=target_coordinate_system,
-                target_unit_to_pixels=target_unit_to_pixels,
-                target_width=target_width,
-                target_height=target_height,
-                target_depth=target_depth,
-            )
-            new_name = f"{name}_rasterized_{element_type}"
-            model = get_model(rasterized)
-            if model in (Image2DModel, Image3DModel):
-                new_images[new_name] = rasterized
-            elif model in (Labels2DModel, Labels3DModel):
-                new_labels[new_name] = rasterized
-            else:
-                raise RuntimeError(f"Unsupported model {model} detected as return type of rasterize()")
-    return SpatialData(images=new_images, labels=new_labels)
+    parsed_data = _parse_element(element=data, sdata=sdata, element_var_name="data", sdata_var_name="sdata")
+    model = get_model(parsed_data)
+    if model in (Image2DModel, Image3DModel, Labels2DModel, Labels3DModel):
+        if agg_func is not None:
+            raise ValueError("agg_func must be None when data is an image or labels.")
+        if return_single_channel is not None:
+            raise ValueError("return_single_channel must be None when data is an image or labels.")
+        rasterized = rasterize_images_labels(
+            data=parsed_data,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+            target_unit_to_pixels=target_unit_to_pixels,
+            target_width=target_width,
+            target_height=target_height,
+            target_depth=target_depth,
+        )
+        if model in (Labels2DModel, Labels3DModel) and not return_regions_as_labels:
+            rasterized = rasterized.expand_dims("c", axis=0)
+            # TODO: check transformations are passed
+            pass
+            # TODO: color labels using value_keys
+            pass
+        else:
+            if value_key is not None:
+                raise ValueError("value_key must be None when data is an image.")
+            if table_name is not None:
+                raise ValueError("table_name must be None when data is an image.")
+        return rasterized
+    if model in (PointsModel, ShapesModel):
+        return rasterize_shapes_points(
+            data=parsed_data,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+            target_unit_to_pixels=target_unit_to_pixels,
+            target_width=target_width,
+            target_height=target_height,
+            target_depth=target_depth,
+            value_key=value_key,
+            element_name=data if isinstance(data, str) else None,
+            sdata=sdata,
+            agg_func=agg_func,
+            return_single_channel=return_single_channel,
+            table_name=table_name,
+            return_regions_as_labels=return_regions_as_labels,
+        )
+    raise ValueError(f"Unsupported model {model}.")
 
 
 def _get_xarray_data_to_rasterize(
@@ -403,10 +485,8 @@ def _get_corrected_affine_matrix(
 
 # TODO: rename this function to an internatl function and invoke this function from a function that has arguments
 #  values, values_sdata
-@rasterize.register(SpatialImage)
-@rasterize.register(MultiscaleSpatialImage)
-def _(
-    data: SpatialImage,
+def rasterize_images_labels(
+    data: SpatialElement,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
@@ -415,7 +495,6 @@ def _(
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
-    **kwargs: Any,
 ) -> SpatialImage:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -515,25 +594,23 @@ def _(
     return transformed_data
 
 
-# TODO: same here as above
-@rasterize.register(DaskDataFrame)
-@rasterize.register(GeoDataFrame)
-def _(
+def rasterize_shapes_points(
     data: DaskDataFrame | GeoDataFrame,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-    value_key: str | None = None,
-    values_sdata: SpatialData | None = None,
-    agg_func: str | ds.reductions.Reduction | None = None,
-    return_single_channel: bool = True,
-    table_name: str | None = None,
-    return_as_labels: bool = False,
     target_unit_to_pixels: float | None = None,
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
+    element_name: str | None = None,
+    sdata: SpatialData | None = None,
+    value_key: str | None = None,
+    table_name: str | None = None,
+    return_regions_as_labels: bool = False,
+    agg_func: str | ds.reductions.Reduction | None = None,
+    return_single_channel: bool | None = None,
 ) -> SpatialImage | Image2DModel:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -561,7 +638,8 @@ def _(
     table_name = table_name if table_name is not None else "table"
 
     if value_key is not None:
-        data[VALUES_COLUMN] = get_values(value_key, element=data, sdata=values_sdata, table_name=table_name).iloc[:, 0]
+        kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
+        data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type]
     elif isinstance(data, GeoDataFrame):
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
@@ -575,6 +653,8 @@ def _(
             data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
         label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
 
+    if return_single_channel is None:
+        return_single_channel = True
     if agg_func is None:
         agg_func = _default_agg_func(data, value_key, return_single_channel)
     elif isinstance(agg_func, str):
@@ -603,8 +683,10 @@ def _(
     transformations: dict[str, BaseTransformation] = {target_coordinate_system: Sequence([scale, translation])}
 
     if isinstance(agg_func, ds.count_cat):
-        assert not return_single_channel, "Cannot return one channel when using count_cat aggregation"
-        assert not return_as_labels, "Cannot return labels when using count_cat aggregation"
+        if return_single_channel:
+            raise ValueError("Cannot return single channel when using count_cat aggregation")
+        if return_regions_as_labels:
+            raise ValueError("Cannot return labels when using count_cat aggregation")
 
         agg = agg.rename({VALUES_COLUMN: "c"}).transpose("c", "y", "x")
 
@@ -612,7 +694,9 @@ def _(
 
     agg = agg.fillna(0)
 
-    if return_as_labels:
+    if return_regions_as_labels:
+        if not isinstance(data, GeoDataFrame):
+            raise ValueError("Can only return regions as labels when rasterizing shapes")
         return Labels2DModel.parse(agg, transformations=transformations)
 
     agg = agg.expand_dims(dim={"c": 1}).transpose("c", "y", "x")

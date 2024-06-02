@@ -113,7 +113,7 @@ def test_rasterize_shapes():
     assert res.max() == 1
 
     res = rasterize(
-        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, return_as_labels=True
+        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, return_regions_as_labels=True
     ).data.compute()
 
     assert res.shape == (40, 50)

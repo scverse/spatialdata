@@ -17,6 +17,7 @@ from shapely import Point
 from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
+from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
@@ -26,29 +27,12 @@ from spatialdata.models import (
     Labels2DModel,
     PointsModel,
     ShapesModel,
-    SpatialElement,
     TableModel,
     get_model,
 )
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 __all__ = ["aggregate"]
-
-
-def _parse_element(element: str | SpatialElement, sdata: SpatialData | None, str_for_exception: str) -> SpatialElement:
-    if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
-        raise ValueError(
-            f"To specify the {str_for_exception!r} SpatialElement, please do one of the following: "
-            f"- either pass a SpatialElement to the {str_for_exception!r} parameter (and keep "
-            f"`{str_for_exception}_sdata` = None);"
-            f"- either `{str_for_exception}_sdata` needs to be a SpatialData object, and {str_for_exception!r} needs "
-            f"to be the string name of the element."
-        )
-    if sdata is not None:
-        assert isinstance(element, str)
-        return sdata[element]
-    assert element is not None
-    return element
 
 
 def aggregate(
@@ -155,8 +139,10 @@ def aggregate(
     to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
     changes required to address this behavior.
     """
-    values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
-    by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
+    values_ = _parse_element(
+        element=values, sdata=values_sdata, element_var_name="values", sdata_var_name="values_sdata"
+    )
+    by_ = _parse_element(element=by, sdata=by_sdata, element_var_name="by", sdata_var_name="by_sdata")
 
     if values_ is by_:
         # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relevant edge case so
