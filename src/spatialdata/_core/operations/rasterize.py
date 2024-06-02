@@ -163,7 +163,7 @@ def rasterize(
     sdata: SpatialData | None = None,
     value_key: str | None = None,
     table_name: str | None = None,
-    return_regions_as_labels: bool = True,
+    return_regions_as_labels: bool = False,
     # extra arguments only for shapes and points
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
@@ -695,8 +695,6 @@ def rasterize_shapes_points(
     agg = agg.fillna(0)
 
     if return_regions_as_labels:
-        if not isinstance(data, GeoDataFrame):
-            raise ValueError("Can only return regions as labels when rasterizing shapes")
         return Labels2DModel.parse(agg, transformations=transformations)
 
     agg = agg.expand_dims(dim={"c": 1}).transpose("c", "y", "x")
