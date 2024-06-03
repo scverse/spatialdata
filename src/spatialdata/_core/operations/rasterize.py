@@ -15,6 +15,7 @@ from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
+from spatialdata._core.operations.vectorize import to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -534,7 +535,7 @@ def _(
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
-) -> SpatialImage | Image2DModel:
+) -> SpatialImage:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
@@ -591,6 +592,7 @@ def _(
     cnv = ds.Canvas(plot_height=plot_height, plot_width=plot_width, x_range=x_range, y_range=y_range)
 
     if isinstance(data, GeoDataFrame):
+        data = to_polygons(data)
         agg = cnv.polygons(data, "geometry", agg=agg_func)
     else:
         agg = cnv.points(data, x="x", y="y", agg=agg_func)
