@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
+from spatialdata.models import SpatialElement
+
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
 
@@ -134,3 +136,21 @@ def transform_to_data_extent(
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
     return SpatialData.from_elements_dict(sdata_to_return_elements)
+
+
+def _parse_element(
+    element: str | SpatialElement, sdata: SpatialData | None, element_var_name: str, sdata_var_name: str
+) -> SpatialElement:
+    if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
+        raise ValueError(
+            f"To specify the {element_var_name!r} SpatialElement, please do one of the following: "
+            f"- either pass a SpatialElement to the {element_var_name!r} parameter (and keep "
+            f"`{sdata_var_name}` = None);"
+            f"- either `{sdata_var_name}` needs to be a SpatialData object, and {element_var_name!r} needs "
+            f"to be the string name of the element."
+        )
+    if sdata is not None:
+        assert isinstance(element, str)
+        return sdata[element]
+    assert element is not None
+    return element

@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
+from spatialdata import SpatialData
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._io._utils import _iter_multiscale
-from spatialdata.models import PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
 
@@ -47,6 +52,7 @@ def test_rasterize_raster(_get_raster):
                 min_coordinate=[0] * len(spatial_dims),
                 max_coordinate=[10] * len(spatial_dims),
                 target_coordinate_system="global",
+                return_regions_as_labels=True,
                 **kwargs,
             )
 
@@ -80,6 +86,25 @@ def test_rasterize_raster(_get_raster):
                 )
 
 
+# testing the two equivalent ways of calling rasterize, one with annotations in the element and passing the element,
+# and the other with annotations in the table and passing the element name and the SpatialData object.
+def _rasterize_test_alternative_calls(
+    element: DaskDataFrame | GeoDataFrame, sdata: SpatialData, element_name: str, **kwargs
+) -> SpatialImage:
+    kwargs0 = kwargs.copy()
+    kwargs0["data"] = element
+
+    kwargs1 = kwargs.copy()
+    kwargs1["data"] = element_name
+    kwargs1["sdata"] = sdata
+
+    res0 = rasterize(**kwargs0)
+    res1 = rasterize(**kwargs1)
+    assert res0.equals(res1)
+
+    return res0
+
+
 def test_rasterize_shapes():
     box_one = box(0, 10, 20, 40)
     box_two = box(5, 35, 15, 45)
@@ -92,19 +117,45 @@ def test_rasterize_shapes():
     gdf["cat_values"] = gdf["cat_values"].astype("category")
     gdf = ShapesModel.parse(gdf, transformations={"global": MapAxis({"y": "x", "x": "y"})})
 
-    res = rasterize(gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1).data.compute()
+    element_name = "shapes"
+    adata = AnnData(
+        X=np.arange(len(gdf)).reshape(-1, 1),
+        obs=pd.DataFrame(
+            {
+                "region": [element_name] * len(gdf),
+                "instance_id": gdf.index,
+                "values": gdf["values"],
+                "cat_values": gdf["cat_values"],
+            }
+        ),
+    )
+    adata.obs["cat_values"] = adata.obs["cat_values"].astype("category")
+    adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
+    sdata = SpatialData.init_from_elements({element_name: gdf[["geometry"]]}, table=adata)
+
+    def _rasterize(element: GeoDataFrame, **kwargs) -> SpatialImage:
+        return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
+
+    res = _rasterize(
+        gdf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1,
+    ).data.compute()
 
     assert res[0, 0, 0] == 2
     assert res[0, 30, 10] == 0
     assert res[0, 10, 30] == 1
     assert res[0, 10, 37] == 2
 
-    res = rasterize(
+    res = _rasterize(
         gdf,
-        ["x", "y"],
-        [0, 0],
-        [50, 40],
-        "global",
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
         target_unit_to_pixels=1,
         return_single_channel=False,
     ).data.compute()
@@ -112,14 +163,26 @@ def test_rasterize_shapes():
     assert res.shape == (3, 40, 50)
     assert res.max() == 1
 
-    res = rasterize(
-        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, return_as_labels=True
+    res = _rasterize(
+        gdf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1,
+        return_regions_as_labels=True,
     ).data.compute()
 
     assert res.shape == (40, 50)
 
-    res = rasterize(
-        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, value_key="values"
+    res = _rasterize(
+        gdf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1,
+        value_key="values",
     ).data.compute()
 
     assert res[0, 0, 0] == 0.3
@@ -127,8 +190,14 @@ def test_rasterize_shapes():
     assert res[0, 10, 30] == 0.1
     assert res[0, 10, 37] == 0.4
 
-    res = rasterize(
-        gdf, ["x", "y"], [0, 0], [50, 40], "global", target_unit_to_pixels=1, value_key="cat_values"
+    res = _rasterize(
+        gdf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1,
+        value_key="cat_values",
     ).data.compute()
 
     assert res[0, 0, 3] == 2
@@ -136,10 +205,10 @@ def test_rasterize_shapes():
 
     res = rasterize(
         gdf,
-        ["x", "y"],
-        [0, 0],
-        [50, 40],
-        "global",
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
         target_unit_to_pixels=1,
         value_key="cat_values",
         return_single_channel=False,
@@ -163,9 +232,28 @@ def test_rasterize_points():
     ddf = dd.from_pandas(df, npartitions=2)
     ddf = PointsModel.parse(ddf)
 
-    res = rasterize(
+    element_name = "points"
+    adata = AnnData(
+        X=np.arange(len(ddf)).reshape(-1, 1),
+        obs=pd.DataFrame(
+            {
+                "region": [element_name] * len(ddf),
+                "instance_id": ddf.index,
+                "gene": data["gene"],
+                "value": data["value"],
+            }
+        ),
+    )
+    adata.obs["gene"] = adata.obs["gene"].astype("category")
+    adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
+    sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]]}, table=adata)
+
+    def _rasterize(element: GeoDataFrame, **kwargs) -> SpatialImage:
+        return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
+
+    res = _rasterize(
         ddf,
-        ["x", "y"],
+        axes=("x", "y"),
         min_coordinate=[0, 0],
         max_coordinate=[5, 5],
         target_coordinate_system="global",
@@ -176,9 +264,9 @@ def test_rasterize_points():
     assert res[0, 1, 3] == 2
     assert res[0, -1, -1] == 0
 
-    res = rasterize(
+    res = _rasterize(
         ddf,
-        ["x", "y"],
+        axes=("x", "y"),
         min_coordinate=[0, 0],
         max_coordinate=[5, 5],
         target_coordinate_system="global",
@@ -188,9 +276,9 @@ def test_rasterize_points():
     assert res[0, 0, 0] == 5
     assert res[0, 0, 1] == 2
 
-    res = rasterize(
+    res = _rasterize(
         ddf,
-        ["x", "y"],
+        axes=("x", "y"),
         min_coordinate=[0, 0],
         max_coordinate=[5, 5],
         target_coordinate_system="global",
@@ -203,9 +291,9 @@ def test_rasterize_points():
     assert res[1].max() == 1
     assert res[2].max() == 2
 
-    res = rasterize(
+    res = _rasterize(
         ddf,
-        ["x", "y"],
+        axes=("x", "y"),
         min_coordinate=[0, 0],
         max_coordinate=[5, 5],
         target_coordinate_system="global",
@@ -217,9 +305,9 @@ def test_rasterize_points():
     assert res[0, 1, 0] == 2
     assert res[0, 1, 2] == 3
 
-    res = rasterize(
+    res = _rasterize(
         ddf,
-        ["x", "y"],
+        axes=("x", "y"),
         min_coordinate=[0, 0],
         max_coordinate=[5, 5],
         target_coordinate_system="global",
