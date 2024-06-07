@@ -7,10 +7,12 @@ import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
 from spatialdata import SpatialData
 from spatialdata._core.operations.rasterize import rasterize
+from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
 from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
@@ -19,8 +21,36 @@ from spatialdata.transformations import MapAxis
 from tests.conftest import _get_images, _get_labels
 
 
+# testing the two equivalent ways of calling rasterize, one with annotations in the element and passing the element,
+# and the other with annotations in the table and passing the element name and the SpatialData object.
+def _rasterize_test_alternative_calls(
+    element: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
+    sdata: SpatialData,
+    element_name: str,
+    **kwargs,
+) -> SpatialImage:
+    kwargs0 = kwargs.copy()
+    kwargs0["data"] = element
+
+    kwargs1 = kwargs.copy()
+    kwargs1["data"] = element_name
+    kwargs1["sdata"] = sdata
+
+    res0 = rasterize(**kwargs0)
+    res1 = rasterize(**kwargs1)
+    assert res0.equals(res1)
+
+    return res0
+
+
 @pytest.mark.parametrize("_get_raster", [_get_images, _get_labels])
 def test_rasterize_raster(_get_raster):
+    rasters = _get_raster()
+    sdata = SpatialData.init_from_elements(rasters)
+
+    def _rasterize(element: SpatialImage | MultiscaleSpatialImage, element_name: str, **kwargs) -> SpatialImage:
+        return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
+
     def _get_data_of_largest_scale(raster):
         if isinstance(raster, SpatialImage):
             return raster.data.compute()
@@ -28,8 +58,7 @@ def test_rasterize_raster(_get_raster):
         xdata = next(iter(_iter_multiscale(raster, None)))
         return xdata.data.compute()
 
-    rasters = _get_raster()
-    for raster in rasters.values():
+    for element_name, raster in rasters.items():
         dims = get_axes_names(raster)
         all_slices = {"c": slice(0, 1000), "z": slice(0, 1000), "y": slice(5, 20), "x": slice(0, 5)}
         slices = [all_slices[d] for d in dims]
@@ -46,15 +75,15 @@ def test_rasterize_raster(_get_raster):
             if "z" not in dims and "target_depth" in kwargs:
                 continue
             spatial_dims = get_spatial_axes(dims)
-            result = rasterize(
-                raster,
-                axes=spatial_dims,
-                min_coordinate=[0] * len(spatial_dims),
-                max_coordinate=[10] * len(spatial_dims),
-                target_coordinate_system="global",
-                return_regions_as_labels=True,
-                **kwargs,
-            )
+
+            kwargs |= {
+                "axes": spatial_dims,
+                "min_coordinate": [0] * len(spatial_dims),
+                "max_coordinate": [10] * len(spatial_dims),
+                "target_coordinate_system": "global",
+                "return_regions_as_labels": True,
+            }
+            result = _rasterize(element=raster, element_name=element_name, **kwargs)
 
             if "c" in raster.coords:
                 assert np.array_equal(raster.coords["c"].values, result.coords["c"].values)
@@ -86,23 +115,42 @@ def test_rasterize_raster(_get_raster):
                 )
 
 
-# testing the two equivalent ways of calling rasterize, one with annotations in the element and passing the element,
-# and the other with annotations in the table and passing the element name and the SpatialData object.
-def _rasterize_test_alternative_calls(
-    element: DaskDataFrame | GeoDataFrame, sdata: SpatialData, element_name: str, **kwargs
-) -> SpatialImage:
-    kwargs0 = kwargs.copy()
-    kwargs0["data"] = element
-
-    kwargs1 = kwargs.copy()
-    kwargs1["data"] = element_name
-    kwargs1["sdata"] = sdata
-
-    res0 = rasterize(**kwargs0)
-    res1 = rasterize(**kwargs1)
-    assert res0.equals(res1)
-
-    return res0
+def test_rasterize_labels_value_key_specified():
+    element_name = "labels2d_multiscale_xarray"
+    value_key = "background"
+    table_name = "my_table"
+    raster = _get_labels()[element_name]
+    spatial_dims = get_spatial_axes(get_axes_names(raster))
+    labels_indices = _get_unique_label_values_as_index(raster)
+    obs = pd.DataFrame(
+        {
+            "region": [element_name] * len(labels_indices),
+            "instance_id": labels_indices,
+            value_key: [True] + [False] * (len(labels_indices) - 1),
+        }
+    )
+    table = TableModel.parse(
+        AnnData(shape=(len(labels_indices), 0), obs=obs),
+        region=element_name,
+        region_key="region",
+        instance_key="instance_id",
+    )
+    sdata = SpatialData.init_from_elements({element_name: raster}, tables={table_name: table})
+    result = rasterize(
+        data=element_name,
+        sdata=sdata,
+        axes=spatial_dims,
+        min_coordinate=[0] * len(spatial_dims),
+        max_coordinate=[10] * len(spatial_dims),
+        target_coordinate_system="global",
+        target_unit_to_pixels=2.0,
+        value_key=value_key,
+        table_name=table_name,
+        return_regions_as_labels=True,
+    )
+    assert result.shape == (20, 20)
+    # background pixels
+    assert set(np.unique(result).tolist()) == {True, False}
 
 
 def test_rasterize_shapes():
@@ -248,7 +296,7 @@ def test_rasterize_points():
     adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
     sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]]}, table=adata)
 
-    def _rasterize(element: GeoDataFrame, **kwargs) -> SpatialImage:
+    def _rasterize(element: DaskDataFrame, **kwargs) -> SpatialImage:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
 
     res = _rasterize(

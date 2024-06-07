@@ -325,17 +325,21 @@ def rasterize(
             target_height=target_height,
             target_depth=target_depth,
         )
+        # adjust the return type
         if model in (Labels2DModel, Labels3DModel) and not return_regions_as_labels:
-            rasterized = rasterized.expand_dims("c", axis=0)
-            # TODO: check transformations are passed
-            pass
-            # TODO: color labels using value_keys
-            pass
-        else:
-            if value_key is not None:
-                raise ValueError("value_key must be None when data is an image.")
-            if table_name is not None:
-                raise ValueError("table_name must be None when data is an image.")
+            model = Image2DModel if model == Labels2DModel else Image3DModel
+            transformations = get_transformation(rasterized, get_all=True)
+            assert isinstance(transformations, dict)
+            rasterized = model.parse(rasterized.expand_dims("c", axis=0))
+        # eventually color the raster data by the specified value column
+        if value_key is not None:
+            element_name = data if isinstance(data, str) else None
+            kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
+            values = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type]
+            max_index = np.max(values.index)
+            assigner = np.zeros(max_index + 1, dtype=values.dtype)
+            assigner[values.index] = values
+            rasterized = assigner[rasterized]
         return rasterized
     if model in (PointsModel, ShapesModel):
         return rasterize_shapes_points(
@@ -348,13 +352,13 @@ def rasterize(
             target_width=target_width,
             target_height=target_height,
             target_depth=target_depth,
-            value_key=value_key,
             element_name=data if isinstance(data, str) else None,
             sdata=sdata,
-            agg_func=agg_func,
-            return_single_channel=return_single_channel,
+            value_key=value_key,
             table_name=table_name,
             return_regions_as_labels=return_regions_as_labels,
+            agg_func=agg_func,
+            return_single_channel=return_single_channel,
         )
     raise ValueError(f"Unsupported model {model}.")
 
