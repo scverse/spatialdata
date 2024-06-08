@@ -7,6 +7,7 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
+from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
 
@@ -325,11 +326,11 @@ def rasterize(
             target_height=target_height,
             target_depth=target_depth,
         )
+        transformations = get_transformation(rasterized, get_all=True)
+        assert isinstance(transformations, dict)
         # adjust the return type
         if model in (Labels2DModel, Labels3DModel) and not return_regions_as_labels:
             model = Image2DModel if model == Labels2DModel else Image3DModel
-            transformations = get_transformation(rasterized, get_all=True)
-            assert isinstance(transformations, dict)
             rasterized = model.parse(rasterized.expand_dims("c", axis=0))
         # eventually color the raster data by the specified value column
         if value_key is not None:
@@ -339,7 +340,9 @@ def rasterize(
             max_index = np.max(values.index)
             assigner = np.zeros(max_index + 1, dtype=values.dtype)
             assigner[values.index] = values
-            rasterized = assigner[rasterized]
+            # call-arg is ignored because model is never TableModel (the error is that the transformation param is not
+            # accepted by TableModel.parse)
+            rasterized = model.parse(assigner[rasterized], transformations=transformations)  # type: ignore[call-arg]
         return rasterized
     if model in (PointsModel, ShapesModel):
         return rasterize_shapes_points(
@@ -630,7 +633,11 @@ def rasterize_shapes_points(
     )
 
     GEOMETRY_COLUMNS = ["x", "y"] if isinstance(data, DaskDataFrame) else ["geometry"]
-    data = data[GEOMETRY_COLUMNS + [value_key] if value_key in data else GEOMETRY_COLUMNS]
+    columns = GEOMETRY_COLUMNS + [value_key] if value_key in data else GEOMETRY_COLUMNS
+    if isinstance(data, GeoDataFrame) and isinstance(data.iloc[0].geometry, Point):
+        assert isinstance(columns, list)
+        columns += ["radius"]
+    data = data[columns]
 
     plot_width, plot_height = int(target_width), int(target_height)
     y_range = [min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]]

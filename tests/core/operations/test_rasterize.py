@@ -10,7 +10,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
-from spatialdata import SpatialData
+from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
 from spatialdata._io._utils import _iter_multiscale
@@ -126,7 +126,7 @@ def test_rasterize_labels_value_key_specified():
         {
             "region": [element_name] * len(labels_indices),
             "instance_id": labels_indices,
-            value_key: [True] + [False] * (len(labels_indices) - 1),
+            value_key: [True] * 10 + [False] * (len(labels_indices) - 10),
         }
     )
     table = TableModel.parse(
@@ -150,7 +150,32 @@ def test_rasterize_labels_value_key_specified():
     )
     assert result.shape == (20, 20)
     # background pixels
-    assert set(np.unique(result).tolist()) == {True, False}
+    values = set(np.unique(result).tolist())
+    assert values == {True, False}, values
+
+
+def test_rasterize_points_shapes_with_string_index(points, shapes):
+    sdata = SpatialData.init_from_elements({"points_0": points["points_0"], "circles": shapes["circles"]})
+
+    # make the indices of the points_0 and circles dataframes strings
+    sdata["points_0"]["str_index"] = dd.from_pandas(pd.Series([str(i) for i in sdata["points_0"].index]), npartitions=1)
+    sdata["points_0"] = sdata["points_0"].set_index("str_index")
+    sdata["circles"].index = [str(i) for i in sdata["circles"].index]
+
+    data_extent = get_extent(sdata)
+
+    for element_name in ["points_0", "circles"]:
+        _ = rasterize(
+            data=element_name,
+            sdata=sdata,
+            axes=("x", "y"),
+            min_coordinate=[data_extent["x"][0], data_extent["y"][0]],
+            max_coordinate=[data_extent["x"][1], data_extent["y"][1]],
+            target_coordinate_system="global",
+            target_unit_to_pixels=1,
+            return_regions_as_labels=True,
+            return_single_channel=True,
+        )
 
 
 def test_rasterize_shapes():
