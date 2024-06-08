@@ -283,7 +283,7 @@ def rasterize(
         new_labels = {}
         for element_type in ["points", "images", "labels", "shapes"]:
             elements = getattr(data, element_type)
-            for name, element in elements.items():
+            for name in elements:
                 rasterized = rasterize(
                     data=name,
                     axes=axes,
@@ -296,7 +296,7 @@ def rasterize(
                     target_depth=target_depth,
                     sdata=data,
                     return_regions_as_labels=return_regions_as_labels,
-                    return_single_channel=return_single_channel if element in ("points", "shapes") else None,
+                    return_single_channel=return_single_channel if element_type in ("points", "shapes") else None,
                 )
                 new_name = f"{name}_rasterized_{element_type}"
                 model = get_model(rasterized)

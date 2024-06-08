@@ -392,6 +392,15 @@ def test_rasterize_points():
     assert res[0, 1, 3] == 1.2
 
 
-@pytest.mark.skip(reason="Not implemented yet")
 def test_rasterize_spatialdata(full_sdata):
-    pass
+    sdata = full_sdata.subset(
+        ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles"]
+    )
+    _ = rasterize(
+        data=sdata,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_width=1000,
+    )
