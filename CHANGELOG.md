@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   Added operation: `to_polygons()` @quentinblampey #560
+-   Extended `rasterize()` to support all the data types @quentinblampey #566
 
 ### Minor
 
