@@ -285,6 +285,7 @@ def _right_exclusive_join_spatialelement_table(
     else:
         exclusive_table = None
 
+    _inplace_fix_subset_categorical_obs(subset_adata=exclusive_table, original_adata=table)
     return element_dict, exclusive_table
 
 
@@ -355,6 +356,7 @@ def _inner_join_spatialelement_table(
                 continue
 
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+    _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     return element_dict, joined_table
 
 
@@ -418,6 +420,7 @@ def _left_join_spatialelement_table(
 
     joined_indices = joined_indices.dropna() if joined_indices is not None else None
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+    _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
 
     return element_dict, joined_table
 
@@ -645,22 +648,18 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     -------
     Table with the rows matching the instances of the element
     """
-    # TODO: refactor this to make use of the new join_sdata_spatialelement_table function.
-    # if table_name is None:
-    #     warnings.warn(
-    #         "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-    #         "Please provide the name of the table as argument to table_name.",
-    #         DeprecationWarning,
-    #         stacklevel=2,
-    #     )
-    #     table_name = "table"
-    # _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
-    # return table
-    assert sdata[table_name] is not None, "No table found in the SpatialData"
-    element_type, _, element = sdata._find_element(element_name)
-    assert element_type in ["labels", "shapes"], f"Element {element_name} ({element_type}) is not supported"
-    elements_dict = {element_type: {element_name: element}}
-    return _filter_table_by_elements(sdata[table_name], elements_dict, match_rows=True)
+    if table_name is None:
+        warnings.warn(
+            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
+            "Please provide the name of the table as argument to table_name.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        table_name = "table"
+    _, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
+    )
+    return table
 
 
 def match_element_to_table(
@@ -724,7 +723,7 @@ def _locate_value(
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
 
     # adding from the obs columns or var
-    if model in [ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
+    if model in [ShapesModel, PointsModel, Labels2DModel, Labels3DModel] and sdata is not None:
         table = sdata.tables.get(table_name) if table_name is not None else None
         if table is not None:
             # check if the table is annotating the element
