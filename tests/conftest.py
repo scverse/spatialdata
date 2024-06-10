@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-# isort: off
-import os
-from typing import Any
 from collections.abc import Sequence
-
-os.environ["USE_PYGEOS"] = "0"
-# isort:on
-
-from shapely import linearrings, polygons
 from pathlib import Path
-from spatialdata._types import ArrayLike
+from typing import Any
+
+import dask.dataframe as dd
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
@@ -19,9 +14,13 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
+from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
+from spatialdata.datasets import BlobsDataset
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -32,10 +31,6 @@ from spatialdata.models import (
     TableModel,
 )
 from xarray import DataArray
-from spatialdata.datasets import BlobsDataset
-import geopandas as gpd
-import dask.dataframe as dd
-from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
 RNG = default_rng(seed=0)
 
@@ -309,6 +304,7 @@ def labels_blobs() -> ArrayLike:
 def sdata_blobs() -> SpatialData:
     """Create a 2D labels."""
     from copy import deepcopy
+
     from spatialdata.datasets import blobs
 
     sdata = deepcopy(blobs(256, 300, 3))

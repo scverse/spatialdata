@@ -24,7 +24,7 @@ from spatial_image import SpatialImage
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _error_message_add_element, deprecation_alias
+from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -108,7 +108,7 @@ class SpatialData:
     annotation directly.
     """
 
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -630,7 +630,7 @@ class SpatialData:
             raise ValueError("Found an element name with a '/' character. This is not allowed.")
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
-    @deprecation_alias(filter_table="filter_tables")
+    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
         self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
     ) -> SpatialData:
@@ -1974,7 +1974,7 @@ class SpatialData:
         return found[0]
 
     @classmethod
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
         cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
     ) -> SpatialData:

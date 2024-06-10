@@ -66,7 +66,9 @@ jobs:
               run: |
                   pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3.1.1
+              uses: codecov/codecov-action@v4
               with:
                   name: coverage
                   verbose: true
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

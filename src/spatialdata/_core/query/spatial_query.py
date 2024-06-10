@@ -17,9 +17,9 @@ from shapely.geometry import MultiPolygon, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata import to_polygons
 from spatialdata._core.query._utils import (
     _get_filtered_or_unfiltered_tables,
-    circles_to_polygons,
     get_bounding_box_corners,
 )
 from spatialdata._core.spatialdata import SpatialData
@@ -902,7 +902,7 @@ def _(
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 
-    buffered = circles_to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
+    buffered = to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
 
     OLD_INDEX = "__old_index"
     if OLD_INDEX in buffered.columns:

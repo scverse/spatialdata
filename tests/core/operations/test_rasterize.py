@@ -45,6 +45,9 @@ def test_rasterize_raster(_get_raster):
                 **kwargs,
             )
 
+            if "c" in raster.coords:
+                assert np.array_equal(raster.coords["c"].values, result.coords["c"].values)
+
             result_data = _get_data_of_largest_scale(result)
             n_equal = result_data[tuple(slices)] == 1
             ratio = np.sum(n_equal) / np.prod(n_equal.shape)

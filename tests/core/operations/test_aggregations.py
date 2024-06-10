@@ -8,9 +8,8 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
-from spatialdata import aggregate
+from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
-from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
@@ -423,9 +422,9 @@ def test_aggregate_considering_fractions_single_values(
     by = sdata[by_name]
     result_adata = aggregate(values=values, by=by, value_key=value_key, agg_func="sum", fractions=True).tables["table"]
     # to manually compute the fractions of overlap that we use to test that aggregate() works
-    values = circles_to_polygons(values)
+    values = to_polygons(values)
     values["__index"] = values.index
-    by = circles_to_polygons(by)
+    by = to_polygons(by)
     by["__index"] = by.index
     overlayed = geopandas.overlay(by, values, how="intersection")
     overlayed.index = overlayed["__index_2"]

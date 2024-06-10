@@ -704,6 +704,7 @@ def test_points_table_joins(full_sdata):
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="inner"
     )
+
     assert len(element_dict["points_0"]) == 100
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
