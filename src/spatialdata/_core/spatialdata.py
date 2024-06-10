@@ -913,6 +913,11 @@ class SpatialData:
         Returns
         -------
         A dictionary of element_name to boolean values indicating whether the elements are self-contained.
+
+        Notes
+        -----
+        Please see :func:`spatialdata.SpatialData.is_self_contained` for more information on the semantic of
+        self-contained elements.
         """
         from spatialdata._io._utils import _is_element_self_contained
 
@@ -1308,7 +1313,9 @@ class SpatialData:
             if disk_element_name == element_name and disk_element_type != element_type:
                 raise ValueError(
                     f"Element {element_name} is found in the Zarr store as a {disk_element_type}, but it is found "
-                    f"in-memory as a {element_type}. The in-memory object should have a different name."
+                    f"in-memory as a {element_type}. The in-memory object should have a different name. If you want to "
+                    f"maintain both objects, please rename the in-memory object. Alternatively, you can rename the"
+                    f" element on disk (manually)."
                 )
 
     def write_consolidated_metadata(self) -> None:
