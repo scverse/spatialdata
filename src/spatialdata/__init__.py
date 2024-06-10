@@ -7,6 +7,7 @@ __version__ = version("spatialdata")
 __all__ = [
     "models",
     "transformations",
+    "datasets",
     "dataloader",
     "concatenate",
     "rasterize",
@@ -31,7 +32,7 @@ __all__ = [
     "deepcopy",
 ]
 
-from spatialdata import dataloader, models, transformations
+from spatialdata import dataloader, datasets, models, transformations
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
