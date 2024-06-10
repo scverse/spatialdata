@@ -43,67 +43,70 @@ and this project adheres to [Semantic Versioning][].
 
 #### Major
 
--   Implemented support in SpatialData for storing multiple tables. These tables can annotate a SpatialElement but not
-    necessarily so.
--   Added SQL like joins that can be executed by calling one public function `join_sdata_spatialelement_table`. The
-    following joins are supported: `left`, `left_exclusive`, `right`, `right_exclusive` and `inner`. The function has
-    an option to match rows. For `left` only matching `left` is supported and for `right` join only `right` matching of
-    rows is supported. Not all joins are supported for `Labels` elements. The elements and table can either exist within
-    a `SpatialData` object or outside.
--   Added function `match_element_to_table` which allows the user to perform a right join of `SpatialElement`(s) with a
-    table with rows matching the row order in the table.
--   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically
-    performed on-disk.
+-   Implemented support in `SpatialData` for storing multiple tables.
+-   These tables can annotate a `SpatialElement` but now not necessarily so.
+-   Deprecated `.table` attribute in favor of `.tables` dict-like accessor.
+
+-   Added join operations
+-   Added SQL like joins that can be executed by calling one public function `join_sdata_spatialelement_table`. The following joins are supported: `left`, `left_exclusive`, `right`, `right_exclusive` and `inner`. The function has an option to match rows. For `left` only matching `left` is supported and for `right` join only `right` matching of rows is supported. Not all joins are supported for `Labels` elements.
+-   Added function `match_element_to_table` which allows the user to perform a right join of `SpatialElement`(s) with a table with rows matching the row order in the table.
+
+-   Incremental IO of data and metadata:
+-   Increased in-memory vs on-disk control: changes performed in-memory (e.g. adding a new image) are not automatically performed on-disk.
+-   Deprecated `add_image()`, `add_labels()`, `add_shapes()`, `add_points()` in favor of `.images`, `.labels`, `.shapes`, `.points` dict-like accessors.
+-   new methods `write_element()`, `write_transformations()`, `write_metadata()`, `remove_element_from_disk()`
+-   new methods `write_consolidated_metadata()` and `has_consolidated_metadata()`
+-   deprecated `save_transformations()`
+-   improved `__repr__()` with information on Zarr storage and Dask-backed files
+-   new utils `is_self_contained()`, `describe_elements_are_self_contained()`
+-   new utils `element_paths_in_memory()`, `element_paths_on_disk()`
 
 #### Minor
 
--   Added public helper function get_table_keys in spatialdata.models to retrieve annotation information of a given
-    table.
--   Added public helper function check_target_region_column_symmetry in spatialdata.models to check whether annotation
-    metadata in table.uns['spatialdata_attrs'] corresponds with respective columns in table.obs.
--   Added function validate_table_in_spatialdata in SpatialData to validate the annotation target of a table being
-    present in the SpatialData object.
--   Added function get_annotated_regions in SpatialData to get the regions annotated by a given table.
--   Added function get_region_key_column in SpatialData to get the region_key column in table.obs.
--   Added function get_instance_key_column in SpatialData to get the instance_key column in table.obs.
--   Added function set_table_annotates_spatialelement in SpatialData to either set or change the annotation metadata of
-    a table in a given SpatialData object.
--   Added table_name parameter to the aggregate function to allow users to give a custom table name to table resulting
-    from aggregation.
--   Added table_name parameter to the get_values function.
--   Added tables property in SpatialData.
--   Added tables setter in SpatialData.
--   Added gen_spatial_elements generator in SpatialData to generate the SpatialElements in a given SpatialData object.
--   Added gen_elements generator in SpatialData to generate elements of a SpatialData object including tables.
--   added SpatialData.subset() API
--   added SpatialData.locate_element() API
--   added utils function: transform_to_data_extent()
--   added utils function: are_extents_equal()
--   added utils function: postpone_transformation()
--   added utils function: remove_transformations_to_coordinate_system()
--   added utils function: get_centroids()
--   added utils function: deepcopy()
--   added operation: to_circles()
--   added testing utilities: assert_spatial_data_objects_are_identical(), assert_elements_are_identical(),
-    assert_elements_dict_are_identical()
+-   Multiple table helper functions
+-   Added public helper function `get_table_keys()` in `spatialdata.models` to retrieve annotation information of a given table.
+-   Added public helper function `check_target_region_column_symmetry()` in `spatialdata.models` to check whether annotation
+    metadata in `table.uns['spatialdata_attrs']` corresponds with respective columns in `table.obs`.
+-   Added function `validate_table_in_spatialdata()` in SpatialData to validate the annotation target of a table being present in the `SpatialData` object.
+-   Added method `get_annotated_regions()` in `SpatialData` to get the regions annotated by a given table.
+-   Added method `get_region_key_column()` in `SpatialData` to get the region_key column in table.obs.
+-   Added method `get_instance_key_column()` in `SpatialData` to get the instance_key column in table.obs.
+-   Added method `set_table_annotates_spatialelement()` in `SpatialData` to either set or change the annotation metadata of a table in a given `SpatialData` object. - Added `table_name` parameter to the `aggregate()` function to allow users to give a custom table name to table resulting from aggregation.
+-   Added `table_name` parameter to the `get_values()` function.
 
-### Changed
+-   Utils
+-   Added `gen_spatial_elements()` generator in SpatialData to generate the `SpatialElements` in a given `SpatialData` object.
+-   Added `gen_elements` generator in `SpatialData` to generate elements of a `SpatialData` object including tables.
+-   added `SpatialData.subset()` API
+-   added `SpatialData.locate_element()` API
+-   added utils function: `get_centroids()`
+-   added utils function: `deepcopy()`
+-   added operation: `to_circles()`
+-   documented previously-added `get_channels()` to retrieve the channel names of a raster element indepently of it being single or multi-scale
+
+-   Transformations-related
+
+    -   added utils function: `transform_to_data_extent()`
+    -   added utils function: `are_extents_equal()`
+    -   added utils function: `postpone_transformation()`
+    -   added utils function: `remove_transformations_to_coordinate_system()`
+
+-   added testing utilities: `assert_spatial_data_objects_are_identical()`, `assert_elements_are_identical()`, `assert_elements_dict_are_identical()`
+
+### Changed/fixed
 
 #### Major
 
 -   refactored data loader for deep learning
+-   refactored `SpatialData.write()` to be more robust
+-   generalized spatial queries to any combination of 2D/3D data and 2D/3D query region #409
 
 #### Minor
 
--   Changed the string representation of SpatialData to reflect the changes in regard to multiple tables.
-
-### Fixed
-
-#### Major
-
--   improved usability and robustness of sdata.write() when overwrite=True @aeisenbarth
--   generalized queries to any combination of 2D/3D data and 2D/3D query region #409
--   fixed warnings for categorical dtypes in tables in TableModel and PointsModel
+-   Changed the string representation of `SpatialData` to reflect the changes in regard to multiple tables and incremental IO.
+-   improved usability and robustness of `sdata.write()` when `overwrite=True` @aeisenbarth
+-   fixed warnings for categorical dtypes in tables in `TableModel` and `PointsModel`
+-   fixed wrong order of points after spatial queries
 
 ## [0.0.14] - 2023-10-11
 

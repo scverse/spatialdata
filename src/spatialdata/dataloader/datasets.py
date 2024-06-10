@@ -67,7 +67,7 @@ class ImageTilesDataset(Dataset):
 
             1) for each tile, each label region is approximated with a circle with the same area of the label region.
             2) The tile is then created as having the width/height equal to the diameter of the circle,
-                multiplied by `tile_scale`.
+               multiplied by `tile_scale`.
 
         If `tile_dim_in_units` is passed, `tile_scale` is ignored.
     tile_dim_in_units

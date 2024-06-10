@@ -6,7 +6,7 @@
 
 ## SpatialData
 
-The `SpatialData` class.
+The `SpatialData` class (follow the link to explore its methods).
 
 ```{eval-rst}
 .. autosummary::
