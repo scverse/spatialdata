@@ -621,10 +621,12 @@ def test_get_values_df(sdata_query_aggregation):
         )
 
 
+def test_get_values_table(sdata_blobs):
+    get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+
+
 def test_get_values_labels_bug(sdata_blobs):
     # https://github.com/scverse/spatialdata-plot/issues/165
-    from spatialdata import get_values
-
     get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels", table_name="table")
 
 
