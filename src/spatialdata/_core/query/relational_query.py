@@ -696,13 +696,14 @@ class _ValueOrigin:
 
 def _get_element(
     element: SpatialElement | AnnData | None, sdata: SpatialData | None, element_name: str | None
-) -> SpatialElement:
+) -> SpatialElement | AnnData:
     if element is None:
         assert sdata is not None
         assert element_name is not None
         return sdata[element_name]
     assert sdata is None
-    assert element_name is None
+    if not isinstance(element, AnnData):
+        assert element_name is None
     return element
 
 
@@ -780,11 +781,13 @@ def get_values(
     value_key
         Name of the column/channel name to get the values from
     element
-        SpatialElement object; either element or (sdata, element_name) must be provided
+        SpatialElement object or AnnData table; either element or (sdata, element_name) must be provided
     sdata
         SpatialData object; either element or (sdata, element_name) must be provided
     element_name
-        Name of the element; either element or (sdata, element_name) must be provided
+        Name of the element; either element or (sdata, element_name) must be provided. In case of element being
+        an AnnData table, element_name can also be provided to subset the AnnData table to only include those rows
+        annotating the element_name.
     table_name
         Name of the table to get the values from.
 
@@ -845,6 +848,9 @@ def get_values(
         else:
             matched_table = element
             instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+            region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+            if element_name is not None:
+                matched_table = matched_table[matched_table.obs[region_key] == element_name]
             obs = matched_table.obs
 
         if origin == "obs":
