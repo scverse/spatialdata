@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   Added operation: `to_polygons()` @quentinblampey #560
+-   Added operation: `rasterize_bins()` @quentinblampey
 
 ### Minor
 
