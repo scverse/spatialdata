@@ -694,7 +694,9 @@ class _ValueOrigin:
     value_key: str
 
 
-def _get_element(element: SpatialElement | None, sdata: SpatialData | None, element_name: str | None) -> SpatialElement:
+def _get_element(
+    element: SpatialElement | AnnData | None, sdata: SpatialData | None, element_name: str | None
+) -> SpatialElement:
     if element is None:
         assert sdata is not None
         assert element_name is not None
@@ -704,9 +706,22 @@ def _get_element(element: SpatialElement | None, sdata: SpatialData | None, elem
     return element
 
 
+def _get_table_origins(
+    element: SpatialElement | AnnData, value_key: str, origins: list[_ValueOrigin]
+) -> list[_ValueOrigin]:
+    if value_key in element.obs.columns:
+        value = element.obs[value_key]
+        is_categorical = pd.api.types.is_categorical_dtype(value)
+        origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
+    # check if the value_key is in the var
+    elif value_key in element.var_names:
+        origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+    return origins
+
+
 def _locate_value(
     value_key: str,
-    element: SpatialElement | None = None,
+    element: SpatialElement | AnnData | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
@@ -714,13 +729,22 @@ def _locate_value(
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     origins = []
     model = get_model(el)
-    if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel]:
+    if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel, TableModel]:
         raise ValueError(f"Cannot get value from {model}")
     # adding from the dataframe columns
     if model in [PointsModel, ShapesModel] and value_key in el.columns:
         value = el[value_key]
         is_categorical = pd.api.types.is_categorical_dtype(value)
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
+    if model == TableModel:
+        origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
+        # if value_key in el.obs.columns:
+        #     value = el.obs[value_key]
+        #     is_categorical = pd.api.types.is_categorical_dtype(value)
+        #     origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
+        # # check if the value_key is in the var
+        # elif value_key in el.var_names:
+        #     origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
 
     # adding from the obs columns or var
     if model in [ShapesModel, PointsModel, Labels2DModel, Labels3DModel] and sdata is not None:
@@ -730,19 +754,20 @@ def _locate_value(
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
             if element_name in region:
                 # check if the value_key is in the table
-                if value_key in table.obs.columns:
-                    value = table.obs[value_key]
-                    is_categorical = pd.api.types.is_categorical_dtype(value)
-                    origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
-                # check if the value_key is in the var
-                elif value_key in table.var_names:
-                    origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+                origins = _get_table_origins(element=table, value_key=value_key, origins=origins)
+                # if value_key in table.obs.columns:
+                #     value = table.obs[value_key]
+                #     is_categorical = pd.api.types.is_categorical_dtype(value)
+                #     origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
+                # # check if the value_key is in the var
+                # elif value_key in table.var_names:
+                #     origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
     return origins
 
 
 def get_values(
     value_key: str | list[str],
-    element: SpatialElement | None = None,
+    element: SpatialElement | AnnData | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
@@ -808,14 +833,20 @@ def get_values(
         if isinstance(el, DaskDataFrame):
             df = df.compute()
         return df
-    if sdata is not None and table_name is not None:
-        assert element_name is not None
-        matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
-        region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-        instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-        obs = matched_table.obs
-        assert obs[region_key].nunique() == 1
-        assert obs[instance_key].nunique() == len(matched_table)
+    if (sdata is not None and table_name is not None) or isinstance(element, AnnData):
+        if sdata is not None and table_name is not None:
+            assert element_name is not None
+            matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
+            region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+            instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+            obs = matched_table.obs
+            assert obs[region_key].nunique() == 1
+            assert obs[instance_key].nunique() == len(matched_table)
+        else:
+            matched_table = element
+            instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+            obs = matched_table.obs
+
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
@@ -828,4 +859,5 @@ def get_values(
             df = pd.DataFrame(x, columns=value_key_values)
         df.index = obs[instance_key]
         return df
+
     raise ValueError(f"Unknown origin {origin}")
