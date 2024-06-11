@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 
 -   Added operation: `to_polygons()` @quentinblampey #560
 -   Extended `rasterize()` to support all the data types @quentinblampey #566
--   Added operation: `rasterize_bins()` @quentinblampey #575
+-   Added operation: `rasterize_bins()` @quentinblampey #578
 
 ### Minor
 

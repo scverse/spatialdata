@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
@@ -8,11 +9,14 @@ from scipy.sparse import csc_matrix
 from skimage.transform import estimate_transform
 from spatial_image import SpatialImage
 
-from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
 RNG = default_rng(0)
+
+
+if TYPE_CHECKING:
+    from spatialdata import SpatialData
 
 
 def rasterize_bins(
