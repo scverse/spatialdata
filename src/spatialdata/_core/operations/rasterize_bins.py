@@ -84,6 +84,7 @@ def rasterize_bins(
         )
 
     min_row, min_col = table.obs[row_key].min(), table.obs[col_key].min()
+    n_rows, n_cols = table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
 
@@ -96,7 +97,7 @@ def rasterize_bins(
         )
 
     if value_key is None:
-        shape = (table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
+        shape = (n_rows, n_cols)
 
         @dask.delayed
         def channel_rasterization(col: csc_matrix) -> np.ndarray:  # type: ignore[type-arg]
@@ -111,9 +112,7 @@ def rasterize_bins(
         ]
         image = da.stack(delayed_arrays, axis=0)
     else:
-        image = np.zeros(
-            (len(value_key), table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
-        )
+        image = np.zeros((len(value_key), n_rows, n_cols))
 
         if keys[0] in table.obs:
             image[:, y, x] = table.obs[keys].values.T
