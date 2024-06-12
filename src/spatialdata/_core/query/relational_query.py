@@ -122,14 +122,14 @@ def _(
     return pd.Index(np.sort(instances))
 
 
-@get_element_instances.register(ShapesModel)
+@get_element_instances.register(GeoDataFrame)
 def _(
     element: GeoDataFrame,
 ) -> pd.Index:
     return element.index
 
 
-@get_element_instances.register(PointsModel)
+@get_element_instances.register(DaskDataFrame)
 def _(
     element: DaskDataFrame,
 ) -> pd.Index:
