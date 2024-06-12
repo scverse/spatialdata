@@ -20,7 +20,7 @@ from torch.utils.data import Dataset
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles
-from spatialdata._core.query.relational_query import _get_unique_label_values_as_index, join_spatialelement_table
+from spatialdata._core.query.relational_query import get_element_instances, join_spatialelement_table
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
@@ -201,7 +201,7 @@ class ImageTilesDataset(Dataset):
             if table_name is not None:
                 _, region_key, instance_key = get_table_keys(sdata.tables[table_name])
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
-                    indices = _get_unique_label_values_as_index(region_elem).tolist()
+                    indices = get_element_instances(region_elem).tolist()
                 else:
                     indices = region_elem.index.tolist()
                 table = sdata.tables[table_name]
