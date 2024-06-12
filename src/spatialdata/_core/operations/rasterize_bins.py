@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from warnings import warn
 
+import dask
+import dask.array as da
 import numpy as np
 from numpy.random import default_rng
 from scipy.sparse import csc_matrix
@@ -82,32 +84,48 @@ def rasterize_bins(
             f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}."
         )
 
-    if value_key is None:
-        raise NotImplementedError("Not implemented yet for all vars.")
-
-    keys = [value_key] if isinstance(value_key, str) else value_key
     min_row, min_col = table.obs[row_key].min(), table.obs[col_key].min()
-
-    if any(key in table.var_names for key in keys) and not isinstance(table.X, csc_matrix):
-        warn(
-            "To speed up bins rasterization, the table should be a csc_matrix matrix. "
-            "This can be done by calling `table.X = table.X.tocsc()`.",
-            UserWarning,
-            stacklevel=2,
-        )
-
-    image = np.zeros((len(value_key), table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1))
-
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
 
-    if keys[0] in table.obs:
-        image[:, y, x] = table.obs[keys].values.T
+    if value_key is None:
+        keys = table.var_names
+
+        @dask.delayed
+        def channel_rasterization(shape: tuple[int, int], col: csc_matrix) -> np.ndarray:  # type: ignore[type-arg]
+            image = np.zeros(shape)
+            bins_indices, data = col.indices, col.data
+            image[y[bins_indices], x[bins_indices]] = data
+            return image
+
+        shape = (table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
+        delayed_arrays = [
+            da.from_delayed(channel_rasterization(shape, table.X[:, i]), shape=shape, dtype=np.uint16)
+            for i in range(table.n_vars)
+        ]
+        image = da.stack(delayed_arrays, axis=0)
     else:
-        for i, key in enumerate(keys):
-            key_index = table.var_names.get_loc(key)
-            bins_indices = table.X[:, key_index].indices
-            image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+        keys = [value_key] if isinstance(value_key, str) else value_key
+
+        if any(key in table.var_names for key in keys) and not isinstance(table.X, csc_matrix):
+            warn(
+                "To speed up bins rasterization, the table should be a csc_matrix matrix. "
+                "This can be done by calling `table.X = table.X.tocsc()`.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        image = np.zeros(
+            (len(value_key), table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
+        )
+
+        if keys[0] in table.obs:
+            image[:, y, x] = table.obs[keys].values.T
+        else:
+            for i, key in enumerate(keys):
+                key_index = table.var_names.get_loc(key)
+                bins_indices = table.X[:, key_index].indices
+                image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
 
     # get the transformation
     assert table.n_obs >= 6, "At least 6 bins are needed to estimate the transformation."
