@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from warnings import warn
 
+import dask.array
 import numpy as np
 from numpy.random import default_rng
 from scipy.sparse import csc_matrix
 from skimage.transform import estimate_transform
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata.models import Image2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
@@ -83,9 +85,11 @@ def rasterize_bins(
         )
 
     if value_key is None:
-        raise NotImplementedError("Not implemented yet for all vars.")
-
-    keys = [value_key] if isinstance(value_key, str) else value_key
+        keys = table.var_names.tolist()
+        lazy = True
+    else:
+        keys = [value_key] if isinstance(value_key, str) else value_key
+        lazy = False
     min_row, min_col = table.obs[row_key].min(), table.obs[col_key].min()
 
     if any(key in table.var_names for key in keys) and not isinstance(table.X, csc_matrix):
@@ -96,7 +100,14 @@ def rasterize_bins(
             stacklevel=2,
         )
 
-    image = np.zeros((len(value_key), table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1))
+    n_channels = len(keys)
+    n_rows = table.obs[row_key].max() - min_row + 1
+    n_cols = table.obs[col_key].max() - min_col + 1
+
+    if not lazy:
+        image = np.zeros((n_channels, n_rows, n_cols))
+    else:
+        image = DataArray(dask.array.zeros((n_channels, n_rows, n_cols), chunks=(1, n_rows, n_cols)))
 
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
@@ -108,6 +119,8 @@ def rasterize_bins(
             key_index = table.var_names.get_loc(key)
             bins_indices = table.X[:, key_index].indices
             image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+            # if not lazy:
+            # else:
 
     # get the transformation
     assert table.n_obs >= 6, "At least 6 bins are needed to estimate the transformation."
