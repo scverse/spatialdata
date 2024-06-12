@@ -717,6 +717,8 @@ def _get_table_origins(
     # check if the value_key is in the var
     elif value_key in element.var_names:
         origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+    elif value_key in element.obsm:
+        origins.append(_ValueOrigin(origin="obsm", is_categorical=False, value_key=value_key))
     return origins
 
 
@@ -739,13 +741,6 @@ def _locate_value(
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
     if model == TableModel:
         origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
-        # if value_key in el.obs.columns:
-        #     value = el.obs[value_key]
-        #     is_categorical = pd.api.types.is_categorical_dtype(value)
-        #     origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
-        # # check if the value_key is in the var
-        # elif value_key in el.var_names:
-        #     origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
 
     # adding from the obs columns or var
     if model in [ShapesModel, PointsModel, Labels2DModel, Labels3DModel] and sdata is not None:
@@ -756,13 +751,7 @@ def _locate_value(
             if element_name in region:
                 # check if the value_key is in the table
                 origins = _get_table_origins(element=table, value_key=value_key, origins=origins)
-                # if value_key in table.obs.columns:
-                #     value = table.obs[value_key]
-                #     is_categorical = pd.api.types.is_categorical_dtype(value)
-                #     origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
-                # # check if the value_key is in the var
-                # elif value_key in table.var_names:
-                #     origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+
     return origins
 
 
@@ -863,6 +852,13 @@ def get_values(
             if isinstance(x, scipy.sparse.csr_matrix):
                 x = x.todense()
             df = pd.DataFrame(x, columns=value_key_values)
+        if origin == "obsm":
+            data = {}
+            for key in value_key_values:
+                data_values = matched_table.obsm[key]
+                for i in range(data_values.shape[1]):
+                    data[key + f"_{i}"] = data_values[:, i]
+            df = pd.DataFrame(data)
         df.index = obs[instance_key]
         return df
 

@@ -14,8 +14,10 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
+from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
+from skimage import data
 from spatial_image import SpatialImage
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
@@ -33,6 +35,16 @@ from spatialdata.models import (
 from xarray import DataArray
 
 RNG = default_rng(seed=0)
+
+try:
+    from numpy.typing import NDArray
+
+    NDArrayA = NDArray[Any]
+except (ImportError, TypeError):
+    NDArray = np.ndarray  # type: ignore[misc]
+    NDArrayA = np.ndarray  # type: ignore[misc]
+
+SEED = 42
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -448,3 +460,58 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 @pytest.fixture()
 def sdata_query_aggregation() -> SpatialData:
     return _make_sdata_for_testing_querying_and_aggretation()
+
+
+def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
+    rng = np.random.default_rng(SEED)
+    return AnnData(
+        rng.normal(size=(obs.shape[0], n_var)),
+        obs=obs,
+        obsm=obsm,
+        uns=uns,
+        dtype=np.float64,
+    )
+
+
+def _get_blobs_galaxy() -> tuple[NDArrayA, NDArrayA]:
+    blobs = data.binary_blobs(rng=SEED)
+    blobs = ndi.label(blobs)[0]
+    return blobs, data.hubble_deep_field()[: blobs.shape[0], : blobs.shape[0]]
+
+
+@pytest.fixture
+def adata_labels() -> AnnData:
+    n_var = 50
+
+    blobs, _ = _get_blobs_galaxy()
+    seg = np.unique(blobs)[1:]
+    n_obs_labels = len(seg)
+    rng = np.random.default_rng(SEED)
+
+    obs_labels = pd.DataFrame(
+        {
+            "a": rng.normal(size=(n_obs_labels,)),
+            "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
+            "cell_id": pd.Categorical(seg),
+            "instance_id": range(n_obs_labels),
+            "region": ["test"] * n_obs_labels,
+        },
+        index=np.arange(n_obs_labels),
+    )
+    uns_labels = {
+        "spatial": {
+            "labels": {
+                "scalefactors": {
+                    "spot_diameter_fullres": 10,
+                    "tissue_hires_scalef": 1,
+                    "tissue_segmentation_scalef": 1,
+                }
+            }
+        },
+        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+    }
+    obsm_labels = {
+        "spatial": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+        "spatial_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+    }
+    return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)
