@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import dask
 import dask.array as da
 import numpy as np
 from numpy.random import default_rng
@@ -99,18 +98,22 @@ def rasterize_bins(
     if value_key is None:
         shape = (n_rows, n_cols)
 
-        @dask.delayed
-        def channel_rasterization(col: csc_matrix) -> np.ndarray:  # type: ignore[type-arg]
-            image = np.zeros(shape)
+        def channel_rasterization(block_id: tuple[int, int, int] | None) -> np.ndarray:  # type: ignore[type-arg]
+            image = np.zeros((1, *shape), dtype=np.uint32)
+
+            if block_id is None:
+                return image
+
+            col = table.X[:, block_id[0]]
             bins_indices, data = col.indices, col.data
-            image[y[bins_indices], x[bins_indices]] = data
+            image[0, y[bins_indices], x[bins_indices]] = data
             return image
 
-        delayed_arrays = [
-            da.from_delayed(channel_rasterization(shape, table.X[:, i]), shape=shape, dtype=np.uint16)
-            for i in range(table.n_vars)
-        ]
-        image = da.stack(delayed_arrays, axis=0)
+        image = da.map_blocks(
+            channel_rasterization,
+            chunks=((1,) * len(keys), *shape),
+            dtype=np.uint32,
+        )
     else:
         image = np.zeros((len(value_key), n_rows, n_cols))
 
