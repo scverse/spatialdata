@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from warnings import warn
 
 import dask
 import dask.array as da
@@ -88,33 +87,30 @@ def rasterize_bins(
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
 
+    keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
+
+    if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(table.X, csc_matrix):
+        raise ValueError(
+            "To speed up bins rasterization, the table should be a csc_matrix matrix. "
+            "This can be done by calling `table.X = table.X.tocsc()`.",
+        )
+
     if value_key is None:
-        keys = table.var_names
+        shape = (table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
 
         @dask.delayed
-        def channel_rasterization(shape: tuple[int, int], col: csc_matrix) -> np.ndarray:  # type: ignore[type-arg]
+        def channel_rasterization(col: csc_matrix) -> np.ndarray:  # type: ignore[type-arg]
             image = np.zeros(shape)
             bins_indices, data = col.indices, col.data
             image[y[bins_indices], x[bins_indices]] = data
             return image
 
-        shape = (table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
         delayed_arrays = [
             da.from_delayed(channel_rasterization(shape, table.X[:, i]), shape=shape, dtype=np.uint16)
             for i in range(table.n_vars)
         ]
         image = da.stack(delayed_arrays, axis=0)
     else:
-        keys = [value_key] if isinstance(value_key, str) else value_key
-
-        if any(key in table.var_names for key in keys) and not isinstance(table.X, csc_matrix):
-            warn(
-                "To speed up bins rasterization, the table should be a csc_matrix matrix. "
-                "This can be done by calling `table.X = table.X.tocsc()`.",
-                UserWarning,
-                stacklevel=2,
-            )
-
         image = np.zeros(
             (len(value_key), table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1)
         )
