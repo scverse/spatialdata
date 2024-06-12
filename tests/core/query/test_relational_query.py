@@ -626,6 +626,9 @@ def test_get_values_obsm(adata_labels: AnnData):
 
     get_values(value_key=["spatial", "spatial_copy"], element=adata_labels)
 
+    values = get_values(value_key="spatial", element=adata_labels, return_array=True)
+    assert isinstance(values, np.ndarray)
+
 
 def test_get_values_table(sdata_blobs):
     get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
