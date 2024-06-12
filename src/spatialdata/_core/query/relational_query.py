@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -761,7 +762,8 @@ def get_values(
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
-) -> pd.DataFrame:
+    return_array: bool = False,
+) -> pd.DataFrame | npt.NDArray[Any]:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
 
@@ -856,6 +858,14 @@ def get_values(
             data = {}
             for key in value_key_values:
                 data_values = matched_table.obsm[key]
+                if len(value_key_values) == 1 and return_array:
+                    return data_values
+                if len(value_key_values) > 1 and return_array:
+                    warnings.warn(
+                        "Multiple value_keys are specified. If you want to return an array only 1 should be specified",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 for i in range(data_values.shape[1]):
                     data[key + f"_{i}"] = data_values[:, i]
             df = pd.DataFrame(data)
