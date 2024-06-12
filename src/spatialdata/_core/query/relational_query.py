@@ -762,7 +762,7 @@ def get_values(
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
-    return_array: bool = False,
+    return_obsm_as_is: bool = False,
 ) -> pd.DataFrame | npt.NDArray[Any]:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
@@ -781,6 +781,9 @@ def get_values(
         annotating the element_name.
     table_name
         Name of the table to get the values from.
+    return_obsm_as_is
+        In case the value is in obsm the value of the key can be returned as is if return_obsm_as_is is True, otherwise
+        creates a dataframe and returns it.
 
     Returns
     -------
@@ -858,9 +861,9 @@ def get_values(
             data = {}
             for key in value_key_values:
                 data_values = matched_table.obsm[key]
-                if len(value_key_values) == 1 and return_array:
+                if len(value_key_values) == 1 and return_obsm_as_is:
                     return data_values
-                if len(value_key_values) > 1 and return_array:
+                if len(value_key_values) > 1 and return_obsm_as_is:
                     warnings.warn(
                         "Multiple value_keys are specified. If you want to return an array only 1 should be specified",
                         UserWarning,
