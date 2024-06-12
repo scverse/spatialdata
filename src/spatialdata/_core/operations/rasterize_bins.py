@@ -42,14 +42,6 @@ def rasterize_bins(
         Name of a column in `sdata[table_name].obs` containing the column indices (integer) for the bins.
     row_key
         Name of a column in `sdata[table_name].obs` containing the row indices (integer) for the bins.
-    min_col
-        If specified, the minimum column index to consider.
-    max_col
-        If specified, the maximum column index to consider (inclusive).
-    min_row
-        If specified, the minimum row index to consider.
-    max_row
-        If specified, the maximum row index to consider (inclusive).
     value_key
         The key(s) (obs columns/var names) in the table that will be used to rasterize the bins.
         If `None`, all the var names will be used, and the returned object will be lazily constructed.
@@ -63,7 +55,9 @@ def rasterize_bins(
     -----
     Before calling this function you should ensure that the data geometries are organized in grid-like bins
     (e.g. Visium HD data, but not Visium data). Also you should ensure that bin indices (integer) are defined
-    in the `.obs` dataframe of the table associated with the spatial geometries.
+    in the `.obs` dataframe of the table associated with the spatial geometries. If variables from `table.X` are
+    being rasterized (typically, gene counts), then the table should be a `csc_matrix` matrix (this can be done
+    by calling `sdata[table_name].X = sdata[table_name].X.tocsc()`).
 
     The returned image will have one pixel for each bin, and a coordinate transformation to map the image to the
     original data orientation. In particular, the bins of Visium HD data are in a grid that is slightly rotated;
