@@ -88,7 +88,7 @@ def get_element_instances(
     element: SpatialElement,
 ) -> pd.Index:
     """
-    Get the instances of the SpatialElement.
+    Get the instances (index values) of the SpatialElement.
 
     Parameters
     ----------
@@ -98,7 +98,7 @@ def get_element_instances(
     Returns
     -------
     pd.Series
-        The instances of the SpatialElement.
+        The instances (index values) of the SpatialElement.
     """
     raise ValueError(f"The object type {type(element)} is not supported.")
 

@@ -98,7 +98,8 @@ def _(
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
-    assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
+    if model not in [Labels2DModel, Labels3DModel]:
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     _validate_coordinate_system(e, coordinate_system)
 
     if isinstance(e, MultiscaleSpatialImage):
