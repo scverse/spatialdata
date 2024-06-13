@@ -621,10 +621,33 @@ def test_get_values_df(sdata_query_aggregation):
         )
 
 
+def test_get_values_obsm(adata_labels: AnnData):
+    get_values(value_key="tensor", element=adata_labels)
+
+    get_values(value_key=["tensor", "tensor_copy"], element=adata_labels)
+
+    values = get_values(value_key="tensor", element=adata_labels, return_obsm_as_is=True)
+    assert isinstance(values, np.ndarray)
+
+
+def test_get_values_table(sdata_blobs):
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 26
+
+
+def test_get_values_table_element_name(sdata_blobs):
+    sdata_blobs["table"].obs["region"] = sdata_blobs["table"].obs["region"].cat.add_categories("another_region")
+    sdata_blobs["table"].obs.loc["1", "region"] = "another_region"
+    sdata_blobs["table"].uns["spatialdata_attrs"]["region"] = ["blobs_labels", "another_region"]
+    sdata_blobs["another_region"] = sdata_blobs["blobs_labels"]
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"], element_name="blobs_labels")
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 25
+
+
 def test_get_values_labels_bug(sdata_blobs):
     # https://github.com/scverse/spatialdata-plot/issues/165
-    from spatialdata import get_values
-
     get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels", table_name="table")
 
 
