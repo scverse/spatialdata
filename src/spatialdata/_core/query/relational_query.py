@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
+from functools import partial, singledispatch
 from typing import Any, Literal
 
 import dask.array as da
@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
@@ -82,7 +83,33 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
     return table
 
 
-def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
+@singledispatch
+def get_element_instances(
+    element: SpatialElement,
+) -> pd.Index:
+    """
+    Get the instances (index values) of the SpatialElement.
+
+    Parameters
+    ----------
+    element
+        The SpatialElement.
+
+    Returns
+    -------
+    pd.Series
+        The instances (index values) of the SpatialElement.
+    """
+    raise ValueError(f"The object type {type(element)} is not supported.")
+
+
+@get_element_instances.register(SpatialImage)
+@get_element_instances.register(MultiscaleSpatialImage)
+def _(
+    element: SpatialImage | MultiscaleSpatialImage,
+) -> pd.Index:
+    model = get_model(element)
+    assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
     if isinstance(element, SpatialImage):
         # get unique labels value (including 0 if present)
         instances = da.unique(element.data).compute()
@@ -94,6 +121,20 @@ def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
         # can be slow
         instances = da.unique(xdata.data).compute()
     return pd.Index(np.sort(instances))
+
+
+@get_element_instances.register(GeoDataFrame)
+def _(
+    element: GeoDataFrame,
+) -> pd.Index:
+    return element.index
+
+
+@get_element_instances.register(DaskDataFrame)
+def _(
+    element: DaskDataFrame,
+) -> pd.Index:
+    return element.index
 
 
 # TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
@@ -268,7 +309,7 @@ def _right_exclusive_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    element_indices = _get_unique_label_values_as_index(element)
+                    element_indices = get_element_instances(element)
 
                 element_dict[element_type][name] = None
                 submask = ~table_instance_key_column.isin(element_indices)
@@ -408,7 +449,7 @@ def _left_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    element_indices = _get_unique_label_values_as_index(element)
+                    element_indices = get_element_instances(element)
 
                 joined_indices = _get_joined_table_indices(
                     joined_indices, element_indices, table_instance_key_column, match_rows

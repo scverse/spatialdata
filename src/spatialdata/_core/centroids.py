@@ -15,7 +15,7 @@ from spatial_image import SpatialImage
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names
 from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
+from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, get_model
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
@@ -98,9 +98,8 @@ def _(
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
-    if model in [Image2DModel, Image3DModel]:
-        raise ValueError("Cannot compute centroids for images.")
-    assert model in [Labels2DModel, Labels3DModel]
+    if model not in [Labels2DModel, Labels3DModel]:
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     _validate_coordinate_system(e, coordinate_system)
 
     if isinstance(e, MultiscaleSpatialImage):
