@@ -10,7 +10,6 @@ from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
@@ -18,6 +17,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Image2DModel,
@@ -763,7 +763,7 @@ def get_values(
     element_name: str | None = None,
     table_name: str | None = None,
     return_obsm_as_is: bool = False,
-) -> pd.DataFrame | npt.NDArray[Any]:
+) -> pd.DataFrame | ArrayLike:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
 
