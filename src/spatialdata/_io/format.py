@@ -53,7 +53,7 @@ class RasterFormatV01(SpatialDataFormatV01):
             assert isinstance(transformations, list)
             types = [t.get("type", None) for t in transformations]
             if any(t is None for t in types):
-                raise ValueError("Missing type in: %s" % transformations)
+                raise ValueError(f"Missing type in: {transformations}")
 
             # new validation
             import json
