@@ -34,17 +34,8 @@ from spatialdata.models import (
 )
 from xarray import DataArray
 
-RNG = default_rng(seed=0)
-
-try:
-    from numpy.typing import NDArray
-
-    NDArrayA = NDArray[Any]
-except (ImportError, TypeError):
-    NDArray = np.ndarray  # type: ignore[misc]
-    NDArrayA = np.ndarray  # type: ignore[misc]
-
-SEED = 42
+SEED = 0
+RNG = default_rng(seed=SEED)
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -249,7 +240,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
             ]
         }
     )
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=SEED)
     points["radius"] = np.abs(rng.normal(size=(len(points), 1)))
 
     out["poly"] = ShapesModel.parse(poly)
@@ -302,7 +293,7 @@ def _get_table(
 
 
 def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
-    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
+    adata = AnnData(np.random.default_rng(seed=SEED).random(10, 20000))
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
@@ -473,7 +464,7 @@ def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dic
     )
 
 
-def _get_blobs_galaxy() -> tuple[NDArrayA, NDArrayA]:
+def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
     blobs = data.binary_blobs(rng=SEED)
     blobs = ndi.label(blobs)[0]
     return blobs, data.hubble_deep_field()[: blobs.shape[0], : blobs.shape[0]]
@@ -499,19 +490,10 @@ def adata_labels() -> AnnData:
         index=np.arange(n_obs_labels),
     )
     uns_labels = {
-        "spatial": {
-            "labels": {
-                "scalefactors": {
-                    "spot_diameter_fullres": 10,
-                    "tissue_hires_scalef": 1,
-                    "tissue_segmentation_scalef": 1,
-                }
-            }
-        },
         "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
     }
     obsm_labels = {
-        "spatial": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
-        "spatial_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+        "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+        "tensor_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
     }
     return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)
