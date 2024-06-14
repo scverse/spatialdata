@@ -4,11 +4,15 @@ from typing import TYPE_CHECKING
 
 import dask.array as da
 import numpy as np
+import pandas as pd
+from dask.dataframe import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from scipy.sparse import csc_matrix
 from skimage.transform import estimate_transform
 from spatial_image import SpatialImage
 
+from spatialdata._core.query.relational_query import get_values
 from spatialdata.models import Image2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
@@ -48,8 +52,7 @@ def rasterize_bins(
 
     Returns
     -------
-    SpatialImage
-        A spatial image object created by rasterizing the specified bins from the spatial data.
+    A spatial image object created by rasterizing the specified bins from the spatial data.
 
     Notes
     -----
@@ -65,6 +68,8 @@ def rasterize_bins(
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
+    if not isinstance(element, (GeoDataFrame, DaskDataFrame)):
+        raise ValueError("The bins should be a GeoDataFrame or a DaskDataFrame.")
 
     _, region_key, instance_key = get_table_keys(table)
     if not table.obs[region_key].dtype == "category":
@@ -83,24 +88,39 @@ def rasterize_bins(
 
     keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
 
-    if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(table.X, csc_matrix):
+    if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
+        table.X, (csc_matrix, np.ndarray)
+    ):
         raise ValueError(
-            "To speed up bins rasterization, the table should be a csc_matrix matrix. "
+            "To speed up bins rasterization, the X matrix in the table, when sparse, should be a csc_matrix matrix. "
             "This can be done by calling `table.X = table.X.tocsc()`.",
         )
+    sparse_matrix = isinstance(table.X, csc_matrix)
+    if isinstance(value_key, str):
+        value_key = [value_key]
+
+    if value_key is None:
+        dtype = table.X.dtype
+    else:
+        values = get_values(value_key=value_key, element=table)
+        assert isinstance(values, pd.DataFrame)
+        dtype = values[value_key[0]].dtype
 
     if value_key is None:
         shape = (n_rows, n_cols)
 
         def channel_rasterization(block_id: tuple[int, int, int] | None) -> np.ndarray:  # type: ignore[type-arg]
-            image = np.zeros((1, *shape), dtype=np.uint32)
+            image = np.zeros((1, *shape), dtype=dtype)
 
             if block_id is None:
                 return image
 
             col = table.X[:, block_id[0]]
-            bins_indices, data = col.indices, col.data
-            image[0, y[bins_indices], x[bins_indices]] = data
+            if sparse_matrix:
+                bins_indices, data = col.indices, col.data
+                image[0, y[bins_indices], x[bins_indices]] = data
+            else:
+                image[0, y, x] = col
             return image
 
         image = da.map_blocks(
@@ -116,18 +136,29 @@ def rasterize_bins(
         else:
             for i, key in enumerate(keys):
                 key_index = table.var_names.get_loc(key)
-                bins_indices = table.X[:, key_index].indices
-                image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+                if sparse_matrix:
+                    bins_indices = table.X[:, key_index].indices
+                    image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+                else:
+                    image[i, y, x] = table.X[:, key_index]
 
     # get the transformation
-    assert table.n_obs >= 6, "At least 6 bins are needed to estimate the transformation."
+    if table.n_obs < 6:
+        raise ValueError("At least 6 bins are needed to estimate the transformation.")
 
     random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
     location_ids = table.obs[instance_key].iloc[random_indices].values
-    sub_gdf, sub_table = element.loc[location_ids], table[random_indices]
+    sub_df, sub_table = element.loc[location_ids], table[random_indices]
 
     src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
-    dst = np.stack([sub_gdf.geometry.x, sub_gdf.geometry.y], axis=1)
+    if isinstance(sub_df, GeoDataFrame):
+        sub_x = sub_df.geometry.x.values
+        sub_y = sub_df.geometry.y.values
+    else:
+        assert isinstance(sub_df, DaskDataFrame)
+        sub_x = sub_df.x.compute().values
+        sub_y = sub_df.y.compute().values
+    dst = np.stack([sub_x, sub_y], axis=1)
 
     to_bins = Sequence(
         [
