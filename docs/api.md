@@ -36,6 +36,7 @@ Operations on `SpatialData` objects.
     concatenate
     transform
     rasterize
+    rasterize_bins
     to_circles
     to_polygons
     aggregate
