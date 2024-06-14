@@ -12,7 +12,7 @@ from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
 from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize
-from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
+from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
@@ -121,7 +121,7 @@ def test_rasterize_labels_value_key_specified():
     table_name = "my_table"
     raster = _get_labels()[element_name]
     spatial_dims = get_spatial_axes(get_axes_names(raster))
-    labels_indices = _get_unique_label_values_as_index(raster)
+    labels_indices = get_element_instances(raster)
     obs = pd.DataFrame(
         {
             "region": [element_name] * len(labels_indices),

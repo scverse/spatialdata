@@ -7,6 +7,7 @@ __version__ = version("spatialdata")
 __all__ = [
     "models",
     "transformations",
+    "datasets",
     "dataloader",
     "concatenate",
     "rasterize",
@@ -17,6 +18,7 @@ __all__ = [
     "aggregate",
     "bounding_box_query",
     "polygon_query",
+    "get_element_instances",
     "get_values",
     "join_spatialelement_table",
     "match_element_to_table",
@@ -32,7 +34,7 @@ __all__ = [
     "deepcopy",
 ]
 
-from spatialdata import dataloader, models, transformations
+from spatialdata import dataloader, datasets, models, transformations
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
@@ -44,6 +46,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata._core.query._utils import get_bounding_box_corners
 from spatialdata._core.query.relational_query import (
+    get_element_instances,
     get_values,
     join_spatialelement_table,
     match_element_to_table,

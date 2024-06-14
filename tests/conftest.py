@@ -14,8 +14,10 @@ from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
+from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
+from skimage import data
 from spatial_image import SpatialImage
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
@@ -32,7 +34,8 @@ from spatialdata.models import (
 )
 from xarray import DataArray
 
-RNG = default_rng(seed=0)
+SEED = 0
+RNG = default_rng(seed=SEED)
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -237,7 +240,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
             ]
         }
     )
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=SEED)
     points["radius"] = np.abs(rng.normal(size=(len(points), 1)))
 
     out["poly"] = ShapesModel.parse(poly)
@@ -290,7 +293,7 @@ def _get_table(
 
 
 def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
-    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
+    adata = AnnData(np.random.default_rng(seed=SEED).random(10, 20000))
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
@@ -448,3 +451,49 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 @pytest.fixture()
 def sdata_query_aggregation() -> SpatialData:
     return _make_sdata_for_testing_querying_and_aggretation()
+
+
+def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
+    rng = np.random.default_rng(SEED)
+    return AnnData(
+        rng.normal(size=(obs.shape[0], n_var)),
+        obs=obs,
+        obsm=obsm,
+        uns=uns,
+        dtype=np.float64,
+    )
+
+
+def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
+    blobs = data.binary_blobs(rng=SEED)
+    blobs = ndi.label(blobs)[0]
+    return blobs, data.hubble_deep_field()[: blobs.shape[0], : blobs.shape[0]]
+
+
+@pytest.fixture
+def adata_labels() -> AnnData:
+    n_var = 50
+
+    blobs, _ = _get_blobs_galaxy()
+    seg = np.unique(blobs)[1:]
+    n_obs_labels = len(seg)
+    rng = np.random.default_rng(SEED)
+
+    obs_labels = pd.DataFrame(
+        {
+            "a": rng.normal(size=(n_obs_labels,)),
+            "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
+            "cell_id": pd.Categorical(seg),
+            "instance_id": range(n_obs_labels),
+            "region": ["test"] * n_obs_labels,
+        },
+        index=np.arange(n_obs_labels),
+    )
+    uns_labels = {
+        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+    }
+    obsm_labels = {
+        "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+        "tensor_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+    }
+    return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)
