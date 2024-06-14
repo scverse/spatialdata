@@ -97,8 +97,7 @@ def get_element_instances(
 
     Returns
     -------
-    pd.Series
-        The instances (index values) of the SpatialElement.
+    pd.Series with the instances (index values) of the SpatialElement.
     """
     raise ValueError(f"The object type {type(element)} is not supported.")
 
@@ -184,6 +183,8 @@ def _filter_table_by_elements(
                 instances = np.sort(instances)
             elif get_model(element) == ShapesModel:
                 instances = element.index.to_numpy()
+            elif get_model(element) == PointsModel:
+                instances = element.compute().index.to_numpy()
             else:
                 continue
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
@@ -785,7 +786,7 @@ def _locate_value(
         origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
 
     # adding from the obs columns or var
-    if model in [ShapesModel, PointsModel, Labels2DModel, Labels3DModel] and sdata is not None:
+    if model in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
         table = sdata.tables.get(table_name) if table_name is not None else None
         if table is not None:
             # check if the table is annotating the element

@@ -520,7 +520,7 @@ def test_locate_value(sdata_query_aggregation):
     )
 
 
-def test_get_values_df(sdata_query_aggregation):
+def test_get_values_df_shapes(sdata_query_aggregation):
     # test with a single value, in the dataframe; using sdata + element_name
     v = get_values(
         value_key="numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
@@ -619,6 +619,28 @@ def test_get_values_df(sdata_query_aggregation):
             element_name="values_circles",
             table_name="table",
         )
+
+
+def test_get_values_df_points(points):
+    # testing get_values() for points, we keep the test more minimalistic than the one for shapes
+    p = points["points_0"]
+    p = p.drop("instance_id", axis=1)
+    p.index.compute()
+    n = len(p)
+    obs = pd.DataFrame(index=p.index, data={"region": ["points_0"] * n, "instance_id": range(n)})
+    obs["region"] = obs["region"].astype("category")
+    table = TableModel.parse(
+        AnnData(shape=(n, 0), obs=obs), region="points_0", region_key="region", instance_key="instance_id"
+    )
+    points["points_0"] = p
+    points["table"] = table
+
+    assert get_values(value_key="region", element_name="points_0", sdata=points, table_name="table").shape == (300, 1)
+    get_values(value_key="instance_id", element_name="points_0", sdata=points, table_name="table")
+    get_values(value_key=["x", "y"], element_name="points_0", sdata=points, table_name="table")
+    get_values(value_key="genes", element_name="points_0", sdata=points, table_name="table")
+
+    pass
 
 
 def test_get_values_obsm(adata_labels: AnnData):
