@@ -17,8 +17,8 @@ from shapely import Point
 from spatial_image import SpatialImage
 from xrspatial import zonal_stats
 
+from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
-from spatialdata._core.query._utils import circles_to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -27,29 +27,12 @@ from spatialdata.models import (
     Labels2DModel,
     PointsModel,
     ShapesModel,
-    SpatialElement,
     TableModel,
     get_model,
 )
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 __all__ = ["aggregate"]
-
-
-def _parse_element(element: str | SpatialElement, sdata: SpatialData | None, str_for_exception: str) -> SpatialElement:
-    if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
-        raise ValueError(
-            f"To specify the {str_for_exception!r} SpatialElement, please do one of the following: "
-            f"- either pass a SpatialElement to the {str_for_exception!r} parameter (and keep "
-            f"`{str_for_exception}_sdata` = None);"
-            f"- either `{str_for_exception}_sdata` needs to be a SpatialData object, and {str_for_exception!r} needs "
-            f"to be the string name of the element."
-        )
-    if sdata is not None:
-        assert isinstance(element, str)
-        return sdata[element]
-    assert element is not None
-    return element
 
 
 def aggregate(
@@ -91,8 +74,9 @@ def aggregate(
         The key can be:
 
              - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
-             - the name of obs column(s) in the associated `AnnData` table (for shapes and labels);
-             - the name of a var(s), referring to the column(s) of the X matrix in the table (for shapes and labels).
+             - the name of obs column(s) in the associated `AnnData` table (for points, shapes and labels);
+             - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes and
+               labels).
 
         If nothing is passed here, it defaults to the equivalent of a column of ones.
         Defaults to `FEATURE_KEY` for points (if present).
@@ -128,7 +112,7 @@ def aggregate(
         Whether to deepcopy the shapes in the returned `SpatialData` object. If the shapes are large (e.g. large
         multiscale labels), you may consider disabling the deepcopy to use a lazy Dask representation.
     table_name
-        The table optionally containing the value_key and the name of the table in the returned `SpatialData` object.
+        The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
     buffer_resolution
         Resolution parameter to pass to the of the .buffer() method to convert circles to polygons. A higher value
         results in a more accurate representation of the circle, but also in a more complex polygon and computation.
@@ -155,8 +139,10 @@ def aggregate(
     to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
     changes required to address this behavior.
     """
-    values_ = _parse_element(element=values, sdata=values_sdata, str_for_exception="values")
-    by_ = _parse_element(element=by, sdata=by_sdata, str_for_exception="by")
+    values_ = _parse_element(
+        element=values, sdata=values_sdata, element_var_name="values", sdata_var_name="values_sdata"
+    )
+    by_ = _parse_element(element=by, sdata=by_sdata, element_var_name="by", sdata_var_name="by_sdata")
 
     if values_ is by_:
         # this case breaks the groupy aggregation in _aggregate_shapes(), probably a non relevant edge case so
@@ -367,6 +353,7 @@ def _aggregate_shapes(
     table_name
         Name of the table optionally containing the value_key column.
     """
+    from spatialdata._core.operations.vectorize import to_polygons
     from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
@@ -383,10 +370,10 @@ def _aggregate_shapes(
     if isinstance(values, DaskDataFrame):
         values = points_dask_dataframe_to_geopandas(values, suppress_z_warning=True)
     elif isinstance(values, GeoDataFrame):
-        values = circles_to_polygons(values, buffer_resolution=buffer_resolution)
+        values = to_polygons(values, buffer_resolution=buffer_resolution)
     else:
         raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
-    by = circles_to_polygons(by, buffer_resolution=buffer_resolution)
+    by = to_polygons(by, buffer_resolution=buffer_resolution)
 
     categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
 

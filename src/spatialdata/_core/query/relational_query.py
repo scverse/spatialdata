@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
-from functools import partial
+from functools import partial, singledispatch
 from typing import Any, Literal
 
 import dask.array as da
@@ -13,10 +13,12 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Image2DModel,
@@ -81,7 +83,33 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
     return table
 
 
-def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
+@singledispatch
+def get_element_instances(
+    element: SpatialElement,
+) -> pd.Index:
+    """
+    Get the instances (index values) of the SpatialElement.
+
+    Parameters
+    ----------
+    element
+        The SpatialElement.
+
+    Returns
+    -------
+    pd.Series
+        The instances (index values) of the SpatialElement.
+    """
+    raise ValueError(f"The object type {type(element)} is not supported.")
+
+
+@get_element_instances.register(SpatialImage)
+@get_element_instances.register(MultiscaleSpatialImage)
+def _(
+    element: SpatialImage | MultiscaleSpatialImage,
+) -> pd.Index:
+    model = get_model(element)
+    assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
     if isinstance(element, SpatialImage):
         # get unique labels value (including 0 if present)
         instances = da.unique(element.data).compute()
@@ -93,6 +121,20 @@ def _get_unique_label_values_as_index(element: SpatialElement) -> pd.Index:
         # can be slow
         instances = da.unique(xdata.data).compute()
     return pd.Index(np.sort(instances))
+
+
+@get_element_instances.register(GeoDataFrame)
+def _(
+    element: GeoDataFrame,
+) -> pd.Index:
+    return element.index
+
+
+@get_element_instances.register(DaskDataFrame)
+def _(
+    element: DaskDataFrame,
+) -> pd.Index:
+    return element.index
 
 
 # TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
@@ -250,6 +292,8 @@ def _get_masked_element(
     if match_rows == "right":
         mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
+    if isinstance(element, DaskDataFrame):
+        return element.map_partitions(lambda df: df.loc[mask_values], meta=element)
     return element.loc[mask_values, :]
 
 
@@ -257,7 +301,7 @@ def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name)
+    groups_df = table.obs.groupby(by=region_column_name, observed=False)
     mask = []
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -267,7 +311,7 @@ def _right_exclusive_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    element_indices = _get_unique_label_values_as_index(element)
+                    element_indices = get_element_instances(element)
 
                 element_dict[element_type][name] = None
                 submask = ~table_instance_key_column.isin(element_indices)
@@ -285,6 +329,7 @@ def _right_exclusive_join_spatialelement_table(
     else:
         exclusive_table = None
 
+    _inplace_fix_subset_categorical_obs(subset_adata=exclusive_table, original_adata=table)
     return element_dict, exclusive_table
 
 
@@ -294,7 +339,7 @@ def _right_join_spatialelement_table(
     if match_rows == "left":
         warnings.warn("Matching rows 'left' is not supported for 'right' join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name)
+    groups_df = table.obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -324,7 +369,7 @@ def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name)
+    groups_df = table.obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -355,6 +400,7 @@ def _inner_join_spatialelement_table(
                 continue
 
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+    _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     return element_dict, joined_table
 
 
@@ -362,7 +408,7 @@ def _left_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name)
+    groups_df = table.obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -395,7 +441,7 @@ def _left_join_spatialelement_table(
     if match_rows == "right":
         warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name)
+    groups_df = table.obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -405,7 +451,7 @@ def _left_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    element_indices = _get_unique_label_values_as_index(element)
+                    element_indices = get_element_instances(element)
 
                 joined_indices = _get_joined_table_indices(
                     joined_indices, element_indices, table_instance_key_column, match_rows
@@ -418,6 +464,7 @@ def _left_join_spatialelement_table(
 
     joined_indices = joined_indices.dropna() if joined_indices is not None else None
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+    _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
 
     return element_dict, joined_table
 
@@ -645,27 +692,18 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     -------
     Table with the rows matching the instances of the element
     """
-    # TODO: refactor this to make use of the new join_sdata_spatialelement_table function.
-    # if table_name is None:
-    #     warnings.warn(
-    #         "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-    #         "Please provide the name of the table as argument to table_name.",
-    #         DeprecationWarning,
-    #         stacklevel=2,
-    #     )
-    #     table_name = "table"
-    # _, table = join_sdata_spatialelement_table(sdata, element_name, table_name, "left", match_rows="left")
-    # return table
-    assert sdata[table_name] is not None, "No table found in the SpatialData"
-    instance_key = sdata[table_name].uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-    if sdata[element_name].index.dtype != sdata[table_name].obs[instance_key].dtype:
-        raise ValueError(
-            f"Table index type: {sdata[table_name].obs[instance_key].dtype} does not match the element index type: {sdata[element_name].index.dtype}"
+    if table_name is None:
+        warnings.warn(
+            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
+            "Please provide the name of the table as argument to table_name.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-    element_type, _, element = sdata._find_element(element_name)
-    assert element_type in ["labels", "shapes", "points"], f"Element {element_name} ({element_type}) is not supported"
-    elements_dict = {element_type: {element_name: element}}
-    return _filter_table_by_elements(sdata[table_name], elements_dict, match_rows=True)
+        table_name = "table"
+    _, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
+    )
+    return table
 
 
 def match_element_to_table(
@@ -700,19 +738,37 @@ class _ValueOrigin:
     value_key: str
 
 
-def _get_element(element: SpatialElement | None, sdata: SpatialData | None, element_name: str | None) -> SpatialElement:
+def _get_element(
+    element: SpatialElement | AnnData | None, sdata: SpatialData | None, element_name: str | None
+) -> SpatialElement | AnnData:
     if element is None:
         assert sdata is not None
         assert element_name is not None
         return sdata[element_name]
     assert sdata is None
-    assert element_name is None
+    if not isinstance(element, AnnData):
+        assert element_name is None
     return element
+
+
+def _get_table_origins(
+    element: SpatialElement | AnnData, value_key: str, origins: list[_ValueOrigin]
+) -> list[_ValueOrigin]:
+    if value_key in element.obs.columns:
+        value = element.obs[value_key]
+        is_categorical = pd.api.types.is_categorical_dtype(value)
+        origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
+    # check if the value_key is in the var
+    elif value_key in element.var_names:
+        origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+    elif value_key in element.obsm:
+        origins.append(_ValueOrigin(origin="obsm", is_categorical=False, value_key=value_key))
+    return origins
 
 
 def _locate_value(
     value_key: str,
-    element: SpatialElement | None = None,
+    element: SpatialElement | AnnData | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
@@ -720,13 +776,15 @@ def _locate_value(
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     origins = []
     model = get_model(el)
-    if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel]:
+    if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel, TableModel]:
         raise ValueError(f"Cannot get value from {model}")
     # adding from the dataframe columns
     if model in [PointsModel, ShapesModel] and value_key in el.columns:
         value = el[value_key]
         is_categorical = pd.api.types.is_categorical_dtype(value)
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
+    if model == TableModel:
+        origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
 
     # adding from the obs columns or var
     if model in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel] and sdata is not None:
@@ -736,23 +794,19 @@ def _locate_value(
             region = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY]
             if element_name in region:
                 # check if the value_key is in the table
-                if value_key in table.obs.columns:
-                    value = table.obs[value_key]
-                    is_categorical = pd.api.types.is_categorical_dtype(value)
-                    origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
-                # check if the value_key is in the var
-                elif value_key in table.var_names:
-                    origins.append(_ValueOrigin(origin="var", is_categorical=False, value_key=value_key))
+                origins = _get_table_origins(element=table, value_key=value_key, origins=origins)
+
     return origins
 
 
 def get_values(
     value_key: str | list[str],
-    element: SpatialElement | None = None,
+    element: SpatialElement | AnnData | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
-) -> pd.DataFrame:
+    return_obsm_as_is: bool = False,
+) -> pd.DataFrame | ArrayLike:
     """
     Get the values from the element, from any location: df columns, obs or var columns (table).
 
@@ -761,13 +815,18 @@ def get_values(
     value_key
         Name of the column/channel name to get the values from
     element
-        SpatialElement object; either element or (sdata, element_name) must be provided
+        SpatialElement object or AnnData table; either element or (sdata, element_name) must be provided
     sdata
         SpatialData object; either element or (sdata, element_name) must be provided
     element_name
-        Name of the element; either element or (sdata, element_name) must be provided
+        Name of the element; either element or (sdata, element_name) must be provided. In case of element being
+        an AnnData table, element_name can also be provided to subset the AnnData table to only include those rows
+        annotating the element_name.
     table_name
         Name of the table to get the values from.
+    return_obsm_as_is
+        In case the value is in obsm the value of the key can be returned as is if return_obsm_as_is is True, otherwise
+        creates a dataframe and returns it.
 
     Returns
     -------
@@ -814,14 +873,23 @@ def get_values(
         if isinstance(el, DaskDataFrame):
             df = df.compute()
         return df
-    if sdata is not None and table_name is not None:
-        assert element_name is not None
-        matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
-        region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-        instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-        obs = matched_table.obs
-        assert obs[region_key].nunique() == 1
-        assert obs[instance_key].nunique() == len(matched_table)
+    if (sdata is not None and table_name is not None) or isinstance(element, AnnData):
+        if sdata is not None and table_name is not None:
+            assert element_name is not None
+            matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
+            region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+            instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+            obs = matched_table.obs
+            assert obs[region_key].nunique() == 1
+            assert obs[instance_key].nunique() == len(matched_table)
+        else:
+            matched_table = element
+            instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
+            region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+            if element_name is not None:
+                matched_table = matched_table[matched_table.obs[region_key] == element_name]
+            obs = matched_table.obs
+
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
@@ -832,6 +900,22 @@ def get_values(
             if isinstance(x, scipy.sparse.csr_matrix):
                 x = x.todense()
             df = pd.DataFrame(x, columns=value_key_values)
+        if origin == "obsm":
+            data = {}
+            for key in value_key_values:
+                data_values = matched_table.obsm[key]
+                if len(value_key_values) == 1 and return_obsm_as_is:
+                    return data_values
+                if len(value_key_values) > 1 and return_obsm_as_is:
+                    warnings.warn(
+                        "Multiple value_keys are specified. If you want to return an array only 1 should be specified",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                for i in range(data_values.shape[1]):
+                    data[key + f"_{i}"] = data_values[:, i]
+            df = pd.DataFrame(data)
         df.index = obs[instance_key]
         return df
+
     raise ValueError(f"Unknown origin {origin}")

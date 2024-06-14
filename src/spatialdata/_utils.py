@@ -205,6 +205,8 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     -----
     See discussion here: https://github.com/scverse/anndata/issues/997
     """
+    if not hasattr(subset_adata, "obs") or not hasattr(original_adata, "obs"):
+        return
     obs = pd.DataFrame(subset_adata.obs)
     for column in obs.columns:
         is_categorical = pd.api.types.is_categorical_dtype(obs[column])
@@ -215,14 +217,15 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
 
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
-def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
+def _deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
     """
     Decorate a function to warn user of use of arguments set for deprecation.
 
     Parameters
     ----------
     aliases
-        Deprecation argument aliases to be mapped to the new arguments.
+        Deprecation argument aliases to be mapped to the new arguments. Must include version with as value a string
+        indicating the version from which the old argument will be deprecated.
 
     Returns
     -------
@@ -238,7 +241,7 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
 
     ```python
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def my_function(tables: AnnData | dict[str, AnnData]):
         pass
     ```
@@ -248,7 +251,12 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
         @functools.wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> RT:
             class_name = f.__qualname__
-            rename_kwargs(f.__name__, kwargs, aliases, class_name)
+            library = f.__module__.split(".")[0]
+            alias_copy = aliases.copy()
+            version = alias_copy.pop("version") if alias_copy.get("version") is not None else None
+            if version is None:
+                raise ValueError("version for deprecation must be specified")
+            rename_kwargs(f.__name__, kwargs, alias_copy, class_name, library, version)
             return f(*args, **kwargs)
 
         return wrapper
@@ -256,7 +264,9 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     return deprecation_decorator
 
 
-def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str) -> None:
+def rename_kwargs(
+    func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str, library: str, version: str
+) -> None:
     """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
     for alias, new in aliases.items():
         if alias in kwargs:
@@ -264,12 +274,12 @@ def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str
             if new in kwargs:
                 raise TypeError(
                     f"{class_name}{func_name} received both {alias} and {new} as arguments!"
-                    f" {alias} is being deprecated in SpatialData version 0.1, only use {new} instead."
+                    f" {alias} is being deprecated in {library} {version}, only use {new} instead."
                 )
             warnings.warn(
                 message=(
-                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in SpatialData "
-                    f"version 0.1, switch to `{new}` instead."
+                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in {library} version "
+                    f"{version}, switch to `{new}` instead."
                 ),
                 category=DeprecationWarning,
                 stacklevel=3,

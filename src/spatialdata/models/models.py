@@ -352,6 +352,36 @@ class ShapesModel:
                     stacklevel=2,
                 )
 
+    @classmethod
+    def validate_shapes_not_mixed_types(cls, gdf: GeoDataFrame) -> None:
+        """
+        Check that the Shapes element is either composed of Point or Polygon/MultiPolygon.
+
+        Parameters
+        ----------
+        gdf
+            The Shapes element.
+
+        Raises
+        ------
+        ValueError
+            When the geometry column composing the object does not satisfy the type requirements.
+
+        Notes
+        -----
+        This function is not called by ShapesModel.validate() because computing the unique types by default could be
+        expensive.
+        """
+        values_geotypes = list(gdf.geom_type.unique())
+        if values_geotypes == ["Point"]:
+            return
+        if set(values_geotypes).issubset(["Polygon", "MultiPolygon"]):
+            return
+        raise ValueError(
+            "The geometry column of a Shapes element should either be composed of Point, either of "
+            f"Polygon/MultyPolygon. Found: {values_geotypes}"
+        )
+
     @singledispatchmethod
     @classmethod
     def parse(cls, data: Any, **kwargs: Any) -> GeoDataFrame:
@@ -640,17 +670,17 @@ class PointsModel:
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
 
-        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
-        # here I tried to fix https://github.com/scverse/spatialdata/issues/486, didn't work
-        # old_columns = list(data.columns)
-        # new_columns = list(table.columns)
-        # if new_columns == set(old_columns) and new_columns != old_columns:
-        #     col_order = [col for col in old_columns if col in new_columns]
-        #     table = table[col_order]
-
-        return cls._add_metadata_and_validate(
+        validated = cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
         )
+
+        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
+        old_columns = list(data.columns)
+        new_columns = list(validated.columns)
+        if set(new_columns) == set(old_columns) and new_columns != old_columns:
+            col_order = [col for col in old_columns if col in new_columns]
+            validated = validated[col_order]
+        return validated
 
     @classmethod
     def _add_metadata_and_validate(
