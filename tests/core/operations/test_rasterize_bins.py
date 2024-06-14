@@ -58,13 +58,6 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None):
     # atol can be set tighter when https://github.com/scverse/spatialdata/issues/165 is addressed
     assert are_extents_equal(points_extent, raster_extent, atol=2)
 
-    # from napari_spatialdata import Interactive
-    # sdata["rasterized"] = rasterized
-    # interactive = Interactive(sdata, headless=True)
-    # interactive.add_element('points', 'global', True)
-    # interactive.add_element('rasterized', 'global')
-    # interactive.run()
-
 
 def test_rasterize_bins_invalid():
     n = 2
