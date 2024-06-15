@@ -20,6 +20,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
@@ -194,7 +195,7 @@ class SpatialData:
                         stacklevel=2,
                     )
                 else:
-                    if isinstance(element, SpatialImage):
+                    if isinstance(element, DataArray):
                         dtype = element.dtype
                     elif isinstance(element, MultiscaleSpatialImage):
                         dtype = element.scale0.ds.dtypes["image"]

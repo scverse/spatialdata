@@ -11,11 +11,12 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
+SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
@@ -131,8 +132,8 @@ def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_axes_names.register(SpatialImage)
-def _(e: SpatialImage) -> tuple[str, ...]:
+@get_axes_names.register(DataArray)
+def _(e: DataArray) -> tuple[str, ...]:
     dims = e.dims
     # dims_sizes = tuple(list(e.sizes.keys()))
     # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams

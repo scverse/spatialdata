@@ -9,7 +9,7 @@ from dask.array.core import from_array
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import multiscale_spatial_image_from_data_tree
@@ -52,8 +52,8 @@ def _(sdata: SpatialData) -> SpatialData:
     return SpatialData.from_elements_dict(elements_dict)
 
 
-@deepcopy.register(SpatialImage)
-def _(element: SpatialImage) -> SpatialImage:
+@deepcopy.register(DataArray)
+def _(element: DataArray) -> DataArray:
     model = get_model(element)
     if isinstance(element.data, DaskArray):
         element = element.compute()

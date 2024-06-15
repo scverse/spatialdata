@@ -72,8 +72,8 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_get_transformations.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DataArray)
+def _(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_xarray(e)
 
 
@@ -98,8 +98,8 @@ def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSyst
     return _get_transformations_from_dict_container(e.attrs)
 
 
-@_set_transformations.register(SpatialImage)
-def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DataArray)
+def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_xarray(e, transformations)
 
 
@@ -193,8 +193,8 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
     return scale
 
 
-@compute_coordinates.register(SpatialImage)
-def _(data: SpatialImage) -> SpatialImage:
+@compute_coordinates.register(DataArray)
+def _(data: DataArray) -> DataArray:
     coords: dict[str, ArrayLike] = {
         d: np.arange(data.sizes[d], dtype=np.float64) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }

@@ -219,8 +219,8 @@ class RasterSchema(DataArraySchema):
             "or Labels3DModel to construct data that is guaranteed to be valid."
         )
 
-    @validate.register(SpatialImage)
-    def _(self, data: SpatialImage) -> None:
+    @validate.register(DataArray)
+    def _(self, data: DataArray) -> None:
         super().validate(data)
 
     @validate.register(MultiscaleSpatialImage)
@@ -995,7 +995,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(e, (DataArray, MultiscaleSpatialImage)):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:
