@@ -5,6 +5,7 @@ import datashader as ds
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
@@ -367,7 +368,7 @@ def rasterize(
 
 
 def _get_xarray_data_to_rasterize(
-    data: SpatialImage | MultiscaleSpatialImage,
+    data: DataArray | DataTree,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,

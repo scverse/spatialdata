@@ -14,6 +14,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from skimage.measure._regionprops import RegionProperties
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
@@ -63,9 +64,9 @@ def to_circles(
     raise RuntimeError(f"Unsupported type: {type(data)}")
 
 
-@to_circles.register(SpatialImage)
+@to_circles.register(DataArray)
 @to_circles.register(MultiscaleSpatialImage)
-def _(element: SpatialImage | MultiscaleSpatialImage, **kwargs: Any) -> GeoDataFrame:
+def _(element: DataArray | MultiscaleSpatialImage, **kwargs: Any) -> GeoDataFrame:
     assert len(kwargs) == 0
     model = get_model(element)
     if model in (Image2DModel, Image3DModel):
@@ -176,10 +177,10 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     raise RuntimeError(f"Unsupported type: {type(data)}")
 
 
-@to_polygons.register(SpatialImage)
+@to_polygons.register(DataArray)
 @to_polygons.register(MultiscaleSpatialImage)
 def _(
-    element: SpatialImage | MultiscaleSpatialImage,
+    element: DataArray | MultiscaleSpatialImage,
     **kwargs: Any,
 ) -> GeoDataFrame:
     assert len(kwargs) == 0

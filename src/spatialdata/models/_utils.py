@@ -7,6 +7,7 @@ import dask.dataframe as dd
 import geopandas
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Point, Polygon
@@ -16,7 +17,7 @@ from xarray import DataArray
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
+SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, DataTree, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
@@ -143,8 +144,8 @@ def _(e: DataArray) -> tuple[str, ...]:
     return dims  # type: ignore[no-any-return]
 
 
-@get_axes_names.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
+@get_axes_names.register(DataTree)
+def _(e: DataTree) -> tuple[str, ...]:
     if "scale0" in e:
         # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
 

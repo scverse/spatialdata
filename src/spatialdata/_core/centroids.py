@@ -11,6 +11,7 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names
@@ -90,10 +91,10 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
     return pd.DataFrame({axis: centroids.values()}, index=list(centroids.keys()))
 
 
-@get_centroids.register(SpatialImage)
+@get_centroids.register(DataArray)
 @get_centroids.register(MultiscaleSpatialImage)
 def _(
-    e: SpatialImage | MultiscaleSpatialImage,
+    e: DataArray | MultiscaleSpatialImage,
     coordinate_system: str = "global",
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""

@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._logging import logger
@@ -77,8 +77,8 @@ def _(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
     return _get_transformations_xarray(e)
 
 
-@_get_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DataTree)
+def _(e: DataTree) -> Optional[MappingToCoordinateSystem_t]:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in e.attrs:
@@ -103,8 +103,8 @@ def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_xarray(e, transformations)
 
 
-@_set_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DataTree)
+def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
     from spatialdata.models import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
@@ -146,9 +146,7 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
 
 
 @singledispatch
-def compute_coordinates(
-    data: Union[SpatialImage, MultiscaleSpatialImage]
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def compute_coordinates(data: Union[DataArray, DataTree]) -> Union[DataArray, DataTree]:
     """
     Computes and assign coordinates to a (Multiscale)SpatialImage.
 
@@ -201,8 +199,8 @@ def _(data: DataArray) -> DataArray:
     return data.assign_coords(coords)
 
 
-@compute_coordinates.register(MultiscaleSpatialImage)
-def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+@compute_coordinates.register(DataTree)
+def _(data: DataTree) -> DataTree:
     from spatialdata.models import get_axes_names
 
     spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
