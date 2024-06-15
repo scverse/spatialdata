@@ -37,7 +37,7 @@ dependencies = [
     "pyarrow",
     "rich",
     "shapely>=2.0.1",
-    "spatial_image==0.3.0",
+    "spatial_image==1.1.0",
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
