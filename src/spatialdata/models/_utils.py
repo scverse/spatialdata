@@ -46,7 +46,7 @@ def has_type_spatial_element(e: Any) -> bool:
     Whether the object is a SpatialElement
     (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
     """
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
+    return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
 
 
 # added this code as part of a refactoring to catch errors earlier
