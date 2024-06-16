@@ -7,8 +7,8 @@ from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
@@ -63,8 +63,8 @@ def _(element: DataArray) -> DataArray:
     return model.parse(element.copy(deep=True))
 
 
-@deepcopy.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+@deepcopy.register(DataTree)
+def _(element: DataTree) -> DataTree:
     # the complexity here is due to the fact that the parsers don't accept MultiscaleSpatialImage types and that we need
     # to convert the DataTree to a MultiscaleSpatialImage. This will be simplified once we support
     # multiscale_spatial_image 1.0.0

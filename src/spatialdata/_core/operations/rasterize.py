@@ -170,7 +170,7 @@ def rasterize(
     # extra arguments only for shapes and points
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
-) -> SpatialData | SpatialImage:
+) -> SpatialData | DataArray:
     """
     Rasterize a `SpatialData` object or a `SpatialElement` (image, labels, points, shapes).
 

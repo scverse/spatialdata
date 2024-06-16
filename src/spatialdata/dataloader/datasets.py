@@ -285,7 +285,7 @@ class ImageTilesDataset(Dataset):
         self.dims = list(dims_)
 
     @staticmethod
-    def _ensure_single_scale(data: DataArray | DataTree) -> SpatialImage:
+    def _ensure_single_scale(data: DataArray | DataTree) -> DataArray:
         if isinstance(data, DataArray):
             return data
         if isinstance(data, DataTree):

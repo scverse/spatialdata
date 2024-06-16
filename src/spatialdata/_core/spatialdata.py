@@ -198,7 +198,7 @@ class SpatialData:
                 else:
                     if isinstance(element, DataArray):
                         dtype = element.dtype
-                    elif isinstance(element, MultiscaleSpatialImage):
+                    elif isinstance(element, DataTree):
                         dtype = element.scale0.ds.dtypes["image"]
                     else:
                         dtype = element.index.dtype
@@ -480,9 +480,9 @@ class SpatialData:
     def aggregate(
         self,
         values_sdata: SpatialData | None = None,
-        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        values: DaskDataFrame | GeoDataFrame | DataArray | DataTree | str | None = None,
         by_sdata: SpatialData | None = None,
-        by: GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        by: GeoDataFrame | DataArray | DataTree | str | None = None,
         value_key: list[str] | str | None = None,
         agg_func: str | list[str] = "sum",
         target_coordinate_system: str = "global",

@@ -12,7 +12,6 @@ from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._types import ArrayLike
@@ -61,7 +60,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     return result  # type: ignore[no-any-return]
 
 
-def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage | MultiscaleSpatialImage:
+def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     """
     Remove padding from a raster type that was eventually added by the rotation component of a transformation.
 

@@ -15,16 +15,16 @@ from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
-from spatial_image import SpatialImage, to_spatial_image
+from spatial_image import to_spatial_image
 from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
@@ -99,7 +99,7 @@ class RasterSchema(DataArraySchema):
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
-    ) -> SpatialImage | MultiscaleSpatialImage:
+    ) -> DataArray | DataTree:
         """
         Validate (or parse) raster data.
 
@@ -135,7 +135,7 @@ class RasterSchema(DataArraySchema):
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, (DataArray, SpatialImage)):
+        if isinstance(data, (DataArray)):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -223,8 +223,8 @@ class RasterSchema(DataArraySchema):
     def _(self, data: DataArray) -> None:
         super().validate(data)
 
-    @validate.register(MultiscaleSpatialImage)
-    def _(self, data: MultiscaleSpatialImage) -> None:
+    @validate.register(DataTree)
+    def _(self, data: DataTree) -> None:
         for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
@@ -995,7 +995,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (DataArray, MultiscaleSpatialImage)):
+    if isinstance(e, (DataArray, DataTree)):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:

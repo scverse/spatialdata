@@ -7,8 +7,8 @@ import dask.array as da
 import pandas as pd
 import xarray as xr
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -92,9 +92,9 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
 
 
 @get_centroids.register(DataArray)
-@get_centroids.register(MultiscaleSpatialImage)
+@get_centroids.register(DataTree)
 def _(
-    e: DataArray | MultiscaleSpatialImage,
+    e: DataArray | DataTree,
     coordinate_system: str = "global",
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
@@ -103,7 +103,7 @@ def _(
         raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     _validate_coordinate_system(e, coordinate_system)
 
-    if isinstance(e, MultiscaleSpatialImage):
+    if isinstance(e, DataTree):
         assert len(e["scale0"]) == 1
         e = SpatialImage(next(iter(e["scale0"].values())))
 

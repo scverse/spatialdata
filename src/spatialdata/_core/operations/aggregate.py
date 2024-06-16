@@ -10,11 +10,13 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
 from shapely import Point
 from spatial_image import SpatialImage
+from xarray import DataArray
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations._utils import _parse_element
@@ -36,8 +38,8 @@ __all__ = ["aggregate"]
 
 
 def aggregate(
-    values: ddf.DataFrame | gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str,
-    by: gpd.GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str,
+    values: ddf.DataFrame | gpd.GeoDataFrame | DataArray | DataTree | str,
+    by: gpd.GeoDataFrame | DataArray | DataTree | str,
     values_sdata: SpatialData | None = None,
     by_sdata: SpatialData | None = None,
     value_key: list[str] | str | None = None,
@@ -226,7 +228,7 @@ def aggregate(
 def _create_sdata_from_table_and_shapes(
     table: ad.AnnData,
     table_name: str,
-    shapes: GeoDataFrame | SpatialImage | MultiscaleSpatialImage,
+    shapes: GeoDataFrame | DataArray | DataTree,
     shapes_name: str,
     region_key: str,
     instance_key: str,
@@ -246,7 +248,7 @@ def _create_sdata_from_table_and_shapes(
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int
-    if isinstance(shapes, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(shapes, (DataArray | DataTree)):
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:
