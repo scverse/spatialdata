@@ -14,6 +14,7 @@ from anndata import AnnData
 from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
@@ -1416,7 +1417,7 @@ class SpatialData:
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+        if isinstance(element, (DataArray | DataTree)):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
@@ -1773,9 +1774,9 @@ class SpatialData:
                 elif attr == "tables":
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} {v.shape}"
                 else:
-                    if isinstance(v, SpatialImage):
+                    if isinstance(v, DataArray):
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
-                    elif isinstance(v, MultiscaleSpatialImage):
+                    elif isinstance(v, DataTree):
                         shapes = []
                         dims: str | None = None
                         for pyramid_level in v:

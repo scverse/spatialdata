@@ -7,10 +7,9 @@ import pytest
 import xarray
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Polygon
-from spatial_image import SpatialImage
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
@@ -29,6 +28,7 @@ from spatialdata.models import (
 )
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, set_transformation
+from xarray import DataArray
 
 from tests.conftest import _make_points, _make_squares
 
@@ -255,11 +255,11 @@ def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: b
             slices["z"] = slice(2, 7)
         expected_image = ximage.sel(**slices)
 
-        if isinstance(image, SpatialImage):
-            assert isinstance(image, SpatialImage)
+        if isinstance(image, DataArray):
+            assert isinstance(image, DataArray)
             np.testing.assert_allclose(image_result, expected_image)
-        elif isinstance(image, MultiscaleSpatialImage):
-            assert isinstance(image_result, MultiscaleSpatialImage)
+        elif isinstance(image, DataTree):
+            assert isinstance(image_result, DataTree)
             v = image_result["scale0"].values()
             assert len(v) == 1
             xdata = v.__iter__().__next__()

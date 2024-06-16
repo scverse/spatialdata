@@ -299,12 +299,12 @@ def get_channels(data: Any) -> list[Any]:
 
 
 @get_channels.register
-def _(data: SpatialImage) -> list[Any]:
+def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
 
 
 @get_channels.register
-def _(data: MultiscaleSpatialImage) -> list[Any]:
+def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
     channels = {tuple(data[i][name].coords["c"].values) for i in data}
     if len(channels) > 1:

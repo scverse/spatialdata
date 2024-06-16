@@ -10,12 +10,13 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from spatial_image import SpatialImage
 from torch.utils.data import Dataset
+from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
@@ -284,10 +285,10 @@ class ImageTilesDataset(Dataset):
         self.dims = list(dims_)
 
     @staticmethod
-    def _ensure_single_scale(data: SpatialImage | MultiscaleSpatialImage) -> SpatialImage:
-        if isinstance(data, SpatialImage):
+    def _ensure_single_scale(data: DataArray | DataTree) -> SpatialImage:
+        if isinstance(data, DataArray):
             return data
-        if isinstance(data, MultiscaleSpatialImage):
+        if isinstance(data, DataTree):
             return SpatialImage(next(iter(data["scale0"].ds.values())))
         raise ValueError(f"Expected a SpatialImage or MultiscaleSpatialImage, got {type(data)}.")
 

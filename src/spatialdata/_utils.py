@@ -112,14 +112,14 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
     # TODO: this "if else" will be unnecessary once we remove the
     #  concept of intrinsic coordinate systems and we make the
     #  transformations and xarray coordinates more interoperable
-    if isinstance(unpadded, SpatialImage):
+    if isinstance(unpadded, DataArray):
         for ax in axes:
             if ax != "c":
                 left_pad, right_pad = _compute_paddings(data=unpadded, axis=ax)
                 unpadded = unpadded.isel({ax: slice(left_pad, right_pad)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-    elif isinstance(unpadded, MultiscaleSpatialImage):
+    elif isinstance(unpadded, DataTree):
         for ax in axes:
             if ax != "c":
                 # let's just operate on the highest resolution. This is not an efficient implementation but we can
@@ -153,7 +153,7 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
 
 
 # TODO: probably we want this method to live in multiscale_spatial_image
-def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSpatialImage:
+def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
     d = {}
     for k, dt in data_tree.items():
         v = dt.values()
@@ -168,7 +168,7 @@ def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSp
 
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
 #  Use only one and expose it to the user in this file
-def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray, None, None]:
+def iterate_pyramid_levels(image: DataTree) -> Generator[DataArray, None, None]:
     """
     Iterate over the pyramid levels of a multiscale spatial image.
 

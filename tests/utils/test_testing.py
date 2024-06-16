@@ -2,8 +2,8 @@ import copy
 
 import numpy as np
 import pytest
+from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from spatialdata import SpatialData, deepcopy
 from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models import (
@@ -18,16 +18,17 @@ from spatialdata.models import (
 )
 from spatialdata.testing import assert_elements_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Scale, set_transformation
+from xarray import DataArray
 
 scale = Scale([1.0], axes=("x",))
 
 
 def _change_metadata_image(sdata: SpatialData, element_name: str, coords: bool, transformations: bool) -> None:
     if coords:
-        if isinstance(sdata[element_name], SpatialImage):
+        if isinstance(sdata[element_name], DataArray):
             sdata[element_name] = sdata[element_name].assign_coords({"c": np.array(["R", "G", "B"])})
         else:
-            assert isinstance(sdata[element_name], MultiscaleSpatialImage)
+            assert isinstance(sdata[element_name], DataTree)
             # TODO: leads to problems with assert_elements_are_identical, I think it's a bug of data_tree,
             #  need to report
             dt = sdata[element_name].assign_coords({"c": np.array(["R", "G", "B"])})

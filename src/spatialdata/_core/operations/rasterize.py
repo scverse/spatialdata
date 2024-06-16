@@ -399,10 +399,10 @@ def _get_xarray_data_to_rasterize(
     """
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
-    if isinstance(data, SpatialImage):
+    if isinstance(data, DataArray):
         xdata = data
         pyramid_scale = None
-    elif isinstance(data, MultiscaleSpatialImage):
+    elif isinstance(data, DataTree):
         latest_scale: str | None = None
         for scale in reversed(list(data.keys())):
             data_tree = data[scale]

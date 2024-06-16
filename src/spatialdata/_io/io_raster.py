@@ -3,6 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import zarr
+from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
@@ -34,7 +35,7 @@ from spatialdata.transformations._utils import (
 
 def _read_multiscale(
     store: Union[str, Path], raster_type: Literal["image", "labels"], fmt: SpatialDataFormatV01 = CurrentRasterFormat()
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+) -> Union[DataArray, DataTree]:
     assert isinstance(store, (str, Path))
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
@@ -104,7 +105,7 @@ def _read_multiscale(
 
 def _write_raster(
     raster_type: Literal["image", "labels"],
-    raster_data: Union[SpatialImage, MultiscaleSpatialImage],
+    raster_data: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     fmt: Format = CurrentRasterFormat(),
@@ -141,7 +142,7 @@ def _write_raster(
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
-    if isinstance(raster_data, SpatialImage):
+    if isinstance(raster_data, DataArray):
         data = raster_data.data
         transformations = _get_transformations(raster_data)
         input_axes: tuple[str, ...] = tuple(raster_data.dims)
@@ -169,7 +170,7 @@ def _write_raster(
         overwrite_coordinate_transformations_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
         )
-    elif isinstance(raster_data, MultiscaleSpatialImage):
+    elif isinstance(raster_data, DataTree):
         data = _iter_multiscale(raster_data, "data")
         list_of_input_axes: list[Any] = _iter_multiscale(raster_data, "dims")
         assert len(set(list_of_input_axes)) == 1
@@ -203,7 +204,7 @@ def _write_raster(
 
 
 def write_image(
-    image: Union[SpatialImage, MultiscaleSpatialImage],
+    image: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     fmt: Format = CurrentRasterFormat(),
@@ -222,7 +223,7 @@ def write_image(
 
 
 def write_labels(
-    labels: Union[SpatialImage, MultiscaleSpatialImage],
+    labels: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     fmt: Format = CurrentRasterFormat(),

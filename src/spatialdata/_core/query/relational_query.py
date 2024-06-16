@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -102,18 +102,18 @@ def get_element_instances(
     raise ValueError(f"The object type {type(element)} is not supported.")
 
 
-@get_element_instances.register(SpatialImage)
-@get_element_instances.register(MultiscaleSpatialImage)
+@get_element_instances.register(DataArray)
+@get_element_instances.register(DataTree)
 def _(
-    element: SpatialImage | MultiscaleSpatialImage,
+    element: DataArray | DataTree,
 ) -> pd.Index:
     model = get_model(element)
     assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
-    if isinstance(element, SpatialImage):
+    if isinstance(element, DataArray):
         # get unique labels value (including 0 if present)
         instances = da.unique(element.data).compute()
     else:
-        assert isinstance(element, MultiscaleSpatialImage)
+        assert isinstance(element, DataTree)
         v = element["scale0"].values()
         assert len(v) == 1
         xdata = next(iter(v))
@@ -170,11 +170,11 @@ def _filter_table_by_elements(
     for _, elements in elements_dict.items():
         for name, element in elements.items():
             if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
-                if isinstance(element, SpatialImage):
+                if isinstance(element, DataArray):
                     # get unique labels value (including 0 if present)
                     instances = da.unique(element.data).compute()
                 else:
-                    assert isinstance(element, MultiscaleSpatialImage)
+                    assert isinstance(element, DataTree)
                     v = element["scale0"].values()
                     assert len(v) == 1
                     xdata = next(iter(v))
