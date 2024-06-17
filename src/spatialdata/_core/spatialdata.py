@@ -1417,7 +1417,7 @@ class SpatialData:
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (DataArray | DataTree)):
+        if isinstance(element, (DataArray, DataTree)):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
