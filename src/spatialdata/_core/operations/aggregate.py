@@ -248,7 +248,7 @@ def _create_sdata_from_table_and_shapes(
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int
-    if isinstance(shapes, (DataArray | DataTree)):
+    if isinstance(shapes, (DataArray, DataTree)):
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:
