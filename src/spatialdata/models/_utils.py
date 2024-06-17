@@ -9,15 +9,13 @@ import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, DataArray, MultiscaleSpatialImage, DataTree, GeoDataFrame, DaskDataFrame]
+SpatialElement = Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
