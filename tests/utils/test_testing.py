@@ -1,9 +1,7 @@
 import copy
 
-import numpy as np
 import pytest
 from datatree import DataTree
-from multiscale_spatial_image import MultiscaleSpatialImage
 from spatialdata import SpatialData, deepcopy
 from spatialdata.models import (
     Image2DModel,
@@ -25,12 +23,12 @@ scale = Scale([1.0], axes=("x",))
 def _change_metadata_image(sdata: SpatialData, element_name: str, coords: bool, transformations: bool) -> None:
     if coords:
         if isinstance(sdata[element_name], DataArray):
-            sdata[element_name] = sdata[element_name].assign_coords({"c": np.array(["r", "g", "b"])})
+            sdata[element_name] = sdata[element_name].assign_coords({"c": sdata[element_name].c.as_numpy().copy()})
         else:
             assert isinstance(sdata[element_name], DataTree)
             # TODO: leads to problems with assert_elements_are_identical, I think it's a bug of data_tree,
             #  need to report
-            dt = sdata[element_name].assign_coords({"c": np.array(["r", "g", "b"])})
+            dt = sdata[element_name].assign_coords({"c": sdata[element_name]["scale0"].c.as_numpy().copy()})
             sdata[element_name] = dt
     if transformations:
         set_transformation(sdata[element_name], copy.deepcopy(scale))
@@ -72,14 +70,12 @@ def test_assert_elements_are_identical_metadata(full_sdata):
     for _, element_name, element in to_iter:
         if get_model(element) in (Image2DModel, Image3DModel):
             _change_metadata_image(copied, element_name, coords=True, transformations=False)
-            # TODO: bug in data_tree, need to report
-            if not isinstance(copied[element_name], MultiscaleSpatialImage):
+            if not isinstance(copied[element_name], DataTree):
                 assert_elements_are_identical(full_sdata[element_name], copied[element_name])
             _change_metadata_image(copied, element_name, coords=True, transformations=True)
         elif get_model(element) in (Labels2DModel, Labels3DModel):
             _change_metadata_labels(copied, element_name)
-            # TODO: bug in data_tree, need to report
-            if not isinstance(copied[element_name], MultiscaleSpatialImage):
+            if not isinstance(copied[element_name], DataTree):
                 with pytest.raises(AssertionError):
                     assert_elements_are_identical(full_sdata[element_name], copied[element_name])
         elif get_model(element) == PointsModel:
