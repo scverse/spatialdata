@@ -5,7 +5,6 @@ import pytest
 from datatree import DataTree
 from multiscale_spatial_image import MultiscaleSpatialImage
 from spatialdata import SpatialData, deepcopy
-from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -26,13 +25,13 @@ scale = Scale([1.0], axes=("x",))
 def _change_metadata_image(sdata: SpatialData, element_name: str, coords: bool, transformations: bool) -> None:
     if coords:
         if isinstance(sdata[element_name], DataArray):
-            sdata[element_name] = sdata[element_name].assign_coords({"c": np.array(["R", "G", "B"])})
+            sdata[element_name] = sdata[element_name].assign_coords({"c": np.array(["r", "g", "b"])})
         else:
             assert isinstance(sdata[element_name], DataTree)
             # TODO: leads to problems with assert_elements_are_identical, I think it's a bug of data_tree,
             #  need to report
-            dt = sdata[element_name].assign_coords({"c": np.array(["R", "G", "B"])})
-            sdata[element_name] = multiscale_spatial_image_from_data_tree(dt)
+            dt = sdata[element_name].assign_coords({"c": np.array(["r", "g", "b"])})
+            sdata[element_name] = dt
     if transformations:
         set_transformation(sdata[element_name], copy.deepcopy(scale))
 
@@ -75,8 +74,7 @@ def test_assert_elements_are_identical_metadata(full_sdata):
             _change_metadata_image(copied, element_name, coords=True, transformations=False)
             # TODO: bug in data_tree, need to report
             if not isinstance(copied[element_name], MultiscaleSpatialImage):
-                with pytest.raises(AssertionError):
-                    assert_elements_are_identical(full_sdata[element_name], copied[element_name])
+                assert_elements_are_identical(full_sdata[element_name], copied[element_name])
             _change_metadata_image(copied, element_name, coords=True, transformations=True)
         elif get_model(element) in (Labels2DModel, Labels3DModel):
             _change_metadata_labels(copied, element_name)

@@ -7,7 +7,6 @@ import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from xarray import DataArray
 
 from spatialdata._logging import logger
@@ -215,10 +214,10 @@ def _(data: DataTree) -> DataTree:
             coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
             new_coords[ax] = coords
         out[name] = dt[img_name].assign_coords(new_coords)
-    msi = MultiscaleSpatialImage.from_dict(d=out)
+    datatree = DataTree.from_dict(d=out)
     # this is to trigger the validation of the dims
-    _ = get_axes_names(msi)
-    return msi
+    _ = get_axes_names(datatree)
+    return datatree
 
 
 def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> ArrayLike:

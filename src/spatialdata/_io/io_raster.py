@@ -4,7 +4,6 @@ from typing import Any, Literal, Optional, Union
 import numpy as np
 import zarr
 from datatree import DataTree
-from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -89,7 +88,7 @@ def _read_multiscale(
                 dims=axes,
                 coords={"c": channels} if channels is not None else {},
             )
-        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
     data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)

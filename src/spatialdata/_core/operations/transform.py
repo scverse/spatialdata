@@ -12,7 +12,6 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -395,7 +394,7 @@ def _(
         )
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
+    transformed_data = DataTree.from_dict(transformed_dict)
     set_transformation(transformed_data, Identity(), to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
 
     old_transformations = get_transformation(data, get_all=True)

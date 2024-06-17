@@ -137,7 +137,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
             xdata = v.values().__iter__().__next__()
             if 0 not in xdata.shape:
                 d[k] = xdata
-        unpadded = MultiscaleSpatialImage.from_dict(d)
+        unpadded = DataTree.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
 

@@ -89,6 +89,7 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
 class RasterSchema(DataArraySchema):
     """Base schema for raster data."""
 
+    # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     @classmethod
     def parse(
         cls,

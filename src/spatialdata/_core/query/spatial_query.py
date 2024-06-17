@@ -12,7 +12,6 @@ import numpy as np
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Polygon
 from xarray import DataArray
 
@@ -594,7 +593,7 @@ def _(
             return None
         d = {k: d[k] for k in scales_to_keep}
 
-        query_result = MultiscaleSpatialImage.from_dict(d)
+        query_result = DataTree.from_dict(d)
         # rechunk the data to avoid irregular chunks
         for scale in query_result:
             query_result[scale]["image"] = query_result[scale]["image"].chunk("auto")

@@ -12,7 +12,6 @@ from geopandas import GeoDataFrame
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
 
@@ -75,7 +74,7 @@ def _(element: DataTree) -> DataTree:
         variable = ds.__iter__().__next__()
         if isinstance(element[key][variable].data, DaskArray):
             element[key][variable] = element[key][variable].compute()
-    msi = multiscale_spatial_image_from_data_tree(element.copy(deep=True))
+    msi = element.copy(deep=True)
     for key in msi:
         ds = msi[key].ds
         variable = ds.__iter__().__next__()
