@@ -99,6 +99,7 @@ def _read_multiscale(
         dims=axes,
         coords={"c": channels} if channels is not None else {},
     )
+    si.__class__ = DataArray
     _set_transformations(si, transformations)
     return compute_coordinates(si)
 
