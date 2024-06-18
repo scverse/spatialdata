@@ -19,11 +19,11 @@ from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
@@ -132,7 +132,7 @@ def _write_metadata(
 
 
 def _iter_multiscale(
-    data: MultiscaleSpatialImage,
+    data: DataTree,
     attr: str | None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
@@ -238,18 +238,18 @@ def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> l
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
     for e in element._gen_spatial_element_values():
-        if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
+        if isinstance(e, (DataArray, DataTree, DaskDataFrame)):
             files = files.union(get_dask_backing_files(e))
     return list(files)
 
 
-@get_dask_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataArray)
+def _(element: DataArray) -> list[str]:
     return _get_backing_files(element.data)
 
 
-@get_dask_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataTree)
+def _(element: DataTree) -> list[str]:
     xdata0 = next(iter(iterate_pyramid_levels(element)))
     return _get_backing_files(xdata0.data)
 
@@ -331,7 +331,7 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
 ) -> bool:
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 

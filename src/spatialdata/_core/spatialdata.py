@@ -14,12 +14,14 @@ from anndata import AnnData
 from dask.dataframe import read_parquet
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
@@ -194,9 +196,9 @@ class SpatialData:
                         stacklevel=2,
                     )
                 else:
-                    if isinstance(element, SpatialImage):
+                    if isinstance(element, DataArray):
                         dtype = element.dtype
-                    elif isinstance(element, MultiscaleSpatialImage):
+                    elif isinstance(element, DataTree):
                         dtype = element.scale0.ds.dtypes["image"]
                     else:
                         dtype = element.index.dtype
@@ -478,9 +480,9 @@ class SpatialData:
     def aggregate(
         self,
         values_sdata: SpatialData | None = None,
-        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        values: DaskDataFrame | GeoDataFrame | DataArray | DataTree | str | None = None,
         by_sdata: SpatialData | None = None,
-        by: GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        by: GeoDataFrame | DataArray | DataTree | str | None = None,
         value_key: list[str] | str | None = None,
         agg_func: str | list[str] = "sum",
         target_coordinate_system: str = "global",
@@ -1415,7 +1417,7 @@ class SpatialData:
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+        if isinstance(element, (DataArray, DataTree)):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
@@ -1772,9 +1774,9 @@ class SpatialData:
                 elif attr == "tables":
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} {v.shape}"
                 else:
-                    if isinstance(v, SpatialImage):
+                    if isinstance(v, DataArray):
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
-                    elif isinstance(v, MultiscaleSpatialImage):
+                    elif isinstance(v, DataTree):
                         shapes = []
                         dims: str | None = None
                         for pyramid_level in v:

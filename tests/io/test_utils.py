@@ -4,7 +4,6 @@ import tempfile
 import dask.dataframe as dd
 from spatialdata import read_zarr
 from spatialdata._io._utils import get_dask_backing_files
-from spatialdata._utils import multiscale_spatial_image_from_data_tree
 
 
 def test_backing_files_points(points):
@@ -50,7 +49,7 @@ def test_backing_files_images(images):
         # multiscale
         im3 = images0.images["image2d_multiscale"]
         im4 = images1.images["image2d_multiscale"]
-        im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
+        im5 = im3 + im4
         files = get_dask_backing_files(im5)
         expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
@@ -81,7 +80,7 @@ def test_backing_files_labels(labels):
         # multiscale
         im3 = labels0.labels["labels2d_multiscale"]
         im4 = labels1.labels["labels2d_multiscale"]
-        im5 = multiscale_spatial_image_from_data_tree(im3 + im4)
+        im5 = im3 + im4
         files = get_dask_backing_files(im5)
         expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)

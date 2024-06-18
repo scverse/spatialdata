@@ -7,12 +7,11 @@ from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
 
@@ -52,8 +51,8 @@ def _(sdata: SpatialData) -> SpatialData:
     return SpatialData.from_elements_dict(elements_dict)
 
 
-@deepcopy.register(SpatialImage)
-def _(element: SpatialImage) -> SpatialImage:
+@deepcopy.register(DataArray)
+def _(element: DataArray) -> DataArray:
     model = get_model(element)
     if isinstance(element.data, DaskArray):
         element = element.compute()
@@ -63,8 +62,8 @@ def _(element: SpatialImage) -> SpatialImage:
     return model.parse(element.copy(deep=True))
 
 
-@deepcopy.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+@deepcopy.register(DataTree)
+def _(element: DataTree) -> DataTree:
     # the complexity here is due to the fact that the parsers don't accept MultiscaleSpatialImage types and that we need
     # to convert the DataTree to a MultiscaleSpatialImage. This will be simplified once we support
     # multiscale_spatial_image 1.0.0
@@ -75,7 +74,7 @@ def _(element: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
         variable = ds.__iter__().__next__()
         if isinstance(element[key][variable].data, DaskArray):
             element[key][variable] = element[key][variable].compute()
-    msi = multiscale_spatial_image_from_data_tree(element.copy(deep=True))
+    msi = element.copy(deep=True)
     for key in msi:
         ds = msi[key].ds
         variable = ds.__iter__().__next__()

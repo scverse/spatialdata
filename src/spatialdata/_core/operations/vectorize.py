@@ -9,11 +9,12 @@ import pandas as pd
 import shapely
 import skimage.measure
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from skimage.measure._regionprops import RegionProperties
 from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
@@ -63,9 +64,9 @@ def to_circles(
     raise RuntimeError(f"Unsupported type: {type(data)}")
 
 
-@to_circles.register(SpatialImage)
-@to_circles.register(MultiscaleSpatialImage)
-def _(element: SpatialImage | MultiscaleSpatialImage, **kwargs: Any) -> GeoDataFrame:
+@to_circles.register(DataArray)
+@to_circles.register(DataTree)
+def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
     assert len(kwargs) == 0
     model = get_model(element)
     if model in (Image2DModel, Image3DModel):
@@ -74,7 +75,7 @@ def _(element: SpatialImage | MultiscaleSpatialImage, **kwargs: Any) -> GeoDataF
         raise RuntimeError("to_circles() is not supported for 3D labels.")
 
     # reduce to the single scale case
-    if isinstance(element, MultiscaleSpatialImage):
+    if isinstance(element, DataTree):
         element_single_scale = SpatialImage(element["scale0"].values().__iter__().__next__())
     else:
         element_single_scale = element
@@ -142,7 +143,7 @@ def _get_centroids(element: SpatialElement) -> pd.DataFrame:
     return centroids
 
 
-def _make_circles(element: SpatialImage | MultiscaleSpatialImage | GeoDataFrame, obs: pd.DataFrame) -> GeoDataFrame:
+def _make_circles(element: DataArray | DataTree | GeoDataFrame, obs: pd.DataFrame) -> GeoDataFrame:
     spatial_axes = sorted(get_axes_names(element))
     centroids = obs[spatial_axes].values
     transformations = get_transformation(element, get_all=True)
@@ -176,10 +177,10 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     raise RuntimeError(f"Unsupported type: {type(data)}")
 
 
-@to_polygons.register(SpatialImage)
-@to_polygons.register(MultiscaleSpatialImage)
+@to_polygons.register(DataArray)
+@to_polygons.register(DataTree)
 def _(
-    element: SpatialImage | MultiscaleSpatialImage,
+    element: DataArray | DataArray | DataTree,
     **kwargs: Any,
 ) -> GeoDataFrame:
     assert len(kwargs) == 0
@@ -190,7 +191,7 @@ def _(
         raise RuntimeError("to_polygons() is not supported for 3D labels.")
 
     # reduce to the single scale case
-    if isinstance(element, MultiscaleSpatialImage):
+    if isinstance(element, DataTree):
         element_single_scale = SpatialImage(element["scale0"].values().__iter__().__next__())
     else:
         element_single_scale = element

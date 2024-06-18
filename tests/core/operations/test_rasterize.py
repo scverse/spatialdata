@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
@@ -17,6 +18,7 @@ from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
+from xarray import DataArray
 
 from tests.conftest import _get_images, _get_labels
 
@@ -48,11 +50,11 @@ def test_rasterize_raster(_get_raster):
     rasters = _get_raster()
     sdata = SpatialData.init_from_elements(rasters)
 
-    def _rasterize(element: SpatialImage | MultiscaleSpatialImage, element_name: str, **kwargs) -> SpatialImage:
+    def _rasterize(element: DataArray | DataTree, element_name: str, **kwargs) -> DataArray:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
 
     def _get_data_of_largest_scale(raster):
-        if isinstance(raster, SpatialImage):
+        if isinstance(raster, DataArray):
             return raster.data.compute()
 
         xdata = next(iter(_iter_multiscale(raster, None)))

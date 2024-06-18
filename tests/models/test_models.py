@@ -192,7 +192,7 @@ class TestModels:
             raise ValueError(f"Unknown model {model}")
         self._passes_validation_after_io(model, spatial_image, element_type)
 
-        assert isinstance(spatial_image, SpatialImage)
+        assert isinstance(spatial_image, DataArray)
         if not permute:
             assert spatial_image.shape == image.shape
             assert spatial_image.data.shape == image.shape
