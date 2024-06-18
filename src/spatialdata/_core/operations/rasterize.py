@@ -336,7 +336,7 @@ def rasterize(
         if value_key is not None:
             element_name = data if isinstance(data, str) else None
             kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
-            values = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type]
+            values = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
             max_index = np.max(values.index)
             assigner = np.zeros(max_index + 1, dtype=values.dtype)
             assigner[values.index] = values
@@ -651,7 +651,7 @@ def rasterize_shapes_points(
 
     if value_key is not None:
         kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
-        data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type]
+        data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
     elif isinstance(data, GeoDataFrame):
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")

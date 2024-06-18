@@ -17,7 +17,7 @@ from skimage.segmentation import slic
 from spatial_image import SpatialImage
 
 from spatialdata._core.operations.aggregate import aggregate
-from spatialdata._core.query.relational_query import _get_unique_label_values_as_index
+from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
@@ -355,7 +355,7 @@ BlobsTypes = Literal[
 def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
     sdata = blobs(length=50)
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
-        instance_id = _get_unique_label_values_as_index(sdata[name]).tolist()
+        instance_id = get_element_instances(sdata[name]).tolist()
     else:
         index = sdata[name].index
         instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.core.Index) else index.tolist()

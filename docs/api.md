@@ -26,6 +26,7 @@ Operations on `SpatialData` objects.
     bounding_box_query
     polygon_query
     get_values
+    get_element_instances
     get_extent
     get_centroids
     join_spatialelement_table
@@ -35,6 +36,7 @@ Operations on `SpatialData` objects.
     concatenate
     transform
     rasterize
+    rasterize_bins
     to_circles
     to_polygons
     aggregate

@@ -14,11 +14,15 @@ and this project adheres to [Semantic Versioning][].
 
 -   Added operation: `to_polygons()` @quentinblampey #560
 -   Extended `rasterize()` to support all the data types @quentinblampey #566
+-   Added operation: `rasterize_bins()` @quentinblampey #578
 
 ### Minor
 
 -   Removed `pygeos` dependency @omsai #545
 -   Channel coordinate annotations on images now persist through `rasterize()` @clwgg #544
+-   Added `datasets` module
+-   Extended `get_values()` to `AnnData` tables #579
+-   Added `get_element_instances()` (replaces `_get_unique_label_values_as_index()`) #582
 
 ## [0.1.2] - 2024-03-30
 
