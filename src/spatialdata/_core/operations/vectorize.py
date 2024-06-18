@@ -264,9 +264,14 @@ def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
     if isinstance(gdf.geometry.iloc[0], Point):
         ShapesModel.validate_shapes_not_mixed_types(gdf)
         if isinstance(gdf.geometry.iloc[0], Point):
-            buffered_df = gdf.set_geometry(
-                gdf.geometry.buffer(gdf[ShapesModel.RADIUS_KEY], resolution=buffer_resolution)
+            buffered_df = gdf.copy()
+            buffered_df["geometry"] = buffered_df.apply(
+                lambda row: row.geometry.buffer(row[ShapesModel.RADIUS_KEY], resolution=buffer_resolution), axis=1
             )
+
+            # Ensure the GeoDataFrame recognizes the updated geometry column
+            buffered_df = buffered_df.set_geometry("geometry")
+
             # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
             buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = gdf.attrs[ShapesModel.TRANSFORM_KEY]
             return buffered_df
