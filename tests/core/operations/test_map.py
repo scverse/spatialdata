@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 from spatialdata._core.operations.map import map_raster
 from spatialdata.transformations import Translation, get_transformation, set_transformation
@@ -35,9 +34,7 @@ def test_map_raster(sdata_blobs, depth):
         sdata_blobs[img_layer],
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunks=(3, 100, 100),
         c_coords=None,
-        scale_factors=None,
         depth=depth,
     )
 
@@ -61,28 +58,24 @@ def test_map_raster_multiscale(sdata_blobs, depth):
         sdata_blobs[img_layer],
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunks=(3, 100, 100),
         c_coords=None,
-        scale_factors=[2, 2, 2, 2],
         depth=depth,
     )
 
-    assert isinstance(se, MultiscaleSpatialImage)
     data = sdata_blobs[img_layer]["scale0"]["image"].data.compute()
-    res = se["scale0"]["image"].data.compute()
+    res = se.data.compute()
     assert np.array_equal(data * fn_kwargs["parameter"], res)
 
 
-def test_map_raster_chunks_none(sdata_blobs):
+def test_map_raster_no_chunkwise(sdata_blobs):
     img_layer = "blobs_image"
     fn_kwargs = {"parameter": 20}
     se = map_raster(
         sdata_blobs[img_layer],
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunks=None,
+        chunkwise=False,
         c_coords=None,
-        scale_factors=None,
         depth=None,
     )
 
@@ -100,14 +93,13 @@ def test_map_raster_output_chunks(sdata_blobs):
         sdata_blobs["blobs_image"],
         func=_multiply_alter_c,
         fn_kwargs=fn_kwargs,
-        chunks=(3, 100, 100),
+        input_chunks=(3, 100, 100),
         output_chunks=(
             (1,),
             (100 + 2 * depth, 96 + 2 * depth, 60 + 2 * depth),
             (100 + 2 * depth, 96 + 2 * depth, 60 + 2 * depth),
         ),  # account for rechunking done by map_overlap to ensure minimum chunksize
         c_coords=["test"],
-        scale_factors=None,
         depth=(0, depth, depth),
     )
 
@@ -118,14 +110,8 @@ def test_map_raster_output_chunks(sdata_blobs):
     assert np.array_equal(data[0] * fn_kwargs["parameter"], res[0])
 
 
-@pytest.mark.parametrize(
-    "img_layer, expected_type, scale_factors",
-    [
-        ("blobs_image", SpatialImage, None),
-        ("blobs_multiscale_image", MultiscaleSpatialImage, [2, 2, 2, 2]),
-    ],
-)
-def test_map_transformation(sdata_blobs, img_layer, expected_type, scale_factors):
+@pytest.mark.parametrize("img_layer", ["blobs_image", "blobs_multiscale_image"])
+def test_map_transformation(sdata_blobs, img_layer):
     fn_kwargs = {"parameter": 20}
     target_coordinate_system = "my_other_space0"
     transformation = Translation(translation=[10, 12], axes=["y", "x"])
@@ -137,12 +123,10 @@ def test_map_transformation(sdata_blobs, img_layer, expected_type, scale_factors
         sdata_blobs[img_layer],
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunks=None,
+        chunkwise=False,
         c_coords=None,
-        scale_factors=scale_factors,
         depth=None,
     )
-    assert isinstance(se, expected_type)
     assert transformation == get_transformation(se, to_coordinate_system=target_coordinate_system)
 
 
@@ -156,10 +140,9 @@ def test_map_remove_z_fails(full_sdata):
             full_sdata["image3d_numpy"],
             func=_multiply_squeeze_z,
             fn_kwargs=fn_kwargs,
-            chunks=100,
+            input_chunks=100,
             output_chunks=((3,), (64,), (64,)),
             drop_axis=1,
             c_coords=None,
-            scale_factors=None,
             depth=None,
         )
