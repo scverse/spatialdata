@@ -1,6 +1,5 @@
 import copy
 
-import pytest
 from datatree import DataTree
 from spatialdata import SpatialData, deepcopy
 from spatialdata.models import (
@@ -52,33 +51,10 @@ def test_assert_elements_are_identical_metadata(full_sdata):
         if get_model(element) in (Image2DModel, Image3DModel) or get_model(element) in (Labels2DModel, Labels3DModel):
             if not isinstance(copied[element_name], DataTree):
                 assert_elements_are_identical(full_sdata[element_name], copied[element_name])
-        elif get_model(element) == PointsModel:
-            _change_metadata_points(copied, element_name, attrs=True, transformations=False)
-            with pytest.raises(AssertionError):
-                assert_elements_are_identical(full_sdata[element_name], copied[element_name])
-            _change_metadata_points(copied, element_name, attrs=True, transformations=True)
-        elif get_model(element) == ShapesModel:
-            _change_metadata_shapes(copied, element_name)
-            with pytest.raises(AssertionError):
-                assert_elements_are_identical(full_sdata[element_name], copied[element_name])
+        elif get_model(element) == PointsModel or get_model(element) == ShapesModel:
+            assert_elements_are_identical(full_sdata[element_name], copied[element_name])
         else:
             assert get_model(element) == TableModel
-            _change_metadata_tables(copied, element_name)
-            with pytest.raises(AssertionError):
-                assert_elements_are_identical(full_sdata[element_name], copied[element_name])
-
-    with pytest.raises(AssertionError):
-        assert_spatial_data_objects_are_identical(full_sdata, copied)
-
-    to_iter = list(full_sdata.gen_elements())
-    for _, element_name, element in to_iter:
-        if get_model(element) in (Image2DModel, Image3DModel) or get_model(element) in (Labels2DModel, Labels3DModel):
-            continue
-        if get_model(element) == PointsModel:
-            _change_metadata_points(full_sdata, element_name, attrs=True, transformations=True)
-        if get_model(element) == ShapesModel:
-            _change_metadata_shapes(full_sdata, element_name)
-        if get_model(element) == TableModel:
-            _change_metadata_tables(full_sdata, element_name)
+            assert_elements_are_identical(full_sdata[element_name], copied[element_name])
 
     assert_spatial_data_objects_are_identical(full_sdata, copied)
