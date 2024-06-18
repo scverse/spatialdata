@@ -182,7 +182,7 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        data = DataArray(to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs))
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
