@@ -11,7 +11,6 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
-from multiscale_spatial_image import MultiscaleSpatialImage
 from xarray import DataArray
 
 from spatialdata._types import ArrayLike
@@ -164,10 +163,8 @@ def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
         assert len(v) == 1
         xdata = v.__iter__().__next__()
         d[k] = xdata
-    # this stopped working, we should add support for multiscale_spatial_image 1.0.0 so that the problem is solved
-    return MultiscaleSpatialImage.from_dict(d)
-    # data_tree.__class__ = MultiscaleSpatialImage
-    # return cast(MultiscaleSpatialImage, data_tree)
+
+    return DataTree.from_dict(d)
 
 
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
