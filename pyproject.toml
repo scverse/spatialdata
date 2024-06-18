@@ -30,7 +30,7 @@ dependencies = [
     "geopandas>=0.14",
     "multiscale_spatial_image==0.11.2",
     "networkx",
-    "numpy<2.0.0",
+    "numpy<=1.26.5",
     "ome_zarr>=0.8.4",
     "pandas",
     "pooch",
