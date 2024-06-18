@@ -153,6 +153,11 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
 
 # TODO: probably we want this method to live in multiscale_spatial_image
 def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
+    warnings.warn(
+        f"{multiscale_spatial_image_from_data_tree} is deprecated and will be removed in version 0.2.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     d = {}
     for k, dt in data_tree.items():
         v = dt.values()
