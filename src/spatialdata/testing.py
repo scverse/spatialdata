@@ -4,11 +4,11 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe.tests.test_dataframe import assert_eq as assert_dask_dataframe_equal
+from datatree import DataTree
 from datatree.testing import assert_equal as assert_datatree_equal
 from geopandas import GeoDataFrame
 from geopandas.testing import assert_geodataframe_equal
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from xarray import DataArray
 from xarray.testing import assert_equal as assert_xarray_equal
 
 from spatialdata import SpatialData
@@ -115,9 +115,9 @@ def assert_elements_are_identical(
     # compare the elements
     if isinstance(element0, AnnData):
         assert_anndata_equal(element0, element1)
-    elif isinstance(element0, SpatialImage):
+    elif isinstance(element0, DataArray):
         assert_xarray_equal(element0, element1)
-    elif isinstance(element0, MultiscaleSpatialImage):
+    elif isinstance(element0, DataTree):
         assert_datatree_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
         assert_geodataframe_equal(element0, element1, check_less_precise=True)

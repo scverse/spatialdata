@@ -5,6 +5,7 @@ import datashader as ds
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
@@ -169,7 +170,7 @@ def rasterize(
     # extra arguments only for shapes and points
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
-) -> SpatialData | SpatialImage:
+) -> SpatialData | DataArray:
     """
     Rasterize a `SpatialData` object or a `SpatialElement` (image, labels, points, shapes).
 
@@ -367,7 +368,7 @@ def rasterize(
 
 
 def _get_xarray_data_to_rasterize(
-    data: SpatialImage | MultiscaleSpatialImage,
+    data: DataArray | DataTree,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
@@ -398,10 +399,10 @@ def _get_xarray_data_to_rasterize(
     """
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
-    if isinstance(data, SpatialImage):
+    if isinstance(data, DataArray):
         xdata = data
         pyramid_scale = None
-    elif isinstance(data, MultiscaleSpatialImage):
+    elif isinstance(data, DataTree):
         latest_scale: str | None = None
         for scale in reversed(list(data.keys())):
             data_tree = data[scale]

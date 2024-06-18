@@ -3,8 +3,7 @@ import itertools
 import dask_image.ndinterp
 import pytest
 import xarray
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from datatree import DataTree
 from spatialdata._utils import unpad_raster
 from spatialdata.models import get_model
 from spatialdata.transformations import Affine
@@ -32,29 +31,29 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
         schema = get_model(raster)
-        if isinstance(raster, SpatialImage):
+        if isinstance(raster, DataArray):
             data = raster
-        elif isinstance(raster, MultiscaleSpatialImage):
+        elif isinstance(raster, DataTree):
             d = dict(raster["scale0"])
             assert len(d) == 1
             data = d.values().__iter__().__next__()
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         padded = _pad_raster(data.data, data.dims)
-        if isinstance(raster, SpatialImage):
+        if isinstance(raster, DataArray):
             padded = schema.parse(padded, dims=data.dims, c_coords=data.coords.get("c", None))
-        elif isinstance(raster, MultiscaleSpatialImage):
+        elif isinstance(raster, DataTree):
             # some arbitrary scaling factors
             padded = schema.parse(padded, dims=data.dims, scale_factors=[2, 2], c_coords=data.coords.get("c", None))
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
         unpadded = unpad_raster(padded)
-        if isinstance(raster, SpatialImage):
+        if isinstance(raster, DataArray):
             try:
                 xarray.testing.assert_equal(raster, unpadded)
             except AssertionError as e:
                 raise e
-        elif isinstance(raster, MultiscaleSpatialImage):
+        elif isinstance(raster, DataTree):
             d0 = dict(raster["scale0"])
             assert len(d0) == 1
             d1 = dict(unpadded["scale0"])

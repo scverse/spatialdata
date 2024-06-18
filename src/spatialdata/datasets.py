@@ -1,6 +1,8 @@
 """SpatialData datasets."""
 
-from typing import Any, Literal, Optional, Union
+from __future__ import annotations
+
+from typing import Any, Literal
 
 import dask.dataframe.core
 import numpy as np
@@ -8,13 +10,13 @@ import pandas as pd
 import scipy
 from anndata import AnnData
 from dask.dataframe.core import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.affinity import translate
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.query.relational_query import get_element_instances
@@ -37,9 +39,9 @@ def blobs(
     length: int = 512,
     n_points: int = 200,
     n_shapes: int = 5,
-    extra_coord_system: Optional[str] = None,
+    extra_coord_system: str | None = None,
     n_channels: int = 3,
-    c_coords: Optional[ArrayLike] = None,
+    c_coords: ArrayLike | None = None,
 ) -> SpatialData:
     """
     Blobs dataset.
@@ -106,9 +108,9 @@ class BlobsDataset:
         length: int = 512,
         n_points: int = 200,
         n_shapes: int = 5,
-        extra_coord_system: Optional[str] = None,
+        extra_coord_system: str | None = None,
         n_channels: int = 3,
-        c_coords: Optional[ArrayLike] = None,
+        c_coords: ArrayLike | None = None,
     ) -> None:
         """
         Blobs dataset.
@@ -173,12 +175,12 @@ class BlobsDataset:
 
     def _image_blobs(
         self,
-        transformations: Optional[dict[str, Any]] = None,
+        transformations: dict[str, Any] | None = None,
         length: int = 512,
         n_channels: int = 3,
-        c_coords: Optional[ArrayLike] = None,
+        c_coords: ArrayLike | None = None,
         multiscale: bool = False,
-    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
+    ) -> DataArray | DataTree:
         masks = []
         for i in range(n_channels):
             mask = self._generate_blobs(length=length, seed=i)
@@ -194,8 +196,8 @@ class BlobsDataset:
         )
 
     def _labels_blobs(
-        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, multiscale: bool = False
-    ) -> Union[SpatialImage, MultiscaleSpatialImage]:
+        self, transformations: dict[str, Any] | None = None, length: int = 512, multiscale: bool = False
+    ) -> DataArray | DataTree:
         """Create a 2D labels."""
         from scipy.ndimage import watershed_ift
 
@@ -222,7 +224,7 @@ class BlobsDataset:
             return Labels2DModel.parse(out, transformations=transformations, dims=dims)
         return Labels2DModel.parse(out, transformations=transformations, dims=dims, scale_factors=[2, 2])
 
-    def _generate_blobs(self, length: int = 512, seed: Optional[int] = None) -> ArrayLike:
+    def _generate_blobs(self, length: int = 512, seed: int | None = None) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
 
         rng = default_rng(42) if seed is None else default_rng(seed)
@@ -237,7 +239,7 @@ class BlobsDataset:
         return mask
 
     def _points_blobs(
-        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, n_points: int = 200
+        self, transformations: dict[str, Any] | None = None, length: int = 512, n_points: int = 200
     ) -> DaskDataFrame:
         rng = default_rng(42)
         padding = 1
@@ -256,7 +258,7 @@ class BlobsDataset:
         )
 
     def _circles_blobs(
-        self, transformations: Optional[dict[str, Any]] = None, length: int = 512, n_shapes: int = 5
+        self, transformations: dict[str, Any] | None = None, length: int = 512, n_shapes: int = 5
     ) -> GeoDataFrame:
         midpoint = length // 2
         halfmidpoint = midpoint // 2
@@ -271,7 +273,7 @@ class BlobsDataset:
 
     def _polygons_blobs(
         self,
-        transformations: Optional[dict[str, Any]] = None,
+        transformations: dict[str, Any] | None = None,
         length: int = 512,
         n_shapes: int = 5,
         multipolygons: bool = False,
@@ -290,7 +292,7 @@ class BlobsDataset:
     # function that generates random shapely polygons given a bounding box
     def _generate_random_polygons(
         self, n: int, bbox: tuple[int, int], multipolygons: bool = False
-    ) -> list[Union[Polygon, MultiPolygon]]:
+    ) -> list[Polygon | MultiPolygon]:
         def get_poly(i: int) -> Polygon:
             return Polygon(
                 [
