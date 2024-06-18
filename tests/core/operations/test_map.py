@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 from spatial_image import SpatialImage
@@ -145,4 +147,27 @@ def test_map_remove_z_fails(full_sdata):
             drop_axis=1,
             c_coords=None,
             depth=None,
+        )
+
+
+def test_invalid_map_raster(sdata_blobs):
+    with pytest.raises(ValueError, match="Only 'SpatialImage' and 'MultiscaleSpatialImage' are supported."):
+        map_raster(
+            sdata_blobs["blobs_points"],
+            func=_multiply,
+            fn_kwargs={"parameter": 20},
+            c_coords=None,
+            depth=(0, 60),
+        )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Depth (0, 60) is provided for 2 dimensions. Please (only) provide depth for 3 dimensions."),
+    ):
+        map_raster(
+            sdata_blobs["blobs_image"],
+            func=_multiply,
+            fn_kwargs={"parameter": 20},
+            c_coords=None,
+            depth=(0, 60),
         )

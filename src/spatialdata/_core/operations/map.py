@@ -79,11 +79,6 @@ def map_raster(
     else:
         raise ValueError("Only 'SpatialImage' and 'MultiscaleSpatialImage' are supported.")
 
-    if "depth" in kwargs or "chunks" in kwargs:
-        raise ValueError(
-            "Please provide 'depth' and 'chunks' as arguments to 'map_raster' (respectively 'depth' and 'output_chunks'"
-            ", and not as 'kwargs'."
-        )
     kwargs = kwargs.copy()
     kwargs["chunks"] = output_chunks
 
@@ -99,7 +94,7 @@ def map_raster(
 
             if not isinstance(depth, int) and len(depth) != arr.ndim:
                 raise ValueError(
-                    f"Depth ({depth}) is provided for {len(depth)} dimensions. "
+                    f"Depth {depth} is provided for {len(depth)} dimensions. "
                     f"Please (only) provide depth for {arr.ndim} dimensions."
                 )
             kwargs["depth"] = coerce_depth(arr.ndim, depth)
