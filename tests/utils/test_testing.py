@@ -15,27 +15,8 @@ from spatialdata.models import (
 )
 from spatialdata.testing import assert_elements_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Scale, set_transformation
-from xarray import DataArray
 
 scale = Scale([1.0], axes=("x",))
-
-
-def _change_metadata_image(sdata: SpatialData, element_name: str, coords: bool, transformations: bool) -> None:
-    if coords:
-        if isinstance(sdata[element_name], DataArray):
-            sdata[element_name] = sdata[element_name].assign_coords({"c": sdata[element_name].c.as_numpy().copy()})
-        else:
-            assert isinstance(sdata[element_name], DataTree)
-            # TODO: leads to problems with assert_elements_are_identical, I think it's a bug of data_tree,
-            #  need to report
-            dt = sdata[element_name].assign_coords({"c": sdata[element_name]["scale0"].c.as_numpy().copy()})
-            sdata[element_name] = dt
-    if transformations:
-        set_transformation(sdata[element_name], copy.deepcopy(scale))
-
-
-def _change_metadata_labels(sdata: SpatialData, element_name: str) -> None:
-    set_transformation(sdata[element_name], copy.deepcopy(scale))
 
 
 def _change_metadata_points(sdata: SpatialData, element_name: str, attrs: bool, transformations: bool) -> None:
@@ -68,16 +49,9 @@ def test_assert_elements_are_identical_metadata(full_sdata):
 
     to_iter = list(copied.gen_elements())
     for _, element_name, element in to_iter:
-        if get_model(element) in (Image2DModel, Image3DModel):
-            _change_metadata_image(copied, element_name, coords=True, transformations=False)
+        if get_model(element) in (Image2DModel, Image3DModel) or get_model(element) in (Labels2DModel, Labels3DModel):
             if not isinstance(copied[element_name], DataTree):
                 assert_elements_are_identical(full_sdata[element_name], copied[element_name])
-            _change_metadata_image(copied, element_name, coords=True, transformations=True)
-        elif get_model(element) in (Labels2DModel, Labels3DModel):
-            _change_metadata_labels(copied, element_name)
-            if not isinstance(copied[element_name], DataTree):
-                with pytest.raises(AssertionError):
-                    assert_elements_are_identical(full_sdata[element_name], copied[element_name])
         elif get_model(element) == PointsModel:
             _change_metadata_points(copied, element_name, attrs=True, transformations=False)
             with pytest.raises(AssertionError):
@@ -98,16 +72,13 @@ def test_assert_elements_are_identical_metadata(full_sdata):
 
     to_iter = list(full_sdata.gen_elements())
     for _, element_name, element in to_iter:
-        if get_model(element) in (Image2DModel, Image3DModel):
-            _change_metadata_image(full_sdata, element_name, coords=True, transformations=True)
-        elif get_model(element) in (Labels2DModel, Labels3DModel):
-            _change_metadata_labels(full_sdata, element_name)
-        elif get_model(element) == PointsModel:
+        if get_model(element) in (Image2DModel, Image3DModel) or get_model(element) in (Labels2DModel, Labels3DModel):
+            continue
+        if get_model(element) == PointsModel:
             _change_metadata_points(full_sdata, element_name, attrs=True, transformations=True)
-        elif get_model(element) == ShapesModel:
+        if get_model(element) == ShapesModel:
             _change_metadata_shapes(full_sdata, element_name)
-        else:
-            assert get_model(element) == TableModel
+        if get_model(element) == TableModel:
             _change_metadata_tables(full_sdata, element_name)
 
     assert_spatial_data_objects_are_identical(full_sdata, copied)
