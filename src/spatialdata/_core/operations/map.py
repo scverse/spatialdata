@@ -20,10 +20,10 @@ def map_raster(
     func: Callable[[da.Array], da.Array],
     fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
     chunkwise: bool = True,
-    depth: str | int | tuple[int, ...] | dict[int, int] | None = None,
+    depth: int | tuple[int, ...] | dict[int, int] | None = None,
     input_chunks: tuple[tuple[int, ...], ...] | None = None,
     output_chunks: tuple[tuple[int, ...], ...] | None = None,
-    c_coords: int | str | Iterable[int | str] | None = None,
+    c_coords: Iterable[int] | Iterable[str] | None = None,
     dims: tuple[str, ...] | None = None,
     transformations: dict[str, Any] | None = None,
     **kwargs: Any,
@@ -46,8 +46,8 @@ def map_raster(
     depth
         If not `None`, distributed processing will be achieved with `dask.array.map_overlap`, otherwise with
         `dask.array.map_blocks`. Specifies the overlap between chunks, i.e. the number of elements that each chunk
-        should share with its neighbor chunks.
-        # TODO: Add examples for each data type in the signature.
+        should share with its neighbor chunks. Please see `dask.array.map_overlap` for more information on the accepted
+        values.
     input_chunks
         If specified, rechunks the input data before applying the function using `dask.array.rechunk`.
     output_chunks
@@ -55,11 +55,9 @@ def map_raster(
         array is assumed to have the same chunk structure as the first input array.
         Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`.
         E.g. ( (3,), (256,), (256,) ).
-        # TODO: Add examples for each data type in the signature.
     c_coords
         The channel coordinates for the output data. If not provided, the channel coordinates of the input data are
         used. It should be specified if the function changes the number of channels.
-        # TODO: Add examples for each data type in the signature.
     dims
         The dimensions of the output data. If not provided, the dimensions of the input data are used. It must be
         specified if the function changes the data dimensions.
