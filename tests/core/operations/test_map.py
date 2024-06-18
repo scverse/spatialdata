@@ -2,9 +2,9 @@ import re
 
 import numpy as np
 import pytest
-from spatial_image import SpatialImage
 from spatialdata._core.operations.map import map_raster
 from spatialdata.transformations import Translation, get_transformation, set_transformation
+from xarray import DataArray
 
 
 def _multiply(arr, parameter=10):
@@ -43,7 +43,7 @@ def test_map_raster(sdata_blobs, depth, element_name):
         depth=depth,
     )
 
-    assert isinstance(se, SpatialImage)
+    assert isinstance(se, DataArray)
     data = sdata_blobs[element_name].data.compute()
     res = se.data.compute()
     assert np.array_equal(data * fn_kwargs["parameter"], res)
@@ -84,7 +84,7 @@ def test_map_raster_no_chunkwise(sdata_blobs):
         depth=None,
     )
 
-    assert isinstance(se, SpatialImage)
+    assert isinstance(se, DataArray)
     data = sdata_blobs[img_layer].data.compute()
     res = se.data.compute()
     assert np.array_equal(data * fn_kwargs["parameter"], res)
@@ -108,7 +108,7 @@ def test_map_raster_output_chunks(sdata_blobs):
         depth=(0, depth, depth),
     )
 
-    assert isinstance(se, SpatialImage)
+    assert isinstance(se, DataArray)
     assert np.array_equal(np.array(output_channels), se.c.data)
     data = sdata_blobs["blobs_image"].data.compute()
     res = se.data.compute()
@@ -154,7 +154,7 @@ def test_map_remove_z_fails(full_sdata):
 
 
 def test_invalid_map_raster(sdata_blobs):
-    with pytest.raises(ValueError, match="Only 'SpatialImage' and 'MultiscaleSpatialImage' are supported."):
+    with pytest.raises(ValueError, match="Only 'DataArray' and 'DataTree' are supported."):
         map_raster(
             sdata_blobs["blobs_points"],
             func=_multiply,

@@ -13,7 +13,6 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._io import SpatialDataFormatV01
@@ -92,13 +91,12 @@ def _read_multiscale(
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
     data = node.load(Multiscales).array(resolution=datasets[0], version=fmt.version)
-    si = SpatialImage(
+    si = DataArray(
         data,
         name="image",
         dims=axes,
         coords={"c": channels} if channels is not None else {},
     )
-    si.__class__ = DataArray
     _set_transformations(si, transformations)
     return compute_coordinates(si)
 

@@ -6,8 +6,8 @@ from typing import Any, Callable
 
 import dask.array as da
 from dask.array.overlap import coerce_depth
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from datatree import DataTree
+from xarray import DataArray
 
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
 from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
@@ -17,7 +17,7 @@ __all__ = ["map_raster"]
 
 
 def map_raster(
-    data: SpatialImage | MultiscaleSpatialImage,
+    data: DataArray | DataTree,
     func: Callable[[da.Array], da.Array],
     fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
     chunkwise: bool = True,
@@ -28,14 +28,14 @@ def map_raster(
     dims: tuple[str, ...] | None = None,
     transformations: dict[str, Any] | None = None,
     **kwargs: Any,
-) -> SpatialImage:
+) -> DataArray:
     """
     Apply a function to raster data, for each chunk and each scale.
 
     Parameters
     ----------
     data
-        The data to process. It can be a `SpatialImage` or `MultiscaleSpatialImage`. If it's a `MultiscaleSpatialImage`,
+        The data to process. It can be a `DataArray` or `DataTree`. If it's a `DataTree`,
         the function is applied to the first scale (full-resolution data).
     func
         The function to apply to the data.
@@ -71,14 +71,14 @@ def map_raster(
 
     Returns
     -------
-    The processed data as a `SpatialImage`.
+    The processed data as a `DataArray`.
     """
-    if isinstance(data, SpatialImage):
+    if isinstance(data, DataArray):
         arr = data.data
-    elif isinstance(data, MultiscaleSpatialImage):
+    elif isinstance(data, DataTree):
         arr = data["scale0"].values().__iter__().__next__().data
     else:
-        raise ValueError("Only 'SpatialImage' and 'MultiscaleSpatialImage' are supported.")
+        raise ValueError("Only 'DataArray' and 'DataTree' are supported.")
 
     model = get_model(data)
     if model in (Labels2DModel, Labels3DModel) and c_coords is not None:
