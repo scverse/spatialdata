@@ -29,11 +29,14 @@ def _multiply_squeeze_z(arr, parameter=10):
         (0, 60, 60),
     ],
 )
-def test_map_raster(sdata_blobs, depth):
-    img_layer = "blobs_image"
+@pytest.mark.parametrize("element_name", ["blobs_image", "blobs_labels"])
+def test_map_raster(sdata_blobs, depth, element_name):
+    if element_name == "blobs_labels" and depth is not None:
+        depth = (60, 60)
+
     fn_kwargs = {"parameter": 20}
     se = map_raster(
-        sdata_blobs[img_layer],
+        sdata_blobs[element_name],
         func=_multiply,
         fn_kwargs=fn_kwargs,
         c_coords=None,
@@ -41,7 +44,7 @@ def test_map_raster(sdata_blobs, depth):
     )
 
     assert isinstance(se, SpatialImage)
-    data = sdata_blobs[img_layer].data.compute()
+    data = sdata_blobs[element_name].data.compute()
     res = se.data.compute()
     assert np.array_equal(data * fn_kwargs["parameter"], res)
 
@@ -170,4 +173,13 @@ def test_invalid_map_raster(sdata_blobs):
             fn_kwargs={"parameter": 20},
             c_coords=None,
             depth=(0, 60),
+        )
+
+    with pytest.raises(ValueError, match="Channel coordinates can not be provided for labels data."):
+        map_raster(
+            sdata_blobs["blobs_labels"],
+            func=_multiply,
+            fn_kwargs={"parameter": 20},
+            c_coords=["c"],
+            depth=(0, 60, 60),
         )

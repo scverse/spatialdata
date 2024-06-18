@@ -10,6 +10,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from spatial_image import SpatialImage
 
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
+from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
 from spatialdata.transformations import get_transformation
 
 __all__ = ["map_raster"]
@@ -79,6 +80,10 @@ def map_raster(
     else:
         raise ValueError("Only 'SpatialImage' and 'MultiscaleSpatialImage' are supported.")
 
+    model = get_model(data)
+    if model in (Labels2DModel, Labels3DModel) and c_coords is not None:
+        raise ValueError("Channel coordinates can not be provided for labels data.")
+
     kwargs = kwargs.copy()
     kwargs["chunks"] = output_chunks
 
@@ -105,7 +110,10 @@ def map_raster(
         arr = map_func(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
 
     dims = dims if dims is not None else get_axes_names(data)
-    c_coords = c_coords if c_coords is not None else get_channels(data)
+    if model not in (Labels2DModel, Labels3DModel):
+        c_coords = c_coords if c_coords is not None else get_channels(data)
+    else:
+        c_coords = None
     if transformations is None:
         d = get_transformation(data, get_all=True)
         assert isinstance(d, dict)
