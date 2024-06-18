@@ -10,7 +10,12 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.1.3] - 2024-xx-xx
 
-### Added
+### Changed
+
+-   Using `DataArray` directly instead of the subclass `SpatialImage` (removed install constraint for the `spatial_image` package) #587
+-   Using `DataTree` directly instead of the subclass `MultiscaleSpatialImage` (removed install constraint for the `multiscale_spatial_image` package) #587
+
+### Major
 
 -   Added operation: `to_polygons()` @quentinblampey #560
 -   Extended `rasterize()` to support all the data types @quentinblampey #566
