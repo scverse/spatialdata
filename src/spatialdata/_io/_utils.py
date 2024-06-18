@@ -5,9 +5,11 @@ import logging
 import os.path
 import re
 import tempfile
+import warnings
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from functools import singledispatch
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -15,12 +17,13 @@ import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
-from dask.array.core import Array as DaskArray
+from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
+from datatree import DataTree
+from geopandas import GeoDataFrame
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
@@ -28,6 +31,7 @@ from spatialdata._utils import iterate_pyramid_levels
 from spatialdata.models import TableModel
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
+    SpatialElement,
     ValidAxis_t,
     _validate_mapping_to_coordinate_system_type,
 )
@@ -128,7 +132,7 @@ def _write_metadata(
 
 
 def _iter_multiscale(
-    data: MultiscaleSpatialImage,
+    data: DataTree,
     attr: str | None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
@@ -210,7 +214,7 @@ def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
 
 
 @singledispatch
-def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpatialImage | DaskDataFrame) -> list[str]:
+def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> list[str]:
     """
     Get the backing files that appear in the Dask computational graph of an element/any element of a SpatialData object.
 
@@ -234,18 +238,18 @@ def get_dask_backing_files(element: SpatialData | SpatialImage | MultiscaleSpati
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
     for e in element._gen_spatial_element_values():
-        if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
+        if isinstance(e, (DataArray, DataTree, DaskDataFrame)):
             files = files.union(get_dask_backing_files(e))
     return list(files)
 
 
-@get_dask_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataArray)
+def _(element: DataArray) -> list[str]:
     return _get_backing_files(element.data)
 
 
-@get_dask_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataTree)
+def _(element: DataTree) -> list[str]:
     xdata0 = next(iter(iterate_pyramid_levels(element)))
     return _get_backing_files(xdata0.data)
 
@@ -253,6 +257,12 @@ def _(element: MultiscaleSpatialImage) -> list[str]:
 @get_dask_backing_files.register(DaskDataFrame)
 def _(element: DaskDataFrame) -> list[str]:
     return _get_backing_files(element)
+
+
+@get_dask_backing_files.register(AnnData)
+@get_dask_backing_files.register(GeoDataFrame)
+def _(element: AnnData | GeoDataFrame) -> list[str]:
+    return []
 
 
 def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
@@ -277,6 +287,61 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     return files
 
 
+def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
+    """
+    Return the list of boolean values indicating if backing files for an object are child directory of a path.
+
+    Parameters
+    ----------
+    path
+        The path to check if the backing files are contained in.
+    object
+        The object to check the backing files of.
+
+    Returns
+    -------
+    List of boolean values for each of the backing files.
+
+    Notes
+    -----
+    If an object does not have a Dask computational graph, it will return an empty list.
+    It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
+    """
+    if not isinstance(path, Path):
+        raise TypeError(f"Expected a Path object, got {type(path)}")
+    return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
+
+
+def _is_subfolder(parent: Path, child: Path) -> bool:
+    """
+    Check if a path is a subfolder of another path.
+
+    Parameters
+    ----------
+    parent
+        The parent folder.
+    child
+        The child folder.
+
+    Returns
+    -------
+    True if the child is a subfolder of the parent.
+    """
+    if isinstance(child, str):
+        child = Path(child)
+    if isinstance(parent, str):
+        parent = Path(parent)
+    if not isinstance(parent, Path) or not isinstance(child, Path):
+        raise TypeError(f"Expected a Path object, got {type(parent)} and {type(child)}")
+    return child.resolve().is_relative_to(parent.resolve())
+
+
+def _is_element_self_contained(
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+) -> bool:
+    return all(_backed_elements_contained_in_path(path=element_path, object=element))
+
+
 def save_transformations(sdata: SpatialData) -> None:
     """
     Save all the transformations of a SpatialData object to disk.
@@ -284,11 +349,14 @@ def save_transformations(sdata: SpatialData) -> None:
     sdata
         The SpatialData object
     """
-    from spatialdata.transformations import get_transformation, set_transformation
-
-    for element in sdata._gen_spatial_element_values():
-        transformations = get_transformation(element, get_all=True)
-        set_transformation(element, transformations, set_all=True, write_to_sdata=sdata)
+    warnings.warn(
+        "This function is deprecated and should be replaced by `SpatialData.write_transformations()` or "
+        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. This function will call"
+        " `SpatialData.write_transformations()`; please call this function directly.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    sdata.write_transformations()
 
 
 def read_table_and_validate(

@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._logging import logger
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
     from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
-def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_from_dict_container(dict_container: Any) -> MappingToCoordinateSystem_t | None:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in dict_container:
@@ -30,12 +29,12 @@ def _get_transformations_from_dict_container(dict_container: Any) -> Optional[Ma
         return None
 
 
-def _get_transformations_xarray(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_xarray(e: DataArray) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch
-def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations(e: SpatialElement) -> MappingToCoordinateSystem_t | None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
@@ -72,13 +71,13 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_get_transformations.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DataArray)
+def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_xarray(e)
 
 
-@_get_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
+@_get_transformations.register(DataTree)
+def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in e.attrs:
@@ -94,17 +93,17 @@ def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
 
 @_get_transformations.register(GeoDataFrame)
 @_get_transformations.register(DaskDataFrame)
-def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_from_dict_container(e.attrs)
 
 
-@_set_transformations.register(SpatialImage)
-def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DataArray)
+def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_xarray(e, transformations)
 
 
-@_set_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DataTree)
+def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
     from spatialdata.models import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
@@ -146,9 +145,7 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
 
 
 @singledispatch
-def compute_coordinates(
-    data: Union[SpatialImage, MultiscaleSpatialImage]
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def compute_coordinates(data: DataArray | DataTree) -> DataArray | DataTree:
     """
     Computes and assign coordinates to a (Multiscale)SpatialImage.
 
@@ -193,16 +190,16 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
     return scale
 
 
-@compute_coordinates.register(SpatialImage)
-def _(data: SpatialImage) -> SpatialImage:
+@compute_coordinates.register(DataArray)
+def _(data: DataArray) -> DataArray:
     coords: dict[str, ArrayLike] = {
         d: np.arange(data.sizes[d], dtype=np.float64) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 
 
-@compute_coordinates.register(MultiscaleSpatialImage)
-def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+@compute_coordinates.register(DataTree)
+def _(data: DataTree) -> DataTree:
     from spatialdata.models import get_axes_names
 
     spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
@@ -217,10 +214,10 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
             coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
             new_coords[ax] = coords
         out[name] = dt[img_name].assign_coords(new_coords)
-    msi = MultiscaleSpatialImage.from_dict(d=out)
+    datatree = DataTree.from_dict(d=out)
     # this is to trigger the validation of the dims
-    _ = get_axes_names(msi)
-    return msi
+    _ = get_axes_names(datatree)
+    return datatree
 
 
 def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> ArrayLike:

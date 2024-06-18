@@ -12,14 +12,12 @@ import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
+from spatialdata import to_polygons
 from spatialdata._core.query._utils import (
     _get_filtered_or_unfiltered_tables,
-    circles_to_polygons,
     get_bounding_box_corners,
 )
 from spatialdata._core.spatialdata import SpatialData
@@ -466,15 +464,15 @@ def _(
     return SpatialData(**new_elements, tables=tables)
 
 
-@bounding_box_query.register(SpatialImage)
-@bounding_box_query.register(MultiscaleSpatialImage)
+@bounding_box_query.register(DataArray)
+@bounding_box_query.register(DataTree)
 def _(
-    image: SpatialImage | MultiscaleSpatialImage,
+    image: DataArray | DataTree,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> SpatialImage | MultiscaleSpatialImage | None:
+) -> DataArray | DataTree | None:
     """Implement bounding box query for SpatialImage.
 
     Notes
@@ -559,14 +557,14 @@ def _(
 
     # query the data
     query_result = image.sel(selection)
-    if isinstance(image, SpatialImage):
+    if isinstance(image, DataArray):
         if 0 in query_result.shape:
             return None
-        assert isinstance(query_result, SpatialImage)
+        assert isinstance(query_result, DataArray)
         # rechunk the data to avoid irregular chunks
         image = image.chunk("auto")
     else:
-        assert isinstance(image, MultiscaleSpatialImage)
+        assert isinstance(image, DataTree)
         assert isinstance(query_result, DataTree)
         # we need to convert query_result it to MultiscaleSpatialImage, dropping eventual collapses scales (or even
         # the whole object if the first scale is collapsed)
@@ -595,7 +593,7 @@ def _(
             return None
         d = {k: d[k] for k in scales_to_keep}
 
-        query_result = MultiscaleSpatialImage.from_dict(d)
+        query_result = DataTree.from_dict(d)
         # rechunk the data to avoid irregular chunks
         for scale in query_result:
             query_result[scale]["image"] = query_result[scale]["image"].chunk("auto")
@@ -838,14 +836,14 @@ def _(
     return SpatialData(**new_elements, tables=tables)
 
 
-@polygon_query.register(SpatialImage)
-@polygon_query.register(MultiscaleSpatialImage)
+@polygon_query.register(DataArray)
+@polygon_query.register(DataTree)
 def _(
-    image: SpatialImage | MultiscaleSpatialImage,
+    image: DataArray | DataTree,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     **kwargs: Any,
-) -> SpatialImage | MultiscaleSpatialImage | None:
+) -> DataArray | DataTree | None:
     _check_deprecated_kwargs(kwargs)
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
@@ -902,7 +900,7 @@ def _(
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 
-    buffered = circles_to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
+    buffered = to_polygons(element) if ShapesModel.RADIUS_KEY in element.columns else element
 
     OLD_INDEX = "__old_index"
     if OLD_INDEX in buffered.columns:

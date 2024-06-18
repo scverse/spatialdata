@@ -12,19 +12,19 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from dask.array.core import Array as DaskArray
+from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
-from spatial_image import SpatialImage, to_spatial_image
+from spatial_image import to_spatial_image
 from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
@@ -89,6 +89,7 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
 class RasterSchema(DataArraySchema):
     """Base schema for raster data."""
 
+    # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     @classmethod
     def parse(
         cls,
@@ -99,7 +100,7 @@ class RasterSchema(DataArraySchema):
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
-    ) -> SpatialImage | MultiscaleSpatialImage:
+    ) -> DataArray | DataTree:
         """
         Validate (or parse) raster data.
 
@@ -135,7 +136,7 @@ class RasterSchema(DataArraySchema):
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, (DataArray, SpatialImage)):
+        if isinstance(data, (DataArray)):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -219,12 +220,12 @@ class RasterSchema(DataArraySchema):
             "or Labels3DModel to construct data that is guaranteed to be valid."
         )
 
-    @validate.register(SpatialImage)
-    def _(self, data: SpatialImage) -> None:
+    @validate.register(DataArray)
+    def _(self, data: DataArray) -> None:
         super().validate(data)
 
-    @validate.register(MultiscaleSpatialImage)
-    def _(self, data: MultiscaleSpatialImage) -> None:
+    @validate.register(DataTree)
+    def _(self, data: DataTree) -> None:
         for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
@@ -351,6 +352,36 @@ class ShapesModel:
                     UserWarning,
                     stacklevel=2,
                 )
+
+    @classmethod
+    def validate_shapes_not_mixed_types(cls, gdf: GeoDataFrame) -> None:
+        """
+        Check that the Shapes element is either composed of Point or Polygon/MultiPolygon.
+
+        Parameters
+        ----------
+        gdf
+            The Shapes element.
+
+        Raises
+        ------
+        ValueError
+            When the geometry column composing the object does not satisfy the type requirements.
+
+        Notes
+        -----
+        This function is not called by ShapesModel.validate() because computing the unique types by default could be
+        expensive.
+        """
+        values_geotypes = list(gdf.geom_type.unique())
+        if values_geotypes == ["Point"]:
+            return
+        if set(values_geotypes).issubset(["Polygon", "MultiPolygon"]):
+            return
+        raise ValueError(
+            "The geometry column of a Shapes element should either be composed of Point, either of "
+            f"Polygon/MultyPolygon. Found: {values_geotypes}"
+        )
 
     @singledispatchmethod
     @classmethod
@@ -640,17 +671,17 @@ class PointsModel:
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
             table[c] = data[c]
 
-        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
-        # here I tried to fix https://github.com/scverse/spatialdata/issues/486, didn't work
-        # old_columns = list(data.columns)
-        # new_columns = list(table.columns)
-        # if new_columns == set(old_columns) and new_columns != old_columns:
-        #     col_order = [col for col in old_columns if col in new_columns]
-        #     table = table[col_order]
-
-        return cls._add_metadata_and_validate(
+        validated = cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
         )
+
+        # when `coordinates` is None, and no columns have been added or removed, preserves the original order
+        old_columns = list(data.columns)
+        new_columns = list(validated.columns)
+        if set(new_columns) == set(old_columns) and new_columns != old_columns:
+            col_order = [col for col in old_columns if col in new_columns]
+            validated = validated[col_order]
+        return validated
 
     @classmethod
     def _add_metadata_and_validate(
@@ -926,7 +957,7 @@ class TableModel:
         not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
         if not_unique:
             raise ValueError(
-                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique integers"
+                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique values"
             )
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
@@ -969,7 +1000,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(e, (DataArray, DataTree)):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:

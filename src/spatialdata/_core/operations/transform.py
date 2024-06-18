@@ -10,8 +10,8 @@ import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -162,7 +162,7 @@ def _set_transformation_for_transformed_elements(
         assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
-    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(element, (DataArray, DataTree)):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
@@ -301,13 +301,13 @@ def _(
     return SpatialData(**new_elements)
 
 
-@transform.register(SpatialImage)
+@transform.register(DataArray)
 def _(
-    data: SpatialImage,
+    data: DataArray,
     transformation: BaseTransformation | None = None,
     maintain_positioning: bool = False,
     to_coordinate_system: str | None = None,
-) -> SpatialImage:
+) -> DataArray:
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
@@ -322,7 +322,7 @@ def _(
     c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
-    assert isinstance(transformed_data, SpatialImage)
+    assert isinstance(transformed_data, DataArray)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     _set_transformation_for_transformed_elements(
@@ -338,13 +338,13 @@ def _(
     return transformed_data
 
 
-@transform.register(MultiscaleSpatialImage)
+@transform.register(DataTree)
 def _(
-    data: MultiscaleSpatialImage,
+    data: DataTree,
     transformation: BaseTransformation | None = None,
     maintain_positioning: bool = False,
     to_coordinate_system: str | None = None,
-) -> MultiscaleSpatialImage:
+) -> DataTree:
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
@@ -394,7 +394,7 @@ def _(
         )
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
+    transformed_data = DataTree.from_dict(transformed_dict)
     set_transformation(transformed_data, Identity(), to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
 
     old_transformations = get_transformation(data, get_all=True)

@@ -10,17 +10,18 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from spatial_image import SpatialImage
 from torch.utils.data import Dataset
+from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles
-from spatialdata._core.query.relational_query import _get_unique_label_values_as_index, join_spatialelement_table
+from spatialdata._core.query.relational_query import get_element_instances, join_spatialelement_table
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
@@ -61,13 +62,13 @@ class ImageTilesDataset(Dataset):
     tile_scale
         This parameter is used to determine the size (width and height) of the tiles.
         Each tile will have size in units equal to tile_scale times the diameter of the circle that approximates (=same
-         area) the region that defines the tile.
+        area) the region that defines the tile.
 
         For example, suppose the regions to be multiscale labels; this is how the tiles are created:
 
             1) for each tile, each label region is approximated with a circle with the same area of the label region.
             2) The tile is then created as having the width/height equal to the diameter of the circle,
-                multiplied by `tile_scale`.
+               multiplied by `tile_scale`.
 
         If `tile_dim_in_units` is passed, `tile_scale` is ignored.
     tile_dim_in_units
@@ -201,7 +202,7 @@ class ImageTilesDataset(Dataset):
             if table_name is not None:
                 _, region_key, instance_key = get_table_keys(sdata.tables[table_name])
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
-                    indices = _get_unique_label_values_as_index(region_elem).tolist()
+                    indices = get_element_instances(region_elem).tolist()
                 else:
                     indices = region_elem.index.tolist()
                 table = sdata.tables[table_name]
@@ -284,10 +285,10 @@ class ImageTilesDataset(Dataset):
         self.dims = list(dims_)
 
     @staticmethod
-    def _ensure_single_scale(data: SpatialImage | MultiscaleSpatialImage) -> SpatialImage:
-        if isinstance(data, SpatialImage):
+    def _ensure_single_scale(data: DataArray | DataTree) -> DataArray:
+        if isinstance(data, DataArray):
             return data
-        if isinstance(data, MultiscaleSpatialImage):
+        if isinstance(data, DataTree):
             return SpatialImage(next(iter(data["scale0"].ds.values())))
         raise ValueError(f"Expected a SpatialImage or MultiscaleSpatialImage, got {type(data)}.")
 

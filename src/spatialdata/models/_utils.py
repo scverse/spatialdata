@@ -7,15 +7,15 @@ import dask.dataframe as dd
 import geopandas
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely.geometry import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame]
+SpatialElement = Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame]
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
@@ -44,7 +44,7 @@ def has_type_spatial_element(e: Any) -> bool:
     Whether the object is a SpatialElement
     (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
     """
-    return isinstance(e, (SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame))
+    return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
 
 
 # added this code as part of a refactoring to catch errors earlier
@@ -131,8 +131,8 @@ def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@get_axes_names.register(SpatialImage)
-def _(e: SpatialImage) -> tuple[str, ...]:
+@get_axes_names.register(DataArray)
+def _(e: DataArray) -> tuple[str, ...]:
     dims = e.dims
     # dims_sizes = tuple(list(e.sizes.keys()))
     # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
@@ -142,8 +142,8 @@ def _(e: SpatialImage) -> tuple[str, ...]:
     return dims  # type: ignore[no-any-return]
 
 
-@get_axes_names.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> tuple[str, ...]:
+@get_axes_names.register(DataTree)
+def _(e: DataTree) -> tuple[str, ...]:
     if "scale0" in e:
         # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
 
@@ -257,6 +257,12 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
     assert "y" not in ddf.columns
     ddf["x"] = gdf.geometry.x
     ddf["y"] = gdf.geometry.y
+
+    # reorder columns
+    axes = ["x", "y", "z"] if "z" in ddf.columns else ["x", "y"]
+    non_axes = [c for c in ddf.columns if c not in axes]
+    ddf = ddf[axes + non_axes]
+
     # parse
     if "z" in ddf.columns:
         if not suppress_z_warning:
@@ -272,7 +278,7 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
 
 @singledispatch
 def get_channels(data: Any) -> list[Any]:
-    """Get channels from data.
+    """Get channels from data for an image element (both single and multiscale).
 
     Parameters
     ----------
@@ -282,21 +288,25 @@ def get_channels(data: Any) -> list[Any]:
     Returns
     -------
     List of channels
+
+    Notes
+    -----
+    For multiscale images, the channels are validated to be consistent across scales.
     """
     raise ValueError(f"Cannot get channels from {type(data)}")
 
 
 @get_channels.register
-def _(data: SpatialImage) -> list[Any]:
+def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
 
 
 @get_channels.register
-def _(data: MultiscaleSpatialImage) -> list[Any]:
+def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
     channels = {tuple(data[i][name].coords["c"].values) for i in data}
     if len(channels) > 1:
-        raise ValueError("TODO")
+        raise ValueError(f"Channels are not consistent across scales: {channels}")
     return list(next(iter(channels)))
 
 

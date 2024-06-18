@@ -9,11 +9,9 @@ from warnings import warn
 
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 
 from spatialdata._types import Raster_T
-from spatialdata._utils import multiscale_spatial_image_from_data_tree
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -33,9 +31,19 @@ class Elements(UserDict[str, Any]):
         super().__init__()
 
     @staticmethod
+    def _check_valid_name(name: str) -> None:
+        if not isinstance(name, str):
+            raise TypeError(f"Name must be a string, not {type(name).__name__}.")
+        if len(name) == 0:
+            raise ValueError("Name cannot be an empty string.")
+        if not all(c.isalnum() or c in "_-" for c in name):
+            raise ValueError("Name must contain only alphanumeric characters, underscores, and hyphens.")
+
+    @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
+        Elements._check_valid_name(key)
         if key in element_keys:
-            warn(f"Key `{key}` already exists. Overwriting it.", UserWarning, stacklevel=2)
+            warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
         else:
             if key in shared_keys:
                 raise KeyError(f"Key `{key}` already exists.")
@@ -52,8 +60,6 @@ class Elements(UserDict[str, Any]):
 class Images(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        if isinstance(value, (DataTree)):
-            value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
         if schema not in (Image2DModel, Image3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
@@ -71,8 +77,6 @@ class Images(Elements):
 class Labels(Elements):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        if isinstance(value, (DataTree)):
-            value = multiscale_spatial_image_from_data_tree(value)
         schema = get_model(value)
         if schema not in (Labels2DModel, Labels3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")

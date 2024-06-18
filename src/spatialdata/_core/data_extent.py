@@ -8,8 +8,8 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
 from spatial_image import SpatialImage
 from xarray import DataArray
@@ -305,12 +305,12 @@ def _(e: DaskDataFrame, coordinate_system: str = "global", exact: bool = True) -
 
 
 @get_extent.register
-def _(e: SpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(e: DataArray, coordinate_system: str = "global") -> BoundingBoxDescription:
     return _get_extent_of_data_array(e, coordinate_system=coordinate_system)
 
 
 @get_extent.register
-def _(e: MultiscaleSpatialImage, coordinate_system: str = "global") -> BoundingBoxDescription:
+def _(e: DataTree, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     xdata = next(iter(e["scale0"].values()))
     return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
