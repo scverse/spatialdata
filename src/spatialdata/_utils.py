@@ -210,7 +210,7 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
         return
     obs = pd.DataFrame(subset_adata.obs)
     for column in obs.columns:
-        is_categorical = pd.api.types.is_categorical_dtype(obs[column])
+        is_categorical = isinstance(obs[column].dtype, pd.CategoricalDtype)
         if is_categorical:
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c

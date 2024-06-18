@@ -377,7 +377,7 @@ def _aggregate_shapes(
         raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
     by = to_polygons(by, buffer_resolution=buffer_resolution)
 
-    categorical = pd.api.types.is_categorical_dtype(actual_values.iloc[:, 0])
+    categorical = isinstance(actual_values.iloc[:, 0].dtype, pd.CategoricalDtype)
 
     # deal with edge cases
     if fractions:

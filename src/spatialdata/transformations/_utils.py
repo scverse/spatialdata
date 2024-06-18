@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
-def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_from_dict_container(dict_container: Any) -> MappingToCoordinateSystem_t | None:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in dict_container:
@@ -29,12 +29,12 @@ def _get_transformations_from_dict_container(dict_container: Any) -> Optional[Ma
         return None
 
 
-def _get_transformations_xarray(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_xarray(e: DataArray) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch
-def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations(e: SpatialElement) -> MappingToCoordinateSystem_t | None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
@@ -72,12 +72,12 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
 
 
 @_get_transformations.register(DataArray)
-def _(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_xarray(e)
 
 
 @_get_transformations.register(DataTree)
-def _(e: DataTree) -> Optional[MappingToCoordinateSystem_t]:
+def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in e.attrs:
@@ -93,7 +93,7 @@ def _(e: DataTree) -> Optional[MappingToCoordinateSystem_t]:
 
 @_get_transformations.register(GeoDataFrame)
 @_get_transformations.register(DaskDataFrame)
-def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_from_dict_container(e.attrs)
 
 
@@ -145,7 +145,7 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
 
 
 @singledispatch
-def compute_coordinates(data: Union[DataArray, DataTree]) -> Union[DataArray, DataTree]:
+def compute_coordinates(data: DataArray | DataTree) -> DataArray | DataTree:
     """
     Computes and assign coordinates to a (Multiscale)SpatialImage.
 

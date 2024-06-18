@@ -755,7 +755,7 @@ def _get_table_origins(
 ) -> list[_ValueOrigin]:
     if value_key in element.obs.columns:
         value = element.obs[value_key]
-        is_categorical = pd.api.types.is_categorical_dtype(value)
+        is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
         origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
     # check if the value_key is in the var
     elif value_key in element.var_names:
@@ -780,7 +780,7 @@ def _locate_value(
     # adding from the dataframe columns
     if model in [PointsModel, ShapesModel] and value_key in el.columns:
         value = el[value_key]
-        is_categorical = pd.api.types.is_categorical_dtype(value)
+        is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
     if model == TableModel:
         origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
