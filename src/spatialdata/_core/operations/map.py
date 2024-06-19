@@ -20,17 +20,16 @@ def map_raster(
     data: DataArray | DataTree,
     func: Callable[[da.Array], da.Array],
     fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    chunkwise: bool = True,
+    blockwise: bool = True,
     depth: int | tuple[int, ...] | dict[int, int] | None = None,
-    input_chunks: tuple[tuple[int, ...], ...] | None = None,
-    output_chunks: tuple[tuple[int, ...], ...] | None = None,
+    chunks: tuple[tuple[int, ...], ...] | None = None,
     c_coords: Iterable[int] | Iterable[str] | None = None,
     dims: tuple[str, ...] | None = None,
     transformations: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> DataArray:
     """
-    Apply a function to raster data, for each chunk and each scale.
+    Apply a function to raster data.
 
     Parameters
     ----------
@@ -41,21 +40,19 @@ def map_raster(
         The function to apply to the data.
     fn_kwargs
         Additional keyword arguments to pass to the function `func`.
-    chunkwise
+    blockwise
         If `True`, distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
-        otherwise the function is applied to the full data. If `False`, `depth` and `input_chunks` are ignored.
+        otherwise the function is applied to the full data. If `False`, `depth` and `chunks` are ignored.
     depth
         If not `None`, distributed processing will be achieved with `dask.array.map_overlap`, otherwise with
         `dask.array.map_blocks`. Specifies the overlap between chunks, i.e. the number of elements that each chunk
         should share with its neighbor chunks. Please see `dask.array.map_overlap` for more information on the accepted
         values.
-    input_chunks
-        If specified, rechunks the input data before applying the function using `dask.array.rechunk`.
-    output_chunks
+    chunks
+        Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`. Ignored if `blockwise` is `False`.
         Chunk shape of resulting blocks if the function does not preserve the data shape. If not provided, the resulting
         array is assumed to have the same chunk structure as the first input array.
-        Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`.
-        E.g. ( (3,), (256,), (256,) ).
+        E.g. ( (3,), (100,100), (100,100) ).
     c_coords
         The channel coordinates for the output data. If not provided, the channel coordinates of the input data are
         used. It should be specified if the function changes the number of channels.
@@ -85,15 +82,11 @@ def map_raster(
         raise ValueError("Channel coordinates can not be provided for labels data.")
 
     kwargs = kwargs.copy()
-    kwargs["chunks"] = output_chunks
+    kwargs["chunks"] = chunks
 
-    if not chunkwise:
+    if not blockwise:
         arr = func(arr, **fn_kwargs)
-        if output_chunks is not None:
-            arr = arr.rechunk(output_chunks)
     else:
-        if input_chunks is not None:
-            arr = arr.rechunk(input_chunks)
         if depth is not None:
             kwargs.setdefault("boundary", "reflect")
 

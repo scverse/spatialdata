@@ -72,14 +72,14 @@ def test_map_raster_multiscale(sdata_blobs, depth):
     assert np.array_equal(data * fn_kwargs["parameter"], res)
 
 
-def test_map_raster_no_chunkwise(sdata_blobs):
+def test_map_raster_no_blockwise(sdata_blobs):
     img_layer = "blobs_image"
     fn_kwargs = {"parameter": 20}
     se = map_raster(
         sdata_blobs[img_layer],
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunkwise=False,
+        blockwise=False,
         c_coords=None,
         depth=None,
     )
@@ -95,11 +95,10 @@ def test_map_raster_output_chunks(sdata_blobs):
     fn_kwargs = {"parameter": 20}
     output_channels = ["test"]
     se = map_raster(
-        sdata_blobs["blobs_image"],
+        sdata_blobs["blobs_image"].chunk((3, 100, 100)),
         func=_multiply_alter_c,
         fn_kwargs=fn_kwargs,
-        input_chunks=(3, 100, 100),
-        output_chunks=(
+        chunks=(
             (1,),
             (100 + 2 * depth, 96 + 2 * depth, 60 + 2 * depth),
             (100 + 2 * depth, 96 + 2 * depth, 60 + 2 * depth),
@@ -125,10 +124,10 @@ def test_map_transformation(sdata_blobs, img_layer):
 
     set_transformation(se, transformation=transformation, to_coordinate_system=target_coordinate_system)
     se = map_raster(
-        sdata_blobs[img_layer],
+        se,
         func=_multiply,
         fn_kwargs=fn_kwargs,
-        chunkwise=False,
+        blockwise=False,
         c_coords=None,
         depth=None,
     )
@@ -140,11 +139,10 @@ def test_map_squeeze_z(full_sdata):
     fn_kwargs = {"parameter": 20}
 
     se = map_raster(
-        full_sdata[img_layer],
+        full_sdata[img_layer].chunk((3, 2, 64, 64)),
         func=_multiply_squeeze_z,
         fn_kwargs=fn_kwargs,
-        input_chunks=100,
-        output_chunks=((3,), (64,), (64,)),
+        chunks=((3,), (64,), (64,)),
         drop_axis=1,
         c_coords=None,
         dims=("c", "y", "x"),
@@ -158,15 +156,15 @@ def test_map_squeeze_z(full_sdata):
 
 
 def test_map_squeeze_z_fails(full_sdata):
+    img_layer = "image3d_numpy"
     fn_kwargs = {"parameter": 20}
 
     with pytest.raises(IndexError):
         map_raster(
-            full_sdata["image3d_numpy"],
+            full_sdata[img_layer].chunk((3, 2, 64, 64)),
             func=_multiply_squeeze_z,
             fn_kwargs=fn_kwargs,
-            input_chunks=100,
-            output_chunks=((3,), (64,), (64,)),
+            chunks=((3,), (64,), (64,)),
             drop_axis=1,
             c_coords=None,
             depth=None,
