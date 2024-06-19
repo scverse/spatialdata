@@ -68,7 +68,7 @@ def table_single_annotation() -> SpatialData:
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
+    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
 
 
 @pytest.fixture()

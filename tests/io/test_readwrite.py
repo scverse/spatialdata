@@ -239,24 +239,24 @@ class TestReadWrite:
 
     def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
-        t = s.table[:10, :].copy()
+        t = s["table"][:10, :].copy()
         with pytest.raises(ValueError):
             s.table = t
-        del s.table
+        del s["table"]
         s.table = t
 
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
             s.write(f)
             s2 = SpatialData.read(f)
-            assert len(s2.table) == len(t)
-            del s2.table
-            s2.table = s.table
-            assert len(s2.table) == len(s.table)
+            assert len(s2["table"]) == len(t)
+            del s2["table"]
+            s2.table = s["table"]
+            assert len(s2["table"]) == len(s["table"])
             f2 = os.path.join(td, "data2.zarr")
             s2.write(f2)
             s3 = SpatialData.read(f2)
-            assert len(s3.table) == len(s2.table)
+            assert len(s3["table"]) == len(s2["table"])
 
     def test_io_and_lazy_loading_points(self, points):
         elem_name = list(points.points.keys())[0]

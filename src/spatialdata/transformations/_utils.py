@@ -147,16 +147,16 @@ def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinate
 @singledispatch
 def compute_coordinates(data: DataArray | DataTree) -> DataArray | DataTree:
     """
-    Computes and assign coordinates to a (Multiscale)SpatialImage.
+    Computes and assign coordinates to a spatialdata supported DataArray or DataTree.
 
     Parameters
     ----------
     data
-        :class:`SpatialImage` or :class:`MultiscaleSpatialImage`.
+        :class:`DataArray` or :class:`DataTree`.
 
     Returns
     -------
-    :class:`SpatialImage` or :class:`MultiscaleSpatialImage` with coordinates assigned.
+    :class:`DataArray` or :class:`DataTree` with coordinates assigned.
     """
     raise TypeError(f"Unsupported type: {type(data)}")
 
