@@ -135,11 +135,31 @@ def test_map_transformation(sdata_blobs, img_layer):
     assert transformation == get_transformation(se, to_coordinate_system=target_coordinate_system)
 
 
-def test_map_remove_z_fails(full_sdata):
+def test_map_squeeze_z(full_sdata):
+    img_layer = "image3d_numpy"
     fn_kwargs = {"parameter": 20}
 
-    # currently can not alter dims, e.g. ("c","z","y","x") -> ("c","y","x") fails
-    # could be supported by adding dims (and possibly transformations) to parameters of map_raster
+    se = map_raster(
+        full_sdata[img_layer],
+        func=_multiply_squeeze_z,
+        fn_kwargs=fn_kwargs,
+        input_chunks=100,
+        output_chunks=((3,), (64,), (64,)),
+        drop_axis=1,
+        c_coords=None,
+        dims=("c", "y", "x"),
+        depth=None,
+    )
+
+    assert isinstance(se, DataArray)
+    data = full_sdata[img_layer].data.compute()
+    res = se.data.compute()
+    assert np.array_equal(data[:, 0, ...] * fn_kwargs["parameter"], res)
+
+
+def test_map_squeeze_z_fails(full_sdata):
+    fn_kwargs = {"parameter": 20}
+
     with pytest.raises(IndexError):
         map_raster(
             full_sdata["image3d_numpy"],
