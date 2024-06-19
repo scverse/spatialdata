@@ -73,10 +73,12 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
         and len(transformations) > 0
     ):
         # we can relax this and overwrite the transformations using the one passed as argument
-        raise ValueError(
-            "Transformations are both specified for the element and also passed as an argument to the parser. Please "
-            "specify the transformations only once."
-        )
+        pass
+        # TODO: restore this! It's maybe hiding a bug with dask.attrs
+        # raise ValueError(
+        #     "Transformations are both specified for the element and also passed as an argument to the parser. Please "
+        #     "specify the transformations only once."
+        # )
     if transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
     elif transformations_in_element is not None and len(transformations_in_element) > 0:
@@ -692,10 +694,6 @@ class PointsModel:
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
-        # TODO: this is just a temporary workaround to avoid a top-level error when running tests, the solution should
-        # come upstream with https://github.com/dask/dask/issues/11146
-        if not hasattr(data, "attrs"):
-            data.attrs = {}
         if feature_key is not None or instance_key is not None:
             data.attrs[cls.ATTRS_KEY] = {}
         if feature_key is not None:

@@ -274,6 +274,13 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     else:
         raise TypeError(f"Unsupported type: {type(element)}")
     for k, v in items:
+        if isinstance(element, DaskDataFrame) and isinstance(k, tuple):
+            if len(k) != 2:
+                raise ValueError(f"Expected a tuple of length 2, got {k}")
+            valid_tuple = isinstance(k[0], str) and isinstance(k[1], int)
+            if not valid_tuple:
+                raise ValueError(f"Expected a tuple of (str, int), got {k}")
+            k = k[0]
         if k.startswith("original-from-zarr-"):
             mapping = v.mapping[k]
             path = mapping.store.path
