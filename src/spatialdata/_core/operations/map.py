@@ -19,7 +19,7 @@ __all__ = ["map_raster"]
 def map_raster(
     data: DataArray | DataTree,
     func: Callable[[da.Array], da.Array],
-    fn_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    func_kwargs: Mapping[str, Any] = MappingProxyType({}),
     blockwise: bool = True,
     depth: int | tuple[int, ...] | dict[int, int] | None = None,
     chunks: tuple[tuple[int, ...], ...] | None = None,
@@ -29,42 +29,49 @@ def map_raster(
     **kwargs: Any,
 ) -> DataArray:
     """
-    Apply a function to raster data.
+    Apply a callable to raster data.
+
+    Applies a callable (`func`) to raster data. If `blockwise` is set to True,
+    distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
+    otherwise `func` is appplied to the full data.
 
     Parameters
     ----------
     data
         The data to process. It can be a `DataArray` or `DataTree`. If it's a `DataTree`,
-        the function is applied to the first scale (full-resolution data).
+        the callable is applied to the first scale (full-resolution data).
     func
         The callable that is applied to the data.
-    fn_kwargs
-        Additional keyword arguments to pass to the function `func`.
+    func_kwargs
+        Additional keyword arguments to pass to the callable `func`.
     blockwise
         If `True`, distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
-        otherwise the function is applied to the full data. If `False`, `depth` and `chunks` are ignored.
+        otherwise `func` is applied to the full data. If `False`, `depth`, `chunks` and `kwargs` are ignored.
     depth
         Specifies the overlap between chunks, i.e. the number of elements that each chunk
         should share with its neighbor chunks. If not `None`, distributed processing will be achieved with
         `dask.array.map_overlap`, otherwise with `dask.array.map_blocks`.  Please see
         :func:`dask.array.map_overlap` for more information on the accepted values.
     chunks
-        Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`. Ignored if `blockwise` is `False`.
-        Chunk shape of resulting blocks if the function does not preserve the data shape. If not provided, the resulting
+        Chunk shape of resulting blocks if the callable does not preserve the data shape. If not provided, the resulting
         array is assumed to have the same chunk structure as the first input array.
         E.g. ( (3,), (100,100), (100,100) ).
+        Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`. Ignored if `blockwise` is `False`.
+        Please see :func:`dask.array.map_blocks` for more information on the accepted values.
     c_coords
         The channel coordinates for the output data. If not provided, the channel coordinates of the input data are
-        used. It should be specified if the function changes the number of channels.
+        used. If the callable `func` is expected to change the number of channel coordinates,
+        this argument should be provided, otherwise will default to range(len(output_coords)).
     dims
         The dimensions of the output data. If not provided, the dimensions of the input data are used. It must be
-        specified if the function changes the data dimensions.
+        specified if the callable changes the data dimensions.
         E.g. ('c', 'y', 'x').
     transformations
         The transformations of the output data. If not provided, the transformations of the input data are copied to the
-        output data. It should be specified if the function changes the data transformations.
+        output data. It should be specified if the callable changes the data transformations.
     kwargs
-        Additional keyword arguments to pass to `dask.array.map_overlap` or `dask.array.map_blocks`.
+        Additional keyword arguments to pass to :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`.
+        Ignored if `blockwise` is set to `False`.
 
     Returns
     -------
@@ -85,7 +92,7 @@ def map_raster(
     kwargs["chunks"] = chunks
 
     if not blockwise:
-        arr = func(arr, **fn_kwargs)
+        arr = func(arr, **func_kwargs)
     else:
         if depth is not None:
             kwargs.setdefault("boundary", "reflect")
@@ -93,18 +100,19 @@ def map_raster(
             if not isinstance(depth, int) and len(depth) != arr.ndim:
                 raise ValueError(
                     f"Depth {depth} is provided for {len(depth)} dimensions. "
-                    f"Please (only) provide depth for {arr.ndim} dimensions."
+                    f"Please provide depth for {arr.ndim} dimensions."
                 )
             kwargs["depth"] = coerce_depth(arr.ndim, depth)
             map_func = da.map_overlap
         else:
             map_func = da.map_blocks
 
-        arr = map_func(func, arr, **fn_kwargs, **kwargs, dtype=arr.dtype)
+        arr = map_func(func, arr, **func_kwargs, **kwargs, dtype=arr.dtype)
 
     dims = dims if dims is not None else get_axes_names(data)
     if model not in (Labels2DModel, Labels3DModel):
-        c_coords = c_coords if c_coords is not None else get_channels(data)
+        if c_coords is None:
+            c_coords = range(arr.shape[0]) if arr.shape[0] != len(get_channels(data)) else get_channels(data)
     else:
         c_coords = None
     if transformations is None:
