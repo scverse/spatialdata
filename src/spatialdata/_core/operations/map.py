@@ -44,10 +44,10 @@ def map_raster(
         If `True`, distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
         otherwise the function is applied to the full data. If `False`, `depth` and `chunks` are ignored.
     depth
-        If not `None`, distributed processing will be achieved with `dask.array.map_overlap`, otherwise with
-        `dask.array.map_blocks`. Specifies the overlap between chunks, i.e. the number of elements that each chunk
-        should share with its neighbor chunks. Please see `dask.array.map_overlap` for more information on the accepted
-        values.
+        Specifies the overlap between chunks, i.e. the number of elements that each chunk
+        should share with its neighbor chunks. If not `None`, distributed processing will be achieved with 
+        `dask.array.map_overlap`, otherwise with `dask.array.map_blocks`.  Please see 
+        :func:`dask.array.map_overlap` for more information on the accepted values.
     chunks
         Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`. Ignored if `blockwise` is `False`.
         Chunk shape of resulting blocks if the function does not preserve the data shape. If not provided, the resulting
