@@ -37,7 +37,7 @@ def map_raster(
         The data to process. It can be a `DataArray` or `DataTree`. If it's a `DataTree`,
         the function is applied to the first scale (full-resolution data).
     func
-        The function to apply to the data.
+        The callable that is applied to the data.
     fn_kwargs
         Additional keyword arguments to pass to the function `func`.
     blockwise
