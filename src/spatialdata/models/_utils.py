@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import dask.dataframe as dd
 import geopandas
@@ -24,6 +24,9 @@ C = "c"
 Z = "z"
 Y = "y"
 X = "x"
+
+if TYPE_CHECKING:
+    from spatialdata.models.models import RasterSchema
 
 
 # mypy says that we can't do isinstance(something, SpatialElement),
@@ -345,3 +348,26 @@ def force_2d(gdf: GeoDataFrame) -> None:
             new_shapes.append(shape)
     if any_3d:
         gdf.geometry = new_shapes
+
+
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
+    """
+    Get the raster model from the dimensions of the data.
+
+    Parameters
+    ----------
+    dims
+        The dimensions of the data
+
+    Returns
+    -------
+    The raster model corresponding to the dimensions of the data.
+    """
+    from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
+
+    if not set(dims).issubset({C, Z, Y, X}):
+        raise ValueError(f"Invalid dimensions: {dims}")
+
+    if C in dims:
+        return Image3DModel if Z in dims else Image2DModel
+    return Labels3DModel if Z in dims else Labels2DModel

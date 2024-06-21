@@ -40,6 +40,7 @@ Operations on `SpatialData` objects.
     to_circles
     to_polygons
     aggregate
+    map_raster
 ```
 
 ### Operations Utilities
