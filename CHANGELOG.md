@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning][].
 -   Added operation: `to_polygons()` @quentinblampey #560
 -   Extended `rasterize()` to support all the data types @quentinblampey #566
 -   Added operation: `rasterize_bins()` @quentinblampey #578
+-   Added operation: `map_raster()` to apply functions block-wise to raster data @ArneDefauw #588
 
 ### Minor
 

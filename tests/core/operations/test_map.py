@@ -34,11 +34,11 @@ def test_map_raster(sdata_blobs, depth, element_name):
     if element_name == "blobs_labels" and depth is not None:
         depth = (60, 60)
 
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
     se = map_raster(
         sdata_blobs[element_name],
         func=_multiply,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         c_coords=None,
         depth=depth,
     )
@@ -46,7 +46,7 @@ def test_map_raster(sdata_blobs, depth, element_name):
     assert isinstance(se, DataArray)
     data = sdata_blobs[element_name].data.compute()
     res = se.data.compute()
-    assert np.array_equal(data * fn_kwargs["parameter"], res)
+    assert np.array_equal(data * func_kwargs["parameter"], res)
 
 
 @pytest.mark.parametrize(
@@ -58,27 +58,27 @@ def test_map_raster(sdata_blobs, depth, element_name):
 )
 def test_map_raster_multiscale(sdata_blobs, depth):
     img_layer = "blobs_multiscale_image"
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
     se = map_raster(
         sdata_blobs[img_layer],
         func=_multiply,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         c_coords=None,
         depth=depth,
     )
 
     data = sdata_blobs[img_layer]["scale0"]["image"].data.compute()
     res = se.data.compute()
-    assert np.array_equal(data * fn_kwargs["parameter"], res)
+    assert np.array_equal(data * func_kwargs["parameter"], res)
 
 
 def test_map_raster_no_blockwise(sdata_blobs):
     img_layer = "blobs_image"
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
     se = map_raster(
         sdata_blobs[img_layer],
         func=_multiply,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         blockwise=False,
         c_coords=None,
         depth=None,
@@ -87,17 +87,17 @@ def test_map_raster_no_blockwise(sdata_blobs):
     assert isinstance(se, DataArray)
     data = sdata_blobs[img_layer].data.compute()
     res = se.data.compute()
-    assert np.array_equal(data * fn_kwargs["parameter"], res)
+    assert np.array_equal(data * func_kwargs["parameter"], res)
 
 
 def test_map_raster_output_chunks(sdata_blobs):
     depth = 60
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
     output_channels = ["test"]
     se = map_raster(
         sdata_blobs["blobs_image"].chunk((3, 100, 100)),
         func=_multiply_alter_c,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         chunks=(
             (1,),
             (100 + 2 * depth, 96 + 2 * depth, 60 + 2 * depth),
@@ -111,12 +111,12 @@ def test_map_raster_output_chunks(sdata_blobs):
     assert np.array_equal(np.array(output_channels), se.c.data)
     data = sdata_blobs["blobs_image"].data.compute()
     res = se.data.compute()
-    assert np.array_equal(data[0] * fn_kwargs["parameter"], res[0])
+    assert np.array_equal(data[0] * func_kwargs["parameter"], res[0])
 
 
 @pytest.mark.parametrize("img_layer", ["blobs_image", "blobs_multiscale_image"])
 def test_map_transformation(sdata_blobs, img_layer):
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
     target_coordinate_system = "my_other_space0"
     transformation = Translation(translation=[10, 12], axes=["y", "x"])
 
@@ -126,7 +126,7 @@ def test_map_transformation(sdata_blobs, img_layer):
     se = map_raster(
         se,
         func=_multiply,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         blockwise=False,
         c_coords=None,
         depth=None,
@@ -136,12 +136,12 @@ def test_map_transformation(sdata_blobs, img_layer):
 
 def test_map_squeeze_z(full_sdata):
     img_layer = "image3d_numpy"
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
 
     se = map_raster(
         full_sdata[img_layer].chunk((3, 2, 64, 64)),
         func=_multiply_squeeze_z,
-        fn_kwargs=fn_kwargs,
+        func_kwargs=func_kwargs,
         chunks=((3,), (64,), (64,)),
         drop_axis=1,
         c_coords=None,
@@ -152,18 +152,18 @@ def test_map_squeeze_z(full_sdata):
     assert isinstance(se, DataArray)
     data = full_sdata[img_layer].data.compute()
     res = se.data.compute()
-    assert np.array_equal(data[:, 0, ...] * fn_kwargs["parameter"], res)
+    assert np.array_equal(data[:, 0, ...] * func_kwargs["parameter"], res)
 
 
 def test_map_squeeze_z_fails(full_sdata):
     img_layer = "image3d_numpy"
-    fn_kwargs = {"parameter": 20}
+    func_kwargs = {"parameter": 20}
 
     with pytest.raises(IndexError):
         map_raster(
             full_sdata[img_layer].chunk((3, 2, 64, 64)),
             func=_multiply_squeeze_z,
-            fn_kwargs=fn_kwargs,
+            func_kwargs=func_kwargs,
             chunks=((3,), (64,), (64,)),
             drop_axis=1,
             c_coords=None,
@@ -176,19 +176,19 @@ def test_invalid_map_raster(sdata_blobs):
         map_raster(
             sdata_blobs["blobs_points"],
             func=_multiply,
-            fn_kwargs={"parameter": 20},
+            func_kwargs={"parameter": 20},
             c_coords=None,
             depth=(0, 60),
         )
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Depth (0, 60) is provided for 2 dimensions. Please (only) provide depth for 3 dimensions."),
+        match=re.escape("Depth (0, 60) is provided for 2 dimensions. Please provide depth for 3 dimensions."),
     ):
         map_raster(
             sdata_blobs["blobs_image"],
             func=_multiply,
-            fn_kwargs={"parameter": 20},
+            func_kwargs={"parameter": 20},
             c_coords=None,
             depth=(0, 60),
         )
@@ -197,7 +197,7 @@ def test_invalid_map_raster(sdata_blobs):
         map_raster(
             sdata_blobs["blobs_labels"],
             func=_multiply,
-            fn_kwargs={"parameter": 20},
+            func_kwargs={"parameter": 20},
             c_coords=["c"],
             depth=(0, 60, 60),
         )

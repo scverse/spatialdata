@@ -31,6 +31,7 @@ __all__ = [
     "save_transformations",
     "get_dask_backing_files",
     "are_extents_equal",
+    "map_raster",
     "deepcopy",
 ]
 
@@ -40,6 +41,7 @@ from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.aggregate import aggregate
+from spatialdata._core.operations.map import map_raster
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.operations.rasterize_bins import rasterize_bins
 from spatialdata._core.operations.transform import transform
