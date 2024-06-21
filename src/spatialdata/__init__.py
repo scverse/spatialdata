@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import dask
 import warnings
+
+import dask
 
 dask.config.set({"dataframe.query-planning": False})
 from dask.dataframe import DASK_EXPR_ENABLED

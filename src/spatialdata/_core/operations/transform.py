@@ -180,7 +180,7 @@ def _set_transformation_for_transformed_elements(
     print(d)
     assert isinstance(d, dict)
     assert len(d) == 1
-    if not DEFAULT_COORDINATE_SYSTEM in d:
+    if DEFAULT_COORDINATE_SYSTEM not in d:
         raise RuntimeError(f"Coordinate system {DEFAULT_COORDINATE_SYSTEM} not found in element")
         pass
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
@@ -450,23 +450,23 @@ def _(
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
         transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
-        print('transformed', ax)
+        print("transformed", ax)
         print(transformed.attrs)
-        print(f'transformed[{ax}]')
+        print(f"transformed[{ax}]")
         print(transformed[ax].attrs)
-        print('')
+        print("")
         pass
 
-    print('')
+    print("")
 
     if DEFAULT_COORDINATE_SYSTEM not in transformed.attrs[TRANSFORM_KEY]:
         pass
     old_transformations = get_transformation(data, get_all=True)
-    print('transformed.attrs:')
+    print("transformed.attrs:")
     print(transformed.attrs)
-    print('old_transformations:')
+    print("old_transformations:")
     print(old_transformations)
-    print('')
+    print("")
     assert isinstance(old_transformations, dict)
     if DEFAULT_COORDINATE_SYSTEM not in transformed.attrs[TRANSFORM_KEY]:
         pass
