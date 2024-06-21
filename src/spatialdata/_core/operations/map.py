@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 from dask.array.overlap import coerce_depth
@@ -118,7 +118,8 @@ def map_raster(
         c_coords = None
     if transformations is None:
         d = get_transformation(data, get_all=True)
-        assert isinstance(d, dict)
+        if TYPE_CHECKING:
+            assert isinstance(d, dict)
         transformations = d
 
     model_kwargs = {
