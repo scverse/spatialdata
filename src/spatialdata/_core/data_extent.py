@@ -85,9 +85,7 @@ def _get_extent_of_points(e: DaskDataFrame) -> BoundingBoxDescription:
 
 
 def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingBoxDescription:
-    # TODO lightweight conversion to SpatialImage just to fix the type of the single-dispatch
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    # TODO also here
     data_axes = get_axes_names(e)
     extent: BoundingBoxDescription = {}
     for ax in ["z", "y", "x"]:
@@ -95,7 +93,6 @@ def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingB
             i = data_axes.index(ax)
             extent[ax] = (0, e.shape[i])
     return _compute_extent_in_coordinate_system(
-        # TODO and here
         element=e,
         coordinate_system=coordinate_system,
         extent=extent,
