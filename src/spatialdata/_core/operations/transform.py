@@ -371,7 +371,7 @@ def _(
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
     else:
-        raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
+        raise ValueError(f"DataTree with schema {schema} not supported")
 
     get_axes_names(data)
     transformed_dict = {}

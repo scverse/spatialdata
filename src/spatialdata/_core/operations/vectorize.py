@@ -13,7 +13,6 @@ from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
 from skimage.measure._regionprops import RegionProperties
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
@@ -76,7 +75,7 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
 
     # reduce to the single scale case
     if isinstance(element, DataTree):
-        element_single_scale = SpatialImage(element["scale0"].values().__iter__().__next__())
+        element_single_scale = element["scale0"].values().__iter__().__next__()
     else:
         element_single_scale = element
     shape = element_single_scale.shape
@@ -192,7 +191,7 @@ def _(
 
     # reduce to the single scale case
     if isinstance(element, DataTree):
-        element_single_scale = SpatialImage(element["scale0"].values().__iter__().__next__())
+        element_single_scale = element["scale0"].values().__iter__().__next__()
     else:
         element_single_scale = element
 

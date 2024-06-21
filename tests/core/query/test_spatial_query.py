@@ -377,7 +377,7 @@ def test_query_filter_table(with_polygon_query: bool):
     table.obs["region"] = ["circles0", "circles0", "circles1"]
     table.obs["instance"] = [0, 1, 0]
     table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
-    sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, table=table)
+    sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, tables={"table": table})
 
     if with_polygon_query:
         polygon = Polygon([(15, 15), (15, 25), (25, 25), (25, 15)])

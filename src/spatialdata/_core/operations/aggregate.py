@@ -12,10 +12,8 @@ import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from scipy import sparse
 from shapely import Point
-from spatial_image import SpatialImage
 from xarray import DataArray
 from xrspatial import zonal_stats
 
@@ -258,8 +256,8 @@ def _create_sdata_from_table_and_shapes(
 
 
 def _aggregate_image_by_labels(
-    values: SpatialImage | MultiscaleSpatialImage,
-    by: SpatialImage | MultiscaleSpatialImage,
+    values: DataArray | DataTree,
+    by: DataArray | DataTree,
     agg_func: str | list[str] = "mean",
     **kwargs: Any,
 ) -> ad.AnnData:
@@ -282,10 +280,10 @@ def _aggregate_image_by_labels(
     -------
     AnnData of shape `(by.shape[0], len(agg_func)]`.
     """
-    if isinstance(by, MultiscaleSpatialImage):
+    if isinstance(by, DataTree):
         assert len(by["scale0"]) == 1
         by = next(iter(by["scale0"].values()))
-    if isinstance(values, MultiscaleSpatialImage):
+    if isinstance(values, DataTree):
         assert len(values["scale0"]) == 1
         values = next(iter(values["scale0"].values()))
 

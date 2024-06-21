@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import dask.dataframe as dd
 import geopandas
@@ -25,6 +25,9 @@ Z = "z"
 Y = "y"
 X = "x"
 
+if TYPE_CHECKING:
+    from spatialdata.models.models import RasterSchema
+
 
 # mypy says that we can't do isinstance(something, SpatialElement),
 # even if the code works fine in my machine. Since the solution described here don't work:
@@ -42,7 +45,7 @@ def has_type_spatial_element(e: Any) -> bool:
     Returns
     -------
     Whether the object is a SpatialElement
-    (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
+    (i.e in Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame])
     """
     return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
 
@@ -134,10 +137,6 @@ def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
 @get_axes_names.register(DataArray)
 def _(e: DataArray) -> tuple[str, ...]:
     dims = e.dims
-    # dims_sizes = tuple(list(e.sizes.keys()))
-    # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
-    # if dims != dims_sizes:
-    #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
     _validate_dims(dims)
     return dims  # type: ignore[no-any-return]
 
@@ -152,17 +151,9 @@ def _(e: DataTree) -> tuple[str, ...]:
         dims_data = xdata.dims
         assert isinstance(dims_data, tuple)
 
-        # dims_sizes = tuple(list(xdata.sizes.keys()))
-
-        # # we check that all the following values are the same otherwise we could incur in subtle bugs downstreams
-        # if dims_coordinates != dims_data or dims_coordinates != dims_sizes:
-        #     raise ValueError(
-        #         f"MultiscaleSpatialImage has inconsistent dimensions: {dims_coordinates}, {dims_data}, {dims_sizes}"
-        #     )
         _validate_dims(dims_data)
         return dims_data
-    raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
-    # return tuple(i for i in e.dims.keys())
+    raise ValueError("Spatialdata DataTree does not contain the scale0 key")
 
 
 @get_axes_names.register(GeoDataFrame)
@@ -345,3 +336,26 @@ def force_2d(gdf: GeoDataFrame) -> None:
             new_shapes.append(shape)
     if any_3d:
         gdf.geometry = new_shapes
+
+
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
+    """
+    Get the raster model from the dimensions of the data.
+
+    Parameters
+    ----------
+    dims
+        The dimensions of the data
+
+    Returns
+    -------
+    The raster model corresponding to the dimensions of the data.
+    """
+    from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
+
+    if not set(dims).issubset({C, Z, Y, X}):
+        raise ValueError(f"Invalid dimensions: {dims}")
+
+    if C in dims:
+        return Image3DModel if Z in dims else Image2DModel
+    return Labels3DModel if Z in dims else Labels2DModel

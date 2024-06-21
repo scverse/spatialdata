@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from datatree import DataTree
+from xarray import DataArray
 
 __all__ = ["ArrayLike", "DTypeLike", "Raster_T"]
 
@@ -16,4 +16,4 @@ except (ImportError, TypeError):
     ArrayLike = np.ndarray  # type: ignore[misc]
     DTypeLike = np.dtype  # type: ignore[misc]
 
-Raster_T = Union[SpatialImage, MultiscaleSpatialImage]
+Raster_T = Union[DataArray, DataTree]

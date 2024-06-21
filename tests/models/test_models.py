@@ -19,7 +19,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
-from pandas.api.types import is_categorical_dtype
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import SpatialImage, to_spatial_image
@@ -336,7 +335,7 @@ class TestModels:
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
         assert region_key in table.obs
-        assert is_categorical_dtype(table.obs[region_key])
+        assert isinstance(table.obs[region_key].dtype, pd.CategoricalDtype)
         assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region

@@ -10,7 +10,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
@@ -105,7 +104,7 @@ def _(
 
     if isinstance(e, DataTree):
         assert len(e["scale0"]) == 1
-        e = SpatialImage(next(iter(e["scale0"].values())))
+        e = next(iter(e["scale0"].values()))
 
     dfs = []
     for axis in get_axes_names(e):

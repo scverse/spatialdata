@@ -11,7 +11,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
@@ -86,18 +85,15 @@ def _get_extent_of_points(e: DaskDataFrame) -> BoundingBoxDescription:
 
 
 def _get_extent_of_data_array(e: DataArray, coordinate_system: str) -> BoundingBoxDescription:
-    # lightweight conversion to SpatialImage just to fix the type of the single-dispatch
-    _check_element_has_coordinate_system(element=SpatialImage(e), coordinate_system=coordinate_system)
-    # also here
-    data_axes = get_axes_names(SpatialImage(e))
+    _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
+    data_axes = get_axes_names(e)
     extent: BoundingBoxDescription = {}
     for ax in ["z", "y", "x"]:
         if ax in data_axes:
             i = data_axes.index(ax)
             extent[ax] = (0, e.shape[i])
     return _compute_extent_in_coordinate_system(
-        # and here
-        element=SpatialImage(e),
+        element=e,
         coordinate_system=coordinate_system,
         extent=extent,
     )

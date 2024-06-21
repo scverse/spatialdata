@@ -15,14 +15,13 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
-from spatial_image import SpatialImage
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -73,7 +72,7 @@ def table_single_annotation() -> SpatialData:
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
+    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
 
 
 @pytest.fixture()
@@ -137,7 +136,7 @@ def sdata(request) -> SpatialData:
     return request.getfixturevalue(request.param)
 
 
-def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+def _get_images() -> dict[str, DataArray | DataTree]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
@@ -167,7 +166,7 @@ def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     return out
 
 
-def _get_labels() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+def _get_labels() -> dict[str, DataArray | DataTree]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")

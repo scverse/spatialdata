@@ -473,7 +473,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> DataArray | DataTree | None:
-    """Implement bounding box query for SpatialImage.
+    """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
     -----
@@ -566,8 +566,7 @@ def _(
     else:
         assert isinstance(image, DataTree)
         assert isinstance(query_result, DataTree)
-        # we need to convert query_result it to MultiscaleSpatialImage, dropping eventual collapses scales (or even
-        # the whole object if the first scale is collapsed)
+
         d = {}
         for k, data_tree in query_result.items():
             v = data_tree.values()
