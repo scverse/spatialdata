@@ -31,6 +31,7 @@ __all__ = [
     "save_transformations",
     "get_dask_backing_files",
     "are_extents_equal",
+    "map_raster",
     "deepcopy",
 ]
 
