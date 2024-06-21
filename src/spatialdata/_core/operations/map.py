@@ -31,41 +31,42 @@ def map_raster(
     """
     Apply a callable to raster data.
 
-    Applies a callable (`func`) to raster data. If `blockwise` is set to True,
-    distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
-    otherwise `func` is appplied to the full data.
+    Applies a `func` callable to raster data. If `blockwise` is set to `True`,
+    distributed processing will be achieved with:
+
+        - :func:`dask.array.map_overlap` if `depth` is not `None`
+        - :func:`dask.array.map_blocks`, if `depth` is `None`
+
+    otherwise `func` is applied to the full data.
 
     Parameters
     ----------
     data
-        The data to process. It can be a `DataArray` or `DataTree`. If it's a `DataTree`,
-        the callable is applied to the first scale (full-resolution data).
+        The data to process. It can be a :class:`xarray.DataArray` or :class:`datatree.DataTree`.
+        If it's a `DataTree`, the callable is applied to the first scale (`scale0`, the full-resolution data).
     func
         The callable that is applied to the data.
     func_kwargs
         Additional keyword arguments to pass to the callable `func`.
     blockwise
-        If `True`, distributed processing will be achieved with `dask.array.map_overlap`/`dask.array.map_blocks`,
+        If `True`, `func` will be distributed with :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`,
         otherwise `func` is applied to the full data. If `False`, `depth`, `chunks` and `kwargs` are ignored.
     depth
         Specifies the overlap between chunks, i.e. the number of elements that each chunk
-        should share with its neighbor chunks. If not `None`, distributed processing will be achieved with
-        `dask.array.map_overlap`, otherwise with `dask.array.map_blocks`.  Please see
-        :func:`dask.array.map_overlap` for more information on the accepted values.
+        should share with its neighboring chunks. If not `None`, distributed processing will be achieved with
+        :func:`dask.array.map_overlap`, otherwise with :func:`dask.array.map_blocks`.
     chunks
-        Chunk shape of resulting blocks if the callable does not preserve the data shape. If not provided, the resulting
-        array is assumed to have the same chunk structure as the first input array.
-        E.g. ( (3,), (100,100), (100,100) ).
-        Passed to `dask.array.map_overlap`/`dask.array.map_blocks` as `chunks`. Ignored if `blockwise` is `False`.
-        Please see :func:`dask.array.map_blocks` for more information on the accepted values.
+        Chunk shape of resulting blocks if the callable does not preserve the data shape.
+        For example, if the input block has `shape: (3,100,100)` and the resulting block after the `map_raster`
+        call has `shape: (1, 100,100)`, the argument `chunks` should be passed accordingly.
+        Passed to :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`. Ignored if `blockwise` is `False`.
     c_coords
         The channel coordinates for the output data. If not provided, the channel coordinates of the input data are
         used. If the callable `func` is expected to change the number of channel coordinates,
-        this argument should be provided, otherwise will default to range(len(output_coords)).
+        this argument should be provided, otherwise will default to `range(len(output_coords))`.
     dims
         The dimensions of the output data. If not provided, the dimensions of the input data are used. It must be
-        specified if the callable changes the data dimensions.
-        E.g. ('c', 'y', 'x').
+        specified if the callable changes the data dimensions, e.g. `('c', 'y', 'x') -> ('y', 'x')`.
     transformations
         The transformations of the output data. If not provided, the transformations of the input data are copied to the
         output data. It should be specified if the callable changes the data transformations.
@@ -75,7 +76,7 @@ def map_raster(
 
     Returns
     -------
-    The processed data as a `DataArray`.
+    The processed data as a :class:`xarray.DataArray`.
     """
     if isinstance(data, DataArray):
         arr = data.data
