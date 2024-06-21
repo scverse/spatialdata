@@ -1,5 +1,20 @@
 from __future__ import annotations
 
+import warnings
+
+import dask
+
+dask.config.set({"dataframe.query-planning": False})
+from dask.dataframe import DASK_EXPR_ENABLED
+
+if DASK_EXPR_ENABLED:
+    raise RuntimeError(
+        "Unsupported backend: dask-expr has been detected as the backend of dask.dataframe. Please "
+        "use:\nimport dask\ndask.config.set({'dataframe.query-planning': False})\nbefore importing "
+        "dask.dataframe to disable dask-expr. The support is being worked on, for more information please see"
+        "https://github.com/scverse/spatialdata/pull/570"
+    )
+
 from importlib.metadata import version
 
 __version__ = version("spatialdata")

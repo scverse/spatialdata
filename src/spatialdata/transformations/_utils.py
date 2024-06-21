@@ -46,6 +46,16 @@ def _set_transformations_to_dict_container(dict_container: Any, transformations:
     dict_container[TRANSFORM_KEY] = transformations
 
 
+def _set_transformations_to_element(element: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
+    attrs = element.attrs
+    if TRANSFORM_KEY not in attrs:
+        attrs[TRANSFORM_KEY] = {}
+    attrs[TRANSFORM_KEY] = transformations
+    element.attrs = attrs
+
+
 def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.attrs, transformations)
 
@@ -141,7 +151,8 @@ def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
 @_set_transformations.register(GeoDataFrame)
 @_set_transformations.register(DaskDataFrame)
 def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
+    _set_transformations_to_element(e, transformations)
+    # _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 @singledispatch
