@@ -364,6 +364,8 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> None:
     if values == "blobs_image" or by == "blobs_labels" and not (values == "blobs_image" and by == "blobs_labels"):
         raise pytest.skip("Aggregation mixing raster and vector data is not currently supported.")
+    if values == "blobs_points":
+        print(values)
     values = sdata_blobs[values]
     by = sdata_blobs[by]
     if id(values) == id(by):
@@ -400,6 +402,8 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     # both values and by map to the "other" coordinate system, and they are aligned
     set_transformation(by, affine, "other")
     out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").tables["table"]
+    # from napari_spatialdata import Interactive
+    # Interactive(sdata)
     assert np.allclose(out0.X.todense().A, out2.X.todense().A)
 
     # actually transforming the data still lead to a correct the result
@@ -407,7 +411,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
     # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
     # transformed sdata
-    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").tables[
+    out3 = aggregate(values=sdata2["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").tables[
         "table"
     ]
     assert np.allclose(out0.X.todense().A, out3.X.todense().A)

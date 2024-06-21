@@ -856,8 +856,8 @@ class SpatialData:
         else:
             # When maintaining positioning is true, and if the element has a transformation to target_coordinate_system
             # (this may not be the case because it could be that the element is not directly mapped to that coordinate
-            # system), then the transformation to the target coordinate system is not needed # because the data is now
-            # already transformed; here we remove such transformation.
+            # system), then the transformation to the target coordinate system is not needed
+            # because the data is now already transformed; here we remove such transformation.
             d = get_transformation(transformed, get_all=True)
             assert isinstance(d, dict)
             if target_coordinate_system in d:

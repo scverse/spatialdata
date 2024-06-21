@@ -19,10 +19,13 @@ def test_backing_files_points(points):
         p1 = points1.points["points_0"]
         p2 = dd.concat([p0, p1], axis=0)
         files = get_dask_backing_files(p2)
-        expected_zarr_locations = [
+        expected_zarr_locations_legacy = [
             os.path.realpath(os.path.join(f, "points/points_0/points.parquet")) for f in [f0, f1]
         ]
-        assert set(files) == set(expected_zarr_locations)
+        expected_zarr_locations_new = [
+            os.path.realpath(os.path.join(f, "points/points_0/points.parquet/part.0.parquet")) for f in [f0, f1]
+        ]
+        assert set(files) == set(expected_zarr_locations_legacy) or set(files) == set(expected_zarr_locations_new)
 
 
 def test_backing_files_images(images):

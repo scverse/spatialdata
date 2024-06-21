@@ -286,11 +286,22 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
             path = mapping.store.path
             files.append(os.path.realpath(path))
         if k.startswith("read-parquet-"):
-            t = v.creation_info["args"]
-            assert isinstance(t, tuple)
-            assert len(t) == 1
-            parquet_file = t[0]
-            files.append(os.path.realpath(parquet_file))
+            if hasattr(v, "creation_info"):
+                t = v.creation_info["args"]
+                assert isinstance(t, tuple)
+                assert len(t) == 1
+                parquet_file = t[0]
+                files.append(os.path.realpath(parquet_file))
+            elif isinstance(v, tuple):
+                parquet_file = v[1]["piece"][0]
+                if not parquet_file.endswith(".parquet"):
+                    raise ValueError(
+                        f"Unable to parse the parquet file from the dask graph for {element}. Please "
+                        f"report this bug."
+                    )
+                files.append(os.path.realpath(parquet_file))
+            else:
+                raise ValueError(f"Unable to parse the dask graph for {element}. Please report this bug.")
     return files
 
 

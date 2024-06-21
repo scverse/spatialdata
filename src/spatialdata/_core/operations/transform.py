@@ -175,9 +175,14 @@ def _set_transformation_for_transformed_elements(
         raise TypeError(f"Unsupported type {type(element)}")
     assert isinstance(to_prepend, BaseTransformation)
 
+    print(element.attrs)
     d = get_transformation(element, get_all=True)
+    print(d)
     assert isinstance(d, dict)
     assert len(d) == 1
+    if not DEFAULT_COORDINATE_SYSTEM in d:
+        raise RuntimeError(f"Coordinate system {DEFAULT_COORDINATE_SYSTEM} not found in element")
+        pass
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
     remove_transformation(element, remove_all=True)
 
@@ -435,14 +440,36 @@ def _(
     transformed = data.drop(columns=list(axes)).copy()
     # dummy transformation that will be replaced by _adjust_transformation()
     transformed.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
+    #  this! Reported here: ...
+    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
+    if DEFAULT_COORDINATE_SYSTEM not in transformed.attrs[TRANSFORM_KEY]:
+        pass
     assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
         transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
+        print('transformed', ax)
+        print(transformed.attrs)
+        print(f'transformed[{ax}]')
+        print(transformed[ax].attrs)
+        print('')
+        pass
 
+    print('')
+
+    if DEFAULT_COORDINATE_SYSTEM not in transformed.attrs[TRANSFORM_KEY]:
+        pass
     old_transformations = get_transformation(data, get_all=True)
+    print('transformed.attrs:')
+    print(transformed.attrs)
+    print('old_transformations:')
+    print(old_transformations)
+    print('')
     assert isinstance(old_transformations, dict)
+    if DEFAULT_COORDINATE_SYSTEM not in transformed.attrs[TRANSFORM_KEY]:
+        pass
     _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,

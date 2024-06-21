@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import dask
+dask.config.set({'dataframe.query-planning': False})
+
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -19,7 +22,7 @@ from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
 from spatial_image import SpatialImage
-from spatialdata._core._deepcopy import deepcopy as _deepcopy
+from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.datasets import BlobsDataset
@@ -306,14 +309,9 @@ def labels_blobs() -> ArrayLike:
 @pytest.fixture()
 def sdata_blobs() -> SpatialData:
     """Create a 2D labels."""
-    from copy import deepcopy
-
     from spatialdata.datasets import blobs
 
-    sdata = deepcopy(blobs(256, 300, 3))
-    for k, v in sdata.shapes.items():
-        sdata.shapes[k] = _deepcopy(v)
-    return sdata
+    return deepcopy(blobs(256, 300, 3))
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
