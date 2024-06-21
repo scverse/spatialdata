@@ -116,7 +116,7 @@ class RasterSchema(DataArraySchema):
             Transformations to apply to the data.
         scale_factors
             Scale factors to apply for multiscale.
-            If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+            If not None, a :class:`xarray.DataArray` is returned.
         method
             Method to use for multiscale.
         chunks
@@ -128,8 +128,8 @@ class RasterSchema(DataArraySchema):
 
         Returns
         -------
-        :class:`spatial_image.SpatialImage` or
-        :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
+        :class:`xarray.DataArray` or
+        :class:`datatree.DataTree`.
         """
         if transformations:
             transformations = transformations.copy()

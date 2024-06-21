@@ -7,9 +7,7 @@ from dask.array.core import Array as DaskArray
 from dask.dataframe.core import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.operations._utils import _parse_element
@@ -233,9 +231,9 @@ def rasterize(
 
     Returns
     -------
-    The rasterized `SpatialData` object or `SpatialImage`. Each `SpatialElement` will be rasterized into a
-    `SpatialImage` (not a `MultiscaleSpatialImage`). So if a `SpatialData` object with elements is passed,
-    a `SpatialData` object with single-scale images and labels will be returned.
+    The rasterized `SpatialData` object or SpatialData supported `DataArray`. Each `SpatialElement` will be rasterized
+    into a `DataArray` (not a `DataTree`). So if a `SpatialData` object with elements is passed, a `SpatialData` object
+    with single-scale images and labels will be returned.
 
     Notes
     -----
@@ -375,7 +373,7 @@ def _get_xarray_data_to_rasterize(
     target_sizes: dict[str, float | None],
     target_coordinate_system: str,
 ) -> tuple[DataArray, Scale | None]:
-    """Make the DataArray to rasterize from either a SpatialImage or a MultiscaleSpatialImage.
+    """Make the DataArray to rasterize from either a Spatialdata supported DataArray or DataTree.
 
     If from a pyramid level, computes scale factor.
 
@@ -413,7 +411,7 @@ def _get_xarray_data_to_rasterize(
             assert set(get_spatial_axes(tuple(xdata.sizes.keys()))) == set(axes)
 
             corrected_affine, _ = _get_corrected_affine_matrix(
-                data=SpatialImage(xdata),
+                data=xdata,
                 axes=axes,
                 target_coordinate_system=target_coordinate_system,
             )
@@ -457,7 +455,7 @@ def _get_xarray_data_to_rasterize(
 
 
 def _get_corrected_affine_matrix(
-    data: SpatialImage | MultiscaleSpatialImage,
+    data: DataArray | DataTree,
     axes: tuple[str, ...],
     target_coordinate_system: str,
 ) -> tuple[Affine, tuple[str, ...]]:
@@ -504,7 +502,7 @@ def rasterize_images_labels(
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
-) -> SpatialImage:
+) -> DataArray:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     # get dimensions of the target image
@@ -620,7 +618,7 @@ def rasterize_shapes_points(
     return_regions_as_labels: bool = False,
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
-) -> SpatialImage:
+) -> DataArray:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(

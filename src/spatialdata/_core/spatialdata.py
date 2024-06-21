@@ -1585,7 +1585,7 @@ class SpatialData:
     def add_image(
         self,
         name: str,
-        image: SpatialImage | MultiscaleSpatialImage,
+        image: DataArray | DataTree,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:

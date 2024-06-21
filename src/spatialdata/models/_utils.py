@@ -45,7 +45,7 @@ def has_type_spatial_element(e: Any) -> bool:
     Returns
     -------
     Whether the object is a SpatialElement
-    (i.e in Union[SpatialImage, MultiscaleSpatialImage, GeoDataFrame, DaskDataFrame])
+    (i.e in Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame])
     """
     return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
 
@@ -137,10 +137,6 @@ def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
 @get_axes_names.register(DataArray)
 def _(e: DataArray) -> tuple[str, ...]:
     dims = e.dims
-    # dims_sizes = tuple(list(e.sizes.keys()))
-    # # we check that the following values are the same otherwise we could incur in subtle bugs downstreams
-    # if dims != dims_sizes:
-    #     raise ValueError(f"SpatialImage has inconsistent dimensions: {dims}, {dims_sizes}")
     _validate_dims(dims)
     return dims  # type: ignore[no-any-return]
 
@@ -155,17 +151,9 @@ def _(e: DataTree) -> tuple[str, ...]:
         dims_data = xdata.dims
         assert isinstance(dims_data, tuple)
 
-        # dims_sizes = tuple(list(xdata.sizes.keys()))
-
-        # # we check that all the following values are the same otherwise we could incur in subtle bugs downstreams
-        # if dims_coordinates != dims_data or dims_coordinates != dims_sizes:
-        #     raise ValueError(
-        #         f"MultiscaleSpatialImage has inconsistent dimensions: {dims_coordinates}, {dims_data}, {dims_sizes}"
-        #     )
         _validate_dims(dims_data)
         return dims_data
-    raise ValueError("MultiscaleSpatialImage does not contain the scale0 key")
-    # return tuple(i for i in e.dims.keys())
+    raise ValueError("Spatialdata DataTree does not contain the scale0 key")
 
 
 @get_axes_names.register(GeoDataFrame)

@@ -125,16 +125,16 @@ class TestMultiTable:
         with pytest.warns(DeprecationWarning):
             del full_sdata.table
         with pytest.raises(KeyError):
-            del full_sdata.table
+            del full_sdata["table"]
         with pytest.warns(DeprecationWarning):
             full_sdata.table = adata0  # this gets placed in sdata['table']
 
-        assert_equal(adata0, full_sdata.table)
+        assert_equal(adata0, full_sdata["table"])
 
-        del full_sdata.table
+        del full_sdata["table"]
 
         full_sdata.tables["my_new_table0"] = adata0
-        assert full_sdata.table is None
+        assert full_sdata.get("table") is None
 
     @pytest.mark.parametrize("region", ["test_shapes", "non_existing"])
     def test_single_table(self, tmp_path: str, region: str):
@@ -173,11 +173,11 @@ class TestMultiTable:
         with pytest.warns(UserWarning, match=r", which is not present in the SpatialData object"):
             SpatialData(
                 shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
-                table={"poly_annotate": table, "multipoly_annotate": table3},
+                tables={"poly_annotate": table, "multipoly_annotate": table3},
             )
         test_sdata = SpatialData(
             shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
-            table={"poly_annotate": table, "multipoly_annotate": table2},
+            tables={"poly_annotate": table, "multipoly_annotate": table2},
         )
         test_sdata.write(tmpdir)
         test_sdata = SpatialData.read(tmpdir)
@@ -195,7 +195,7 @@ class TestMultiTable:
                 "poly": test_shapes["poly"],
                 "multipoly": test_shapes["multipoly"],
             },
-            table=table,
+            tables={"table": table},
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)

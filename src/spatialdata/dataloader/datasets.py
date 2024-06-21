@@ -14,7 +14,6 @@ from datatree import DataTree
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
-from spatial_image import SpatialImage
 from torch.utils.data import Dataset
 from xarray import DataArray
 
@@ -289,8 +288,8 @@ class ImageTilesDataset(Dataset):
         if isinstance(data, DataArray):
             return data
         if isinstance(data, DataTree):
-            return SpatialImage(next(iter(data["scale0"].ds.values())))
-        raise ValueError(f"Expected a SpatialImage or MultiscaleSpatialImage, got {type(data)}.")
+            return next(iter(data["scale0"].ds.values()))
+        raise ValueError(f"Expected a DataArray or DataTree, got {type(data)}.")
 
     @staticmethod
     def _return_function(
@@ -327,7 +326,7 @@ class ImageTilesDataset(Dataset):
             # or a crop of the label
             return SpatialData(
                 images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile},
-                table=table_row,
+                tables={"table": table_row},
             )
         return SpatialData(images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile})
 
