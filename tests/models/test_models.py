@@ -21,7 +21,6 @@ from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
-from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models._utils import (
@@ -50,7 +49,7 @@ from spatialdata.transformations.operations import (
     get_transformation,
     set_transformation,
 )
-from spatialdata.transformations.transformations import Scale
+from spatialdata.transformations.transformations import Identity, Scale
 from xarray import DataArray
 
 from tests.conftest import (
@@ -83,27 +82,30 @@ class TestModels:
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
-        if any(isinstance(element, t) for t in (DataArray, AnnData, GeoDataFrame, DaskDataFrame)):
-            element_erased = deepcopy(element)
-            # we are not respecting the function signature (the transform should be not None); it's fine for testing
-            _set_transformations(element_erased, {})
-            element_copy0 = deepcopy(element_erased)
-            parsed0 = model.parse(element_copy0, **kwargs)
+        if any(isinstance(element, t) for t in (DataArray, GeoDataFrame, DaskDataFrame)):
+            # no transformation in the element, nor passed to the parser (default transformation is added)
 
-            element_copy1 = deepcopy(element_erased)
+            _set_transformations(element, {})
+            parsed0 = model.parse(element, **kwargs)
+            assert get_transformation(parsed0, "global") == Identity()
+
+            # no transformation in the element, but passed to the parser
+            _set_transformations(element, {})
             t = Scale([1.0, 1.0], axes=("x", "y"))
-            parsed1 = model.parse(element_copy1, transformations={"global": t}, **kwargs)
-            assert get_transformation(parsed0, "global") != get_transformation(parsed1, "global")
+            parsed1 = model.parse(element, transformations={"global": t}, **kwargs)
+            assert get_transformation(parsed1, "global") == t
 
-            element_copy2 = deepcopy(element_erased)
-            set_transformation(element_copy2, t, "global")
-            parsed2 = model.parse(element_copy2, **kwargs)
-            assert get_transformation(parsed1, "global") == get_transformation(parsed2, "global")
+            # transformation in the element, but not passed to the parser
+            _set_transformations(element, {})
+            set_transformation(element, t, "global")
+            parsed2 = model.parse(element, **kwargs)
+            assert get_transformation(parsed2, "global") == t
 
+            # transformation in the element, and passed to the parser
             with pytest.raises(ValueError):
-                element_copy3 = deepcopy(element_erased)
-                set_transformation(element_copy3, t, "global")
-                model.parse(element_copy3, transformations={"global": t}, **kwargs)
+                _set_transformations(element, {})
+                set_transformation(element, t, "global")
+                model.parse(element, transformations={"global": t}, **kwargs)
         elif any(
             isinstance(element, t)
             for t in (

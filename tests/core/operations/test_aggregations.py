@@ -364,8 +364,6 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> None:
     if values == "blobs_image" or by == "blobs_labels" and not (values == "blobs_image" and by == "blobs_labels"):
         raise pytest.skip("Aggregation mixing raster and vector data is not currently supported.")
-    if values == "blobs_points":
-        print(values)
     values = sdata_blobs[values]
     by = sdata_blobs[by]
     if id(values) == id(by):

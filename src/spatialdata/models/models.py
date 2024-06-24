@@ -73,12 +73,10 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
         and len(transformations) > 0
     ):
         # we can relax this and overwrite the transformations using the one passed as argument
-        pass
-        # TODO: restore this! It's maybe hiding a bug with dask.attrs
-        # raise ValueError(
-        #     "Transformations are both specified for the element and also passed as an argument to the parser. Please "
-        #     "specify the transformations only once."
-        # )
+        raise ValueError(
+            "Transformations are both specified for the element and also passed as an argument to the parser. Please "
+            "specify the transformations only once."
+        )
     if transformations is not None and len(transformations) > 0:
         parsed_transformations = transformations
     elif transformations_in_element is not None and len(transformations_in_element) > 0:
