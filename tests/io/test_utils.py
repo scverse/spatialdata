@@ -108,8 +108,12 @@ def test_backing_files_combining_points_and_images(points, images):
         v.compute_chunk_sizes()
         im2 = v + im1
         files = get_dask_backing_files(im2)
-        expected_zarr_locations = [
+        expected_zarr_locations_old = [
             os.path.realpath(os.path.join(f0, "points/points_0/points.parquet")),
             os.path.realpath(os.path.join(f1, "images/image2d")),
         ]
-        assert set(files) == set(expected_zarr_locations)
+        expected_zarr_locations_new = [
+            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet/part.0.parquet")),
+            os.path.realpath(os.path.join(f1, "images/image2d")),
+        ]
+        assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
