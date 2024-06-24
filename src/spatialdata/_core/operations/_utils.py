@@ -62,7 +62,7 @@ def transform_to_data_extent(
     Notes
     -----
         - The data extent is the smallest rectangle that contains all the images and geometries.
-        - MultiscaleSpatialImage objects will be converted to SpatialImage objects.
+        - DataTree objects (multiscale images) will be converted to DataArray (single-scale images) objects.
         - This helper function will be deprecated when https://github.com/scverse/spatialdata/issues/308 is closed,
           as this function will be easily recovered by `transform_to_coordinate_system()`
     """

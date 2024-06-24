@@ -13,7 +13,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
@@ -394,9 +393,7 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = SpatialImage(
-            transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}}
-        )
+        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = DataTree.from_dict(transformed_dict)

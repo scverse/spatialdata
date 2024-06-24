@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from copy import deepcopy
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
@@ -16,12 +15,13 @@ import pytest
 from anndata import AnnData
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
-from spatial_image import SpatialImage, to_spatial_image
+from spatial_image import to_spatial_image
+from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models._utils import (
@@ -45,7 +45,6 @@ from spatialdata.models.models import (
 from spatialdata.testing import assert_elements_are_identical
 from spatialdata.transformations._utils import (
     _set_transformations,
-    _set_transformations_xarray,
 )
 from spatialdata.transformations.operations import (
     get_transformation,
@@ -79,20 +78,15 @@ def test_validate_axis_name():
 class TestModels:
     def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs) -> None:
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
-        # other times (SpatialImage, DataArray, AnnData, GeoDataFrame) the object is enriched in-place. In such
-        # cases we check that if there was already a transformation in the object we consider it then we are not
+        # other times (DataArray, AnnData, GeoDataFrame) the object is enriched in-place. In such
+        # cases we check that if there was already a transformation in the object then we are not
         # passing it also explicitly in the parser.
         # This function does that for all the models (it's called by the various tests of the models) and it first
         # creates clean copies of the element, and then puts the transformation inside it with various methods
-        if any(isinstance(element, t) for t in (SpatialImage, DataArray, AnnData, GeoDataFrame, DaskDataFrame)):
+        if any(isinstance(element, t) for t in (DataArray, AnnData, GeoDataFrame, DaskDataFrame)):
             element_erased = deepcopy(element)
             # we are not respecting the function signature (the transform should be not None); it's fine for testing
-            if isinstance(element_erased, DataArray) and not isinstance(element_erased, SpatialImage):
-                # this case is for xarray.DataArray where the user manually updates the transform in attrs,
-                # or when a user takes an image from a MultiscaleSpatialImage
-                _set_transformations_xarray(element_erased, {})
-            else:
-                _set_transformations(element_erased, {})
+            _set_transformations(element_erased, {})
             element_copy0 = deepcopy(element_erased)
             parsed0 = model.parse(element_copy0, **kwargs)
 
@@ -102,24 +96,18 @@ class TestModels:
             assert get_transformation(parsed0, "global") != get_transformation(parsed1, "global")
 
             element_copy2 = deepcopy(element_erased)
-            if isinstance(element_copy2, DataArray) and not isinstance(element_copy2, SpatialImage):
-                _set_transformations_xarray(element_copy2, {"global": t})
-            else:
-                set_transformation(element_copy2, t, "global")
+            set_transformation(element_copy2, t, "global")
             parsed2 = model.parse(element_copy2, **kwargs)
             assert get_transformation(parsed1, "global") == get_transformation(parsed2, "global")
 
             with pytest.raises(ValueError):
                 element_copy3 = deepcopy(element_erased)
-                if isinstance(element_copy3, DataArray) and not isinstance(element_copy3, SpatialImage):
-                    _set_transformations_xarray(element_copy3, {"global": t})
-                else:
-                    set_transformation(element_copy3, t, "global")
+                set_transformation(element_copy3, t, "global")
                 model.parse(element_copy3, transformations={"global": t}, **kwargs)
         elif any(
             isinstance(element, t)
             for t in (
-                MultiscaleSpatialImage,
+                DataTree,
                 str,
                 np.ndarray,
                 dask.array.core.Array,

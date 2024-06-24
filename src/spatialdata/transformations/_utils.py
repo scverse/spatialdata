@@ -56,6 +56,7 @@ def _set_transformations_to_element(element: Any, transformations: MappingToCoor
     element.attrs = attrs
 
 
+# TODO: remove this function, now that we use DataArray instead of SpatialImage, we don't need it anymore
 def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_dict_container(e.attrs, transformations)
 

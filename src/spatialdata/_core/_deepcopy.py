@@ -64,9 +64,9 @@ def _(element: DataArray) -> DataArray:
 
 @deepcopy.register(DataTree)
 def _(element: DataTree) -> DataTree:
-    # the complexity here is due to the fact that the parsers don't accept MultiscaleSpatialImage types and that we need
-    # to convert the DataTree to a MultiscaleSpatialImage. This will be simplified once we support
-    # multiscale_spatial_image 1.0.0
+    # TODO: now that multiscale_spatial_image 1.0.0 is supported, this code can probably be simplified. Check
+    # https://github.com/scverse/spatialdata/pull/587/files#diff-c74ebf49cb8cbddcfaec213defae041010f2043cfddbded24175025b6764ef79
+    # to understand the original motivation.
     model = get_model(element)
     for key in element:
         ds = element[key].ds

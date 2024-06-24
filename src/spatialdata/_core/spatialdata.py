@@ -16,11 +16,9 @@ from dask.dataframe import read_parquet
 from dask.delayed import Delayed
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
@@ -97,9 +95,7 @@ class SpatialData:
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`spatial_image.SpatialImage` or
-            :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to
-            :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
@@ -1595,7 +1591,7 @@ class SpatialData:
     def add_labels(
         self,
         name: str,
-        labels: SpatialImage | MultiscaleSpatialImage,
+        labels: DataArray | DataTree,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
