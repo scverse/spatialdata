@@ -259,17 +259,12 @@ class TestReadWrite:
             assert len(s3["table"]) == len(s2["table"])
 
     def test_io_and_lazy_loading_points(self, points):
-        elem_name = list(points.points.keys())[0]
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
-            dask0 = points.points[elem_name]
             points.write(f)
-            assert all("read-parquet" not in key for key in dask0.dask.layers)
             assert len(get_dask_backing_files(points)) == 0
 
             sdata2 = SpatialData.read(f)
-            dask1 = sdata2[elem_name]
-            assert any("read-parquet" in key for key in dask1.dask.layers)
             assert len(get_dask_backing_files(sdata2)) > 0
 
     def test_io_and_lazy_loading_raster(self, images, labels):

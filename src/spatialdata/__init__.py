@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import dask
 
 dask.config.set({"dataframe.query-planning": False})
@@ -14,7 +12,6 @@ if DASK_EXPR_ENABLED:
         "dask.dataframe to disable dask-expr. The support is being worked on, for more information please see"
         "https://github.com/scverse/spatialdata/pull/570"
     )
-
 from importlib.metadata import version
 
 __version__ = version("spatialdata")
