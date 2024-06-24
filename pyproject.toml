@@ -36,6 +36,7 @@ dependencies = [
     "pooch",
     "pyarrow",
     "rich",
+    "setuptools",
     "shapely>=2.0.1",
     "spatial_image>=1.1.0",
     "scikit-image",

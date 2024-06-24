@@ -400,8 +400,6 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     # both values and by map to the "other" coordinate system, and they are aligned
     set_transformation(by, affine, "other")
     out2 = aggregate(values=values, by=by, target_coordinate_system="other", agg_func="sum").tables["table"]
-    # from napari_spatialdata import Interactive
-    # Interactive(sdata)
     assert np.allclose(out0.X.todense().A, out2.X.todense().A)
 
     # actually transforming the data still lead to a correct the result
