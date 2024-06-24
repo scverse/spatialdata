@@ -4,9 +4,9 @@ import pytest
 from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
-    _get_element_annotators,
     _locate_value,
     _ValueOrigin,
+    get_element_annotators,
     join_spatialelement_table,
 )
 from spatialdata.models.models import TableModel
@@ -773,13 +773,13 @@ def test_points_table_joins(full_sdata):
 
 
 def test_get_element_annotators(full_sdata):
-    names = _get_element_annotators(full_sdata, "points_0")
+    names = get_element_annotators(full_sdata, "points_0")
     assert len(names) == 0
 
-    names = _get_element_annotators(full_sdata, "labels2d")
+    names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"table"}
 
     another_table = full_sdata.tables["table"].copy()
     full_sdata.tables["another_table"] = another_table
-    names = _get_element_annotators(full_sdata, "labels2d")
+    names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"another_table", "table"}
