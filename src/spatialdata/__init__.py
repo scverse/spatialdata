@@ -5,8 +5,8 @@ import dask
 dask.config.set({"dataframe.query-planning": False})
 from dask.dataframe import DASK_EXPR_ENABLED
 
-# Setting `dataframe.query-planning` to False is effective only if run before `dask.dataframe` is initialized. In 
-# the case in which the user had initilized `dask.dataframe` before, we would have DASK_EXPER_ENABLED set to `True`. 
+# Setting `dataframe.query-planning` to False is effective only if run before `dask.dataframe` is initialized. In
+# the case in which the user had initilized `dask.dataframe` before, we would have DASK_EXPER_ENABLED set to `True`.
 # Here we check that this does not happen.
 if DASK_EXPR_ENABLED:
     raise RuntimeError(
