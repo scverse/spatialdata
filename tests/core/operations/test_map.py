@@ -236,7 +236,7 @@ def test_invalid_map_raster(sdata_blobs):
 
     with pytest.raises(
         ValueError,
-        match=(
+        match=re.escape(
             "Channel coordinates `c_coords` can not be provided if output data consists of labels "
             "('c' channel missing)."
         ),
