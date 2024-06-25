@@ -22,6 +22,11 @@ def _multiply_squeeze_z(arr, parameter=10):
     return arr[:, 0, ...]
 
 
+def _multiply_to_labels(arr, parameter=10):
+    arr = arr * parameter
+    return arr[0].astype(np.int32)
+
+
 @pytest.mark.parametrize(
     "depth",
     [
@@ -134,6 +139,35 @@ def test_map_transformation(sdata_blobs, img_layer):
     assert transformation == get_transformation(se, to_coordinate_system=target_coordinate_system)
 
 
+@pytest.mark.parametrize(
+    "blockwise, chunks, drop_axis",
+    [
+        (False, None, None),
+        (True, ((256,), (256,)), 0),
+    ],
+)
+def test_map_to_labels_(sdata_blobs, blockwise, chunks, drop_axis):
+    img_layer = "blobs_image"
+    func_kwargs = {"parameter": 20}
+
+    se = sdata_blobs[img_layer]
+
+    se = map_raster(
+        se.chunk((3, 256, 256)),
+        func=_multiply_to_labels,
+        func_kwargs=func_kwargs,
+        c_coords=None,
+        blockwise=blockwise,
+        chunks=chunks,
+        drop_axis=drop_axis,
+        dims=("y", "x"),
+    )
+
+    data = sdata_blobs[img_layer].data.compute()
+    res = se.data.compute()
+    assert np.array_equal((data[0] * func_kwargs["parameter"]).astype(np.int32), res)
+
+
 def test_map_squeeze_z(full_sdata):
     img_layer = "image3d_numpy"
     func_kwargs = {"parameter": 20}
@@ -159,7 +193,14 @@ def test_map_squeeze_z_fails(full_sdata):
     img_layer = "image3d_numpy"
     func_kwargs = {"parameter": 20}
 
-    with pytest.raises(IndexError):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "The number of dimensions of the output data (3) "
+            "differs from the number of dimensions in 'dims' (('c', 'z', 'y', 'x')). "
+            "Please provide correct output dimension via the 'dims' parameter.",
+        ),
+    ):
         map_raster(
             full_sdata[img_layer].chunk((3, 2, 64, 64)),
             func=_multiply_squeeze_z,
@@ -193,7 +234,7 @@ def test_invalid_map_raster(sdata_blobs):
             depth=(0, 60),
         )
 
-    with pytest.raises(ValueError, match="Channel coordinates can not be provided for labels data."):
+    with pytest.raises(ValueError, match="Channel coordinates can not be provided if output data consists of labels."):
         map_raster(
             sdata_blobs["blobs_labels"],
             func=_multiply,
