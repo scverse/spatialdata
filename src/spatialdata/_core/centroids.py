@@ -6,7 +6,7 @@ from functools import singledispatch
 import dask.array as da
 import pandas as pd
 import xarray as xr
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon

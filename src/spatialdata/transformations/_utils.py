@@ -4,7 +4,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from xarray import DataArray
@@ -43,11 +43,20 @@ def _set_transformations_to_dict_container(dict_container: Any, transformations:
 
     if TRANSFORM_KEY not in dict_container:
         dict_container[TRANSFORM_KEY] = {}
+    # this modifies the dict in place without triggering a setter in the element class. Probably we want to stop using
+    # _set_transformations_to_dict_container and use _set_transformations_to_element instead
     dict_container[TRANSFORM_KEY] = transformations
 
 
-def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
+def _set_transformations_to_element(element: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
+    attrs = element.attrs
+    if TRANSFORM_KEY not in attrs:
+        attrs[TRANSFORM_KEY] = {}
+    attrs[TRANSFORM_KEY] = transformations
+    # this calls an eventual setter in the element class; modifying the attrs directly would not trigger the setter
+    element.attrs = attrs
 
 
 @singledispatch
@@ -71,35 +80,9 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_get_transformations.register(DataArray)
-def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
-    return _get_transformations_xarray(e)
-
-
-@_get_transformations.register(DataTree)
-def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
-    from spatialdata.models._utils import TRANSFORM_KEY
-
-    if TRANSFORM_KEY in e.attrs:
-        raise ValueError(
-            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
-            "stored in the inner levels."
-        )
-    d = dict(e["scale0"])
-    assert len(d) == 1
-    xdata = d.values().__iter__().__next__()
-    return _get_transformations_xarray(xdata)
-
-
-@_get_transformations.register(GeoDataFrame)
-@_get_transformations.register(DaskDataFrame)
-def _(e: Union[GeoDataFrame, DaskDataFrame]) -> MappingToCoordinateSystem_t | None:
-    return _get_transformations_from_dict_container(e.attrs)
-
-
 @_set_transformations.register(DataArray)
 def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_xarray(e, transformations)
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
 @_set_transformations.register(DataTree)
@@ -132,16 +115,43 @@ def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
             for k, v in transformations.items():
                 sequence: BaseTransformation = Sequence([scale_transformation, v])
                 new_transformations[k] = sequence
-            _set_transformations_xarray(xdata, new_transformations)
+            _set_transformations(xdata, new_transformations)
         else:
-            _set_transformations_xarray(xdata, transformations)
+            _set_transformations(xdata, transformations)
             old_shape = new_shape
 
 
 @_set_transformations.register(GeoDataFrame)
 @_set_transformations.register(DaskDataFrame)
 def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
+    _set_transformations_to_element(e, transformations)
+    # _set_transformations_to_dict_container(e.attrs, transformations)
+
+
+@_get_transformations.register(DataArray)
+def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
+    return _get_transformations_xarray(e)
+
+
+@_get_transformations.register(DataTree)
+def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
+    if TRANSFORM_KEY in e.attrs:
+        raise ValueError(
+            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
+            "stored in the inner levels."
+        )
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    xdata = d.values().__iter__().__next__()
+    return _get_transformations_xarray(xdata)
+
+
+@_get_transformations.register(GeoDataFrame)
+@_get_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> MappingToCoordinateSystem_t | None:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch

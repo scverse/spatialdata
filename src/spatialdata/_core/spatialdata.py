@@ -11,16 +11,14 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
-from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
@@ -97,9 +95,7 @@ class SpatialData:
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`spatial_image.SpatialImage` or
-            :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to
-            :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
@@ -856,8 +852,8 @@ class SpatialData:
         else:
             # When maintaining positioning is true, and if the element has a transformation to target_coordinate_system
             # (this may not be the case because it could be that the element is not directly mapped to that coordinate
-            # system), then the transformation to the target coordinate system is not needed # because the data is now
-            # already transformed; here we remove such transformation.
+            # system), then the transformation to the target coordinate system is not needed
+            # because the data is now already transformed; here we remove such transformation.
             d = get_transformation(transformed, get_all=True)
             assert isinstance(d, dict)
             if target_coordinate_system in d:
@@ -1595,7 +1591,7 @@ class SpatialData:
     def add_labels(
         self,
         name: str,
-        labels: SpatialImage | MultiscaleSpatialImage,
+        labels: DataArray | DataTree,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
@@ -1743,8 +1739,8 @@ class SpatialData:
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                 elif attr == "points":
                     length: int | None = None
-                    if len(v.dask.layers) == 1:
-                        name, layer = v.dask.layers.items().__iter__().__next__()
+                    if len(v.dask) == 1:
+                        name, layer = v.dask.items().__iter__().__next__()
                         if "read-parquet" in name:
                             t = layer.creation_info["args"]
                             assert isinstance(t, tuple)

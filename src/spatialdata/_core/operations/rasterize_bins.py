@@ -10,7 +10,7 @@ from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from scipy.sparse import csc_matrix
 from skimage.transform import estimate_transform
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
 from spatialdata.models import Image2DModel, get_table_keys
@@ -30,7 +30,7 @@ def rasterize_bins(
     col_key: str,
     row_key: str,
     value_key: str | list[str] | None = None,
-) -> SpatialImage:
+) -> DataArray:
     """
     Rasterizes grid-like binned shapes/points annotated by a table (e.g. Visium HD data).
 

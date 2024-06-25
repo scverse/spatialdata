@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng

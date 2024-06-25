@@ -74,6 +74,7 @@ def test_aggregate_points_by_shapes(sdata_query_aggregation, by_shapes: str, val
             assert np.all(np.isclose(result_adata.X.todense().A, np.array([[s0], [0], [0], [0], [s4]])))
 
     # id_key can be implicit for points
+    points.attrs[PointsModel.ATTRS_KEY] = {}
     points.attrs[PointsModel.ATTRS_KEY][PointsModel.FEATURE_KEY] = value_key
     result_adata_implicit = aggregate(values=points, by=shapes, agg_func="sum").tables["table"]
     assert_equal(result_adata, result_adata_implicit)
@@ -406,7 +407,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
     sdata2 = SpatialData.init_from_elements({"values": sdata["values"], "by": transformed_sdata["by"]})
     # let's take values from the original sdata (non-transformed but aligned to 'other'); let's take by from the
     # transformed sdata
-    out3 = aggregate(values=sdata["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").tables[
+    out3 = aggregate(values=sdata2["values"], by=sdata2["by"], target_coordinate_system="other", agg_func="sum").tables[
         "table"
     ]
     assert np.allclose(out0.X.todense().A, out3.X.todense().A)

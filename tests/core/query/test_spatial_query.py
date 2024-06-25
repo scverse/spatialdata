@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import xarray
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Polygon
@@ -586,4 +586,3 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     # check that the attributes of the queried element are not the same as the old ones
     assert sdata[name].attrs is not queried[name].attrs
     assert sdata[name].attrs["transform"] is not queried[name].attrs["transform"]
-    pass

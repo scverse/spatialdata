@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import dask
+
+dask.config.set({"dataframe.query-planning": False})
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -10,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
@@ -18,7 +21,7 @@ from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
-from spatialdata._core._deepcopy import deepcopy as _deepcopy
+from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.datasets import BlobsDataset
@@ -305,14 +308,9 @@ def labels_blobs() -> ArrayLike:
 @pytest.fixture()
 def sdata_blobs() -> SpatialData:
     """Create a 2D labels."""
-    from copy import deepcopy
-
     from spatialdata.datasets import blobs
 
-    sdata = deepcopy(blobs(256, 300, 3))
-    for k, v in sdata.shapes.items():
-        sdata.shapes[k] = _deepcopy(v)
-    return sdata
+    return deepcopy(blobs(256, 300, 3))
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
@@ -399,10 +397,12 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     by_squares.loc[len(by_squares)] = [polygon]
     ShapesModel.validate(by_squares)
 
-    s = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
-    values_points["categorical_in_ddf"] = dd.from_pandas(s, npartitions=1)
-    s = pd.Series(RNG.random(20))
-    values_points["numerical_in_ddf"] = dd.from_pandas(s, npartitions=1)
+    s_cat = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
+    s_num = pd.Series(RNG.random(20))
+    # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
+    values_points = PointsModel.parse(
+        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+    )
 
     sdata = SpatialData(
         points={"points": values_points},

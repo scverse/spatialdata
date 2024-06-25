@@ -9,11 +9,10 @@ import dask.array as da
 import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
@@ -176,6 +175,9 @@ def _set_transformation_for_transformed_elements(
     assert isinstance(to_prepend, BaseTransformation)
 
     d = get_transformation(element, get_all=True)
+    assert isinstance(d, dict)
+    if DEFAULT_COORDINATE_SYSTEM not in d:
+        raise RuntimeError(f"Coordinate system {DEFAULT_COORDINATE_SYSTEM} not found in element")
     assert isinstance(d, dict)
     assert len(d) == 1
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
@@ -389,9 +391,7 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = SpatialImage(
-            transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}}
-        )
+        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = DataTree.from_dict(transformed_dict)
@@ -435,6 +435,9 @@ def _(
     transformed = data.drop(columns=list(axes)).copy()
     # dummy transformation that will be replaced by _adjust_transformation()
     transformed.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
+    #  this! Reported here: ...
+    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
     assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax

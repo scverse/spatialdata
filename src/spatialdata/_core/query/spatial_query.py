@@ -9,7 +9,7 @@ from typing import Any, Callable
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Polygon

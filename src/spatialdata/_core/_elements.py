@@ -8,7 +8,7 @@ from typing import Any
 from warnings import warn
 
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
 from spatialdata._types import Raster_T
