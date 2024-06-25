@@ -3,12 +3,12 @@ from __future__ import annotations
 import dask
 
 dask.config.set({"dataframe.query-planning": False})
-from dask.dataframe import DASK_EXPR_ENABLED
+import dask.dataframe as dd
 
 # Setting `dataframe.query-planning` to False is effective only if run before `dask.dataframe` is initialized. In
 # the case in which the user had initilized `dask.dataframe` before, we would have DASK_EXPER_ENABLED set to `True`.
 # Here we check that this does not happen.
-if DASK_EXPR_ENABLED:
+if hasattr(dd, "DASK_EXPR_ENABLED") and dd.DASK_EXPR_ENABLED:
     raise RuntimeError(
         "Unsupported backend: dask-expr has been detected as the backend of dask.dataframe. Please "
         "use:\nimport dask\ndask.config.set({'dataframe.query-planning': False})\nbefore importing "
