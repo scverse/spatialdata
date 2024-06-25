@@ -1,11 +1,9 @@
 import os
-import pickle
 import tempfile
 
 import dask.dataframe as dd
-import pytest
 from spatialdata import read_zarr
-from spatialdata._io._utils import _search_for_backing_files_recursively, get_dask_backing_files
+from spatialdata._io._utils import get_dask_backing_files
 
 
 def test_backing_files_points(points):
@@ -28,14 +26,6 @@ def test_backing_files_points(points):
             os.path.realpath(os.path.join(f, "points/points_0/points.parquet/part.0.parquet")) for f in [f0, f1]
         ]
         assert set(files) == set(expected_zarr_locations_legacy) or set(files) == set(expected_zarr_locations_new)
-
-        # to prepare the test data to commit to the repository
-        # to generate with dask-expr disabled
-        # with open('data/read-parquet_piece.pkl', 'wb') as outfile:
-        #     pickle.dump(p2.dask.to_dict(), outfile)
-        # to generate with dask-expr enabled
-        # with open('data/read_parquet_piece.pkl', 'wb') as outfile:
-        #     pickle.dump(p2.dask, outfile)
 
 
 def test_backing_files_images(images):
@@ -98,11 +88,6 @@ def test_backing_files_labels(labels):
         expected_zarr_locations = [os.path.realpath(os.path.join(f, "labels/labels2d_multiscale")) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
-        # to prepare the test data to commit to the repository
-        # with open('data/original-from-zarr.pkl', 'wb') as outfile:
-        #     graph = im5['scale0']['image'].data.dask
-        #     pickle.dump(graph.to_dict(), outfile)
-
 
 def test_backing_files_combining_points_and_images(points, images):
     """
@@ -132,14 +117,3 @@ def test_backing_files_combining_points_and_images(points, images):
             os.path.realpath(os.path.join(f1, "images/image2d")),
         ]
         assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
-
-
-@pytest.mark.parametrize(
-    "dask_graph_file", ["data/read-parquet_piece.pkl", "data/read_parquet_piece.pkl", "data/original-from-zarr.pkl"]
-)
-def test_search_for_backing_files_recursively(dask_graph_file: str):
-    with open(dask_graph_file, "rb") as infile:
-        dask_graph = pickle.load(infile)
-        files = []
-        _search_for_backing_files_recursively(dask_graph, files)
-        assert len(files) == 2
