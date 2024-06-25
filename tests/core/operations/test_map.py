@@ -233,7 +233,7 @@ def test_invalid_map_raster(sdata_blobs):
             c_coords=None,
             depth=(0, 60),
         )
-    
+
     with pytest.raises(
         ValueError,
         match=(
