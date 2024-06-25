@@ -10,7 +10,6 @@ from datatree import DataTree
 from xarray import DataArray
 
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
-from spatialdata.models.models import Labels2DModel, Labels3DModel, get_model
 from spatialdata.transformations import get_transformation
 
 __all__ = ["map_raster"]
@@ -85,9 +84,13 @@ def map_raster(
     else:
         raise ValueError("Only 'DataArray' and 'DataTree' are supported.")
 
-    model = get_model(data)
-    if model in (Labels2DModel, Labels3DModel) and c_coords is not None:
-        raise ValueError("Channel coordinates can not be provided for labels data.")
+    dims = dims if dims is not None else get_axes_names(data)
+
+    if "c" not in dims and c_coords is not None:
+        raise ValueError(
+            "Channel coordinates `c_coords` can not be provided if output data consists of labels "
+            "('c' channel missing)."
+        )
 
     kwargs = kwargs.copy()
     kwargs["chunks"] = chunks
@@ -108,10 +111,16 @@ def map_raster(
         else:
             map_func = da.map_blocks
 
-        arr = map_func(func, arr, **func_kwargs, **kwargs, dtype=arr.dtype)
+        arr = map_func(func, arr, **func_kwargs, **kwargs)
 
-    dims = dims if dims is not None else get_axes_names(data)
-    if model not in (Labels2DModel, Labels3DModel):
+    if arr.ndim != len(dims):
+        raise ValueError(
+            f"The number of dimensions of the output data ({arr.ndim}) "
+            f"differs from the number of dimensions in 'dims' ({dims}). "
+            "Please provide correct output dimension via the 'dims' parameter."
+        )
+
+    if "c" in dims:
         if c_coords is None:
             c_coords = range(arr.shape[0]) if arr.shape[0] != len(get_channels(data)) else get_channels(data)
     else:
