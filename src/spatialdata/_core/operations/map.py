@@ -87,7 +87,10 @@ def map_raster(
     dims = dims if dims is not None else get_axes_names(data)
 
     if "c" not in dims and c_coords is not None:
-        raise ValueError("Channel coordinates can not be provided if output data consists of labels.")
+        raise ValueError(
+            "Channel coordinates `c_coords` can not be provided if output data consists of labels "
+            "('c' channel missing)."
+        )
 
     kwargs = kwargs.copy()
     kwargs["chunks"] = chunks

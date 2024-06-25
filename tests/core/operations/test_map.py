@@ -233,8 +233,14 @@ def test_invalid_map_raster(sdata_blobs):
             c_coords=None,
             depth=(0, 60),
         )
-
-    with pytest.raises(ValueError, match="Channel coordinates can not be provided if output data consists of labels."):
+    
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Channel coordinates `c_coords` can not be provided if output data consists of labels "
+            "('c' channel missing)."
+        ),
+    ):
         map_raster(
             sdata_blobs["blobs_labels"],
             func=_multiply,
