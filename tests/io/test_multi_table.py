@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
