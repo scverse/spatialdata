@@ -113,8 +113,8 @@ class TestMultiTable:
             "table", "labels2d", region_key="region", instance_key="instance_id"
         )
 
-        region = ["circles"] * 50 + ['poly'] * 50
-        full_sdata['table'].obs['region'] = region
+        region = ["circles"] * 50 + ["poly"] * 50
+        full_sdata["table"].obs["region"] = region
 
         full_sdata.set_table_annotates_spatialelement(
             "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"

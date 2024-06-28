@@ -459,7 +459,10 @@ class SpatialData:
         """
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
-        if (isinstance(region, str) and region not in element_names) or (isinstance(element_names, (list, pd.Series)) and not all(region_element in element_names for region_element in region)):
+        if (isinstance(region, str) and region not in element_names) or (
+            isinstance(element_names, (list, pd.Series))
+            and not all(region_element in element_names for region_element in region)
+        ):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):
