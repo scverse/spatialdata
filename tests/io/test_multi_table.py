@@ -112,6 +112,13 @@ class TestMultiTable:
             "table", "labels2d", region_key="region", instance_key="instance_id"
         )
 
+        region = ["circles"] * 50 + ["poly"] * 50
+        full_sdata["table"].obs["region"] = region
+
+        full_sdata.set_table_annotates_spatialelement(
+            "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"
+        )
+
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
         tmpdir = Path(tmp_path) / "tmp.zarr"
