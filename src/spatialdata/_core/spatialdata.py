@@ -389,7 +389,7 @@ class SpatialData:
             If provided region_key is not present in table.obs.
         """
         attrs = table.uns[TableModel.ATTRS_KEY]
-        table_region_key = region_key if region_key else attrs.get(TableModel.REGION_KEY_KEY)
+        table_region_key = region_key if region_key is not None else attrs.get(TableModel.REGION_KEY_KEY)
 
         TableModel()._validate_set_region_key(table, region_key)
         TableModel()._validate_set_instance_key(table, instance_key)
@@ -430,7 +430,7 @@ class SpatialData:
     def set_table_annotates_spatialelement(
         self,
         table_name: str,
-        region: str | pd.Series,
+        region: str | pd.Series | list[str],
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
@@ -459,7 +459,7 @@ class SpatialData:
         """
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
-        if (isinstance(region, str) and region not in element_names) or not all(region_element in element_names for region_element in region):
+        if (isinstance(region, str) and region not in element_names) or (isinstance(element_names, (list, pd.Series)) and not all(region_element in element_names for region_element in region)):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):

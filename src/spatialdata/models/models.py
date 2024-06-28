@@ -748,7 +748,7 @@ class TableModel:
         if attrs is None:
             data.uns[self.ATTRS_KEY] = attrs = {}
         table_region_key = attrs.get(self.REGION_KEY_KEY)
-        if not region_key:
+        if region_key is None:
             if not table_region_key:
                 raise ValueError(
                     "No region_key in table.uns and no region_key provided as argument. Please specify 'region_key'."
