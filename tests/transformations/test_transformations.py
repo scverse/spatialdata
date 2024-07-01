@@ -4,8 +4,6 @@ from copy import deepcopy
 import numpy as np
 import pytest
 import xarray.testing
-from xarray import DataArray
-
 from spatialdata import transform
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel
@@ -34,6 +32,7 @@ from spatialdata.transformations.transformations import (
     _decompose_transformation,
     _get_affine_for_element,
 )
+from xarray import DataArray
 
 
 def test_identity():
