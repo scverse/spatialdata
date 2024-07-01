@@ -18,7 +18,7 @@ from xarray import DataArray
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channels
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -365,8 +365,10 @@ def _(
     if schema in (Labels2DModel, Labels3DModel):
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
+        channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
+        channel_names = get_channels(data)
     else:
         raise ValueError(f"DataTree with schema {schema} not supported")
 
@@ -392,6 +394,8 @@ def _(
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
         transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
+        if channel_names is not None:
+            transformed_dict[k] = transformed_dict[k].assign_coords(c=channel_names)
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = DataTree.from_dict(transformed_dict)

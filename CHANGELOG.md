@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning][].
 -   Added `get_element_instances()` (replaces `_get_unique_label_values_as_index()`) #582
 -   Added `get_element_annotators()`, retrieving the tables that annotate a particular SpatialElement #595
 
+### Fixed
+
+-   Preserve channel names of multi-scale images in `transform` (#379)
+
 ## [0.1.2] - 2024-03-30
 
 ### Minor
