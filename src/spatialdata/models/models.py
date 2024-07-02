@@ -941,8 +941,6 @@ class TableModel:
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
 
-        adata = convert_region_column_to_categorical(adata)
-
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
@@ -958,7 +956,7 @@ class TableModel:
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
         cls().validate(adata)
-        return adata
+        return convert_region_column_to_categorical(adata)
 
 
 Schema_t = Union[
