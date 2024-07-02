@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning][].
 
 -   Using `DataArray` directly instead of the subclass `SpatialImage` (removed install constraint for the `spatial_image` package) #587
 -   Using `DataTree` directly instead of the subclass `MultiscaleSpatialImage` (removed install constraint for the `multiscale_spatial_image` package) #587
+-   Changed `element`parameter (deprecation in v0.3.0) of `transform_element_to_coordinate_system` to a string `element_name` #611
 
 ### Major
 
