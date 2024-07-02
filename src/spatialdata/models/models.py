@@ -43,6 +43,7 @@ from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     SpatialElement,
     _validate_mapping_to_coordinate_system_type,
+    convert_region_column_to_categorical,
 )
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -939,11 +940,9 @@ class TableModel:
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-        if not isinstance(adata.obs[region_key].dtype, CategoricalDtype):
-            warnings.warn(
-                f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
-            )
-            adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
+
+        adata = convert_region_column_to_categorical(adata)
+
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
