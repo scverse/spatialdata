@@ -95,7 +95,8 @@ class TestMultiTable:
         ):
             full_sdata.set_table_annotates_spatialelement("table", "non_existing")
 
-    def test_set_table_annotates_spatialelement(self, full_sdata):
+    def test_set_table_annotates_spatialelement(self, full_sdata, tmp_path):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
         with pytest.raises(
             TypeError, match="No current annotation metadata found. " "Please specify both region_key and instance_key."
@@ -119,6 +120,12 @@ class TestMultiTable:
         full_sdata.set_table_annotates_spatialelement(
             "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"
         )
+
+        full_sdata["table"].obs["region"] = "circles"
+        full_sdata.set_table_annotates_spatialelement(
+            "table", "circles", region_key="region", instance_key="instance_id"
+        )
+        full_sdata.write(tmpdir)
 
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
