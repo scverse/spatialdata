@@ -37,7 +37,7 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
-from spatialdata.models._utils import SpatialElement, get_axes_names
+from spatialdata.models._utils import SpatialElement, convert_region_column_to_categorical, get_axes_names
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -471,6 +471,7 @@ class SpatialData:
             self._set_table_annotation_target(table, region, region_key, instance_key)
         else:
             raise TypeError("No current annotation metadata found. Please specify both region_key and instance_key.")
+        convert_region_column_to_categorical(table)
 
     @property
     def query(self) -> QueryManager:

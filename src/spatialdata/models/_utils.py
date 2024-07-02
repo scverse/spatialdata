@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Union
 
 import dask.dataframe as dd
 import geopandas
 import numpy as np
+import pandas as pd
+from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
@@ -359,3 +362,18 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     if C in dims:
         return Image3DModel if Z in dims else Image2DModel
     return Labels3DModel if Z in dims else Labels2DModel
+
+
+def convert_region_column_to_categorical(table: AnnData) -> AnnData:
+    from spatialdata.models.models import TableModel
+
+    if TableModel.ATTRS_KEY in table.uns:
+        region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
+        if not isinstance(table.obs[region_key].dtype, pd.CategoricalDtype):
+            warnings.warn(
+                f"Converting `{TableModel.REGION_KEY_KEY}: {region_key}` to categorical dtype.",
+                UserWarning,
+                stacklevel=2,
+            )
+            table.obs[region_key] = pd.Categorical(table.obs[region_key])
+    return table
