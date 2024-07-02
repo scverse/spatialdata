@@ -127,7 +127,6 @@ class TestMultiTable:
         )
         full_sdata.write(tmpdir)
 
-
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
         tmpdir = Path(tmp_path) / "tmp.zarr"
