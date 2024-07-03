@@ -916,7 +916,7 @@ class NgffSequence(NgffBaseTransformation):
         # complexity in these NgffSequence class will be rewarded in the long term.
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
-        assert type(self.input_coordinate_system) == NgffCoordinateSystem
+        assert type(self.input_coordinate_system) is NgffCoordinateSystem
         latest_output_cs: NgffCoordinateSystem = self.input_coordinate_system
         for t in self.transformations:
             latest_output_cs, input_cs, output_cs = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)
@@ -934,7 +934,7 @@ class NgffSequence(NgffBaseTransformation):
         # method, applies also here
         input_axes, output_axes = self._get_and_validate_axes()
         composed = np.eye(len(input_axes) + 1)
-        assert type(self.input_coordinate_system) == NgffCoordinateSystem
+        assert type(self.input_coordinate_system) is NgffCoordinateSystem
         latest_output_cs: NgffCoordinateSystem = self.input_coordinate_system
         for t in self.transformations:
             latest_output_cs, input_cs, output_cs = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)

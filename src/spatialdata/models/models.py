@@ -853,7 +853,7 @@ class TableModel:
         if attr[self.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
         if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [int, np.int16, np.int32, np.int64, "O"] or (
-            dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) != str
+            dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str
         ):
             dtype = dtype if dtype != "O" else val_dtype
             raise TypeError(
