@@ -199,7 +199,7 @@ class SpatialData:
                     else:
                         dtype = element.index.dtype
                     if dtype != table.obs[instance_key].dtype and (
-                        dtype == str or table.obs[instance_key].dtype == str
+                        dtype is str or table.obs[instance_key].dtype is str
                     ):
                         raise TypeError(
                             f"Table instance_key column ({instance_key}) has a dtype "
