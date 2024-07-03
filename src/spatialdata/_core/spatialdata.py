@@ -801,16 +801,17 @@ class SpatialData:
             # set the new transformations
             set_transformation(element=element, transformation=new_transformations, set_all=True)
 
+    @_deprecation_alias(element="element_name", version="0.3.0")
     def transform_element_to_coordinate_system(
-        self, element: SpatialElement, target_coordinate_system: str, maintain_positioning: bool = False
+        self, element_name: str, target_coordinate_system: str, maintain_positioning: bool = False
     ) -> SpatialElement:
         """
         Transform an element to a given coordinate system.
 
         Parameters
         ----------
-        element
-            The element to transform.
+        element_name:
+            The name of the element to transform.
         target_coordinate_system
             The target coordinate system.
         maintain_positioning
@@ -830,6 +831,18 @@ class SpatialData:
             remove_transformation,
             set_transformation,
         )
+
+        # TODO remove after deprecation
+        if not isinstance(element_name, str):
+            warnings.warn(
+                "Passing a SpatialElement is as element will be deprecated in SpatialData v0.3.0. Pass"
+                "element_name as string to silence this warning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            element = element_name
+        else:
+            element = self.get(element_name)
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:

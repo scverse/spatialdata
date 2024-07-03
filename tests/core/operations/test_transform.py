@@ -489,10 +489,11 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     scale = Scale([k], axes=("x",))
     translation = Translation([k], axes=("x",))
     sequence = Sequence([scale, translation])
-    for element in full_sdata._gen_spatial_element_values():
+    for _, element_name, _ in full_sdata.gen_spatial_elements():
+        element = full_sdata[element_name]
         set_transformation(element, sequence, "my_space")
         transformed_element = full_sdata.transform_element_to_coordinate_system(
-            element, "my_space", maintain_positioning=maintain_positioning
+            element_name, "my_space", maintain_positioning=maintain_positioning
         )
         t = get_transformation(transformed_element, to_coordinate_system="my_space")
         a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
