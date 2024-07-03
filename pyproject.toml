@@ -35,6 +35,7 @@ dependencies = [
     "pandas",
     "pooch",
     "pyarrow",
+    "pygeos",
     "rich",
     "setuptools",
     "shapely>=2.0.1",
