@@ -25,7 +25,7 @@ dependencies = [
     "anndata>=0.9.1",
     "click",
     "dask-image",
-    "dask>=2024.2.1",
+    "dask>=2024.4.1",
     "fsspec<=2023.6",
     "geopandas>=0.14",
     "multiscale_spatial_image>=1.0.0",
