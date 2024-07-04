@@ -38,7 +38,7 @@ dependencies = [
     "rich",
     "setuptools",
     "shapely>=2.0.1",
-    "spatial_image>=1.1.0",
+    "spatial_image>=1.0.0",
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
