@@ -648,14 +648,6 @@ def _(
         target_coordinate_system=target_coordinate_system,
     )
 
-    # (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
-    #     element=points,
-    #     axes=axes,
-    #     min_coordinate=min_coordinate,
-    #     max_coordinate=max_coordinate,
-    #     target_coordinate_system=target_coordinate_system,
-    # )
-
     min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
     max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
 
