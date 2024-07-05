@@ -4,7 +4,7 @@ import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 import dask.dataframe as dd
@@ -49,7 +49,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> tuple[ArrayLike, tuple[str, ...]]:
+) -> tuple[ArrayLike | DataArray, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
 
     Parameters
@@ -74,38 +74,65 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     The axes of the intrinsic coordinate system.
     """
-    from spatialdata.transformations import get_transformation
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
-    # get the transformation from the element's intrinsic coordinate system
-    # to the query coordinate space
-    transform_to_query_space = get_transformation(element, to_coordinate_system=target_coordinate_system)
+
+    # compute the output axes of the transformation, remove c from input and output axes, return the matrix without c
+    # and then build an affine transformation from that
     m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
         element, target_coordinate_system
     )
+    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
+
+    # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
+    # transformations; we focus on them
+    if isinstance(element, (DataArray, DataTree)):
+        m_without_c_linear = m_without_c[:-1, :-1]
+        case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
+        assert case in [1, 5]
+
+    # adjust the bounding box to the real axes, dropping or adding eventually mismatching axes; the order of the axes is
+    # not adjusted
     axes, min_coordinate, max_coordinate = _adjust_bounding_box_to_real_axes(
         axes, min_coordinate, max_coordinate, output_axes_without_c
     )
+    assert set(axes) == set(output_axes_without_c)
 
-    # get the coordinates of the bounding box corners
+    # in the case of non-raster data, we need to swap the axes
+    if not isinstance(element, (DataArray, DataTree)):
+        input_axes_without_c, axes = axes, input_axes_without_c
+
+    # let's get the bounding box corners and inverse transform then to the intrinsic coordinate system; since we are
+    # in case 1 or 5, the transformation is invertible
+    spatial_transform_bb_axes = Affine(
+        spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
+        input_axes=input_axes_without_c,
+        output_axes=axes,
+    )
+
     bounding_box_corners = get_bounding_box_corners(
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         axes=axes,
-    ).data
-
-    # transform the coordinates to the intrinsic coordinate system
-    intrinsic_axes = get_axes_names(element)
-    transform_to_intrinsic = transform_to_query_space.inverse().to_affine_matrix(  # type: ignore[union-attr]
-        input_axes=axes, output_axes=intrinsic_axes
     )
-    rotation_matrix = transform_to_intrinsic[0:-1, 0:-1]
-    translation = transform_to_intrinsic[0:-1, -1]
 
-    intrinsic_bounding_box_corners = bounding_box_corners @ rotation_matrix.T + translation
+    inverse = spatial_transform_bb_axes.inverse()
+    assert isinstance(inverse, Affine)
+    rotation_matrix = inverse.matrix[0:-1, 0:-1]
+    translation = inverse.matrix[0:-1, -1]
 
-    return intrinsic_bounding_box_corners, intrinsic_axes
+    intrinsic_bounding_box_corners = bounding_box_corners.data @ rotation_matrix.T + translation
+
+    if isinstance(element, (DataArray, DataTree)):
+        return (
+            DataArray(
+                intrinsic_bounding_box_corners,
+                coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+            ),
+            axes,
+        )
+
+    return intrinsic_bounding_box_corners, axes
 
 
 def _get_polygon_in_intrinsic_coordinates(
@@ -493,48 +520,11 @@ def _(
         max_coordinate=max_coordinate,
     )
 
-    # compute the output axes of the transformation, remove c from input and output axes, return the matrix without c
-    # and then build an affine transformation from that
-    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
-        image, target_coordinate_system
+    intrinsic_bounding_box_corners, axes = _get_bounding_box_corners_in_intrinsic_coordinates(
+        image, axes, min_coordinate, max_coordinate, target_coordinate_system
     )
-    spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
-
-    # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
-    # transformations; we focus on them
-    m_without_c_linear = m_without_c[:-1, :-1]
-    case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
-    assert case in [1, 5]
-
-    # adjust the bounding box to the real axes, dropping or adding eventually mismatching axes; the order of the axes is
-    # not adjusted
-    axes, min_coordinate, max_coordinate = _adjust_bounding_box_to_real_axes(
-        axes, min_coordinate, max_coordinate, output_axes_without_c
-    )
-    assert set(axes) == set(output_axes_without_c)
-
-    # since the order of the axes is arbitrary, let's adjust the affine transformation without c to match those axes
-    spatial_transform_bb_axes = Affine(
-        spatial_transform.to_affine_matrix(input_axes=input_axes_without_c, output_axes=axes),
-        input_axes=input_axes_without_c,
-        output_axes=axes,
-    )
-
-    # let's get the bounding box corners and inverse transform then to the intrinsic coordinate system; since we are
-    # in case 1 or 5, the transformation is invertible
-    bounding_box_corners = get_bounding_box_corners(
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-        axes=axes,
-    )
-    inverse = spatial_transform_bb_axes.inverse()
-    assert isinstance(inverse, Affine)
-    rotation_matrix = inverse.matrix[0:-1, 0:-1]
-    translation = inverse.matrix[0:-1, -1]
-    intrinsic_bounding_box_corners = DataArray(
-        bounding_box_corners.data @ rotation_matrix.T + translation,
-        coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
-    )
+    if TYPE_CHECKING:
+        assert isinstance(intrinsic_bounding_box_corners, DataArray)
 
     # build the request: now that we have the bounding box corners in the intrinsic coordinate system, we can use them
     # to build the request to query the raster data using the xarray APIs
@@ -652,6 +642,15 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
+
+    # (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
+    #     element=points,
+    #     axes=axes,
+    #     min_coordinate=min_coordinate,
+    #     max_coordinate=max_coordinate,
+    #     target_coordinate_system=target_coordinate_system,
+    # )
+
     min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
     max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
 
