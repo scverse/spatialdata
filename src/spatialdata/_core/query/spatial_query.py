@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Callable
@@ -499,7 +500,8 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> DataArray | DataTree | None:
+    return_request_only: bool = False,
+) -> DataArray | DataTree | Mapping[str, list[int]] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -544,6 +546,9 @@ def _(
             translation_vector.append(np.ceil(min_value).item())
         else:
             translation_vector.append(0)
+
+    if return_request_only:
+        return selection
 
     # query the data
     query_result = image.sel(selection)
