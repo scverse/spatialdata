@@ -7,6 +7,7 @@ from itertools import chain
 from types import MappingProxyType
 from typing import Any, Callable
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
@@ -276,7 +277,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = AnnData.concatenate(*tables_l)
+            self.dataset_table = ad.concat(*tables_l)
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))
