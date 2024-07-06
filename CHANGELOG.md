@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning][].
 
 ### Minor
 
--  Relaxing `spatial-image` package requirement #616
+-   Relaxing `spatial-image` package requirement #616
 
 ## [0.2.0] - 2024-07-03
 
@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning][].
 ### Fixed
 
 -   Preserve channel names of multi-scale images in `transform` (#379)
+-   Fix `filter_by_coordinate_system` with SpatialData object having a table not annotating an element (#619)
 
 ## [0.1.2] - 2024-03-30
 

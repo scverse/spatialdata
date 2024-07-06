@@ -722,6 +722,8 @@ class SpatialData:
                 if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
                     tables[table_name] = table
                     continue
+                if not include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
+                    continue
                 if table_name in names_tables_to_keep:
                     tables[table_name] = table
                     continue
