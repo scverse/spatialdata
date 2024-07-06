@@ -684,6 +684,14 @@ def test_filter_table_categorical_bug(shapes):
     shapes.filter_by_coordinate_system("global")
 
 
+def test_filter_table_non_annotating(full_sdata):
+    obs = pd.DataFrame({"test": ["a", "b", "c"]})
+    adata = AnnData(obs=obs)
+    table = TableModel.parse(adata)
+    full_sdata["table"] = table
+    full_sdata.filter_by_coordinate_system("global")
+
+
 def test_labels_table_joins(full_sdata):
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata,
