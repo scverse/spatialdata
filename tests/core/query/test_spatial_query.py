@@ -189,7 +189,10 @@ def test_query_points_no_points():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+@pytest.mark.parametrize("return_request_only", [True, False])
+def test_query_raster(
+    n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, return_request_only: bool
+):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
         # labels cannot have multiple channels, let's ignore this combination of parameters
@@ -240,7 +243,9 @@ def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: b
                 return
             # make a triangle whose bounding box is the same as the bounding box specified with the query
             polygon = Polygon([(0, 5), (5, 5), (5, 10)])
-            image_result = polygon_query(image, polygon=polygon, target_coordinate_system="global")
+            image_result = polygon_query(
+                image, polygon=polygon, target_coordinate_system="global", return_request_only=return_request_only
+            )
         else:
             image_result = bounding_box_query(
                 image,
@@ -248,11 +253,21 @@ def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: b
                 min_coordinate=_min_coordinate,
                 max_coordinate=_max_coordinate,
                 target_coordinate_system="global",
+                return_request_only=return_request_only,
             )
 
         slices = {"y": slice(5, 10), "x": slice(0, 5)}
         if is_bb_3d and is_3d:
             slices["z"] = slice(2, 7)
+        if return_request_only:
+            assert isinstance(image_result, dict)
+            if not (is_bb_3d and is_3d) and ("z" in image_result):
+                image_result.pop("z")  # remove z from slices if `polygon_query`
+            for k, v in image_result.items():
+                assert isinstance(v, slice)
+                assert image_result[k] == slices[k]
+            return
+
         expected_image = ximage.sel(**slices)
 
         if isinstance(image, DataArray):

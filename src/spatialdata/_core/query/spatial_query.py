@@ -834,6 +834,7 @@ def _(
     image: DataArray | DataTree,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
+    return_request_only: bool = False,
     **kwargs: Any,
 ) -> DataArray | DataTree | None:
     _check_deprecated_kwargs(kwargs)
@@ -845,6 +846,7 @@ def _(
         max_coordinate=[max_x, max_y],
         axes=("x", "y"),
         target_coordinate_system=target_coordinate_system,
+        return_request_only=return_request_only,
     )
 
 
