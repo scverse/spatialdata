@@ -98,10 +98,6 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     if set(axes) != set(output_axes_without_c):
         raise ValueError("The axes of the bounding box must match the axes of the transformation.")
 
-    # in the case of non-raster data, we need to swap the axes
-    if not isinstance(element, (DataArray, DataTree)):
-        input_axes_without_c, axes = axes, input_axes_without_c
-
     # let's get the bounding box corners and inverse transform then to the intrinsic coordinate system; since we are
     # in case 1 or 5, the transformation is invertible
     spatial_transform_bb_axes = Affine(
@@ -252,6 +248,11 @@ def _adjust_bounding_box_to_real_axes(
             M = np.finfo(np.float32).max - 1
             min_coordinate = np.append(min_coordinate, -M)
             max_coordinate = np.append(max_coordinate, M)
+    else:
+        indices = [axes_bb.index(ax) for ax in axes_out_without_c]
+        min_coordinate = min_coordinate[np.array(indices)]
+        max_coordinate = max_coordinate[np.array(indices)]
+        axes_bb = axes_out_without_c
     return axes_bb, min_coordinate, max_coordinate
 
 
