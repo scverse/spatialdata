@@ -432,6 +432,7 @@ def bounding_box_query(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
+    return_request_only: bool = False,
     filter_table: bool = True,
     **kwargs: Any,
 ) -> SpatialElement | SpatialData | None:
@@ -451,6 +452,9 @@ def bounding_box_query(
     filter_table
         If `True`, the table is filtered to only contain rows that are annotating regions
         contained within the bounding box.
+    return_request_only
+        If `True`, the function returns the bounding box coordinates in the target coordinate system.
+        Only valid with `DataArray` and `DataTree` elements.
 
     Returns
     -------
