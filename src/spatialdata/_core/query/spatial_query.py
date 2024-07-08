@@ -50,7 +50,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> tuple[ArrayLike | DataArray, tuple[str, ...]]:
+) -> tuple[DataArray, tuple[str, ...]]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
 
     Parameters
@@ -87,17 +87,16 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
     # transformations; we focus on them
-    if isinstance(element, (DataArray, DataTree)):
-        m_without_c_linear = m_without_c[:-1, :-1]
-        case = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
-        assert case in [1, 5]
+    m_without_c_linear = m_without_c[:-1, :-1]
+    _ = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
 
     # adjust the bounding box to the real axes, dropping or adding eventually mismatching axes; the order of the axes is
     # not adjusted
     axes, min_coordinate, max_coordinate = _adjust_bounding_box_to_real_axes(
         axes, min_coordinate, max_coordinate, output_axes_without_c
     )
-    assert set(axes) == set(output_axes_without_c)
+    if set(axes) != set(output_axes_without_c):
+        raise ValueError("The axes of the bounding box must match the axes of the transformation.")
 
     # in the case of non-raster data, we need to swap the axes
     if not isinstance(element, (DataArray, DataTree)):
@@ -118,22 +117,20 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     )
 
     inverse = spatial_transform_bb_axes.inverse()
-    assert isinstance(inverse, Affine)
+    if not isinstance(inverse, Affine):
+        raise RuntimeError("This should not happen")
     rotation_matrix = inverse.matrix[0:-1, 0:-1]
     translation = inverse.matrix[0:-1, -1]
 
     intrinsic_bounding_box_corners = bounding_box_corners.data @ rotation_matrix.T + translation
 
-    if isinstance(element, (DataArray, DataTree)):
-        return (
-            DataArray(
-                intrinsic_bounding_box_corners,
-                coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
-            ),
-            axes,
-        )
-
-    return intrinsic_bounding_box_corners, axes
+    return (
+        DataArray(
+            intrinsic_bounding_box_corners,
+            coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+        ),
+        axes,
+    )
 
 
 def _get_polygon_in_intrinsic_coordinates(
@@ -647,7 +644,7 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-
+    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
     min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
     max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
 
@@ -718,14 +715,14 @@ def _(
     )
 
     # get the four corners of the bounding box
-    (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
+    (intrinsic_bounding_box_corners, _) = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,
         axes=axes,
         min_coordinate=min_coordinate,
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-
+    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
     bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
     indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
     queried = polygons[indices]
