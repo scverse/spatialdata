@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+-   Added `SpatialData.filter()` method for subsetting by `obs` and `var` @aeisenbarth
+
 ## [0.2.1] - 2024-07-04
 
 ### Minor
