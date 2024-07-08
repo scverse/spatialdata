@@ -283,6 +283,7 @@ def _get_table(
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> AnnData:
+    # size = 99 if "label" in region else 100
     adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
     if not all(var for var in (region, region_key, instance_key)):
         return TableModel.parse(adata=adata)
