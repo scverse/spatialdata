@@ -106,6 +106,7 @@ def get_element_instances(
 @get_element_instances.register(DataTree)
 def _(
     element: DataArray | DataTree,
+    return_background: bool = False,
 ) -> pd.Index:
     model = get_model(element)
     assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
@@ -119,7 +120,10 @@ def _(
         xdata = next(iter(v))
         # can be slow
         instances = da.unique(xdata.data).compute()
-    return pd.Index(np.sort(instances))
+    index = pd.Index(np.sort(instances))
+    if not return_background and 0 in index:
+        return index.drop(0)  # drop the background label
+    return index
 
 
 @get_element_instances.register(GeoDataFrame)
