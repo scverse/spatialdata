@@ -35,6 +35,7 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> No
 def get_centroids(
     e: SpatialElement,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """
     Get the centroids of the geometries contained in a SpatialElement, as a new Points element.
@@ -45,6 +46,8 @@ def get_centroids(
         The SpatialElement. Only points, shapes (circles, polygons and multipolygons) and labels are supported.
     coordinate_system
         The coordinate system in which the centroids are computed.
+    return_background
+        If True, the centroid of the background label (0) is included in the output.
 
     Notes
     -----

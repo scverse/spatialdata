@@ -86,6 +86,7 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
 @singledispatch
 def get_element_instances(
     element: SpatialElement,
+    return_background: bool = False,
 ) -> pd.Index:
     """
     Get the instances (index values) of the SpatialElement.
@@ -94,6 +95,8 @@ def get_element_instances(
     ----------
     element
         The SpatialElement.
+    return_background
+        If True, the background label (0) is included in the output.
 
     Returns
     -------
