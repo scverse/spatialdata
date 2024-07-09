@@ -240,12 +240,14 @@ One region table can refer to multiple sets of Regions. But each row can map to 
     * `region: str | list[str]`: Regions or list of regions this table refers to.
     * `region_key: str`: Key in obs which says which Regions container
            this obs exists in (e.g. "library_id").
-           *In `spatialdata-io` we commonly use the name `'region'` as the default name for the `region_key` column.*
     * `instance_key: str`: Key in obs that says which instance the obs
            represents (e.g. "cell_id").
-           *In `spatialdata-io` we commonly use the name `'instance_id'` as the default name for the `instance_key` column.*
 
 If any of `region`, `region_key` and `instance_key` are defined, they all MUST be defined. A table not defining them is still allowed, but it will not be mapped to any spatial element.
+
+In `spatialdata-io` we use a consistent naming scheme for the `region_key` and `instance_key` column, which is suggested (but not required):
+- we use the name `'region'` as the default name for the `region_key` column;
+- we use the name `'instance_id'` as the default name for the `instance_key` column.
 
 ### Summary
 
