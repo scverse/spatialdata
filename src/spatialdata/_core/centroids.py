@@ -35,6 +35,7 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> No
 def get_centroids(
     e: SpatialElement,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """
     Get the centroids of the geometries contained in a SpatialElement, as a new Points element.
@@ -45,6 +46,8 @@ def get_centroids(
         The SpatialElement. Only points, shapes (circles, polygons and multipolygons) and labels are supported.
     coordinate_system
         The coordinate system in which the centroids are computed.
+    return_background
+        If True, the centroid of the background label (0) is included in the output.
 
     Notes
     -----
@@ -69,7 +72,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         A DataFrame containing one column, named after "axis", with the centroids of the labels along that axis.
-        The index of the DataFrame is the collection of label values, sorted ascendingly.
+        The index of the DataFrame is the collection of label values, sorted in ascending order.
     """
     centroids: dict[int, float] = defaultdict(float)
     for i in xdata[axis]:
@@ -95,6 +98,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
 def _(
     e: DataArray | DataTree,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
@@ -110,6 +114,8 @@ def _(
     for axis in get_axes_names(e):
         dfs.append(_get_centroids_for_axis(e, axis))
     df = pd.concat(dfs, axis=1)
+    if not return_background and 0 in df.index:
+        df = df.drop(index=0)  # drop the background label
     t = get_transformation(e, coordinate_system)
     centroids = PointsModel.parse(df, transformations={coordinate_system: t})
     return transform(centroids, to_coordinate_system=coordinate_system)

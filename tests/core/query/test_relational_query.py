@@ -699,14 +699,15 @@ def test_labels_table_joins(full_sdata):
         table_name="table",
         how="left",
     )
-    assert all(table.obs["instance_id"] == range(100))
+
+    assert all(table.obs["instance_id"] == range(1, 100))
 
     full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
 
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="left", match_rows="left"
     )
-    assert all(table.obs["instance_id"] == range(100))
+    assert all(table.obs["instance_id"] == range(1, 100))
 
     with pytest.warns(UserWarning, match="Element type"):
         join_spatialelement_table(
@@ -724,7 +725,8 @@ def test_labels_table_joins(full_sdata):
         sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="right_exclusive"
     )
     assert element_dict["labels2d"] is None
-    assert table is None
+    assert len(table) == 1
+    assert all(table.obs["instance_id"] == 0)  # the background value, which is filtered out effectively
 
 
 def test_points_table_joins(full_sdata):

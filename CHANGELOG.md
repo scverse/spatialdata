@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+-   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
+
 ## [0.2.1] - 2024-07-04
 
 ### Minor
