@@ -576,6 +576,7 @@ def join_spatialelement_table(
 
     For Points and Shapes elements every valid join for argument how is supported. For Labels elements only
      the ``'left'`` and ``'right_exclusive'`` joins are supported.
+    For labels, the background label (0) is not included in the output and it will not be returned.
 
     Parameters
     ----------
