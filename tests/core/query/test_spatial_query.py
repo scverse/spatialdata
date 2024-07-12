@@ -3,13 +3,14 @@ from dataclasses import FrozenInstanceError
 import dask.dataframe as dd
 import geopandas.testing
 import numpy as np
+import pandas as pd
 import pytest
 import xarray
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from shapely import Polygon
+from shapely import MultiPolygon, Point, Polygon
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
@@ -27,7 +28,7 @@ from spatialdata.models import (
     TableModel,
 )
 from spatialdata.testing import assert_spatial_data_objects_are_identical
-from spatialdata.transformations import Identity, set_transformation
+from spatialdata.transformations import Identity, MapAxis, set_transformation
 from xarray import DataArray
 
 from tests.conftest import _make_points, _make_squares
@@ -189,7 +190,10 @@ def test_query_points_no_points():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+@pytest.mark.parametrize("return_request_only", [True, False])
+def test_query_raster(
+    n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, return_request_only: bool
+):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
         # labels cannot have multiple channels, let's ignore this combination of parameters
@@ -240,7 +244,9 @@ def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: b
                 return
             # make a triangle whose bounding box is the same as the bounding box specified with the query
             polygon = Polygon([(0, 5), (5, 5), (5, 10)])
-            image_result = polygon_query(image, polygon=polygon, target_coordinate_system="global")
+            image_result = polygon_query(
+                image, polygon=polygon, target_coordinate_system="global", return_request_only=return_request_only
+            )
         else:
             image_result = bounding_box_query(
                 image,
@@ -248,11 +254,21 @@ def test_query_raster(n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: b
                 min_coordinate=_min_coordinate,
                 max_coordinate=_max_coordinate,
                 target_coordinate_system="global",
+                return_request_only=return_request_only,
             )
 
         slices = {"y": slice(5, 10), "x": slice(0, 5)}
         if is_bb_3d and is_3d:
             slices["z"] = slice(2, 7)
+        if return_request_only:
+            assert isinstance(image_result, dict)
+            if not (is_bb_3d and is_3d) and ("z" in image_result):
+                image_result.pop("z")  # remove z from slices if `polygon_query`
+            for k, v in image_result.items():
+                assert isinstance(v, slice)
+                assert image_result[k] == slices[k]
+            return
+
         expected_image = ximage.sel(**slices)
 
         if isinstance(image, DataArray):
@@ -547,7 +563,10 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-@pytest.mark.parametrize("name", ["image2d", "labels2d", "points_0", "circles", "multipoly", "poly"])
+@pytest.mark.parametrize(
+    "name",
+    ["image2d", "labels2d", "image2d_multiscale", "labels2d_multiscale", "points_0", "circles", "multipoly", "poly"],
+)
 def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     """Test that attributes are copied over to the new spatial data object."""
     sdata = full_sdata.subset([name])
@@ -555,8 +574,12 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     # let's add a second transformation, to make sure that later we are not checking for the presence of default values
     set_transformation(sdata[name], transformation=Identity(), to_coordinate_system="aligned")
 
-    old_attrs = sdata[name].attrs
-    old_transform = sdata[name].attrs["transform"]
+    if not isinstance(sdata[name], DataTree):
+        old_attrs = sdata[name].attrs
+        old_transform = sdata[name].attrs["transform"]
+    else:
+        old_attrs = sdata[name]["scale0"].values().__iter__().__next__().attrs
+        old_transform = sdata[name]["scale0"].values().__iter__().__next__().attrs["transform"]
 
     old_attrs_value = old_attrs.copy()
     old_transform_value = old_transform.copy()
@@ -577,12 +600,91 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
         )
 
     # check that the old attribute didn't change, neither in reference nor in value
-    assert sdata[name].attrs is old_attrs
-    assert sdata[name].attrs["transform"] is old_transform
+    original_element = sdata[name]
+    queried_element = queried[name]
+    if isinstance(original_element, DataTree):
+        original_element = original_element["scale0"].values().__iter__().__next__()
+        queried_element = queried_element["scale0"].values().__iter__().__next__()
+        assert isinstance(original_element, DataArray)
+        assert isinstance(queried_element, DataArray)
 
-    assert sdata[name].attrs == old_attrs_value
-    assert sdata[name].attrs["transform"] == old_transform_value
+    assert original_element.attrs is old_attrs
+    assert original_element.attrs["transform"] is old_transform
+
+    assert original_element.attrs == old_attrs_value
+    assert original_element.attrs["transform"] == old_transform_value
 
     # check that the attributes of the queried element are not the same as the old ones
-    assert sdata[name].attrs is not queried[name].attrs
-    assert sdata[name].attrs["transform"] is not queried[name].attrs["transform"]
+    assert original_element.attrs is not queried_element.attrs
+    assert original_element.attrs["transform"] is not queried_element.attrs["transform"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["image2d", "labels2d", "image2d_multiscale", "labels2d_multiscale", "points_0", "circles", "multipoly", "poly"],
+)
+def test_spatial_query_different_axes(full_sdata, name: str):
+    """
+    Test for the behavior discussed here https://github.com/scverse/spatialdata/pull/617#issuecomment-2214039365.
+    Specifically, tests the case in which _adjust_bounding_box_to_real_axes() (which is called by
+    _get_bounding_box_corners_in_intrinsic_coordinates(), permutes the axes).
+    """
+    # for circles, points and polygons let's add one more elements, with (x, y) = (4, 1). This is done because al the
+    # other geometries are either in [0, 1] x [0, 1], either outside [0, 4] x [0, 4], so we are not able to test the
+    # permutation of the axes
+    if name in ["circles", "poly", "multipoly"]:
+        gdf = full_sdata[name]
+        if name == "circles":
+            new_data = GeoDataFrame({"geometry": [Point(4, 1)], "radius": [1]})
+        if name == "poly":
+            new_data = GeoDataFrame({"geometry": [Polygon([(3, 1), (4, 1), (3, 0)])]})
+        if name == "multipoly":
+            new_data = GeoDataFrame({"geometry": [MultiPolygon([Polygon([(3, 1), (4, 1), (3, 0)])])]})
+        gdf = pd.concat([gdf, new_data], ignore_index=True)
+        full_sdata[name] = ShapesModel.parse(gdf)
+
+    map_axis = MapAxis(map_axis={"x": "y", "y": "x"})
+    set_transformation(full_sdata[name], transformation=map_axis, to_coordinate_system="swapped")
+    x_min = -1.1
+    x_max = 1.1
+    y_min = -1.1
+    y_max = 4.1
+    queried_sdata = bounding_box_query(
+        full_sdata,
+        axes=("y", "x"),
+        target_coordinate_system="swapped",
+        min_coordinate=[y_min, x_min],
+        max_coordinate=[y_max, x_max],
+    )
+    original = full_sdata[name]
+    queried = queried_sdata[name]
+
+    # raster case
+    if isinstance(original, DataTree):
+        original = original["scale0"].values().__iter__().__next__()
+        queried = queried["scale0"].values().__iter__().__next__()
+        assert isinstance(original, DataArray)
+        assert isinstance(queried, DataArray)
+    if isinstance(original, DataArray):
+        x0 = original.sel(x=slice(y_min, y_max), y=slice(x_min, x_max))
+        np.testing.assert_allclose(x0, queried)
+        return
+
+    # vector case
+    # from napari_spatialdata import Interactive
+    # Interactive(SpatialData.init_from_elements({'original': original, 'queried': queried}))
+    if isinstance(original, GeoDataFrame):
+        if name == "circles" or name == "multipoly":
+            assert len(queried) == 3
+            return
+        if name == "poly":
+            assert len(queried) == 5
+            return
+    if isinstance(original, DaskDataFrame):
+        filtered_df = original[
+            (original["x"] > y_min) & (original["x"] < y_max) & (original["y"] > x_min) & (original["y"] < x_max)
+        ]
+        assert dd.assert_eq(filtered_df, queried)
+        return
+
+    raise RuntimeError(f"Unexpected type {type(original)}")
