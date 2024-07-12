@@ -671,8 +671,6 @@ def test_spatial_query_different_axes(full_sdata, name: str):
         return
 
     # vector case
-    # from napari_spatialdata import Interactive
-    # Interactive(SpatialData.init_from_elements({'original': original, 'queried': queried}))
     if isinstance(original, GeoDataFrame):
         if name == "circles" or name == "multipoly":
             assert len(queried) == 3

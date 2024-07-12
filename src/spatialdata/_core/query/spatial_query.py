@@ -98,8 +98,6 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     if set(axes_adjusted) != set(output_axes_without_c):
         raise ValueError("The axes of the bounding box must match the axes of the transformation.")
 
-    # axes, input_axes_without_c = input_axes_without_c, axes
-
     # let's get the bounding box corners and inverse transform then to the intrinsic coordinate system; since we are
     # in case 1 or 5, the transformation is invertible
     spatial_transform_bb_axes = Affine(
