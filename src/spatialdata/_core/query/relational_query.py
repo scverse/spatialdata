@@ -86,6 +86,7 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
 @singledispatch
 def get_element_instances(
     element: SpatialElement,
+    return_background: bool = False,
 ) -> pd.Index:
     """
     Get the instances (index values) of the SpatialElement.
@@ -94,6 +95,8 @@ def get_element_instances(
     ----------
     element
         The SpatialElement.
+    return_background
+        If True, the background label (0) is included in the output.
 
     Returns
     -------
@@ -106,6 +109,7 @@ def get_element_instances(
 @get_element_instances.register(DataTree)
 def _(
     element: DataArray | DataTree,
+    return_background: bool = False,
 ) -> pd.Index:
     model = get_model(element)
     assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
@@ -119,7 +123,10 @@ def _(
         xdata = next(iter(v))
         # can be slow
         instances = da.unique(xdata.data).compute()
-    return pd.Index(np.sort(instances))
+    index = pd.Index(np.sort(instances))
+    if not return_background and 0 in index:
+        return index.drop(0)  # drop the background label
+    return index
 
 
 @get_element_instances.register(GeoDataFrame)
@@ -568,7 +575,8 @@ def join_spatialelement_table(
     both the SpatialElement and table.
 
     For Points and Shapes elements every valid join for argument how is supported. For Labels elements only
-     the ``'left'`` and ``'right_exclusive'`` joins are supported.
+    the ``'left'`` and ``'right_exclusive'`` joins are supported.
+    For Labels, the background label (0) is not included in the output and it will not be returned.
 
     Parameters
     ----------

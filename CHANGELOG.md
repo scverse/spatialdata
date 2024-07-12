@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+-   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
+
 ## [0.2.1] - 2024-07-04
 
 ### Minor
@@ -43,6 +45,7 @@ and this project adheres to [Semantic Versioning][].
 ### Fixed
 
 -   Preserve channel names of multi-scale images in `transform` (#379)
+-   Fix `filter_by_coordinate_system` with SpatialData object having a table not annotating an element (#619)
 
 ## [0.1.2] - 2024-03-30
 
