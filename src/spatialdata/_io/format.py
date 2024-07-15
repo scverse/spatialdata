@@ -208,22 +208,22 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         "tables": False,
     }
 
-    def _check_modified(type: str) -> None:
-        if modified[type]:
-            raise ValueError(f"Duplicate format {type} in input argument.")
-        modified[type] = True
+    def _check_modified(element_type: str) -> None:
+        if modified[element_type]:
+            raise ValueError(f"Duplicate format {element_type} in input argument.")
+        modified[element_type] = True
 
     for fmt in formats:
-        if isinstance(fmt, ShapesFormatV01):
+        if any(isinstance(fmt, type(v)) for v in ShapesFormats.values()):
             _check_modified("shapes")
             parsed["shapes"] = fmt
-        elif isinstance(fmt, PointsFormatV01):
+        elif any(isinstance(fmt, type(v)) for v in PointsFormats.values()):
             _check_modified("points")
             parsed["points"] = fmt
-        elif isinstance(fmt, TablesFormatV01):
+        elif any(isinstance(fmt, type(v)) for v in TablesFormats.values()):
             _check_modified("tables")
             parsed["tables"] = fmt
-        elif isinstance(fmt, RasterFormatV01):
+        elif any(isinstance(fmt, type(v)) for v in RasterFormats.values()):
             _check_modified("raster")
             parsed["raster"] = fmt
         else:

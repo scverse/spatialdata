@@ -33,7 +33,7 @@ def _read_points(
     path = os.path.join(f._store.path, f.path, "points.parquet")
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
-    points = read_parquet("simplecache::" + path if "http" in path else path)
+    points = read_parquet("simplecache::" + path if path.startswith("http") else path)
     assert isinstance(points, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])

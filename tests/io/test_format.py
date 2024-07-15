@@ -51,15 +51,15 @@ class TestFormat:
             3: "POLYGON",
             6: "MULTIPOLYGON",
         }
-        metadata: dict[str, Any] = {attrs_key: {"version": ShapesFormatV01.version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": ShapesFormatV01().version}}
         format_metadata: dict[str, Any] = {attrs_key: {}}
         metadata[attrs_key][geos_key] = {}
         metadata[attrs_key][geos_key][type_key] = shapes_type
         metadata[attrs_key][geos_key][name_key] = shapes_dict[shapes_type]
-        format_metadata[attrs_key] = ShapesFormatV01.attrs_from_dict(metadata)
+        format_metadata[attrs_key] = ShapesFormatV01().attrs_from_dict(metadata)
         metadata[attrs_key].pop("version")
         geometry = GeometryType(metadata[attrs_key][geos_key][type_key])
-        assert metadata[attrs_key] == ShapesFormatV01.attrs_to_dict(geometry)
+        assert metadata[attrs_key] == ShapesFormatV01().attrs_to_dict(geometry)
 
     @pytest.mark.parametrize("attrs_key", [ShapesModel.ATTRS_KEY])
     def test_format_shapes_v2(
