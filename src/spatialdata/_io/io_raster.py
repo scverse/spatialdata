@@ -21,7 +21,6 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
-    SPATIALDATA_FORMAT_VERSION,
     CurrentRasterFormat,
     RasterFormats,
     RasterFormatV01,
@@ -220,7 +219,7 @@ def _write_raster(
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]
-    attrs[SPATIALDATA_FORMAT_VERSION] = format.spatialdata_format_version
+    attrs["version"] = format.spatialdata_format_version
     # triggers the write operation
     group.attrs[ATTRS_KEY] = attrs
 
