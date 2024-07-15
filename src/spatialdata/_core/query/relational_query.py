@@ -904,7 +904,7 @@ def get_values(
             x = matched_table[:, value_key_values].X
             import scipy
 
-            if isinstance(x, scipy.sparse.csr_matrix):
+            if isinstance(x, (scipy.sparse.csr_matrix, scipy.sparse.csc_matrix, scipy.sparse.coo_matrix)):
                 x = x.todense()
             df = pd.DataFrame(x, columns=value_key_values)
         if origin == "obsm":
