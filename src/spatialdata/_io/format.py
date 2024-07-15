@@ -16,8 +16,21 @@ Shapes_s = ShapesModel()
 Points_s = PointsModel()
 
 
-def _parse_version(group: zarr.Group) -> str:
-    version = group.attrs[ATTRS_KEY]["version"]
+def _parse_version(group: zarr.Group) -> str | None:
+    if ATTRS_KEY not in group.attrs:
+        return None
+    version_found = "version" in group.attrs[ATTRS_KEY]
+    spatialdata_format_version_found = "spatialdata_format_version" in group.attrs[ATTRS_KEY]
+    if not version_found and not spatialdata_format_version_found:
+        return None
+    if version_found and spatialdata_format_version_found:
+        raise RuntimeError(
+            "The version of the data is specified twice, the metadata seems to be corrupted. Please report this issue."
+        )
+    if version_found:
+        version = group.attrs[ATTRS_KEY]["version"]
+    else:
+        version = group.attrs[ATTRS_KEY]["spatialdata_format_version"]
     assert isinstance(version, str)
     return version
 
@@ -78,12 +91,18 @@ class RasterFormatV01(SpatialDataFormat):
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
 
+    # eventually we are fully compliant with NGFF and we can drop "spatialdata_format_version" and simply rely on
+    # "version"; still, until the coordinate transformations make it into NGFF, we need to have our extension
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.1"
+
 
 class ShapesFormatV01(SpatialDataFormat):
     """Formatter for shapes."""
 
     @property
-    def version(self) -> str:
+    def spatialdata_format_version(self) -> str:
         return "0.1"
 
     def attrs_from_dict(self, metadata: dict[str, Any]) -> GeometryType:
@@ -98,7 +117,7 @@ class ShapesFormatV01(SpatialDataFormat):
 
         typ = GeometryType(metadata_[Shapes_s.GEOS_KEY][Shapes_s.TYPE_KEY])
         assert typ.name == metadata_[Shapes_s.GEOS_KEY][Shapes_s.NAME_KEY]
-        assert self.version == metadata_["version"]
+        assert self.spatialdata_format_version == metadata_["version"]
         return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> dict[str, str | dict[str, Any]]:
@@ -109,7 +128,7 @@ class ShapesFormatV02(SpatialDataFormat):
     """Formatter for shapes."""
 
     @property
-    def version(self) -> str:
+    def spatialdata_format_version(self) -> str:
         return "0.2"
 
     # no need for attrs_from_dict as we are not saving metadata except for the coordinate transformations
@@ -121,14 +140,14 @@ class PointsFormatV01(SpatialDataFormat):
     """Formatter for points."""
 
     @property
-    def version(self) -> str:
+    def spatialdata_format_version(self) -> str:
         return "0.1"
 
     def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.version == metadata_["version"]
+        assert self.spatialdata_format_version == metadata_["spatialdata_format_version"]
         d = {}
         if Points_s.FEATURE_KEY in metadata_:
             d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
@@ -150,7 +169,7 @@ class TablesFormatV01(SpatialDataFormat):
     """Formatter for the table."""
 
     @property
-    def version(self) -> str:
+    def spatialdata_format_version(self) -> str:
         return "0.1"
 
     def validate_table(

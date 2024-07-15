@@ -8,13 +8,12 @@ from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defin
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
-from spatialdata._io import SpatialDataFormat
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
-from spatialdata._io.format import CurrentPointsFormat
+from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -24,11 +23,14 @@ from spatialdata.transformations._utils import (
 
 def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
-    format: SpatialDataFormat = CurrentPointsFormat(),
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
+
+    version = _parse_version(f)
+    assert version is not None
+    format = PointsFormats[version]
 
     path = os.path.join(f._store.path, f.path, "points.parquet")
     # cache on remote file needed for parquet reader to work
@@ -72,14 +74,13 @@ def write_points(
     points.to_parquet(path)
 
     attrs = format.attrs_to_dict(points.attrs)
-    attrs["version"] = format.version
+    attrs["spatialdata_format_version"] = format.spatialdata_format_version
 
     _write_metadata(
         points_groups,
         group_type=group_type,
         axes=list(axes),
         attrs=attrs,
-        fmt=format,
     )
     assert t is not None
     overwrite_coordinate_transformations_non_raster(group=points_groups, axes=axes, transformations=t)

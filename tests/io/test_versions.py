@@ -1,7 +1,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
 from spatialdata import read_zarr
 from spatialdata._io.format import ShapesFormatV01, ShapesFormatV02
 from spatialdata.testing import assert_spatial_data_objects_are_identical
@@ -9,22 +8,21 @@ from spatialdata.testing import assert_spatial_data_objects_are_identical
 
 def test_shapes_v1_to_v2(shapes):
     with tempfile.TemporaryDirectory() as tmpdir:
-        f = Path(tmpdir) / "data.zarr"
+        f0 = Path(tmpdir) / "data0.zarr"
+        f1 = Path(tmpdir) / "data1.zarr"
 
         # write shapes in version 1
-        shapes.write(f, format=ShapesFormatV01())
+        shapes.write(f0, format=ShapesFormatV01())
 
-        # read shapes in version 1 using the latest version, will fail
-        with pytest.raises(ValueError):
-            read_zarr(f)
+        # reading from v1 works
+        shapes_read = read_zarr(f0)
 
-        # read using the legacy reader
-        shapes_read = read_zarr(f, format=ShapesFormatV01())
+        assert_spatial_data_objects_are_identical(shapes, shapes_read)
 
-        # overwrite shapes using the latest version
-        shapes_read.write(f, format=ShapesFormatV02(), overwrite=True)
+        # write shapes using the v2 version
+        shapes_read.write(f1, format=ShapesFormatV02())
 
-        # read shapes using the latest version
-        shapes_read = read_zarr(f)
+        # read again
+        shapes_read = read_zarr(f1)
 
         assert_spatial_data_objects_are_identical(shapes, shapes_read)

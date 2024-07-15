@@ -18,7 +18,6 @@ from spatialdata._io.format import (
     ShapesFormats,
     ShapesFormatV01,
     ShapesFormatV02,
-    SpatialDataFormat,
     _parse_version,
 )
 from spatialdata.models import ShapesModel, get_axes_names
@@ -30,12 +29,12 @@ from spatialdata.transformations._utils import (
 
 def _read_shapes(
     store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
-    format: SpatialDataFormat = CurrentShapesFormat(),
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
     version = _parse_version(f)
+    assert version is not None
     format = ShapesFormats[version]
 
     if isinstance(format, ShapesFormatV01):
@@ -93,21 +92,21 @@ def write_shapes(
             shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
         attrs = format.attrs_to_dict(geometry)
+        attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
         path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
         shapes.to_parquet(path)
 
         attrs = format.attrs_to_dict(shapes.attrs)
+        attrs["spatialdata_format_version"] = format.spatialdata_format_version
     else:
         raise ValueError(f"Unsupported format version {format.version}. Please update the spatialdata library.")
 
-    attrs["version"] = format.version
     _write_metadata(
         shapes_group,
         group_type=group_type,
         axes=list(axes),
         attrs=attrs,
-        fmt=format,
     )
     assert t is not None
     overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=t)

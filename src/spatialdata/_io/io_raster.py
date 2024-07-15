@@ -15,14 +15,14 @@ from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
 from xarray import DataArray
 
-from spatialdata._io import SpatialDataFormat
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _iter_multiscale,
     overwrite_coordinate_transformations_raster,
 )
-from spatialdata._io.format import CurrentRasterFormat
+from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
 from spatialdata.models._utils import get_channels
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
@@ -31,11 +31,20 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(
-    store: Union[str, Path], raster_type: Literal["image", "labels"], format: SpatialDataFormat = CurrentRasterFormat()
-) -> Union[DataArray, DataTree]:
+def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "labels"]) -> Union[DataArray, DataTree]:
     assert isinstance(store, (str, Path))
     assert raster_type in ["image", "labels"]
+
+    f = zarr.open(store, mode="r")
+    version = _parse_version(f)
+    # old spaitaldata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
+    # interpreting the lack of such information as the presence of the format v01
+    if version is None:
+        format = RasterFormatV01()
+    else:
+        format = RasterFormats[version]
+    f.store.close()
+
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)
     if image_loc.exists():
@@ -199,6 +208,12 @@ def _write_raster(
         )
     else:
         raise ValueError("Not a valid labels object")
+
+    group = _get_group_for_writing_transformations()
+    if ATTRS_KEY not in group.attrs:
+        group.attrs[ATTRS_KEY] = {}
+    attrs = group.attrs[ATTRS_KEY]
+    attrs["spatialdata_format_version"] = format.spatialdata_format_version
 
 
 def write_image(
