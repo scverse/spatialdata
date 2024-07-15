@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import zarr
-from multiscale_spatial_image import MultiscaleSpatialImage
+from datatree import DataTree
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -13,7 +13,6 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._io import SpatialDataFormat
@@ -23,6 +22,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import CurrentRasterFormat
+from spatialdata.models._utils import get_channels
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
@@ -33,7 +33,7 @@ from spatialdata.transformations._utils import (
 
 def _read_multiscale(
     store: Union[str, Path], raster_type: Literal["image", "labels"], format: SpatialDataFormat = CurrentRasterFormat()
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+) -> Union[DataArray, DataTree]:
     assert isinstance(store, (str, Path))
     assert raster_type in ["image", "labels"]
     nodes: list[Node] = []
@@ -58,7 +58,8 @@ def _read_multiscale(
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
-    channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)
+    omero_metadata = node.load(Multiscales).zarr.root_attrs.get("omero", None)
+    legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
     # something that doesn't have coordinateTransformations in top level
@@ -70,8 +71,11 @@ def _read_multiscale(
     # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     channels: Optional[list[Any]] = None
-    if raster_type == "image" and channels_metadata is not None:
-        channels = format.channels_from_metadata(channels_metadata)
+    if raster_type == "image":
+        if legacy_channels_metadata is not None:
+            channels = [d["label"] for d in legacy_channels_metadata["channels"]]
+        if omero_metadata is not None:
+            channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         multiscale_image = {}
@@ -83,11 +87,11 @@ def _read_multiscale(
                 dims=axes,
                 coords={"c": channels} if channels is not None else {},
             )
-        msi = MultiscaleSpatialImage.from_dict(multiscale_image)
+        msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
     data = node.load(Multiscales).array(resolution=datasets[0], version=format.version)
-    si = SpatialImage(
+    si = DataArray(
         data,
         name="image",
         dims=axes,
@@ -99,13 +103,12 @@ def _read_multiscale(
 
 def _write_raster(
     raster_type: Literal["image", "labels"],
-    raster_data: Union[SpatialImage, MultiscaleSpatialImage],
+    raster_data: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
     storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
     label_metadata: Optional[JSONDict] = None,
-    channels_metadata: Optional[JSONDict] = None,
     **metadata: Union[str, JSONDict, list[JSONDict]],
 ) -> None:
     assert raster_type in ["image", "labels"]
@@ -130,11 +133,14 @@ def _write_raster(
             return group.require_group(name)
         return group["labels"][name]
 
-    # convert channel names to channel metadata
+    # convert channel names to channel metadata in omero
     if raster_type == "image":
-        group_data.attrs["channels_metadata"] = format.channels_to_metadata(raster_data, channels_metadata)
+        metadata["metadata"] = {"omero": {"channels": []}}
+        channels = get_channels(raster_data)
+        for c in channels:
+            metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
-    if isinstance(raster_data, SpatialImage):
+    if isinstance(raster_data, DataArray):
         data = raster_data.data
         transformations = _get_transformations(raster_data)
         input_axes: tuple[str, ...] = tuple(raster_data.dims)
@@ -162,7 +168,7 @@ def _write_raster(
         overwrite_coordinate_transformations_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
         )
-    elif isinstance(raster_data, MultiscaleSpatialImage):
+    elif isinstance(raster_data, DataTree):
         data = _iter_multiscale(raster_data, "data")
         list_of_input_axes: list[Any] = _iter_multiscale(raster_data, "dims")
         assert len(set(list_of_input_axes)) == 1
@@ -196,7 +202,7 @@ def _write_raster(
 
 
 def write_image(
-    image: Union[SpatialImage, MultiscaleSpatialImage],
+    image: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
@@ -215,7 +221,7 @@ def write_image(
 
 
 def write_labels(
-    labels: Union[SpatialImage, MultiscaleSpatialImage],
+    labels: Union[DataArray, DataTree],
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),

@@ -11,20 +11,20 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
-from dask.dataframe.core import DataFrame as DaskDataFrame
 from dask.delayed import Delayed
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _error_message_add_element, deprecation_alias
+from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -37,7 +37,7 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
-from spatialdata.models._utils import SpatialElement, get_axes_names
+from spatialdata.models._utils import SpatialElement, convert_region_column_to_categorical, get_axes_names
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -96,9 +96,7 @@ class SpatialData:
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`spatial_image.SpatialImage` or
-            :class:`multiscale_spatial_image.MultiscaleSpatialImage` objects, which are respectively equivalent to
-            :class:`xarray.DataArray` and to a :class:`datatree.DataTree` of :class:`xarray.DataArray` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
@@ -109,7 +107,7 @@ class SpatialData:
     annotation directly.
     """
 
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -195,14 +193,14 @@ class SpatialData:
                         stacklevel=2,
                     )
                 else:
-                    if isinstance(element, SpatialImage):
+                    if isinstance(element, DataArray):
                         dtype = element.dtype
-                    elif isinstance(element, MultiscaleSpatialImage):
+                    elif isinstance(element, DataTree):
                         dtype = element.scale0.ds.dtypes["image"]
                     else:
                         dtype = element.index.dtype
                     if dtype != table.obs[instance_key].dtype and (
-                        dtype == str or table.obs[instance_key].dtype == str
+                        dtype is str or table.obs[instance_key].dtype is str
                     ):
                         raise TypeError(
                             f"Table instance_key column ({instance_key}) has a dtype "
@@ -433,7 +431,7 @@ class SpatialData:
     def set_table_annotates_spatialelement(
         self,
         table_name: str,
-        region: str | pd.Series,
+        region: str | pd.Series | list[str],
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
@@ -462,7 +460,10 @@ class SpatialData:
         """
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
-        if region not in element_names:
+        if (isinstance(region, str) and region not in element_names) or (
+            isinstance(element_names, (list, pd.Series))
+            and not all(region_element in element_names for region_element in region)
+        ):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
 
         if table.uns.get(TableModel.ATTRS_KEY):
@@ -471,6 +472,7 @@ class SpatialData:
             self._set_table_annotation_target(table, region, region_key, instance_key)
         else:
             raise TypeError("No current annotation metadata found. Please specify both region_key and instance_key.")
+        convert_region_column_to_categorical(table)
 
     @property
     def query(self) -> QueryManager:
@@ -479,9 +481,9 @@ class SpatialData:
     def aggregate(
         self,
         values_sdata: SpatialData | None = None,
-        values: DaskDataFrame | GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        values: DaskDataFrame | GeoDataFrame | DataArray | DataTree | str | None = None,
         by_sdata: SpatialData | None = None,
-        by: GeoDataFrame | SpatialImage | MultiscaleSpatialImage | str | None = None,
+        by: GeoDataFrame | DataArray | DataTree | str | None = None,
         value_key: list[str] | str | None = None,
         agg_func: str | list[str] = "sum",
         target_coordinate_system: str = "global",
@@ -631,7 +633,7 @@ class SpatialData:
             raise ValueError("Found an element name with a '/' character. This is not allowed.")
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
-    @deprecation_alias(filter_table="filter_tables")
+    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
         self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
     ) -> SpatialData:
@@ -721,6 +723,8 @@ class SpatialData:
                 if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
                     tables[table_name] = table
                     continue
+                if not include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
+                    continue
                 if table_name in names_tables_to_keep:
                     tables[table_name] = table
                     continue
@@ -800,16 +804,17 @@ class SpatialData:
             # set the new transformations
             set_transformation(element=element, transformation=new_transformations, set_all=True)
 
+    @_deprecation_alias(element="element_name", version="0.3.0")
     def transform_element_to_coordinate_system(
-        self, element: SpatialElement, target_coordinate_system: str, maintain_positioning: bool = False
+        self, element_name: str, target_coordinate_system: str, maintain_positioning: bool = False
     ) -> SpatialElement:
         """
         Transform an element to a given coordinate system.
 
         Parameters
         ----------
-        element
-            The element to transform.
+        element_name:
+            The name of the element to transform.
         target_coordinate_system
             The target coordinate system.
         maintain_positioning
@@ -829,6 +834,18 @@ class SpatialData:
             remove_transformation,
             set_transformation,
         )
+
+        # TODO remove after deprecation
+        if not isinstance(element_name, str):
+            warnings.warn(
+                "Passing a SpatialElement is as element will be deprecated in SpatialData v0.3.0. Pass"
+                "element_name as string to silence this warning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            element = element_name
+        else:
+            element = self.get(element_name)
 
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:
@@ -855,8 +872,8 @@ class SpatialData:
         else:
             # When maintaining positioning is true, and if the element has a transformation to target_coordinate_system
             # (this may not be the case because it could be that the element is not directly mapped to that coordinate
-            # system), then the transformation to the target coordinate system is not needed # because the data is now
-            # already transformed; here we remove such transformation.
+            # system), then the transformation to the target coordinate system is not needed
+            # because the data is now already transformed; here we remove such transformation.
             d = get_transformation(transformed, get_all=True)
             assert isinstance(d, dict)
             if target_coordinate_system in d:
@@ -914,6 +931,11 @@ class SpatialData:
         Returns
         -------
         A dictionary of element_name to boolean values indicating whether the elements are self-contained.
+
+        Notes
+        -----
+        Please see :func:`spatialdata.SpatialData.is_self_contained` for more information on the semantic of
+        self-contained elements.
         """
         from spatialdata._io._utils import _is_element_self_contained
 
@@ -1184,25 +1206,36 @@ class SpatialData:
 
     def write_element(
         self,
-        element_name: str,
+        element_name: str | list[str],
         overwrite: bool = False,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
     ) -> None:
         """
-        Write a single element to the Zarr store used for backing.
+        Write a single element, or a list of elements, to the Zarr store used for backing.
 
         The element must already be present in the SpatialData object.
 
         Parameters
         ----------
         element_name
-            The name of the element to write.
+            The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
         format
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
+
+        Notes
+        -----
+        If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
+        an element, the writing of the remaining elements will not be attempted.
         """
+        if isinstance(element_name, list):
+            for name in element_name:
+                assert isinstance(name, str)
+                self.write_element(name, overwrite=overwrite)
+            return
+
         from spatialdata._core._elements import Elements
 
         Elements._check_valid_name(element_name)
@@ -1236,18 +1269,23 @@ class SpatialData:
             format=format,
         )
 
-    def delete_element_from_disk(self, element_name: str) -> None:
+    def delete_element_from_disk(self, element_name: str | list[str]) -> None:
         """
-        Delete an element from the Zarr store associated with the SpatialData object.
+        Delete an element, or list of elements, from the Zarr store associated with the SpatialData object.
 
         The element must be available in-memory and will not be removed from the SpatialData object in-memory storage.
 
         Parameters
         ----------
         element_name
+            The name(s) of the element(s) to delete.
 
         Notes
         -----
+        If you pass a list of names, the elements will be deleted one by one. If an error occurs during the deletion of
+        an element, the deletion of the remaining elements will not be attempted.
+
+        Important note on overwriting elements saved on disk.
         In general, it is not recommended to delete an element from the Zarr store with the intention of saving an
         updated version of the element that is available only in-memory. This is because data loss may occur if the
         execution is interrupted during writing.
@@ -1264,6 +1302,12 @@ class SpatialData:
         environment (e.g. operating system, local vs network storage, file permissions, ...) and call this function
         appropriately (or implement a tailored solution), to prevent data loss.
         """
+        if isinstance(element_name, list):
+            for name in element_name:
+                assert isinstance(name, str)
+                self.delete_element_from_disk(name)
+            return
+
         from spatialdata._core._elements import Elements
         from spatialdata._io._utils import _backed_elements_contained_in_path
 
@@ -1323,7 +1367,9 @@ class SpatialData:
             if disk_element_name == element_name and disk_element_type != element_type:
                 raise ValueError(
                     f"Element {element_name} is found in the Zarr store as a {disk_element_type}, but it is found "
-                    f"in-memory as a {element_type}. The in-memory object should have a different name."
+                    f"in-memory as a {element_type}. The in-memory object should have a different name. If you want to "
+                    f"maintain both objects, please rename the in-memory object. Alternatively, you can rename the"
+                    f" element on disk (manually)."
                 )
 
     def write_consolidated_metadata(self) -> None:
@@ -1423,7 +1469,7 @@ class SpatialData:
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+        if isinstance(element, (DataArray, DataTree)):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
@@ -1591,7 +1637,7 @@ class SpatialData:
     def add_image(
         self,
         name: str,
-        image: SpatialImage | MultiscaleSpatialImage,
+        image: DataArray | DataTree,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
@@ -1601,7 +1647,7 @@ class SpatialData:
     def add_labels(
         self,
         name: str,
-        labels: SpatialImage | MultiscaleSpatialImage,
+        labels: DataArray | DataTree,
         storage_options: JSONDict | list[JSONDict] | None = None,
         overwrite: bool = False,
     ) -> None:
@@ -1749,8 +1795,8 @@ class SpatialData:
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
                 elif attr == "points":
                     length: int | None = None
-                    if len(v.dask.layers) == 1:
-                        name, layer = v.dask.layers.items().__iter__().__next__()
+                    if len(v.dask) == 1:
+                        name, layer = v.dask.items().__iter__().__next__()
                         if "read-parquet" in name:
                             t = layer.creation_info["args"]
                             assert isinstance(t, tuple)
@@ -1780,9 +1826,9 @@ class SpatialData:
                 elif attr == "tables":
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} {v.shape}"
                 else:
-                    if isinstance(v, SpatialImage):
+                    if isinstance(v, DataArray):
                         descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{''.join(v.dims)}] {v.shape}"
-                    elif isinstance(v, MultiscaleSpatialImage):
+                    elif isinstance(v, DataTree):
                         shapes = []
                         dims: str | None = None
                         for pyramid_level in v:
@@ -1982,7 +2028,7 @@ class SpatialData:
         return found[0]
 
     @classmethod
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
         cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
     ) -> SpatialData:

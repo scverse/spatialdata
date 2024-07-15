@@ -11,8 +11,6 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from datatree import DataTree
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._types import ArrayLike
@@ -61,7 +59,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     return result  # type: ignore[no-any-return]
 
 
-def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage | MultiscaleSpatialImage:
+def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     """
     Remove padding from a raster type that was eventually added by the rotation component of a transformation.
 
@@ -112,14 +110,14 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
     # TODO: this "if else" will be unnecessary once we remove the
     #  concept of intrinsic coordinate systems and we make the
     #  transformations and xarray coordinates more interoperable
-    if isinstance(unpadded, SpatialImage):
+    if isinstance(unpadded, DataArray):
         for ax in axes:
             if ax != "c":
                 left_pad, right_pad = _compute_paddings(data=unpadded, axis=ax)
                 unpadded = unpadded.isel({ax: slice(left_pad, right_pad)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-    elif isinstance(unpadded, MultiscaleSpatialImage):
+    elif isinstance(unpadded, DataTree):
         for ax in axes:
             if ax != "c":
                 # let's just operate on the highest resolution. This is not an efficient implementation but we can
@@ -138,7 +136,7 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
             xdata = v.values().__iter__().__next__()
             if 0 not in xdata.shape:
                 d[k] = xdata
-        unpadded = MultiscaleSpatialImage.from_dict(d)
+        unpadded = DataTree.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
 
@@ -153,22 +151,25 @@ def unpad_raster(raster: SpatialImage | MultiscaleSpatialImage) -> SpatialImage 
 
 
 # TODO: probably we want this method to live in multiscale_spatial_image
-def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> MultiscaleSpatialImage:
+def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
+    warnings.warn(
+        f"{multiscale_spatial_image_from_data_tree} is deprecated and will be removed in version 0.2.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     d = {}
     for k, dt in data_tree.items():
         v = dt.values()
         assert len(v) == 1
         xdata = v.__iter__().__next__()
         d[k] = xdata
-    # this stopped working, we should add support for multiscale_spatial_image 1.0.0 so that the problem is solved
-    return MultiscaleSpatialImage.from_dict(d)
-    # data_tree.__class__ = MultiscaleSpatialImage
-    # return cast(MultiscaleSpatialImage, data_tree)
+
+    return DataTree.from_dict(d)
 
 
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
 #  Use only one and expose it to the user in this file
-def iterate_pyramid_levels(image: MultiscaleSpatialImage) -> Generator[DataArray, None, None]:
+def iterate_pyramid_levels(image: DataTree) -> Generator[DataArray, None, None]:
     """
     Iterate over the pyramid levels of a multiscale spatial image.
 
@@ -205,9 +206,11 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     -----
     See discussion here: https://github.com/scverse/anndata/issues/997
     """
+    if not hasattr(subset_adata, "obs") or not hasattr(original_adata, "obs"):
+        return
     obs = pd.DataFrame(subset_adata.obs)
     for column in obs.columns:
-        is_categorical = pd.api.types.is_categorical_dtype(obs[column])
+        is_categorical = isinstance(obs[column].dtype, pd.CategoricalDtype)
         if is_categorical:
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c
@@ -215,14 +218,15 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
 
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
-def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
+def _deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
     """
     Decorate a function to warn user of use of arguments set for deprecation.
 
     Parameters
     ----------
     aliases
-        Deprecation argument aliases to be mapped to the new arguments.
+        Deprecation argument aliases to be mapped to the new arguments. Must include version with as value a string
+        indicating the version from which the old argument will be deprecated.
 
     Returns
     -------
@@ -238,7 +242,7 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     Assuming we have an argument 'table' set for deprecation and we want to warn the user and substitute with 'tables':
 
     ```python
-    @deprecation_alias(table="tables")
+    @_deprecation_alias(table="tables", version="0.1.0")
     def my_function(tables: AnnData | dict[str, AnnData]):
         pass
     ```
@@ -248,7 +252,12 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
         @functools.wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> RT:
             class_name = f.__qualname__
-            rename_kwargs(f.__name__, kwargs, aliases, class_name)
+            library = f.__module__.split(".")[0]
+            alias_copy = aliases.copy()
+            version = alias_copy.pop("version") if alias_copy.get("version") is not None else None
+            if version is None:
+                raise ValueError("version for deprecation must be specified")
+            rename_kwargs(f.__name__, kwargs, alias_copy, class_name, library, version)
             return f(*args, **kwargs)
 
         return wrapper
@@ -256,7 +265,9 @@ def deprecation_alias(**aliases: str) -> Callable[[Callable[..., RT]], Callable[
     return deprecation_decorator
 
 
-def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str) -> None:
+def rename_kwargs(
+    func_name: str, kwargs: dict[str, Any], aliases: dict[str, str], class_name: None | str, library: str, version: str
+) -> None:
     """Rename function arguments set for deprecation and gives warning in case of usage of these arguments."""
     for alias, new in aliases.items():
         if alias in kwargs:
@@ -264,12 +275,12 @@ def rename_kwargs(func_name: str, kwargs: dict[str, Any], aliases: dict[str, str
             if new in kwargs:
                 raise TypeError(
                     f"{class_name}{func_name} received both {alias} and {new} as arguments!"
-                    f" {alias} is being deprecated in SpatialData version 0.1, only use {new} instead."
+                    f" {alias} is being deprecated in {library} {version}, only use {new} instead."
                 )
             warnings.warn(
                 message=(
-                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in SpatialData "
-                    f"version 0.1, switch to `{new}` instead."
+                    f"`{alias}` is being deprecated as an argument to `{class_name}{func_name}` in {library} version "
+                    f"{version}, switch to `{new}` instead."
                 ),
                 category=DeprecationWarning,
                 stacklevel=3,

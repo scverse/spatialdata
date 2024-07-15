@@ -1,27 +1,30 @@
 from __future__ import annotations
 
-# isort: off
-import os
-from typing import Any
+import dask
+
+dask.config.set({"dataframe.query-planning": False})
 from collections.abc import Sequence
-
-os.environ["USE_PYGEOS"] = "0"
-# isort:on
-
-from shapely import linearrings, polygons
 from pathlib import Path
-from spatialdata._types import ArrayLike
+from typing import Any
+
+import dask.dataframe as dd
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from numpy.random import default_rng
+from scipy import ndimage as ndi
+from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
+from skimage import data
+from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
+from spatialdata.datasets import BlobsDataset
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -32,12 +35,9 @@ from spatialdata.models import (
     TableModel,
 )
 from xarray import DataArray
-from spatialdata.datasets import BlobsDataset
-import geopandas as gpd
-import dask.dataframe as dd
-from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
-RNG = default_rng(seed=0)
+SEED = 0
+RNG = default_rng(seed=SEED)
 
 POLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
@@ -71,7 +71,7 @@ def table_single_annotation() -> SpatialData:
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(table=_get_table(region=["labels2d", "poly"]))
+    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
 
 
 @pytest.fixture()
@@ -135,7 +135,7 @@ def sdata(request) -> SpatialData:
     return request.getfixturevalue(request.param)
 
 
-def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+def _get_images() -> dict[str, DataArray | DataTree]:
     out = {}
     dims_2d = ("c", "y", "x")
     dims_3d = ("z", "y", "x", "c")
@@ -165,7 +165,7 @@ def _get_images() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
     return out
 
 
-def _get_labels() -> dict[str, SpatialImage | MultiscaleSpatialImage]:
+def _get_labels() -> dict[str, DataArray | DataTree]:
     out = {}
     dims_2d = ("y", "x")
     dims_3d = ("z", "y", "x")
@@ -242,7 +242,7 @@ def _get_shapes() -> dict[str, GeoDataFrame]:
             ]
         }
     )
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(seed=SEED)
     points["radius"] = np.abs(rng.normal(size=(len(points), 1)))
 
     out["poly"] = ShapesModel.parse(poly)
@@ -295,7 +295,7 @@ def _get_table(
 
 
 def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: None | Sequence[Any]) -> AnnData:
-    adata = AnnData(np.random.default_rng(seed=0).random(10, 20000))
+    adata = AnnData(np.random.default_rng(seed=SEED).random(10, 20000))
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
@@ -308,21 +308,9 @@ def labels_blobs() -> ArrayLike:
 @pytest.fixture()
 def sdata_blobs() -> SpatialData:
     """Create a 2D labels."""
-    from copy import deepcopy
     from spatialdata.datasets import blobs
 
-    sdata = deepcopy(blobs(256, 300, 3))
-    for k, v in sdata.shapes.items():
-        sdata.shapes[k] = _deepcopy(v)
-    from spatialdata._utils import multiscale_spatial_image_from_data_tree
-
-    sdata.images["blobs_multiscale_image"] = multiscale_spatial_image_from_data_tree(
-        sdata.images["blobs_multiscale_image"]
-    )
-    sdata.labels["blobs_multiscale_labels"] = multiscale_spatial_image_from_data_tree(
-        sdata.labels["blobs_multiscale_labels"]
-    )
-    return sdata
+    return deepcopy(blobs(256, 300, 3))
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
@@ -409,10 +397,12 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     by_squares.loc[len(by_squares)] = [polygon]
     ShapesModel.validate(by_squares)
 
-    s = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
-    values_points["categorical_in_ddf"] = dd.from_pandas(s, npartitions=1)
-    s = pd.Series(RNG.random(20))
-    values_points["numerical_in_ddf"] = dd.from_pandas(s, npartitions=1)
+    s_cat = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 2))
+    s_num = pd.Series(RNG.random(20))
+    # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
+    values_points = PointsModel.parse(
+        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+    )
 
     sdata = SpatialData(
         points={"points": values_points},
@@ -452,3 +442,49 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 @pytest.fixture()
 def sdata_query_aggregation() -> SpatialData:
     return _make_sdata_for_testing_querying_and_aggretation()
+
+
+def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
+    rng = np.random.default_rng(SEED)
+    return AnnData(
+        rng.normal(size=(obs.shape[0], n_var)),
+        obs=obs,
+        obsm=obsm,
+        uns=uns,
+        dtype=np.float64,
+    )
+
+
+def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
+    blobs = data.binary_blobs(rng=SEED)
+    blobs = ndi.label(blobs)[0]
+    return blobs, data.hubble_deep_field()[: blobs.shape[0], : blobs.shape[0]]
+
+
+@pytest.fixture
+def adata_labels() -> AnnData:
+    n_var = 50
+
+    blobs, _ = _get_blobs_galaxy()
+    seg = np.unique(blobs)[1:]
+    n_obs_labels = len(seg)
+    rng = np.random.default_rng(SEED)
+
+    obs_labels = pd.DataFrame(
+        {
+            "a": rng.normal(size=(n_obs_labels,)),
+            "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
+            "cell_id": pd.Categorical(seg),
+            "instance_id": range(n_obs_labels),
+            "region": ["test"] * n_obs_labels,
+        },
+        index=np.arange(n_obs_labels),
+    )
+    uns_labels = {
+        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+    }
+    obsm_labels = {
+        "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+        "tensor_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
+    }
+    return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)

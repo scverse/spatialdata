@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
@@ -94,7 +95,8 @@ class TestMultiTable:
         ):
             full_sdata.set_table_annotates_spatialelement("table", "non_existing")
 
-    def test_set_table_annotates_spatialelement(self, full_sdata):
+    def test_set_table_annotates_spatialelement(self, full_sdata, tmp_path):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
         with pytest.raises(
             TypeError, match="No current annotation metadata found. " "Please specify both region_key and instance_key."
@@ -112,6 +114,19 @@ class TestMultiTable:
             "table", "labels2d", region_key="region", instance_key="instance_id"
         )
 
+        region = ["circles"] * 50 + ["poly"] * 50
+        full_sdata["table"].obs["region"] = region
+
+        full_sdata.set_table_annotates_spatialelement(
+            "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"
+        )
+
+        full_sdata["table"].obs["region"] = "circles"
+        full_sdata.set_table_annotates_spatialelement(
+            "table", "circles", region_key="region", instance_key="instance_id"
+        )
+        full_sdata.write(tmpdir)
+
     def test_old_accessor_deprecation(self, full_sdata, tmp_path):
         # To test self._backed
         tmpdir = Path(tmp_path) / "tmp.zarr"
@@ -125,16 +140,16 @@ class TestMultiTable:
         with pytest.warns(DeprecationWarning):
             del full_sdata.table
         with pytest.raises(KeyError):
-            del full_sdata.table
+            del full_sdata["table"]
         with pytest.warns(DeprecationWarning):
             full_sdata.table = adata0  # this gets placed in sdata['table']
 
-        assert_equal(adata0, full_sdata.table)
+        assert_equal(adata0, full_sdata["table"])
 
-        del full_sdata.table
+        del full_sdata["table"]
 
         full_sdata.tables["my_new_table0"] = adata0
-        assert full_sdata.table is None
+        assert full_sdata.get("table") is None
 
     @pytest.mark.parametrize("region", ["test_shapes", "non_existing"])
     def test_single_table(self, tmp_path: str, region: str):
@@ -173,11 +188,11 @@ class TestMultiTable:
         with pytest.warns(UserWarning, match=r", which is not present in the SpatialData object"):
             SpatialData(
                 shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
-                table={"poly_annotate": table, "multipoly_annotate": table3},
+                tables={"poly_annotate": table, "multipoly_annotate": table3},
             )
         test_sdata = SpatialData(
             shapes={"poly": test_shapes["poly"], "multipoly": test_shapes["multipoly"]},
-            table={"poly_annotate": table, "multipoly_annotate": table2},
+            tables={"poly_annotate": table, "multipoly_annotate": table2},
         )
         test_sdata.write(tmpdir)
         test_sdata = SpatialData.read(tmpdir)
@@ -195,7 +210,7 @@ class TestMultiTable:
                 "poly": test_shapes["poly"],
                 "multipoly": test_shapes["multipoly"],
             },
-            table=table,
+            tables={"table": table},
         )
         test_sdata.write(tmpdir)
         SpatialData.read(tmpdir)

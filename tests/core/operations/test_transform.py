@@ -4,9 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from datatree import DataTree
 from geopandas.testing import geom_almost_equals
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
@@ -29,6 +28,7 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
+from xarray import DataArray
 
 
 class TestElementsTransform:
@@ -134,7 +134,7 @@ def _postpone_transformation(
 @pytest.mark.parametrize("element_type", ["image", "labels"])
 @pytest.mark.parametrize("multiscale", [False, True])
 def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale: bool):
-    datatype = MultiscaleSpatialImage if multiscale else SpatialImage
+    datatype = DataTree if multiscale else DataArray
 
     if element_type == "image":
         sdata = SpatialData(images={k: v for k, v in full_sdata.images.items() if isinstance(v, datatype)})
@@ -489,10 +489,11 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     scale = Scale([k], axes=("x",))
     translation = Translation([k], axes=("x",))
     sequence = Sequence([scale, translation])
-    for element in full_sdata._gen_spatial_element_values():
+    for _, element_name, _ in full_sdata.gen_spatial_elements():
+        element = full_sdata[element_name]
         set_transformation(element, sequence, "my_space")
         transformed_element = full_sdata.transform_element_to_coordinate_system(
-            element, "my_space", maintain_positioning=maintain_positioning
+            element_name, "my_space", maintain_positioning=maintain_positioning
         )
         t = get_transformation(transformed_element, to_coordinate_system="my_space")
         a = t.to_affine_matrix(input_axes=("x",), output_axes=("x",))
@@ -502,13 +503,13 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
             assert set(d.keys()) == {"global", "my_space"}
             a2 = d["global"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
             assert np.allclose(a, a2)
-            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+            if isinstance(element, (DataArray, DataTree)):
                 assert np.allclose(a, np.array([[1 / k, 0], [0, 1]]))
             else:
                 assert np.allclose(a, np.array([[1 / k, -k / k], [0, 1]]))
         else:
             assert set(d.keys()) == {"my_space"}
-            if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+            if isinstance(element, (DataArray, DataTree)):
                 assert np.allclose(a, np.array([[1, k], [0, 1]]))
             else:
                 assert np.allclose(a, np.array([[1, 0], [0, 1]]))
@@ -566,7 +567,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
                 # I'd say that in the general case maybe they are not necessarily identical, but in this case they are
                 assert np.allclose(affine, affine2)
                 assert np.allclose(affine, np.array([[1, -k], [0, 1]]))
-            elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+            elif isinstance(element, (DataArray, DataTree)):
                 assert set(d.keys()) == {"my_space"}
                 assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
@@ -577,7 +578,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
                 # non multi-hop case, since there is a direct transformation
                 assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
-            elif isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+            elif isinstance(element, (DataArray, DataTree)):
                 assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
                 assert np.allclose(affine, np.array([[1, 0], [0, 1]]))

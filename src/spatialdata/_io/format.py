@@ -4,13 +4,10 @@ from typing import Any
 
 import zarr
 from anndata import AnnData
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import CurrentFormat
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
-from spatial_image import SpatialImage
 
-from spatialdata.models._utils import get_channels
 from spatialdata.models.models import ATTRS_KEY, PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
@@ -65,7 +62,7 @@ class RasterFormatV01(SpatialDataFormat):
             assert isinstance(transformations, list)
             types = [t.get("type", None) for t in transformations]
             if any(t is None for t in types):
-                raise ValueError("Missing type in: %s" % transformations)
+                raise ValueError(f"Missing type in: {transformations}")
 
             # new validation
             import json
@@ -80,29 +77,6 @@ class RasterFormatV01(SpatialDataFormat):
             import numpy as np
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
-
-    def channels_to_metadata(
-        self,
-        data: SpatialImage | MultiscaleSpatialImage,
-        channels_metadata: None | dict[str, Any] = None,
-    ) -> dict[str, int | str]:
-        """Convert channels to omero metadata."""
-        channels = get_channels(data)
-        metadata: dict[str, Any] = {"channels": []}
-        if channels_metadata is not None:
-            if set(channels_metadata.keys()).symmetric_difference(set(channels)):
-                for c in channels:
-                    metadata["channels"].append({"label": c} | channels_metadata[c])
-            else:
-                raise ValueError("Channels metadata must contain all channels.")
-        else:
-            for c in channels:
-                metadata["channels"].append({"label": c})
-        return metadata
-
-    def channels_from_metadata(self, omero_metadata: dict[str, Any]) -> list[Any]:
-        """Convert channels from omero metadata."""
-        return [d["label"] for d in omero_metadata["channels"]]
 
 
 class ShapesFormatV01(SpatialDataFormat):

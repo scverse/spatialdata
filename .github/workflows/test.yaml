@@ -18,15 +18,15 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.9", "3.10"]
+                python: ["3.9", "3.12"]
                 os: [ubuntu-latest]
                 include:
                     - os: macos-latest
                       python: "3.9"
                     - os: macos-latest
-                      python: "3.10"
+                      python: "3.12"
                       pip-flags: "--pre"
-                      name: "Python 3.10 (pre-release)"
+                      name: "Python 3.12 (pre-release)"
 
         env:
             OS: ${{ matrix.os }}
@@ -66,7 +66,9 @@ jobs:
               run: |
                   pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3.1.1
+              uses: codecov/codecov-action@v4
               with:
                   name: coverage
                   verbose: true
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

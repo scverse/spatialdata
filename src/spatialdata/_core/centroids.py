@@ -6,16 +6,16 @@ from functools import singledispatch
 import dask.array as da
 import pandas as pd
 import xarray as xr
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, Point, Polygon
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names
 from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
+from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, get_model
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
@@ -35,6 +35,7 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> No
 def get_centroids(
     e: SpatialElement,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """
     Get the centroids of the geometries contained in a SpatialElement, as a new Points element.
@@ -45,6 +46,8 @@ def get_centroids(
         The SpatialElement. Only points, shapes (circles, polygons and multipolygons) and labels are supported.
     coordinate_system
         The coordinate system in which the centroids are computed.
+    return_background
+        If True, the centroid of the background label (0) is included in the output.
 
     Notes
     -----
@@ -69,7 +72,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         A DataFrame containing one column, named after "axis", with the centroids of the labels along that axis.
-        The index of the DataFrame is the collection of label values, sorted ascendingly.
+        The index of the DataFrame is the collection of label values, sorted in ascending order.
     """
     centroids: dict[int, float] = defaultdict(float)
     for i in xdata[axis]:
@@ -90,27 +93,29 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
     return pd.DataFrame({axis: centroids.values()}, index=list(centroids.keys()))
 
 
-@get_centroids.register(SpatialImage)
-@get_centroids.register(MultiscaleSpatialImage)
+@get_centroids.register(DataArray)
+@get_centroids.register(DataTree)
 def _(
-    e: SpatialImage | MultiscaleSpatialImage,
+    e: DataArray | DataTree,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
-    if model in [Image2DModel, Image3DModel]:
-        raise ValueError("Cannot compute centroids for images.")
-    assert model in [Labels2DModel, Labels3DModel]
+    if model not in [Labels2DModel, Labels3DModel]:
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     _validate_coordinate_system(e, coordinate_system)
 
-    if isinstance(e, MultiscaleSpatialImage):
+    if isinstance(e, DataTree):
         assert len(e["scale0"]) == 1
-        e = SpatialImage(next(iter(e["scale0"].values())))
+        e = next(iter(e["scale0"].values()))
 
     dfs = []
     for axis in get_axes_names(e):
         dfs.append(_get_centroids_for_axis(e, axis))
     df = pd.concat(dfs, axis=1)
+    if not return_background and 0 in df.index:
+        df = df.drop(index=0)  # drop the background label
     t = get_transformation(e, coordinate_system)
     centroids = PointsModel.parse(df, transformations={coordinate_system: t})
     return transform(centroids, to_coordinate_system=coordinate_system)

@@ -6,7 +6,7 @@ import os.path
 import re
 import tempfile
 import warnings
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from functools import singledispatch
 from pathlib import Path
@@ -17,13 +17,13 @@ import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata.experimental import read_elem
-from dask.array.core import Array as DaskArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.array import Array as DaskArray
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from ome_zarr.format import Format
 from ome_zarr.writer import _get_valid_axes
-from spatial_image import SpatialImage
+from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
@@ -132,7 +132,7 @@ def _write_metadata(
 
 
 def _iter_multiscale(
-    data: MultiscaleSpatialImage,
+    data: DataTree,
     attr: str | None,
 ) -> list[Any]:
     # TODO: put this check also in the validator for raster multiscales
@@ -238,18 +238,18 @@ def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> l
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
     for e in element._gen_spatial_element_values():
-        if isinstance(e, (SpatialImage, MultiscaleSpatialImage, DaskDataFrame)):
+        if isinstance(e, (DataArray, DataTree, DaskDataFrame)):
             files = files.union(get_dask_backing_files(e))
     return list(files)
 
 
-@get_dask_backing_files.register(SpatialImage)
-def _(element: SpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataArray)
+def _(element: DataArray) -> list[str]:
     return _get_backing_files(element.data)
 
 
-@get_dask_backing_files.register(MultiscaleSpatialImage)
-def _(element: MultiscaleSpatialImage) -> list[str]:
+@get_dask_backing_files.register(DataTree)
+def _(element: DataTree) -> list[str]:
     xdata0 = next(iter(iterate_pyramid_levels(element)))
     return _get_backing_files(xdata0.data)
 
@@ -266,19 +266,55 @@ def _(element: AnnData | GeoDataFrame) -> list[str]:
 
 
 def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
-    files = []
-    for k, v in element.dask.layers.items():
-        if k.startswith("original-from-zarr-"):
-            mapping = v.mapping[k]
-            path = mapping.store.path
-            files.append(os.path.realpath(path))
-        if k.startswith("read-parquet-"):
-            t = v.creation_info["args"]
-            assert isinstance(t, tuple)
-            assert len(t) == 1
-            parquet_file = t[0]
-            files.append(os.path.realpath(parquet_file))
+    files: list[str] = []
+    _search_for_backing_files_recursively(subgraph=element.dask, files=files)
     return files
+
+
+def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> None:
+    # see the types allowed for the dask graph here: https://docs.dask.org/en/stable/spec.html
+
+    # search recursively
+    if isinstance(subgraph, Mapping):
+        for k, v in subgraph.items():
+            _search_for_backing_files_recursively(subgraph=k, files=files)
+            _search_for_backing_files_recursively(subgraph=v, files=files)
+    elif isinstance(subgraph, Sequence) and not isinstance(subgraph, str):
+        for v in subgraph:
+            _search_for_backing_files_recursively(subgraph=v, files=files)
+
+    # cases where a backing file is found
+    if isinstance(subgraph, Mapping):
+        for k, v in subgraph.items():
+            name = None
+            if isinstance(k, Sequence) and not isinstance(k, str):
+                name = k[0]
+            elif isinstance(k, str):
+                name = k
+            if name is not None:
+                if name.startswith("original-from-zarr"):
+                    path = v.store.path
+                    files.append(os.path.realpath(path))
+                elif name.startswith("read-parquet") or name.startswith("read_parquet"):
+                    if hasattr(v, "creation_info"):
+                        # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L625
+                        t = v.creation_info["args"]
+                        if not isinstance(t, tuple) or len(t) != 1:
+                            raise ValueError(
+                                f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
+                                f"report this bug."
+                            )
+                        parquet_file = t[0]
+                        files.append(os.path.realpath(parquet_file))
+                    elif isinstance(v, tuple) and len(v) > 1 and isinstance(v[1], dict) and "piece" in v[1]:
+                        # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
+                        parquet_file, check0, check1 = v[1]["piece"]
+                        if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
+                            raise ValueError(
+                                f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
+                                f"report this bug."
+                            )
+                        files.append(os.path.realpath(parquet_file))
 
 
 def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
@@ -331,8 +367,10 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: SpatialImage | MultiscaleSpatialImage | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
 ) -> bool:
+    if isinstance(element, DaskDataFrame):
+        pass
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 

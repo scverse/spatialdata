@@ -8,7 +8,44 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.1.3] - 2024-xx-xx
+## [0.x.x] - 2024-xx-xx
+
+-   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
+
+## [0.2.1] - 2024-07-04
+
+### Minor
+
+-   Relaxing `spatial-image` package requirement #616
+
+## [0.2.0] - 2024-07-03
+
+### Changed
+
+-   Using `DataArray` directly instead of the subclass `SpatialImage` (removed install constraint for the `spatial_image` package) #587
+-   Using `DataTree` directly instead of the subclass `MultiscaleSpatialImage` (removed install constraint for the `multiscale_spatial_image` package) #587
+-   Changed `element`parameter (deprecation in v0.3.0) of `transform_element_to_coordinate_system` to a string `element_name` #611
+
+### Major
+
+-   Added operation: `to_polygons()` @quentinblampey #560
+-   Extended `rasterize()` to support all the data types @quentinblampey #566
+-   Added operation: `rasterize_bins()` @quentinblampey #578
+-   Added operation: `map_raster()` to apply functions block-wise to raster data @ArneDefauw #588
+
+### Minor
+
+-   Removed `pygeos` dependency @omsai #545
+-   Channel coordinate annotations on images now persist through `rasterize()` @clwgg #544
+-   Added `datasets` module
+-   Extended `get_values()` to `AnnData` tables #579
+-   Added `get_element_instances()` (replaces `_get_unique_label_values_as_index()`) #582
+-   Added `get_element_annotators()`, retrieving the tables that annotate a particular SpatialElement #595
+
+### Fixed
+
+-   Preserve channel names of multi-scale images in `transform` (#379)
+-   Fix `filter_by_coordinate_system` with SpatialData object having a table not annotating an element (#619)
 
 ## [0.1.2] - 2024-03-30
 

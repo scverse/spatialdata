@@ -390,8 +390,15 @@ def get_transformation_between_landmarks(
             input_axes=("x", "y"),
             output_axes=("x", "y"),
         )
-        set_transformation(moving_coords, transformation=flip, to_coordinate_system="flipped")
-        flipped_moving = transform(moving_coords, to_coordinate_system="flipped")
+        FLIPPED_COORDINATE_SYSTEM = "__flipped__"
+        transformations = get_transformation(moving_coords, get_all=True)
+        assert isinstance(transformations, dict)
+        if FLIPPED_COORDINATE_SYSTEM in transformations:
+            raise RuntimeError(
+                f"The coordinate system {FLIPPED_COORDINATE_SYSTEM!r} already exists in the moving element."
+            )
+        transformations[FLIPPED_COORDINATE_SYSTEM] = flip
+        flipped_moving = transform(moving_coords, to_coordinate_system=FLIPPED_COORDINATE_SYSTEM)
         if isinstance(flipped_moving, GeoDataFrame):
             flipped_moving_xy = np.stack([flipped_moving.geometry.x, flipped_moving.geometry.y], axis=1)
         elif isinstance(flipped_moving, DaskDataFrame):
@@ -400,6 +407,7 @@ def get_transformation_between_landmarks(
             raise TypeError("flipped_moving must be either an GeoDataFrame or a DaskDataFrame")
         model = estimate_transform("similarity", src=flipped_moving_xy, dst=references_xy)
         final = Sequence([flip, Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))])
+        del transformations[FLIPPED_COORDINATE_SYSTEM]
     else:
         model = estimate_transform("similarity", src=moving_xy, dst=references_xy)
         final = Affine(model.params, input_axes=("x", "y"), output_axes=("x", "y"))

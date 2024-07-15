@@ -4,22 +4,22 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
+    from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import MappingToCoordinateSystem_t
     from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
-def _get_transformations_from_dict_container(dict_container: Any) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_from_dict_container(dict_container: Any) -> MappingToCoordinateSystem_t | None:
     from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in dict_container:
@@ -29,12 +29,12 @@ def _get_transformations_from_dict_container(dict_container: Any) -> Optional[Ma
         return None
 
 
-def _get_transformations_xarray(e: DataArray) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations_xarray(e: DataArray) -> MappingToCoordinateSystem_t | None:
     return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch
-def _get_transformations(e: SpatialElement) -> Optional[MappingToCoordinateSystem_t]:
+def _get_transformations(e: SpatialElement) -> MappingToCoordinateSystem_t | None:
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
@@ -43,11 +43,20 @@ def _set_transformations_to_dict_container(dict_container: Any, transformations:
 
     if TRANSFORM_KEY not in dict_container:
         dict_container[TRANSFORM_KEY] = {}
+    # this modifies the dict in place without triggering a setter in the element class. Probably we want to stop using
+    # _set_transformations_to_dict_container and use _set_transformations_to_element instead
     dict_container[TRANSFORM_KEY] = transformations
 
 
-def _set_transformations_xarray(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
+def _set_transformations_to_element(element: Any, transformations: MappingToCoordinateSystem_t) -> None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
+    attrs = element.attrs
+    if TRANSFORM_KEY not in attrs:
+        attrs[TRANSFORM_KEY] = {}
+    attrs[TRANSFORM_KEY] = transformations
+    # this calls an eventual setter in the element class; modifying the attrs directly would not trigger the setter
+    element.attrs = attrs
 
 
 @singledispatch
@@ -71,39 +80,13 @@ def _set_transformations(e: SpatialElement, transformations: MappingToCoordinate
     raise TypeError(f"Unsupported type: {type(e)}")
 
 
-@_get_transformations.register(SpatialImage)
-def _(e: SpatialImage) -> Optional[MappingToCoordinateSystem_t]:
-    return _get_transformations_xarray(e)
+@_set_transformations.register(DataArray)
+def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
+    _set_transformations_to_dict_container(e.attrs, transformations)
 
 
-@_get_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage) -> Optional[MappingToCoordinateSystem_t]:
-    from spatialdata.models._utils import TRANSFORM_KEY
-
-    if TRANSFORM_KEY in e.attrs:
-        raise ValueError(
-            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
-            "stored in the inner levels."
-        )
-    d = dict(e["scale0"])
-    assert len(d) == 1
-    xdata = d.values().__iter__().__next__()
-    return _get_transformations_xarray(xdata)
-
-
-@_get_transformations.register(GeoDataFrame)
-@_get_transformations.register(DaskDataFrame)
-def _(e: Union[GeoDataFrame, DaskDataFrame]) -> Optional[MappingToCoordinateSystem_t]:
-    return _get_transformations_from_dict_container(e.attrs)
-
-
-@_set_transformations.register(SpatialImage)
-def _(e: SpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_xarray(e, transformations)
-
-
-@_set_transformations.register(MultiscaleSpatialImage)
-def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -> None:
+@_set_transformations.register(DataTree)
+def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
     from spatialdata.models import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
@@ -132,33 +115,58 @@ def _(e: MultiscaleSpatialImage, transformations: MappingToCoordinateSystem_t) -
             for k, v in transformations.items():
                 sequence: BaseTransformation = Sequence([scale_transformation, v])
                 new_transformations[k] = sequence
-            _set_transformations_xarray(xdata, new_transformations)
+            _set_transformations(xdata, new_transformations)
         else:
-            _set_transformations_xarray(xdata, transformations)
+            _set_transformations(xdata, transformations)
             old_shape = new_shape
 
 
 @_set_transformations.register(GeoDataFrame)
 @_set_transformations.register(DaskDataFrame)
 def _(e: Union[GeoDataFrame, GeoDataFrame], transformations: MappingToCoordinateSystem_t) -> None:
-    _set_transformations_to_dict_container(e.attrs, transformations)
+    _set_transformations_to_element(e, transformations)
+    # _set_transformations_to_dict_container(e.attrs, transformations)
+
+
+@_get_transformations.register(DataArray)
+def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
+    return _get_transformations_xarray(e)
+
+
+@_get_transformations.register(DataTree)
+def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
+    from spatialdata.models._utils import TRANSFORM_KEY
+
+    if TRANSFORM_KEY in e.attrs:
+        raise ValueError(
+            "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
+            "stored in the inner levels."
+        )
+    d = dict(e["scale0"])
+    assert len(d) == 1
+    xdata = d.values().__iter__().__next__()
+    return _get_transformations_xarray(xdata)
+
+
+@_get_transformations.register(GeoDataFrame)
+@_get_transformations.register(DaskDataFrame)
+def _(e: Union[GeoDataFrame, DaskDataFrame]) -> MappingToCoordinateSystem_t | None:
+    return _get_transformations_from_dict_container(e.attrs)
 
 
 @singledispatch
-def compute_coordinates(
-    data: Union[SpatialImage, MultiscaleSpatialImage]
-) -> Union[SpatialImage, MultiscaleSpatialImage]:
+def compute_coordinates(data: DataArray | DataTree) -> DataArray | DataTree:
     """
-    Computes and assign coordinates to a (Multiscale)SpatialImage.
+    Computes and assign coordinates to a spatialdata supported DataArray or DataTree.
 
     Parameters
     ----------
     data
-        :class:`SpatialImage` or :class:`MultiscaleSpatialImage`.
+        :class:`DataArray` or :class:`DataTree`.
 
     Returns
     -------
-    :class:`SpatialImage` or :class:`MultiscaleSpatialImage` with coordinates assigned.
+    :class:`DataArray` or :class:`DataTree` with coordinates assigned.
     """
     raise TypeError(f"Unsupported type: {type(data)}")
 
@@ -192,16 +200,16 @@ def _get_scale(transforms: dict[str, Any]) -> Scale:
     return scale
 
 
-@compute_coordinates.register(SpatialImage)
-def _(data: SpatialImage) -> SpatialImage:
+@compute_coordinates.register(DataArray)
+def _(data: DataArray) -> DataArray:
     coords: dict[str, ArrayLike] = {
         d: np.arange(data.sizes[d], dtype=np.float64) + 0.5 for d in data.sizes if d in ["x", "y", "z"]
     }
     return data.assign_coords(coords)
 
 
-@compute_coordinates.register(MultiscaleSpatialImage)
-def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
+@compute_coordinates.register(DataTree)
+def _(data: DataTree) -> DataTree:
     from spatialdata.models import get_axes_names
 
     spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
@@ -216,10 +224,10 @@ def _(data: MultiscaleSpatialImage) -> MultiscaleSpatialImage:
             coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
             new_coords[ax] = coords
         out[name] = dt[img_name].assign_coords(new_coords)
-    msi = MultiscaleSpatialImage.from_dict(d=out)
+    datatree = DataTree.from_dict(d=out)
     # this is to trigger the validation of the dims
-    _ = get_axes_names(msi)
-    return msi
+    _ = get_axes_names(datatree)
+    return datatree
 
 
 def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> ArrayLike:
@@ -254,3 +262,30 @@ def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> Arra
     new_radii = radii * scale_factor
     assert isinstance(new_radii, np.ndarray)
     return new_radii
+
+
+def convert_transformations_to_affine(sdata: SpatialData, coordinate_system: str) -> None:
+    """
+    Convert all transformations to the given coordinate system to affine transformations.
+
+    Parameters
+    ----------
+    coordinate_system
+        The coordinate system to convert to.
+
+    Notes
+    -----
+    The new transformations are modified only in-memory. If you want to save the changes to disk please call
+    `SpatialData.write_transformations()`.
+    """
+    from spatialdata.transformations.operations import get_transformation, set_transformation
+    from spatialdata.transformations.transformations import Affine, _get_affine_for_element
+
+    for _, _, element in sdata.gen_spatial_elements():
+        transformations = get_transformation(element, get_all=True)
+        assert isinstance(transformations, dict)
+        if coordinate_system in transformations:
+            t = transformations[coordinate_system]
+            if not isinstance(t, Affine):
+                affine = _get_affine_for_element(element, t)
+                set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from multiscale_spatial_image import MultiscaleSpatialImage
-from spatial_image import SpatialImage
+from datatree import DataTree
+from xarray import DataArray
+
+from spatialdata.models import SpatialElement
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
@@ -60,7 +62,7 @@ def transform_to_data_extent(
     Notes
     -----
         - The data extent is the smallest rectangle that contains all the images and geometries.
-        - MultiscaleSpatialImage objects will be converted to SpatialImage objects.
+        - DataTree objects (multiscale images) will be converted to DataArray (single-scale images) objects.
         - This helper function will be deprecated when https://github.com/scverse/spatialdata/issues/308 is closed,
           as this function will be easily recovered by `transform_to_coordinate_system()`
     """
@@ -113,7 +115,7 @@ def transform_to_data_extent(
     }
 
     for _, element_name, element in sdata_raster.gen_spatial_elements():
-        if isinstance(element, (MultiscaleSpatialImage, SpatialImage)):
+        if isinstance(element, (DataArray, DataTree)):
             rasterized = rasterize(
                 element,
                 axes=data_extent_axes,
@@ -134,3 +136,21 @@ def transform_to_data_extent(
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
     return SpatialData.from_elements_dict(sdata_to_return_elements)
+
+
+def _parse_element(
+    element: str | SpatialElement, sdata: SpatialData | None, element_var_name: str, sdata_var_name: str
+) -> SpatialElement:
+    if not ((sdata is not None and isinstance(element, str)) ^ (not isinstance(element, str))):
+        raise ValueError(
+            f"To specify the {element_var_name!r} SpatialElement, please do one of the following: "
+            f"- either pass a SpatialElement to the {element_var_name!r} parameter (and keep "
+            f"`{sdata_var_name}` = None);"
+            f"- either `{sdata_var_name}` needs to be a SpatialData object, and {element_var_name!r} needs "
+            f"to be the string name of the element."
+        )
+    if sdata is not None:
+        assert isinstance(element, str)
+        return sdata[element]
+    assert element is not None
+    return element

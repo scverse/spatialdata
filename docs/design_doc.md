@@ -245,6 +245,10 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 If any of `region`, `region_key` and `instance_key` are defined, they all MUST be defined. A table not defining them is still allowed, but it will not be mapped to any spatial element.
 
+In `spatialdata-io` we use a consistent naming scheme for the `region_key` and `instance_key` column, which is suggested (but not required):
+- we use the name `'region'` as the default name for the `region_key` column;
+- we use the name `'instance_id'` as the default name for the `instance_key` column.
+
 ### Summary
 
 -   Image `type: Image`
@@ -340,7 +344,7 @@ This section describes a more detailed timeline of future developments, includin
 #### Early 2024
 
 -   [ ] Simplify data models
-    -   [ ] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
+    -   [x] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
     -   [ ] Use `GeoDataFrame` for points
 -   [ ] More performant disk storage
     -   [ ] Use `geoparquet` for shapes and points

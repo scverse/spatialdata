@@ -17,8 +17,7 @@ __pycache__/
 /data/
 
 # docs
-/docs/generated/
-/docs/_build/
+/docs
 
 # IDEs
 /.idea/

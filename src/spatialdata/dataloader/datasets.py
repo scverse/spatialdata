@@ -7,20 +7,21 @@ from itertools import chain
 from types import MappingProxyType
 from typing import Any, Callable
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
-from spatial_image import SpatialImage
 from torch.utils.data import Dataset
+from xarray import DataArray
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles
-from spatialdata._core.query.relational_query import _get_unique_label_values_as_index, join_spatialelement_table
+from spatialdata._core.query.relational_query import get_element_instances, join_spatialelement_table
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
     Image2DModel,
@@ -201,7 +202,7 @@ class ImageTilesDataset(Dataset):
             if table_name is not None:
                 _, region_key, instance_key = get_table_keys(sdata.tables[table_name])
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
-                    indices = _get_unique_label_values_as_index(region_elem).tolist()
+                    indices = get_element_instances(region_elem).tolist()
                 else:
                     indices = region_elem.index.tolist()
                 table = sdata.tables[table_name]
@@ -276,7 +277,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = AnnData.concatenate(*tables_l)
+            self.dataset_table = ad.concat(*tables_l)
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))
@@ -284,12 +285,12 @@ class ImageTilesDataset(Dataset):
         self.dims = list(dims_)
 
     @staticmethod
-    def _ensure_single_scale(data: SpatialImage | MultiscaleSpatialImage) -> SpatialImage:
-        if isinstance(data, SpatialImage):
+    def _ensure_single_scale(data: DataArray | DataTree) -> DataArray:
+        if isinstance(data, DataArray):
             return data
-        if isinstance(data, MultiscaleSpatialImage):
-            return SpatialImage(next(iter(data["scale0"].ds.values())))
-        raise ValueError(f"Expected a SpatialImage or MultiscaleSpatialImage, got {type(data)}.")
+        if isinstance(data, DataTree):
+            return next(iter(data["scale0"].ds.values()))
+        raise ValueError(f"Expected a DataArray or DataTree, got {type(data)}.")
 
     @staticmethod
     def _return_function(
@@ -326,7 +327,7 @@ class ImageTilesDataset(Dataset):
             # or a crop of the label
             return SpatialData(
                 images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile},
-                table=table_row,
+                tables={"table": table_row},
             )
         return SpatialData(images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile})
 

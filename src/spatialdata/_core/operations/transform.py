@@ -9,17 +9,16 @@ import dask.array as da
 import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame
-from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import Point
-from spatial_image import SpatialImage
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channels
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -162,7 +161,7 @@ def _set_transformation_for_transformed_elements(
         assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
-    if isinstance(element, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(element, (DataArray, DataTree)):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
@@ -176,6 +175,9 @@ def _set_transformation_for_transformed_elements(
     assert isinstance(to_prepend, BaseTransformation)
 
     d = get_transformation(element, get_all=True)
+    assert isinstance(d, dict)
+    if DEFAULT_COORDINATE_SYSTEM not in d:
+        raise RuntimeError(f"Coordinate system {DEFAULT_COORDINATE_SYSTEM} not found in element")
     assert isinstance(d, dict)
     assert len(d) == 1
     assert isinstance(d[DEFAULT_COORDINATE_SYSTEM], Identity)
@@ -301,13 +303,13 @@ def _(
     return SpatialData(**new_elements)
 
 
-@transform.register(SpatialImage)
+@transform.register(DataArray)
 def _(
-    data: SpatialImage,
+    data: DataArray,
     transformation: BaseTransformation | None = None,
     maintain_positioning: bool = False,
     to_coordinate_system: str | None = None,
-) -> SpatialImage:
+) -> DataArray:
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
@@ -322,7 +324,7 @@ def _(
     c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
     transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
-    assert isinstance(transformed_data, SpatialImage)
+    assert isinstance(transformed_data, DataArray)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
     _set_transformation_for_transformed_elements(
@@ -338,13 +340,13 @@ def _(
     return transformed_data
 
 
-@transform.register(MultiscaleSpatialImage)
+@transform.register(DataTree)
 def _(
-    data: MultiscaleSpatialImage,
+    data: DataTree,
     transformation: BaseTransformation | None = None,
     maintain_positioning: bool = False,
     to_coordinate_system: str | None = None,
-) -> MultiscaleSpatialImage:
+) -> DataTree:
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
         data, transformation, maintain_positioning, to_coordinate_system
     )
@@ -363,10 +365,12 @@ def _(
     if schema in (Labels2DModel, Labels3DModel):
         # TODO: this should work, test better
         kwargs = {"prefilter": False}
+        channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
+        channel_names = get_channels(data)
     else:
-        raise ValueError(f"MultiscaleSpatialImage with schema {schema} not supported")
+        raise ValueError(f"DataTree with schema {schema} not supported")
 
     get_axes_names(data)
     transformed_dict = {}
@@ -389,12 +393,12 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = SpatialImage(
-            transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}}
-        )
+        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
+        if channel_names is not None:
+            transformed_dict[k] = transformed_dict[k].assign_coords(c=channel_names)
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = MultiscaleSpatialImage.from_dict(transformed_dict)
+    transformed_data = DataTree.from_dict(transformed_dict)
     set_transformation(transformed_data, Identity(), to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
 
     old_transformations = get_transformation(data, get_all=True)
@@ -435,6 +439,9 @@ def _(
     transformed = data.drop(columns=list(axes)).copy()
     # dummy transformation that will be replaced by _adjust_transformation()
     transformed.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
+    #  this! Reported here: ...
+    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
     assert isinstance(transformed, DaskDataFrame)
     for ax in axes:
         indices = xtransformed["dim"] == ax

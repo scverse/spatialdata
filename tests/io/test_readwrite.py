@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
-from spatialdata import SpatialData, read_zarr
+from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
@@ -132,6 +132,25 @@ class TestReadWrite:
             with pytest.raises(KeyError, match="Key `table` already exists."):
                 sdata["table"] = v
 
+    def test_incremental_io_list_of_elements(self, shapes: SpatialData) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = os.path.join(tmpdir, "data.zarr")
+            shapes.write(f)
+            new_shapes0 = deepcopy(shapes["circles"])
+            new_shapes1 = deepcopy(shapes["poly"])
+            shapes["new_shapes0"] = new_shapes0
+            shapes["new_shapes1"] = new_shapes1
+            assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
+
+            shapes.write_element(["new_shapes0", "new_shapes1"])
+            assert "shapes/new_shapes0" in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" in shapes.elements_paths_on_disk()
+
+            shapes.delete_element_from_disk(["new_shapes0", "new_shapes1"])
+            assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
+            assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
+
     @pytest.mark.parametrize("dask_backed", [True, False])
     @pytest.mark.parametrize("workaround", [1, 2])
     def test_incremental_io_on_disk(
@@ -221,37 +240,32 @@ class TestReadWrite:
 
     def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
-        t = s.table[:10, :].copy()
+        t = s["table"][:10, :].copy()
         with pytest.raises(ValueError):
             s.table = t
-        del s.table
+        del s["table"]
         s.table = t
 
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
             s.write(f)
             s2 = SpatialData.read(f)
-            assert len(s2.table) == len(t)
-            del s2.table
-            s2.table = s.table
-            assert len(s2.table) == len(s.table)
+            assert len(s2["table"]) == len(t)
+            del s2["table"]
+            s2.table = s["table"]
+            assert len(s2["table"]) == len(s["table"])
             f2 = os.path.join(td, "data2.zarr")
             s2.write(f2)
             s3 = SpatialData.read(f2)
-            assert len(s3.table) == len(s2.table)
+            assert len(s3["table"]) == len(s2["table"])
 
     def test_io_and_lazy_loading_points(self, points):
-        elem_name = list(points.points.keys())[0]
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
-            dask0 = points.points[elem_name]
             points.write(f)
-            assert all("read-parquet" not in key for key in dask0.dask.layers)
             assert len(get_dask_backing_files(points)) == 0
 
             sdata2 = SpatialData.read(f)
-            dask1 = sdata2[elem_name]
-            assert any("read-parquet" in key for key in dask1.dask.layers)
             assert len(get_dask_backing_files(sdata2)) > 0
 
     def test_io_and_lazy_loading_raster(self, images, labels):

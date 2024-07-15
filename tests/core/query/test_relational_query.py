@@ -4,9 +4,9 @@ import pytest
 from anndata import AnnData
 from spatialdata import get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
-    _get_element_annotators,
     _locate_value,
     _ValueOrigin,
+    get_element_annotators,
     join_spatialelement_table,
 )
 from spatialdata.models.models import TableModel
@@ -520,7 +520,7 @@ def test_locate_value(sdata_query_aggregation):
     )
 
 
-def test_get_values_df(sdata_query_aggregation):
+def test_get_values_df_shapes(sdata_query_aggregation):
     # test with a single value, in the dataframe; using sdata + element_name
     v = get_values(
         value_key="numerical_in_gdf", sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
@@ -621,10 +621,55 @@ def test_get_values_df(sdata_query_aggregation):
         )
 
 
+def test_get_values_df_points(points):
+    # testing get_values() for points, we keep the test more minimalistic than the one for shapes
+    p = points["points_0"]
+    p = p.drop("instance_id", axis=1)
+    p.index.compute()
+    n = len(p)
+    obs = pd.DataFrame(index=p.index, data={"region": ["points_0"] * n, "instance_id": range(n)})
+    obs["region"] = obs["region"].astype("category")
+    table = TableModel.parse(
+        AnnData(shape=(n, 0), obs=obs), region="points_0", region_key="region", instance_key="instance_id"
+    )
+    points["points_0"] = p
+    points["table"] = table
+
+    assert get_values(value_key="region", element_name="points_0", sdata=points, table_name="table").shape == (300, 1)
+    get_values(value_key="instance_id", element_name="points_0", sdata=points, table_name="table")
+    get_values(value_key=["x", "y"], element_name="points_0", sdata=points, table_name="table")
+    get_values(value_key="genes", element_name="points_0", sdata=points, table_name="table")
+
+    pass
+
+
+def test_get_values_obsm(adata_labels: AnnData):
+    get_values(value_key="tensor", element=adata_labels)
+
+    get_values(value_key=["tensor", "tensor_copy"], element=adata_labels)
+
+    values = get_values(value_key="tensor", element=adata_labels, return_obsm_as_is=True)
+    assert isinstance(values, np.ndarray)
+
+
+def test_get_values_table(sdata_blobs):
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 26
+
+
+def test_get_values_table_element_name(sdata_blobs):
+    sdata_blobs["table"].obs["region"] = sdata_blobs["table"].obs["region"].cat.add_categories("another_region")
+    sdata_blobs["table"].obs.loc["1", "region"] = "another_region"
+    sdata_blobs["table"].uns["spatialdata_attrs"]["region"] = ["blobs_labels", "another_region"]
+    sdata_blobs["another_region"] = sdata_blobs["blobs_labels"]
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"], element_name="blobs_labels")
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 25
+
+
 def test_get_values_labels_bug(sdata_blobs):
     # https://github.com/scverse/spatialdata-plot/issues/165
-    from spatialdata import get_values
-
     get_values("channel_0_sum", sdata=sdata_blobs, element_name="blobs_labels", table_name="table")
 
 
@@ -639,6 +684,14 @@ def test_filter_table_categorical_bug(shapes):
     shapes.filter_by_coordinate_system("global")
 
 
+def test_filter_table_non_annotating(full_sdata):
+    obs = pd.DataFrame({"test": ["a", "b", "c"]})
+    adata = AnnData(obs=obs)
+    table = TableModel.parse(adata)
+    full_sdata["table"] = table
+    full_sdata.filter_by_coordinate_system("global")
+
+
 def test_labels_table_joins(full_sdata):
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata,
@@ -646,14 +699,15 @@ def test_labels_table_joins(full_sdata):
         table_name="table",
         how="left",
     )
-    assert all(table.obs["instance_id"] == range(100))
+
+    assert all(table.obs["instance_id"] == range(1, 100))
 
     full_sdata["table"].obs["instance_id"] = list(reversed(range(100)))
 
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="left", match_rows="left"
     )
-    assert all(table.obs["instance_id"] == range(100))
+    assert all(table.obs["instance_id"] == range(1, 100))
 
     with pytest.warns(UserWarning, match="Element type"):
         join_spatialelement_table(
@@ -671,7 +725,8 @@ def test_labels_table_joins(full_sdata):
         sdata=full_sdata, spatial_element_names="labels2d", table_name="table", how="right_exclusive"
     )
     assert element_dict["labels2d"] is None
-    assert table is None
+    assert len(table) == 1
+    assert all(table.obs["instance_id"] == 0)  # the background value, which is filtered out effectively
 
 
 def test_points_table_joins(full_sdata):
@@ -704,6 +759,7 @@ def test_points_table_joins(full_sdata):
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata, spatial_element_names="points_0", table_name="table", how="inner"
     )
+
     assert len(element_dict["points_0"]) == 100
     assert all(table.obs["instance_id"] == list(reversed(range(100))))
 
@@ -727,13 +783,13 @@ def test_points_table_joins(full_sdata):
 
 
 def test_get_element_annotators(full_sdata):
-    names = _get_element_annotators(full_sdata, "points_0")
+    names = get_element_annotators(full_sdata, "points_0")
     assert len(names) == 0
 
-    names = _get_element_annotators(full_sdata, "labels2d")
+    names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"table"}
 
     another_table = full_sdata.tables["table"].copy()
     full_sdata.tables["another_table"] = another_table
-    names = _get_element_annotators(full_sdata, "labels2d")
+    names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"another_table", "table"}

@@ -12,19 +12,19 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from dask.array.core import Array as DaskArray
+from dask.array import Array as DaskArray
 from dask.array.core import from_array
-from dask.dataframe.core import DataFrame as DaskDataFrame
+from dask.dataframe import DataFrame as DaskDataFrame
+from datatree import DataTree
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
-from multiscale_spatial_image.multiscale_spatial_image import MultiscaleSpatialImage
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
-from spatial_image import SpatialImage, to_spatial_image
+from spatial_image import to_spatial_image
 from xarray import DataArray
 from xarray_schema.components import (
     ArrayTypeSchema,
@@ -43,6 +43,7 @@ from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     SpatialElement,
     _validate_mapping_to_coordinate_system_type,
+    convert_region_column_to_categorical,
 )
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -90,6 +91,7 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
 class RasterSchema(DataArraySchema):
     """Base schema for raster data."""
 
+    # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     ATTRS_KEY = ATTRS_KEY
 
     @classmethod
@@ -102,7 +104,7 @@ class RasterSchema(DataArraySchema):
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
-    ) -> SpatialImage | MultiscaleSpatialImage:
+    ) -> DataArray | DataTree:
         """
         Validate (or parse) raster data.
 
@@ -118,7 +120,7 @@ class RasterSchema(DataArraySchema):
             Transformations to apply to the data.
         scale_factors
             Scale factors to apply for multiscale.
-            If not None, a :class:`multiscale_spatial_image.MultiscaleSpatialImage` is returned.
+            If not None, a :class:`xarray.DataArray` is returned.
         method
             Method to use for multiscale.
         chunks
@@ -130,15 +132,15 @@ class RasterSchema(DataArraySchema):
 
         Returns
         -------
-        :class:`spatial_image.SpatialImage` or
-        :class:`multiscale_spatial_image.MultiscaleSpatialImage`.
+        :class:`xarray.DataArray` or
+        :class:`datatree.DataTree`.
         """
         if transformations:
             transformations = transformations.copy()
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, (DataArray, SpatialImage)):
+        if isinstance(data, (DataArray)):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -222,12 +224,12 @@ class RasterSchema(DataArraySchema):
             "or Labels3DModel to construct data that is guaranteed to be valid."
         )
 
-    @validate.register(SpatialImage)
-    def _(self, data: SpatialImage) -> None:
+    @validate.register(DataArray)
+    def _(self, data: DataArray) -> None:
         super().validate(data)
 
-    @validate.register(MultiscaleSpatialImage)
-    def _(self, data: MultiscaleSpatialImage) -> None:
+    @validate.register(DataTree)
+    def _(self, data: DataTree) -> None:
         for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
@@ -354,6 +356,36 @@ class ShapesModel:
                     UserWarning,
                     stacklevel=2,
                 )
+
+    @classmethod
+    def validate_shapes_not_mixed_types(cls, gdf: GeoDataFrame) -> None:
+        """
+        Check that the Shapes element is either composed of Point or Polygon/MultiPolygon.
+
+        Parameters
+        ----------
+        gdf
+            The Shapes element.
+
+        Raises
+        ------
+        ValueError
+            When the geometry column composing the object does not satisfy the type requirements.
+
+        Notes
+        -----
+        This function is not called by ShapesModel.validate() because computing the unique types by default could be
+        expensive.
+        """
+        values_geotypes = list(gdf.geom_type.unique())
+        if values_geotypes == ["Point"]:
+            return
+        if set(values_geotypes).issubset(["Polygon", "MultiPolygon"]):
+            return
+        raise ValueError(
+            "The geometry column of a Shapes element should either be composed of Point, either of "
+            f"Polygon/MultyPolygon. Found: {values_geotypes}"
+        )
 
     @singledispatchmethod
     @classmethod
@@ -572,23 +604,23 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         index = annotation.index if annotation is not None else None
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data, columns=axes, index=index), **kwargs)  # type: ignore[attr-defined]
+        df_dict = {ax: data[:, i] for i, ax in enumerate(axes)}
+        df_kwargs = {"data": df_dict, "index": index}
+
         if annotation is not None:
             if feature_key is not None:
-                feature_categ = dd.from_pandas(  # type: ignore[attr-defined]
-                    annotation[feature_key].astype(str).astype("category"), **kwargs
-                )
-                table[feature_key] = feature_categ
+                df_dict[feature_key] = annotation[feature_key].astype(str).astype("category")
             if instance_key is not None:
-                table[instance_key] = annotation[instance_key]
+                df_dict[instance_key] = annotation[instance_key]
             if Z not in axes and Z in annotation.columns:
                 logger.info(f"Column `{Z}` in `annotation` will be ignored since the data is 2D.")
             for c in set(annotation.columns) - {feature_key, instance_key, X, Y, Z}:
-                table[c] = dd.from_pandas(annotation[c], **kwargs)  # type: ignore[attr-defined]
-            return cls._add_metadata_and_validate(
-                table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
-            )
-        return cls._add_metadata_and_validate(table, transformations=transformations)
+                df_dict[c] = annotation[c]
+
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
+        return cls._add_metadata_and_validate(
+            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+        )
 
     @parse.register(pd.DataFrame)
     @parse.register(DaskDataFrame)
@@ -824,12 +856,19 @@ class TableModel:
             raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[self.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
-        if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [int, np.int16, np.int32, np.int64, "O"] or (
-            dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) != str
-        ):
+        if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [
+            int,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+            "O",
+        ] or (dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str):
             dtype = dtype if dtype != "O" else val_dtype
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64 or string allowed as dtype for "
+                f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
                 f"instance_key column in obs. Dtype found to be {dtype}"
             )
         expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
@@ -911,11 +950,7 @@ class TableModel:
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
-        if not isinstance(adata.obs[region_key].dtype, CategoricalDtype):
-            warnings.warn(
-                f"Converting `{cls.REGION_KEY_KEY}: {region_key}` to categorical dtype.", UserWarning, stacklevel=2
-            )
-            adata.obs[region_key] = pd.Categorical(adata.obs[region_key])
+
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
@@ -925,13 +960,13 @@ class TableModel:
         not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
         if not_unique:
             raise ValueError(
-                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique integers"
+                f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique values"
             )
 
         attr = {"region": region, "region_key": region_key, "instance_key": instance_key}
         adata.uns[cls.ATTRS_KEY] = attr
         cls().validate(adata)
-        return adata
+        return convert_region_column_to_categorical(adata)
 
 
 Schema_t = Union[
@@ -968,7 +1003,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (SpatialImage, MultiscaleSpatialImage)):
+    if isinstance(e, (DataArray, DataTree)):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:
