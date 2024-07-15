@@ -65,6 +65,9 @@ def rasterize_bins(
     The returned image will have one pixel for each bin, and a coordinate transformation to map the image to the
     original data orientation. In particular, the bins of Visium HD data are in a grid that is slightly rotated;
     the coordinate transformation will adjust for this, so that the returned data is aligned to the original geometries.
+
+    If `spatialdata-plot` is used to visualized the returned image, the parameter `scale='full'` needs to be passed to
+    `.render_shapes()`, to disable an automatic rasterization that would confict with the rasterization performed here.
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
