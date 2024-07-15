@@ -20,7 +20,13 @@ from spatialdata._io._utils import (
     _iter_multiscale,
     overwrite_coordinate_transformations_raster,
 )
-from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
+from spatialdata._io.format import (
+    SPATIALDATA_FORMAT_VERSION,
+    CurrentRasterFormat,
+    RasterFormats,
+    RasterFormatV01,
+    _parse_version,
+)
 from spatialdata.models._utils import get_channels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations._utils import (
@@ -36,13 +42,10 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
     assert raster_type in ["image", "labels"]
 
     f = zarr.open(store, mode="r")
-    version = _parse_version(f)
-    # old spaitaldata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
+    version = _parse_version(f, expect_attrs_key=True)
+    # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
     # interpreting the lack of such information as the presence of the format v01
-    if version is None:
-        format = RasterFormatV01()
-    else:
-        format = RasterFormats[version]
+    format = RasterFormatV01() if version is None else RasterFormats[version]
     f.store.close()
 
     nodes: list[Node] = []
@@ -209,11 +212,17 @@ def _write_raster(
     else:
         raise ValueError("Not a valid labels object")
 
+    # as explained in a comment in format.py, since coordinate transformations are not part of NGFF yet, we need to have
+    # our spatialdata extension also for raster type (eventually it will be dropped in favor of pure NGFF). Until then,
+    # saving the NGFF version (i.e. 0.4) is not enough, and we need to also record which version of the spatialdata
+    # format we are using for raster types
     group = _get_group_for_writing_transformations()
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]
-    attrs["spatialdata_format_version"] = format.spatialdata_format_version
+    attrs[SPATIALDATA_FORMAT_VERSION] = format.spatialdata_format_version
+    # triggers the write operation
+    group.attrs[ATTRS_KEY] = attrs
 
 
 def write_image(

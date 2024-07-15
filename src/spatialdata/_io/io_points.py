@@ -28,7 +28,7 @@ def _read_points(
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
 
-    version = _parse_version(f)
+    version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     format = PointsFormats[version]
 
@@ -74,7 +74,7 @@ def write_points(
     points.to_parquet(path)
 
     attrs = format.attrs_to_dict(points.attrs)
-    attrs["spatialdata_format_version"] = format.spatialdata_format_version
+    attrs["version"] = format.spatialdata_format_version
 
     _write_metadata(
         points_groups,

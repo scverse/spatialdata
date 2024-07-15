@@ -15,22 +15,47 @@ CoordinateTransform_t = list[dict[str, Any]]
 Shapes_s = ShapesModel()
 Points_s = PointsModel()
 
+SPATIALDATA_FORMAT_VERSION = "spatialdata_format_version"
 
-def _parse_version(group: zarr.Group) -> str | None:
-    if ATTRS_KEY not in group.attrs:
+
+def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
+    """
+    Parse the version of the spatialdata encoding for the element.
+
+    Parameters
+    ----------
+    group
+        The Zarr group where the element is stored.
+    expect_attrs_key
+        Boolean value specifying if the version is expected to be found as a key-value store in the .attrs[ATTRS_KEY],
+         where .attrs is the attrs of the Zarr group (expect_attrs_key == True), or if the version is expected to be
+         found as key-value store directly in .attrs
+
+    Returns
+    -------
+    The string specifying the encoding version of the element, if found. `None` otherwise.
+
+    Notes
+    -----
+    Note on "version" vs SPATIALDATA_FORMAT_VERSION.
+    Older version of raster data used "version" to store the spatialdata encoding version, newer use
+    SPATIALDATA_FORMAT_VERSION. This is to avoid confusion with the NGFF version. As explained in a comment in
+    format.py, we cannot rely entirely on NGFF for storing raster types until coordinate transformations make it into a
+    released version. Until then, we need to have a spatialdata extension, that we track using
+    SPATIALDATA_FORMAT_VERSION.
+    """
+    if expect_attrs_key and ATTRS_KEY not in group.attrs:
         return None
-    version_found = "version" in group.attrs[ATTRS_KEY]
-    spatialdata_format_version_found = "spatialdata_format_version" in group.attrs[ATTRS_KEY]
+    attrs_key_group = group.attrs[ATTRS_KEY] if expect_attrs_key else group.attrs
+    version_found = "version" in attrs_key_group
+    spatialdata_format_version_found = SPATIALDATA_FORMAT_VERSION in attrs_key_group
     if not version_found and not spatialdata_format_version_found:
         return None
     if version_found and spatialdata_format_version_found:
         raise RuntimeError(
             "The version of the data is specified twice, the metadata seems to be corrupted. Please report this issue."
         )
-    if version_found:
-        version = group.attrs[ATTRS_KEY]["version"]
-    else:
-        version = group.attrs[ATTRS_KEY]["spatialdata_format_version"]
+    version = attrs_key_group["version"] if version_found else attrs_key_group[SPATIALDATA_FORMAT_VERSION]
     assert isinstance(version, str)
     return version
 
@@ -91,7 +116,7 @@ class RasterFormatV01(SpatialDataFormat):
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
 
-    # eventually we are fully compliant with NGFF and we can drop "spatialdata_format_version" and simply rely on
+    # eventually we are fully compliant with NGFF and we can drop SPATIALDATA_FORMAT_VERSION and simply rely on
     # "version"; still, until the coordinate transformations make it into NGFF, we need to have our extension
     @property
     def spatialdata_format_version(self) -> str:
@@ -147,7 +172,7 @@ class PointsFormatV01(SpatialDataFormat):
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.spatialdata_format_version == metadata_["spatialdata_format_version"]
+        assert self.spatialdata_format_version == metadata_["version"]
         d = {}
         if Points_s.FEATURE_KEY in metadata_:
             d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]

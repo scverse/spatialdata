@@ -33,7 +33,7 @@ def _read_shapes(
     """Read shapes from a zarr store."""
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
-    version = _parse_version(f)
+    version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     format = ShapesFormats[version]
 
@@ -98,7 +98,7 @@ def write_shapes(
         shapes.to_parquet(path)
 
         attrs = format.attrs_to_dict(shapes.attrs)
-        attrs["spatialdata_format_version"] = format.spatialdata_format_version
+        attrs["version"] = format.spatialdata_format_version
     else:
         raise ValueError(f"Unsupported format version {format.version}. Please update the spatialdata library.")
 
