@@ -1128,9 +1128,8 @@ class SpatialData:
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
             already exists.
         consolidate_metadata
-            If `True`, consolidate metadata (write all the metadata in a single file at the root directory of the
-            store). This optimizes the data to be cloud accessible, and it is even a requirement for certain cloud
-            stores (such with S3).
+            If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single 			file at the root directory of the store. This makes the data cloud accessible, which is required for certain cloud
+            stores (such as S3).
         format
             The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
             parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
