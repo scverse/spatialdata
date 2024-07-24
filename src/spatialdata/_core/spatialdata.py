@@ -1134,7 +1134,7 @@ class SpatialData:
         format
             The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
             parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
-            either a format for an element (formats are defined in `spatialdata._io.format`), or a list of formats.
+            either a format for an element (formats are defined in :mod:`spatialdata._io.format`), or a list of formats.
             For example it can be a subset of the following list `[RasterFormatVXX(), ShapesFormatVXX(),
             PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the version number, and should be replaced with the
             respective format; the version numbers can differ across elements):
