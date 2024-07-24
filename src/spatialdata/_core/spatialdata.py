@@ -1128,15 +1128,19 @@ class SpatialData:
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
             already exists.
         consolidate_metadata
-            If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single 			file at the root directory of the store. This makes the data cloud accessible, which is required for certain cloud
-            stores (such as S3).
+            If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
+            file at the root directory of the store. This makes the data cloud accessible, which is required for certain
+            cloud stores (such as S3).
         format
             The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
             parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
-            either a format for an element (formats are defined in :mod:`spatialdata._io.format`), or a list of formats.
+            either a format for an element, or a list of formats.
             For example it can be a subset of the following list `[RasterFormatVXX(), ShapesFormatVXX(),
             PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the version number, and should be replaced with the
-            respective format; the version numbers can differ across elements):
+            respective format; the version numbers can differ across elements).
+            By default, the latest format is used for all elements, i.e.
+            :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
+            :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
         if isinstance(file_path, str):
             file_path = Path(file_path)
