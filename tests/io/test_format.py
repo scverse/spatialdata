@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 import pytest
 from shapely import GeometryType
-from spatialdata._io.format import CurrentPointsFormat, CurrentShapesFormat
+from spatialdata._io.format import CurrentPointsFormat, CurrentShapesFormat, ShapesFormatV01
 from spatialdata.models import PointsModel, ShapesModel
 
 Points_f = CurrentPointsFormat()
@@ -21,7 +21,7 @@ class TestFormat:
         feature_key: Optional[str],
         instance_key: Optional[str],
     ) -> None:
-        metadata: dict[str, Any] = {attrs_key: {"version": Points_f.version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": Points_f.spatialdata_format_version}}
         format_metadata: dict[str, Any] = {attrs_key: {}}
         if feature_key is not None:
             metadata[attrs_key][feature_key] = "target"
@@ -38,7 +38,7 @@ class TestFormat:
     @pytest.mark.parametrize("type_key", [ShapesModel.TYPE_KEY])
     @pytest.mark.parametrize("name_key", [ShapesModel.NAME_KEY])
     @pytest.mark.parametrize("shapes_type", [0, 3, 6])
-    def test_format_shapes(
+    def test_format_shapes_v1(
         self,
         attrs_key: str,
         geos_key: str,
@@ -51,12 +51,22 @@ class TestFormat:
             3: "POLYGON",
             6: "MULTIPOLYGON",
         }
-        metadata: dict[str, Any] = {attrs_key: {"version": Shapes_f.version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": ShapesFormatV01().spatialdata_format_version}}
         format_metadata: dict[str, Any] = {attrs_key: {}}
         metadata[attrs_key][geos_key] = {}
         metadata[attrs_key][geos_key][type_key] = shapes_type
         metadata[attrs_key][geos_key][name_key] = shapes_dict[shapes_type]
-        format_metadata[attrs_key] = Shapes_f.attrs_from_dict(metadata)
+        format_metadata[attrs_key] = ShapesFormatV01().attrs_from_dict(metadata)
         metadata[attrs_key].pop("version")
         geometry = GeometryType(metadata[attrs_key][geos_key][type_key])
-        assert metadata[attrs_key] == Shapes_f.attrs_to_dict(geometry)
+        assert metadata[attrs_key] == ShapesFormatV01().attrs_to_dict(geometry)
+
+    @pytest.mark.parametrize("attrs_key", [ShapesModel.ATTRS_KEY])
+    def test_format_shapes_v2(
+        self,
+        attrs_key: str,
+    ) -> None:
+        # not testing anything, maybe remove
+        metadata: dict[str, Any] = {attrs_key: {"version": Shapes_f.spatialdata_format_version}}
+        metadata[attrs_key].pop("version")
+        assert metadata[attrs_key] == Shapes_f.attrs_to_dict({})

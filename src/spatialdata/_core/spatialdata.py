@@ -41,6 +41,7 @@ from spatialdata.models._utils import SpatialElement, convert_region_column_to_c
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
+    from spatialdata._io.format import SpatialDataFormat
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -1114,8 +1115,33 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
+        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
     ) -> None:
-        """Write to a Zarr store."""
+        """
+        Write the `SpatialData` object to a Zarr store.
+
+        Parameters
+        ----------
+        file_path
+            The path to the Zarr store to write to.
+        overwrite
+            If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
+            already exists.
+        consolidate_metadata
+            If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
+            file at the root directory of the store. This makes the data cloud accessible, which is required for certain
+            cloud stores (such as S3).
+        format
+            The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
+            parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
+            either a format for an element, or a list of formats.
+            For example it can be a subset of the following list `[RasterFormatVXX(), ShapesFormatVXX(),
+            PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the version number, and should be replaced with the
+            respective format; the version numbers can differ across elements).
+            By default, the latest format is used for all elements, i.e.
+            :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
+            :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+        """
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
@@ -1131,6 +1157,7 @@ class SpatialData:
                 element_type=element_type,
                 element_name=element_name,
                 overwrite=False,
+                format=format,
             )
 
         if self.path != file_path:
@@ -1148,6 +1175,7 @@ class SpatialData:
         element_type: str,
         element_name: str,
         overwrite: bool,
+        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1162,21 +1190,29 @@ class SpatialData:
             zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
         )
         from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+        from spatialdata._io.format import _parse_formats
+
+        parsed = _parse_formats(formats=format)
 
         if element_type == "images":
-            write_image(image=element, group=element_type_group, name=element_name)
+            write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
         elif element_type == "labels":
-            write_labels(labels=element, group=root_group, name=element_name)
+            write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
         elif element_type == "points":
-            write_points(points=element, group=element_type_group, name=element_name)
+            write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_type_group, name=element_name)
+            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"])
         elif element_type == "tables":
-            write_table(table=element, group=element_type_group, name=element_name)
+            write_table(table=element, group=element_type_group, name=element_name, format=parsed["tables"])
         else:
             raise ValueError(f"Unknown element type: {element_type}")
 
-    def write_element(self, element_name: str | list[str], overwrite: bool = False) -> None:
+    def write_element(
+        self,
+        element_name: str | list[str],
+        overwrite: bool = False,
+        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+    ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
 
@@ -1188,6 +1224,9 @@ class SpatialData:
             The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
+        format
+            It is recommended to leave this parameter equal to `None`. See more details in the documentation of
+             `SpatialData.write()`.
 
         Notes
         -----
@@ -1230,6 +1269,7 @@ class SpatialData:
             element_type=element_type,
             element_name=element_name,
             overwrite=overwrite,
+            format=format,
         )
 
     def delete_element_from_disk(self, element_name: str | list[str]) -> None:

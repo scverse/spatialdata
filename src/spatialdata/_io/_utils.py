@@ -12,23 +12,16 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import zarr
 from anndata import AnnData
-from anndata import read_zarr as read_anndata_zarr
-from anndata.experimental import read_elem
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from ome_zarr.format import Format
-from ome_zarr.writer import _get_valid_axes
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._utils import iterate_pyramid_levels
-from spatialdata.models import TableModel
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     SpatialElement,
@@ -115,19 +108,17 @@ def overwrite_coordinate_transformations_raster(
 def _write_metadata(
     group: zarr.Group,
     group_type: str,
-    fmt: Format,
-    axes: str | list[str] | list[dict[str, str]] | None = None,
+    axes: list[str],
     attrs: Mapping[str, Any] | None = None,
 ) -> None:
     """Write metdata to a group."""
-    axes = _get_valid_axes(axes=axes, fmt=fmt)
+    axes = sorted(axes)
 
     group.attrs["encoding-type"] = group_type
     group.attrs["axes"] = axes
     # we write empty coordinateTransformations and then overwrite
     # them with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
-    # group.attrs["coordinateTransformations"] = coordinate_transformations
     group.attrs["spatialdata_attrs"] = attrs
 
 
@@ -389,54 +380,3 @@ def save_transformations(sdata: SpatialData) -> None:
         stacklevel=2,
     )
     sdata.write_transformations()
-
-
-def read_table_and_validate(
-    zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
-) -> dict[str, AnnData]:
-    """
-    Read in tables in the tables Zarr.group of a SpatialData Zarr store.
-
-    Parameters
-    ----------
-    zarr_store_path
-        The path to the Zarr store.
-    group
-        The parent group containing the subgroup.
-    subgroup
-        The subgroup containing the tables.
-    tables
-        A dictionary of tables.
-
-    Returns
-    -------
-    The modified dictionary with the tables.
-    """
-    count = 0
-    for table_name in subgroup:
-        f_elem = subgroup[table_name]
-        f_elem_store = os.path.join(zarr_store_path, f_elem.path)
-        if isinstance(group.store, zarr.storage.ConsolidatedMetadataStore):
-            tables[table_name] = read_elem(f_elem)
-            # we can replace read_elem with read_anndata_zarr after this PR gets into a release (>= 0.6.5)
-            # https://github.com/scverse/anndata/pull/1057#pullrequestreview-1530623183
-            # table = read_anndata_zarr(f_elem)
-        else:
-            tables[table_name] = read_anndata_zarr(f_elem_store)
-        if TableModel.ATTRS_KEY in tables[table_name].uns:
-            # fill out eventual missing attributes that has been omitted because their value was None
-            attrs = tables[table_name].uns[TableModel.ATTRS_KEY]
-            if "region" not in attrs:
-                attrs["region"] = None
-            if "region_key" not in attrs:
-                attrs["region_key"] = None
-            if "instance_key" not in attrs:
-                attrs["instance_key"] = None
-            # fix type for region
-            if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                attrs["region"] = attrs["region"].tolist()
-
-        count += 1
-
-    logger.debug(f"Found {count} elements in {subgroup}")
-    return tables

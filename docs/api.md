@@ -163,3 +163,52 @@ The transformations that can be defined between elements and coordinate systems 
     assert_elements_are_identical
     assert_elements_dict_are_identical
 ```
+
+## Data format (advanced topic)
+
+The SpatialData format is defined as a set of versioned subclasses of :class:`spatialdata._io.format.SpatialDataFormat`, one per type of element.
+These classes are useful to ensure backward compatibility whenever a major version change is introduced.
+We also provide pointers to the latest format.
+
+### Raster format
+
+```{eval-rst}
+.. currentmodule:: spatialdata._io.format
+
+.. autosummary::
+    :toctree: generated
+
+    CurrentRasterFormat
+    RasterFormatV01
+```
+
+### Shapes format
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    CurrentShapesFormat
+    ShapesFormatV01
+    ShapesFormatV02
+```
+
+### Points format
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    CurrentPointsFormat
+    PointsFormatV01
+```
+
+### Tables format
+
+```{eval-rst}
+.. autosummary::
+    :toctree: generated
+
+    CurrentTablesFormat
+    TablesFormatV01
+```

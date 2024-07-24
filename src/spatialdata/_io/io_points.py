@@ -8,13 +8,12 @@ from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defin
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
-from spatialdata._io import SpatialDataFormatV01
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
-from spatialdata._io.format import CurrentPointsFormat
+from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -24,25 +23,28 @@ from spatialdata.transformations._utils import (
 
 def _read_points(
     store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
-    fmt: SpatialDataFormatV01 = CurrentPointsFormat(),
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     assert isinstance(store, (str, Path))
     f = zarr.open(store, mode="r")
 
+    version = _parse_version(f, expect_attrs_key=True)
+    assert version is not None
+    format = PointsFormats[version]
+
     path = os.path.join(f._store.path, f.path, "points.parquet")
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
-    table = read_parquet("simplecache::" + path if "http" in path else path)
-    assert isinstance(table, DaskDataFrame)
+    points = read_parquet("simplecache::" + path if path.startswith("http") else path)
+    assert isinstance(points, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
-    _set_transformations(table, transformations)
+    _set_transformations(points, transformations)
 
-    attrs = fmt.attrs_from_dict(f.attrs.asdict())
+    attrs = format.attrs_from_dict(f.attrs.asdict())
     if len(attrs):
-        table.attrs["spatialdata_attrs"] = attrs
-    return table
+        points.attrs["spatialdata_attrs"] = attrs
+    return points
 
 
 def write_points(
@@ -50,7 +52,7 @@ def write_points(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:points",
-    fmt: Format = CurrentPointsFormat(),
+    format: Format = CurrentPointsFormat(),
 ) -> None:
     axes = get_axes_names(points)
     t = _get_transformations(points)
@@ -71,15 +73,14 @@ def write_points(
 
     points.to_parquet(path)
 
-    attrs = fmt.attrs_to_dict(points.attrs)
-    attrs["version"] = fmt.version
+    attrs = format.attrs_to_dict(points.attrs)
+    attrs["version"] = format.spatialdata_format_version
 
     _write_metadata(
         points_groups,
         group_type=group_type,
         axes=list(axes),
         attrs=attrs,
-        fmt=fmt,
     )
     assert t is not None
     overwrite_coordinate_transformations_non_raster(group=points_groups, axes=axes, transformations=t)
