@@ -10,7 +10,14 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+# Major
+
+-   New disk format for shapes using `GeoParquet` (the change is backward compatible) #542
+
+# Minor
+
 -   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
+-   Ability to save data using older disk formats #542
 
 ## [0.2.1] - 2024-07-04
 
