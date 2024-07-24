@@ -96,6 +96,7 @@ intersphinx_mapping = {
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
+    "shapely": ("https://shapely.readthedocs.io/en/stable", None),
 }
 
 
@@ -123,6 +124,10 @@ nitpicky = False  # TODO: solve upstream.
 #     ("py:class", "spatial_image.SpatialImage"),
 #     ("py:class", "multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage"),
 # ]
+# no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
+suppress_warnings = [
+    "autosummary.import_cycle",
+]
 
 
 # -- Options for HTML output -------------------------------------------------

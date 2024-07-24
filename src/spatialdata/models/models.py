@@ -62,6 +62,7 @@ Chunks_t = Union[
 ScaleFactors_t = Sequence[Union[dict[str, int], int]]
 
 Transform_s = AttrSchema(BaseTransformation, None)
+ATTRS_KEY = "spatialdata_attrs"
 
 
 def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:
@@ -91,6 +92,8 @@ class RasterSchema(DataArraySchema):
     """Base schema for raster data."""
 
     # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
+    ATTRS_KEY = ATTRS_KEY
+
     @classmethod
     def parse(
         cls,
@@ -300,12 +303,12 @@ class Image3DModel(RasterSchema):
 
 class ShapesModel:
     GEOMETRY_KEY = "geometry"
-    ATTRS_KEY = "spatialdata_attrs"
     GEOS_KEY = "geos"
     TYPE_KEY = "type"
     NAME_KEY = "name"
     RADIUS_KEY = "radius"
     TRANSFORM_KEY = "transform"
+    ATTRS_KEY = ATTRS_KEY
 
     @classmethod
     def validate(cls, data: GeoDataFrame) -> None:
@@ -396,14 +399,14 @@ class ShapesModel:
             Data to parse:
 
                 - If :class:`numpy.ndarray`, it assumes the shapes are parsed as
-                  ragged arrays, in case of (Multi)`Polygons`.
+                  ragged arrays, in case of :class:`shapely.Polygon` or :class:`shapely.MultiPolygon`.
                   Therefore additional arguments `offsets` and `geometry` must be provided
                 - if `Path` or `str`, it's read as a GeoJSON file.
                 - If :class:`geopandas.GeoDataFrame`, it's validated. The object needs to
                   have a column called `geometry` which is a :class:`geopandas.GeoSeries`
-                  or `shapely` objects. Valid options are combinations of `Polygon`/
-                  `MultiPolygon` or `Point`. If the geometries are `Point`, there must be
-                  another column called `radius`.
+                  or `shapely` objects. Valid options are combinations of :class:`shapely.Polygon`
+                  or :class:`shapely.MultiPolygon` or :class:`shapely.Point`.
+                  If the geometries are `Point`, there must be another column called `radius`.
 
         geometry
             Geometry type of the shapes. The following geometries are supported:
@@ -413,10 +416,11 @@ class ShapesModel:
                 - 6: `MultiPolygon`
 
         offsets
-            In the case of (Multi)`Polygons` shapes, in order to initialize the shapes from their
-            ragged array representation, the offsets of the polygons must be provided.
+            In the case of :class:`shapely.Polygon` or :class:`shapely.MultiPolygon` shapes,
+            in order to initialize the shapes from their ragged array representation,
+            the offsets of the polygons must be provided.
             Alternatively you can call the parser as `ShapesModel.parse(data)`, where data is a
-            `GeoDataFrame` object and ignore the `offset` paramter (recommended).
+            `GeoDataFrame` object and ignore the `offset` parameter (recommended).
         radius
             Size of the `Circles`. It must be provided if the shapes are `Circles`.
         index
@@ -500,10 +504,10 @@ class ShapesModel:
 
 
 class PointsModel:
-    ATTRS_KEY = "spatialdata_attrs"
     INSTANCE_KEY = "instance_key"
     FEATURE_KEY = "feature_key"
     TRANSFORM_KEY = "transform"
+    ATTRS_KEY = ATTRS_KEY
     NPARTITIONS = 1
 
     @classmethod
@@ -529,8 +533,8 @@ class PointsModel:
             raise ValueError(
                 f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
             )
-        if cls.ATTRS_KEY in data.attrs and "feature_key" in data.attrs[cls.ATTRS_KEY]:
-            feature_key = data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY]
+        if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
+            feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
             if not isinstance(data[feature_key].dtype, CategoricalDtype):
                 logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
 
@@ -694,13 +698,13 @@ class PointsModel:
     ) -> DaskDataFrame:
         assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
         if feature_key is not None or instance_key is not None:
-            data.attrs[cls.ATTRS_KEY] = {}
+            data.attrs[ATTRS_KEY] = {}
         if feature_key is not None:
             assert feature_key in data.columns
-            data.attrs[cls.ATTRS_KEY][cls.FEATURE_KEY] = feature_key
+            data.attrs[ATTRS_KEY][cls.FEATURE_KEY] = feature_key
         if instance_key is not None:
             assert instance_key in data.columns
-            data.attrs[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
+            data.attrs[ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
         for c in data.columns:
             #  Here we are explicitly importing the categories
@@ -719,10 +723,10 @@ class PointsModel:
 
 
 class TableModel:
-    ATTRS_KEY = "spatialdata_attrs"
     REGION_KEY = "region"
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
+    ATTRS_KEY = ATTRS_KEY
 
     def _validate_set_region_key(self, data: AnnData, region_key: str | None = None) -> None:
         """
@@ -745,9 +749,9 @@ class TableModel:
         ValueError
             If the specified region key column is not present in table.obs.
         """
-        attrs = data.uns.get(self.ATTRS_KEY)
+        attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[self.ATTRS_KEY] = attrs = {}
+            data.uns[ATTRS_KEY] = attrs = {}
         table_region_key = attrs.get(self.REGION_KEY_KEY)
         if not region_key:
             if not table_region_key:
@@ -789,9 +793,9 @@ class TableModel:
         ValueError
             If provided instance_key is not present as table.obs column.
         """
-        attrs = data.uns.get(self.ATTRS_KEY)
+        attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[self.ATTRS_KEY] = {}
+            data.uns[ATTRS_KEY] = {}
 
         if not instance_key:
             if not attrs.get(TableModel.INSTANCE_KEY):
@@ -840,14 +844,14 @@ class TableModel:
 
         """
         SUGGESTION = " Please use TableModel.parse() to construct data that is guaranteed to be valid."
-        attr = data.uns[self.ATTRS_KEY]
+        attr = data.uns[ATTRS_KEY]
 
         if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(f"`region` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
         if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(f"`region_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
         if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{self.ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(f"`instance_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
 
         if attr[self.REGION_KEY_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
@@ -889,7 +893,7 @@ class TableModel:
         -------
         The validated data.
         """
-        if self.ATTRS_KEY not in data.uns:
+        if ATTRS_KEY not in data.uns:
             return data
 
         self._validate_table_annotation_metadata(data)

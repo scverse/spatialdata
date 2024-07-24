@@ -8,10 +8,11 @@ import zarr
 from anndata import AnnData
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
+from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
+from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 
@@ -123,7 +124,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         logger.debug(f"Found {count} elements in {group}")
     if "tables" in selector and "tables" in f:
         group = f["tables"]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables)
 
     if "table" in selector and "table" in f:
         warnings.warn(
@@ -134,7 +135,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         )
         subgroup_name = "table"
         group = f[subgroup_name]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables)
 
         logger.debug(f"Found {count} elements in {group}")
 

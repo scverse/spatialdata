@@ -63,7 +63,7 @@ Note: if you are using a Mac with an M1/M2 chip, please follow the installation 
 
 To get involved in the discussion, or if you need help to get started, you are welcome to use the following options.
 
--   <ins>Chat</ins> via [`scverse` Zulip](https://imagesc.zulipchat.com/#narrow/stream/329057-scverse/topic/segmentation) (public or 1 to 1).
+-   <ins>Chat</ins> via [`scverse` Zulip](https://scverse.zulipchat.com/#narrow/stream/315824-spatial) (public or 1 to 1).
 -   <ins>Forum post</ins> in the [scverse discourse forum](https://discourse.scverse.org/).
 -   <ins>Bug report/feature request</ins> via the [GitHub issue tracker][issue-tracker].
 -   <ins>Zoom call</ins> as part of the SpatialData Community Meetings, held every 2 weeks on Thursday, [schedule here](https://hackmd.io/enWU826vRai-JYaL7TZaSw).
