@@ -414,7 +414,7 @@ class NgffMapAxis(NgffBaseTransformation):
         new_indices = [input_axes.index(self.map_axis[ax]) for ax in output_axes]
         assert len(new_indices) == len(output_axes)
         mapped = points[:, new_indices]
-        assert type(mapped) == np.ndarray
+        assert isinstance(mapped, np.ndarray)
         return mapped
 
     def to_affine(self) -> NgffAffine:
@@ -888,7 +888,7 @@ class NgffSequence(NgffBaseTransformation):
             if expected_output_cs is not None:
                 assert t.output_coordinate_system == expected_output_cs
         new_latest_output_cs = t.output_coordinate_system
-        assert type(new_latest_output_cs) == NgffCoordinateSystem
+        assert isinstance(new_latest_output_cs, NgffCoordinateSystem)
         return new_latest_output_cs, input_cs, output_cs
 
     @staticmethod

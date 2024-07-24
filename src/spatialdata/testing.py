@@ -95,7 +95,7 @@ def assert_elements_are_identical(
     Please see
     :func:`spatialdata.testing.assert_spatial_data_objects_are_identical` for additional comments.
     """
-    assert type(element0) == type(element1)
+    assert type(element0) is type(element1)
     if check_transformations and not check_metadata:
         raise ValueError("check_transformations cannot be True if check_metadata is False")
 

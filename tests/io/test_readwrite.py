@@ -296,14 +296,14 @@ class TestReadWrite:
                     f = os.path.join(td, "data.zarr")
                     single_sdata.write(f)
                     t0 = get_transformation(SpatialData.read(f)[elem_name])
-                    assert type(t0) == Identity
+                    assert isinstance(t0, Identity)
                     set_transformation(
                         single_sdata[elem_name],
                         Scale([2.0], axes=("x",)),
                         write_to_sdata=single_sdata,
                     )
                     t1 = get_transformation(SpatialData.read(f)[elem_name])
-                    assert type(t1) == Scale
+                    assert isinstance(t1, Scale)
 
     def test_replace_transformation_on_disk_non_raster(self, shapes, points):
         sdatas = {"shapes": shapes, "points": points}
@@ -314,10 +314,10 @@ class TestReadWrite:
                 f = os.path.join(td, "data.zarr")
                 sdata.write(f)
                 t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
-                assert type(t0) == Identity
+                assert isinstance(t0, Identity)
                 set_transformation(sdata[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
                 t1 = get_transformation(SpatialData.read(f)[elem_name])
-                assert type(t1) == Scale
+                assert isinstance(t1, Scale)
 
     def test_overwrite_works_when_no_zarr_store(self, full_sdata):
         with tempfile.TemporaryDirectory() as tmpdir:
