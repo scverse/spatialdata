@@ -229,6 +229,8 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
     if not isinstance(formats, list):
         formats = [formats]
 
+    # this is to ensure that the variable `formats`, which is passed by the user, does not contain multiple versions
+    # of the same format
     modified = {
         "raster": False,
         "shapes": False,

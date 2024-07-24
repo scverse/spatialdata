@@ -124,6 +124,10 @@ nitpicky = False  # TODO: solve upstream.
 #     ("py:class", "spatial_image.SpatialImage"),
 #     ("py:class", "multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage"),
 # ]
+# no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
+suppress_warnings = [
+    "autosummary.import_cycle",
+]
 
 
 # -- Options for HTML output -------------------------------------------------
