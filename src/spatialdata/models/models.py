@@ -688,9 +688,10 @@ class PointsModel:
         if Z not in axes and Z in data.columns:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
-            table[c] = dd.from_pandas(
-                data[c].compute(), npartitions=table.npartitions, sort=index_monotonically_increasing
-            )
+            column = data[c]
+            if isinstance(column, dd.Series):
+                column = column.compute()
+            table[c] = dd.from_pandas(column, npartitions=table.npartitions, sort=index_monotonically_increasing)
 
         validated = cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
