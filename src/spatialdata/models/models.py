@@ -647,14 +647,26 @@ class PointsModel:
                 )
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
+        index_monotonically_increasing = data.index.is_monotonic_increasing.compute()
         if isinstance(data, pd.DataFrame):
+            if not index_monotonically_increasing:
+                warnings.warn(
+                    "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
+                    "adjust the order of the index before calling .parse(); this will make the division known when"
+                    "dask.dataframe.from_pandas() is called.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
+                # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
+                sort=index_monotonically_increasing,
                 **kwargs,
             )
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
                     data[feature_key].astype(str).astype("category"),
+                    sort=index_monotonically_increasing,
                     **kwargs,
                 )  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ
@@ -674,7 +686,9 @@ class PointsModel:
         if Z not in axes and Z in data.columns:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
-            table[c] = data[c]
+            table[c] = dd.from_pandas(
+                data[c].compute(), npartitions=table.npartitions, sort=index_monotonically_increasing
+            )
 
         validated = cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
