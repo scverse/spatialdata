@@ -647,7 +647,9 @@ class PointsModel:
                 )
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
-        index_monotonically_increasing = data.index.is_monotonic_increasing.compute()
+        index_monotonically_increasing = data.index.is_monotonic_increasing
+        if not isinstance(index_monotonically_increasing, bool):
+            index_monotonically_increasing = index_monotonically_increasing.compute()
         if isinstance(data, pd.DataFrame):
             if not index_monotonically_increasing:
                 warnings.warn(
