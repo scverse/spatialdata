@@ -457,11 +457,16 @@ class SpatialData:
             If the annotation SpatialElement target is not present in the SpatialData object.
         TypeError
             If no current annotation metadata is found and both region_key and instance_key are not specified.
+
+        Notes
+        -----
+        Before calling this function, you may need to replace the values of the `region_key` column, or add a new
+        `region_key` column. For example, by calling: sdata["table"].obs["region"] = "my_new_instances".
         """
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if (isinstance(region, str) and region not in element_names) or (
-            isinstance(element_names, (list, pd.Series))
+            isinstance(region, (list, pd.Series))
             and not all(region_element in element_names for region_element in region)
         ):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
