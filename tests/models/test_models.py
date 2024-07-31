@@ -453,3 +453,14 @@ def test_force2d():
     assert_elements_are_identical(circles_3d, expected_circles_2d)
     assert_elements_are_identical(polygons_3d, expected_polygons_2d)
     assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)
+
+
+def test_dask_points_unsorted_index(points):
+    element = points["points_0"]
+    new_order = RNG.permutation(len(element))
+    with pytest.warns(
+        UserWarning,
+        match=r"The index of the dataframe is not monotonic increasing\.",
+    ):
+        ordered = PointsModel.parse(element.compute().iloc[new_order, :])
+    assert np.all(ordered.index.compute().to_numpy() == new_order)

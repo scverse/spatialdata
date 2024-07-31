@@ -9,6 +9,7 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from scipy.sparse import csc_matrix
+from shapely import MultiPolygon, Point, Polygon
 from skimage.transform import estimate_transform
 from xarray import DataArray
 
@@ -155,8 +156,13 @@ def rasterize_bins(
 
     src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
     if isinstance(sub_df, GeoDataFrame):
-        sub_x = sub_df.geometry.x.values
-        sub_y = sub_df.geometry.y.values
+        if isinstance(sub_df.iloc[0].geometry, Point):
+            sub_x = sub_df.geometry.x.values
+            sub_y = sub_df.geometry.y.values
+        else:
+            assert isinstance(sub_df.iloc[0].geometry, (Polygon, MultiPolygon))
+            sub_x = sub_df.centroid.x
+            sub_y = sub_df.centroid.y
     else:
         assert isinstance(sub_df, DaskDataFrame)
         sub_x = sub_df.x.compute().values

@@ -3,9 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from pandas import DataFrame
 from scipy.sparse import csr_matrix
+from shapely.geometry import Polygon
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.rasterize_bins import rasterize_bins
 from spatialdata._core.spatialdata import SpatialData
@@ -25,7 +27,7 @@ def _get_bins_data(n: int) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
     return np.dot(data, rotation.T), x, y
 
 
-@pytest.mark.parametrize("geometry", ["points", "shapes"])
+@pytest.mark.parametrize("geometry", ["points", "circles", "squares"])
 @pytest.mark.parametrize("value_key", [None, "instance_id", ["gene0", "gene1"]])
 def test_rasterize_bins(geometry: str, value_key: str | list[str] | None):
     n = 10
@@ -34,9 +36,16 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None):
 
     if geometry == "points":
         points = PointsModel.parse(data, transformations={"global": scale})
-    else:
-        assert geometry == "shapes"
+    elif geometry == "circles":
         points = ShapesModel.parse(data, geometry=0, radius=1, transformations={"global": scale})
+    else:
+        assert geometry == "squares"
+
+        gdf = GeoDataFrame(
+            data={"geometry": [Polygon([(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1), (x, y)]) for x, y in data]}
+        )
+
+        points = ShapesModel.parse(gdf, transformations={"global": scale})
 
     obs = DataFrame(
         data={"region": ["points"] * n * n, "instance_id": np.arange(n * n), "col_index": x, "row_index": y}
