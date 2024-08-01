@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning][].
 -   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
 -   Ability to save data using older disk formats #542
 
+# Fixed
+
+-   Circles validation now checks for inf or nan radii #653
+
 ## [0.2.1] - 2024-07-04
 
 ### Minor
