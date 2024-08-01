@@ -265,7 +265,7 @@ class ImageTilesDataset(Dataset):
                 _, table = join_spatialelement_table(
                     sdata=circles_sdata,
                     spatial_element_names=region_name,
-                    table_name=table_name,
+                    table_name="table",
                     how="left",
                     match_rows="left",
                 )
