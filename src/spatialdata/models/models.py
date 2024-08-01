@@ -342,7 +342,9 @@ class ShapesModel:
                 raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
             radii = data[cls.RADIUS_KEY].values
             if np.any(radii <= 0):
-                raise ValueError("Radii of circles must be positive." + SUGGESTION)
+                raise ValueError("Radii of circles must be positive.")
+            if np.any(np.isnan(radii)) or np.any(np.isinf(radii)):
+                raise ValueError("Radii of circles must not be nan or inf.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:
