@@ -344,7 +344,14 @@ class ShapesModel:
             if np.any(radii <= 0):
                 raise ValueError("Radii of circles must be positive.")
             if np.any(np.isnan(radii)) or np.any(np.isinf(radii)):
-                raise ValueError("Radii of circles must not be nan or inf.")
+                # using logger.warning instead of warnings.warn to avoid the warning to being silenced in some cases
+                # (e.g. PyCharm console)
+                logger.warning(
+                    "Radii of circles must not be nan or inf (this warning will be turned into a ValueError in the "
+                    "next code release). If you are seeing this warning after reading previously saved Xenium data, "
+                    "please see https://github.com/scverse/spatialdata/discussions/657 for a solution. Otherwise, "
+                    "please correct the radii of the circles before calling the parser function.",
+                )
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:

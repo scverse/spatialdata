@@ -222,12 +222,16 @@ class TestModels:
             poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = np.nan
-            with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
-                ShapesModel.validate(poly)
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = np.inf
-            with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
-                ShapesModel.validate(poly)
+
+            # tests to be restored when the validation is re-enabled (now it just raises a warning, that is tricky to
+            # capture)
+            # poly[ShapesModel.RADIUS_KEY].iloc[0] = np.nan
+            # with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
+            #     ShapesModel.validate(poly)
+            #
+            # poly[ShapesModel.RADIUS_KEY].iloc[0] = np.inf
+            # with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
+            #     ShapesModel.validate(poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
