@@ -652,22 +652,23 @@ class PointsModel:
         index_monotonically_increasing = data.index.is_monotonic_increasing
         if not isinstance(index_monotonically_increasing, bool):
             index_monotonically_increasing = index_monotonically_increasing.compute()
+        if not index_monotonically_increasing:
+            warnings.warn(
+                "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
+                "adjust the order of the index before calling .parse() to avoid possible problems due to unknown "
+                "divisions",
+                UserWarning,
+                stacklevel=2,
+            )
         if isinstance(data, pd.DataFrame):
-            if not index_monotonically_increasing:
-                warnings.warn(
-                    "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
-                    "adjust the order of the index before calling .parse(); this will make the division known when"
-                    "dask.dataframe.from_pandas() is called.",
-                    UserWarning,
-                    stacklevel=2,
-                )
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=index_monotonically_increasing,
                 **kwargs,
             )
-            if not table.known_divisions:
+            # we cannot compute the divisions whne the index is not monotonically increasing and npartitions > 1
+            if not table.known_divisions and (index_monotonically_increasing or table.npartitions == 1):
                 table.divisions = table.compute_current_divisions()
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
@@ -677,8 +678,6 @@ class PointsModel:
                 )  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
-            if not data.known_divisions:
-                data.divisions = data.compute_current_divisions()
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
             if feature_key is not None and data[feature_key].dtype.name != "category":

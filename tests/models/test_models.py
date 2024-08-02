@@ -5,6 +5,7 @@ import re
 import tempfile
 from functools import partial
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Callable
 
 import dask.array.core
@@ -461,12 +462,59 @@ def test_force2d():
     assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)
 
 
-def test_dask_points_unsorted_index(points):
+def test_dask_points_unsorted_index_with_warning(points):
+    chunksize = 300
     element = points["points_0"]
     new_order = RNG.permutation(len(element))
     with pytest.warns(
         UserWarning,
         match=r"The index of the dataframe is not monotonic increasing\.",
     ):
-        ordered = PointsModel.parse(element.compute().iloc[new_order, :])
-    assert np.all(ordered.index.compute().to_numpy() == new_order)
+        ordered = PointsModel.parse(element.compute().iloc[new_order, :], chunksize=chunksize)
+        assert np.all(ordered.index.compute().to_numpy() == new_order)
+
+
+@pytest.mark.xfail(reason="Not supporting multiple partitions when the index is not sorted.")
+def test_dask_points_unsorted_index_with_xfail(points):
+    chunksize = 150
+    element = points["points_0"]
+    new_order = RNG.permutation(len(element))
+    with pytest.raises(
+        ValueError,
+        match=r"Not all divisions are known, can't align partitions. Please use `set_index` to set the index.",
+    ):
+        _ = PointsModel.parse(element.compute().iloc[new_order, :], chunksize=chunksize)
+    raise ValueError("pytest.raises caught an exceptionG")
+
+
+# helper function to create random points data and write to a Parquet file, used in the test below
+def create_parquet_file(temp_dir, num_points=20, sorted_index=True):
+    df = pd.DataFrame(
+        {"x": RNG.uniform(size=num_points), "y": RNG.uniform(size=num_points), "z": RNG.uniform(size=num_points)}
+    )
+    if not sorted_index:
+        new_order = RNG.permutation(len(df))
+        df = df.iloc[new_order, :]
+    file_path = f"{temp_dir}/points.parquet"
+    df.to_parquet(file_path)
+    return file_path
+
+
+# this test was added because the xenium() reader (which reads a .parquet file into a dask-dataframe, was failing before
+# https://github.com/scverse/spatialdata/pull/656.
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("sorted_index", [True, False])
+def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
+    with TemporaryDirectory() as temp_dir:
+        file_path = create_parquet_file(temp_dir, sorted_index=sorted_index)
+        points = dd.read_parquet(file_path)
+
+        if sorted_index:
+            _ = PointsModel.parse(points, npartitions=npartitions)
+            assert np.all(points.index.compute().to_numpy() == np.arange(len(points)))
+        else:
+            with pytest.warns(
+                UserWarning,
+                match=r"The index of the dataframe is not monotonic increasing\.",
+            ):
+                _ = PointsModel.parse(points, npartitions=npartitions)
