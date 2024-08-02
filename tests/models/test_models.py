@@ -502,6 +502,8 @@ def create_parquet_file(temp_dir, num_points=20, sorted_index=True):
 
 # this test was added because the xenium() reader (which reads a .parquet file into a dask-dataframe, was failing before
 # https://github.com/scverse/spatialdata/pull/656.
+# Luca: actually, this test is not able to reproduce the issue; anyway this PR fixes the issue and I'll still keep the
+# test here as an explicit test for unsorted index in the case of dask dataframes.
 @pytest.mark.parametrize("npartitions", [1, 2])
 @pytest.mark.parametrize("sorted_index", [True, False])
 def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
