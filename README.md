@@ -45,7 +45,7 @@ Please refer to the [documentation][link-docs]. In particular:
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
 
-## Installation 
+## Installation
 
 Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the "batteries included" installation, you can install via pip:
 
