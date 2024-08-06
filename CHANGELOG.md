@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning][].
 # Fixed
 
 -   Circles validation now checks for inf or nan radii #653
--   Bug with table name in torch dataset #654 @LLehner 
+-   Bug with table name in torch dataset #654 @LLehner
 
 ## [0.2.1] - 2024-07-04
 
