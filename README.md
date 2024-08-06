@@ -53,6 +53,12 @@ Check out the docs for more complete [installation instructions](https://spatial
 pip install "spatialdata[extra]"
 ```
 
+or via conda:
+
+```bash
+mamba install -c conda-forge spatialdata napari-spatialdata spatialdata-io spatialdata-plot
+```
+
 ## Limitations
 
 -   Code only manually tested for Windows machines. Currently the framework is being developed using Linux, macOS and Windows machines, but it is automatically tested only for Linux and macOS machines.
