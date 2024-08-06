@@ -261,11 +261,13 @@ class ImageTilesDataset(Dataset):
 
             if table_name is not None:
                 table_subset = filtered_table[filtered_table.obs[region_key] == region_name]
-                circles_sdata = SpatialData.init_from_elements({region_name: circles}, tables=table_subset.copy())
+                circles_sdata = SpatialData.init_from_elements(
+                    {region_name: circles}, tables={"table": table_subset.copy()}
+                )
                 _, table = join_spatialelement_table(
                     sdata=circles_sdata,
                     spatial_element_names=region_name,
-                    table_name=table_name,
+                    table_name="table",
                     how="left",
                     match_rows="left",
                 )
@@ -320,9 +322,10 @@ class ImageTilesDataset(Dataset):
             )
         # return spatialdata consisting of the image tile and, if available, the associated table
         if table_name:
-            # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
             table_row = dataset_table[idx].copy()
-            del table_row.uns[TableModel.ATTRS_KEY]
+            # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
+            if TableModel.ATTRS_KEY in table_row.uns:
+                del table_row.uns[TableModel.ATTRS_KEY]
             # TODO: add the shape used for constructing the tile; in the case of the label consider adding the circles
             # or a crop of the label
             return SpatialData(
