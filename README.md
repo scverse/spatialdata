@@ -53,8 +53,6 @@ Check out the docs for more complete [installation instructions](https://spatial
 pip install "spatialdata[extra]"
 ```
 
-Note: if you are using a Mac with an M1/M2 chip, please follow the installation instructions.
-
 ## Limitations
 
 -   Code only manually tested for Windows machines. Currently the framework is being developed using Linux, macOS and Windows machines, but it is automatically tested only for Linux and macOS machines.
