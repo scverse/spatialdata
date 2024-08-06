@@ -344,7 +344,14 @@ class ShapesModel:
             if np.any(radii <= 0):
                 raise ValueError("Radii of circles must be positive.")
             if np.any(np.isnan(radii)) or np.any(np.isinf(radii)):
-                raise ValueError("Radii of circles must not be nan or inf.")
+                # using logger.warning instead of warnings.warn to avoid the warning to being silenced in some cases
+                # (e.g. PyCharm console)
+                logger.warning(
+                    "Radii of circles must not be nan or inf (this warning will be turned into a ValueError in the "
+                    "next code release). If you are seeing this warning after reading previously saved Xenium data, "
+                    "please see https://github.com/scverse/spatialdata/discussions/657 for a solution. Otherwise, "
+                    "please correct the radii of the circles before calling the parser function.",
+                )
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:
@@ -652,21 +659,24 @@ class PointsModel:
         index_monotonically_increasing = data.index.is_monotonic_increasing
         if not isinstance(index_monotonically_increasing, bool):
             index_monotonically_increasing = index_monotonically_increasing.compute()
+        if not index_monotonically_increasing:
+            warnings.warn(
+                "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
+                "adjust the order of the index before calling .parse() to avoid possible problems due to unknown "
+                "divisions",
+                UserWarning,
+                stacklevel=2,
+            )
         if isinstance(data, pd.DataFrame):
-            if not index_monotonically_increasing:
-                warnings.warn(
-                    "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
-                    "adjust the order of the index before calling .parse(); this will make the division known when"
-                    "dask.dataframe.from_pandas() is called.",
-                    UserWarning,
-                    stacklevel=2,
-                )
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=index_monotonically_increasing,
                 **kwargs,
             )
+            # we cannot compute the divisions whne the index is not monotonically increasing and npartitions > 1
+            if not table.known_divisions and (index_monotonically_increasing or table.npartitions == 1):
+                table.divisions = table.compute_current_divisions()
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
                     data[feature_key].astype(str).astype("category"),
@@ -690,10 +700,7 @@ class PointsModel:
         if Z not in axes and Z in data.columns:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
         for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
-            column = data[c]
-            if isinstance(column, dd.Series):
-                column = column.compute()
-            table[c] = dd.from_pandas(column, npartitions=table.npartitions, sort=index_monotonically_increasing)
+            table[c] = data[c]
 
         validated = cls._add_metadata_and_validate(
             table, feature_key=feature_key, instance_key=instance_key, transformations=transformations

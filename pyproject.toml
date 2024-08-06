@@ -73,7 +73,7 @@ torch = [
     "torch"
 ]
 extra  = [
-    "napari-spatialdata>=0.2.4",
+    "napari-spatialdata[all]>=0.2.4",
     "spatialdata-plot",
     "spatialdata-io",
 ]
