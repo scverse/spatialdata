@@ -307,3 +307,20 @@ def test_map_raster_relabel_fail(sdata_blobs):
         )
 
         se.data.compute()
+
+    constant = 2047
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+    with pytest.raises(
+        ValueError,
+        match=re.escape(f"Relabeling is only supported for arrays of type {np.integer}."),
+    ):
+        se = map_raster(
+            sdata_blobs[element_name].astype(float).chunk((100, 100)),
+            func=_to_constant,
+            func_kwargs=func_kwargs,
+            c_coords=None,
+            depth=None,
+            relabel=True,
+        )

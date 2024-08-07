@@ -156,6 +156,8 @@ def map_raster(
 
 
 def _relabel(arr: da.Array) -> da.Array:
+    if not np.issubdtype(arr.dtype, np.integer):
+        raise ValueError(f"Relabeling is only supported for arrays of type {np.integer}.")
     num_blocks = arr.numblocks
 
     shift = (math.prod(num_blocks) - 1).bit_length()
