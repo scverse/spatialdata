@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+## [0.2.2] - 2024-08-07
+
 # Major
 
 -   New disk format for shapes using `GeoParquet` (the change is backward compatible) #542
