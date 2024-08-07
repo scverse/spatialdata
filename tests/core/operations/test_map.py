@@ -1,3 +1,4 @@
+import math
 import re
 
 import numpy as np
@@ -27,6 +28,11 @@ def _multiply_to_labels(arr, parameter=10):
     return arr[0].astype(np.int32)
 
 
+def _to_constant(arr, constant=5):
+    arr[arr > 0] = constant
+    return arr
+
+
 @pytest.mark.parametrize(
     "depth",
     [
@@ -46,6 +52,7 @@ def test_map_raster(sdata_blobs, depth, element_name):
         func_kwargs=func_kwargs,
         c_coords=None,
         depth=depth,
+        relabel=False,
     )
 
     assert isinstance(se, DataArray)
@@ -161,6 +168,7 @@ def test_map_to_labels_(sdata_blobs, blockwise, chunks, drop_axis):
         chunks=chunks,
         drop_axis=drop_axis,
         dims=("y", "x"),
+        relabel=False,
     )
 
     data = sdata_blobs[img_layer].data.compute()
@@ -248,3 +256,54 @@ def test_invalid_map_raster(sdata_blobs):
             c_coords=["c"],
             depth=(0, 60, 60),
         )
+
+
+def test_map_raster_relabel(sdata_blobs):
+    constant = 2047
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+    se = map_raster(
+        sdata_blobs[element_name].chunk((100, 100)),
+        func=_to_constant,
+        func_kwargs=func_kwargs,
+        c_coords=None,
+        depth=None,
+        relabel=True,
+    )
+
+    # check if labels in different blocks are all mapped to a different value
+    assert isinstance(se, DataArray)
+    se.data.compute()
+    a = set()
+    for chunk in se.data.to_delayed().flatten():
+        chunk = chunk.compute()
+        b = set(np.unique(chunk))
+        b.remove(0)
+        assert not b.intersection(a)
+        a.update(b)
+    # 9 blocks, each block contains 'constant' left shifted by (9-1).bit_length() + block_num.
+    shift = (math.prod(se.data.numblocks) - 1).bit_length()
+    assert a == set(range(constant << shift, (constant << shift) + math.prod(se.data.numblocks)))
+
+
+def test_map_raster_relabel_fail(sdata_blobs):
+    constant = 2048
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Relabel was set to True, but max bits"),
+    ):
+        se = map_raster(
+            sdata_blobs[element_name].chunk((100, 100)),
+            func=_to_constant,
+            func_kwargs=func_kwargs,
+            c_coords=None,
+            depth=None,
+            relabel=True,
+        )
+
+        se.data.compute()

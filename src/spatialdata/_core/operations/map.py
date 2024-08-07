@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import math
+import operator
 from collections.abc import Iterable, Mapping
+from functools import reduce
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
+import numpy as np
 from dask.array.overlap import coerce_depth
 from datatree import DataTree
 from xarray import DataArray
 
+from spatialdata._types import ArrayLike
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
 
@@ -25,6 +30,7 @@ def map_raster(
     c_coords: Iterable[int] | Iterable[str] | None = None,
     dims: tuple[str, ...] | None = None,
     transformations: dict[str, Any] | None = None,
+    relabel: bool = True,
     **kwargs: Any,
 ) -> DataArray:
     """
@@ -69,6 +75,11 @@ def map_raster(
     transformations
         The transformations of the output data. If not provided, the transformations of the input data are copied to the
         output data. It should be specified if the callable changes the data transformations.
+    relabel
+        Whether to relabel the blocks of the output data.
+        This option is ignored when the output data is not a labels layer (i.e., when `dims` does not contain `c`).
+        It is recommended to enable relabeling if `func` returns labels that are not unique across chunks.
+        Relabeling will be done by performing a bit shift.
     kwargs
         Additional keyword arguments to pass to :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`.
         Ignored if `blockwise` is set to `False`.
@@ -131,6 +142,9 @@ def map_raster(
             assert isinstance(d, dict)
         transformations = d
 
+    if "c" not in dims and relabel:
+        arr = _relabel(arr)
+
     model_kwargs = {
         "chunks": arr.chunksize,
         "c_coords": c_coords,
@@ -139,3 +153,56 @@ def map_raster(
     }
     model = get_raster_model_from_data_dims(dims)
     return model.parse(arr, **model_kwargs)
+
+
+def _relabel(arr: da.Array) -> da.Array:
+    num_blocks = arr.numblocks
+
+    shift = (math.prod(num_blocks) - 1).bit_length()
+
+    meta = np.empty((0,) * arr.ndim, dtype=arr.dtype)
+
+    def _relabel_block(
+        block: ArrayLike, block_id: tuple[int, ...], num_blocks: tuple[int, ...], shift: int
+    ) -> ArrayLike:
+        def _calculate_block_num(block_id: tuple[int, ...], num_blocks: tuple[int, ...]) -> int:
+            if len(num_blocks) != len(block_id):
+                raise ValueError("num_blocks and block_id must have the same length")
+            block_num = 0
+            for i in range(len(num_blocks)):
+                multiplier = reduce(operator.mul, num_blocks[i + 1 :], 1)
+                block_num += block_id[i] * multiplier
+            return block_num
+
+        available_bits = np.iinfo(block.dtype).max.bit_length()
+        max_bits_block = int(block.max()).bit_length()
+
+        if max_bits_block + shift > available_bits:
+            raise ValueError(
+                f"Relabel was set to True, but "
+                f"max bits required to represent the labels in the block ({max_bits_block}) "
+                f"+ required shift ({shift}) > "
+                f"available_bits ({available_bits}). "
+                "To solve this issue, please consider rechunking using a larger chunk size, "
+                "resulting in a fewer number of blocks and thus a lower value for the required shift; "
+                f"cast to a data type (current data type is {block.dtype}) with a higher maximum value "
+                "(resulting in more available bits for the bit shift); "
+                "or consider a sequential relabeling of the dask array, "
+                "which could result in a lower maximum value of the labels in the block."
+            )
+
+        block_num = _calculate_block_num(block_id=block_id, num_blocks=num_blocks)
+
+        mask = block > 0
+        block[mask] = (block[mask] << shift) | block_num
+
+        return block
+
+    return da.map_blocks(
+        _relabel_block,
+        arr,
+        dtype=arr.dtype,
+        num_blocks=num_blocks,
+        shift=shift,
+        meta=meta,
+    )
