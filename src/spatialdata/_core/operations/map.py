@@ -11,9 +11,9 @@ import dask.array as da
 import numpy as np
 from dask.array.overlap import coerce_depth
 from datatree import DataTree
+from numpy.typing import NDArray
 from xarray import DataArray
 
-from spatialdata._types import ArrayLike
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
 
@@ -165,8 +165,8 @@ def _relabel(arr: da.Array) -> da.Array:
     meta = np.empty((0,) * arr.ndim, dtype=arr.dtype)
 
     def _relabel_block(
-        block: ArrayLike, block_id: tuple[int, ...], num_blocks: tuple[int, ...], shift: int
-    ) -> ArrayLike:
+        block: NDArray[np.int64], block_id: tuple[int, ...], num_blocks: tuple[int, ...], shift: int
+    ) -> NDArray[np.int64]:
         def _calculate_block_num(block_id: tuple[int, ...], num_blocks: tuple[int, ...]) -> int:
             if len(num_blocks) != len(block_id):
                 raise ValueError("num_blocks and block_id must have the same length")
