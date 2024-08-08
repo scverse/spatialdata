@@ -206,3 +206,36 @@ def _relabel(arr: da.Array) -> da.Array:
         shift=shift,
         meta=meta,
     )
+
+
+def _relabel_sequential(arr: da.Array) -> da.Array:
+    """
+    Relabels integers in a Dask array sequentially.
+
+    This function assigns sequential labels to the integers in a Dask array starting from 1.
+    For example, if the unique values in the input array are [0, 5, 9],
+    they will be relabeled to [0, 1, 2] respectively.
+
+    Parameters
+    ----------
+    arr
+        input array.
+
+    Returns
+    -------
+    The relabeled array.
+    """
+    if not np.issubdtype(arr.dtype, np.integer):
+        raise ValueError(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
+    unique_labels = da.unique(arr).compute()
+    if 0 not in unique_labels:
+        # otherwise first non zero label would be relabeled to 0
+        unique_labels = np.insert(unique_labels, 0, 0)
+
+    max_label = unique_labels[-1]
+
+    new_labeling = da.full(max_label + 1, -1, dtype=arr.dtype)
+
+    new_labeling[unique_labels] = da.arange(len(unique_labels), dtype=arr.dtype)
+
+    return da.map_blocks(operator.getitem, new_labeling, arr, dtype=arr.dtype, chunks=arr.chunks)

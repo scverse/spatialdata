@@ -1,9 +1,10 @@
 import math
 import re
 
+import dask.array as da
 import numpy as np
 import pytest
-from spatialdata._core.operations.map import map_raster
+from spatialdata._core.operations.map import _relabel_sequential, map_raster
 from spatialdata.transformations import Translation, get_transformation, set_transformation
 from xarray import DataArray
 
@@ -324,3 +325,42 @@ def test_map_raster_relabel_fail(sdata_blobs):
             depth=None,
             relabel=True,
         )
+
+
+def test_relabel_sequential(sdata_blobs):
+    def _is_sequential(arr):
+        if arr.ndim != 1:
+            raise ValueError("Input array must be one-dimensional")
+        sorted_arr = np.sort(arr)
+        expected_sequence = np.arange(sorted_arr[0], sorted_arr[0] + len(sorted_arr))
+        return np.array_equal(sorted_arr, expected_sequence)
+
+    arr = sdata_blobs["blobs_labels"].data.rechunk(100)
+
+    arr_relabeled = _relabel_sequential(arr)
+
+    labels_relabeled = da.unique(arr_relabeled).compute()
+    labels_original = da.unique(arr).compute()
+
+    assert labels_relabeled.shape == labels_original.shape
+    assert _is_sequential(labels_relabeled)
+
+    # test some edge cases
+    arr = da.asarray(np.array([0]))
+    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([0]))
+
+    arr = da.asarray(np.array([1]))
+    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1]))
+
+    arr = da.asarray(np.array([2]))
+    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1]))
+
+    arr = da.asarray(np.array([2, 0]))
+    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1, 0]))
+
+
+def test_relabel_sequential_fails(sdata_blobs):
+    with pytest.raises(
+        ValueError, match=re.escape(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
+    ):
+        _relabel_sequential(sdata_blobs["blobs_labels"].data.astype(float))
