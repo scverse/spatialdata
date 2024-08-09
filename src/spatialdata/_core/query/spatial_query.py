@@ -13,7 +13,7 @@ import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray
 
 from spatialdata import to_polygons
@@ -758,6 +758,7 @@ def polygon_query(
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
+    clip: bool = False,
     shapes: bool = True,
     points: bool = True,
     images: bool = True,
@@ -777,6 +778,12 @@ def polygon_query(
     filter_table
         Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
         SpatialData object of the query.
+    clip
+        If `True`, the shapes are clipped to the polygon. This behavior is implemented only when querying
+        polygons/multipolygons or circles, and it is ignored for other types of elements (images, labels, points).
+        Importantly, when clipping is enabled, the circles will be converted to polygons before the clipping. This may
+        affect downstream operations that rely on the circle radius or on performance, so it is recommended to disable
+        clipping when querying circles or when querying a `SpatialData` object that contains circles.
     shapes [Deprecated]
         This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
         function.
@@ -810,6 +817,7 @@ def _(
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
     filter_table: bool = True,
+    clip: bool = False,
     shapes: bool = True,
     points: bool = True,
     images: bool = True,
@@ -825,6 +833,7 @@ def _(
             polygon_query,
             polygon=polygon,
             target_coordinate_system=target_coordinate_system,
+            clip=clip,
         )
         new_elements[element_type] = queried_elements
 
@@ -891,6 +900,7 @@ def _(
     element: GeoDataFrame,
     polygon: Polygon | MultiPolygon,
     target_coordinate_system: str,
+    clip: bool = False,
     **kwargs: Any,
 ) -> GeoDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
@@ -912,9 +922,18 @@ def _(
     queried_shapes = element[indices]
     queried_shapes.index = buffered[indices][OLD_INDEX]
     queried_shapes.index.name = None
+
+    if clip:
+        if isinstance(element.geometry.iloc[0], Point):
+            queried_shapes = buffered[indices]
+            queried_shapes.index = buffered[indices][OLD_INDEX]
+            queried_shapes.index.name = None
+        queried_shapes = queried_shapes.clip(polygon_gdf, keep_geom_type=True)
+
     del buffered[OLD_INDEX]
     if OLD_INDEX in queried_shapes.columns:
         del queried_shapes[OLD_INDEX]
+
     transformation = get_transformation(buffered, target_coordinate_system)
     queried_shapes = ShapesModel.parse(queried_shapes)
     set_transformation(queried_shapes, transformation, target_coordinate_system)
