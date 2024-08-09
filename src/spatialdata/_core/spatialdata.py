@@ -2225,6 +2225,7 @@ class QueryManager:
         polygon: Polygon | MultiPolygon,
         target_coordinate_system: str,
         filter_table: bool = True,
+        clip: bool = False,
     ) -> SpatialData:
         """
         Perform a polygon query on the SpatialData object.
@@ -2239,6 +2240,7 @@ class QueryManager:
             polygon=polygon,
             target_coordinate_system=target_coordinate_system,
             filter_table=filter_table,
+            clip=clip,
         )
 
     def __call__(self, request: BaseSpatialRequest, **kwargs) -> SpatialData:  # type: ignore[no-untyped-def]
