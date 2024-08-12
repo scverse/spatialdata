@@ -11,6 +11,7 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
+from spatialdata._core.data_extent import get_extent
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
     BoundingBoxRequest,
@@ -686,3 +687,37 @@ def test_spatial_query_different_axes(full_sdata, name: str):
         return
 
     raise RuntimeError(f"Unexpected type {type(original)}")
+
+
+def test_query_with_clipping(sdata_blobs):
+    circles = sdata_blobs["blobs_circles"]
+    circles.index = [10, 100, 1]
+    polygons = sdata_blobs["blobs_polygons"]
+    polygons.index = [10, 100, 1]
+
+    # define square to use as query geometry
+    minx = 120
+    maxx = 170
+    miny = 150
+    maxy = 210
+    x_coords = [minx, maxx, maxx, minx, minx]
+    y_coords = [miny, miny, maxy, maxy, miny]
+    polygon = Polygon(zip(x_coords, y_coords))
+
+    queried_circles = polygon_query(circles, polygon=polygon, target_coordinate_system="global", clip=True)
+    queried_polygons = polygon_query(polygons, polygon=polygon, target_coordinate_system="global", clip=True)
+
+    assert queried_circles.index.tolist() == [100]
+    assert queried_polygons.index.tolist() == [100]
+
+    extent_circles = get_extent(queried_circles)
+    extent_polygons = get_extent(queried_polygons)
+
+    def query_polyon_contains_queried_data(extent: dict[str, tuple[float, float]]) -> None:
+        assert extent["x"][0] >= minx
+        assert extent["x"][1] <= maxx
+        assert extent["y"][0] >= miny
+        assert extent["y"][1] <= maxy
+
+    query_polyon_contains_queried_data(extent_circles)
+    query_polyon_contains_queried_data(extent_polygons)
