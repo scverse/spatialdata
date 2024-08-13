@@ -63,8 +63,7 @@ def blobs(
 
     Returns
     -------
-    SpatialData
-        SpatialData object with blobs dataset.
+    SpatialData object with blobs dataset.
     """
     return BlobsDataset(
         length=length,
@@ -355,6 +354,19 @@ BlobsTypes = Literal[
 
 
 def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
+    """
+    Return the blobs dataset with the desired element annotated by the table.
+
+    Parameters
+    ----------
+    name
+        Name of the element to annotate. One of "blobs_labels", "blobs_multiscale_labels", "blobs_circles",
+        "blobs_polygons", "blobs_multipolygons".
+
+    Returns
+    -------
+    SpatialData object with the desired element annotated by the table.
+    """
     sdata = blobs(length=50)
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
         instance_id = get_element_instances(sdata[name]).tolist()
