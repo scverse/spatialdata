@@ -628,7 +628,7 @@ class SpatialData:
         found_element_name: list[str] = []
         for element_type in ["images", "labels", "points", "shapes", "tables"]:
             for element_name, element_value in getattr(self, element_type).items():
-                if id(element_value) == id(element):
+                if element_value is element:
                     found.append(element_value)
                     found_element_type.append(element_type)
                     found_element_name.append(element_name)

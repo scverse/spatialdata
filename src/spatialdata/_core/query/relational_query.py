@@ -220,8 +220,8 @@ def _filter_table_by_elements(
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
         matched_positions = merged["position"].to_numpy()
         table = table[matched_positions, :]
-    _inplace_fix_subset_categorical_obs(subset_adata=table, original_adata=original_table)
     table = table.copy()
+    _inplace_fix_subset_categorical_obs(subset_adata=table, original_adata=original_table)
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
 

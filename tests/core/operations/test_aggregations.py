@@ -366,7 +366,7 @@ def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> 
         raise pytest.skip("Aggregation mixing raster and vector data is not currently supported.")
     values = sdata_blobs[values]
     by = sdata_blobs[by]
-    if id(values) == id(by):
+    if values is by:
         # warning: this will give problems when aggregation labels by labels (not supported yet), because of this: https://github.com/scverse/spatialdata/issues/269
         by = _deepcopy(by)
         assert by.attrs["transform"] is not values.attrs["transform"]
