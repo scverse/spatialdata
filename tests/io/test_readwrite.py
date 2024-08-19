@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
+
 from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
@@ -19,7 +20,6 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-
 from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
 
 RNG = default_rng(0)

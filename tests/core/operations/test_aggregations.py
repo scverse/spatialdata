@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData

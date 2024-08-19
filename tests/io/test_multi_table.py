@@ -4,9 +4,9 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal
+
 from spatialdata import SpatialData, concatenate
 from spatialdata.models import TableModel
-
 from tests.conftest import _get_shapes, _get_table
 
 # notes on paths: https://github.com/orgs/scverse/projects/17/views/1?pane=issue&itemId=44066734

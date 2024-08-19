@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 from anndata import AnnData
+
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
@@ -21,7 +22,6 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
-
 from tests.conftest import _get_table
 
 

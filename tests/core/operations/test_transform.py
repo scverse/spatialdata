@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 from datatree import DataTree
 from geopandas.testing import geom_almost_equals
+from xarray import DataArray
+
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
@@ -28,7 +30,6 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
-from xarray import DataArray
 
 
 class TestElementsTransform:
