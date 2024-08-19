@@ -623,6 +623,11 @@ def join_spatialelement_table(
         If the provided join type is not supported.
     ValueError
         If an incorrect value is given for `match_rows`.
+
+    See Also
+    --------
+    match_element_to_table : Function to match elements to a table.
+    join_spatialelement_table : Function to join spatial elements with a table.
     """
     if spatial_element_names is None:
         raise ValueError("`spatial_element_names` must be provided.")
@@ -698,6 +703,11 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     Returns
     -------
     Table with the rows matching the instances of the element
+
+    See Also
+    --------
+    match_element_to_table : Function to match a spatial element to a table.
+    join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
     if table_name is None:
         warnings.warn(
@@ -731,6 +741,11 @@ def match_element_to_table(
     Returns
     -------
     A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+
+    See Also
+    --------
+    match_table_to_element : Function to match a table to a spatial element.
+    join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
     element_dict, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="right", match_rows="right"
