@@ -128,8 +128,8 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
 
     if "table" in selector and "table" in f:
         warnings.warn(
-            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store"
-            f"to use tables instead.",
+            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store to use tables "
+            f"instead.",
             DeprecationWarning,
             stacklevel=2,
         )
