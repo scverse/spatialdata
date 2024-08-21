@@ -252,7 +252,7 @@ class ImageTilesDataset(Dataset):
                 tile_dim_in_units=tile_dim_in_units,
             )
             tile_coords["selection"] = tile_coords.apply(
-                lambda row: bounding_box_query(
+                lambda row, cs=cs, image_name=image_name: bounding_box_query(
                     self.sdata[image_name],
                     ("x", "y"),
                     min_coordinate=row[["minx", "miny"]].values,
