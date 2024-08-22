@@ -17,3 +17,4 @@ except (ImportError, TypeError):
     DTypeLike = np.dtype  # type: ignore[misc]
 
 Raster_T = Union[DataArray, DataTree]
+ColorLike = Union[tuple[float, ...], str]
