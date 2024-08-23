@@ -6,7 +6,7 @@ import numpy as np
 from datatree import DataTree
 from xarray import DataArray
 
-__all__ = ["ArrayLike", "DTypeLike", "Raster_T"]
+__all__ = ["ArrayLike", "ColorLike", "DTypeLike", "Raster_T"]
 
 try:
     from numpy.typing import DTypeLike, NDArray
@@ -17,3 +17,4 @@ except (ImportError, TypeError):
     DTypeLike = np.dtype  # type: ignore[misc]
 
 Raster_T = Union[DataArray, DataTree]
+ColorLike = Union[tuple[float, ...], str]
