@@ -336,7 +336,7 @@ def rasterize(
             element_name = data if isinstance(data, str) else None
             kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
             values = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
-            max_index = np.max(values.index)
+            max_index: float = np.max(values.index)
             assigner = np.zeros(max_index + 1, dtype=values.dtype)
             assigner[values.index] = values
             # call-arg is ignored because model is never TableModel (the error is that the transformation param is not
