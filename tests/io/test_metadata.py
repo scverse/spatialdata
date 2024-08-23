@@ -3,6 +3,7 @@ import os
 import tempfile
 
 import pytest
+
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _is_element_self_contained
 from spatialdata._logging import logger

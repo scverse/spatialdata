@@ -21,6 +21,8 @@ from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
+from xarray import DataArray
+
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -34,7 +36,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-from xarray import DataArray
 
 SEED = 0
 RNG = default_rng(seed=SEED)

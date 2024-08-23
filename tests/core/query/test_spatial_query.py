@@ -11,6 +11,8 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
+from xarray import DataArray
+
 from spatialdata._core.data_extent import get_extent
 from spatialdata._core.query.spatial_query import (
     BaseSpatialRequest,
@@ -30,8 +32,6 @@ from spatialdata.models import (
 )
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, MapAxis, set_transformation
-from xarray import DataArray
-
 from tests.conftest import _make_points, _make_squares
 
 

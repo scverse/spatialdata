@@ -11,6 +11,8 @@ from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
+from xarray import DataArray
+
 from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.query.relational_query import get_element_instances
@@ -18,8 +20,6 @@ from spatialdata._io._utils import _iter_multiscale
 from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
-from xarray import DataArray
-
 from tests.conftest import _get_images, _get_labels
 
 
