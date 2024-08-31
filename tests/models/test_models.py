@@ -195,6 +195,27 @@ class TestModels:
             with pytest.raises(ValueError):
                 model.parse(image, **kwargs)
 
+    @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+    def test_labels_model_with_multiscales(self, model):
+        # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
+        dims = np.array(model.dims.dims).tolist()
+        n_dims = len(dims)
+
+        # A labels image with one label value 4, that partially covers 2×2 blocks.
+        # Downsampling with interpolation would produce values 1, 2, 3, 4.
+        image: ArrayLike = np.array([[0, 0, 0, 0], [0, 4, 4, 4], [4, 4, 4, 4], [0, 4, 4, 4]], dtype=np.uint16)
+        if n_dims == 3:
+            image = np.stack([image] * image.shape[0])
+        actual = model.parse(image, scale_factors=(2,))
+        assert isinstance(actual, DataTree)
+        assert actual.children.keys() == {"scale0", "scale1"}
+        assert actual.scale0.image.dtype == image.dtype
+        assert actual.scale1.image.dtype == image.dtype
+        assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
+        assert set(np.unique(image)) >= set(
+            np.unique(actual.scale1.image)
+        ), "Subsequent scales should not have interpolation artifacts"
+
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
