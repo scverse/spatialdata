@@ -255,6 +255,17 @@ class Labels2DModel(RasterSchema):
             **kwargs,
         )
 
+    @classmethod
+    def parse(  # noqa: D102
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> DataArray | DataTree:
+        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
+            # Override default scaling method to preserve labels
+            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
+        return super().parse(*args, **kwargs)
+
 
 class Labels3DModel(RasterSchema):
     dims = DimsSchema((Z, Y, X))
@@ -269,6 +280,13 @@ class Labels3DModel(RasterSchema):
             *args,
             **kwargs,
         )
+
+    @classmethod
+    def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
+            # Override default scaling method to preserve labels
+            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
+        return super().parse(*args, **kwargs)
 
 
 class Image2DModel(RasterSchema):
