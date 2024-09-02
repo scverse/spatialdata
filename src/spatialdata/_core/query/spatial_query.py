@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 import dask.dataframe as dd
+import numba as nb
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
@@ -42,6 +43,24 @@ from spatialdata.transformations.transformations import (
     Translation,
     _get_affine_for_element,
 )
+
+
+@nb.njit(parallel=False, nopython=True)
+def create_slices_and_translation(
+    min_values: nb.types.Array[nb.float64, nb.float64],
+    max_values: nb.types.Array[nb.float64, nb.float64],
+) -> tuple[nb.types.Array[nb.float64, nb.float64], nb.types.Array[nb.float64, nb.float64]]:
+    n_boxes, n_dims = min_values.shape
+    slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
+    translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
+
+    for i in range(n_boxes):
+        for j in range(n_dims):
+            slices[i, j, 0] = min_values[i, j]
+            slices[i, j, 1] = max_values[i, j]
+            translation_vectors[i, j] = np.ceil(max(min_values[i, j], 0))
+
+    return slices, translation_vectors
 
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -120,10 +139,18 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     intrinsic_bounding_box_corners = bounding_box_corners.data @ rotation_matrix.T + translation
 
+    if bounding_box_corners.ndim > 2:  # multiple boxes
+        coords = {
+            "box": range(len(bounding_box_corners)),
+            "corner": range(len(bounding_box_corners)),
+            "axis": list(inverse.output_axes),
+        }
+    else:
+        coords = {"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)}
     return (
         DataArray(
             intrinsic_bounding_box_corners,
-            coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+            coords=coords,
         ),
         input_axes_without_c,
     )
@@ -230,6 +257,8 @@ def _adjust_bounding_box_to_real_axes(
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
+    # axis for slicing, if axis > 0, then the min_/max_coordinate multiple bounding boxes along axis 0
+    axis = min_coordinate.ndim - 1
     if set(axes_bb) != set(axes_out_without_c):
         axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
         axes_only_in_output = set(axes_out_without_c) - set(axes_bb)
@@ -238,20 +267,20 @@ def _adjust_bounding_box_to_real_axes(
         # 3D bounding box)
         indices_to_remove_from_bb = [axes_bb.index(ax) for ax in axes_only_in_bb]
         axes_bb = tuple(ax for ax in axes_bb if ax not in axes_only_in_bb)
-        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb)
-        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb)
+        min_coordinate = np.delete(min_coordinate, indices_to_remove_from_bb, axis=axis)
+        max_coordinate = np.delete(max_coordinate, indices_to_remove_from_bb, axis=axis)
 
         # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
         # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
+        M = np.finfo(np.float32).max - 1
         for ax in axes_only_in_output:
             axes_bb = axes_bb + (ax,)
-            M = np.finfo(np.float32).max - 1
-            min_coordinate = np.append(min_coordinate, -M)
-            max_coordinate = np.append(max_coordinate, M)
+            min_coordinate = np.insert(min_coordinate, min_coordinate.shape[axis], -M, axis=axis)
+            max_coordinate = np.insert(max_coordinate, max_coordinate.shape[axis], M, axis=axis)
     else:
         indices = [axes_bb.index(ax) for ax in axes_out_without_c]
-        min_coordinate = min_coordinate[np.array(indices)]
-        max_coordinate = max_coordinate[np.array(indices)]
+        min_coordinate = np.take(min_coordinate, indices, axis=axis)
+        max_coordinate = np.take(max_coordinate, indices, axis=axis)
         axes_bb = axes_out_without_c
     return axes_bb, min_coordinate, max_coordinate
 
@@ -530,24 +559,30 @@ def _(
     if TYPE_CHECKING:
         assert isinstance(intrinsic_bounding_box_corners, DataArray)
 
-    # build the request: now that we have the bounding box corners in the intrinsic coordinate system, we can use them
-    # to build the request to query the raster data using the xarray APIs
-    selection = {}
-    translation_vector = []
-    for axis_name in axes:
-        # get the min value along the axis
-        min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
+    min_values = intrinsic_bounding_box_corners.min(dim="corner")
+    max_values = intrinsic_bounding_box_corners.max(dim="corner")
 
-        # get max value, slices are open half interval
-        max_value = intrinsic_bounding_box_corners.sel(axis=axis_name).max().item()
+    min_values_np = min_values.data
+    max_values_np = max_values.data
 
-        # add the
-        selection[axis_name] = slice(min_value, max_value)
+    if min_values_np.ndim == 1:
+        min_values_np = min_values_np[np.newaxis, :]
+        max_values_np = max_values_np[np.newaxis, :]
 
-        if min_value > 0:
-            translation_vector.append(np.ceil(min_value).item())
-        else:
-            translation_vector.append(0)
+    slices, translation_vectors = create_slices_and_translation(min_values_np, max_values_np)
+
+    if min_values.ndim == 2:  # Multiple boxes
+        selection: list[dict[str, Any]] | dict[str, Any] = [
+            {
+                axis: slice(slices[box_idx, axis_idx, 0], slices[box_idx, axis_idx, 1])
+                for axis_idx, axis in enumerate(axes)
+            }
+            for box_idx in range(len(min_values_np))
+        ]
+        translation_vector = translation_vectors.tolist()
+    else:  # Single box
+        selection = {axis: slice(slices[0, axis_idx, 0], slices[0, axis_idx, 1]) for axis_idx, axis in enumerate(axes)}
+        translation_vector = translation_vectors[0].tolist()
 
     if return_request_only:
         return selection
@@ -823,7 +858,6 @@ def _(
     images: bool = True,
     labels: bool = True,
 ) -> SpatialData:
-
     _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
