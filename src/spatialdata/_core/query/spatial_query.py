@@ -142,7 +142,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     if bounding_box_corners.ndim > 2:  # multiple boxes
         coords = {
             "box": range(len(bounding_box_corners)),
-            "corner": range(len(bounding_box_corners)),
+            "corner": range(bounding_box_corners.shape[1]),
             "axis": list(inverse.output_axes),
         }
     else:
