@@ -230,6 +230,7 @@ def _adjust_bounding_box_to_real_axes(
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
+    axis = min_coordinate.ndim - 1
     if set(axes_bb) != set(axes_out_without_c):
         axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
         axes_only_in_output = set(axes_out_without_c) - set(axes_bb)
@@ -246,8 +247,8 @@ def _adjust_bounding_box_to_real_axes(
         for ax in axes_only_in_output:
             axes_bb = axes_bb + (ax,)
             M = np.finfo(np.float32).max - 1
-            min_coordinate = np.append(min_coordinate, -M)
-            max_coordinate = np.append(max_coordinate, M)
+            min_coordinate = np.append(min_coordinate, -M, axis=axis)
+            max_coordinate = np.append(max_coordinate, M, axis=axis)
     else:
         indices = [axes_bb.index(ax) for ax in axes_out_without_c]
         min_coordinate = min_coordinate[np.array(indices)]
