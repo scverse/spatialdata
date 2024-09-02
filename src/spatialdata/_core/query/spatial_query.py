@@ -244,11 +244,11 @@ def _adjust_bounding_box_to_real_axes(
 
         # if there are axes in the output axes that are not in the bounding box, we need to add them to the bounding box
         # with a range that includes everything (e.g. querying 3D points with a 2D bounding box)
+        M = np.finfo(np.float32).max - 1
         for ax in axes_only_in_output:
             axes_bb = axes_bb + (ax,)
-            M = np.finfo(np.float32).max - 1
-            min_coordinate = np.append(min_coordinate, -M, axis=axis)
-            max_coordinate = np.append(max_coordinate, M, axis=axis)
+            min_coordinate = np.insert(min_coordinate, min_coordinate.shape[axis], -M, axis=axis)
+            max_coordinate = np.insert(max_coordinate, max_coordinate.shape[axis], M, axis=axis)
     else:
         indices = [axes_bb.index(ax) for ax in axes_out_without_c]
         min_coordinate = np.take(min_coordinate, indices, axis=axis)
