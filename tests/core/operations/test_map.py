@@ -4,6 +4,7 @@ import re
 import dask.array as da
 import numpy as np
 import pytest
+
 from spatialdata._core.operations.map import _relabel_sequential, map_raster
 from spatialdata.transformations import Translation, get_transformation, set_transformation
 
