@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from anndata import AnnData
 from xarray import DataArray
 
@@ -36,37 +37,55 @@ def get_bounding_box_corners(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
-    if len(min_coordinate) not in (2, 3):
+    if min_coordinate.ndim == 1:
+        min_coordinate = min_coordinate[np.newaxis, :]
+        max_coordinate = max_coordinate[np.newaxis, :]
+
+    if min_coordinate.shape[1] not in (2, 3):
         raise ValueError("bounding box must be 2D or 3D")
 
-    if len(min_coordinate) == 2:
+    num_boxes = min_coordinate.shape[0]
+    num_dims = min_coordinate.shape[1]
+
+    if num_dims == 2:
         # 2D bounding box
         assert len(axes) == 2
-        return DataArray(
+        corners = np.array(
             [
-                [min_coordinate[0], min_coordinate[1]],
-                [min_coordinate[0], max_coordinate[1]],
-                [max_coordinate[0], max_coordinate[1]],
-                [max_coordinate[0], min_coordinate[1]],
-            ],
-            coords={"corner": range(4), "axis": list(axes)},
+                [min_coordinate[:, 0], min_coordinate[:, 1]],
+                [min_coordinate[:, 0], max_coordinate[:, 1]],
+                [max_coordinate[:, 0], max_coordinate[:, 1]],
+                [max_coordinate[:, 0], min_coordinate[:, 1]],
+            ]
         )
-
-    # 3D bounding cube
-    assert len(axes) == 3
-    return DataArray(
-        [
-            [min_coordinate[0], min_coordinate[1], min_coordinate[2]],
-            [min_coordinate[0], min_coordinate[1], max_coordinate[2]],
-            [min_coordinate[0], max_coordinate[1], max_coordinate[2]],
-            [min_coordinate[0], max_coordinate[1], min_coordinate[2]],
-            [max_coordinate[0], min_coordinate[1], min_coordinate[2]],
-            [max_coordinate[0], min_coordinate[1], max_coordinate[2]],
-            [max_coordinate[0], max_coordinate[1], max_coordinate[2]],
-            [max_coordinate[0], max_coordinate[1], min_coordinate[2]],
-        ],
-        coords={"corner": range(8), "axis": list(axes)},
+        corners = np.transpose(corners, (2, 0, 1))
+    else:
+        # 3D bounding cube
+        assert len(axes) == 3
+        corners = np.array(
+            [
+                [min_coordinate[:, 0], min_coordinate[:, 1], min_coordinate[:, 2]],
+                [min_coordinate[:, 0], min_coordinate[:, 1], max_coordinate[:, 2]],
+                [min_coordinate[:, 0], max_coordinate[:, 1], max_coordinate[:, 2]],
+                [min_coordinate[:, 0], max_coordinate[:, 1], min_coordinate[:, 2]],
+                [max_coordinate[:, 0], min_coordinate[:, 1], min_coordinate[:, 2]],
+                [max_coordinate[:, 0], min_coordinate[:, 1], max_coordinate[:, 2]],
+                [max_coordinate[:, 0], max_coordinate[:, 1], max_coordinate[:, 2]],
+                [max_coordinate[:, 0], max_coordinate[:, 1], min_coordinate[:, 2]],
+            ]
+        )
+        corners = np.transpose(corners, (2, 0, 1))
+    output = DataArray(
+        corners,
+        coords={
+            "box": range(num_boxes),
+            "corner": range(corners.shape[1]),
+            "axis": list(axes),
+        },
     )
+    if num_boxes > 1:
+        return output
+    return output.squeeze().drop_vars("box")
 
 
 def _get_filtered_or_unfiltered_tables(
