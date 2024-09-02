@@ -230,6 +230,7 @@ def _adjust_bounding_box_to_real_axes(
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
+    # axis for slicing, if axis > 0, then the min_/max_coordinate multiple bounding boxes along axis 0
     axis = min_coordinate.ndim - 1
     if set(axes_bb) != set(axes_out_without_c):
         axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
