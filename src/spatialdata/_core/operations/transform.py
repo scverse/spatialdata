@@ -49,11 +49,11 @@ def _transform_raster(
     v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
     matrix = transformation.to_affine_matrix(input_axes=axes, output_axes=axes)
     inverse_matrix = transformation.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-    new_v = (matrix @ v.T).T
+    new_v: ArrayLike = (matrix @ v.T).T
     c_shape: tuple[int, ...]
     c_shape = (data.shape[0],) if "c" in axes else ()
     new_spatial_shape = tuple(
-        int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
+        int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))  # type: ignore[operator]
     )
     output_shape = c_shape + new_spatial_shape
     translation_vector = np.min(new_v[:, :-1], axis=0)

@@ -8,6 +8,7 @@ from numpy.random import default_rng
 from pandas import DataFrame
 from scipy.sparse import csr_matrix
 from shapely.geometry import Polygon
+
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.rasterize_bins import rasterize_bins
 from spatialdata._core.spatialdata import SpatialData

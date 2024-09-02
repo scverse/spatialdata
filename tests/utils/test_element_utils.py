@@ -4,10 +4,11 @@ import dask_image.ndinterp
 import pytest
 import xarray
 from datatree import DataTree
+from xarray import DataArray
+
 from spatialdata._utils import unpad_raster
 from spatialdata.models import get_model
 from spatialdata.transformations import Affine
-from xarray import DataArray
 
 
 def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:

@@ -14,6 +14,7 @@ from skimage.transform import estimate_transform
 from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
+from spatialdata._types import ArrayLike
 from spatialdata.models import Image2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
@@ -113,8 +114,9 @@ def rasterize_bins(
     if value_key is None:
         shape = (n_rows, n_cols)
 
-        def channel_rasterization(block_id: tuple[int, int, int] | None) -> np.ndarray:  # type: ignore[type-arg]
-            image = np.zeros((1, *shape), dtype=dtype)
+        def channel_rasterization(block_id: tuple[int, int, int] | None) -> ArrayLike:
+
+            image: ArrayLike = np.zeros((1, *shape), dtype=dtype)
 
             if block_id is None:
                 return image

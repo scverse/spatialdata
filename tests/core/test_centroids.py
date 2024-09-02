@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
+
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
