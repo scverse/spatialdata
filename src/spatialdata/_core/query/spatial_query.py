@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 import dask.dataframe as dd
+import numba as nb
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
@@ -42,6 +43,24 @@ from spatialdata.transformations.transformations import (
     Translation,
     _get_affine_for_element,
 )
+
+
+@nb.njit(parallel=False, nopython=True)
+def create_slices_and_translation(
+    min_values: nb.types.Array[nb.float64, nb.float64],
+    max_values: nb.types.Array[nb.float64, nb.float64],
+) -> tuple[nb.types.Array[nb.float64, nb.float64], nb.types.Array[nb.float64, nb.float64]]:
+    n_boxes, n_dims = min_values.shape
+    slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
+    translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
+
+    for i in range(n_boxes):
+        for j in range(n_dims):
+            slices[i, j, 0] = min_values[i, j]
+            slices[i, j, 1] = max_values[i, j]
+            translation_vectors[i, j] = np.ceil(max(min_values[i, j], 0))
+
+    return slices, translation_vectors
 
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -540,49 +559,30 @@ def _(
     if TYPE_CHECKING:
         assert isinstance(intrinsic_bounding_box_corners, DataArray)
 
-    # build the request: now that we have the bounding box corners in the intrinsic coordinate system, we can use them
-    # to build the request to query the raster data using the xarray APIs
-    # selection = {}
-    # translation_vector = []
-    # for axis_name in axes:
-    #     # get the min value along the axis
-    #     min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
-
-    #     # get max value, slices are open half interval
-    #     max_value = intrinsic_bounding_box_corners.sel(axis=axis_name).max().item()
-
-    #     # add the
-    #     selection[axis_name] = slice(min_value, max_value)
-
-    #     if min_value > 0:
-    #         translation_vector.append(np.ceil(min_value).item())
-    #     else:
-    #         translation_vector.append(0)
-
     min_values = intrinsic_bounding_box_corners.min(dim="corner")
     max_values = intrinsic_bounding_box_corners.max(dim="corner")
 
-    # Convert to numpy arrays for faster operations
-    min_values_np = min_values.values
-    max_values_np = max_values.values
+    min_values_np = min_values.data
+    max_values_np = max_values.data
+
+    if min_values_np.ndim == 1:
+        min_values_np = min_values_np[np.newaxis, :]
+        max_values_np = max_values_np[np.newaxis, :]
+
+    slices, translation_vectors = create_slices_and_translation(min_values_np, max_values_np)
 
     if min_values.ndim == 2:  # Multiple boxes
-        slices = np.array(
-            [
-                [slice(min_val, max_val) for min_val, max_val in zip(box_min, box_max)]
-                for box_min, box_max in zip(min_values_np, max_values_np)
-            ]
-        )
-        translation_vectors = np.ceil(np.maximum(min_values_np, 0))
         selection: list[dict[str, Any]] | dict[str, Any] = [
-            {axis: slices[box_idx, axis_idx] for axis_idx, axis in enumerate(axes)}
+            {
+                axis: slice(slices[box_idx, axis_idx, 0], slices[box_idx, axis_idx, 1])
+                for axis_idx, axis in enumerate(axes)
+            }
             for box_idx in range(len(min_values_np))
         ]
         translation_vector = translation_vectors.tolist()
     else:  # Single box
-        slices = np.array([slice(min_val, max_val) for min_val, max_val in zip(min_values_np, max_values_np)])
-        translation_vector = np.ceil(np.maximum(min_values_np, 0)).tolist()
-        selection = {axis: slices[axis_idx] for axis_idx, axis in enumerate(axes)}
+        selection = {axis: slice(slices[0, axis_idx, 0], slices[0, axis_idx, 1]) for axis_idx, axis in enumerate(axes)}
+        translation_vector = translation_vectors[0].tolist()
 
     if return_request_only:
         return selection
@@ -858,7 +858,6 @@ def _(
     images: bool = True,
     labels: bool = True,
 ) -> SpatialData:
-
     _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
