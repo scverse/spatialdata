@@ -120,10 +120,18 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     intrinsic_bounding_box_corners = bounding_box_corners.data @ rotation_matrix.T + translation
 
+    if bounding_box_corners.ndim > 2:  # multiple boxes
+        coords = {
+            "box": range(len(bounding_box_corners)),
+            "corner": range(len(bounding_box_corners)),
+            "axis": list(inverse.output_axes),
+        }
+    else:
+        coords = {"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)}
     return (
         DataArray(
             intrinsic_bounding_box_corners,
-            coords={"corner": range(len(bounding_box_corners)), "axis": list(inverse.output_axes)},
+            coords=coords,
         ),
         input_axes_without_c,
     )
@@ -534,22 +542,47 @@ def _(
 
     # build the request: now that we have the bounding box corners in the intrinsic coordinate system, we can use them
     # to build the request to query the raster data using the xarray APIs
-    selection = {}
-    translation_vector = []
-    for axis_name in axes:
-        # get the min value along the axis
-        min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
+    # selection = {}
+    # translation_vector = []
+    # for axis_name in axes:
+    #     # get the min value along the axis
+    #     min_value = intrinsic_bounding_box_corners.sel(axis=axis_name).min().item()
 
-        # get max value, slices are open half interval
-        max_value = intrinsic_bounding_box_corners.sel(axis=axis_name).max().item()
+    #     # get max value, slices are open half interval
+    #     max_value = intrinsic_bounding_box_corners.sel(axis=axis_name).max().item()
 
-        # add the
-        selection[axis_name] = slice(min_value, max_value)
+    #     # add the
+    #     selection[axis_name] = slice(min_value, max_value)
 
-        if min_value > 0:
-            translation_vector.append(np.ceil(min_value).item())
-        else:
-            translation_vector.append(0)
+    #     if min_value > 0:
+    #         translation_vector.append(np.ceil(min_value).item())
+    #     else:
+    #         translation_vector.append(0)
+
+    min_values = intrinsic_bounding_box_corners.min(dim="corner")
+    max_values = intrinsic_bounding_box_corners.max(dim="corner")
+
+    # Convert to numpy arrays for faster operations
+    min_values_np = min_values.values
+    max_values_np = max_values.values
+
+    if min_values.ndim == 2:  # Multiple boxes
+        slices = np.array(
+            [
+                [slice(min_val, max_val) for min_val, max_val in zip(box_min, box_max)]
+                for box_min, box_max in zip(min_values_np, max_values_np)
+            ]
+        )
+        translation_vectors = np.ceil(np.maximum(min_values_np, 0))
+        selection: list[dict[str, Any]] | dict[str, Any] = [
+            {axis: slices[box_idx, axis_idx] for axis_idx, axis in enumerate(axes)}
+            for box_idx in range(len(min_values_np))
+        ]
+        translation_vector = translation_vectors.tolist()
+    else:  # Single box
+        slices = np.array([slice(min_val, max_val) for min_val, max_val in zip(min_values_np, max_values_np)])
+        translation_vector = np.ceil(np.maximum(min_values_np, 0)).tolist()
+        selection = {axis: slices[axis_idx] for axis_idx, axis in enumerate(axes)}
 
     if return_request_only:
         return selection
