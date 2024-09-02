@@ -2,6 +2,7 @@ import os
 import tempfile
 
 import dask.dataframe as dd
+
 from spatialdata import read_zarr
 from spatialdata._io._utils import get_dask_backing_files
 

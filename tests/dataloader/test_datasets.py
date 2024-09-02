@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
+
 from spatialdata.dataloader import ImageTilesDataset
 from spatialdata.datasets import blobs_annotating_element
 
 
-@pytest.mark.skip(reason="To be worked on out in separate PR.")
 class TestImageTilesDataset:
     @pytest.mark.parametrize("image_element", ["blobs_image", "blobs_multiscale_image"])
     @pytest.mark.parametrize(

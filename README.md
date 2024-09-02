@@ -47,13 +47,17 @@ Another useful resource to get started is the source code of the [`spatialdata-i
 
 ## Installation
 
-Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/latest/installation.html). To get started with the "batteries included" installation, you can install via pip:
+Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the "batteries included" installation, you can install via pip:
 
 ```bash
 pip install "spatialdata[extra]"
 ```
 
-Note: if you are using a Mac with an M1/M2 chip, please follow the installation instructions.
+or via conda:
+
+```bash
+mamba install -c conda-forge spatialdata napari-spatialdata spatialdata-io spatialdata-plot
+```
 
 ## Limitations
 

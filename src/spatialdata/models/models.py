@@ -656,14 +656,18 @@ class PointsModel:
                 )
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
-        index_monotonically_increasing = data.index.is_monotonic_increasing
-        if not isinstance(index_monotonically_increasing, bool):
-            index_monotonically_increasing = index_monotonically_increasing.compute()
-        if not index_monotonically_increasing:
+        if "sort" not in kwargs:
+            index_monotonically_increasing = data.index.is_monotonic_increasing
+            if not isinstance(index_monotonically_increasing, bool):
+                index_monotonically_increasing = index_monotonically_increasing.compute()
+            sort = index_monotonically_increasing
+        else:
+            sort = kwargs["sort"]
+        if not sort:
             warnings.warn(
                 "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
-                "adjust the order of the index before calling .parse() to avoid possible problems due to unknown "
-                "divisions",
+                "adjust the order of the index before calling .parse() (or call `parse(sort=True)`) to avoid possible "
+                "problems due to unknown divisions.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -671,16 +675,16 @@ class PointsModel:
             table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
-                sort=index_monotonically_increasing,
+                sort=sort,
                 **kwargs,
             )
             # we cannot compute the divisions whne the index is not monotonically increasing and npartitions > 1
-            if not table.known_divisions and (index_monotonically_increasing or table.npartitions == 1):
+            if not table.known_divisions and (sort or table.npartitions == 1):
                 table.divisions = table.compute_current_divisions()
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
                     data[feature_key].astype(str).astype("category"),
-                    sort=index_monotonically_increasing,
+                    sort=sort,
                     **kwargs,
                 )  # type: ignore[attr-defined]
                 table[feature_key] = feature_categ

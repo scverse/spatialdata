@@ -1,4 +1,5 @@
 from pandas.testing import assert_frame_equal
+
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 

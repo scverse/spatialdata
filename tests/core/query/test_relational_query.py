@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+
 from spatialdata import get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _locate_value,

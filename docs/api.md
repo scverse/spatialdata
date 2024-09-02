@@ -164,6 +164,22 @@ The transformations that can be defined between elements and coordinate systems 
     assert_elements_dict_are_identical
 ```
 
+## Datasets
+
+Convenience small datasets
+
+```{eval-rst}
+.. currentmodule:: spatialdata.datasets
+
+.. autosummary::
+    :toctree: generated
+
+    blobs
+    blobs_annotating_element
+    raccoon
+
+```
+
 ## Data format (advanced topic)
 
 The SpatialData format is defined as a set of versioned subclasses of :class:`spatialdata._io.format.SpatialDataFormat`, one per type of element.
@@ -211,3 +227,4 @@ These classes are useful to ensure backward compatibility whenever a major versi
     CurrentTablesFormat
     TablesFormatV01
 ```
+

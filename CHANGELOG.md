@@ -10,18 +10,25 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
-# Major
+### Minor
+
+-   Added `clip: bool = False` parameter to `polygon_query()` #670
+
+## [0.2.2] - 2024-08-07
+
+### Major
 
 -   New disk format for shapes using `GeoParquet` (the change is backward compatible) #542
 
-# Minor
+### Minor
 
 -   Add `return_background` as argument to `get_centroids` and `get_element_instances` #621
 -   Ability to save data using older disk formats #542
 
-# Fixed
+### Fixed
 
 -   Circles validation now checks for inf or nan radii #653
+-   Bug with table name in torch dataset #654 @LLehner
 
 ## [0.2.1] - 2024-07-04
 

@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 from anndata import AnnData
+
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
@@ -21,7 +22,6 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
-
 from tests.conftest import _get_table
 
 
@@ -296,7 +296,7 @@ def test_locate_spatial_element(full_sdata: SpatialData) -> None:
 
 
 def test_get_item(points: SpatialData) -> None:
-    assert id(points["points_0"]) == id(points.points["points_0"])
+    assert points["points_0"] is points.points["points_0"]
 
     # removed this test after this change: https://github.com/scverse/spatialdata/pull/145#discussion_r1133122720
     # to be uncommented/removed/modified after this is closed: https://github.com/scverse/spatialdata/issues/186
