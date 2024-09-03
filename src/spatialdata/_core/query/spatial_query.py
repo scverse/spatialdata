@@ -673,7 +673,7 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> GeoDataFrame | None:
+) -> GeoDataFrame | list[GeoDataFrame] | None:
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -695,16 +695,32 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
-    bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
-    queried = polygons[indices]
-    if len(queried) == 0:
-        return None
+
+    # Create a list of Polygons for each bounding box
     old_transformations = get_transformation(polygons, get_all=True)
     assert isinstance(old_transformations, dict)
-    del queried.attrs[ShapesModel.TRANSFORM_KEY]
-    return ShapesModel.parse(queried, transformations=old_transformations.copy())
+
+    queried_polygons = []
+    intrinsic_bounding_box_corners = (
+        intrinsic_bounding_box_corners.expand_dims(dim="box")
+        if "box" not in intrinsic_bounding_box_corners.dims
+        else intrinsic_bounding_box_corners
+    )
+    for box_corners in intrinsic_bounding_box_corners:
+        bounding_box_non_axes_aligned = Polygon(box_corners.data)
+        indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
+        queried = polygons[indices]
+        if len(queried) == 0:
+            queried_polygon = None
+        else:
+            del queried.attrs[ShapesModel.TRANSFORM_KEY]
+            queried_polygon = ShapesModel.parse(queried, transformations=old_transformations.copy())
+        queried_polygons.append(queried_polygon)
+    if len(queried_polygons) == 0:
+        return None
+    if len(queried_polygons) == 1:
+        return queried_polygons[0]
+    return queried_polygons
 
 
 # TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter
