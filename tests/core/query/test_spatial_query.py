@@ -324,7 +324,8 @@ def test_query_raster(
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize("multiple_boxes", [True, False])
-def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes: bool):
+@pytest.mark.parametrize("box_outside_polygon", [True, False])
+def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes: bool, box_outside_polygon: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
     half_widths = [6] * 4
     sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
@@ -342,10 +343,18 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes
         if is_bb_3d:
             _min_coordinate = np.array([[2, 40, 40], [2, 50, 50]]) if multiple_boxes else np.array([2, 40, 40])
             _max_coordinate = np.array([[7, 100, 100], [7, 110, 110]]) if multiple_boxes else np.array([7, 100, 100])
+            if box_outside_polygon:
+                _min_coordinate = np.array([[2, 100, 100], [2, 50, 50]]) if multiple_boxes else np.array([2, 40, 40])
+                _max_coordinate = (
+                    np.array([[7, 110, 110], [7, 110, 110]]) if multiple_boxes else np.array([7, 100, 100])
+                )
             _axes = ("z", "y", "x")
         else:
             _min_coordinate = np.array([[40, 40], [50, 50]]) if multiple_boxes else np.array([40, 40])
             _max_coordinate = np.array([[100, 100], [110, 110]]) if multiple_boxes else np.array([100, 100])
+            if box_outside_polygon:
+                _min_coordinate = np.array([[100, 100], [50, 50]]) if multiple_boxes else np.array([40, 40])
+                _max_coordinate = np.array([[110, 110], [110, 110]]) if multiple_boxes else np.array([100, 100])
             _axes = ("y", "x")
 
         polygons_result = bounding_box_query(
@@ -359,8 +368,13 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes
     if multiple_boxes and not with_polygon_query:
         assert isinstance(polygons_result, list)
         assert len(polygons_result) == 2
-        assert polygons_result[0].index[0] == 3
-        assert len(polygons_result[1]) == 1
+        if box_outside_polygon:
+
+            assert polygons_result[0] is None
+            assert polygons_result[1].index[0] == 3
+        else:
+            assert polygons_result[0].index[0] == 3
+            assert len(polygons_result[1]) == 1
     else:
         assert len(polygons_result) == 1
         assert polygons_result.index[0] == 3
