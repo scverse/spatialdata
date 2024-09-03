@@ -380,7 +380,12 @@ class BoundingBoxRequest(BaseSpatialRequest):
             raise ValueError(f"Non-spatial axes specified: {non_spatial_axes}")
 
         # validate the axes
-        if len(self.axes) != len(self.min_coordinate) or len(self.axes) != len(self.max_coordinate):
+        if self.min_coordinate.shape != self.max_coordinate.shape:
+            raise ValueError("The `min_coordinate` and `max_coordinate` must have the same shape.")
+
+        n_axes_coordinate = len(self.min_coordinate) if self.min_coordinate.ndim == 1 else self.min_coordinate.shape[1]
+
+        if len(self.axes) != n_axes_coordinate:
             raise ValueError("The number of axes must match the number of coordinates.")
 
         # validate the coordinates
