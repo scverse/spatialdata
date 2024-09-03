@@ -515,7 +515,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray | DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
