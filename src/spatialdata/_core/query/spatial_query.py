@@ -528,6 +528,40 @@ def _(
     return SpatialData(**new_elements, tables=tables)
 
 
+def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
+    d = {}
+    for k, data_tree in query_result.items():
+        v = data_tree.values()
+        assert len(v) == 1
+        xdata = v.__iter__().__next__()
+        if 0 in xdata.shape:
+            if k == "scale0":
+                return None
+        else:
+            d[k] = xdata
+
+    # Remove scales after finding a missing scale
+    scales_to_keep = []
+    for i, scale_name in enumerate(d.keys()):
+        if scale_name == f"scale{i}":
+            scales_to_keep.append(scale_name)
+        else:
+            break
+
+    # Case in which scale0 is not present but other scales are
+    if len(scales_to_keep) == 0:
+        return None
+
+    d = {k: d[k] for k in scales_to_keep}
+    result = DataTree.from_dict(d)
+
+    # Rechunk the data to avoid irregular chunks
+    for scale in result:
+        result[scale]["image"] = result[scale]["image"].chunk("auto")
+
+    return result
+
+
 @bounding_box_query.register(DataArray)
 @bounding_box_query.register(DataTree)
 def _(
@@ -593,46 +627,20 @@ def _(
         return selection
 
     # query the data
-    query_result = image.sel(selection)
+    query_result = image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
     if isinstance(image, DataArray):
         if 0 in query_result.shape:
             return None
         assert isinstance(query_result, DataArray)
         # rechunk the data to avoid irregular chunks
-        image = image.chunk("auto")
+        query_result = query_result.chunk("auto")
     else:
         assert isinstance(image, DataTree)
         assert isinstance(query_result, DataTree)
-
-        d = {}
-        for k, data_tree in query_result.items():
-            v = data_tree.values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            if 0 in xdata.shape:
-                if k == "scale0":
-                    return None
-            else:
-                d[k] = xdata
-        # the list of scales may not be contiguous when the data has small shape (for instance with yx = 22 and
-        # rotations we may end up having scale0 and scale2 but not scale1. Practically this may occur in torch tiler if
-        # the tiles are request to be too small).
-        # Here we remove scales after we found a scale missing
-        scales_to_keep = []
-        for i, scale_name in enumerate(d.keys()):
-            if scale_name == f"scale{i}":
-                scales_to_keep.append(scale_name)
-            else:
-                break
-        # case in which scale0 is not present but other scales are
-        if len(scales_to_keep) == 0:
+        query_result = _process_data_tree_query_result(query_result)
+        if query_result is None:
             return None
-        d = {k: d[k] for k in scales_to_keep}
 
-        query_result = DataTree.from_dict(d)
-        # rechunk the data to avoid irregular chunks
-        for scale in query_result:
-            query_result[scale]["image"] = query_result[scale]["image"].chunk("auto")
     query_result = compute_coordinates(query_result)
 
     # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
