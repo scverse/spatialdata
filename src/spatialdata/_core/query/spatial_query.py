@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 import dask.dataframe as dd
-import numba as nb
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
@@ -34,33 +33,12 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
-from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
-    Sequence,
-    Translation,
     _get_affine_for_element,
 )
-
-
-@nb.njit(parallel=False, nopython=True)
-def create_slices_and_translation(
-    min_values: nb.types.Array[nb.float64, nb.float64],
-    max_values: nb.types.Array[nb.float64, nb.float64],
-) -> tuple[nb.types.Array[nb.float64, nb.float64], nb.types.Array[nb.float64, nb.float64]]:
-    n_boxes, n_dims = min_values.shape
-    slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
-    translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
-
-    for i in range(n_boxes):
-        for j in range(n_dims):
-            slices[i, j, 0] = min_values[i, j]
-            slices[i, j, 1] = max_values[i, j]
-            translation_vectors[i, j] = np.ceil(max(min_values[i, j], 0))
-
-    return slices, translation_vectors
 
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -528,40 +506,6 @@ def _(
     return SpatialData(**new_elements, tables=tables)
 
 
-def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
-    d = {}
-    for k, data_tree in query_result.items():
-        v = data_tree.values()
-        assert len(v) == 1
-        xdata = v.__iter__().__next__()
-        if 0 in xdata.shape:
-            if k == "scale0":
-                return None
-        else:
-            d[k] = xdata
-
-    # Remove scales after finding a missing scale
-    scales_to_keep = []
-    for i, scale_name in enumerate(d.keys()):
-        if scale_name == f"scale{i}":
-            scales_to_keep.append(scale_name)
-        else:
-            break
-
-    # Case in which scale0 is not present but other scales are
-    if len(scales_to_keep) == 0:
-        return None
-
-    d = {k: d[k] for k in scales_to_keep}
-    result = DataTree.from_dict(d)
-
-    # Rechunk the data to avoid irregular chunks
-    for scale in result:
-        result[scale]["image"] = result[scale]["image"].chunk("auto")
-
-    return result
-
-
 @bounding_box_query.register(DataArray)
 @bounding_box_query.register(DataTree)
 def _(
@@ -579,7 +523,7 @@ def _(
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
-    from spatialdata.transformations import get_transformation, set_transformation
+    from spatialdata._core.query._utils import _create_slices_and_translation, _process_query_result
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -608,7 +552,7 @@ def _(
         min_values_np = min_values_np[np.newaxis, :]
         max_values_np = max_values_np[np.newaxis, :]
 
-    slices, translation_vectors = create_slices_and_translation(min_values_np, max_values_np)
+    slices, translation_vectors = _create_slices_and_translation(min_values_np, max_values_np)
 
     if min_values.ndim == 2:  # Multiple boxes
         selection: list[dict[str, Any]] | dict[str, Any] = [
@@ -627,43 +571,19 @@ def _(
         return selection
 
     # query the data
-    query_result = image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
-    if isinstance(image, DataArray):
-        if 0 in query_result.shape:
-            return None
-        assert isinstance(query_result, DataArray)
-        # rechunk the data to avoid irregular chunks
-        query_result = query_result.chunk("auto")
+    query_result: DataArray | DataTree | list[DataArray | DataTree] = (
+        image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
+    )
+
+    if isinstance(query_result, list):
+        processed_results = []
+        for result in query_result:
+            processed_result = _process_query_result(result, translation_vector, axes)
+            if processed_result is not None:
+                processed_results.append(processed_result)
+        query_result = processed_results if processed_results else None
     else:
-        assert isinstance(image, DataTree)
-        assert isinstance(query_result, DataTree)
-        query_result = _process_data_tree_query_result(query_result)
-        if query_result is None:
-            return None
-
-    query_result = compute_coordinates(query_result)
-
-    # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
-    # points is likely starting away from the origin (this is described by translation_vector), so we need to prepend
-    # this translation to every transformation in the new queries elements (unless the translation_vector is zero,
-    # in that case the translation is not needed)
-    if not np.allclose(np.array(translation_vector), 0):
-        translation_transform = Translation(translation=translation_vector, axes=axes)
-
-        transformations = get_transformation(query_result, get_all=True)
-        assert isinstance(transformations, dict)
-
-        new_transformations = {}
-        for coordinate_system, initial_transform in transformations.items():
-            new_transformation: BaseTransformation = Sequence(
-                [translation_transform, initial_transform],
-            )
-            new_transformations[coordinate_system] = new_transformation
-        set_transformation(query_result, new_transformations, set_all=True)
-    # let's make a copy of the transformations so that we don't modify the original object
-    t = get_transformation(query_result, get_all=True)
-    assert isinstance(t, dict)
-    set_transformation(query_result, t.copy(), set_all=True)
+        query_result = _process_query_result(query_result, translation_vector, axes)
     return query_result
 
 
