@@ -562,10 +562,10 @@ def _(
             }
             for box_idx in range(len(min_values_np))
         ]
-        translation_vector = translation_vectors.tolist()
+        translation_vectors = translation_vectors.tolist()
     else:  # Single box
         selection = {axis: slice(slices[0, axis_idx, 0], slices[0, axis_idx, 1]) for axis_idx, axis in enumerate(axes)}
-        translation_vector = translation_vectors[0].tolist()
+        translation_vectors = translation_vectors[0].tolist()
 
     if return_request_only:
         return selection
@@ -577,13 +577,13 @@ def _(
 
     if isinstance(query_result, list):
         processed_results = []
-        for result in query_result:
+        for result, translation_vector in zip(query_result, translation_vectors):
             processed_result = _process_query_result(result, translation_vector, axes)
             if processed_result is not None:
                 processed_results.append(processed_result)
         query_result = processed_results if processed_results else None
     else:
-        query_result = _process_query_result(query_result, translation_vector, axes)
+        query_result = _process_query_result(query_result, translation_vectors, axes)
     return query_result
 
 

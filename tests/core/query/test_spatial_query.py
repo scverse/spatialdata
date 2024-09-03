@@ -192,8 +192,15 @@ def test_query_points_no_points():
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize("return_request_only", [True, False])
+@pytest.mark.parametrize("multiple_boxes", [True, False])
 def test_query_raster(
-    n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, return_request_only: bool
+    n_channels: int,
+    is_labels: bool,
+    is_3d: bool,
+    is_bb_3d: bool,
+    with_polygon_query: bool,
+    return_request_only: bool,
+    multiple_boxes: bool,
 ):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
@@ -232,16 +239,16 @@ def test_query_raster(
 
     for image in images:
         if is_bb_3d:
-            _min_coordinate = np.array([2, 5, 0])
-            _max_coordinate = np.array([7, 10, 5])
+            _min_coordinate = np.array([[2, 5, 0], [1, 4, 0]]) if multiple_boxes else np.array([2, 5, 0])
+            _max_coordinate = np.array([[7, 10, 5], [6, 9, 4]]) if multiple_boxes else np.array([7, 10, 5])
             _axes = ("z", "y", "x")
         else:
-            _min_coordinate = np.array([5, 0])
-            _max_coordinate = np.array([10, 5])
+            _min_coordinate = np.array([[5, 0], [4, 0]]) if multiple_boxes else np.array([5, 0])
+            _max_coordinate = np.array([[10, 5], [9, 4]]) if multiple_boxes else np.array([10, 5])
             _axes = ("y", "x")
 
         if with_polygon_query:
-            if is_bb_3d:
+            if is_bb_3d or multiple_boxes:
                 return
             # make a triangle whose bounding box is the same as the bounding box specified with the query
             polygon = Polygon([(0, 5), (5, 5), (5, 10)])
@@ -258,29 +265,58 @@ def test_query_raster(
                 return_request_only=return_request_only,
             )
 
-        slices = {"y": slice(5, 10), "x": slice(0, 5)}
-        if is_bb_3d and is_3d:
-            slices["z"] = slice(2, 7)
+        if multiple_boxes:
+            slices = [{"y": slice(5, 10), "x": slice(0, 5)}, {"y": slice(4, 9), "x": slice(0, 4)}]
+            if is_bb_3d and is_3d:
+                slices[0]["z"] = slice(2, 7)
+                slices[1]["z"] = slice(1, 6)
+        else:
+            slices = {"y": slice(5, 10), "x": slice(0, 5)}
+            if is_bb_3d and is_3d:
+                slices["z"] = slice(2, 7)
+
         if return_request_only:
-            assert isinstance(image_result, dict)
-            if not (is_bb_3d and is_3d) and ("z" in image_result):
-                image_result.pop("z")  # remove z from slices if `polygon_query`
-            for k, v in image_result.items():
-                assert isinstance(v, slice)
-                assert image_result[k] == slices[k]
+            assert isinstance(image_result, (dict, list))
+            if multiple_boxes:
+                for i, result in enumerate(image_result):
+                    if not (is_bb_3d and is_3d) and ("z" in result):
+                        result.pop("z")  # remove z from slices if `polygon_query`
+                    for k, v in result.items():
+                        assert isinstance(v, slice)
+                        assert result[k] == slices[i][k]
+            else:
+                if not (is_bb_3d and is_3d) and ("z" in image_result):
+                    image_result.pop("z")  # remove z from slices if `polygon_query`
+                for k, v in image_result.items():
+                    assert isinstance(v, slice)
+                    assert image_result[k] == slices[k]
             return
 
-        expected_image = ximage.sel(**slices)
+        if multiple_boxes:
+            expected_images = [ximage.sel(**s) for s in slices]
+        else:
+            expected_image = ximage.sel(**slices)
 
         if isinstance(image, DataArray):
-            assert isinstance(image, DataArray)
-            np.testing.assert_allclose(image_result, expected_image)
+            assert isinstance(image_result, (DataArray, list))
+            if multiple_boxes:
+                for result, expected in zip(image_result, expected_images):
+                    np.testing.assert_allclose(result, expected)
+            else:
+                np.testing.assert_allclose(image_result, expected_image)
         elif isinstance(image, DataTree):
-            assert isinstance(image_result, DataTree)
-            v = image_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
+            assert isinstance(image_result, (DataTree, list))
+            if multiple_boxes:
+                for result, expected in zip(image_result, expected_images):
+                    v = result["scale0"].values()
+                    assert len(v) == 1
+                    xdata = v.__iter__().__next__()
+                    np.testing.assert_allclose(xdata, expected)
+            else:
+                v = image_result["scale0"].values()
+                assert len(v) == 1
+                xdata = v.__iter__().__next__()
+                np.testing.assert_allclose(xdata, expected_image)
         else:
             raise ValueError("Unexpected type")
 
