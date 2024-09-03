@@ -251,17 +251,25 @@ class ImageTilesDataset(Dataset):
                 tile_scale=tile_scale,
                 tile_dim_in_units=tile_dim_in_units,
             )
-            tile_coords["selection"] = tile_coords.apply(
-                lambda row, cs=cs, image_name=image_name: bounding_box_query(
-                    self.sdata[image_name],
-                    ("x", "y"),
-                    min_coordinate=row[["minx", "miny"]].values,
-                    max_coordinate=row[["maxx", "maxy"]].values,
-                    target_coordinate_system=cs,
-                    return_request_only=True,
-                ),
-                axis=1,
+            tile_coords["selection"] = bounding_box_query(
+                self.sdata[image_name],
+                ("x", "y"),
+                min_coordinate=tile_coords[["minx", "miny"]].values,
+                max_coordinate=tile_coords[["maxx", "maxy"]].values,
+                target_coordinate_system=cs,
+                return_request_only=True,
             )
+            # tile_coords["selection"] = tile_coords.apply(
+            #     lambda row, cs=cs, image_name=image_name: bounding_box_query(
+            #         self.sdata[image_name],
+            #         ("x", "y"),
+            #         min_coordinate=row[["minx", "miny"]].values,
+            #         max_coordinate=row[["maxx", "maxy"]].values,
+            #         target_coordinate_system=cs,
+            #         return_request_only=True,
+            #     ),
+            #     axis=1,
+            # )
             tile_coords_df.append(tile_coords)
 
             inst = circles.index.values

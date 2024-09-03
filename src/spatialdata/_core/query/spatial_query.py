@@ -546,12 +546,12 @@ def _(
     max_coordinate = _parse_list_into_array(max_coordinate)
 
     # for triggering validation
-    _ = BoundingBoxRequest(
-        target_coordinate_system=target_coordinate_system,
-        axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-    )
+    # _ = BoundingBoxRequest(
+    #     target_coordinate_system=target_coordinate_system,
+    #     axes=axes,
+    #     min_coordinate=min_coordinate,
+    #     max_coordinate=max_coordinate,
+    # )
 
     intrinsic_bounding_box_corners, axes = _get_bounding_box_corners_in_intrinsic_coordinates(
         image, axes, min_coordinate, max_coordinate, target_coordinate_system
