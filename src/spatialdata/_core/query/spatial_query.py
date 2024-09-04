@@ -606,7 +606,7 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> DaskDataFrame | None:
+) -> DaskDataFrame | list[DaskDataFrame] | None:
     from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
