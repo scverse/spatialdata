@@ -108,11 +108,12 @@ def test_bounding_box_request_wrong_coordinate_order():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+@pytest.mark.parametrize("multiple_boxes", [True, False])
+def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, multiple_boxes: bool):
     """test the points bounding box_query"""
-    data_x = np.array([10, 20, 20, 20])
-    data_y = np.array([10, 20, 30, 30])
-    data_z = np.array([100, 200, 200, 300])
+    data_x = np.array([10, 20, 20, 20, 40])
+    data_y = np.array([10, 20, 30, 30, 50])
+    data_z = np.array([100, 200, 200, 300, 500])
 
     data = np.stack((data_x, data_y), axis=1)
     if is_3d:
@@ -125,16 +126,24 @@ def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
         original_z = points_element["z"]
 
     if is_bb_3d:
-        _min_coordinate = np.array([18, 25, 250])
-        _max_coordinate = np.array([22, 35, 350])
+        if multiple_boxes:
+            _min_coordinate = np.array([[18, 25, 250], [35, 45, 450], [100, 110, 1100]])
+            _max_coordinate = np.array([[22, 35, 350], [45, 55, 550], [110, 120, 1200]])
+        else:
+            _min_coordinate = np.array([18, 25, 250])
+            _max_coordinate = np.array([22, 35, 350])
         _axes = ("x", "y", "z")
     else:
-        _min_coordinate = np.array([18, 25])
-        _max_coordinate = np.array([22, 35])
+        if multiple_boxes:
+            _min_coordinate = np.array([[18, 25], [35, 45], [100, 110]])
+            _max_coordinate = np.array([[22, 35], [45, 55], [110, 120]])
+        else:
+            _min_coordinate = np.array([18, 25])
+            _max_coordinate = np.array([22, 35])
         _axes = ("x", "y")
 
     if with_polygon_query:
-        if is_bb_3d:
+        if is_bb_3d or multiple_boxes:
             return
         polygon = Polygon([(18, 25), (18, 35), (22, 35), (22, 25)])
         points_result = polygon_query(points_element, polygon=polygon, target_coordinate_system="global")
@@ -147,22 +156,49 @@ def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
             target_coordinate_system="global",
         )
 
-    # Check that the correct point was selected
+    # Check that the correct points were selected
     if is_3d:
         if is_bb_3d:
-            np.testing.assert_allclose(points_result["x"].compute(), [20])
-            np.testing.assert_allclose(points_result["y"].compute(), [30])
-            np.testing.assert_allclose(points_result["z"].compute(), [300])
+            if multiple_boxes:
+                np.testing.assert_allclose(points_result[0]["x"].compute(), [20])
+                np.testing.assert_allclose(points_result[0]["y"].compute(), [30])
+                np.testing.assert_allclose(points_result[0]["z"].compute(), [300])
+                np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+                np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+                np.testing.assert_allclose(points_result[1]["z"].compute(), [500])
+            else:
+                np.testing.assert_allclose(points_result["x"].compute(), [20])
+                np.testing.assert_allclose(points_result["y"].compute(), [30])
+                np.testing.assert_allclose(points_result["z"].compute(), [300])
+        else:
+            if multiple_boxes:
+                np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+                np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+                np.testing.assert_allclose(points_result[0]["z"].compute(), [200, 300])
+                np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+                np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+                np.testing.assert_allclose(points_result[1]["z"].compute(), [500])
+            else:
+                np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
+                np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
+                np.testing.assert_allclose(points_result["z"].compute(), [200, 300])
+    else:
+        if multiple_boxes:
+            np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+            np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+            np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+            np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+            assert points_result[2] is None
         else:
             np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
             np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
-            np.testing.assert_allclose(points_result["z"].compute(), [200, 300])
-    else:
-        np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
-        np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
 
     # result should be valid points element
-    PointsModel.validate(points_result)
+    if multiple_boxes:
+        for result in points_result:
+            if result is None:
+                continue
+            PointsModel.validate(result)
 
     # original element should be unchanged
     np.testing.assert_allclose(points_element["x"].compute(), original_x)

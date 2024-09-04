@@ -385,7 +385,7 @@ def _bounding_box_mask_points(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
 ) -> da.Array:
-    """Compute a mask that is true for the points inside an axis-aligned bounding box.
+    """Compute a mask that is true for the points inside axis-aligned bounding boxes.
 
     Parameters
     ----------
@@ -394,30 +394,42 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        The upper left hand corner of the bounding box (i.e., minimum coordinates along all dimensions).
+        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     max_coordinate
-        The lower right hand corner of the bounding box (i.e., the maximum coordinates along all dimensions).
+        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 
     Returns
     -------
-    The mask for the points inside the bounding box.
+    The masks for the points inside the bounding boxes.
     """
     element_axes = get_axes_names(points)
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
+
+    # Ensure min_coordinate and max_coordinate are 2D arrays
+    min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
+    max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
+
+    n_boxes = min_coordinate.shape[0]
     in_bounding_box_masks = []
-    for axis_index, axis_name in enumerate(axes):
-        if axis_name not in element_axes:
-            continue
-        min_value = min_coordinate[axis_index]
-        in_bounding_box_masks.append(points[axis_name].gt(min_value).to_dask_array(lengths=True))
-    for axis_index, axis_name in enumerate(axes):
-        if axis_name not in element_axes:
-            continue
-        max_value = max_coordinate[axis_index]
-        in_bounding_box_masks.append(points[axis_name].lt(max_value).to_dask_array(lengths=True))
-    in_bounding_box_masks = da.stack(in_bounding_box_masks, axis=-1)
-    return da.all(in_bounding_box_masks, axis=1)
+
+    for box in range(n_boxes):
+        box_masks = []
+        for axis_index, axis_name in enumerate(axes):
+            if axis_name not in element_axes:
+                continue
+            min_value = min_coordinate[box, axis_index]
+            max_value = max_coordinate[box, axis_index]
+            box_masks.append(
+                points[axis_name].gt(min_value).to_dask_array(lengths=True)
+                & points[axis_name].lt(max_value).to_dask_array(lengths=True)
+            )
+        bounding_box_mask = da.stack(box_masks, axis=-1)
+        in_bounding_box_masks.append(da.all(bounding_box_mask, axis=1))
+    return in_bounding_box_masks
 
 
 def _dict_query_dispatcher(
@@ -601,6 +613,10 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
+    # Ensure min_coordinate and max_coordinate are 2D arrays
+    min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
+    max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
+
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -617,9 +633,11 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
+    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
+    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
+
+    min_coordinate_intrinsic = min_coordinate_intrinsic.data
+    max_coordinate_intrinsic = max_coordinate_intrinsic.data
 
     # get the points in the intrinsic coordinate bounding box
     in_intrinsic_bounding_box = _bounding_box_mask_points(
@@ -628,10 +646,20 @@ def _(
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
     )
-    # if there aren't any points, just return
-    if in_intrinsic_bounding_box.sum() == 0:
+
+    # assert that the number of bounding boxes is correct
+    assert len(in_intrinsic_bounding_box) == len(min_coordinate)
+    points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
+    for mask in in_intrinsic_bounding_box:
+        if mask.sum() == 0:
+            points_in_intrinsic_bounding_box.append(None)
+        else:
+            points_in_intrinsic_bounding_box.append(points.loc[mask])
+    if len(points_in_intrinsic_bounding_box) == 0:
         return None
-    points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
+
+    # assert that the number of queried points is correct
+    assert len(points_in_intrinsic_bounding_box) == len(min_coordinate)
 
     # # we have to reset the index since we have subset
     # # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
@@ -645,25 +673,42 @@ def _(
     # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
 
     # transform the element to the query coordinate system
-    points_query_coordinate_system = transform(
-        points_in_intrinsic_bounding_box, to_coordinate_system=target_coordinate_system, maintain_positioning=False
-    )  # type: ignore[union-attr]
+    output: list[DaskDataFrame | None] = []
+    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate):
+        if p is None:
+            output.append(None)
+        else:
+            points_query_coordinate_system = transform(
+                p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
+            )
 
-    # get a mask for the points in the bounding box
-    bounding_box_mask = _bounding_box_mask_points(
-        points=points_query_coordinate_system,
-        axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-    )
-    bounding_box_indices = np.where(bounding_box_mask.compute())[0]
-    if len(bounding_box_indices) == 0:
+            # get a mask for the points in the bounding box
+            bounding_box_mask = _bounding_box_mask_points(
+                points=points_query_coordinate_system,
+                axes=axes,
+                min_coordinate=min_c,
+                max_coordinate=max_c,
+            )
+            if len(bounding_box_mask) == 1:
+                bounding_box_mask = bounding_box_mask[0]
+            bounding_box_indices = np.where(bounding_box_mask.compute())[0]
+
+            if len(bounding_box_indices) == 0:
+                output.append(None)
+            else:
+                points_df = p.compute().iloc[bounding_box_indices]
+                old_transformations = get_transformation(p, get_all=True)
+                assert isinstance(old_transformations, dict)
+                output.append(
+                    PointsModel.parse(
+                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                    )
+                )
+    if len(output) == 0:
         return None
-    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_indices]
-    old_transformations = get_transformation(points, get_all=True)
-    assert isinstance(old_transformations, dict)
-    # an alternative approach is to query for each partition in parallel
-    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy())
+    if len(output) == 1:
+        return output[0]
+    return output
 
 
 @bounding_box_query.register(GeoDataFrame)
