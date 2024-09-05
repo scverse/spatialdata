@@ -145,7 +145,7 @@ def _(
 
 # TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
 def _filter_table_by_elements(
-    table: AnnData, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
+    table: AnnData | list[AnnData], elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
 ) -> AnnData:
     """
     Filter an AnnData table to keep only the rows that are in the elements.
@@ -216,6 +216,7 @@ def _filter_table_by_elements(
 
     original_table = table
     table = _filter_table(table, to_keep)
+
     if match_rows:
         assert instances is not None
         assert isinstance(instances, np.ndarray)
