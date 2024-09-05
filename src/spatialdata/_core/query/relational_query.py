@@ -163,40 +163,59 @@ def _filter_table_by_elements(
     -------
     The filtered table (eventually with reordered rows), or None if the input table was None.
     """
-    assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
-    assert len(elements_dict) > 0, "elements_dict must not be empty"
-    assert any(
-        len(elements) > 0 for elements in elements_dict.values()
-    ), "elements_dict must contain at least one dict which contains at least one element"
-    to_keep = np.zeros(len(table), dtype=bool)
-    region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-    instances = None
-    for _, elements in elements_dict.items():
-        for name, element in elements.items():
-            if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
-                if isinstance(element, DataArray):
-                    # get unique labels value (including 0 if present)
-                    instances = da.unique(element.data).compute()
-                else:
-                    assert isinstance(element, DataTree)
-                    v = element["scale0"].values()
-                    assert len(v) == 1
-                    xdata = next(iter(v))
-                    # can be slow
-                    instances = da.unique(xdata.data).compute()
-                instances = np.sort(instances)
-            elif get_model(element) == ShapesModel:
-                instances = element.index.to_numpy()
-            elif get_model(element) == PointsModel:
-                instances = element.compute().index.to_numpy()
+
+    def _validate_elements_dict(elements_dict: dict[str, dict[str, Any]]) -> None:
+        assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
+        assert len(elements_dict) > 0, "elements_dict must not be empty"
+        assert any(
+            len(elements) > 0 for elements in elements_dict.values()
+        ), "elements_dict must contain at least one dict which contains at least one element"
+
+    def _get_table_keys(table: AnnData) -> tuple[str, str]:
+        return (
+            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY],
+            table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY],
+        )
+
+    def _get_element_instances(element: SpatialElement) -> ArrayLike | None:
+        if get_model(element) in [Labels2DModel, Labels3DModel]:
+            if isinstance(element, DataArray):
+                instances = da.unique(element.data).compute()
             else:
-                continue
-            indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
-            to_keep = to_keep | indices
+                assert isinstance(element, DataTree)
+                v = element["scale0"].values()
+                assert len(v) == 1
+                xdata = next(iter(v))
+                instances = da.unique(xdata.data).compute()
+            return np.sort(instances)
+        if get_model(element) == ShapesModel:
+            return element.index.to_numpy()
+        if get_model(element) == PointsModel:
+            return element.compute().index.to_numpy()
+        return None
+
+    def _get_matching_indices(
+        table: AnnData, region_key: str, instance_key: str, name: str, instances: ArrayLike
+    ) -> ArrayLike:
+        return ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
+
+    def _filter_table(table: AnnData, to_keep: ArrayLike) -> AnnData:
+        table.obs = pd.DataFrame(table.obs)
+        return table[to_keep, :]
+
+    _validate_elements_dict(elements_dict)
+    to_keep = np.zeros(len(table), dtype=bool)
+    region_key, instance_key = _get_table_keys(table)
+
+    for elements in elements_dict.values():
+        for name, element in elements.items():
+            instances = _get_element_instances(element)
+            if instances is not None:
+                indices = _get_matching_indices(table, region_key, instance_key, name, instances)
+                to_keep |= indices
+
     original_table = table
-    table.obs = pd.DataFrame(table.obs)
-    table = table[to_keep, :]
+    table = _filter_table(table, to_keep)
     if match_rows:
         assert instances is not None
         assert isinstance(instances, np.ndarray)
