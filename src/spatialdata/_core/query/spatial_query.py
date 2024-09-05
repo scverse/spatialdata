@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 import dask.dataframe as dd
-import numba as nb
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from datatree import DataTree
@@ -34,33 +33,12 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
-from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
-    Sequence,
-    Translation,
     _get_affine_for_element,
 )
-
-
-@nb.njit(parallel=False, nopython=True)
-def create_slices_and_translation(
-    min_values: nb.types.Array[nb.float64, nb.float64],
-    max_values: nb.types.Array[nb.float64, nb.float64],
-) -> tuple[nb.types.Array[nb.float64, nb.float64], nb.types.Array[nb.float64, nb.float64]]:
-    n_boxes, n_dims = min_values.shape
-    slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
-    translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
-
-    for i in range(n_boxes):
-        for j in range(n_dims):
-            slices[i, j, 0] = min_values[i, j]
-            slices[i, j, 1] = max_values[i, j]
-            translation_vectors[i, j] = np.ceil(max(min_values[i, j], 0))
-
-    return slices, translation_vectors
 
 
 def _get_bounding_box_corners_in_intrinsic_coordinates(
@@ -407,7 +385,7 @@ def _bounding_box_mask_points(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
 ) -> da.Array:
-    """Compute a mask that is true for the points inside an axis-aligned bounding box.
+    """Compute a mask that is true for the points inside axis-aligned bounding boxes.
 
     Parameters
     ----------
@@ -416,30 +394,42 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        The upper left hand corner of the bounding box (i.e., minimum coordinates along all dimensions).
+        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     max_coordinate
-        The lower right hand corner of the bounding box (i.e., the maximum coordinates along all dimensions).
+        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 
     Returns
     -------
-    The mask for the points inside the bounding box.
+    The masks for the points inside the bounding boxes.
     """
     element_axes = get_axes_names(points)
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
+
+    # Ensure min_coordinate and max_coordinate are 2D arrays
+    min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
+    max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
+
+    n_boxes = min_coordinate.shape[0]
     in_bounding_box_masks = []
-    for axis_index, axis_name in enumerate(axes):
-        if axis_name not in element_axes:
-            continue
-        min_value = min_coordinate[axis_index]
-        in_bounding_box_masks.append(points[axis_name].gt(min_value).to_dask_array(lengths=True))
-    for axis_index, axis_name in enumerate(axes):
-        if axis_name not in element_axes:
-            continue
-        max_value = max_coordinate[axis_index]
-        in_bounding_box_masks.append(points[axis_name].lt(max_value).to_dask_array(lengths=True))
-    in_bounding_box_masks = da.stack(in_bounding_box_masks, axis=-1)
-    return da.all(in_bounding_box_masks, axis=1)
+
+    for box in range(n_boxes):
+        box_masks = []
+        for axis_index, axis_name in enumerate(axes):
+            if axis_name not in element_axes:
+                continue
+            min_value = min_coordinate[box, axis_index]
+            max_value = max_coordinate[box, axis_index]
+            box_masks.append(
+                points[axis_name].gt(min_value).to_dask_array(lengths=True)
+                & points[axis_name].lt(max_value).to_dask_array(lengths=True)
+            )
+        bounding_box_mask = da.stack(box_masks, axis=-1)
+        in_bounding_box_masks.append(da.all(bounding_box_mask, axis=1))
+    return in_bounding_box_masks
 
 
 def _dict_query_dispatcher(
@@ -537,7 +527,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray | DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -545,7 +535,7 @@ def _(
     See https://github.com/scverse/spatialdata/pull/151 for a detailed overview of the logic of this code,
     and for the cases the comments refer to.
     """
-    from spatialdata.transformations import get_transformation, set_transformation
+    from spatialdata._core.query._utils import _create_slices_and_translation, _process_query_result
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -574,7 +564,7 @@ def _(
         min_values_np = min_values_np[np.newaxis, :]
         max_values_np = max_values_np[np.newaxis, :]
 
-    slices, translation_vectors = create_slices_and_translation(min_values_np, max_values_np)
+    slices, translation_vectors = _create_slices_and_translation(min_values_np, max_values_np)
 
     if min_values.ndim == 2:  # Multiple boxes
         selection: list[dict[str, Any]] | dict[str, Any] = [
@@ -584,78 +574,28 @@ def _(
             }
             for box_idx in range(len(min_values_np))
         ]
-        translation_vector = translation_vectors.tolist()
+        translation_vectors = translation_vectors.tolist()
     else:  # Single box
         selection = {axis: slice(slices[0, axis_idx, 0], slices[0, axis_idx, 1]) for axis_idx, axis in enumerate(axes)}
-        translation_vector = translation_vectors[0].tolist()
+        translation_vectors = translation_vectors[0].tolist()
 
     if return_request_only:
         return selection
 
     # query the data
-    query_result = image.sel(selection)
-    if isinstance(image, DataArray):
-        if 0 in query_result.shape:
-            return None
-        assert isinstance(query_result, DataArray)
-        # rechunk the data to avoid irregular chunks
-        image = image.chunk("auto")
+    query_result: DataArray | DataTree | list[DataArray | DataTree] = (
+        image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
+    )
+
+    if isinstance(query_result, list):
+        processed_results = []
+        for result, translation_vector in zip(query_result, translation_vectors):
+            processed_result = _process_query_result(result, translation_vector, axes)
+            if processed_result is not None:
+                processed_results.append(processed_result)
+        query_result = processed_results if processed_results else None
     else:
-        assert isinstance(image, DataTree)
-        assert isinstance(query_result, DataTree)
-
-        d = {}
-        for k, data_tree in query_result.items():
-            v = data_tree.values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            if 0 in xdata.shape:
-                if k == "scale0":
-                    return None
-            else:
-                d[k] = xdata
-        # the list of scales may not be contiguous when the data has small shape (for instance with yx = 22 and
-        # rotations we may end up having scale0 and scale2 but not scale1. Practically this may occur in torch tiler if
-        # the tiles are request to be too small).
-        # Here we remove scales after we found a scale missing
-        scales_to_keep = []
-        for i, scale_name in enumerate(d.keys()):
-            if scale_name == f"scale{i}":
-                scales_to_keep.append(scale_name)
-            else:
-                break
-        # case in which scale0 is not present but other scales are
-        if len(scales_to_keep) == 0:
-            return None
-        d = {k: d[k] for k in scales_to_keep}
-
-        query_result = DataTree.from_dict(d)
-        # rechunk the data to avoid irregular chunks
-        for scale in query_result:
-            query_result[scale]["image"] = query_result[scale]["image"].chunk("auto")
-    query_result = compute_coordinates(query_result)
-
-    # the bounding box, mapped back to the intrinsic coordinate system is a set of points. The bounding box of these
-    # points is likely starting away from the origin (this is described by translation_vector), so we need to prepend
-    # this translation to every transformation in the new queries elements (unless the translation_vector is zero,
-    # in that case the translation is not needed)
-    if not np.allclose(np.array(translation_vector), 0):
-        translation_transform = Translation(translation=translation_vector, axes=axes)
-
-        transformations = get_transformation(query_result, get_all=True)
-        assert isinstance(transformations, dict)
-
-        new_transformations = {}
-        for coordinate_system, initial_transform in transformations.items():
-            new_transformation: BaseTransformation = Sequence(
-                [translation_transform, initial_transform],
-            )
-            new_transformations[coordinate_system] = new_transformation
-        set_transformation(query_result, new_transformations, set_all=True)
-    # let's make a copy of the transformations so that we don't modify the original object
-    t = get_transformation(query_result, get_all=True)
-    assert isinstance(t, dict)
-    set_transformation(query_result, t.copy(), set_all=True)
+        query_result = _process_query_result(query_result, translation_vectors, axes)
     return query_result
 
 
@@ -666,12 +606,16 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> DaskDataFrame | None:
+) -> DaskDataFrame | list[DaskDataFrame] | None:
     from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
+
+    # Ensure min_coordinate and max_coordinate are 2D arrays
+    min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
+    max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
 
     # for triggering validation
     _ = BoundingBoxRequest(
@@ -689,9 +633,11 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(axis=0)
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(axis=0)
+    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
+    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
+
+    min_coordinate_intrinsic = min_coordinate_intrinsic.data
+    max_coordinate_intrinsic = max_coordinate_intrinsic.data
 
     # get the points in the intrinsic coordinate bounding box
     in_intrinsic_bounding_box = _bounding_box_mask_points(
@@ -700,10 +646,20 @@ def _(
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
     )
-    # if there aren't any points, just return
-    if in_intrinsic_bounding_box.sum() == 0:
+
+    # assert that the number of bounding boxes is correct
+    assert len(in_intrinsic_bounding_box) == len(min_coordinate)
+    points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
+    for mask in in_intrinsic_bounding_box:
+        if mask.sum() == 0:
+            points_in_intrinsic_bounding_box.append(None)
+        else:
+            points_in_intrinsic_bounding_box.append(points.loc[mask])
+    if len(points_in_intrinsic_bounding_box) == 0:
         return None
-    points_in_intrinsic_bounding_box = points.loc[in_intrinsic_bounding_box]
+
+    # assert that the number of queried points is correct
+    assert len(points_in_intrinsic_bounding_box) == len(min_coordinate)
 
     # # we have to reset the index since we have subset
     # # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
@@ -717,25 +673,42 @@ def _(
     # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
 
     # transform the element to the query coordinate system
-    points_query_coordinate_system = transform(
-        points_in_intrinsic_bounding_box, to_coordinate_system=target_coordinate_system, maintain_positioning=False
-    )  # type: ignore[union-attr]
+    output: list[DaskDataFrame | None] = []
+    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate):
+        if p is None:
+            output.append(None)
+        else:
+            points_query_coordinate_system = transform(
+                p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
+            )
 
-    # get a mask for the points in the bounding box
-    bounding_box_mask = _bounding_box_mask_points(
-        points=points_query_coordinate_system,
-        axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-    )
-    bounding_box_indices = np.where(bounding_box_mask.compute())[0]
-    if len(bounding_box_indices) == 0:
+            # get a mask for the points in the bounding box
+            bounding_box_mask = _bounding_box_mask_points(
+                points=points_query_coordinate_system,
+                axes=axes,
+                min_coordinate=min_c,
+                max_coordinate=max_c,
+            )
+            if len(bounding_box_mask) == 1:
+                bounding_box_mask = bounding_box_mask[0]
+            bounding_box_indices = np.where(bounding_box_mask.compute())[0]
+
+            if len(bounding_box_indices) == 0:
+                output.append(None)
+            else:
+                points_df = p.compute().iloc[bounding_box_indices]
+                old_transformations = get_transformation(p, get_all=True)
+                assert isinstance(old_transformations, dict)
+                output.append(
+                    PointsModel.parse(
+                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                    )
+                )
+    if len(output) == 0:
         return None
-    points_df = points_in_intrinsic_bounding_box.compute().iloc[bounding_box_indices]
-    old_transformations = get_transformation(points, get_all=True)
-    assert isinstance(old_transformations, dict)
-    # an alternative approach is to query for each partition in parallel
-    return PointsModel.parse(dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy())
+    if len(output) == 1:
+        return output[0]
+    return output
 
 
 @bounding_box_query.register(GeoDataFrame)
@@ -745,7 +718,7 @@ def _(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> GeoDataFrame | None:
+) -> GeoDataFrame | list[GeoDataFrame] | None:
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -767,16 +740,32 @@ def _(
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
-    intrinsic_bounding_box_corners = intrinsic_bounding_box_corners.data
-    bounding_box_non_axes_aligned = Polygon(intrinsic_bounding_box_corners)
-    indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
-    queried = polygons[indices]
-    if len(queried) == 0:
-        return None
+
+    # Create a list of Polygons for each bounding box
     old_transformations = get_transformation(polygons, get_all=True)
     assert isinstance(old_transformations, dict)
-    del queried.attrs[ShapesModel.TRANSFORM_KEY]
-    return ShapesModel.parse(queried, transformations=old_transformations.copy())
+
+    queried_polygons = []
+    intrinsic_bounding_box_corners = (
+        intrinsic_bounding_box_corners.expand_dims(dim="box")
+        if "box" not in intrinsic_bounding_box_corners.dims
+        else intrinsic_bounding_box_corners
+    )
+    for box_corners in intrinsic_bounding_box_corners:
+        bounding_box_non_axes_aligned = Polygon(box_corners.data)
+        indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
+        queried = polygons[indices]
+        if len(queried) == 0:
+            queried_polygon = None
+        else:
+            del queried.attrs[ShapesModel.TRANSFORM_KEY]
+            queried_polygon = ShapesModel.parse(queried, transformations=old_transformations.copy())
+        queried_polygons.append(queried_polygon)
+    if len(queried_polygons) == 0:
+        return None
+    if len(queried_polygons) == 1:
+        return queried_polygons[0]
+    return queried_polygons
 
 
 # TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter

@@ -108,11 +108,12 @@ def test_bounding_box_request_wrong_coordinate_order():
 @pytest.mark.parametrize("is_3d", [True, False])
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
+@pytest.mark.parametrize("multiple_boxes", [True, False])
+def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, multiple_boxes: bool):
     """test the points bounding box_query"""
-    data_x = np.array([10, 20, 20, 20])
-    data_y = np.array([10, 20, 30, 30])
-    data_z = np.array([100, 200, 200, 300])
+    data_x = np.array([10, 20, 20, 20, 40])
+    data_y = np.array([10, 20, 30, 30, 50])
+    data_z = np.array([100, 200, 200, 300, 500])
 
     data = np.stack((data_x, data_y), axis=1)
     if is_3d:
@@ -125,16 +126,24 @@ def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
         original_z = points_element["z"]
 
     if is_bb_3d:
-        _min_coordinate = np.array([18, 25, 250])
-        _max_coordinate = np.array([22, 35, 350])
+        if multiple_boxes:
+            _min_coordinate = np.array([[18, 25, 250], [35, 45, 450], [100, 110, 1100]])
+            _max_coordinate = np.array([[22, 35, 350], [45, 55, 550], [110, 120, 1200]])
+        else:
+            _min_coordinate = np.array([18, 25, 250])
+            _max_coordinate = np.array([22, 35, 350])
         _axes = ("x", "y", "z")
     else:
-        _min_coordinate = np.array([18, 25])
-        _max_coordinate = np.array([22, 35])
+        if multiple_boxes:
+            _min_coordinate = np.array([[18, 25], [35, 45], [100, 110]])
+            _max_coordinate = np.array([[22, 35], [45, 55], [110, 120]])
+        else:
+            _min_coordinate = np.array([18, 25])
+            _max_coordinate = np.array([22, 35])
         _axes = ("x", "y")
 
     if with_polygon_query:
-        if is_bb_3d:
+        if is_bb_3d or multiple_boxes:
             return
         polygon = Polygon([(18, 25), (18, 35), (22, 35), (22, 25)])
         points_result = polygon_query(points_element, polygon=polygon, target_coordinate_system="global")
@@ -147,22 +156,49 @@ def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool):
             target_coordinate_system="global",
         )
 
-    # Check that the correct point was selected
+    # Check that the correct points were selected
     if is_3d:
         if is_bb_3d:
-            np.testing.assert_allclose(points_result["x"].compute(), [20])
-            np.testing.assert_allclose(points_result["y"].compute(), [30])
-            np.testing.assert_allclose(points_result["z"].compute(), [300])
+            if multiple_boxes:
+                np.testing.assert_allclose(points_result[0]["x"].compute(), [20])
+                np.testing.assert_allclose(points_result[0]["y"].compute(), [30])
+                np.testing.assert_allclose(points_result[0]["z"].compute(), [300])
+                np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+                np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+                np.testing.assert_allclose(points_result[1]["z"].compute(), [500])
+            else:
+                np.testing.assert_allclose(points_result["x"].compute(), [20])
+                np.testing.assert_allclose(points_result["y"].compute(), [30])
+                np.testing.assert_allclose(points_result["z"].compute(), [300])
+        else:
+            if multiple_boxes:
+                np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+                np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+                np.testing.assert_allclose(points_result[0]["z"].compute(), [200, 300])
+                np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+                np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+                np.testing.assert_allclose(points_result[1]["z"].compute(), [500])
+            else:
+                np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
+                np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
+                np.testing.assert_allclose(points_result["z"].compute(), [200, 300])
+    else:
+        if multiple_boxes:
+            np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+            np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+            np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+            np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+            assert points_result[2] is None
         else:
             np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
             np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
-            np.testing.assert_allclose(points_result["z"].compute(), [200, 300])
-    else:
-        np.testing.assert_allclose(points_result["x"].compute(), [20, 20])
-        np.testing.assert_allclose(points_result["y"].compute(), [30, 30])
 
     # result should be valid points element
-    PointsModel.validate(points_result)
+    if multiple_boxes:
+        for result in points_result:
+            if result is None:
+                continue
+            PointsModel.validate(result)
 
     # original element should be unchanged
     np.testing.assert_allclose(points_element["x"].compute(), original_x)
@@ -192,8 +228,15 @@ def test_query_points_no_points():
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize("return_request_only", [True, False])
+@pytest.mark.parametrize("multiple_boxes", [True, False])
 def test_query_raster(
-    n_channels: int, is_labels: bool, is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, return_request_only: bool
+    n_channels: int,
+    is_labels: bool,
+    is_3d: bool,
+    is_bb_3d: bool,
+    with_polygon_query: bool,
+    return_request_only: bool,
+    multiple_boxes: bool,
 ):
     """Apply a bounding box to a raster element."""
     if is_labels and n_channels > 1:
@@ -232,16 +275,16 @@ def test_query_raster(
 
     for image in images:
         if is_bb_3d:
-            _min_coordinate = np.array([2, 5, 0])
-            _max_coordinate = np.array([7, 10, 5])
+            _min_coordinate = np.array([[2, 5, 0], [1, 4, 0]]) if multiple_boxes else np.array([2, 5, 0])
+            _max_coordinate = np.array([[7, 10, 5], [6, 9, 4]]) if multiple_boxes else np.array([7, 10, 5])
             _axes = ("z", "y", "x")
         else:
-            _min_coordinate = np.array([5, 0])
-            _max_coordinate = np.array([10, 5])
+            _min_coordinate = np.array([[5, 0], [4, 0]]) if multiple_boxes else np.array([5, 0])
+            _max_coordinate = np.array([[10, 5], [9, 4]]) if multiple_boxes else np.array([10, 5])
             _axes = ("y", "x")
 
         if with_polygon_query:
-            if is_bb_3d:
+            if is_bb_3d or multiple_boxes:
                 return
             # make a triangle whose bounding box is the same as the bounding box specified with the query
             polygon = Polygon([(0, 5), (5, 5), (5, 10)])
@@ -258,36 +301,67 @@ def test_query_raster(
                 return_request_only=return_request_only,
             )
 
-        slices = {"y": slice(5, 10), "x": slice(0, 5)}
-        if is_bb_3d and is_3d:
-            slices["z"] = slice(2, 7)
+        if multiple_boxes:
+            slices = [{"y": slice(5, 10), "x": slice(0, 5)}, {"y": slice(4, 9), "x": slice(0, 4)}]
+            if is_bb_3d and is_3d:
+                slices[0]["z"] = slice(2, 7)
+                slices[1]["z"] = slice(1, 6)
+        else:
+            slices = {"y": slice(5, 10), "x": slice(0, 5)}
+            if is_bb_3d and is_3d:
+                slices["z"] = slice(2, 7)
+
         if return_request_only:
-            assert isinstance(image_result, dict)
-            if not (is_bb_3d and is_3d) and ("z" in image_result):
-                image_result.pop("z")  # remove z from slices if `polygon_query`
-            for k, v in image_result.items():
-                assert isinstance(v, slice)
-                assert image_result[k] == slices[k]
+            assert isinstance(image_result, (dict, list))
+            if multiple_boxes:
+                for i, result in enumerate(image_result):
+                    if not (is_bb_3d and is_3d) and ("z" in result):
+                        result.pop("z")  # remove z from slices if `polygon_query`
+                    for k, v in result.items():
+                        assert isinstance(v, slice)
+                        assert result[k] == slices[i][k]
+            else:
+                if not (is_bb_3d and is_3d) and ("z" in image_result):
+                    image_result.pop("z")  # remove z from slices if `polygon_query`
+                for k, v in image_result.items():
+                    assert isinstance(v, slice)
+                    assert image_result[k] == slices[k]
             return
 
-        expected_image = ximage.sel(**slices)
+        if multiple_boxes:
+            expected_images = [ximage.sel(**s) for s in slices]
+        else:
+            expected_image = ximage.sel(**slices)
 
         if isinstance(image, DataArray):
-            assert isinstance(image, DataArray)
-            np.testing.assert_allclose(image_result, expected_image)
+            assert isinstance(image_result, (DataArray, list))
+            if multiple_boxes:
+                for result, expected in zip(image_result, expected_images):
+                    np.testing.assert_allclose(result, expected)
+            else:
+                np.testing.assert_allclose(image_result, expected_image)
         elif isinstance(image, DataTree):
-            assert isinstance(image_result, DataTree)
-            v = image_result["scale0"].values()
-            assert len(v) == 1
-            xdata = v.__iter__().__next__()
-            np.testing.assert_allclose(xdata, expected_image)
+            assert isinstance(image_result, (DataTree, list))
+            if multiple_boxes:
+                for result, expected in zip(image_result, expected_images):
+                    v = result["scale0"].values()
+                    assert len(v) == 1
+                    xdata = v.__iter__().__next__()
+                    np.testing.assert_allclose(xdata, expected)
+            else:
+                v = image_result["scale0"].values()
+                assert len(v) == 1
+                xdata = v.__iter__().__next__()
+                np.testing.assert_allclose(xdata, expected_image)
         else:
             raise ValueError("Unexpected type")
 
 
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
-def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool):
+@pytest.mark.parametrize("multiple_boxes", [True, False])
+@pytest.mark.parametrize("box_outside_polygon", [True, False])
+def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes: bool, box_outside_polygon: bool):
     centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
     half_widths = [6] * 4
     sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
@@ -303,12 +377,20 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool):
         )
     else:
         if is_bb_3d:
-            _min_coordinate = np.array([2, 40, 40])
-            _max_coordinate = np.array([7, 100, 100])
+            _min_coordinate = np.array([[2, 40, 40], [2, 50, 50]]) if multiple_boxes else np.array([2, 40, 40])
+            _max_coordinate = np.array([[7, 100, 100], [7, 110, 110]]) if multiple_boxes else np.array([7, 100, 100])
+            if box_outside_polygon:
+                _min_coordinate = np.array([[2, 100, 100], [2, 50, 50]]) if multiple_boxes else np.array([2, 40, 40])
+                _max_coordinate = (
+                    np.array([[7, 110, 110], [7, 110, 110]]) if multiple_boxes else np.array([7, 100, 100])
+                )
             _axes = ("z", "y", "x")
         else:
-            _min_coordinate = np.array([40, 40])
-            _max_coordinate = np.array([100, 100])
+            _min_coordinate = np.array([[40, 40], [50, 50]]) if multiple_boxes else np.array([40, 40])
+            _max_coordinate = np.array([[100, 100], [110, 110]]) if multiple_boxes else np.array([100, 100])
+            if box_outside_polygon:
+                _min_coordinate = np.array([[100, 100], [50, 50]]) if multiple_boxes else np.array([40, 40])
+                _max_coordinate = np.array([[110, 110], [110, 110]]) if multiple_boxes else np.array([100, 100])
             _axes = ("y", "x")
 
         polygons_result = bounding_box_query(
@@ -319,8 +401,19 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool):
             max_coordinate=_max_coordinate,
         )
 
-    assert len(polygons_result) == 1
-    assert polygons_result.index[0] == 3
+    if multiple_boxes and not with_polygon_query:
+        assert isinstance(polygons_result, list)
+        assert len(polygons_result) == 2
+        if box_outside_polygon:
+
+            assert polygons_result[0] is None
+            assert polygons_result[1].index[0] == 3
+        else:
+            assert polygons_result[0].index[0] == 3
+            assert len(polygons_result[1]) == 1
+    else:
+        assert len(polygons_result) == 1
+        assert polygons_result.index[0] == 3
 
 
 @pytest.mark.parametrize("is_bb_3d", [True, False])
