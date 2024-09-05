@@ -145,8 +145,8 @@ def _(
 
 # TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
 def _filter_table_by_elements(
-    table: AnnData | None, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
-) -> AnnData | None:
+    table: AnnData, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
+) -> AnnData:
     """
     Filter an AnnData table to keep only the rows that are in the elements.
 
@@ -168,8 +168,6 @@ def _filter_table_by_elements(
     assert any(
         len(elements) > 0 for elements in elements_dict.values()
     ), "elements_dict must contain at least one dict which contains at least one element"
-    if table is None:
-        return None
     to_keep = np.zeros(len(table), dtype=bool)
     region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
     instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
