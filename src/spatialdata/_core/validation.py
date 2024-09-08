@@ -71,5 +71,11 @@ def check_valid_name(name: str) -> None:
         raise TypeError(f"Name must be a string, not {type(name).__name__}.")
     if len(name) == 0:
         raise ValueError("Name cannot be an empty string.")
-    if not all(c.isalnum() or c in "_-" for c in name):
-        raise ValueError("Name must contain only alphanumeric characters, underscores, and hyphens.")
+    if name == ".":
+        raise ValueError("Name cannot be '.'.")
+    if name == "..":
+        raise ValueError("Name cannot be '..'.")
+    if name.startswith("__"):
+        raise ValueError("Name cannot start with '__'.")
+    if not all(c.isalnum() or c in "_-." for c in name):
+        raise ValueError("Name must contain only alphanumeric characters, underscores, dots and hyphens.")

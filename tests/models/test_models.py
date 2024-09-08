@@ -366,6 +366,24 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_invalid_names(self, full_sdata, element_type: str, name: str):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValueError, match="Name (must|cannot)"):
+            SpatialData(**{element_type: {name: element}})
+
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):

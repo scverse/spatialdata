@@ -567,17 +567,31 @@ def _check_valid_name(f: Callable[[str], Any]) -> None:
         f(2)
     with pytest.raises(ValueError, match="Name cannot be an empty string."):
         f("")
-    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
-        f("not valid")
-    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
+    with pytest.raises(ValueError, match="Name cannot be '.'"):
+        f(".")
+    with pytest.raises(ValueError, match="Name cannot be '..'"):
+        f("..")
+    with pytest.raises(ValueError, match="Name cannot start with '__'"):
+        f("__a")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
+        f("has whitespace")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
         f("this/is/not/valid")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
+        f("non-alnum_#$%&()*+,?@")
 
 
-def test_incremental_io_valid_name(points: SpatialData) -> None:
-    _check_valid_name(points.write_element)
-    _check_valid_name(points.write_metadata)
-    _check_valid_name(points.write_transformations)
-    _check_valid_name(points.delete_element_from_disk)
+def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
+    _check_valid_name(full_sdata.write_element)
+    _check_valid_name(full_sdata.write_metadata)
+    _check_valid_name(full_sdata.write_transformations)
+    _check_valid_name(full_sdata.delete_element_from_disk)
 
 
 cached_sdata_blobs = blobs()
