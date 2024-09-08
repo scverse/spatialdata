@@ -39,6 +39,12 @@ class Elements(UserDict[str, Any]):
         if not all(c.isalnum() or c in "_-" for c in name):
             raise ValueError("Name must contain only alphanumeric characters, underscores, and hyphens.")
 
+    def _add_shared_key(self, key: str) -> None:
+        self._shared_keys.add(key)
+
+    def _remove_shared_key(self, key: str) -> None:
+        self._shared_keys.remove(key)
+
     @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
         Elements._check_valid_name(key)
@@ -49,11 +55,11 @@ class Elements(UserDict[str, Any]):
                 raise KeyError(f"Key `{key}` already exists.")
 
     def __setitem__(self, key: str, value: Any) -> None:
-        self._shared_keys.add(key)
+        self._add_shared_key(key)
         super().__setitem__(key, value)
 
     def __delitem__(self, key: str) -> None:
-        self._shared_keys.remove(key)
+        self._remove_shared_key(key)
         super().__delitem__(key)
 
 
