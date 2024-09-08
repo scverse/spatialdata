@@ -186,6 +186,8 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
+        if "rgb" not in kwargs:
+            kwargs["rgb"] = None
         data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
