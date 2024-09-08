@@ -11,7 +11,7 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
-from spatialdata._core.validation import check_valid_name
+from spatialdata._core.validation import check_key_is_case_insensitively_unique, check_valid_name
 from spatialdata._types import Raster_T
 from spatialdata.models import (
     Image2DModel,
@@ -43,8 +43,11 @@ class Elements(UserDict[str, Any]):
         if key in element_keys:
             warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
         else:
-            if key in shared_keys:
-                raise KeyError(f"Key `{key}` already exists.")
+            try:
+                check_key_is_case_insensitively_unique(key, shared_keys)
+            except ValueError as e:
+                # Validation raises ValueError, but inappropriate mapping key must raise KeyError.
+                raise KeyError(*e.args) from e
 
     def __setitem__(self, key: str, value: Any) -> None:
         self._add_shared_key(key)

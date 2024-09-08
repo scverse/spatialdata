@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Collection
+
 import pandas as pd
 from anndata import AnnData
 
@@ -65,7 +67,7 @@ def check_valid_name(name: str) -> None:
     TypeError
         If given argument is not of type string.
     ValueError
-        If the proposed name viloates a naming restriction.
+        If the proposed name violates a naming restriction.
     """
     if not isinstance(name, str):
         raise TypeError(f"Name must be a string, not {type(name).__name__}.")
@@ -79,3 +81,73 @@ def check_valid_name(name: str) -> None:
         raise ValueError("Name cannot start with '__'.")
     if not all(c.isalnum() or c in "_-." for c in name):
         raise ValueError("Name must contain only alphanumeric characters, underscores, dots and hyphens.")
+
+
+def check_all_keys_case_insensitively_unique(keys: Collection[str]) -> None:
+    """
+    Check that all keys are unique when ignoring case.
+
+    This checks whether the keys contain no duplicates on an case-insensitive system. If keys
+    differ in character case, an error is raised.
+
+    Parameters
+    ----------
+    keys
+        A collection of string keys
+
+    Raises
+    ------
+    ValueError
+        If two keys differ only in character case.
+
+    Example
+    -------
+
+    ```pycon
+    >>> check_all_keys_case_insensitively_unique(["abc", "def"])
+    >>> check_all_keys_case_insensitively_unique(["abc", "def", "Abc"])
+    Traceback (most recent call last):
+        ...
+    ValueError: Key `Abc` is not unique, or another case-variant of it exists.
+    ```
+    """
+    seen: set[str | None] = set()
+    for key in keys:
+        normalized_key = key.lower()
+        check_key_is_case_insensitively_unique(key, seen)
+        seen.add(normalized_key)
+
+
+def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]) -> None:
+    """
+    Check that a specific key is not contained in a set of keys, ignoring case.
+
+    This checks whether a given key is not contained among a set of reference keys. If the key or
+    a case-variant of it is contained, an error is raised.
+
+    Parameters
+    ----------
+    key
+        A string key
+    other_keys
+        A collection of string keys
+
+    Raises
+    ------
+    ValueError
+        If reference keys contain a variant of the key that only differs in character case.
+
+    Example
+    -------
+
+    ```pycon
+    >>> check_key_is_case_insensitively_unique("def", ["abc"])
+    >>> check_key_is_case_insensitively_unique("abc", ["def", "Abc"])
+    Traceback (most recent call last):
+        ...
+    ValueError: Key `Abc` is not unique, or another case-variant of it exists.
+    ```
+    """
+    normalized_key = key.lower()
+    if normalized_key in other_keys:
+        raise ValueError(f"Key `{key}` is not unique, or another case-variant of it exists.")

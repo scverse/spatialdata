@@ -384,6 +384,18 @@ class TestModels:
         with pytest.raises(ValueError, match="Name (must|cannot)"):
             SpatialData(**{element_type: {name: element}})
 
+    @pytest.mark.parametrize(
+        "names",
+        [
+            ["abc", "Abc"],
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_not_unique_names(self, full_sdata, element_type: str, names: list[str]):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(KeyError, match="Key `.*` is not unique"):
+            SpatialData(**{element_type: {name: element for name in names}})
+
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):

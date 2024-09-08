@@ -104,7 +104,7 @@ class TestReadWrite:
             with pytest.warns(UserWarning):
                 sdata.images[f"additional_{k}"] = v
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_labels().items():
@@ -112,7 +112,7 @@ class TestReadWrite:
             with pytest.warns(UserWarning):
                 sdata.labels[f"additional_{k}"] = v
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_shapes().items():
@@ -120,7 +120,7 @@ class TestReadWrite:
             with pytest.warns(UserWarning):
                 sdata.shapes[f"additional_{k}"] = v
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_points().items():
@@ -128,7 +128,7 @@ class TestReadWrite:
             with pytest.warns(UserWarning):
                 sdata.points[f"additional_{k}"] = v
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
     def test_incremental_io_list_of_elements(self, shapes: SpatialData) -> None:

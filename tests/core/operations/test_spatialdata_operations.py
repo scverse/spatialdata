@@ -66,6 +66,17 @@ def test_element_names_unique() -> None:
     with pytest.raises(KeyError):
         sdata.shapes["labels"] = shapes
 
+    # add elements with the case-variant of an existing name
+    # of element of same type
+    with pytest.raises(KeyError):
+        sdata.images["Image"] = image
+    with pytest.raises(KeyError):
+        sdata.points["POINTS"] = points
+    with pytest.raises(KeyError):
+        sdata.shapes["Shapes"] = shapes
+    with pytest.raises(KeyError):
+        sdata.labels["Labels"] = labels
+
     assert sdata["image"].shape == image.shape
     assert sdata["labels"].shape == labels.shape
     assert len(sdata["points"]) == len(points)

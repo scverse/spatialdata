@@ -22,7 +22,11 @@ from shapely import MultiPolygon, Polygon
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata._core.validation import check_valid_name
+from spatialdata._core.validation import (
+    check_all_keys_case_insensitively_unique,
+    check_target_region_column_symmetry,
+    check_valid_name,
+)
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
@@ -1987,11 +1991,7 @@ class SpatialData:
         ValueError
             If the element names are not unique.
         """
-        element_names = set()
-        for _, element_name, _ in self.gen_elements():
-            if element_name in element_names:
-                raise ValueError(f"Element name {element_name!r} is not unique.")
-            element_names.add(element_name)
+        check_all_keys_case_insensitively_unique([name for _, name, _ in self.gen_elements()])
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
