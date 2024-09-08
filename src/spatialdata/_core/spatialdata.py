@@ -22,6 +22,7 @@ from shapely import MultiPolygon, Polygon
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
+from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
@@ -33,7 +34,6 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    check_target_region_column_symmetry,
     get_model,
     get_table_keys,
 )
