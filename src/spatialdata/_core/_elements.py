@@ -11,6 +11,7 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
+from spatialdata._core.validation import check_valid_name
 from spatialdata._types import Raster_T
 from spatialdata.models import (
     Image2DModel,
@@ -30,15 +31,6 @@ class Elements(UserDict[str, Any]):
         self._shared_keys = shared_keys
         super().__init__()
 
-    @staticmethod
-    def _check_valid_name(name: str) -> None:
-        if not isinstance(name, str):
-            raise TypeError(f"Name must be a string, not {type(name).__name__}.")
-        if len(name) == 0:
-            raise ValueError("Name cannot be an empty string.")
-        if not all(c.isalnum() or c in "_-" for c in name):
-            raise ValueError("Name must contain only alphanumeric characters, underscores, and hyphens.")
-
     def _add_shared_key(self, key: str) -> None:
         self._shared_keys.add(key)
 
@@ -47,7 +39,7 @@ class Elements(UserDict[str, Any]):
 
     @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
-        Elements._check_valid_name(key)
+        check_valid_name(key)
         if key in element_keys:
             warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
         else:

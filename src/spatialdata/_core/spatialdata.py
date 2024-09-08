@@ -22,7 +22,7 @@ from shapely import MultiPolygon, Polygon
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata._core.validation import check_target_region_column_symmetry
+from spatialdata._core.validation import check_valid_name
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
@@ -1244,9 +1244,7 @@ class SpatialData:
                 self.write_element(name, overwrite=overwrite)
             return
 
-        from spatialdata._core._elements import Elements
-
-        Elements._check_valid_name(element_name)
+        check_valid_name(element_name)
         self._validate_element_names_are_unique()
         element = self.get(element_name)
         if element is None:
@@ -1316,10 +1314,9 @@ class SpatialData:
                 self.delete_element_from_disk(name)
             return
 
-        from spatialdata._core._elements import Elements
         from spatialdata._io._utils import _backed_elements_contained_in_path
 
-        Elements._check_valid_name(element_name)
+        check_valid_name(element_name)
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
@@ -1451,10 +1448,8 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
-        from spatialdata._core._elements import Elements
-
         if element_name is not None:
-            Elements._check_valid_name(element_name)
+            check_valid_name(element_name)
 
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
@@ -1541,10 +1536,8 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
-        from spatialdata._core._elements import Elements
-
         if element_name is not None:
-            Elements._check_valid_name(element_name)
+            check_valid_name(element_name)
 
         self.write_transformations(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.

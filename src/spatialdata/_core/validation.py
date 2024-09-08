@@ -46,3 +46,30 @@ def check_target_region_column_symmetry(table: AnnData, region_key: str, target:
             f"Mismatch(es) found between regions in region column in obs and target element: "
             f"{', '.join(diff for diff in symmetric_difference)}"
         )
+
+
+def check_valid_name(name: str) -> None:
+    """
+    Check that a name is valid for SpatialData elements.
+
+    This checks whether the proposed name fulfills the naming restrictions and raises an error
+    otherwise.
+
+    Parameters
+    ----------
+    name
+        The name for a SpatialData element
+
+    Raises
+    ------
+    TypeError
+        If given argument is not of type string.
+    ValueError
+        If the proposed name viloates a naming restriction.
+    """
+    if not isinstance(name, str):
+        raise TypeError(f"Name must be a string, not {type(name).__name__}.")
+    if len(name) == 0:
+        raise ValueError("Name cannot be an empty string.")
+    if not all(c.isalnum() or c in "_-" for c in name):
+        raise ValueError("Name must contain only alphanumeric characters, underscores, and hyphens.")
