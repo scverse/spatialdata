@@ -34,6 +34,7 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import C, X, Y, Z, get_axes_names
@@ -974,6 +975,7 @@ class TableModel:
         -------
         The parsed data.
         """
+        validate_table_attr_keys(adata)
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:

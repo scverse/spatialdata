@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections import defaultdict
+from collections.abc import Callable, Collection
 
 import pandas as pd
 from anndata import AnnData
@@ -151,3 +152,78 @@ def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]
     normalized_key = key.lower()
     if normalized_key in other_keys:
         raise ValueError(f"Key `{key}` is not unique, or another case-variant of it exists.")
+
+
+def check_valid_dataframe_column_name(name: str) -> None:
+    """
+    Check that a name is valid for SpatialData table dataframe.
+
+    This checks whether the proposed name fulfills the naming restrictions and raises an error
+    otherwise. In addition to the element naming restriction, a column cannot be named "_index".
+
+    Parameters
+    ----------
+    name
+        The name for a table column
+
+    Raises
+    ------
+    TypeError
+        If given argument is not of type string.
+    ValueError
+        If the proposed name violates a naming restriction.
+    """
+    check_valid_name(name)
+    if name == "_index":
+        raise ValueError("Name cannot be '_index'")
+
+
+def _iter_anndata_attr_keys_collect_value_errors(
+    adata: AnnData, attr_visitor: Callable[[str], None], key_visitor: Callable[[str, str], None]
+) -> None:
+    messages_per_attr: dict[str, list[str]] = defaultdict(list)
+    for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns"):
+        try:
+            attr_visitor(attr)
+        except ValueError as e:
+            messages_per_attr[attr].append(f"  {e.args[0]}")
+        for key in getattr(adata, attr):
+            try:
+                key_visitor(attr, key)
+            except ValueError as e:
+                messages_per_attr[attr].append(f"  '{key}': {e.args[0]}")
+    if messages_per_attr:
+        raise ValueError(
+            "Table contains invalid names:\n"
+            + "\n".join(f"{attr}:\n" + "\n".join(messages) for attr, messages in messages_per_attr.items())
+        )
+
+
+def validate_table_attr_keys(data: AnnData) -> None:
+    """
+    Check that all keys of all AnnData attributes have valid names.
+
+    This checks for AnnData obs, var, obsm, obsp, varm, varp, uns whether their keys fulfill the
+    naming restrictions and raises an error otherwise.
+
+    Parameters
+    ----------
+    data
+        The AnnData table
+
+    Raises
+    ------
+    ValueError
+        If the AnnData contains on or several invalid keys.
+    """
+
+    def _check_valid_attr_keys(attr: str) -> None:
+        check_all_keys_case_insensitively_unique(getattr(data, attr).keys())
+
+    def _check_valid_attr_key(attr: str, key: str) -> None:
+        if attr in ("obs", "var"):
+            check_valid_dataframe_column_name(key)
+        else:
+            check_valid_name(key)
+
+    _iter_anndata_attr_keys_collect_value_errors(data, _check_valid_attr_keys, _check_valid_attr_key)

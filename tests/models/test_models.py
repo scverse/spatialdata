@@ -411,6 +411,56 @@ class TestModels:
         with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "_index",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns"])
+    def test_table_model_invalid_names(self, key: str, attr: str):
+        if attr in ("obs", "var"):
+            with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
+                df = pd.DataFrame([[None]], columns=[key], index=["1"])
+                adata = AnnData(np.array([[0]]), **{attr: df})
+                TableModel.parse(adata)
+        elif key != "_index":  # "_index" is only disallowed in obs/var
+            if attr in ("obsm", "varm", "obsp", "varp"):
+                with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
+                    array = np.array([[0]])
+                    adata = AnnData(np.array([[0]]), **{attr: {key: array}})
+                    TableModel.parse(adata)
+            elif attr == "uns":
+                with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
+                    adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
+                    TableModel.parse(adata)
+
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ["abc", "abc"],
+            ["abc", "Abc", "ABC"],
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "var"])
+    def test_table_model_not_unique_columns(self, keys: list[str], attr: str):
+        key_regex = re.escape(keys[1])
+        df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
+        with pytest.raises(
+            ValueError,
+            match=f"Table contains invalid names:\n{attr}:\n"
+            + f"  Key `{key_regex}` is not unique, or another case-variant of it exists.",
+        ):
+            adata = AnnData(np.array([[0]]), **{attr: df})
+            TableModel.parse(adata)
+
 
 def test_get_schema():
     images = _get_images()
