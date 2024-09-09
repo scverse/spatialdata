@@ -26,6 +26,7 @@ from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
     check_valid_name,
+    validate_table_attr_keys,
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
@@ -1119,6 +1120,12 @@ class SpatialData:
                     " the current Zarr store." + WORKAROUND
                 )
 
+    def _validate_all_elements(self) -> None:
+        for element_type, element_name, element in self.gen_elements():
+            check_valid_name(element_name)
+            if element_type == "table":
+                validate_table_attr_keys(element)
+
     def write(
         self,
         file_path: str | Path,
@@ -1154,6 +1161,7 @@ class SpatialData:
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
+        self._validate_all_elements()
 
         store = parse_url(file_path, mode="w").store
         _ = zarr.group(store=store, overwrite=overwrite)

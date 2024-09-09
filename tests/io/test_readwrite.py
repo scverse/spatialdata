@@ -20,7 +20,7 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
+from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes, _get_table
 
 RNG = default_rng(0)
 
@@ -684,3 +684,16 @@ def test_element_already_on_disk_different_type(full_sdata, element_name: str) -
             match=ERROR_MSG,
         ):
             full_sdata.write_transformations(element_name)
+
+
+def test_writing_invalid_name(tmp_path: Path):
+    invalid_sdata = SpatialData()
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    invalid_sdata.images.data[""] = next(iter(_get_images().values()))
+    # invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
+    invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.tables.data["has whitespace"] = _get_table()
+
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write(tmp_path / "data.zarr")
