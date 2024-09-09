@@ -130,6 +130,18 @@ _SpatialData_ follows the OME-NGFF specifications whenever possible and therefor
 -   Any `Element` MAY be annotated by `Tables`; also `Shapes` and `Points` MAY contain annotations within themselves as additional dataframe columns (e.g. intensity of point spread function of a each point, or gene id).
 -   `Tables` CAN NOT be annotated by other `Tables`.
 
+#### Naming
+
+Names of SpatialData elements must fulfill certain restrictions to ensure robust storage and compatibility:
+
+- MUST NOT be the empty string ``.
+- MUST only contain alphanumeric characters or hyphens `-`, dots `.`, underscores `_`. Alphanumeric includes letters from different alphabets and number-like symbols, but excludes whitespace, slashes and other symbols.
+- MUST NOT be the full strings `.` or `..`, which would have special meanings as file paths.
+- MUST NOT start with double underscores `__`.
+- MUST NOT only differ in character case, to avoid name collisions on case-insensitive systems.
+
+Additionally, dataframes in tables MUST NOT have a column named `_index`, which is reserved.
+
 #### Images
 
 Images of a sample. Should conform to the [OME-NGFF concept of an image](https://ngff.openmicroscopy.org/latest/#image-layout).
