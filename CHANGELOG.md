@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+### Changed
+
+-   Validation of element and column names allowing `_-.` and alphanumeric characters #624
+
 ### Minor
 
 -   Added `clip: bool = False` parameter to `polygon_query()` #670
