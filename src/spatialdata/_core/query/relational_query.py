@@ -110,8 +110,10 @@ def get_element_instances(
 def _(
     element: DataArray | DataTree,
     return_background: bool = False,
-) -> pd.Index:
+) -> pd.Index | None:
     model = get_model(element)
+    if model in [Image2DModel, Image3DModel]:
+        return None
     assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
     if isinstance(element, DataArray):
         # get unique labels value (including 0 if present)
@@ -171,29 +173,6 @@ def _filter_table_by_elements(
             len(elements) > 0 for elements in elements_dict.values()
         ), "elements_dict must contain at least one dict which contains at least one element"
 
-    def _get_table_keys(table: AnnData) -> tuple[str, str]:
-        return (
-            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY],
-            table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY],
-        )
-
-    def _get_element_instances(element: SpatialElement) -> ArrayLike | None:
-        if get_model(element) in [Labels2DModel, Labels3DModel]:
-            if isinstance(element, DataArray):
-                instances = da.unique(element.data).compute()
-            else:
-                assert isinstance(element, DataTree)
-                v = element["scale0"].values()
-                assert len(v) == 1
-                xdata = next(iter(v))
-                instances = da.unique(xdata.data).compute()
-            return np.sort(instances)
-        if get_model(element) == ShapesModel:
-            return element.index.to_numpy()
-        if get_model(element) == PointsModel:
-            return element.compute().index.to_numpy()
-        return None
-
     def _get_matching_indices(
         table: AnnData, region_key: str, instance_key: str, name: str, instances: ArrayLike
     ) -> ArrayLike:
@@ -205,11 +184,12 @@ def _filter_table_by_elements(
 
     _validate_elements_dict(elements_dict)
     to_keep = np.zeros(len(table), dtype=bool)
-    region_key, instance_key = _get_table_keys(table)
+    _, region_key, instance_key = get_table_keys(table)
 
     for elements in elements_dict.values():
         for name, element in elements.items():
-            instances = _get_element_instances(element)
+            model = get_model(element)
+            instances = get_element_instances(element)
             if instances is not None:
                 indices = _get_matching_indices(table, region_key, instance_key, name, instances)
                 to_keep |= indices
