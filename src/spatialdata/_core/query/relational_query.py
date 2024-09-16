@@ -58,31 +58,6 @@ def get_element_annotators(sdata: SpatialData, element_name: str) -> set[str]:
     return table_names
 
 
-def _filter_table_by_element_names(table: AnnData | None, element_names: str | list[str]) -> AnnData | None:
-    """
-    Filter an AnnData table to keep only the rows that are in the coordinate system.
-
-    Parameters
-    ----------
-    table
-        The table to filter; if None, returns None
-    element_names
-        The element_names to keep in the tables obs.region column
-
-    Returns
-    -------
-    The filtered table, or None if the input table was None
-    """
-    if table is None or not table.uns.get(TableModel.ATTRS_KEY):
-        return None
-    table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
-    region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
-    table.obs = pd.DataFrame(table.obs)
-    table = table[table.obs[region_key].isin(element_names)].copy()
-    table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
-    return table
-
-
 @singledispatch
 def get_element_instances(
     element: SpatialElement,
