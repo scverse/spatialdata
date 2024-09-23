@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import warnings
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -115,6 +115,7 @@ class SpatialData:
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
         tables: dict[str, AnnData] | Tables | None = None,
+        attrs: Mapping[Any, Any] | None = None,
     ) -> None:
         self._path: Path | None = None
 
@@ -124,6 +125,7 @@ class SpatialData:
         self._points: Points = Points(shared_keys=self._shared_keys)
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
+        self._attrs: dict[Any, Any] = dict(attrs) if attrs else {}
 
         # Workaround to allow for backward compatibility
         if isinstance(tables, AnnData):
@@ -1152,7 +1154,11 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
 
         store = parse_url(file_path, mode="w").store
-        _ = zarr.group(store=store, overwrite=overwrite)
+        zarr_group = zarr.group(store=store, overwrite=overwrite)
+        try:
+            zarr_group.attrs.put(self.attrs)
+        except TypeError as e:
+            raise TypeError("Invalid attribute in SpatialData.attrs") from e
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
@@ -2187,6 +2193,15 @@ class SpatialData:
         """
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
+
+    @property
+    def attrs(self) -> dict[Any, Any]:
+        """Dictionary of global attributes on this SpatialData object."""
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, value: Mapping[Any, Any]) -> None:
+        self._attrs = dict(value)
 
 
 class QueryManager:

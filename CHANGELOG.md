@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.x.x] - 2024-xx-xx
 
+### Major
+
+-   Added attributes at the SpatialData object level (`.attrs`)
+
 ### Minor
 
 -   Added `clip: bool = False` parameter to `polygon_query()` #670
