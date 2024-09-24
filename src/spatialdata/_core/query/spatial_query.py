@@ -22,6 +22,7 @@ from spatialdata._core.query._utils import (
     get_bounding_box_corners,
 )
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
@@ -40,7 +41,17 @@ from spatialdata.transformations.transformations import (
     _get_affine_for_element,
 )
 
+MIN_COORDINATE_DOCS = """\
+    The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+"""
+MAX_COORDINATE_DOCS = """\
+    The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes)
+"""
 
+
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
     axes: tuple[str, ...],
@@ -57,11 +68,9 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        The upper left hand corner of the bounding box (i.e., minimum coordinates
-        along all dimensions).
+    {min_coordinate_docs}
     max_coordinate
-        The lower right hand corner of the bounding box (i.e., the maximum coordinates
-        along all dimensions
+    {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
 
@@ -83,7 +92,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
 
     # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
-    # transformations; we focus on them
+    # transformations; we focus on them. The following code triggers a validation that ensures we are in case 1 or 5.
     m_without_c_linear = m_without_c[:-1, :-1]
     _ = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
 
@@ -235,7 +244,8 @@ def _adjust_bounding_box_to_real_axes(
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
-    # axis for slicing, if axis > 0, then the min_/max_coordinate multiple bounding boxes along axis 0
+    # the following variable `axis` is the index of the axis in the variable min_coordinates that corresponds to the
+    # named axes ('x', 'y', ...). We need it to know at which index to remove/add new named axes
     axis = min_coordinate.ndim - 1
     if set(axes_bb) != set(axes_out_without_c):
         axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
@@ -339,6 +349,7 @@ class BoundingBoxRequest(BaseSpatialRequest):
     axes
         The axes the coordinates are expressed in.
     min_coordinate
+        PLACEHOLDER
         The coordinate of the lower left hand corner (i.e., minimum values)
         of the bounding box.
     max_coordinate
@@ -379,6 +390,7 @@ class BoundingBoxRequest(BaseSpatialRequest):
         }
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _bounding_box_mask_points(
     points: DaskDataFrame,
     axes: tuple[str, ...],
@@ -394,11 +406,14 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
+        PLACEHOLDER
         The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {min_coordinate_docs}
     max_coordinate
         The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {max_coordinate_docs}
 
     Returns
     -------
@@ -450,6 +465,7 @@ def _dict_query_dispatcher(
     return queried_elements
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 @singledispatch
 def bounding_box_query(
     element: SpatialElement | SpatialData,
@@ -469,9 +485,9 @@ def bounding_box_query(
     axes
         The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
-        The minimum coordinates of the bounding box.
+        {min_coordinate_docs}
     max_coordinate
-        The maximum coordinates of the bounding box.
+        {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
     filter_table
@@ -527,7 +543,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray | DataTree] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray] | list[DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -583,7 +599,8 @@ def _(
         return selection
 
     # query the data
-    query_result: DataArray | DataTree | list[DataArray | DataTree] = (
+    # TODO: ADD NONE (But the next line is not None)
+    query_result: DataArray | DataTree | list[DataArray] | list[DataTree] = (
         image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
     )
 
