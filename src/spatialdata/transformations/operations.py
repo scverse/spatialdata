@@ -227,8 +227,9 @@ def get_transformation_between_coordinate_systems(
         The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
     shortest_path
-        Whether to return the shortest paths when multiple paths are found between the coordinate systems.
-        If `False`, an error is raised when multiple paths exist.
+        Whether to return the shortest paths when multiple paths are found between the coordinate systems
+        and a single shortest path is found. If `False`, an error is raised when multiple paths exist.
+        The same error is raised if `True`, but multiple paths of the same shortest lenghts are found.
 
     Returns
     -------
