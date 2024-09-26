@@ -814,3 +814,28 @@ def test_query_with_clipping(sdata_blobs):
 
     query_polyon_contains_queried_data(extent_circles)
     query_polyon_contains_queried_data(extent_polygons)
+
+
+def test_query_multiple_boxes_len_one(sdata_blobs):
+    """
+    Tests that querying by a list of bounding boxes with length one is equivalent to querying by a single bounding box.
+    """
+    min_coordinate = np.array([[80, 80]])
+    max_coordinate = np.array([[165, 150]])
+    axes = ("x", "y")
+
+    queried0 = bounding_box_query(
+        sdata_blobs,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_coordinate_system="global",
+    )
+    queried1 = bounding_box_query(
+        sdata_blobs,
+        axes=axes,
+        min_coordinate=min_coordinate[0],
+        max_coordinate=max_coordinate[0],
+        target_coordinate_system="global",
+    )
+    assert_spatial_data_objects_are_identical(queried0, queried1)

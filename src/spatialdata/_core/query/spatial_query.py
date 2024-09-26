@@ -340,6 +340,7 @@ class BaseSpatialRequest:
         pass
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 @dataclass(frozen=True)
 class BoundingBoxRequest(BaseSpatialRequest):
     """Query with an axis-aligned bounding box.
@@ -349,12 +350,9 @@ class BoundingBoxRequest(BaseSpatialRequest):
     axes
         The axes the coordinates are expressed in.
     min_coordinate
-        PLACEHOLDER
-        The coordinate of the lower left hand corner (i.e., minimum values)
-        of the bounding box.
+        {min_coordinate_docs}
     max_coordinate
-        The coordinate of the upper right hand corner (i.e., maximum values)
-        of the bounding box
+        {max_coordinate_docs}
     """
 
     min_coordinate: ArrayLike
@@ -599,8 +597,7 @@ def _(
         return selection
 
     # query the data
-    # TODO: ADD NONE (But the next line is not None)
-    query_result: DataArray | DataTree | list[DataArray] | list[DataTree] = (
+    query_result: DataArray | DataTree | list[DataArray] | list[DataTree] | None = (
         image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
     )
 
