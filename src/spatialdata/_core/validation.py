@@ -214,7 +214,7 @@ def validate_table_attr_keys(data: AnnData) -> None:
     Raises
     ------
     ValueError
-        If the AnnData contains on or several invalid keys.
+        If the AnnData contains one or several invalid keys.
     """
 
     def _check_valid_attr_keys(attr: str) -> None:
