@@ -140,6 +140,9 @@ Names of SpatialData elements must fulfill certain restrictions to ensure robust
 - MUST NOT start with double underscores `__`.
 - MUST NOT only differ in character case, to avoid name collisions on case-insensitive systems.
 
+In tables, the above restrictions apply to the column names of `obs` and `var`, and to the key names of the `obsm`,
+`obsp`, `varm`, `varp`, `uns`, `layers` slots (for example `adata.obs['has space']` and `adata.layers['.']` are not
+allowed).
 Additionally, dataframes in tables MUST NOT have a column named `_index`, which is reserved.
 
 #### Images
