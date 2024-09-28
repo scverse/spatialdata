@@ -1123,7 +1123,7 @@ class SpatialData:
     def _validate_all_elements(self) -> None:
         for element_type, element_name, element in self.gen_elements():
             check_valid_name(element_name)
-            if element_type == "table":
+            if element_type == "tables":
                 validate_table_attr_keys(element)
 
     def write(
@@ -1275,6 +1275,8 @@ class SpatialData:
                 break
         if element_type is None:
             raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+        if element_type == "tables":
+            validate_table_attr_keys(element)
 
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 

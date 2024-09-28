@@ -20,7 +20,7 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes, _get_table
+from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes, _get_table, _get_tables
 
 RNG = default_rng(0)
 
@@ -103,6 +103,7 @@ class TestReadWrite:
             sdata.images[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.images[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
@@ -111,6 +112,7 @@ class TestReadWrite:
             sdata.labels[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.labels[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
@@ -119,6 +121,7 @@ class TestReadWrite:
             sdata.shapes[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.shapes[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
@@ -127,9 +130,19 @@ class TestReadWrite:
             sdata.points[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.points[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
+
+        for k, v in _get_tables().items():
+            sdata.tables[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.tables[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `poly` is not unique"):
+                sdata["poly"] = v
 
     def test_incremental_io_list_of_elements(self, shapes: SpatialData) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -690,10 +703,47 @@ def test_writing_invalid_name(tmp_path: Path):
     invalid_sdata = SpatialData()
     # Circumvent validation at construction time and check validation happens again at writing time.
     invalid_sdata.images.data[""] = next(iter(_get_images().values()))
-    # invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
+    invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
     invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
     invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
     invalid_sdata.tables.data["has whitespace"] = _get_table()
 
     with pytest.raises(ValueError, match="Name (must|cannot)"):
         invalid_sdata.write(tmp_path / "data.zarr")
+
+
+def test_writing_valid_table_name_invalid_table(tmp_path: Path):
+    # also try with a valid table name but invalid table
+    # testing just one case, all the cases are in test_table_model_invalid_names()
+    invalid_sdata = SpatialData()
+    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write(tmp_path / "data.zarr")
+
+
+def test_incremental_writing_invalid_name(tmp_path: Path):
+    invalid_sdata = SpatialData()
+    invalid_sdata.write(tmp_path / "data.zarr")
+
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    invalid_sdata.images.data[""] = next(iter(_get_images().values()))
+    invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
+    invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.tables.data["has whitespace"] = _get_table()
+
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        elements = getattr(invalid_sdata, element_type)
+        for name in elements:
+            with pytest.raises(ValueError, match="Name (must|cannot)"):
+                invalid_sdata.write_element(name)
+
+
+def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
+    # also try with a valid table name but invalid table
+    # testing just one case, all the cases are in test_table_model_invalid_names()
+    invalid_sdata = SpatialData()
+    invalid_sdata.write(tmp_path / "data2.zarr")
+    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write_element("valid_name")

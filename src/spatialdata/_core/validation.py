@@ -182,7 +182,7 @@ def _iter_anndata_attr_keys_collect_value_errors(
     adata: AnnData, attr_visitor: Callable[[str], None], key_visitor: Callable[[str, str], None]
 ) -> None:
     messages_per_attr: dict[str, list[str]] = defaultdict(list)
-    for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns"):
+    for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"):
         try:
             attr_visitor(attr)
         except ValueError as e:
@@ -203,7 +203,7 @@ def validate_table_attr_keys(data: AnnData) -> None:
     """
     Check that all keys of all AnnData attributes have valid names.
 
-    This checks for AnnData obs, var, obsm, obsp, varm, varp, uns whether their keys fulfill the
+    This checks for AnnData obs, var, obsm, obsp, varm, varp, uns, layers whether their keys fulfill the
     naming restrictions and raises an error otherwise.
 
     Parameters

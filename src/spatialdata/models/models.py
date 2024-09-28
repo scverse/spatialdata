@@ -942,6 +942,7 @@ class TableModel:
         -------
         The validated data.
         """
+        validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
             return data
 
@@ -1005,6 +1006,8 @@ class TableModel:
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
+        # note! this is an expensive check and therefore we skip it during validation
+        # https://github.com/scverse/spatialdata/issues/715
         grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()

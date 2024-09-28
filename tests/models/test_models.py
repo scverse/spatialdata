@@ -424,23 +424,33 @@ class TestModels:
             "non-alnum_#$%&()*+,?@",
         ],
     )
-    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns"])
-    def test_table_model_invalid_names(self, key: str, attr: str):
+    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_invalid_names(self, key: str, attr: str, parse: bool):
         if attr in ("obs", "var"):
+            df = pd.DataFrame([[None]], columns=[key], index=["1"])
+            adata = AnnData(np.array([[0]]), **{attr: df})
             with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
-                df = pd.DataFrame([[None]], columns=[key], index=["1"])
-                adata = AnnData(np.array([[0]]), **{attr: df})
-                TableModel.parse(adata)
+                if parse:
+                    TableModel.parse(adata)
+                else:
+                    TableModel().validate(adata)
         elif key != "_index":  # "_index" is only disallowed in obs/var
-            if attr in ("obsm", "varm", "obsp", "varp"):
+            if attr in ("obsm", "varm", "obsp", "varp", "layers"):
+                array = np.array([[0]])
+                adata = AnnData(np.array([[0]]), **{attr: {key: array}})
                 with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
-                    array = np.array([[0]])
-                    adata = AnnData(np.array([[0]]), **{attr: {key: array}})
-                    TableModel.parse(adata)
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
             elif attr == "uns":
+                adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
                 with pytest.raises(ValueError, match=f"Table contains invalid names:\n{attr}:\n  '{re.escape(key)}'"):
-                    adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
-                    TableModel.parse(adata)
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
 
     @pytest.mark.parametrize(
         "keys",
@@ -450,16 +460,20 @@ class TestModels:
         ],
     )
     @pytest.mark.parametrize("attr", ["obs", "var"])
-    def test_table_model_not_unique_columns(self, keys: list[str], attr: str):
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
         key_regex = re.escape(keys[1])
         df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
+        adata = AnnData(np.array([[0]]), **{attr: df})
         with pytest.raises(
             ValueError,
             match=f"Table contains invalid names:\n{attr}:\n"
             + f"  Key `{key_regex}` is not unique, or another case-variant of it exists.",
         ):
-            adata = AnnData(np.array([[0]]), **{attr: df})
-            TableModel.parse(adata)
+            if parse:
+                TableModel.parse(adata)
+            else:
+                TableModel().validate(adata)
 
 
 def test_get_schema():
