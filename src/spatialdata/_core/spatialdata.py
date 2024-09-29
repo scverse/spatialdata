@@ -735,10 +735,17 @@ class SpatialData:
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
                 if by == "cs":
-                    from spatialdata._core.query.relational_query import _filter_table_by_element_names
+                    from spatialdata._core.query.relational_query import _filter_table_by_elements
 
                     assert element_names is not None
-                    table = _filter_table_by_element_names(table, element_names)
+                    elements_dict = {}
+                    for element_type in ["images", "labels", "shapes", "points"]:
+                        elements = getattr(self, element_type)
+                        if elements:  # Check if the dictionary is not empty
+                            elements_dict[element_type] = {
+                                name: elements[name] for name in element_names if name in elements
+                            }
+                    table = _filter_table_by_elements(table, elements_dict=elements_dict)
                     if len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":

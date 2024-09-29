@@ -135,9 +135,15 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
 def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None:
     from spatialdata.models import TableModel
 
-    rng = np.random.default_rng(seed=0)
-    full_sdata["table"].obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
-    adata = full_sdata["table"]
+    adata = full_sdata["table"].copy()
+
+    circles_instances = full_sdata["circles"].index.values
+    poly_instances = full_sdata["poly"].index.values
+
+    adata = adata[: len(circles_instances) + len(poly_instances), :].copy()
+    adata.obs["annotated_shapes"] = ["circles"] * len(circles_instances) + ["poly"] * len(poly_instances)
+    adata.obs["instance_id"] = np.concatenate([circles_instances, poly_instances])
+
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.tables["table"]
     full_sdata.table = TableModel.parse(
