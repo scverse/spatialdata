@@ -17,7 +17,6 @@ from xarray import DataArray
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _iter_multiscale,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
@@ -26,6 +25,7 @@ from spatialdata._io.format import (
     RasterFormatV01,
     _parse_version,
 )
+from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations._utils import (
@@ -180,8 +180,8 @@ def _write_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
         )
     elif isinstance(raster_data, DataTree):
-        data = _iter_multiscale(raster_data, "data")
-        list_of_input_axes: list[Any] = _iter_multiscale(raster_data, "dims")
+        data = get_pyramid_levels(raster_data, attr="data")
+        list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
         assert len(set(list_of_input_axes)) == 1
         input_axes = list_of_input_axes[0]
         # saving only the transformations of the first scale
@@ -191,8 +191,8 @@ def _write_raster(
         transformations = _get_transformations_xarray(xdata)
         assert transformations is not None
         assert len(transformations) > 0
-        chunks = _iter_multiscale(raster_data, "chunks")
-        # coords = _iter_multiscale(raster_data, "coords")
+        chunks = get_pyramid_levels(raster_data, "chunks")
+        # coords = iterate_pyramid_levels(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         write_multi_scale_ngff(
