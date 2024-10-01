@@ -305,7 +305,7 @@ def _aggregate_image_by_labels(
 
     X = sparse.csr_matrix(df.values)
 
-    index = kwargs.get("zone_ids", None)  # `zone_ids` allows the user to select specific labels to aggregate by
+    index = kwargs.get("zone_ids")  # `zone_ids` allows the user to select specific labels to aggregate by
     if index is None:
         index = np.array(da.array.unique(by.data))
         assert np.array(index == np.insert(zones, 0, 0)).all(), "Index mismatch between zonal stats and labels."
