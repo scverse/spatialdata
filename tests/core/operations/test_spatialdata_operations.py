@@ -284,6 +284,37 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     assert len(list(concatenated.gen_elements())) == 3
 
 
+def test_concatenate_sdatas_from_sequence() -> None:
+    sdata0 = blobs()
+    sdata1 = blobs()
+
+    elements_sdata0 = {f"{name}-sample0": el for _, name, el in sdata0.gen_spatial_elements()}
+    elements_sdata1 = {f"{name}-sample1": el for _, name, el in sdata1.gen_spatial_elements()}
+
+    table0 = sdata0["table"]
+    table1 = sdata1["table"]
+
+    table0.obs["region"] = (table0.obs["region"].astype("str") + "-sample0").astype("category")
+    table0.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        table0.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] + "-sample0"
+    )
+    table1.obs["region"] = (table1.obs["region"].astype("str") + "-sample1").astype("category")
+    table1.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        table1.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] + "-sample1"
+    )
+
+    sdata0 = SpatialData.init_from_elements(elements_sdata0, tables=table0)
+    sdata1 = SpatialData.init_from_elements(elements_sdata1, tables=table1)
+
+    sdatas = {"sample0": sdata0, "sample1": sdata1}
+    _ = concatenate(sdatas.values(), concatenate_tables=True)
+    pass
+    # merged['table'].obs_names_make_unique()
+
+    # from napari_spatialdata import Interactive
+    # Interactive(merged)
+
+
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
     assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]

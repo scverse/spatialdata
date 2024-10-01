@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from copy import copy  # Should probably go up at the top
 from itertools import chain
 from typing import Any
@@ -73,7 +74,7 @@ def _concatenate_tables(
 
 
 def concatenate(
-    sdatas: list[SpatialData],
+    sdatas: Iterable[SpatialData],
     region_key: str | None = None,
     instance_key: str | None = None,
     concatenate_tables: bool = False,
@@ -88,9 +89,10 @@ def concatenate(
         The spatial data objects to concatenate.
     region_key
         The key to use for the region column in the concatenated object.
-        If all region_keys are the same, the `region_key` is used.
+        If `None` and all region_keys are the same, the `region_key` is used.
     instance_key
         The key to use for the instance column in the concatenated object.
+        If `None` and all instance_keys are the same, the `instance_key` is used.
     concatenate_tables
         Whether to merge the tables in case of having the same element name.
     kwargs
@@ -100,6 +102,9 @@ def concatenate(
     -------
     The concatenated :class:`spatialdata.SpatialData` object.
     """
+    if not isinstance(sdatas, Iterable):
+        raise TypeError("`sdatas` must be a `Iterable`")
+
     merged_images = {**{k: v for sdata in sdatas for k, v in sdata.images.items()}}
     if len(merged_images) != np.sum([len(sdata.images) for sdata in sdatas]):
         raise KeyError("Images must have unique names across the SpatialData objects to concatenate")
@@ -113,9 +118,6 @@ def concatenate(
     if len(merged_shapes) != np.sum([len(sdata.shapes) for sdata in sdatas]):
         raise KeyError("Shapes must have unique names across the SpatialData objects to concatenate")
 
-    assert isinstance(sdatas, list), "sdatas must be a list"
-    assert len(sdatas) > 0, "sdatas must be a non-empty list"
-
     if not concatenate_tables:
         key_counts: dict[str, int] = defaultdict(int)
         for sdata in sdatas:
@@ -124,8 +126,8 @@ def concatenate(
 
         if any(value > 1 for value in key_counts.values()):
             warn(
-                "Duplicate table names found. Tables will be added with integer suffix. Set concatenate_tables to True"
-                "if concatenation is wished for instead.",
+                "Duplicate table names found. Tables will be added with integer suffix. Set `concatenate_tables` to "
+                "`True` if concatenation is wished for instead.",
                 UserWarning,
                 stacklevel=2,
             )
