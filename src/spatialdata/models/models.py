@@ -251,8 +251,8 @@ class RasterSchema(DataArraySchema):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
         name = {list(data[i].data_vars.keys())[0] for i in data}
-        if len(name) > 1:
-            raise ValueError(f"Wrong name for datatree: `{name}`.")
+        if len(name) != 1:
+            raise ValueError(f"Expected exactly one data variable for the datatree: found `{name}`.")
         name = list(name)[0]
         for d in data:
             super().validate(data[d][name])

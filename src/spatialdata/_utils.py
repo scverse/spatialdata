@@ -150,23 +150,6 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     return compute_coordinates(unpadded)
 
 
-# TODO: probably we want this method to live in multiscale_spatial_image
-def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
-    warnings.warn(
-        f"{multiscale_spatial_image_from_data_tree} is deprecated and will be removed in version 0.2.0.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    d = {}
-    for k, dt in data_tree.items():
-        v = dt.values()
-        assert len(v) == 1
-        xdata = v.__iter__().__next__()
-        d[k] = xdata
-
-    return DataTree.from_dict(d)
-
-
 # TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
 #  Use only one and expose it to the user in this file
 def iterate_pyramid_levels(image: DataTree) -> Generator[DataArray, None, None]:
