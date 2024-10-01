@@ -4,6 +4,7 @@ import functools
 import re
 import warnings
 from collections.abc import Generator
+from itertools import islice
 from typing import Any, Callable, TypeVar, Union
 
 import numpy as np
@@ -150,45 +151,53 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     return compute_coordinates(unpadded)
 
 
-# TODO: probably we want this method to live in multiscale_spatial_image
-def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
-    warnings.warn(
-        f"{multiscale_spatial_image_from_data_tree} is deprecated and will be removed in version 0.2.0.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    d = {}
-    for k, dt in data_tree.items():
-        v = dt.values()
-        assert len(v) == 1
-        xdata = v.__iter__().__next__()
-        d[k] = xdata
-
-    return DataTree.from_dict(d)
-
-
-# TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
-#  Use only one and expose it to the user in this file
-def iterate_pyramid_levels(image: DataTree) -> Generator[DataArray, None, None]:
+def get_pyramid_levels(image: DataTree, attr: str | None = None, n: int | None = None) -> list[Any] | Any:
     """
-    Iterate over the pyramid levels of a multiscale spatial image.
+    Access the data/attribute of the pyramid levels of a multiscale spatial image.
 
     Parameters
     ----------
     image
         The multiscale spatial image.
+    attr
+        If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
+        within the `DataArray` data.
+    n
+        If not None, return only the `n` pyramid level.
 
     Returns
     -------
-    A generator that yields the pyramid levels.
+    The pyramid levels data (or an attribute of it) as a list or a generator.
     """
-    for k in range(len(image)):
-        scale_name = f"scale{k}"
-        dt = image[scale_name]
-        v = dt.values()
-        assert len(v) == 1
-        xdata = next(iter(v))
-        yield xdata
+    generator = iterate_pyramid_levels(image, attr)
+    if n is not None:
+        return next(iter(islice(generator, n, None)))
+    return list(generator)
+
+
+def iterate_pyramid_levels(
+    data: DataTree,
+    attr: str | None,
+) -> Generator[Any, None, None]:
+    """
+    Iterate over the pyramid levels of a multiscale spatial image.
+
+    Parameters
+    ----------
+    data
+        The multiscale spatial image
+    attr
+        If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
+        within the `DataArray` data.
+
+    Returns
+    -------
+    A generator to iterate over the pyramid levels.
+    """
+    names = data["scale0"].ds.keys()
+    name: str = next(iter(names))
+    for scale in data:
+        yield data[scale][name] if attr is None else getattr(data[scale][name], attr)
 
 
 def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
