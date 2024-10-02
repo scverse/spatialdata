@@ -2268,8 +2268,11 @@ class SpatialData:
             ) -> sd.SpatialData:
                 '''Compute the spatial neighbors and return the SpatialData object using
                 :func:`squidpy.gr.spatial_neighbors`.'''
-                sq.gr.spatial_neighbors(sdata, elements_to_coordinate_systems=elements_to_coordinate_systems,
-                    table_key=table_key)
+                sq.gr.spatial_neighbors(
+                    sdata,
+                    elements_to_coordinate_systems=elements_to_coordinate_systems,
+                    table_key=table_key
+                )
                 return sdata
 
 
