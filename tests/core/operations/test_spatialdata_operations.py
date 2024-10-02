@@ -11,7 +11,14 @@ from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+    get_table_keys,
+)
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
@@ -284,35 +291,30 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     assert len(list(concatenated.gen_elements())) == 3
 
 
-def test_concatenate_sdatas_from_sequence() -> None:
+@pytest.mark.parametrize("concatenate_tables", [True, False])
+@pytest.mark.parametrize("obs_names_make_unique", [True, False])
+def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_make_unique: bool) -> None:
     sdata0 = blobs()
     sdata1 = blobs()
 
-    elements_sdata0 = {f"{name}-sample0": el for _, name, el in sdata0.gen_spatial_elements()}
-    elements_sdata1 = {f"{name}-sample1": el for _, name, el in sdata1.gen_spatial_elements()}
-
-    table0 = sdata0["table"]
-    table1 = sdata1["table"]
-
-    table0.obs["region"] = (table0.obs["region"].astype("str") + "-sample0").astype("category")
-    table0.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
-        table0.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] + "-sample0"
-    )
-    table1.obs["region"] = (table1.obs["region"].astype("str") + "-sample1").astype("category")
-    table1.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
-        table1.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] + "-sample1"
-    )
-
-    sdata0 = SpatialData.init_from_elements(elements_sdata0, tables=table0)
-    sdata1 = SpatialData.init_from_elements(elements_sdata1, tables=table1)
-
     sdatas = {"sample0": sdata0, "sample1": sdata1}
-    _ = concatenate(sdatas.values(), concatenate_tables=True)
-    pass
-    # merged['table'].obs_names_make_unique()
+    with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
+        _ = concatenate(
+            sdatas.values(), concatenate_tables=concatenate_tables, obs_names_make_unique=obs_names_make_unique
+        )
+    merged = concatenate(sdatas, obs_names_make_unique=obs_names_make_unique, concatenate_tables=concatenate_tables)
 
-    # from napari_spatialdata import Interactive
-    # Interactive(merged)
+    if concatenate_tables:
+        assert len(merged.tables) == 1
+        table = merged["table"]
+        if obs_names_make_unique:
+            assert table.obs_names[0] == "1-sample0"
+            assert table.obs_names[-1] == "30-sample1"
+        else:
+            assert table.obs_names[0] == "1"
+    else:
+        assert merged["table-sample0"].obs_names[0] == "1"
+    assert sdata0["table"].obs_names[0] == "1"
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
