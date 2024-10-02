@@ -30,7 +30,7 @@ dependencies = [
     "geopandas>=0.14",
     "multiscale_spatial_image>=1.0.0",
     "networkx",
-    "numpy",
+    "numpy<2",
     "ome_zarr>=0.8.4",
     "pandas",
     "pooch",
@@ -47,6 +47,7 @@ dependencies = [
     "xarray-schema",
     "xarray-spatial>=0.3.5",
     "zarr",
+    "squidpy>=1.6.1",
 ]
 
 [project.optional-dependencies]

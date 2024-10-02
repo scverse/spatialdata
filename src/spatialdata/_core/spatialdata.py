@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import os
 import warnings
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar
 
 import pandas as pd
 import zarr
@@ -42,6 +42,9 @@ from spatialdata.models._utils import SpatialElement, convert_region_column_to_c
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
     from spatialdata._io.format import SpatialDataFormat
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -2187,6 +2190,131 @@ class SpatialData:
         """
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
+
+    def pipe(self, func: Callable[P, T] | tuple[Callable[P, T], str], *args: P.args, **kwargs: P.kwargs) -> T:
+        """
+        Apply chainable functions ``func(self, *args, **kwargs)`` that expect :class:`SpatialData`.
+
+        Parameters
+        ----------
+        func
+            Function to apply to this SpatialData object. ``args``, and ``kwargs`` are passed into ``func``.
+            Alternatively a ``(callable, data_keyword)`` tuple where ``data_keyword`` is a string indicating
+            the keyword of ``callable`` that expects the xarray object.
+        *args
+            Positional arguments passed into ``func``.
+        **kwargs
+            Keyword arguments passed into ``func``.
+
+        Returns
+        -------
+            The return type of ``func``.
+
+        Raises
+        ------
+        ValueError
+            When the data target is both the pipe target and a keyword argument.
+
+
+        Notes
+        -----
+        Use ``.pipe`` when chaining together functions that expect SpatialData objects, e.g., instead of writing
+
+        .. code:: python
+
+            f(g(h(sdata), arg1=a), arg2=b, arg3=cs)
+
+
+        You can write
+
+        .. code:: python
+
+            (sdata.pipe(h).pipe(g, arg1=a).pipe(f, arg2=b, arg3=c))
+
+        If you have a function that takes the data as (say) the second argument, pass a tuple indicating
+        which keyword expects the data. For example suppose ``f`` takes its data as ``arg2``
+
+        .. code:: python
+
+            (sdata.pipe(h).pipe(g, arg1=a).pipe((f, "arg2"), arg1=a, arg3=c))
+
+
+        Examples
+        --------
+        Here we will mix functions from spatialdata, scanpy and squidpy to perform neighborhood enrichment analysis.
+
+        .. plot::
+            :context: close-figs
+
+            from collections.abc import Mapping
+
+            import pandas as pd
+            import scanpy as sc
+            import squidpy as sq
+
+            import spatialdata as sd
+
+            blobs_sdata = sd.datasets.blobs()
+
+            def add_centroids_to_table(sdata: sd.SpatialData, label_name: str, table_key: str) -> sd.SpatialData:
+                '''Compute the centroids of an label and append them to `.tables[table_name].obsm[spatial]`.'''
+                # Swap x,y -> y,x ordering.
+                centroids: pd.DataFrame = sd.get_centroids(sdata.labels[label_name])[["y", "x"]].compute()
+                sdata.tables[table_key].obsm["spatial"] = centroids.to_numpy()
+                return sdata
+
+
+            def spatial_neighbors(
+                sdata: sd.SpatialData, elements_to_coordinate_systems: Mapping[str, str], table_key: str
+            ) -> sd.SpatialData:
+                '''Compute the spatial neighbors and return the SpatialData object using :func:`squidpy.gr.spatial_neighbors`.'''
+                sq.gr.spatial_neighbors(sdata, elements_to_coordinate_systems=elements_to_coordinate_systems, table_key=table_key)
+                return sdata
+
+
+            def sdata_leiden(
+                sdata: sd.SpatialData, table_key: str, neighbors_key: str, **kwargs
+            ) -> sd.SpatialData:
+                '''Compute clusters using :func:`scanpy.tl.leiden`.'''
+                sc.tl.leiden(adata=blobs_sdata.tables[table_key], neighbors_key=neighbors_key, **kwargs)
+                return sdata
+
+
+            def nhood_enrichment(sdata: sd.SpatialData, cluster_key: str, **kwargs) -> sd.SpatialData:
+                '''Compute and return the neighborhood enrichment using :func:`squidpy.gr.nhood_enrichment`.'''
+                sq.gr.nhood_enrichment(sdata, cluster_key=cluster_key, **kwargs)
+                return sdata
+
+
+            def plot_nhood_enrichment(sdata: sd.SpatialData, table_key: str, cluster_key: str, **kwargs) -> None:
+                '''Generate and display the neighborhood enrichment plot.'''
+                sq.pl.nhood_enrichment(adata=sdata.tables[table_key], cluster_key=cluster_key, **kwargs)
+
+
+            (
+                blobs_sdata.pipe(add_centroids_to_table, label_name="blobs_labels", table_key="table")
+                .pipe(spatial_neighbors, elements_to_coordinate_systems={"blobs_labels": "global"}, table_key="table")
+                .pipe(sdata_leiden, table_key="table", neighbors_key="spatial_neighbors", flavor="igraph")
+                .pipe(nhood_enrichment, cluster_key="leiden", numba_parallel=True)
+                .pipe(plot_nhood_enrichment, table_key="table", cluster_key="leiden", annotate=True, figsize=(6,5))
+            )
+
+
+        See Also
+        --------
+        pandas.DataFrame.pipe
+
+        xarray.DataArray.pipe
+
+        xarray.Dataset.pipe
+        """
+        if isinstance(func, tuple):
+            func, target = func
+            if target in kwargs:
+                raise ValueError(f"{target} is both the pipe target and a keyword argument")
+            kwargs[target] = self
+            return func(*args, **kwargs)
+        return func(self, *args, **kwargs)
 
 
 class QueryManager:
