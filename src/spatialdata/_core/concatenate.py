@@ -90,8 +90,8 @@ def concatenate(
     sdatas
         The spatial data objects to concatenate. The names of the elements across the `SpatialData` objects must be
         unique. If they are not unique, you can pass a dictionary with the suffixes as keys and the spatial data objects
-         as values. This will rename the names of each `SpatialElement` to ensure uniqueness of names across
-         `SpatialData` objects. See more on the notes.
+        as values. This will rename the names of each `SpatialElement` to ensure uniqueness of names across
+        `SpatialData` objects. See more on the notes.
     region_key
         The key to use for the region column in the concatenated object.
         If `None` and all region_keys are the same, the `region_key` is used.
