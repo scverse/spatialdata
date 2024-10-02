@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Callable, Generator
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import pandas as pd
 import zarr
@@ -43,9 +43,6 @@ if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
     from spatialdata._io.format import SpatialDataFormat
 
-P = ParamSpec("P")
-T = TypeVar("T")
-
 # schema for elements
 Label2D_s = Labels2DModel()
 Label3D_s = Labels3DModel()
@@ -54,6 +51,8 @@ Image3D_s = Image3DModel()
 Shape_s = ShapesModel()
 Point_s = PointsModel()
 Table_s = TableModel()
+
+T = TypeVar("T")
 
 
 class SpatialData:
@@ -2191,7 +2190,7 @@ class SpatialData:
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
 
-    def pipe(self, func: Callable[P, T] | tuple[Callable[P, T], str], *args: P.args, **kwargs: P.kwargs) -> T:
+    def pipe(self, func: Callable[..., T] | tuple[Callable[..., T], str], *args: Any, **kwargs: Any) -> Any:
         """
         Apply chainable functions ``func(self, *args, **kwargs)`` that expect :class:`SpatialData`.
 
@@ -2267,8 +2266,10 @@ class SpatialData:
             def spatial_neighbors(
                 sdata: sd.SpatialData, elements_to_coordinate_systems: Mapping[str, str], table_key: str
             ) -> sd.SpatialData:
-                '''Compute the spatial neighbors and return the SpatialData object using :func:`squidpy.gr.spatial_neighbors`.'''
-                sq.gr.spatial_neighbors(sdata, elements_to_coordinate_systems=elements_to_coordinate_systems, table_key=table_key)
+                '''Compute the spatial neighbors and return the SpatialData object using
+                :func:`squidpy.gr.spatial_neighbors`.'''
+                sq.gr.spatial_neighbors(sdata, elements_to_coordinate_systems=elements_to_coordinate_systems,
+                    table_key=table_key)
                 return sdata
 
 
@@ -2313,8 +2314,9 @@ class SpatialData:
             if target in kwargs:
                 raise ValueError(f"{target} is both the pipe target and a keyword argument")
             kwargs[target] = self
-            return func(*args, **kwargs)
-        return func(self, *args, **kwargs)
+        else:
+            args = (self,) + args
+        return func(*args, **kwargs)
 
 
 class QueryManager:
