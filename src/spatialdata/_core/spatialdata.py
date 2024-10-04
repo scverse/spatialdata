@@ -22,6 +22,12 @@ from shapely import MultiPolygon, Polygon
 from xarray import DataArray
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
+from spatialdata._core.validation import (
+    check_all_keys_case_insensitively_unique,
+    check_target_region_column_symmetry,
+    check_valid_name,
+    validate_table_attr_keys,
+)
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
@@ -33,7 +39,6 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    check_target_region_column_symmetry,
     get_model,
     get_table_keys,
 )
@@ -1115,6 +1120,12 @@ class SpatialData:
                     " the current Zarr store." + WORKAROUND
                 )
 
+    def _validate_all_elements(self) -> None:
+        for element_type, element_name, element in self.gen_elements():
+            check_valid_name(element_name)
+            if element_type == "tables":
+                validate_table_attr_keys(element)
+
     def write(
         self,
         file_path: str | Path,
@@ -1150,6 +1161,7 @@ class SpatialData:
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
+        self._validate_all_elements()
 
         store = parse_url(file_path, mode="w").store
         _ = zarr.group(store=store, overwrite=overwrite)
@@ -1244,9 +1256,7 @@ class SpatialData:
                 self.write_element(name, overwrite=overwrite)
             return
 
-        from spatialdata._core._elements import Elements
-
-        Elements._check_valid_name(element_name)
+        check_valid_name(element_name)
         self._validate_element_names_are_unique()
         element = self.get(element_name)
         if element is None:
@@ -1265,6 +1275,8 @@ class SpatialData:
                 break
         if element_type is None:
             raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+        if element_type == "tables":
+            validate_table_attr_keys(element)
 
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
@@ -1316,10 +1328,9 @@ class SpatialData:
                 self.delete_element_from_disk(name)
             return
 
-        from spatialdata._core._elements import Elements
         from spatialdata._io._utils import _backed_elements_contained_in_path
 
-        Elements._check_valid_name(element_name)
+        check_valid_name(element_name)
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
@@ -1451,10 +1462,8 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
-        from spatialdata._core._elements import Elements
-
         if element_name is not None:
-            Elements._check_valid_name(element_name)
+            check_valid_name(element_name)
 
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
@@ -1541,10 +1550,8 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
-        from spatialdata._core._elements import Elements
-
         if element_name is not None:
-            Elements._check_valid_name(element_name)
+            check_valid_name(element_name)
 
         self.write_transformations(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
@@ -1994,11 +2001,7 @@ class SpatialData:
         ValueError
             If the element names are not unique.
         """
-        element_names = set()
-        for _, element_name, _ in self.gen_elements():
-            if element_name in element_names:
-                raise ValueError(f"Element name {element_name!r} is not unique.")
-            element_names.add(element_name)
+        check_all_keys_case_insensitively_unique([name for _, name, _ in self.gen_elements()])
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
