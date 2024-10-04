@@ -317,6 +317,20 @@ def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_ma
     assert sdata0["table"].obs_names[0] == "1"
 
 
+def test_concatenate_sdatas_single_item() -> None:
+    sdata = blobs()
+
+    def _n_elements(sdata: SpatialData) -> int:
+        return len([0 for _, _, _ in sdata.gen_elements()])
+
+    n = _n_elements(sdata)
+    assert n == _n_elements(concatenate([sdata]))
+    assert n == _n_elements(concatenate({"sample": sdata}.values()))
+    c = concatenate({"sample": sdata})
+    assert n == _n_elements(c)
+    assert "blobs_image-sample" in c.images
+
+
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
     assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
