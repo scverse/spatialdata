@@ -51,6 +51,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "matplotlib.sphinxext.plot_directive",
     "sphinxcontrib.bibtex",
     "sphinx_autodoc_typehints",
     "sphinx.ext.mathjax",
@@ -97,6 +98,8 @@ intersphinx_mapping = {
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "squidpy": ("https://squidpy.readthedocs.io/en/stable", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
 }
 
 
@@ -170,3 +173,11 @@ def setup(app):
         True,
     )
     app.add_css_file("css/custom.css")
+
+
+plot_include_source = True
+plot_formats = [("png", 300)]
+plot_html_show_formats = False
+plot_html_show_source_link = False
+plot_working_directory = HERE.parent  # Project root
+plot_rcparams = {"figure.constrained_layout.use": True}
