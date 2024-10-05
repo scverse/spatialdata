@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
+import dask.array as da
 import numpy as np
 import zarr
 from datatree import DataTree
@@ -195,7 +196,7 @@ def _write_raster(
         # coords = iterate_pyramid_levels(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
-        write_multi_scale_ngff(
+        dask_delayed = write_multi_scale_ngff(
             pyramid=data,
             group=group_data,
             fmt=format,
@@ -203,7 +204,10 @@ def _write_raster(
             coordinate_transformations=None,
             storage_options=storage_options,
             **metadata,
+            compute=False,
         )
+        # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
+        da.compute(*dask_delayed)
         assert transformations is not None
         overwrite_coordinate_transformations_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=tuple(input_axes)
