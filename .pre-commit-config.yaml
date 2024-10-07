@@ -2,8 +2,8 @@ fail_fast: false
 default_language_version:
     python: python3
 default_stages:
-    - commit
-    - push
+    - Nonepre-commitNone
+    - Nonepre-pushNone
 minimum_pre_commit_version: 2.16.0
 ci:
     skip: []
@@ -27,7 +27,7 @@ repos:
             additional_dependencies: [numpy, types-requests]
             exclude: tests/|docs/
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.6.8
+      rev: v0.6.9
       hooks:
           - id: ruff
             args: [--fix, --exit-non-zero-on-fix]
