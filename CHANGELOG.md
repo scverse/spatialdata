@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning][].
 -   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems`
 -   Added `get_pyramid_levels()` utils API
 -   Improved ergonomics of `concatenate()` when element names are non-unique #720
+-   Improved performance of writing images with multiscales #577
 
 ## [0.2.3] - 2024-09-25
 
