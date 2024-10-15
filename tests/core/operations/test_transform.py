@@ -341,6 +341,43 @@ def test_map_coordinate_systems_single_path(full_sdata: SpatialData):
     )
 
 
+def test_coordinate_systems_with_shortest_paths(full_sdata: SpatialData):
+    scale = Scale([2], axes=("x",))
+    translation = Translation([100], axes=("x",))
+    cs1_to_cs2 = Sequence([scale.inverse(), translation])
+
+    im = full_sdata.images["image2d_multiscale"]
+    la = full_sdata.labels["labels2d"]
+    po = full_sdata.shapes["multipoly"]
+    po2 = full_sdata.shapes["circles"]
+
+    set_transformation(im, {"cs1": Identity()}, set_all=True)
+    set_transformation(la, {"cs2": Identity()}, set_all=True)
+
+    with pytest.raises(RuntimeError):  # error 0
+        get_transformation_between_coordinate_systems(full_sdata, im, la)
+
+    set_transformation(po, {"cs1": scale, "cs2": translation}, set_all=True)
+
+    t = get_transformation_between_coordinate_systems(full_sdata, im, la, shortest_path=True)
+    assert len(t.transformations) == 4
+    t = get_transformation_between_coordinate_systems(full_sdata, im, la, shortest_path=False)
+    assert len(t.transformations) == 4
+
+    set_transformation(im, cs1_to_cs2, "cs2")
+
+    with pytest.raises(RuntimeError):  # error 4
+        get_transformation_between_coordinate_systems(full_sdata, im, la, shortest_path=False)
+
+    t = get_transformation_between_coordinate_systems(full_sdata, im, la, shortest_path=True)
+
+    assert len(t.transformations) == 2
+
+    set_transformation(po2, {"cs1": scale, "cs2": translation}, set_all=True)
+
+    get_transformation_between_coordinate_systems(full_sdata, im, la, shortest_path=True)
+
+
 def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
     scale = Scale([2], axes=("x",))
 
@@ -356,7 +393,7 @@ def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
             full_sdata, source_coordinate_system="my_space0", target_coordinate_system="globalE"
         )
 
-    # error 1
+    # error 2
     with pytest.raises(RuntimeError):
         t = get_transformation_between_coordinate_systems(
             full_sdata, source_coordinate_system="my_space0", target_coordinate_system="global"
@@ -378,7 +415,7 @@ def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
             ]
         ),
     )
-    # error 2
+    # error 3
     with pytest.raises(RuntimeError):
         get_transformation_between_coordinate_systems(
             full_sdata,
@@ -386,7 +423,7 @@ def test_map_coordinate_systems_zero_or_multiple_paths(full_sdata):
             target_coordinate_system="global",
             intermediate_coordinate_systems="globalE",
         )
-    # error 3
+    # error 5
     with pytest.raises(RuntimeError):
         get_transformation_between_coordinate_systems(
             full_sdata,
