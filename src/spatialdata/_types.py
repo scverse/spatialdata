@@ -12,9 +12,12 @@ try:
     from numpy.typing import DTypeLike, NDArray
 
     ArrayLike = NDArray[np.float64]
+    IntArray = NDArray[np.int64]  # or any np.integer
+
 except (ImportError, TypeError):
     ArrayLike = np.ndarray  # type: ignore[misc]
     DTypeLike = np.dtype  # type: ignore[misc]
+    IntArray = np.ndarray  # type: ignore[misc]
 
 Raster_T = Union[DataArray, DataTree]
 ColorLike = Union[tuple[float, ...], str]
