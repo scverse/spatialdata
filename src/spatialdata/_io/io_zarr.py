@@ -145,6 +145,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         points=points,
         shapes=shapes,
         tables=tables,
+        attrs=f.attrs.asdict(),
     )
     sdata.path = Path(store)
     return sdata
