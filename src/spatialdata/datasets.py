@@ -183,7 +183,7 @@ class BlobsDataset:
         masks = []
         for i in range(n_channels):
             mask = self._generate_blobs(length=length, seed=i)
-            mask = (mask - mask.min()) / mask.ptp()  # type: ignore[attr-defined]
+            mask = (mask - mask.min()) / np.ptp(mask)  # type: ignore[attr-defined]
             masks.append(mask)
 
         x = np.stack(masks, axis=0)
