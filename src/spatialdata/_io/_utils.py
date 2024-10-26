@@ -21,7 +21,7 @@ from geopandas import GeoDataFrame
 from xarray import DataArray
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import iterate_pyramid_levels
+from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
     SpatialElement,
@@ -120,22 +120,6 @@ def _write_metadata(
     # them with overwrite_coordinate_transformations_non_raster()
     group.attrs["coordinateTransformations"] = []
     group.attrs["spatialdata_attrs"] = attrs
-
-
-def _iter_multiscale(
-    data: DataTree,
-    attr: str | None,
-) -> list[Any]:
-    # TODO: put this check also in the validator for raster multiscales
-    for i in data:
-        variables = set(data[i].variables.keys())
-        names: set[str] = variables.difference({"c", "z", "y", "x"})
-        if len(names) != 1:
-            raise ValueError(f"Invalid variable name: `{names}`.")
-    name: str = next(iter(names))
-    if attr is not None:
-        return [getattr(data[i][name], attr) for i in data]
-    return [data[i][name] for i in data]
 
 
 class dircmp(filecmp.dircmp):  # type: ignore[type-arg]
@@ -241,8 +225,8 @@ def _(element: DataArray) -> list[str]:
 
 @get_dask_backing_files.register(DataTree)
 def _(element: DataTree) -> list[str]:
-    xdata0 = next(iter(iterate_pyramid_levels(element)))
-    return _get_backing_files(xdata0.data)
+    dask_data_scale0 = get_pyramid_levels(element, attr="data", n=0)
+    return _get_backing_files(dask_data_scale0)
 
 
 @get_dask_backing_files.register(DaskDataFrame)

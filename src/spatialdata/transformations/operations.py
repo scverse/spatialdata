@@ -10,10 +10,7 @@ from geopandas import GeoDataFrame
 from skimage.transform import estimate_transform
 
 from spatialdata._logging import logger
-from spatialdata.transformations._utils import (
-    _get_transformations,
-    _set_transformations,
-)
+from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
@@ -216,6 +213,7 @@ def get_transformation_between_coordinate_systems(
     source_coordinate_system: Union[SpatialElement, str],
     target_coordinate_system: Union[SpatialElement, str],
     intermediate_coordinate_systems: Optional[Union[SpatialElement, str]] = None,
+    shortest_path: bool = True,
 ) -> BaseTransformation:
     """
     Get the transformation to map a coordinate system (intrinsic or extrinsic) to another one.
@@ -228,6 +226,10 @@ def get_transformation_between_coordinate_systems(
     target_coordinate_system
         The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
+    shortest_path
+        Whether to return the shortest paths when multiple paths are found between the coordinate systems
+        and a single shortest path is found. If `False`, an error is raised when multiple paths exist.
+        The same error is raised if `True`, but multiple paths of the same shortest lenghts are found.
 
     Returns
     -------
@@ -236,24 +238,6 @@ def get_transformation_between_coordinate_systems(
     from spatialdata.models._utils import has_type_spatial_element
     from spatialdata.transformations import Identity, Sequence
 
-    def _describe_paths(paths: list[list[Union[int, str]]]) -> str:
-        paths_str = ""
-        for p in paths:
-            components = []
-            for c in p:
-                if isinstance(c, str):
-                    components.append(f"{c!r}")
-                else:
-                    ss = [
-                        f"<sdata>.{element_type}[{element_name!r}]"
-                        for element_type, element_name, e in sdata._gen_elements()
-                        if id(e) == c
-                    ]
-                    assert len(ss) == 1
-                    components.append(ss[0])
-            paths_str += "\n    " + " -> ".join(components)
-        return paths_str
-
     if (
         isinstance(source_coordinate_system, str)
         and isinstance(target_coordinate_system, str)
@@ -261,63 +245,98 @@ def get_transformation_between_coordinate_systems(
         or id(source_coordinate_system) == id(target_coordinate_system)
     ):
         return Identity()
+
+    def _describe_paths(paths: list[list[Union[int, str]]]) -> str:
+        paths_str = ""
+        for p in paths:
+            components = []
+            for c in p:
+                if isinstance(c, str):
+                    components.append(f"{c!r}")
+                    continue
+                ss = [
+                    f"<sdata>.{element_type}[{element_name!r}]"
+                    for element_type, element_name, e in sdata._gen_elements()
+                    if id(e) == c
+                ]
+                assert len(ss) == 1
+                components.append(ss[0])
+            paths_str += "\n    " + " -> ".join(components)
+        return paths_str
+
+    g = _build_transformations_graph(sdata)
+    src_node: Union[int, str]
+    if has_type_spatial_element(source_coordinate_system):
+        src_node = id(source_coordinate_system)
     else:
-        g = _build_transformations_graph(sdata)
-        src_node: Union[int, str]
-        if has_type_spatial_element(source_coordinate_system):
-            src_node = id(source_coordinate_system)
+        assert isinstance(source_coordinate_system, str)
+        src_node = source_coordinate_system
+    tgt_node: Union[int, str]
+    if has_type_spatial_element(target_coordinate_system):
+        tgt_node = id(target_coordinate_system)
+    else:
+        assert isinstance(target_coordinate_system, str)
+        tgt_node = target_coordinate_system
+    paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
+    if len(paths) == 0:
+        # error 0 (we refer to this in the tests)
+        raise RuntimeError("No path found between the two coordinate systems")
+    if len(paths) == 1:
+        path = paths[0]
+    elif intermediate_coordinate_systems is None:
+        # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
+        # an expection and ask the user to be more specific
+        paths_with_length_1 = [p for p in paths if len(p) == 2]
+        if len(paths_with_length_1) == 1:
+            path = paths_with_length_1[0]
+        elif shortest_path:
+            shortest_paths = [p for p in paths if len(p) == min(map(len, paths))]
+
+            if len(shortest_paths) > 1:
+                # error 1
+                s = _describe_paths(shortest_paths)
+                raise RuntimeError(
+                    "Multiple equal paths found between the two coordinate systems passing through the intermediate. "
+                    f"Available shortest paths are:{s}"
+                )
+            path = shortest_paths[0]
         else:
-            assert isinstance(source_coordinate_system, str)
-            src_node = source_coordinate_system
-        tgt_node: Union[int, str]
-        if has_type_spatial_element(target_coordinate_system):
-            tgt_node = id(target_coordinate_system)
-        else:
-            assert isinstance(target_coordinate_system, str)
-            tgt_node = target_coordinate_system
-        paths = list(nx.all_simple_paths(g, source=src_node, target=tgt_node))
+            # error 2
+            s = _describe_paths(paths)
+            raise RuntimeError(
+                "Multiple paths found between the two coordinate systems. Please specify an intermediate "
+                f"coordinate system. Available paths are:{s}"
+            )
+    else:
+        if has_type_spatial_element(intermediate_coordinate_systems):
+            intermediate_coordinate_systems = id(intermediate_coordinate_systems)
+        paths = [p for p in paths if intermediate_coordinate_systems in p]
         if len(paths) == 0:
-            # error 0 (we refer to this in the tests)
-            raise RuntimeError("No path found between the two coordinate systems")
-        elif len(paths) > 1:
-            if intermediate_coordinate_systems is None:
-                # if one and only one of the paths has lenght 1, we choose it straight away, otherwise we raise
-                # an expection and ask the user to be more specific
-                paths_with_length_1 = [p for p in paths if len(p) == 2]
-                if len(paths_with_length_1) == 1:
-                    path = paths_with_length_1[0]
-                else:
-                    # error 1
-                    s = _describe_paths(paths)
-                    raise RuntimeError(
-                        "Multiple paths found between the two coordinate systems. Please specify an intermediate "
-                        f"coordinate system. Available paths are:{s}"
-                    )
-            else:
-                if has_type_spatial_element(intermediate_coordinate_systems):
-                    intermediate_coordinate_systems = id(intermediate_coordinate_systems)
-                paths = [p for p in paths if intermediate_coordinate_systems in p]
-                if len(paths) == 0:
-                    # error 2
-                    raise RuntimeError(
-                        "No path found between the two coordinate systems passing through the intermediate"
-                    )
-                elif len(paths) > 1:
-                    # error 3
-                    s = _describe_paths(paths)
-                    raise RuntimeError(
-                        "Multiple paths found between the two coordinate systems passing through the intermediate. "
-                        f"Avaliable paths are:{s}"
-                    )
-                else:
-                    path = paths[0]
-        else:
+            # error 3
+            raise RuntimeError("No path found between the two coordinate systems passing through the intermediate")
+        if len(paths) == 1:
             path = paths[0]
-        transformations = []
-        for i in range(len(path) - 1):
-            transformations.append(g[path[i]][path[i + 1]]["transformation"])
-        sequence = Sequence(transformations)
-        return sequence
+        elif shortest_path:
+            shortest_paths = [p for p in paths if len(p) == min(map(len, paths))]
+            if len(shortest_paths) > 1:
+                # error 4
+                s = _describe_paths(shortest_paths)
+                raise RuntimeError(
+                    "Multiple equal paths found between the two coordinate systems passing through the intermediate. "
+                    f"Available paths are:{s}"
+                )
+            path = shortest_paths[0]
+        else:
+            # error 5
+            s = _describe_paths(paths)
+            raise RuntimeError(
+                "Multiple paths found between the two coordinate systems passing through the intermediate. "
+                f"Available paths are:{s}"
+            )
+
+    transformations = [g[path[i]][path[i + 1]]["transformation"] for i in range(len(path) - 1)]
+    sequence = Sequence(transformations)
+    return sequence
 
 
 def get_transformation_between_landmarks(
@@ -355,10 +374,7 @@ def get_transformation_between_landmarks(
     """
     from spatialdata import transform
     from spatialdata.models import get_axes_names
-    from spatialdata.transformations.transformations import (
-        Affine,
-        Sequence,
-    )
+    from spatialdata.transformations.transformations import Affine, Sequence
 
     assert get_axes_names(references_coords) == ("x", "y")
     assert get_axes_names(moving_coords) == ("x", "y")

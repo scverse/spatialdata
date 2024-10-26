@@ -11,7 +11,14 @@ from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.datasets import blobs
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+    get_table_keys,
+)
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
@@ -316,6 +323,46 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     filtered1["table"].obs[filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
     concatenated = concatenate([filtered0, filtered1], concatenate_tables=True)
     assert len(list(concatenated.gen_elements())) == 3
+
+
+@pytest.mark.parametrize("concatenate_tables", [True, False])
+@pytest.mark.parametrize("obs_names_make_unique", [True, False])
+def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_make_unique: bool) -> None:
+    sdata0 = blobs()
+    sdata1 = blobs()
+
+    sdatas = {"sample0": sdata0, "sample1": sdata1}
+    with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
+        _ = concatenate(
+            sdatas.values(), concatenate_tables=concatenate_tables, obs_names_make_unique=obs_names_make_unique
+        )
+    merged = concatenate(sdatas, obs_names_make_unique=obs_names_make_unique, concatenate_tables=concatenate_tables)
+
+    if concatenate_tables:
+        assert len(merged.tables) == 1
+        table = merged["table"]
+        if obs_names_make_unique:
+            assert table.obs_names[0] == "1-sample0"
+            assert table.obs_names[-1] == "30-sample1"
+        else:
+            assert table.obs_names[0] == "1"
+    else:
+        assert merged["table-sample0"].obs_names[0] == "1"
+    assert sdata0["table"].obs_names[0] == "1"
+
+
+def test_concatenate_sdatas_single_item() -> None:
+    sdata = blobs()
+
+    def _n_elements(sdata: SpatialData) -> int:
+        return len([0 for _, _, _ in sdata.gen_elements()])
+
+    n = _n_elements(sdata)
+    assert n == _n_elements(concatenate([sdata]))
+    assert n == _n_elements(concatenate({"sample": sdata}.values()))
+    c = concatenate({"sample": sdata})
+    assert n == _n_elements(c)
+    assert "blobs_image-sample" in c.images
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:

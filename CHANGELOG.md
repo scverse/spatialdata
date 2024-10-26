@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.x.x] - 2024-xx-xx
+## [0.2.4] - xxxx-xx-xx
+
+### Minor
+
+-   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems`
+-   Added `get_pyramid_levels()` utils API
+-   Improved ergonomics of `concatenate()` when element names are non-unique #720
+-   Improved performance of writing images with multiscales #577
+
+## [0.2.3] - 2024-09-25
 
 ### Changed
 
@@ -17,6 +26,11 @@ and this project adheres to [Semantic Versioning][].
 ### Minor
 
 -   Added `clip: bool = False` parameter to `polygon_query()` #670
+-   Add `sort` parameter to `PointsModel.parse()` #672
+
+### Fixed
+
+-   Fix interpolation artifact multiscale computation for labels #697
 
 ## [0.2.2] - 2024-08-07
 
