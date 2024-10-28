@@ -1,10 +1,38 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Callable, Collection
+from collections.abc import Collection
+from types import TracebackType
+from typing import NamedTuple, cast
 
 import pandas as pd
 from anndata import AnnData
+
+
+class ErrorDetails(NamedTuple):
+    location: tuple[str, ...]
+    """Tuple of strings identifying the element for which the error occurred."""
+
+    message: str
+    """A human readable error message."""
+
+
+class ValidationError(ValueError):
+    def __init__(self, title: str, errors: list[ErrorDetails]):
+        self._errors: list[ErrorDetails] = list(errors)
+        super().__init__(title)
+
+    @property
+    def title(self) -> str:
+        return str(self.args[0]) if self.args else ""
+
+    @property
+    def errors(self) -> list[ErrorDetails]:
+        return list(self._errors)
+
+    def __str__(self) -> str:
+        return f"{self.title}\n" + "\n".join(
+            f"  {'/'.join(str(key) for key in details.location)}: {details.message}" for details in self.errors
+        )
 
 
 def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
@@ -84,7 +112,7 @@ def check_valid_name(name: str) -> None:
         raise ValueError("Name must contain only alphanumeric characters, underscores, dots and hyphens.")
 
 
-def check_all_keys_case_insensitively_unique(keys: Collection[str]) -> None:
+def check_all_keys_case_insensitively_unique(keys: Collection[str], location: tuple[str, ...] = ()) -> None:
     """
     Check that all keys are unique when ignoring case.
 
@@ -95,6 +123,8 @@ def check_all_keys_case_insensitively_unique(keys: Collection[str]) -> None:
     ----------
     keys
         A collection of string keys
+    location
+        Tuple of strings identifying the parent element
 
     Raises
     ------
@@ -113,10 +143,16 @@ def check_all_keys_case_insensitively_unique(keys: Collection[str]) -> None:
     ```
     """
     seen: set[str | None] = set()
-    for key in keys:
-        normalized_key = key.lower()
-        check_key_is_case_insensitively_unique(key, seen)
-        seen.add(normalized_key)
+    with raise_validation_errors(
+        title="Element contains conflicting keys.\n"
+        "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
+        exc_type=ValueError,
+    ) as collect_error:
+        for key in keys:
+            normalized_key = key.lower()
+            with collect_error(location=location + (key,)):
+                check_key_is_case_insensitively_unique(key, seen)
+            seen.add(normalized_key)
 
 
 def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]) -> None:
@@ -178,28 +214,7 @@ def check_valid_dataframe_column_name(name: str) -> None:
         raise ValueError("Name cannot be '_index'")
 
 
-def _iter_anndata_attr_keys_collect_value_errors(
-    adata: AnnData, attr_visitor: Callable[[str], None], key_visitor: Callable[[str, str], None]
-) -> None:
-    messages_per_attr: dict[str, list[str]] = defaultdict(list)
-    for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"):
-        try:
-            attr_visitor(attr)
-        except ValueError as e:
-            messages_per_attr[attr].append(f"  {e.args[0]}")
-        for key in getattr(adata, attr):
-            try:
-                key_visitor(attr, key)
-            except ValueError as e:
-                messages_per_attr[attr].append(f"  '{key}': {e.args[0]}")
-    if messages_per_attr:
-        raise ValueError(
-            "Table contains invalid names:\n"
-            + "\n".join(f"{attr}:\n" + "\n".join(messages) for attr, messages in messages_per_attr.items())
-        )
-
-
-def validate_table_attr_keys(data: AnnData) -> None:
+def validate_table_attr_keys(data: AnnData, location: tuple[str, ...] = ()) -> None:
     """
     Check that all keys of all AnnData attributes have valid names.
 
@@ -210,20 +225,159 @@ def validate_table_attr_keys(data: AnnData) -> None:
     ----------
     data
         The AnnData table
+    location
+        Tuple of strings identifying the parent element
 
     Raises
     ------
     ValueError
         If the AnnData contains one or several invalid keys.
     """
+    with raise_validation_errors(
+        title="Table contains invalid names.\n"
+        "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
+        exc_type=ValueError,
+    ) as collect_error:
+        for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"):
+            attr_path = location + (attr,)
+            with collect_error(location=attr_path):
+                check_all_keys_case_insensitively_unique(getattr(data, attr).keys(), location=attr_path)
+            for key in getattr(data, attr):
+                key_path = attr_path + (key,)
+                with collect_error(location=key_path):
+                    if attr in ("obs", "var"):
+                        check_valid_dataframe_column_name(key)
+                    else:
+                        check_valid_name(key)
 
-    def _check_valid_attr_keys(attr: str) -> None:
-        check_all_keys_case_insensitively_unique(getattr(data, attr).keys())
 
-    def _check_valid_attr_key(attr: str, key: str) -> None:
-        if attr in ("obs", "var"):
-            check_valid_dataframe_column_name(key)
+class _ErrorDetailsCollector:
+    """
+    Context manager to collect possible exceptions into a list.
+
+    This is syntactic sugar for shortening the try/except construction when the error handling is
+    the same. Only for internal use by `raise_validation_errors`.
+
+    Parameters
+    ----------
+    exc_type
+        The class of the exception to catch. Other exceptions are raised.
+    """
+
+    def __init__(
+        self,
+        exc_type: type[BaseException] | tuple[type[BaseException], ...],
+    ) -> None:
+        self.errors: list[ErrorDetails] = []
+        self._location: tuple[str, ...] = ()
+        self._exc_type = exc_type
+        self._exc_type_override: type[BaseException] | tuple[type[BaseException], ...] | None = None
+
+    def __call__(
+        self,
+        location: str | tuple[str, ...] = (),
+        expected_exception: type[BaseException] | tuple[type[BaseException], ...] | None = None,
+    ) -> _ErrorDetailsCollector:
+        """
+        Set or override error details in advance before an exception is raised.
+
+        Parameters
+        ----------
+        location
+            Tuple of strings identifying the parent element
+        expected_exception
+            The class of the exception to catch. Other exceptions are raised.
+        """
+        if isinstance(location, str):
+            location = (location,)
+        self._location = location
+        if expected_exception is not None:
+            self._exc_type_override = expected_exception
+        return self
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
+        # No exception happened
+        if exc_type is None:
+            return True
+        # An exception that we cannot handle, let the interpreter raise it.
+        handled_exception_type = self._exc_type_override or self._exc_type
+        if not issubclass(exc_type, handled_exception_type):
+            return False
+        # One of the expected exceptions happened, or another ValidationError that we can merge.
+        assert exc_val is not None
+        if issubclass(exc_type, ValidationError):
+            exc_val = cast(ValidationError, exc_val)
+            self.errors += exc_val.errors
         else:
-            check_valid_name(key)
+            details = ErrorDetails(location=self._location, message=str(exc_val.args[0]))
+            self.errors.append(details)
+        # Reset temporary attributes
+        self._location = ()
+        self._exc_type_override = None
+        return True
 
-    _iter_anndata_attr_keys_collect_value_errors(data, _check_valid_attr_keys, _check_valid_attr_key)
+
+class raise_validation_errors:
+    """
+    Context manager to raise collected exceptions together as one ValidationError.
+
+    This is syntactic sugar for shortening the try/except construction when the error handling is
+    the same.
+
+    Parameters
+    ----------
+    title
+        A validation error summary to display above the individual errors
+    exc_type
+        The class of the exception to catch. Other exceptions are raised.
+
+    Example
+    -------
+
+    ```pycon
+    >>> with raise_validation_errors(
+    ...     "Some errors happened", exc_type=ValueError
+    ... ) as collect_error:
+    ...     for key, value in {"first": 1, "second": 2, "third": 3}.items():
+    ...         with collect_error(location=key):
+    ...             if value % 2 != 0:
+    ...                 raise ValueError("Odd value encountered")
+    ...
+    spatialdata._core.validation.ValidationErro: Some errors happened
+    first: Odd value encountered
+    third: Odd value encountered
+    ```
+    """
+
+    def __init__(
+        self,
+        title: str = "Validation errors happened",
+        exc_type: type[BaseException] | tuple[type[BaseException], ...] = ValueError,
+    ) -> None:
+        self._message = title
+        self._collector = _ErrorDetailsCollector(exc_type=exc_type)
+
+    def __enter__(self) -> _ErrorDetailsCollector:
+        return self._collector
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
+        # An unexpected exception happened, let the interpreter handle it.
+        if exc_type is not None:
+            return False
+        # Exceptions were collected that we want to raise as a combined validation error.
+        if self._collector.errors:
+            raise ValidationError(title=self._message, errors=self._collector.errors)
+        return True

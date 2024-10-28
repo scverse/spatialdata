@@ -26,6 +26,7 @@ from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
     check_valid_name,
+    raise_validation_errors,
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
@@ -142,26 +143,37 @@ class SpatialData:
                 f"Element names must be unique. The following element names are used multiple times: {duplicates}"
             )
 
-        if images is not None:
-            for k, v in images.items():
-                self.images[k] = v
+        with raise_validation_errors(
+            title="Cannot construct SpatialData object, input contains invalid elements.\n"
+            "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
+            exc_type=(ValueError, KeyError),
+        ) as collect_error:
 
-        if labels is not None:
-            for k, v in labels.items():
-                self.labels[k] = v
+            if images is not None:
+                for k, v in images.items():
+                    with collect_error(location=("images", k)):
+                        self.images[k] = v
 
-        if shapes is not None:
-            for k, v in shapes.items():
-                self.shapes[k] = v
+            if labels is not None:
+                for k, v in labels.items():
+                    with collect_error(location=("labels", k)):
+                        self.labels[k] = v
 
-        if points is not None:
-            for k, v in points.items():
-                self.points[k] = v
+            if shapes is not None:
+                for k, v in shapes.items():
+                    with collect_error(location=("shapes", k)):
+                        self.shapes[k] = v
 
-        if tables is not None:
-            for k, v in tables.items():
-                self.validate_table_in_spatialdata(v)
-                self.tables[k] = v
+            if points is not None:
+                for k, v in points.items():
+                    with collect_error(location=("points", k)):
+                        self.points[k] = v
+
+            if tables is not None:
+                for k, v in tables.items():
+                    with collect_error(location=("tables", k)):
+                        self.validate_table_in_spatialdata(v)
+                        self.tables[k] = v
 
         self._query = QueryManager(self)
 
@@ -1121,10 +1133,18 @@ class SpatialData:
                 )
 
     def _validate_all_elements(self) -> None:
-        for element_type, element_name, element in self.gen_elements():
-            check_valid_name(element_name)
-            if element_type == "tables":
-                validate_table_attr_keys(element)
+        with raise_validation_errors(
+            title="SpatialData contains elements with invalid names.\n"
+            "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
+            exc_type=ValueError,
+        ) as collect_error:
+            for element_type, element_name, element in self.gen_elements():
+                element_path = (element_type, element_name)
+                with collect_error(location=element_path):
+                    check_valid_name(element_name)
+                if element_type == "tables":
+                    with collect_error(location=element_path):
+                        validate_table_attr_keys(element, location=element_path)
 
     def write(
         self,
@@ -2001,7 +2021,7 @@ class SpatialData:
         ValueError
             If the element names are not unique.
         """
-        check_all_keys_case_insensitively_unique([name for _, name, _ in self.gen_elements()])
+        check_all_keys_case_insensitively_unique([name for _, name, _ in self.gen_elements()], location=())
 
     def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
         """
