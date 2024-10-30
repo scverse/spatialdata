@@ -1350,8 +1350,6 @@ class SpatialData:
 
         from spatialdata._io._utils import _backed_elements_contained_in_path
 
-        check_valid_name(element_name)
-
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
 

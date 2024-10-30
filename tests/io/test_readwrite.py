@@ -604,7 +604,6 @@ def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
     _check_valid_name(full_sdata.write_element)
     _check_valid_name(full_sdata.write_metadata)
     _check_valid_name(full_sdata.write_transformations)
-    _check_valid_name(full_sdata.delete_element_from_disk)
 
 
 cached_sdata_blobs = blobs()
