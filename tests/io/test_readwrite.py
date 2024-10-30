@@ -10,6 +10,7 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData, deepcopy, read_zarr
+from spatialdata._core.validation import ValidationError
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
@@ -746,3 +747,33 @@ def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
     invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
     with pytest.raises(ValueError, match="Name (must|cannot)"):
         invalid_sdata.write_element("valid_name")
+
+
+def test_reading_invalid_name(tmp_path: Path):
+    image_name, image = next(iter(_get_images().items()))
+    labels_name, labels = next(iter(_get_labels().items()))
+    points_name, points = next(iter(_get_points().items()))
+    shapes_name, shapes = next(iter(_get_shapes().items()))
+    table_name, table = "table", _get_table()
+    valid_sdata = SpatialData(
+        images={image_name: image},
+        labels={labels_name: labels},
+        points={points_name: points},
+        shapes={shapes_name: shapes},
+        tables={table_name: table},
+    )
+    valid_sdata.write(tmp_path / "data.zarr")
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
+    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+
+    with pytest.raises(ValidationError, match="Cannot construct SpatialData") as exc_info:
+        read_zarr(tmp_path / "data.zarr")
+
+    actual_message = str(exc_info.value)
+    assert "points/has whitespace" in actual_message
+    assert "shapes/non-alnum_#$%&()*+,?@" in actual_message
+    assert (
+        "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707"
+        in actual_message
+    )
