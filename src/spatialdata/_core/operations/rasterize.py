@@ -305,7 +305,7 @@ def rasterize(
                     new_labels[new_name] = rasterized
                 else:
                     raise RuntimeError(f"Unsupported model {model} detected as return type of rasterize().")
-        return SpatialData(images=new_images, labels=new_labels, tables=data.tables)
+        return SpatialData(images=new_images, labels=new_labels, tables=data.tables, attrs=data.attrs)
 
     parsed_data = _parse_element(element=data, sdata=sdata, element_var_name="data", sdata_var_name="sdata")
     model = get_model(parsed_data)

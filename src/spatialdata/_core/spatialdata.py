@@ -687,7 +687,7 @@ class SpatialData:
             set(), filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
         )
 
-        return SpatialData(**elements, tables=tables)
+        return SpatialData(**elements, tables=tables, attrs=self.attrs)
 
     # TODO: move to relational query with refactor
     def _filter_tables(
@@ -929,7 +929,7 @@ class SpatialData:
                 if element_type not in elements:
                     elements[element_type] = {}
                 elements[element_type][element_name] = transformed
-        return SpatialData(**elements, tables=sdata.tables)
+        return SpatialData(**elements, tables=sdata.tables, attrs=self.attrs)
 
     def elements_are_self_contained(self) -> dict[str, bool]:
         """
@@ -2112,7 +2112,7 @@ class SpatialData:
             include_orphan_tables,
             elements_dict=elements_dict,
         )
-        return SpatialData(**elements_dict, tables=tables)
+        return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
     def __getitem__(self, item: str) -> SpatialElement:
         """

@@ -529,7 +529,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -881,7 +881,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
