@@ -8,10 +8,9 @@ from typing import Union
 import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData

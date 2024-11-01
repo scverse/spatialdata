@@ -10,13 +10,12 @@ import pandas as pd
 import scipy
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.affinity import translate
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage.segmentation import slic
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.query.relational_query import get_element_instances

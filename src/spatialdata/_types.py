@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 __all__ = ["ArrayLike", "ColorLike", "DTypeLike", "Raster_T"]
 

@@ -10,10 +10,9 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation

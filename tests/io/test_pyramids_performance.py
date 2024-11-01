@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 import xarray as xr
 import zarr
-from datatree import DataTree
 
 from spatialdata import SpatialData
 from spatialdata._io import write_image
@@ -35,8 +34,8 @@ def sdata_with_image(request: "_pytest.fixtures.SubRequest", tmp_path: Path) -> 
     return SpatialData(images={"image": image})
 
 
-def count_chunks(array: Union[xr.DataArray, xr.Dataset, DataTree]) -> int:
-    if isinstance(array, DataTree):
+def count_chunks(array: Union[xr.DataArray, xr.Dataset, xr.DataTree]) -> int:
+    if isinstance(array, xr.DataTree):
         array = array.ds
     # From `chunksizes`, we get only the number of chunks per axis.
     # By multiplying them, we get the total number of chunks in 2D/3D.
@@ -73,11 +72,11 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
     )
 
     # The number of chunks of scale level 0
-    num_chunks_scale0 = count_chunks(image.scale0 if isinstance(image, DataTree) else image)
+    num_chunks_scale0 = count_chunks(image.scale0 if isinstance(image, xr.DataTree) else image)
     # The total number of chunks of all scale levels
     num_chunks_all_scales = (
         sum(count_chunks(pyramid) for pyramid in image.children.values())
-        if isinstance(image, DataTree)
+        if isinstance(image, xr.DataTree)
         else count_chunks(image)
     )
 

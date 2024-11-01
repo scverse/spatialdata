@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata.models import SpatialElement
 

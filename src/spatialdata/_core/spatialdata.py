@@ -14,12 +14,11 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger

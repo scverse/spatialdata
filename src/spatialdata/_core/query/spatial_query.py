@@ -11,10 +11,9 @@ import dask.array as da
 import dask.dataframe as dd
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
 from spatialdata._core.query._utils import (

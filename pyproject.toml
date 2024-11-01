@@ -28,7 +28,7 @@ dependencies = [
     "dask>=2024.4.1",
     "fsspec<=2023.6",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=1.0.0",
+    #"multiscale_spatial_image>=1.0.0", Uncomment when new release using xr.DataTree is out
     "networkx",
     "numba",
     "numpy",
@@ -43,8 +43,7 @@ dependencies = [
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
-    "xarray",
-    "xarray-datatree",
+    "xarray>=2024.10.0",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
     "zarr",

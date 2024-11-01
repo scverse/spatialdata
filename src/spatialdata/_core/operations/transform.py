@@ -10,10 +10,9 @@ import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -393,8 +392,11 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
+        transformed_dict[k] = Dataset(
+            {"image": DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})}
+        )
         if channel_names is not None:
+            # This expression returns a dataset now.
             transformed_dict[k] = transformed_dict[k].assign_coords(c=channel_names)
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...

@@ -4,7 +4,6 @@ from typing import Any, Literal, Optional, Union
 import dask.array as da
 import numpy as np
 import zarr
-from datatree import DataTree
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -14,7 +13,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -93,11 +92,15 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
         multiscale_image = {}
         for i, d in enumerate(datasets):
             data = node.load(Multiscales).array(resolution=d, version=format.version)
-            multiscale_image[f"scale{i}"] = DataArray(
-                data,
-                name="image",
-                dims=axes,
-                coords={"c": channels} if channels is not None else {},
+            multiscale_image[f"scale{i}"] = Dataset(
+                {
+                    "image": DataArray(
+                        data,
+                        name="image",
+                        dims=axes,
+                        coords={"c": channels} if channels is not None else {},
+                    )
+                }
             )
         msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)

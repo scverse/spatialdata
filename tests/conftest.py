@@ -14,14 +14,13 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData

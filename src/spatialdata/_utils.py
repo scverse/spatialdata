@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
 from spatialdata.transformations import (
@@ -136,7 +135,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
             assert len(v.values()) == 1
             xdata = v.values().__iter__().__next__()
             if 0 not in xdata.shape:
-                d[k] = xdata
+                d[k] = Dataset({"image": xdata})
         unpadded = DataTree.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")

@@ -7,10 +7,9 @@ import dask.array as da
 import pandas as pd
 import xarray as xr
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names

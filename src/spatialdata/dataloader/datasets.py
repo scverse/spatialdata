@@ -11,12 +11,11 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform

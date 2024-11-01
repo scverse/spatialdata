@@ -8,10 +8,9 @@ import pytest
 import xarray
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.data_extent import get_extent
 from spatialdata._core.query.spatial_query import (

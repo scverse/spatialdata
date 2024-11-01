@@ -9,11 +9,10 @@ import pandas as pd
 import shapely
 import skimage.measure
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
 from skimage.measure._regionprops import RegionProperties
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate

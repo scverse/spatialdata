@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import dask.array as da
 from dask.array.overlap import coerce_depth
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation

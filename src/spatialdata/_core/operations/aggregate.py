@@ -10,11 +10,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from scipy import sparse
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, DataTree
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations._utils import _parse_element
