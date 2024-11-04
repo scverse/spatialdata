@@ -5,7 +5,7 @@ import pytest
 import xarray
 from xarray import DataArray, DataTree
 
-from spatialdata._utils import unpad_raster
+from spatialdata._utils import skip_non_dimension_nodes, unpad_raster
 from spatialdata.models import get_model
 from spatialdata.transformations import Affine
 
@@ -64,3 +64,19 @@ def test_unpad_raster(images, labels) -> None:
                 raise e
         else:
             raise ValueError(f"Unknown type: {type(raster)}")
+
+
+def test_skip_nodes(images):
+    multiscale_img = images["image2d_multiscale"]
+
+    @skip_non_dimension_nodes
+    def transpose(ds, *args, **kwargs):
+        return ds.transpose(*args, **kwargs)
+
+    for scale in list(multiscale_img.keys()):
+        assert multiscale_img[scale]["image"].dims == ("c", "y", "x")
+
+    # applying this function without skipping the root node would fail as the root node does not have dimensions.
+    result = images["image2d_multiscale"].map_over_datasets(transpose, "y", "x", "c")
+    for scale in list(result.keys()):
+        assert result[scale]["image"].dims == ("y", "x", "c")
