@@ -43,7 +43,7 @@ dependencies = [
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
-    "xarray",
+    "xarray<2024.10.0",
     "xarray-datatree",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
