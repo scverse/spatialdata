@@ -161,6 +161,13 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     """
     Convert a set of geometries (2D labels, 2D shapes) to approximated 2D polygons/multypolygons.
 
+    For optimal performance when converting rasters (:class:`xarray.DataArray` or :class:`datatree.DataTree`)
+    to polygons, it is recommended to configure `Dask` to use 'processes' rather than 'threads'.
+    For example, you can set this configuration with:
+
+    >>> import dask
+    >>> dask.config.set(scheduler='processes')
+
     Parameters
     ----------
     data
@@ -195,23 +202,22 @@ def _(
     else:
         element_single_scale = element
 
-    gdf_chunks = []
     chunk_sizes = element_single_scale.data.chunks
 
-    def _vectorize_chunk(chunk: np.ndarray, yoff: int, xoff: int) -> None:  # type: ignore[type-arg]
+    def _vectorize_chunk(chunk: np.ndarray, yoff: int, xoff: int) -> GeoDataFrame:  # type: ignore[type-arg]
         gdf = _vectorize_mask(chunk)
         gdf["chunk-location"] = f"({yoff}, {xoff})"
         gdf.geometry = gdf.translate(xoff, yoff)
-        gdf_chunks.append(gdf)
+        return gdf
 
     tasks = [
         dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[0][:iy]), sum(chunk_sizes[1][:ix]))
         for iy, row in enumerate(element_single_scale.data.to_delayed())
         for ix, chunk in enumerate(row)
     ]
-    dask.compute(tasks)
 
-    gdf = pd.concat(gdf_chunks)
+    results = dask.compute(*tasks)
+    gdf = pd.concat(results)
     gdf = GeoDataFrame([_dissolve_on_overlaps(*item) for item in gdf.groupby("label")], columns=["label", "geometry"])
     gdf.index = gdf["label"]
 
