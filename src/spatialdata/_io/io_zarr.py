@@ -1,14 +1,17 @@
 import logging
 import os
 import warnings
+from json import JSONDecodeError
 from pathlib import Path
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import zarr
 from anndata import AnnData
+from pyarrow import ArrowInvalid
+from zarr.errors import ArrayNotFoundError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import ome_zarr_logger
+from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -37,7 +40,11 @@ def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, s
     return f, f_store_path
 
 
-def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
+def read_zarr(
+    store: Union[str, Path, zarr.Group],
+    selection: Optional[tuple[str]] = None,
+    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
+) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
 
@@ -49,6 +56,16 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
     selection
         List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
         read.
+
+    on_bad_files
+        Specifies what to do upon encountering a bad file, e.g. corrupted, invalid or missing files.
+        Allowed values are :
+
+        - 'error', raise an exception when a bad file is encountered. Reading aborts immediately
+          with an error.
+        - 'warn', raise a warning when a bad file is encountered and skip that file. A SpatialData
+          object is returned containing only elements that could be read. Failures can only be
+          determined from the warnings.
 
     Returns
     -------
@@ -76,9 +93,19 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(f_store_path, f_elem.path)
-            element = _read_multiscale(f_elem_store, raster_type="image")
-            images[subgroup_name] = element
-            count += 1
+            with handle_read_errors(
+                on_bad_files,
+                location=f"{group.path}/{subgroup_name}",
+                exc_types=(
+                    JSONDecodeError,  # JSON parse error
+                    ValueError,  # ome_zarr: Unable to read the NGFF file
+                    KeyError,  # Missing JSON key
+                    ArrayNotFoundError,  # Image chunks missing
+                ),
+            ):
+                element = _read_multiscale(f_elem_store, raster_type="image")
+                images[subgroup_name] = element
+                count += 1
         logger.debug(f"Found {count} elements in {group}")
 
     # read multiscale labels
@@ -92,8 +119,13 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                     continue
                 f_elem = group[subgroup_name]
                 f_elem_store = os.path.join(f_store_path, f_elem.path)
-                labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
-                count += 1
+                with handle_read_errors(
+                    on_bad_files,
+                    location=f"{group.path}/{subgroup_name}",
+                    exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError),
+                ):
+                    labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
+                    count += 1
             logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
@@ -106,8 +138,13 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 # skip hidden files like .zgroup or .zmetadata
                 continue
             f_elem_store = os.path.join(f_store_path, f_elem.path)
-            points[subgroup_name] = _read_points(f_elem_store)
-            count += 1
+            with handle_read_errors(
+                on_bad_files,
+                location=f"{group.path}/{subgroup_name}",
+                exc_types=(JSONDecodeError, KeyError, ArrowInvalid),
+            ):
+                points[subgroup_name] = _read_points(f_elem_store)
+                count += 1
         logger.debug(f"Found {count} elements in {group}")
 
     if "shapes" in selector and "shapes" in f:
@@ -119,12 +156,22 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
                 continue
             f_elem = group[subgroup_name]
             f_elem_store = os.path.join(f_store_path, f_elem.path)
-            shapes[subgroup_name] = _read_shapes(f_elem_store)
-            count += 1
+            with handle_read_errors(
+                on_bad_files,
+                location=f"{group.path}/{subgroup_name}",
+                exc_types=(
+                    JSONDecodeError,
+                    ValueError,
+                    KeyError,
+                    ArrayNotFoundError,
+                ),
+            ):
+                shapes[subgroup_name] = _read_shapes(f_elem_store)
+                count += 1
         logger.debug(f"Found {count} elements in {group}")
     if "tables" in selector and "tables" in f:
         group = f["tables"]
-        tables = _read_table(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
 
     if "table" in selector and "table" in f:
         warnings.warn(
@@ -135,7 +182,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         )
         subgroup_name = "table"
         group = f[subgroup_name]
-        tables = _read_table(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
 
         logger.debug(f"Found {count} elements in {group}")
 
