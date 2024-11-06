@@ -8,12 +8,16 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.2.4] - xxxx-xx-xx
+## [0.2.4] - 2024-06-11
+
+### Major
+
+-   Enable vectorization of `bounding_box_query` for all `SpatialData` elements. #699
 
 ### Minor
 
--   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems`
--   Added `get_pyramid_levels()` utils API
+-   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems` #714
+-   Added `get_pyramid_levels()` utils API #719
 -   Improved ergonomics of `concatenate()` when element names are non-unique #720
 -   Improved performance of writing images with multiscales #577
 
