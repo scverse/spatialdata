@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## [0.x.x] - xxxx-xx-xx
+
+### Minor
+
+-   Added option `on_bad_files="warn"` to `read_zarr` for partially reading corrupted datasets #457
+
 ## [0.2.5] - 2024-06-11
 
 ### Fixed
