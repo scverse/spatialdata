@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.2.4] - 2024-06-11
 
+### Major
+
+-   Enable vectorization of `bounding_box_query` for all `SpatialData` elements. #699
+
 ### Minor
 
 -   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems` #714
