@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import tempfile
+from dataclasses import dataclass
+from json import JSONDecodeError
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+import py
+import pytest
+import zarr
+from pyarrow import ArrowInvalid
+from zarr.errors import ArrayNotFoundError
+
+from spatialdata import SpatialData, read_zarr
+from spatialdata.datasets import blobs
+
+if TYPE_CHECKING:
+    import _pytest.fixtures
+
+
+@pytest.fixture(scope="module")
+def test_case(request: _pytest.fixtures.SubRequest):
+    """
+    Fixture that helps using fixtures as arguments in parametrize.
+
+    The fixture `test_case` takes up values from other fixture functions used as parameters.
+    """
+    fixture_function = request.param
+    fixture_name = fixture_function.__name__
+    return request.getfixturevalue(fixture_name)
+
+
+@dataclass
+class PartialReadTestCase:
+    path: Path
+    expected_elements: list[str]
+    expected_exceptions: type[Exception] | tuple[type[Exception], ...]
+    warnings_patterns: list[str]
+
+
+@pytest.fixture(scope="session")
+def session_tmp_path(request: _pytest.fixtures.SubRequest) -> Path:
+    """
+    Create a temporary directory as a fixture with session scope and deletes it afterward.
+
+    The default tmp_path fixture has function scope and cannot be used as input to session-scoped
+    fixtures.
+    """
+    directory = py.path.local(tempfile.mkdtemp())
+    request.addfinalizer(lambda: directory.remove(rec=1))
+    return Path(directory)
+
+
+@pytest.fixture(scope="module")
+def sdata_with_corrupted_zattrs(session_tmp_path: Path) -> PartialReadTestCase:
+    # .zattrs is a zero-byte file, aborted during write, or contains invalid JSON syntax
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_corrupted_zattrs.zarr"
+    sdata.write(sdata_path)
+
+    corrupted_elements = ["blobs_image", "blobs_labels", "blobs_points", "blobs_polygons", "table"]
+    warnings_patterns = []
+    for corrupted_element in corrupted_elements:
+        elem_path = sdata.locate_element(sdata[corrupted_element])[0]
+        (sdata_path / elem_path / ".zattrs").write_bytes(b"")
+        warnings_patterns.append(f"{elem_path}: JSONDecodeError")
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name not in corrupted_elements]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=JSONDecodeError,
+        warnings_patterns=warnings_patterns,
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_corrupted_image_chunks(session_tmp_path: Path) -> PartialReadTestCase:
+    # images/blobs_image/0 is a zero-byte file or aborted during write
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_corrupted_image_chunks.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_image"
+    shutil.rmtree(sdata_path / "images" / corrupted / "0")
+    (sdata_path / "images" / corrupted / "0").touch()
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=ArrayNotFoundError,
+        warnings_patterns=[rf"images/{corrupted}: ArrayNotFoundError"],
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_corrupted_parquet(session_tmp_path: Path) -> PartialReadTestCase:
+    # points/blobs_points/0 is a zero-byte file or aborted during write
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_corrupted_parquet.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_points"
+    shutil.rmtree(sdata_path / "points" / corrupted / "points.parquet")
+    (sdata_path / "points" / corrupted / "points.parquet").touch()
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=ArrowInvalid,
+        warnings_patterns=[rf"points/{corrupted}: ArrowInvalid"],
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_missing_zattrs(session_tmp_path: Path) -> PartialReadTestCase:
+    # .zattrs is missing
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_missing_zattrs.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_image"
+    (sdata_path / "images" / corrupted / ".zattrs").unlink()
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=ValueError,
+        warnings_patterns=[rf"images/{corrupted}: .* Unable to read the NGFF file"],
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_missing_image_chunks(
+    session_tmp_path: Path,
+) -> PartialReadTestCase:
+    # .zattrs exists, but refers to binary array chunks that do not exist
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_missing_image_chunks.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_image"
+    shutil.rmtree(sdata_path / "images" / corrupted / "0")
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=ArrayNotFoundError,
+        warnings_patterns=[rf"images/{corrupted}: ArrayNotFoundError"],
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_invalid_zattrs_violating_spec(session_tmp_path: Path) -> PartialReadTestCase:
+    # .zattrs contains readable JSON which is not valid for SpatialData/NGFF specs
+    # for example due to a missing/misspelled/renamed key
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_invalid_zattrs_violating_spec.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_image"
+    json_dict = json.loads((sdata_path / "images" / corrupted / ".zattrs").read_text())
+    del json_dict["multiscales"][0]["coordinateTransformations"]
+    (sdata_path / "images" / corrupted / ".zattrs").write_text(json.dumps(json_dict, indent=4))
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=KeyError,
+        warnings_patterns=[rf"images/{corrupted}: KeyError: coordinateTransformations"],
+    )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_invalid_zattrs_table_region_not_found(session_tmp_path: Path) -> PartialReadTestCase:
+    # table/table/.zarr referring to a region that is not found
+    # This has been emitting just a warning, but does not fail reading the table element.
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_invalid_zattrs_table_region_not_found.zarr"
+    sdata.write(sdata_path)
+
+    corrupted = "blobs_labels"
+    # The element data is missing
+    shutil.rmtree(sdata_path / "labels" / corrupted)
+    # But the labels element is referenced as a region in a table
+    regions = zarr.open_group(sdata_path / "tables" / "table" / "obs" / "region", mode="r")
+    assert corrupted in np.asarray(regions.categories)[regions.codes]
+    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=(),
+        warnings_patterns=[
+            rf"The table is annotating '{re.escape(corrupted)}', which is not present in the SpatialData object"
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        sdata_with_corrupted_zattrs,
+        sdata_with_corrupted_image_chunks,
+        sdata_with_corrupted_parquet,
+        sdata_with_missing_zattrs,
+        sdata_with_missing_image_chunks,
+        sdata_with_invalid_zattrs_violating_spec,
+        sdata_with_invalid_zattrs_table_region_not_found,
+    ],
+    indirect=True,
+)
+def test_read_zarr_with_error(test_case: PartialReadTestCase):
+    # The specific type of exception depends on the read function for the SpatialData element
+    if test_case.expected_exceptions:
+        with pytest.raises(test_case.expected_exceptions):
+            read_zarr(test_case.path, on_bad_files="error")
+    else:
+        read_zarr(test_case.path, on_bad_files="error")
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        sdata_with_corrupted_zattrs,
+        sdata_with_corrupted_image_chunks,
+        sdata_with_corrupted_parquet,
+        sdata_with_missing_zattrs,
+        sdata_with_missing_image_chunks,
+        sdata_with_invalid_zattrs_violating_spec,
+        sdata_with_invalid_zattrs_table_region_not_found,
+    ],
+    indirect=True,
+)
+def test_read_zarr_with_warnings(test_case: PartialReadTestCase):
+    with pytest.warns(UserWarning) as all_warnings:
+        actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
+
+    for warning_pattern, warning_record in zip(test_case.warnings_patterns, all_warnings):
+        assert re.search(warning_pattern, warning_record.message.args[0])
+
+    for elem in test_case.expected_elements:
+        assert elem in actual
