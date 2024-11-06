@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## [0.2.5] - 2024-06-11
+
+### Fixed
+
+-   Incompatibility issues due to newest release of `multiscale-spatial-image` #760
+
 ## [0.2.4] - 2024-06-11
 
 ### Major
