@@ -96,7 +96,7 @@ def get_bounding_box_corners(
     return output.squeeze().drop_vars("box")
 
 
-@nb.njit(parallel=False, nopython=True)
+@nb.jit(parallel=False, nopython=True)
 def _create_slices_and_translation(
     min_values: nb.types.Array,
     max_values: nb.types.Array,
