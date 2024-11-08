@@ -16,7 +16,7 @@ import py
 import pytest
 import zarr
 from pyarrow import ArrowInvalid
-from zarr.errors import ArrayNotFoundError
+from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata import SpatialData, read_zarr
 from spatialdata.datasets import blobs
@@ -82,6 +82,26 @@ def session_tmp_path(request: _pytest.fixtures.SubRequest) -> Path:
     directory = py.path.local(tempfile.mkdtemp())
     request.addfinalizer(lambda: directory.remove(rec=1))
     return Path(directory)
+
+
+@pytest.fixture(scope="module")
+def sdata_with_corrupted_elem_type_zgroup(session_tmp_path: Path) -> PartialReadTestCase:
+    # .zattrs is a zero-byte file, aborted during write, or contains invalid JSON syntax
+    sdata = blobs()
+    sdata_path = session_tmp_path / "sdata_with_corrupted_top_level_zgroup.zarr"
+    sdata.write(sdata_path)
+
+    (sdata_path / "images" / ".zgroup").unlink()  # missing, not detected by reader
+    (sdata_path / "labels" / ".zgroup").write_text("")  # corrupted
+    (sdata_path / "points" / ".zgroup").write_text("{}")  # invalid
+    not_corrupted = [name for t, name, _ in sdata.gen_elements() if t not in ("images", "labels", "points")]
+
+    return PartialReadTestCase(
+        path=sdata_path,
+        expected_elements=not_corrupted,
+        expected_exceptions=(JSONDecodeError, MetadataError),
+        warnings_patterns=["labels: JSONDecodeError", "points: MetadataError"],
+    )
 
 
 @pytest.fixture(scope="module")
@@ -251,6 +271,7 @@ def sdata_with_invalid_zattrs_table_region_not_found(session_tmp_path: Path) -> 
         sdata_with_missing_image_chunks,
         sdata_with_invalid_zattrs_violating_spec,
         sdata_with_invalid_zattrs_table_region_not_found,
+        sdata_with_corrupted_elem_type_zgroup,
     ],
     indirect=True,
 )
@@ -273,6 +294,7 @@ def test_read_zarr_with_error(test_case: PartialReadTestCase):
         sdata_with_missing_image_chunks,
         sdata_with_invalid_zattrs_violating_spec,
         sdata_with_invalid_zattrs_table_region_not_found,
+        sdata_with_corrupted_elem_type_zgroup,
     ],
     indirect=True,
 )
