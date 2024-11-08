@@ -101,6 +101,7 @@ def read_zarr(
                     ValueError,  # ome_zarr: Unable to read the NGFF file
                     KeyError,  # Missing JSON key
                     ArrayNotFoundError,  # Image chunks missing
+                    TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
                 ),
             ):
                 element = _read_multiscale(f_elem_store, raster_type="image")
@@ -122,7 +123,7 @@ def read_zarr(
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
-                    exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError),
+                    exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
                 ):
                     labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                     count += 1

@@ -4,6 +4,8 @@ import json
 import re
 import shutil
 import tempfile
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
@@ -23,10 +25,36 @@ if TYPE_CHECKING:
     import _pytest.fixtures
 
 
+@contextmanager
+def pytest_warns_multiple(
+    expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning, matches: Iterable[str] = ()
+) -> Generator[None, None, None]:
+    """
+    Assert that code raises a warnings matching particular patterns.
+
+    Like `pytest.warns`, but with multiple patterns which each must match a warning.
+
+    Parameters
+    ----------
+    expected_warning
+        A warning class or a tuple of warning classes for which at least one matching warning must be found
+    matches
+        Regular expression patterns that of which each must be found in at least one warning message.
+    """
+    if not matches:
+        yield
+    else:
+        with (
+            pytest.warns(expected_warning, match=matches[0]),
+            pytest_warns_multiple(expected_warning, matches=matches[1:]),
+        ):
+            yield
+
+
 @pytest.fixture(scope="module")
 def test_case(request: _pytest.fixtures.SubRequest):
     """
-    Fixture that helps using fixtures as arguments in parametrize.
+    Fixture that helps to use fixtures as arguments in parametrize.
 
     The fixture `test_case` takes up values from other fixture functions used as parameters.
     """
@@ -94,8 +122,11 @@ def sdata_with_corrupted_image_chunks(session_tmp_path: Path) -> PartialReadTest
     return PartialReadTestCase(
         path=sdata_path,
         expected_elements=not_corrupted,
-        expected_exceptions=ArrayNotFoundError,
-        warnings_patterns=[rf"images/{corrupted}: ArrayNotFoundError"],
+        expected_exceptions=(
+            ArrayNotFoundError,
+            TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
+        ),
+        warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
     )
 
 
@@ -154,8 +185,11 @@ def sdata_with_missing_image_chunks(
     return PartialReadTestCase(
         path=sdata_path,
         expected_elements=not_corrupted,
-        expected_exceptions=ArrayNotFoundError,
-        warnings_patterns=[rf"images/{corrupted}: ArrayNotFoundError"],
+        expected_exceptions=(
+            ArrayNotFoundError,
+            TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
+        ),
+        warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
     )
 
 
@@ -243,11 +277,8 @@ def test_read_zarr_with_error(test_case: PartialReadTestCase):
     indirect=True,
 )
 def test_read_zarr_with_warnings(test_case: PartialReadTestCase):
-    with pytest.warns(UserWarning) as all_warnings:
+    with pytest_warns_multiple(UserWarning, matches=test_case.warnings_patterns):
         actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
-
-    for warning_pattern, warning_record in zip(test_case.warnings_patterns, all_warnings):
-        assert re.search(warning_pattern, warning_record.message.args[0])
 
     for elem in test_case.expected_elements:
         assert elem in actual
