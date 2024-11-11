@@ -3,9 +3,9 @@ from __future__ import annotations
 import functools
 import re
 import warnings
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from itertools import islice
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ from spatialdata.transformations import (
 )
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
-Number = Union[int, float]
+Number = int | float
 RT = TypeVar("RT")
 
 
