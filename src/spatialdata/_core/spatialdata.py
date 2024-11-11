@@ -465,7 +465,7 @@ class SpatialData:
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if (isinstance(region, str) and region not in element_names) or (
-            isinstance(region, (list, pd.Series))
+            isinstance(region, list | pd.Series)
             and not all(region_element in element_names for region_element in region)
         ):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
@@ -543,7 +543,7 @@ class SpatialData:
 
     @path.setter
     def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, (str, Path)):
+        if value is None or isinstance(value, str | Path):
             self._path = value
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
@@ -1476,13 +1476,13 @@ class SpatialData:
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (DataArray, DataTree)):
+        if isinstance(element, DataArray | DataTree):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
 
             overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
-        elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+        elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )

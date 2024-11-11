@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
@@ -36,8 +36,8 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "labels"]) -> Union[DataArray, DataTree]:
-    assert isinstance(store, (str, Path))
+def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
+    assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
 
     f = zarr.open(store, mode="r")
@@ -81,7 +81,7 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
     # TODO: what to do with name? For now remove?
     # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
-    channels: Optional[list[Any]] = None
+    channels: list[Any] | None = None
     if raster_type == "image":
         if legacy_channels_metadata is not None:
             channels = [d["label"] for d in legacy_channels_metadata["channels"]]
@@ -118,13 +118,13 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
 
 def _write_raster(
     raster_type: Literal["image", "labels"],
-    raster_data: Union[DataArray, DataTree],
+    raster_data: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    label_metadata: Optional[JSONDict] = None,
-    **metadata: Union[str, JSONDict, list[JSONDict]],
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    label_metadata: JSONDict | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     assert raster_type in ["image", "labels"]
     # the argument "name" and "label_metadata" are only used for labels (to be precise, name is used in
@@ -232,12 +232,12 @@ def _write_raster(
 
 
 def write_image(
-    image: Union[DataArray, DataTree],
+    image: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    **metadata: Union[str, JSONDict, list[JSONDict]],
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     _write_raster(
         raster_type="image",
@@ -251,12 +251,12 @@ def write_image(
 
 
 def write_labels(
-    labels: Union[DataArray, DataTree],
+    labels: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    label_metadata: Optional[JSONDict] = None,
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    label_metadata: JSONDict | None = None,
     **metadata: JSONDict,
 ) -> None:
     _write_raster(
