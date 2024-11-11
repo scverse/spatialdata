@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import warnings
 from abc import abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import dask.dataframe as dd
@@ -602,7 +602,7 @@ def _(
 
     if isinstance(query_result, list):
         processed_results = []
-        for result, translation_vector in zip(query_result, translation_vectors):
+        for result, translation_vector in zip(query_result, translation_vectors, strict=True):
             processed_result = _process_query_result(result, translation_vector, axes)
             if processed_result is not None:
                 processed_results.append(processed_result)
@@ -687,7 +687,7 @@ def _(
 
     # transform the element to the query coordinate system
     output: list[DaskDataFrame | None] = []
-    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate):
+    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
         if p is None:
             output.append(None)
         else:

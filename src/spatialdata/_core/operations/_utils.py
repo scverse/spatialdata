@@ -114,7 +114,7 @@ def transform_to_data_extent(
     }
 
     for _, element_name, element in sdata_raster.gen_spatial_elements():
-        if isinstance(element, (DataArray, DataTree)):
+        if isinstance(element, DataArray | DataTree):
             rasterized = rasterize(
                 element,
                 axes=data_extent_axes,

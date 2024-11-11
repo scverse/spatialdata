@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import dask.dataframe as dd
 import geopandas
@@ -17,7 +15,7 @@ from xarray import DataArray, DataTree
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame]
+SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
@@ -47,9 +45,9 @@ def has_type_spatial_element(e: Any) -> bool:
     Returns
     -------
     Whether the object is a SpatialElement
-    (i.e in Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame])
+    (i.e in DataArray | DataTree | GeoDataFrame | DaskDataFrame)
     """
-    return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
+    return isinstance(e, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
 
 
 # added this code as part of a refactoring to catch errors earlier

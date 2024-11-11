@@ -105,7 +105,7 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
 @to_circles.register(GeoDataFrame)
 def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
     assert len(kwargs) == 0
-    if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
+    if isinstance(element.geometry.iloc[0], Polygon | MultiPolygon):
         radius = np.sqrt(element.geometry.area / np.pi)
         centroids = _get_centroids(element)
         obs = pd.DataFrame({"radius": radius})
@@ -257,7 +257,7 @@ def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
 
 @to_polygons.register(GeoDataFrame)
 def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
-    if isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon)):
+    if isinstance(gdf.geometry.iloc[0], Polygon | MultiPolygon):
         return gdf
     if isinstance(gdf.geometry.iloc[0], Point):
         ShapesModel.validate_shapes_not_mixed_types(gdf)
@@ -273,7 +273,7 @@ def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
             # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
             buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = gdf.attrs[ShapesModel.TRANSFORM_KEY]
             return buffered_df
-        assert isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon))
+        assert isinstance(gdf.geometry.iloc[0], Polygon | MultiPolygon)
         return gdf
     raise RuntimeError("Unsupported geometry type: " f"{type(gdf.geometry.iloc[0])}")
 

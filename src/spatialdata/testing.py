@@ -113,7 +113,7 @@ def assert_elements_are_identical(
     # compare the elements
     if isinstance(element0, AnnData):
         assert_anndata_equal(element0, element1)
-    elif isinstance(element0, (DataArray, DataTree)):
+    elif isinstance(element0, DataArray | DataTree):
         assert_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
         assert_geodataframe_equal(element0, element1, check_less_precise=True)

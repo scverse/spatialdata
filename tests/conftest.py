@@ -323,7 +323,7 @@ def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
 
 def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:
     linear_rings = []
-    for centroid, half_width in zip(centroid_coordinates, half_widths):
+    for centroid, half_width in zip(centroid_coordinates, half_widths, strict=True):
         min_coords = centroid - half_width
         max_coords = centroid + half_width
 

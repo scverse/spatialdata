@@ -70,7 +70,7 @@ def _get_extent_of_polygons_multipolygons(
     -------
     The bounding box description.
     """
-    assert isinstance(shapes.geometry.iloc[0], (Polygon, MultiPolygon))
+    assert isinstance(shapes.geometry.iloc[0], Polygon | MultiPolygon)
     axes = get_axes_names(shapes)
     bounds = shapes["geometry"].bounds
     return {ax: (bounds[f"min{ax}"].min(), bounds[f"max{ax}"].max()) for ax in axes}
@@ -200,7 +200,7 @@ def _(
     new_max_coordinates_dict: dict[str, list[float]] = defaultdict(list)
     mask = [has_images, has_labels, has_points, has_shapes]
     include_spatial_elements = ["images", "labels", "points", "shapes"]
-    include_spatial_elements = [i for (i, v) in zip(include_spatial_elements, mask) if v]
+    include_spatial_elements = [i for (i, v) in zip(include_spatial_elements, mask, strict=True) if v]
 
     if elements is None:  # to shut up ruff
         elements = []
@@ -216,7 +216,7 @@ def _(
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
             if coordinate_system in coordinate_systems:
-                if isinstance(element_obj, (DaskDataFrame, GeoDataFrame)):
+                if isinstance(element_obj, DaskDataFrame | GeoDataFrame):
                     extent = get_extent(element_obj, coordinate_system=coordinate_system, exact=exact)
                 else:
                     extent = get_extent(element_obj, coordinate_system=coordinate_system)
@@ -253,7 +253,7 @@ def _get_extent_of_shapes(e: GeoDataFrame) -> BoundingBoxDescription:
     first_geometry = e_temp["geometry"].iloc[0]
     if isinstance(first_geometry, Point):
         return _get_extent_of_circles(e)
-    assert isinstance(first_geometry, (Polygon, MultiPolygon))
+    assert isinstance(first_geometry, Polygon | MultiPolygon)
     return _get_extent_of_polygons_multipolygons(e)
 
 

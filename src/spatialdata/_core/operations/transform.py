@@ -160,13 +160,13 @@ def _set_transformation_for_transformed_elements(
         assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
-    if isinstance(element, (DataArray, DataTree)):
+    if isinstance(element, DataArray | DataTree):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
-    elif isinstance(element, (GeoDataFrame, DaskDataFrame)):
+    elif isinstance(element, GeoDataFrame | DaskDataFrame):
         assert raster_translation is None
         to_prepend = transformation.inverse() if maintain_positioning else Identity()
     else:

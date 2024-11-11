@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
@@ -32,7 +30,6 @@ __all__ = [
 # http://api.csswg.org/bikeshed/?url=https://raw.githubusercontent.com/bogovicj/ngff/coord-transforms/latest/index.bs
 # Transformation_t = Dict[str, Union[str, List[int], List[str], List[Dict[str, Any]]]]
 Transformation_t = dict[str, Any]
-NGFF_TRANSFORMATIONS: dict[str, type[NgffBaseTransformation]] = {}
 
 
 class NgffBaseTransformation(ABC):
@@ -75,11 +72,11 @@ class NgffBaseTransformation(ABC):
 
     @classmethod
     @abstractmethod
-    def _from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
+    def _from_dict(cls, d: Transformation_t) -> "NgffBaseTransformation":
         pass
 
     @classmethod
-    def from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
+    def from_dict(cls, d: Transformation_t) -> "NgffBaseTransformation":
         """
         Initialize a transformation from the Python dict of its json representation.
 
@@ -138,7 +135,7 @@ class NgffBaseTransformation(ABC):
                 d["output"] = d["output"].to_dict()
 
     @abstractmethod
-    def inverse(self) -> NgffBaseTransformation:
+    def inverse(self) -> "NgffBaseTransformation":
         """Return the inverse of the transformation."""
 
     @abstractmethod
@@ -160,7 +157,7 @@ class NgffBaseTransformation(ABC):
         """
 
     @abstractmethod
-    def to_affine(self) -> NgffAffine:
+    def to_affine(self) -> "NgffAffine":
         """Convert the transformation to an affine transformation, whenever the conversion can be made."""
 
     def _validate_transform_points_shapes(self, input_size: int, points_shape: tuple[int, ...]) -> None:
@@ -181,7 +178,7 @@ class NgffBaseTransformation(ABC):
             )
 
     # order of the composition: self is applied first, then the transformation passed as argument
-    def compose_with(self, transformation: NgffBaseTransformation) -> NgffBaseTransformation:
+    def compose_with(self, transformation: "NgffBaseTransformation") -> "NgffBaseTransformation":
         """
         Compose the transfomation object with another transformation
 
@@ -225,6 +222,9 @@ class NgffBaseTransformation(ABC):
         if array.dtype != float:
             array = array.astype(float)
         return array
+
+
+NGFF_TRANSFORMATIONS: dict[str, type[NgffBaseTransformation]] = {}
 
 
 # A note on affine transformations and their matrix representation.
@@ -277,6 +277,118 @@ class NgffBaseTransformation(ABC):
 # space invariant (i.e. it does not map finite points to the line at the infinity).
 # For a primer you can look here: https://en.wikipedia.org/wiki/Affine_space#Relation_to_projective_spaces
 # For more information please consult a linear algebra textbook.
+
+
+class NgffAffine(NgffBaseTransformation):
+    """The Affine transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        affine: Union[ArrayLike, list[list[Number]]],
+        input_coordinate_system: Optional[NgffCoordinateSystem] = None,
+        output_coordinate_system: Optional[NgffCoordinateSystem] = None,
+    ) -> None:
+        """
+        Init the NgffAffine object.
+        Parameters
+        ----------
+        affine
+            A list of lists of numbers or a matrix specifying the affine transformation.
+        input_coordinate_system
+            Input coordinate system of the transformation.
+        output_coordinate_system
+            Output coordinate system of the transformation.
+        """
+        super().__init__(input_coordinate_system, output_coordinate_system)
+        self.affine = self._parse_list_into_array(affine)
+
+    @classmethod
+    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+        assert isinstance(d["affine"], list)
+        last_row = [[0.0] * (len(d["affine"][0]) - 1) + [1.0]]
+        return cls(d["affine"] + last_row)
+
+    def to_dict(self) -> Transformation_t:
+        d = {
+            "type": "affine",
+            "affine": self.affine[:-1, :].tolist(),
+        }
+        self._update_dict_with_input_output_cs(d)
+        return d
+
+    def _repr_transformation_description(self, indent: int = 0) -> str:
+        s = ""
+        for row in self.affine:
+            s += f"{self._indent(indent)}{row}\n"
+        s = s[:-1]
+        return s
+
+    def inverse(self) -> NgffBaseTransformation:
+        inv = np.linalg.inv(self.affine)
+        return NgffAffine(
+            inv,
+            input_coordinate_system=self.output_coordinate_system,
+            output_coordinate_system=self.input_coordinate_system,
+        )
+
+    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        input_axes, output_axes = self._get_axes_from_coordinate_systems()
+        return input_axes, output_axes
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        input_axes, output_axes = self._get_and_validate_axes()
+        self._validate_transform_points_shapes(len(input_axes), points.shape)
+        p = np.vstack([points.T, np.ones(points.shape[0])])
+        q = self.affine @ p
+        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
+
+    def to_affine(self) -> "NgffAffine":
+        return NgffAffine(
+            self.affine,
+            input_coordinate_system=self.input_coordinate_system,
+            output_coordinate_system=self.output_coordinate_system,
+        )
+
+    @classmethod
+    def _affine_matrix_from_input_and_output_axes(
+        cls, input_axes: tuple[str, ...], output_axes: tuple[str, ...]
+    ) -> ArrayLike:
+        """
+        computes a permutation matrix to match the input and output axes.
+
+        Parameters
+        ----------
+        input_axes
+            the input axes.
+        output_axes
+            the output axes.
+        """
+        from spatialdata.models import C, X, Y, Z
+
+        assert all(ax in (X, Y, Z, C) for ax in input_axes)
+        assert all(ax in (X, Y, Z, C) for ax in output_axes)
+        m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
+        for output_ax in output_axes:
+            for input_ax in input_axes:
+                if output_ax == input_ax:
+                    m[output_axes.index(output_ax), input_axes.index(input_ax)] = 1
+        m[-1, -1] = 1
+        return m
+
+    @classmethod
+    def from_input_output_coordinate_systems(
+        cls,
+        input_coordinate_system: NgffCoordinateSystem,
+        output_coordinate_system: NgffCoordinateSystem,
+    ) -> "NgffAffine":
+        input_axes = input_coordinate_system.axes_names
+        output_axes = output_coordinate_system.axes_names
+        m = cls._affine_matrix_from_input_and_output_axes(input_axes, output_axes)
+        return cls(
+            affine=m, input_coordinate_system=input_coordinate_system, output_coordinate_system=output_coordinate_system
+        )
+
+
 class NgffIdentity(NgffBaseTransformation):
     """The Identity transformation from the NGFF specification."""
 
@@ -569,116 +681,6 @@ class NgffScale(NgffBaseTransformation):
         )
 
 
-class NgffAffine(NgffBaseTransformation):
-    """The Affine transformation from the NGFF specification."""
-
-    def __init__(
-        self,
-        affine: Union[ArrayLike, list[list[Number]]],
-        input_coordinate_system: Optional[NgffCoordinateSystem] = None,
-        output_coordinate_system: Optional[NgffCoordinateSystem] = None,
-    ) -> None:
-        """
-        Init the NgffAffine object.
-        Parameters
-        ----------
-        affine
-            A list of lists of numbers or a matrix specifying the affine transformation.
-        input_coordinate_system
-            Input coordinate system of the transformation.
-        output_coordinate_system
-            Output coordinate system of the transformation.
-        """
-        super().__init__(input_coordinate_system, output_coordinate_system)
-        self.affine = self._parse_list_into_array(affine)
-
-    @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
-        assert isinstance(d["affine"], list)
-        last_row = [[0.0] * (len(d["affine"][0]) - 1) + [1.0]]
-        return cls(d["affine"] + last_row)
-
-    def to_dict(self) -> Transformation_t:
-        d = {
-            "type": "affine",
-            "affine": self.affine[:-1, :].tolist(),
-        }
-        self._update_dict_with_input_output_cs(d)
-        return d
-
-    def _repr_transformation_description(self, indent: int = 0) -> str:
-        s = ""
-        for row in self.affine:
-            s += f"{self._indent(indent)}{row}\n"
-        s = s[:-1]
-        return s
-
-    def inverse(self) -> NgffBaseTransformation:
-        inv = np.linalg.inv(self.affine)
-        return NgffAffine(
-            inv,
-            input_coordinate_system=self.output_coordinate_system,
-            output_coordinate_system=self.input_coordinate_system,
-        )
-
-    def _get_and_validate_axes(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
-        input_axes, output_axes = self._get_axes_from_coordinate_systems()
-        return input_axes, output_axes
-
-    def transform_points(self, points: ArrayLike) -> ArrayLike:
-        input_axes, output_axes = self._get_and_validate_axes()
-        self._validate_transform_points_shapes(len(input_axes), points.shape)
-        p = np.vstack([points.T, np.ones(points.shape[0])])
-        q = self.affine @ p
-        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
-
-    def to_affine(self) -> NgffAffine:
-        return NgffAffine(
-            self.affine,
-            input_coordinate_system=self.input_coordinate_system,
-            output_coordinate_system=self.output_coordinate_system,
-        )
-
-    @classmethod
-    def _affine_matrix_from_input_and_output_axes(
-        cls, input_axes: tuple[str, ...], output_axes: tuple[str, ...]
-    ) -> ArrayLike:
-        """
-        computes a permutation matrix to match the input and output axes.
-
-        Parameters
-        ----------
-        input_axes
-            the input axes.
-        output_axes
-            the output axes.
-        """
-        from spatialdata.models import C, X, Y, Z
-
-        assert all(ax in (X, Y, Z, C) for ax in input_axes)
-        assert all(ax in (X, Y, Z, C) for ax in output_axes)
-        m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
-        for output_ax in output_axes:
-            for input_ax in input_axes:
-                if output_ax == input_ax:
-                    m[output_axes.index(output_ax), input_axes.index(input_ax)] = 1
-        m[-1, -1] = 1
-        return m
-
-    @classmethod
-    def from_input_output_coordinate_systems(
-        cls,
-        input_coordinate_system: NgffCoordinateSystem,
-        output_coordinate_system: NgffCoordinateSystem,
-    ) -> NgffAffine:
-        input_axes = input_coordinate_system.axes_names
-        output_axes = output_coordinate_system.axes_names
-        m = cls._affine_matrix_from_input_and_output_axes(input_axes, output_axes)
-        return cls(
-            affine=m, input_coordinate_system=input_coordinate_system, output_coordinate_system=output_coordinate_system
-        )
-
-
 class NgffRotation(NgffBaseTransformation):
     """The Rotation transformation from the NGFF specification."""
 
@@ -843,7 +845,7 @@ class NgffSequence(NgffBaseTransformation):
         assert isinstance(t.input_coordinate_system, NgffCoordinateSystem)
         if isinstance(t, NgffAffine):
             return None
-        elif isinstance(t, (NgffTranslation, NgffScale, NgffRotation, NgffIdentity)):
+        elif isinstance(t, NgffTranslation | NgffScale | NgffRotation | NgffIdentity):
             return t.input_coordinate_system
         elif isinstance(t, NgffMapAxis):
             return None
@@ -1130,7 +1132,7 @@ class NgffByDimension(NgffBaseTransformation):
             input_columns = [points[:, input_axes.index(ax)] for ax in t.input_coordinate_system.axes_names]
             input_columns_stacked: ArrayLike = np.stack(input_columns, axis=1)
             output_columns_t = t.transform_points(input_columns_stacked)
-            for ax, col in zip(t.output_coordinate_system.axes_names, output_columns_t.T):
+            for ax, col in zip(t.output_coordinate_system.axes_names, output_columns_t.T, strict=True):
                 output_columns[ax] = col
         output: ArrayLike = np.stack([output_columns[ax] for ax in output_axes], axis=1)
         return output
