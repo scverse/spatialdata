@@ -1,5 +1,6 @@
 # from https://stackoverflow.com/questions/10307696/how-to-put-a-variable-into-python-docstring
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 

@@ -13,9 +13,8 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -653,7 +652,7 @@ def join_spatialelement_table(
     if sdata is not None:
         elements_dict = _create_sdata_elements_dict_for_join(sdata, spatial_element_names)
     else:
-        derived_sdata = SpatialData.from_elements_dict(dict(zip(spatial_element_names, spatial_elements)))
+        derived_sdata = SpatialData.from_elements_dict(dict(zip(spatial_element_names, spatial_elements, strict=True)))
         element_types = ["labels", "shapes", "points"]
         elements_dict = defaultdict(lambda: defaultdict(dict))
         for element_type in element_types:
@@ -919,7 +918,7 @@ def get_values(
             x = matched_table[:, value_key_values].X
             import scipy
 
-            if isinstance(x, (scipy.sparse.csr_matrix, scipy.sparse.csc_matrix, scipy.sparse.coo_matrix)):
+            if isinstance(x, scipy.sparse.csr_matrix | scipy.sparse.csc_matrix | scipy.sparse.coo_matrix):
                 x = x.todense()
             df = pd.DataFrame(x, columns=value_key_values)
         if origin == "obsm":

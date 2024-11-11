@@ -73,7 +73,7 @@ def rasterize_bins(
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
-    if not isinstance(element, (GeoDataFrame, DaskDataFrame)):
+    if not isinstance(element, GeoDataFrame | DaskDataFrame):
         raise ValueError("The bins should be a GeoDataFrame or a DaskDataFrame.")
 
     _, region_key, instance_key = get_table_keys(table)
@@ -94,7 +94,7 @@ def rasterize_bins(
     keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
 
     if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
-        table.X, (csc_matrix, np.ndarray)
+        table.X, csc_matrix | np.ndarray
     ):
         raise ValueError(
             "To speed up bins rasterization, the X matrix in the table, when sparse, should be a csc_matrix matrix. "
@@ -162,7 +162,7 @@ def rasterize_bins(
             sub_x = sub_df.geometry.x.values
             sub_y = sub_df.geometry.y.values
         else:
-            assert isinstance(sub_df.iloc[0].geometry, (Polygon, MultiPolygon))
+            assert isinstance(sub_df.iloc[0].geometry, Polygon | MultiPolygon)
             sub_x = sub_df.centroid.x
             sub_y = sub_df.centroid.y
     else:

@@ -557,7 +557,7 @@ def test_transform_coordinates():
         DataArray(manual0, coords={"points": range(2), "dim": ["x", "y", "z"]}),
         DataArray(manual1, coords={"points": range(2), "dim": ["x", "y", "z"]}),
     ]
-    for t, e in zip(transformaions, expected):
+    for t, e in zip(transformaions, expected, strict=True):
         transformed = t._transform_coordinates(coords)
         xarray.testing.assert_allclose(transformed, e)
 
@@ -577,7 +577,7 @@ def _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems
     if outer_sequence:
         assert t0.input_coordinate_system.name == t1.input_coordinate_system.name
         assert t0.output_coordinate_system.name == t1.output_coordinate_system.name
-    for sub0, sub1 in zip(t0.transformations, t1.transformations):
+    for sub0, sub1 in zip(t0.transformations, t1.transformations, strict=True):
         if isinstance(sub0, NgffSequence):
             assert isinstance(sub1, NgffSequence)
             _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(

@@ -6,12 +6,11 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize

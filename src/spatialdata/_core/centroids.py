@@ -7,10 +7,9 @@ import dask.array as da
 import pandas as pd
 import xarray as xr
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names
@@ -86,7 +85,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
             centroids[label_value] += count * i.values.item()
 
     all_labels_values, all_labels_counts = da.unique(xdata.data, return_counts=True)
-    all_labels = dict(zip(all_labels_values.compute(), all_labels_counts.compute()))
+    all_labels = dict(zip(all_labels_values.compute(), all_labels_counts.compute(), strict=True))
     for label_value in centroids:
         centroids[label_value] /= all_labels[label_value]
     centroids = dict(sorted(centroids.items(), key=lambda x: x[0]))
@@ -132,7 +131,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     if isinstance(first_geometry, Point):
         xy = e.geometry.get_coordinates().values
     else:
-        assert isinstance(first_geometry, (Polygon, MultiPolygon)), (
+        assert isinstance(first_geometry, Polygon | MultiPolygon), (
             f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
             f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
         )

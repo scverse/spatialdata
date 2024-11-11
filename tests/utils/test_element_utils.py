@@ -3,8 +3,7 @@ import itertools
 import dask_image.ndinterp
 import pytest
 import xarray
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._utils import unpad_raster
 from spatialdata.models import get_model
