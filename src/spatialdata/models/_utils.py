@@ -338,7 +338,7 @@ def force_2d(gdf: GeoDataFrame) -> None:
         gdf.geometry = new_shapes
 
 
-def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type["RasterSchema"]:
     """
     Get the raster model from the dimensions of the data.
 
