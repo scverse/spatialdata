@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any
 
 import anndata as ad
 import numpy as np

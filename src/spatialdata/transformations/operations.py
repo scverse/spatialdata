@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 def set_transformation(
     element: SpatialElement,
     transformation: Union[BaseTransformation, dict[str, BaseTransformation]],
-    to_coordinate_system: Optional[str] = None,
+    to_coordinate_system: str | None = None,
     set_all: bool = False,
     write_to_sdata: Optional[SpatialData] = None,
 ) -> None:
@@ -89,7 +89,7 @@ def set_transformation(
 
 
 def get_transformation(
-    element: SpatialElement, to_coordinate_system: Optional[str] = None, get_all: bool = False
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: bool = False
 ) -> Union[BaseTransformation, dict[str, BaseTransformation]]:
     """
     Get the transformation/s of an element.
@@ -132,9 +132,9 @@ def get_transformation(
 
 def remove_transformation(
     element: SpatialElement,
-    to_coordinate_system: Optional[str] = None,
+    to_coordinate_system: str | None = None,
     remove_all: bool = False,
-    write_to_sdata: Optional[SpatialData] = None,
+    write_to_sdata: SpatialData | None = None,
 ) -> None:
     """
     Remove a transformation/s from an element, in-memory or from disk.
@@ -443,7 +443,7 @@ def align_elements_using_landmarks(
     moving_element: SpatialElement,
     reference_coordinate_system: str = "global",
     moving_coordinate_system: str = "global",
-    new_coordinate_system: Optional[str] = None,
+    new_coordinate_system: str | None = None,
     write_to_sdata: Optional[SpatialData] = None,
 ) -> BaseTransformation:
     """
