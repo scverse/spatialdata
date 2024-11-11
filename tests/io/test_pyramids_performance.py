@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import dask
 import dask.array
@@ -34,7 +34,7 @@ def sdata_with_image(request: "_pytest.fixtures.SubRequest", tmp_path: Path) -> 
     return SpatialData(images={"image": image})
 
 
-def count_chunks(array: Union[xr.DataArray, xr.Dataset, xr.DataTree]) -> int:
+def count_chunks(array: xr.DataArray | xr.Dataset | xr.DataTree) -> int:
     if isinstance(array, xr.DataTree):
         array = array.ds
     # From `chunksizes`, we get only the number of chunks per axis.

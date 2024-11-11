@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from typing import Any
 
 import dask.array.core
 import dask.dataframe as dd
