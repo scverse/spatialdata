@@ -28,7 +28,7 @@ dependencies = [
     "dask>=2024.4.1",
     "fsspec<=2023.6",
     "geopandas>=0.14",
-    #"multiscale_spatial_image>=1.0.0", Uncomment when new release using xr.DataTree is out
+    "multiscale_spatial_image>=2.0.1",
     "networkx",
     "numba",
     "numpy",
