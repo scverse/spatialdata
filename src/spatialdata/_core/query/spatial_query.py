@@ -510,11 +510,24 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     filter_table: bool = True,
+    shapes: bool = True,
+    images: bool = True,
+    labels: bool = True,
+    points: bool = True,
 ) -> SpatialData:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
-    for element_type in ["points", "images", "labels", "shapes"]:
+    elements_to_filter = []
+    if images:
+        elements_to_filter.append("images")
+    if shapes:
+        elements_to_filter.append("shapes")
+    if points:
+        elements_to_filter.append("points")
+    if labels:
+        elements_to_filter.append("labels")
+    for element_type in elements_to_filter:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
             elements,
