@@ -72,6 +72,9 @@ test = [
     "pytest-mock",
     "torch",
 ]
+benchmark = [
+    "asv",
+]
 torch = [
     "torch"
 ]
