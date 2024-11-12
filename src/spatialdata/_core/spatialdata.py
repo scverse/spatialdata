@@ -1155,10 +1155,7 @@ class SpatialData:
 
         store = parse_url(file_path, mode="w").store
         zarr_group = zarr.group(store=store, overwrite=overwrite)
-        try:
-            zarr_group.attrs.put(self.attrs)
-        except TypeError as e:
-            raise TypeError("Invalid attribute in SpatialData.attrs") from e
+        self.write_attrs(zarr_group=zarr_group)
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
@@ -1522,7 +1519,28 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
+    def write_attrs(self, overwrite: bool = True, zarr_group: zarr.Group | None = None) -> None:
+        store = None
+
+        if zarr_group is None:
+            assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
+            store = parse_url(self.path, mode="w").store
+            zarr_group = zarr.group(store=store, overwrite=overwrite)
+
+        try:
+            zarr_group.attrs.put(self.attrs)
+        except TypeError as e:
+            raise TypeError("Invalid attribute in SpatialData.attrs") from e
+
+        if store is not None:
+            store.close()
+
+    def write_metadata(
+        self,
+        element_name: str | None = None,
+        consolidate_metadata: bool | None = None,
+        write_attrs: bool = True,
+    ) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
 
@@ -1547,6 +1565,9 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
+        if write_attrs:
+            self.write_attrs()
+
         from spatialdata._core._elements import Elements
 
         if element_name is not None:
