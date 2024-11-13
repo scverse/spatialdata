@@ -28,6 +28,7 @@ def timeraw_import_inspect():
     import spatialdata
     """
 
+
 class TimeMapRaster:
     """Time the."""
 
@@ -41,7 +42,8 @@ class TimeMapRaster:
         del self.sdata
 
     def time_map_blocks(self, _):
-        sd.map_raster(self.sdata["blobs_image"], lambda x: x+1)
+        sd.map_raster(self.sdata["blobs_image"], lambda x: x + 1)
+
 
 class TimeQueries:
 
@@ -52,8 +54,7 @@ class TimeQueries:
         import shapely
 
         self.sdata = cluster_blobs(length=length)
-        self.polygon = shapely.box(0, 0, length//2, length//2)
-
+        self.polygon = shapely.box(0, 0, length // 2, length // 2)
 
     def teardown(self, length, filter_table):
         del self.sdata
@@ -62,14 +63,17 @@ class TimeQueries:
         self.sdata.query.bounding_box(
             axes=["x", "y"],
             min_coordinate=[0, 0],
-            max_coordinate=[length//2, length//2],
+            max_coordinate=[length // 2, length // 2],
             target_coordinate_system="global",
             filter_table=filter_table,
         )
 
     def time_query_polygon_box(self, length, filter_table):
-        sd.polygon_query(self.sdata, self.polygon, target_coordinate_system="global",
-                         filter_table=filter_table,
+        sd.polygon_query(
+            self.sdata,
+            self.polygon,
+            target_coordinate_system="global",
+            filter_table=filter_table,
         )
 
 
@@ -80,7 +84,7 @@ if __name__ == "__main__":
     sdata.query.bounding_box(
         axes=["x", "y"],
         min_coordinate=[0, 0],
-        max_coordinate=[length//2, length//2],
+        max_coordinate=[length // 2, length // 2],
         target_coordinate_system="global",
         filter_table=True,
     )
