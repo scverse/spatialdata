@@ -45,19 +45,19 @@ class TimeMapRaster:
 
 class TimeQueries:
 
-    params = ([100, 1000, 10_000], [True, False])
-    param_names = ["length", "filter_table"]
+    params = ([100, 1000, 10_000], [True, False], [100, 10_000])
+    param_names = ["length", "filter_table", "n_transcripts_per_cell"]
 
-    def setup(self, length, filter_table):
+    def setup(self, length, filter_table, n_transcripts_per_cell):
         import shapely
 
-        self.sdata = cluster_blobs(length=length)
+        self.sdata = cluster_blobs(length=length, n_transcripts_per_cell=n_transcripts_per_cell)
         self.polygon = shapely.box(0, 0, length // 2, length // 2)
 
-    def teardown(self, length, filter_table):
+    def teardown(self, length, filter_table, n_transcripts_per_cell):
         del self.sdata
 
-    def time_query_bounding_box(self, length, filter_table):
+    def time_query_bounding_box(self, length, filter_table, n_transcripts_per_cell):
         self.sdata.query.bounding_box(
             axes=["x", "y"],
             min_coordinate=[0, 0],
@@ -66,7 +66,7 @@ class TimeQueries:
             filter_table=filter_table,
         )
 
-    def time_query_polygon_box(self, length, filter_table):
+    def time_query_polygon_box(self, length, filter_table, n_transcripts_per_cell):
         sd.polygon_query(
             self.sdata,
             self.polygon,
