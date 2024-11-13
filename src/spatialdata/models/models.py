@@ -1,12 +1,10 @@
 """Models and schema for SpatialData."""
 
-from __future__ import annotations
-
 import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal, TypeAlias
 
 import dask.dataframe as dd
 import numpy as np
@@ -15,7 +13,6 @@ from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
@@ -25,7 +22,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import to_spatial_image
-from xarray import DataArray
+from xarray import DataArray, DataTree
 from xarray_schema.components import (
     ArrayTypeSchema,
     AttrSchema,
@@ -53,13 +50,8 @@ from spatialdata.transformations._utils import (
 from spatialdata.transformations.transformations import BaseTransformation, Identity
 
 # Types
-Chunks_t = Union[
-    int,
-    tuple[int, ...],
-    tuple[tuple[int, ...], ...],
-    Mapping[Any, Union[None, int, tuple[int, ...]]],
-]
-ScaleFactors_t = Sequence[Union[dict[str, int], int]]
+Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
+ScaleFactors_t = Sequence[dict[str, int] | int]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 ATTRS_KEY = "spatialdata_attrs"
@@ -157,7 +149,7 @@ class RasterSchema(DataArraySchema):
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, (DataArray)):
+        if isinstance(data, DataArray):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -173,7 +165,7 @@ class RasterSchema(DataArraySchema):
                 raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
         # if there are no dims in the data, use the model's dims or provided dims
-        elif isinstance(data, (np.ndarray, DaskArray)):
+        elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
             if dims is None:
@@ -247,7 +239,7 @@ class RasterSchema(DataArraySchema):
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
-        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
+        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))], strict=True):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
         name = {list(data[i].data_vars.keys())[0] for i in data}
@@ -367,7 +359,7 @@ class ShapesModel:
         if len(data[cls.GEOMETRY_KEY]) == 0:
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
-        if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
+        if not isinstance(geom_, Polygon | MultiPolygon | Point):
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}." + SUGGESTION
@@ -1035,15 +1027,15 @@ class TableModel:
         return convert_region_column_to_categorical(adata)
 
 
-Schema_t = Union[
-    type[Image2DModel],
-    type[Image3DModel],
-    type[Labels2DModel],
-    type[Labels3DModel],
-    type[PointsModel],
-    type[ShapesModel],
-    type[TableModel],
-]
+Schema_t: TypeAlias = (
+    type[Image2DModel]
+    | type[Image3DModel]
+    | type[Labels2DModel]
+    | type[Labels3DModel]
+    | type[PointsModel]
+    | type[ShapesModel]
+    | type[TableModel]
+)
 
 
 def get_model(
@@ -1069,7 +1061,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (DataArray, DataTree)):
+    if isinstance(e, DataArray | DataTree):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:

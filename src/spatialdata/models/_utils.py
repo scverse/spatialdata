@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import dask.dataframe as dd
 import geopandas
@@ -10,15 +8,14 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
 from spatialdata.transformations.transformations import BaseTransformation
 
-SpatialElement = Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame]
+SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
 TRANSFORM_KEY = "transform"
 DEFAULT_COORDINATE_SYSTEM = "global"
 ValidAxis_t = str
@@ -48,9 +45,9 @@ def has_type_spatial_element(e: Any) -> bool:
     Returns
     -------
     Whether the object is a SpatialElement
-    (i.e in Union[DataArray, DataTree, GeoDataFrame, DaskDataFrame])
+    (i.e in DataArray | DataTree | GeoDataFrame | DaskDataFrame)
     """
-    return isinstance(e, (DataArray, DataTree, GeoDataFrame, DaskDataFrame))
+    return isinstance(e, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
 
 
 # added this code as part of a refactoring to catch errors earlier
@@ -341,7 +338,7 @@ def force_2d(gdf: GeoDataFrame) -> None:
         gdf.geometry = new_shapes
 
 
-def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type["RasterSchema"]:
     """
     Get the raster model from the dimensions of the data.
 

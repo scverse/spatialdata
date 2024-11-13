@@ -57,7 +57,7 @@ class RasterFormatV01(SpatialDataFormat):
         # calculate minimal 'scale' transform based on pyramid dims
         for shape in shapes:
             assert len(shape) == len(data_shape)
-            scale = [full / level for full, level in zip(data_shape, shape)]
+            scale = [full / level for full, level in zip(data_shape, shape, strict=True)]
             from spatialdata.transformations.ngff.ngff_transformations import NgffScale
 
             coordinate_transformations.append([NgffScale(scale=scale).to_dict()])
@@ -98,7 +98,7 @@ class RasterFormatV01(SpatialDataFormat):
             json1 = [json.dumps(p.to_dict()) for p in parsed]
             import numpy as np
 
-            assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
+            assert np.all([j0 == j1 for j0, j1 in zip(json0, json1, strict=True)])
 
     # eventually we are fully compliant with NGFF and we can drop SPATIALDATA_FORMAT_VERSION and simply rely on
     # "version"; still, until the coordinate transformations make it into NGFF, we need to have our extension

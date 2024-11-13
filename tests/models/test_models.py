@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from typing import Any
 
 import dask.array.core
 import dask.dataframe as dd
@@ -16,13 +17,12 @@ import pytest
 from anndata import AnnData
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
