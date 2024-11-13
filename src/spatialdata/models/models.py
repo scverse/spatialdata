@@ -111,8 +111,7 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
-        {("c_coords : str | list[str] | None\n            Set channel coordinates for image data. This is only"
-        "applicable for image data; labels data do not have channels.\n" if cls.INCLUDE_C_COORDS else "")}
+        {("c_coords : str | list[str] | None\n           Channel names of image data." if cls.INCLUDE_C_COORDS else "")}
         transformations
             Dictionary of transformations to apply to the data. The key is the name of the target coordinate system,
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
