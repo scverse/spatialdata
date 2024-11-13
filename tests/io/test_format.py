@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 from shapely import GeometryType
@@ -18,9 +18,9 @@ class TestFormat:
     @pytest.mark.parametrize("instance_key", [None, PointsModel.INSTANCE_KEY])
     def test_format_points(
         self,
-        attrs_key: Optional[str],
-        feature_key: Optional[str],
-        instance_key: Optional[str],
+        attrs_key: str | None,
+        feature_key: str | None,
+        instance_key: str | None,
     ) -> None:
         metadata: dict[str, Any] = {attrs_key: {"version": Points_f.spatialdata_format_version}}
         format_metadata: dict[str, Any] = {attrs_key: {}}
