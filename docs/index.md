@@ -66,6 +66,7 @@ installation.md
 api.md
 tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
+glossary.md
 design_doc.md
 contributing.md
 changelog.md

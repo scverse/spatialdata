@@ -245,6 +245,15 @@ class Identity(BaseTransformation):
 # drop axes. When convering from MapAxis to NgffMapAxis this can be done by returing a Sequence of NgffAffine and
 # NgffMapAxis, where the NgffAffine corrects the axes
 class MapAxis(BaseTransformation):
+    """
+    Transformation that maps input axes to output axes.
+
+    Parameters
+    ----------
+    map_axis
+        Dictionnary with keys being the input axes and values the output axes.
+    """
+
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
         # to avoid circular imports
         from spatialdata.models import validate_axis_name
