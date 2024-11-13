@@ -546,7 +546,7 @@ def rasterize_images_labels(
         target_coordinate_system=target_coordinate_system,
     )
 
-    if 'z' in spatial_axes:
+    if "z" in spatial_axes:
         half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
     else:
         half_pixel_offset = Translation([0.5, 0.5], axes=("y", "x"))
