@@ -32,11 +32,7 @@ class Skip:
         self.func_always = always
 
     def __contains__(self, item):
-        return (
-            self.func_pr(*item)
-            or self.func_ci(*item)
-            or self.func_always(*item)
-        )
+        return self.func_pr(*item) or self.func_ci(*item) or self.func_always(*item)
 
 
 def _generate_ball(radius: int, ndim: int) -> np.ndarray:
@@ -81,9 +77,7 @@ def _structure_at_coordinates(
     *,
     multipliers: Sequence = itertools.repeat(1),
     dtype=None,
-    reduce_fn: Callable[
-        [np.ndarray, np.ndarray, Optional[np.ndarray]], np.ndarray
-    ],
+    reduce_fn: Callable[[np.ndarray, np.ndarray, Optional[np.ndarray]], np.ndarray],
 ):
     """Update data with structure at given coordinates.
 
@@ -110,9 +104,7 @@ def _structure_at_coordinates(
 
     for point, value in zip(coordinates, multipliers):
         slice_im, slice_ball = _get_slices_at(shape, point, radius)
-        reduce_fn(
-            data[slice_im], value * structure[slice_ball], out=data[slice_im]
-        )
+        reduce_fn(data[slice_im], value * structure[slice_ball], out=data[slice_im])
     return data
 
 
@@ -120,9 +112,7 @@ def _get_slices_at(shape, point, radius):
     slice_im = []
     slice_ball = []
     for i, p in enumerate(point):
-        slice_im.append(
-            slice(max(0, p - radius), min(shape[i], p + radius + 1))
-        )
+        slice_im.append(slice(max(0, p - radius), min(shape[i], p + radius + 1)))
         ball_start = max(0, radius - p)
         ball_stop = slice_im[-1].stop - slice_im[-1].start + ball_start
         slice_ball.append(slice(ball_start, ball_stop))
@@ -219,18 +209,14 @@ def labeled_particles(
 
     if return_density:
         dens = _generate_density(sigma * 2, ndim)
-        densities = _structure_at_coordinates(
-            shape, points, dens, reduce_fn=np.maximum, dtype=np.float32
-        )
+        densities = _structure_at_coordinates(shape, points, dens, reduce_fn=np.maximum, dtype=np.float32)
 
         return labels, densities, points, values
     else:  # noqa: RET505
         return labels
 
 
-def run_benchmark_from_module(
-    module: ModuleType, klass_name: str, method_name: str
-):
+def run_benchmark_from_module(module: ModuleType, klass_name: str, method_name: str):
     klass = getattr(module, klass_name)
     if getattr(klass, "params", None):
         skip_if = getattr(klass, "skip_params", {})
@@ -263,9 +249,7 @@ def run_benchmark():
     import inspect
 
     parser = argparse.ArgumentParser(description="Run benchmark")
-    parser.add_argument(
-        "benchmark", type=str, help="Name of the benchmark to run", default=""
-    )
+    parser.add_argument("benchmark", type=str, help="Name of the benchmark to run", default="")
 
     args = parser.parse_args()
 
@@ -275,52 +259,34 @@ def run_benchmark():
     call_module = inspect.getmodule(inspect.currentframe().f_back)
     run_benchmark_from_module(call_module, *benchmark_selection)
 
+
 @lru_cache
 def cluster_blobs(
     length=512,
-    n=None,
+    n_cells=None,
     region_key="region_key",
     instance_key="instance_key",
     image_name="blobs_image",
     labels_name="blobs_labels",
     points_name="blobs_points",
+    n_transcripts_per_cell=None,
     table_name="table",
     coordinate_system="global",
 ):
     """Faster `spatialdata.datasets.make_blobs` using napari.datasets code."""
-    if n is None:
-        n = length
+    if n_cells is None:
+        n_cells = length
     # cells
-    labels, density, points , values = labeled_particles(
-            (length, length), return_density=True, n=n
-    )
-    # transcript points
-    # generate 100 transcripts per cell
-    rng = np.random.default_rng(None)
-    points_transcripts = rng.integers(length, size=(n*1000, 2))
+    labels, density, points, values = labeled_particles((length, length), return_density=True, n=n_cells)
 
     im_el = Image2DModel.parse(
         data=density[None, ...],
         dims="cyx",
         transformations={coordinate_system: Identity()},
     )
-    label_el = sd.models.Labels2DModel.parse(
-        labels,
-        dims="yx",
-        transformations={coordinate_system: Identity()}
-    )
-    points_cells_el = sd.models.PointsModel.parse(
-        points,
-        transformations={coordinate_system: Identity()}
-    )
-    points_transcripts_el = sd.models.PointsModel.parse(
-        points_transcripts,
-        transformations={coordinate_system: Identity()}
-    )
+    label_el = sd.models.Labels2DModel.parse(labels, dims="yx", transformations={coordinate_system: Identity()})
+    points_cells_el = sd.models.PointsModel.parse(points, transformations={coordinate_system: Identity()})
 
-    # TODO: generate actual values table in a scalable fashion
-    # adata = aggregate(values=points_el, by=label_el, region_key=region_key, instance_key=instance_key, target_coordinate_system=coordinate_system).tables["table"]
-    # make X dense as markers are limited
     # generate dummy table
     adata = ad.AnnData(X=np.ones((length, 10)))
     adata.obs[region_key] = pd.Categorical([labels_name] * len(adata))
@@ -342,14 +308,21 @@ def cluster_blobs(
         },
         labels={
             labels_name: label_el,
-            # "blobs_markers": Labels2DModel.parse(data=markers),
         },
-        points={
-            points_name: points_cells_el,
-            "transcripts_" + points_name: points_transcripts_el,
-        },
+        points={points_name: points_cells_el},
         tables={table_name: table},
     )
+
+    if n_transcripts_per_cell:
+        # transcript points
+        # generate 100 transcripts per cell
+        rng = np.random.default_rng(None)
+        points_transcripts = rng.integers(length, size=(n_cells * n_transcripts_per_cell, 2))
+        points_transcripts_el = sd.models.PointsModel.parse(
+            points_transcripts, transformations={coordinate_system: Identity()}
+        )
+        sdata["transcripts_" + points_name] = points_transcripts_el
+
     # if shapes_name:
     #     sdata[shapes_name] = sd.to_circles(sdata[labels_name])
     # add_regionprop_features(sdata, labels_layer=labels_name, table_layer=table_name)
