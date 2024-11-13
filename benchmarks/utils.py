@@ -1,3 +1,5 @@
+# type: ignore
+
 import itertools
 import os
 from collections.abc import Sequence

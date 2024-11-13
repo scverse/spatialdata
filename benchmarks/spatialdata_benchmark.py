@@ -1,12 +1,10 @@
+# type: ignore
+
 # Write the benchmarking functions here.
 # See "Writing benchmarks" in the asv docs for more information.
 import spatialdata as sd
 
-try:
-    from .utils import cluster_blobs
-except ImportError:
-    # TODO: remove ugly hack used for local testing
-    from utils import cluster_blobs
+from .utils import cluster_blobs
 
 
 class MemorySpatialData:
