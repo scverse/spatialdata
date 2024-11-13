@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
@@ -223,8 +222,10 @@ def _(data: DataTree) -> DataTree:
             offset = max_dim / n / 2
             coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
             new_coords[ax] = coords
-        out[name] = dt[img_name].assign_coords(new_coords)
-    datatree = DataTree.from_dict(d=out)
+
+        # Xarray now only accepts Dataset as dictionary values for DataTree.from_dict.
+        out[name] = Dataset({img_name: dt[img_name].assign_coords(new_coords)})
+    datatree = DataTree.from_dict(out)
     # this is to trigger the validation of the dims
     _ = get_axes_names(datatree)
     return datatree

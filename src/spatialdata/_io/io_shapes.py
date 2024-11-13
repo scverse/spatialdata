@@ -1,6 +1,5 @@
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 import zarr
@@ -28,10 +27,10 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
+    store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    assert isinstance(store, (str, Path))
+    assert isinstance(store, str | Path)
     f = zarr.open(store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
