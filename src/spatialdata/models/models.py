@@ -91,6 +91,7 @@ class RasterSchema(DataArraySchema):
         cls,
         data: ArrayLike | DataArray | DaskArray,
         dims: Sequence[str] | None = None,
+        c_coords: str | list[str] | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
         scale_factors: ScaleFactors_t | None = None,
         method: Methods | None = None,
@@ -195,7 +196,15 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        if isinstance(c_coords, str):
+            c_coords = [c_coords]
+        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+            raise ValueError(
+                f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+                f" with length {data.shape[cls.dims.dims.index('c')]}."
+            )
+
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -270,6 +279,8 @@ class Labels2DModel(RasterSchema):
         *args: Any,
         **kwargs: Any,
     ) -> DataArray | DataTree:
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -292,6 +303,8 @@ class Labels3DModel(RasterSchema):
 
     @classmethod
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
