@@ -515,7 +515,10 @@ def _(
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
     if len(sdata.points) > 0:
-        warnings.warn(f"Your SpatialData object has points element. Thus maybe suffer from performance issues when querying.", UserWarning)
+        warnings.warn(
+            "Your SpatialData object has points element. Thus maybe suffer from performance issues when querying.",
+            UserWarning,
+        )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
