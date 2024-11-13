@@ -2,6 +2,12 @@
 # See "Writing benchmarks" in the asv docs for more information.
 import spatialdata as sd
 
+try:
+    from .utils import cluster_blobs
+except ImportError:
+    # TODO: remove ugly hack used for local testing
+    from utils import cluster_blobs
+
 
 class MemorySpatialData:
     # TODO: see what the memory overhead is e.g. Python interpreter...
@@ -25,11 +31,11 @@ def timeraw_import_inspect():
 class TimeMapRaster:
     """Time the."""
 
-    params = [100, 1000]
+    params = [100, 1000, 10_000]
     param_names = ["length"]
 
     def setup(self, length):
-        self.sdata = sd.datasets.blobs(length=length)
+        self.sdata = cluster_blobs(length=length)
 
     def teardown(self, _):
         del self.sdata
@@ -39,13 +45,14 @@ class TimeMapRaster:
 
 class TimeQueries:
 
-    params = ([100, 1000], [True, False])
+    params = ([100, 1000, 10_000], [True, False])
     param_names = ["length", "filter_table"]
 
     def setup(self, length, filter_table):
         import shapely
-        self.sdata = sd.datasets.blobs(length=length)
-        self.polygon = shapely.box(0, 0, 100, 100)
+
+        self.sdata = cluster_blobs(length=length)
+        self.polygon = shapely.box(0, 0, length//2, length//2)
 
 
     def teardown(self, length, filter_table):
@@ -55,7 +62,7 @@ class TimeQueries:
         self.sdata.query.bounding_box(
             axes=["x", "y"],
             min_coordinate=[0, 0],
-            max_coordinate=[100, 100],
+            max_coordinate=[length//2, length//2],
             target_coordinate_system="global",
             filter_table=filter_table,
         )
@@ -64,3 +71,17 @@ class TimeQueries:
         sd.polygon_query(self.sdata, self.polygon, target_coordinate_system="global",
                          filter_table=filter_table,
         )
+
+
+if __name__ == "__main__":
+    length = 10_000
+    sdata = cluster_blobs(length)
+    # sdata.write("tmp_test")
+    sdata.query.bounding_box(
+        axes=["x", "y"],
+        min_coordinate=[0, 0],
+        max_coordinate=[length//2, length//2],
+        target_coordinate_system="global",
+        filter_table=True,
+    )
+    print(sdata)
