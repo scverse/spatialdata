@@ -545,3 +545,24 @@ def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
                 match=r"The index of the dataframe is not monotonic increasing\.",
             ):
                 _ = PointsModel.parse(points, npartitions=npartitions)
+
+
+@pytest.mark.parametrize("scale_factors", [None, [2, 2]])
+def test_c_coords_2d(scale_factors: list[int] | None):
+    data = np.zeros((3, 30, 30))
+    model = Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd"], scale_factors=scale_factors)
+    if scale_factors is None:
+        assert model.coords["c"].data.tolist() == ["1st", "2nd", "3rd"]
+    else:
+        assert all(
+            model[group]["image"].coords["c"].data.tolist() == ["1st", "2nd", "3rd"] for group in list(model.keys())
+        )
+
+    with pytest.raises(ValueError, match="The number of channel names"):
+        Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd", "too_much"], scale_factors=scale_factors)
+
+
+@pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
+    with pytest.raises(ValueError, match="`c_coords` is not supported"):
+        model().parse(np.zeros((30, 30)), c_coords=["1st", "2nd", "3rd"])

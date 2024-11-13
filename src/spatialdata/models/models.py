@@ -91,13 +91,14 @@ class RasterSchema(DataArraySchema):
         cls,
         data: ArrayLike | DataArray | DaskArray,
         dims: Sequence[str] | None = None,
+        c_coords: str | list[str] | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
         scale_factors: ScaleFactors_t | None = None,
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
     ) -> DataArray | DataTree:
-        """
+        r"""
         Validate (or parse) raster data.
 
         Parameters
@@ -110,6 +111,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
+        c_coords : str | list[str] | None
+            Channel names of image data. Must be equal to the length of dimension 'c'. Only supported for `Image`
+            models.
         transformations
             Dictionary of transformations to apply to the data. The key is the name of the target coordinate system,
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
@@ -195,7 +199,15 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        if isinstance(c_coords, str):
+            c_coords = [c_coords]
+        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+            raise ValueError(
+                f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+                f" with length {data.shape[cls.dims.dims.index('c')]}."
+            )
+
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -270,6 +282,8 @@ class Labels2DModel(RasterSchema):
         *args: Any,
         **kwargs: Any,
     ) -> DataArray | DataTree:
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -292,6 +306,8 @@ class Labels3DModel(RasterSchema):
 
     @classmethod
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
