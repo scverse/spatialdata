@@ -5,22 +5,28 @@ setup
 pip install -e '.[docs,benchmark]'
 ```
 
+In PyCharm, configure your Configuration to include the benchmark module. In Python, you can run using
+```
+python -m benchmarks.spatialdata_benchmark
+```
+
+
 See napari [docs](https://napari.org/stable/developers/contributing/performance/benchmarks.html) on profiling and benchmarking for more information.
 
 run a specific benchmark
 ```
-PYTHONWARNINGS="ignore" asv run --python=same --show-stderr --quick -b time_query_bounding_box 
+PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b time_query_bounding_box
 ```
 output:
 ```
 [100.00%] ··· ======== ========== ============
-              --             filter_table     
+              --             filter_table
               -------- -----------------------
-               length     True       False    
+               length     True       False
               ======== ========== ============
-                100     89.1±5ms   85.6±0.8ms 
-                1000    99.0±8ms    87.7±1ms  
-               10000    427±10ms    92.4±2ms  
+                100     89.1±5ms   85.6±0.8ms
+                1000    99.0±8ms    87.7±1ms
+               10000    427±10ms    92.4±2ms
               ======== ========== ============
 ```
 

@@ -74,7 +74,7 @@ class TimeQueries:
 
 
 if __name__ == "__main__":
-    length = 10_000
+    length = 1_000
     sdata = cluster_blobs(length)
     # sdata.write("tmp_test")
     sdata.query.bounding_box(

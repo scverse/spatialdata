@@ -275,6 +275,7 @@ def run_benchmark():
     call_module = inspect.getmodule(inspect.currentframe().f_back)
     run_benchmark_from_module(call_module, *benchmark_selection)
 
+@lru_cache
 def cluster_blobs(
     length=512,
     n=None,
@@ -289,9 +290,14 @@ def cluster_blobs(
     """Faster `spatialdata.datasets.make_blobs` using napari.datasets code."""
     if n is None:
         n = length
+    # cells
     labels, density, points , values = labeled_particles(
             (length, length), return_density=True, n=n
     )
+    # transcript points
+    # generate 100 transcripts per cell
+    rng = np.random.default_rng(None)
+    points_transcripts = rng.integers(length, size=(n*1000, 2))
 
     im_el = Image2DModel.parse(
         data=density[None, ...],
@@ -303,10 +309,15 @@ def cluster_blobs(
         dims="yx",
         transformations={coordinate_system: Identity()}
     )
-    points_el = sd.models.PointsModel.parse(
+    points_cells_el = sd.models.PointsModel.parse(
         points,
         transformations={coordinate_system: Identity()}
     )
+    points_transcripts_el = sd.models.PointsModel.parse(
+        points_transcripts,
+        transformations={coordinate_system: Identity()}
+    )
+
     # TODO: generate actual values table in a scalable fashion
     # adata = aggregate(values=points_el, by=label_el, region_key=region_key, instance_key=instance_key, target_coordinate_system=coordinate_system).tables["table"]
     # make X dense as markers are limited
@@ -333,7 +344,10 @@ def cluster_blobs(
             labels_name: label_el,
             # "blobs_markers": Labels2DModel.parse(data=markers),
         },
-        points={points_name: points_el},
+        points={
+            points_name: points_cells_el,
+            "transcripts_" + points_name: points_transcripts_el,
+        },
         tables={table_name: table},
     )
     # if shapes_name:
