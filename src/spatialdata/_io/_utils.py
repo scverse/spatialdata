@@ -16,9 +16,8 @@ import zarr
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import get_pyramid_levels
@@ -53,7 +52,7 @@ def _get_transformations_from_ngff_dict(
     list_of_ngff_transformations = [NgffBaseTransformation.from_dict(d) for d in list_of_encoded_ngff_transformations]
     list_of_transformations = [BaseTransformation.from_ngff(t) for t in list_of_ngff_transformations]
     transformations = {}
-    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations):
+    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations, strict=True):
         assert ngff_t.output_coordinate_system is not None
         transformations[ngff_t.output_coordinate_system.name] = t
     return transformations
@@ -213,7 +212,7 @@ def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> l
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
     for e in element._gen_spatial_element_values():
-        if isinstance(e, (DataArray, DataTree, DaskDataFrame)):
+        if isinstance(e, DataArray | DataTree | DaskDataFrame):
             files = files.union(get_dask_backing_files(e))
     return list(files)
 

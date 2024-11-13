@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## [0.2.6] - TBD
+
+### Fixed
+
+-   Updated deprecated default stages of `pre-commit` #771
+
 ## [0.2.5] - 2024-06-11
 
 ### Fixed

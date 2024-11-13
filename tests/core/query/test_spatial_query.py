@@ -8,10 +8,9 @@ import pytest
 import xarray
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.data_extent import get_extent
 from spatialdata._core.query.spatial_query import (
@@ -312,7 +311,7 @@ def test_query_raster(
                 slices["z"] = slice(2, 7)
 
         if return_request_only:
-            assert isinstance(image_result, (dict, list))
+            assert isinstance(image_result, dict | list)
             if multiple_boxes:
                 for i, result in enumerate(image_result):
                     if not (is_bb_3d and is_3d) and ("z" in result):
@@ -334,16 +333,16 @@ def test_query_raster(
             expected_image = ximage.sel(**slices)
 
         if isinstance(image, DataArray):
-            assert isinstance(image_result, (DataArray, list))
+            assert isinstance(image_result, DataArray | list)
             if multiple_boxes:
-                for result, expected in zip(image_result, expected_images):
+                for result, expected in zip(image_result, expected_images, strict=True):
                     np.testing.assert_allclose(result, expected)
             else:
                 np.testing.assert_allclose(image_result, expected_image)
         elif isinstance(image, DataTree):
-            assert isinstance(image_result, (DataTree, list))
+            assert isinstance(image_result, DataTree | list)
             if multiple_boxes:
-                for result, expected in zip(image_result, expected_images):
+                for result, expected in zip(image_result, expected_images, strict=True):
                     v = result["scale0"].values()
                     assert len(v) == 1
                     xdata = v.__iter__().__next__()
@@ -795,7 +794,7 @@ def test_query_with_clipping(sdata_blobs):
     maxy = 210
     x_coords = [minx, maxx, maxx, minx, minx]
     y_coords = [miny, miny, maxy, maxy, miny]
-    polygon = Polygon(zip(x_coords, y_coords))
+    polygon = Polygon(zip(x_coords, y_coords, strict=True))
 
     queried_circles = polygon_query(circles, polygon=polygon, target_coordinate_system="global", clip=True)
     queried_polygons = polygon_query(polygons, polygon=polygon, target_coordinate_system="global", clip=True)

@@ -51,7 +51,7 @@ def _concatenate_tables(
             raise ValueError("`instance_key` must be specified if tables have different instance keys")
 
     tables_l = []
-    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables):
+    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables, strict=True):
         rename_dict = {}
         if table_region_key != region_key:
             rename_dict[table_region_key] = region_key
@@ -239,7 +239,7 @@ def _fix_ensure_unique_element_names(
             tables[new_name] = table
         tables_by_sdata.append(tables)
     sdatas_fixed = []
-    for elements, tables in zip(elements_by_sdata, tables_by_sdata):
+    for elements, tables in zip(elements_by_sdata, tables_by_sdata, strict=True):
         sdata = SpatialData.init_from_elements(elements, tables=tables)
         sdatas_fixed.append(sdata)
     return sdatas_fixed

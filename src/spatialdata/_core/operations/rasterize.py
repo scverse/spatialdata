@@ -5,10 +5,9 @@ import datashader as ds
 import numpy as np
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform

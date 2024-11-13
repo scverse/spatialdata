@@ -1,7 +1,8 @@
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import dask.dataframe as dd
 import numpy as np

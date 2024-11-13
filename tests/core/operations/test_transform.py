@@ -4,9 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from datatree import DataTree
 from geopandas.testing import geom_almost_equals
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
@@ -541,13 +540,13 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
             assert set(d.keys()) == {"global", "my_space"}
             a2 = d["global"].to_affine_matrix(input_axes=("x",), output_axes=("x",))
             assert np.allclose(a, a2)
-            if isinstance(element, (DataArray, DataTree)):
+            if isinstance(element, DataArray | DataTree):
                 assert np.allclose(a, np.array([[1 / k, 0], [0, 1]]))
             else:
                 assert np.allclose(a, np.array([[1 / k, -k / k], [0, 1]]))
         else:
             assert set(d.keys()) == {"my_space"}
-            if isinstance(element, (DataArray, DataTree)):
+            if isinstance(element, DataArray | DataTree):
                 assert np.allclose(a, np.array([[1, k], [0, 1]]))
             else:
                 assert np.allclose(a, np.array([[1, 0], [0, 1]]))
@@ -605,7 +604,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
                 # I'd say that in the general case maybe they are not necessarily identical, but in this case they are
                 assert np.allclose(affine, affine2)
                 assert np.allclose(affine, np.array([[1, -k], [0, 1]]))
-            elif isinstance(element, (DataArray, DataTree)):
+            elif isinstance(element, DataArray | DataTree):
                 assert set(d.keys()) == {"my_space"}
                 assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
@@ -616,7 +615,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             if full_sdata.locate_element(element) == ["shapes/proxy_element"]:
                 # non multi-hop case, since there is a direct transformation
                 assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
-            elif isinstance(element, (DataArray, DataTree)):
+            elif isinstance(element, DataArray | DataTree):
                 assert np.allclose(affine, np.array([[1, k], [0, 1]]))
             else:
                 assert np.allclose(affine, np.array([[1, 0], [0, 1]]))

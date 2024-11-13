@@ -3,16 +3,15 @@ from __future__ import annotations
 import functools
 import re
 import warnings
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from itertools import islice
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
 from spatialdata.transformations import (
@@ -23,7 +22,7 @@ from spatialdata.transformations import (
 )
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
-Number = Union[int, float]
+Number = int | float
 RT = TypeVar("RT")
 
 
@@ -136,7 +135,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
             assert len(v.values()) == 1
             xdata = v.values().__iter__().__next__()
             if 0 not in xdata.shape:
-                d[k] = xdata
+                d[k] = Dataset({"image": xdata})
         unpadded = DataTree.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
