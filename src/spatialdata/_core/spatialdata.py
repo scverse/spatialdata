@@ -1495,7 +1495,8 @@ class SpatialData:
         Parameters
         ----------
         element_name
-            The name of the element to write. If None, write the channel names of all image elements.
+            The name of the element to write the channel names of. If None, write the channel names of all image
+            elements.
         """
         from spatialdata._core._elements import Elements
 
@@ -1514,8 +1515,8 @@ class SpatialData:
 
         element_type, element = validation_result
 
-        # Mypy does not understand that path is not None so we have a conditional
-        if self.path is not None:
+        # Mypy does not understand that path is not None so we have the check in the conditional
+        if element_type == "images" and self.path is not None:
             _, _, element_group = self._get_groups_for_element(
                 zarr_path=Path(self.path), element_type=element_type, element_name=element_name
             )
@@ -1523,6 +1524,8 @@ class SpatialData:
             from spatialdata._io._utils import overwrite_channel_names
 
             overwrite_channel_names(element_group, element)
+        else:
+            raise ValueError(f"Can't set channel names for element of type '{element_type}'.")
 
     def write_transformations(self, element_name: str | None = None) -> None:
         """

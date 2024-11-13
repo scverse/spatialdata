@@ -111,11 +111,22 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
 
 
 # test io for channel names
-@pytest.mark.skip(reason="Not implemented yet")
 def test_save_channel_names_incremental(images: SpatialData) -> None:
-    # note: the non-incremental IO for channel names is already covered in TestReadWrite.test_images(), so here we
-    # only test the incremental IO
-    pass
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "sdata.zarr")
+        images.write(f0)
+
+        new_channels = ["first", "second", "third"]
+        images.set_sdata_image_channel_names("image2d", new_channels)
+        images.set_sdata_image_channel_names("image2d_multiscale", new_channels)
+        images.set_sdata_image_channel_names("image3d_numpy", new_channels)
+        images.set_sdata_image_channel_names("image3d_multiscale_numpy", new_channels)
+
+        images = SpatialData.read(f0)
+        assert images["image2d"].coords["c"].data.tolist() == new_channels
+        assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+        assert images["image3d_numpy"].coords["c"].data.tolist() == new_channels
+        assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
 
 
 # test io for consolidated metadata
