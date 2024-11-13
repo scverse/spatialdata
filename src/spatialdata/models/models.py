@@ -111,7 +111,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
-        {("c_coords : str | list[str] | None\n           Channel names of image data." if cls.INCLUDE_C_COORDS else "")}
+        c_coords : str | list[str] | None
+            Channel names of image data. Must be equal to the length of dimension 'c'. Only supported for `Image`
+            models.
         transformations
             Dictionary of transformations to apply to the data. The key is the name of the target coordinate system,
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
@@ -318,7 +320,6 @@ class Image2DModel(RasterSchema):
     attrs = AttrsSchema({"transform": Transform_s})
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.INCLUDE_C_COORDS = True
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
@@ -334,7 +335,6 @@ class Image3DModel(RasterSchema):
     attrs = AttrsSchema({"transform": Transform_s})
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.INCLUDE_C_COORDS = True
         super().__init__(
             dims=self.dims,
             array_type=self.array_type,
