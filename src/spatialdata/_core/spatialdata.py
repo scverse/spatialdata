@@ -352,6 +352,10 @@ class SpatialData:
     def set_sdata_image_channel_names(self, element_name: str, channel_names: str | list[str]) -> None:
         """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
 
+        This method assumes that the `SpatialData` object and the element are already stored on disk as it will
+        also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
+        element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+
         Parameters
         ----------
         element_name
