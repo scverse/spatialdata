@@ -23,7 +23,12 @@ from xarray import DataArray, DataTree
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _deprecation_alias, _error_message_add_element
+from spatialdata._utils import (
+    _assign_multiscale_coords,
+    _check_match_length_channels_c_dim,
+    _deprecation_alias,
+    _error_message_add_element,
+)
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -314,6 +319,47 @@ class SpatialData:
         if table.obs.get(instance_key) is not None:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
+
+    @staticmethod
+    def set_image_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:
+        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+        Parameters
+        ----------
+        element
+            The image `SpatialElement` or parsed `ImageModel`.
+        channel_names
+            The channel names to be assigned to the c dimension of the image `SpatialElement`.
+
+        Returns
+        -------
+        element
+            The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
+        """
+        channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
+        model = get_model(element)
+        if model in [Image2DModel, Image3DModel]:
+            channel_names = _check_match_length_channels_c_dim(element, channel_names, model().dims.dims)  # type: ignore[union-attr]
+            if isinstance(element, DataArray):
+                element = element.assign_coords(c=channel_names)
+            else:
+                element = element.map_over_datasets(_assign_multiscale_coords, {"c": channel_names})
+        else:
+            raise TypeError(f"Model `{model}` does not support setting channel names.")
+
+        return element
+
+    def set_sdata_image_channel_names(self, element_name: str, channel_names: str | list[str]) -> None:
+        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+        Parameters
+        ----------
+        element_name
+            Name of the image `SpatialElement`.
+        channel_names
+            The channel names to be assigned to the c dimension of the image `SpatialElement`.
+        """
+        self.images[element_name] = self.set_image_channel_names(self.images[element_name], channel_names)
 
     @staticmethod
     def _set_table_annotation_target(
@@ -1440,6 +1486,17 @@ class SpatialData:
                 "Zarr group will not be affected."
             )
         return element_type, element
+
+    def write_channel_names(self, element_name: str) -> None:
+        """
+        Write channel names to disk for a single image element, or for all image elements, without rewriting the data.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write. If None, write the channel names of all image elements.
+        """
+        raise NotImplementedError
 
     def write_transformations(self, element_name: str | None = None) -> None:
         """

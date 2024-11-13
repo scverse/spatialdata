@@ -33,6 +33,7 @@ from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -199,8 +200,9 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        if isinstance(c_coords, str):
-            c_coords = [c_coords]
+        if c_coords is not None:
+            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
+
         if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"

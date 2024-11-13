@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
+from dask.array import Array as DaskArray
+from multiscale_spatial_image import skip_non_dimension_nodes
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
@@ -311,3 +313,43 @@ def _error_message_add_element() -> None:
         "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
         "ergonomic in a follow up PR."
     )
+
+
+def _check_match_length_channels_c_dim(
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], cls_dims: tuple[str]
+) -> list[str]:
+    """
+    Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.
+
+    Parameters
+    ----------
+    data
+        The image array
+    c_coords
+        The channel names
+    cls_dims
+        The dimensions of the particular `ImageModel`
+
+    Returns
+    -------
+    c_coords
+        The channel names as list
+    """
+    c_index = cls_dims.index("c")
+    c_length = (
+        data.shape[c_index] if isinstance(data, DataArray | DaskArray) else data["scale0"]["image"].shape[c_index]
+    )
+    if isinstance(c_coords, str):
+        c_coords = [c_coords]
+    if c_coords is not None and len(c_coords) != c_length:
+        raise ValueError(
+            f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+            f" with length {c_length}."
+        )
+    return c_coords
+
+
+# TODO: move to multiscale spatial image
+@skip_non_dimension_nodes
+def _assign_multiscale_coords(ds: Dataset, *args: Any, **kwargs: Any) -> Dataset:
+    return ds.assign_coords(*args, **kwargs)
