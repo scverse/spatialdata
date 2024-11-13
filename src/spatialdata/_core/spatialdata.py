@@ -360,6 +360,7 @@ class SpatialData:
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
         """
         self.images[element_name] = self.set_image_channel_names(self.images[element_name], channel_names)
+        self.write_channel_names(element_name)
 
     @staticmethod
     def _set_table_annotation_target(
@@ -1496,7 +1497,32 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the channel names of all image elements.
         """
-        raise NotImplementedError
+        from spatialdata._core._elements import Elements
+
+        if element_name is not None:
+            Elements._check_valid_name(element_name)
+
+        # recursively write the transformation for all the SpatialElement
+        if element_name is None:
+            for element_name in list(self.images.keys()):
+                self.write_channel_names(element_name)
+            return
+
+        validation_result = self._validate_can_write_metadata_on_element(element_name)
+        if validation_result is None:
+            return
+
+        element_type, element = validation_result
+
+        # Mypy does not understand that path is not None so we have a conditional
+        if self.path is not None:
+            _, _, element_group = self._get_groups_for_element(
+                zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            )
+
+            from spatialdata._io._utils import overwrite_channel_names
+
+            overwrite_channel_names(element_group, element)
 
     def write_transformations(self, element_name: str | None = None) -> None:
         """
@@ -1528,6 +1554,7 @@ class SpatialData:
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
 
+        # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
         _, _, element_group = self._get_groups_for_element(
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
