@@ -1564,9 +1564,6 @@ class SpatialData:
         -----
         When using the methods `write()` and `write_element()`, the metadata is written automatically.
         """
-        if write_attrs:
-            self.write_attrs()
-
         from spatialdata._core._elements import Elements
 
         if element_name is not None:
@@ -1576,6 +1573,9 @@ class SpatialData:
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
         # TODO: write omero metadata for the channel name of images.
+
+        if write_attrs:
+            self.write_attrs()
 
         if consolidate_metadata is None and self.has_consolidated_metadata():
             consolidate_metadata = True
