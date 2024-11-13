@@ -18,11 +18,11 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.9", "3.12"]
+                python: ["3.10", "3.12"]
                 os: [ubuntu-latest]
                 include:
                     - os: macos-latest
-                      python: "3.9"
+                      python: "3.10"
                     - os: macos-latest
                       python: "3.12"
                       pip-flags: "--pre"

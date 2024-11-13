@@ -10,11 +10,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from scipy import sparse
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, DataTree
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations._utils import _parse_element
@@ -246,7 +245,7 @@ def _create_sdata_from_table_and_shapes(
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int
-    if isinstance(shapes, (DataArray, DataTree)):
+    if isinstance(shapes, DataArray | DataTree):
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:

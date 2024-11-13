@@ -1,5 +1,3 @@
-from typing import Optional
-
 import geopandas
 import numpy as np
 import pandas as pd
@@ -19,7 +17,7 @@ RNG = default_rng(42)
 
 
 def _parse_shapes(
-    sdata_query_aggregation: SpatialData, by_shapes: Optional[str] = None, values_shapes: Optional[str] = None
+    sdata_query_aggregation: SpatialData, by_shapes: str | None = None, values_shapes: str | None = None
 ) -> GeoDataFrame:
     # only one between by_shapes and values_shapes can be None
     assert by_shapes is None or values_shapes is None

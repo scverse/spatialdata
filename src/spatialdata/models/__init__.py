@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from spatialdata.models._utils import (
     C,
     SpatialElement,
@@ -52,4 +50,5 @@ __all__ = [
     "get_table_keys",
     "get_channels",
     "force_2d",
+    "RasterSchema",
 ]

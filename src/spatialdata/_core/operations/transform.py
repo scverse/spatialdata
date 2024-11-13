@@ -10,10 +10,9 @@ import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -161,13 +160,13 @@ def _set_transformation_for_transformed_elements(
         assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
-    if isinstance(element, (DataArray, DataTree)):
+    if isinstance(element, DataArray | DataTree):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
-    elif isinstance(element, (GeoDataFrame, DaskDataFrame)):
+    elif isinstance(element, GeoDataFrame | DaskDataFrame):
         assert raster_translation is None
         to_prepend = transformation.inverse() if maintain_positioning else Identity()
     else:
@@ -393,8 +392,11 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
+        transformed_dict[k] = Dataset(
+            {"image": DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})}
+        )
         if channel_names is not None:
+            # This expression returns a dataset now.
             transformed_dict[k] = transformed_dict[k].assign_coords(c=channel_names)
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
