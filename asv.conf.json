@@ -37,7 +37,7 @@
     // See asv.conf.json documentation.
     // "install_command": ["in-dir={env_dir} python -mpip install {wheel_file}"],
     // "uninstall_command": ["return-code=any python -mpip uninstall -y {project}"],
-    
+
     // Install using default install
     "install_command": [
         "in-dir={env_dir} python -m pip install {build_dir}[test]"
@@ -175,7 +175,7 @@
     // `asv` will cache results of the recent builds in each
     // environment, making them faster to install next time.  This is
     // the number of builds to keep, per environment.
-    "build_cache_size": 2,
+    "build_cache_size": 2
 
     // The commits after which the regression search in `asv publish`
     // should start looking for regressions. Dictionary whose keys are
