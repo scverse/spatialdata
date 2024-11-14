@@ -476,6 +476,7 @@ def bounding_box_query(
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or SpatialElement within a bounding box.
+    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues.
 
     Parameters
     ----------
@@ -514,11 +515,8 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
-    if len(sdata.points) > 0:
-        warnings.warn(
-            "Your SpatialData object has points element. Thus maybe suffer from performance issues when querying.",
-            UserWarning,
-        )
+    if sdata.points:
+        warnings.warn(f"Your SpatialData object has points element. Thus maybe suffer from performance issues when querying.", UserWarning)
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
