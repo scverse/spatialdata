@@ -16,6 +16,10 @@ Vector data represents spatial information using geometric shapes such as points
 
 Vectorization is the process of converting raster data (i.e. pixel-based images) into vector format. For instance, a "raster" cell boundary can be "vectorized" into a polygon represented by the coordinates of the vertices of the polygon.
 
+### ROI
+
+An ROI (_Region of Interest_) is a specific subset of a dataset that highlights an area of particular relevance, such as a niche, cell, or tissue location. For example, an ROI may be defined as a polygon outlining a lymphoid structure.
+
 ### IO
 
 IO means input/output. For instance, `spatialdata-io` is about reading and/or writing data.

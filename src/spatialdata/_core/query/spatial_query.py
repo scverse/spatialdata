@@ -478,8 +478,13 @@ def bounding_box_query(
     """
     Query a SpatialData object or SpatialElement within a bounding box.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.bounding_box(...)`, without specifying `element`.
+
     Parameters
     ----------
+    element
+        The SpatialElement or SpatialData object to query.
     axes
         The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
@@ -809,6 +814,9 @@ def polygon_query(
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
+
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.polygon(...)`, without specifying `element`.
 
     Parameters
     ----------
