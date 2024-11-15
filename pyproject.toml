@@ -64,6 +64,7 @@ docs = [
     "ipython>=8.6.0",
     "sphinx-copybutton",
     "sphinx-pytest",
+    "squidpy>=1.6.1",
 ]
 test = [
     "pytest",

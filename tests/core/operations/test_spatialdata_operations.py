@@ -497,3 +497,19 @@ def test_validate_table_in_spatialdata(full_sdata):
     del full_sdata.points["points_0"]
     with pytest.warns(UserWarning, match="in the SpatialData object"):
         full_sdata.validate_table_in_spatialdata(table)
+
+
+def test_pipe(full_sdata):
+    def compare_nlabels(sdata, n):
+        return len(np.unique(sdata.labels["labels2d"])) > n
+
+    def compare_nlabels2(n, sdata):
+        return len(np.unique(sdata.labels["labels2d"])) > n
+
+    # Test function as first argument
+    full_sdata.pipe(func=compare_nlabels, n=5)
+    # Test tuple as input
+    full_sdata.pipe(func=(compare_nlabels2, "sdata"), n=5)
+
+    with pytest.raises(ValueError, match="is both the pipe target and a keyword argument"):
+        full_sdata.pipe(func=(compare_nlabels2, "sdata"), sdata=full_sdata, n=5)
