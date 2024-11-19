@@ -17,6 +17,7 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    get_model,
     get_table_keys,
 )
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
@@ -468,6 +469,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         for element in elements:
             before = full_sdata[element]
             after = sdata[element]
+            assert get_model(after) == get_model(before)
             data_extent_before = get_extent(before, coordinate_system="global")
             data_extent_after = get_extent(after, coordinate_system="global")
             # huge tolerance because of the bug with pixel perfectness
