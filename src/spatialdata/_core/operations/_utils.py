@@ -125,6 +125,7 @@ def transform_to_data_extent(
                 target_width=target_width,
                 target_height=None,
                 target_depth=None,
+                return_regions_as_labels=True,
             )
             sdata_to_return_elements[element_name] = rasterized
         else:
