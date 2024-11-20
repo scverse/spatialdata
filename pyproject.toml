@@ -28,7 +28,7 @@ dependencies = [
     "dask>=2024.4.1",
     "fsspec<=2023.6",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=2.0.1",
+    "multiscale_spatial_image>=2.0.2",
     "networkx",
     "numba",
     "numpy",
