@@ -17,7 +17,7 @@ from xarray import DataArray, Dataset, DataTree
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channels
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -367,7 +367,7 @@ def _(
         channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
-        channel_names = get_channels(data)
+        channel_names = get_channel_names(data)
     else:
         raise ValueError(f"DataTree with schema {schema} not supported")
 

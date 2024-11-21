@@ -7,7 +7,7 @@ import pytest
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _is_element_self_contained
 from spatialdata._logging import logger
-from spatialdata.models import get_channels
+from spatialdata.models import get_channel_names
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 
@@ -114,8 +114,8 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
 # test io for channel names
 @pytest.mark.parametrize("write", ["overwrite", "write", "no"])
 def test_save_channel_names_incremental(images: SpatialData, write: str) -> None:
-    old_channels2d = get_channels(images["image2d"])
-    old_channels3d = get_channels(images["image3d_numpy"])
+    old_channels2d = get_channel_names(images["image2d"])
+    old_channels3d = get_channel_names(images["image3d_numpy"])
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         f0 = os.path.join(tmp_dir, "sdata.zarr")

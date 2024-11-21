@@ -269,7 +269,7 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
 
 
 @singledispatch
-def get_channels(data: Any) -> list[Any]:
+def get_channel_names(data: Any) -> list[Any]:
     """Get channels from data for an image element (both single and multiscale).
 
     Parameters
@@ -288,12 +288,40 @@ def get_channels(data: Any) -> list[Any]:
     raise ValueError(f"Cannot get channels from {type(data)}")
 
 
-@get_channels.register
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data for an image element (both single and multiscale).
+
+    [Deprecation] This function will be deprecated in version 0.3.0. Please use
+    `get_channel_names`.
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+
+    Notes
+    -----
+    For multiscale images, the channels are validated to be consistent across scales.
+    """
+    warnings.warn(
+        "The function 'get_channels' is deprecated and will be removed in version 0.3.0. "
+        "Please use 'get_channel_names' instead.",
+        DeprecationWarning,
+        stacklevel=2,  # Adjust the stack level to point to the caller
+    )
+    return get_channel_names(data)
+
+
+@get_channel_names.register
 def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
 
 
-@get_channels.register
+@get_channel_names.register
 def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
     channels = {tuple(data[i][name].coords["c"].values) for i in data}

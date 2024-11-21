@@ -8,7 +8,7 @@ import dask.array as da
 from dask.array.overlap import coerce_depth
 from xarray import DataArray, DataTree
 
-from spatialdata.models._utils import get_axes_names, get_channels, get_raster_model_from_data_dims
+from spatialdata.models._utils import get_axes_names, get_channel_names, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
 
 __all__ = ["map_raster"]
@@ -121,7 +121,7 @@ def map_raster(
 
     if "c" in dims:
         if c_coords is None:
-            c_coords = range(arr.shape[0]) if arr.shape[0] != len(get_channels(data)) else get_channels(data)
+            c_coords = range(arr.shape[0]) if arr.shape[0] != len(get_channel_names(data)) else get_channel_names(data)
     else:
         c_coords = None
     if transformations is None:
