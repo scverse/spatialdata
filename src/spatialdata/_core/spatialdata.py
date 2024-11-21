@@ -24,7 +24,6 @@ from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import (
-    _check_match_length_channels_c_dim,
     _deprecation_alias,
     _error_message_add_element,
 )
@@ -40,7 +39,12 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
-from spatialdata.models._utils import SpatialElement, convert_region_column_to_categorical, get_axes_names
+from spatialdata.models._utils import (
+    SpatialElement,
+    convert_region_column_to_categorical,
+    get_axes_names,
+    set_channel_names,
+)
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -319,36 +323,7 @@ class SpatialData:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
-    @staticmethod
-    def set_image_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:
-        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
-
-        Parameters
-        ----------
-        element
-            The image `SpatialElement` or parsed `ImageModel`.
-        channel_names
-            The channel names to be assigned to the c dimension of the image `SpatialElement`.
-
-        Returns
-        -------
-        element
-            The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
-        """
-        channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
-        model = get_model(element)
-        if model in [Image2DModel, Image3DModel]:
-            channel_names = _check_match_length_channels_c_dim(element, channel_names, model().dims.dims)  # type: ignore[union-attr]
-            if isinstance(element, DataArray):
-                element = element.assign_coords(c=channel_names)
-            else:
-                element = element.msi.assign_coords({"c": channel_names})
-        else:
-            raise TypeError(f"Model `{model}` does not support setting channel names.")
-
-        return element
-
-    def set_sdata_image_channel_names(self, element_name: str, channel_names: str | list[str]) -> None:
+    def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
         """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
 
         This method assumes that the `SpatialData` object and the element are already stored on disk as it will
@@ -361,9 +336,12 @@ class SpatialData:
             Name of the image `SpatialElement`.
         channel_names
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
+        write
+            Whether to overwrite the channel metadata on disk.
         """
-        self.images[element_name] = self.set_image_channel_names(self.images[element_name], channel_names)
-        self.write_channel_names(element_name)
+        self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
+        if write:
+            self.write_channel_names(element_name)
 
     @staticmethod
     def _set_table_annotation_target(
@@ -1491,7 +1469,7 @@ class SpatialData:
             )
         return element_type, element
 
-    def write_channel_names(self, element_name: str) -> None:
+    def write_channel_names(self, element_name: str | None = None) -> None:
         """
         Write channel names to disk for a single image element, or for all image elements, without rewriting the data.
 
@@ -1636,9 +1614,9 @@ class SpatialData:
             Elements._check_valid_name(element_name)
 
         self.write_transformations(element_name)
+        self.write_channel_names(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
-        # TODO: write omero metadata for the channel name of images.
 
         if consolidate_metadata is None and self.has_consolidated_metadata():
             consolidate_metadata = True
