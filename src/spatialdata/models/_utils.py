@@ -27,7 +27,7 @@ Y = "y"
 X = "x"
 
 if TYPE_CHECKING:
-    from spatialdata.models.models import RasterSchema
+    from spatialdata.models.models import Image2DModel, Image3DModel, RasterSchema
 
 
 # mypy says that we can't do isinstance(something, SpatialElement),
@@ -420,11 +420,14 @@ def set_channel_names(element: DataArray | DataTree, channel_names: str | list[s
     element
         The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
     """
+    from spatialdata.models import get_model
+
     channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
+    model = get_model(element)
 
     # get_model cannot be used due to circular import so get_axes_names is used instead
-    if "c" in (dims := get_axes_names(element)):
-        channel_names = _check_match_length_channels_c_dim(element, channel_names, dims)  # type: ignore[union-attr]
+    if model in [Image2DModel, Image3DModel]:
+        channel_names = _check_match_length_channels_c_dim(element, channel_names, model.dims.dims)  # type: ignore[union-attr]
         if isinstance(element, DataArray):
             element = element.assign_coords(c=channel_names)
         else:
