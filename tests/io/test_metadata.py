@@ -111,22 +111,35 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
 
 
 # test io for channel names
-def test_save_channel_names_incremental(images: SpatialData) -> None:
+@pytest.mark.parametrize("write", ["overwrite", "write", "no"])
+def test_save_channel_names_incremental(images: SpatialData, write: str) -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
         f0 = os.path.join(tmp_dir, "sdata.zarr")
         images.write(f0)
 
+        over_write = write == "overwrite"
+        old_channels = images["image2d"].coords["c"].data.tolist()
+
         new_channels = ["first", "second", "third"]
-        images.set_sdata_image_channel_names("image2d", new_channels)
-        images.set_sdata_image_channel_names("image2d_multiscale", new_channels)
-        images.set_sdata_image_channel_names("image3d_numpy", new_channels)
-        images.set_sdata_image_channel_names("image3d_multiscale_numpy", new_channels)
+        images.set_channel_names("image2d", new_channels, write=over_write)
+        images.set_channel_names("image2d_multiscale", new_channels, write=over_write)
+        images.set_channel_names("image3d_numpy", new_channels, write=over_write)
+        images.set_channel_names("image3d_multiscale_numpy", new_channels, write=over_write)
+
+        if write == "write":
+            images.write_channel_names()
 
         images = SpatialData.read(f0)
-        assert images["image2d"].coords["c"].data.tolist() == new_channels
-        assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
-        assert images["image3d_numpy"].coords["c"].data.tolist() == new_channels
-        assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+        if write != "no":
+            assert images["image2d"].coords["c"].data.tolist() == new_channels
+            assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+            assert images["image3d_numpy"].coords["c"].data.tolist() == new_channels
+            assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+        else:
+            assert images["image2d"].coords["c"].data.tolist() == old_channels
+            assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == old_channels
+            assert images["image3d_numpy"].coords["c"].data.tolist() == old_channels
+            assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == old_channels
 
 
 # test io for consolidated metadata
