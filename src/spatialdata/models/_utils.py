@@ -14,6 +14,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
 from spatialdata._utils import _check_match_length_channels_c_dim
+from spatialdata.models.models import Image2DModel, Image3DModel
 from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
@@ -27,7 +28,7 @@ Y = "y"
 X = "x"
 
 if TYPE_CHECKING:
-    from spatialdata.models.models import Image2DModel, Image3DModel, RasterSchema
+    from spatialdata.models.models import RasterSchema
 
 
 # mypy says that we can't do isinstance(something, SpatialElement),

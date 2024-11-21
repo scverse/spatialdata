@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning][].
 
 ## [0.2.6] - TBD
 
+### Added
+
+-   Added `set_channel_names` method to `SpatialData` to change the channel names of an
+    image element in `SpatialData`
+-   Added `write_channel_names` method to `SpatialData` to overwrite channel metadata on disk
+    without overwriting the image array itself.
+
+### Changed
+
+-   `get_channels` is marked for deprecation in `SpatialData` v0.3.0. Function is replaced
+    by `get_channel_names`
+
 ### Fixed
 
 -   Updated deprecated default stages of `pre-commit` #771
