@@ -24,7 +24,6 @@ from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import (
-    _assign_multiscale_coords,
     _check_match_length_channels_c_dim,
     _deprecation_alias,
     _error_message_add_element,
@@ -343,7 +342,7 @@ class SpatialData:
             if isinstance(element, DataArray):
                 element = element.assign_coords(c=channel_names)
             else:
-                element = element.map_over_datasets(_assign_multiscale_coords, {"c": channel_names})
+                element = element.msi.assign_coords({"c": channel_names})
         else:
             raise TypeError(f"Model `{model}` does not support setting channel names.")
 

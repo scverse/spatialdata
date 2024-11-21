@@ -12,7 +12,6 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from dask.array import Array as DaskArray
-from multiscale_spatial_image import skip_non_dimension_nodes
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
@@ -347,9 +346,3 @@ def _check_match_length_channels_c_dim(
             f" with length {c_length}."
         )
     return c_coords
-
-
-# TODO: move to multiscale spatial image
-@skip_non_dimension_nodes
-def _assign_multiscale_coords(ds: Dataset, *args: Any, **kwargs: Any) -> Dataset:
-    return ds.assign_coords(*args, **kwargs)
