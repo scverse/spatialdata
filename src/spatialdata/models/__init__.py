@@ -11,6 +11,7 @@ from spatialdata.models._utils import (
     get_spatial_axes,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
+    set_channel_names,
     validate_axes,
     validate_axis_name,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "get_table_keys",
     "get_channels",
     "get_channel_names",
+    "set_channel_names",
     "force_2d",
     "RasterSchema",
 ]
