@@ -315,7 +315,7 @@ def _error_message_add_element() -> None:
 
 
 def _check_match_length_channels_c_dim(
-    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], cls_dims: tuple[str]
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str, ...]
 ) -> list[str]:
     """
     Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.
@@ -326,15 +326,15 @@ def _check_match_length_channels_c_dim(
         The image array
     c_coords
         The channel names
-    cls_dims
-        The dimensions of the particular `ImageModel`
+    dims
+        The axes names in the order that is the same as the `ImageModel` from which it is derived.
 
     Returns
     -------
     c_coords
         The channel names as list
     """
-    c_index = cls_dims.index("c")
+    c_index = dims.index("c")
     c_length = (
         data.shape[c_index] if isinstance(data, DataArray | DaskArray) else data["scale0"]["image"].shape[c_index]
     )

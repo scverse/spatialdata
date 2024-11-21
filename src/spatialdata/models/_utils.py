@@ -13,6 +13,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
@@ -374,3 +375,33 @@ def convert_region_column_to_categorical(table: AnnData) -> AnnData:
             )
             table.obs[region_key] = pd.Categorical(table.obs[region_key])
     return table
+
+
+def set_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:
+    """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+    Parameters
+    ----------
+    element
+        The image `SpatialElement` or parsed `ImageModel`.
+    channel_names
+        The channel names to be assigned to the c dimension of the image `SpatialElement`.
+
+    Returns
+    -------
+    element
+        The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
+    """
+    channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
+
+    # get_model cannot be used due to circular import so get_axes_names is used instead
+    if "c" in (dims := get_axes_names(element)):
+        channel_names = _check_match_length_channels_c_dim(element, channel_names, dims)  # type: ignore[union-attr]
+        if isinstance(element, DataArray):
+            element = element.assign_coords(c=channel_names)
+        else:
+            element = element.msi.assign_coords({"c": channel_names})
+    else:
+        raise TypeError("Element model does not support setting channel names, no `c` dimension found.")
+
+    return element
