@@ -14,7 +14,6 @@ from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
 from spatialdata._utils import _check_match_length_channels_c_dim
-from spatialdata.models.models import Image2DModel, Image3DModel
 from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
@@ -421,7 +420,7 @@ def set_channel_names(element: DataArray | DataTree, channel_names: str | list[s
     element
         The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
     """
-    from spatialdata.models import get_model
+    from spatialdata.models import Image2DModel, Image3DModel, get_model
 
     channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
     model = get_model(element)
