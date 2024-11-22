@@ -125,7 +125,8 @@ def get_transformation(
             raise ValueError(f"Transformation to {to_coordinate_system} not found in element {element}.")
         return transformations[to_coordinate_system]
     else:
-        assert to_coordinate_system is None, "If get_all=True, to_coordinate_system must be None."
+        if to_coordinate_system is not None:
+            raise ValueError("If get_all=True, to_coordinate_system must be None.")
         # get the dict of all the transformations
         return transformations
 
