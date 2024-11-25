@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning][].
 ### Fixed
 
 -   Updated deprecated default stages of `pre-commit` #771
--   Preserve points `feature_key` during queries
+-   Preserve points `feature_key` during queries #794
 
 ## [0.2.5] - 2024-06-11
 
