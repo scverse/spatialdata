@@ -417,8 +417,7 @@ def set_channel_names(element: DataArray | DataTree, channel_names: str | list[s
 
     Returns
     -------
-    element
-        The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
+    The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
     """
     from spatialdata.models import Image2DModel, Image3DModel, get_model
 
