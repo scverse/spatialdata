@@ -736,8 +736,11 @@ class PointsModel:
         elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None and data[feature_key].dtype.name != "category":
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None:
+                if data[feature_key].dtype.name == "category":
+                    table[feature_key] = data[feature_key]
+                else:
+                    table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
