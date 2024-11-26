@@ -13,14 +13,17 @@ and this project adheres to [Semantic Versioning][].
 ### Added
 
 -   Added `set_channel_names` method to `SpatialData` to change the channel names of an
-    image element in `SpatialData`
+    image element in `SpatialData` #786
 -   Added `write_channel_names` method to `SpatialData` to overwrite channel metadata on disk
-    without overwriting the image array itself.
+    without overwriting the image array itself. #786
 
 ### Changed
 
+-   Argument `c_coords` is moved out of kwargs for the `ImageModel`s. #779
 -   `get_channels` is marked for deprecation in `SpatialData` v0.3.0. Function is replaced
-    by `get_channel_names`
+    by `get_channel_names` #786
+-   Updated dependency of `multiscale-spatial-image` #792
+-   Adjust to new version of `xarray` with `DataTree` # 752
 
 ### Fixed
 
