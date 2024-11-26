@@ -27,13 +27,13 @@ and this project adheres to [Semantic Versioning][].
 -   Updated deprecated default stages of `pre-commit` #771
 -   Preserve points `feature_key` during queries #794
 
-## [0.2.5] - 2024-06-11
+## [0.2.5] - 2024-11-06
 
 ### Fixed
 
 -   Incompatibility issues due to newest release of `multiscale-spatial-image` #760
 
-## [0.2.4] - 2024-06-11
+## [0.2.4] - 2024-11-06
 
 ### Major
 
