@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning][].
     without overwriting the image array itself. #786
 
 ### Changed
+
 -   Argument `c_coords` is moved out of kwargs for the `ImageModel`s. #779
 -   `get_channels` is marked for deprecation in `SpatialData` v0.3.0. Function is replaced
     by `get_channel_names` #786
