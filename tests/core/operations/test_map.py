@@ -30,7 +30,7 @@ def _multiply_to_labels(arr, parameter=10):
     return arr[0].astype(np.int32)
 
 
-def _to_constant(arr, constant=5):
+def _to_constant(arr, constant):
     arr[arr > 0] = constant
     return arr
 
