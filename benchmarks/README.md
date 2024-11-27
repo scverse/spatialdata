@@ -1,6 +1,6 @@
 # Benchmarking SpatialData code
 
-This `benchmarks` folder contains code to benchmark the performance of the SpatialData code. You can use it to see how code behaves for different options or data sizes. For more information, check the [SpatialData Contributing Guide](https://spatialdata.scverse.org/en/stable/contributing.html).
+This `benchmarks/` folder contains code to benchmark the performance of the SpatialData code. You can use it to see how code behaves for different options or data sizes. For more information, check the [SpatialData Contributing Guide](https://spatialdata.scverse.org/en/stable/contributing.html).
 
 Note that to run code, your current working directory should be the SpatialData repo, not this `benchmarks/` folder.
 
@@ -17,8 +17,9 @@ pip install -e '.[docs,test,benchmark]'
 Running all the benchmarks is usually not needed. You can select the benchmarks your interesting in with `-b` and run them in your current environment with `--python=same`. Some example benchmarks:
 
 Importing the SpatialData library can take around 4 seconds:
+
 ```
-PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b timeraw_import_inspect 
+PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b timeraw_import_inspect
 Couldn't load asv.plugins._mamba_helpers because
 No module named 'conda'
 · Discovering benchmarks
@@ -29,6 +30,7 @@ No module named 'conda'
 ```
 
 Querying using a bounding box without a spatial index is highly impacted by large amounts of points (transcripts), more than table rows (cells).
+
 ```
 $ PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b time_query_bounding_box
 
