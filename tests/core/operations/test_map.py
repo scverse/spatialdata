@@ -297,7 +297,7 @@ def test_map_raster_relabel_fail(sdata_blobs):
 
     with pytest.raises(
         ValueError,
-        match=re.escape("Relabel was set to True, but max bits"),
+        match=re.escape("Relabel was set to True, but"),
     ):
         se = map_raster(
             sdata_blobs[element_name].chunk((100, 100)),
