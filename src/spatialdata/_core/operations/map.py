@@ -177,17 +177,19 @@ def _relabel(arr: da.Array) -> da.Array:
         max_bits_block = int(block.max()).bit_length()
 
         if max_bits_block + shift > available_bits:
+            # Note: because of no harmonization across blocks, adjusting number of chunks lowers the required bits.
             raise ValueError(
                 f"Relabel was set to True, but "
-                f"max bits required to represent the labels in the block ({max_bits_block}) "
-                f"+ required shift ({shift}) > "
-                f"available_bits ({available_bits}). "
-                "To solve this issue, please consider rechunking using a larger chunk size, "
-                "resulting in a fewer number of blocks and thus a lower value for the required shift; "
-                f"cast to a data type (current data type is {block.dtype}) with a higher maximum value "
-                "(resulting in more available bits for the bit shift); "
-                "or consider a sequential relabeling of the dask array, "
-                "which could result in a lower maximum value of the labels in the block."
+                f"the number of bits required to represent the labels in the block ({max_bits_block}) "
+                f"+ required shift ({shift}) exceeds the available_bits ({available_bits}). In other words"
+                f"the number of labels exceeds the number of integers that can be represented by the dtype"
+                "of the individual blocks."
+                "To solve this issue, please consider the following solutions:"
+                "   1. Rechunking using a larger chunk size, lowering the number of blocks and thereby"
+                "      lowering the value of required shift."
+                "   2. Cast to a data type with a higher maximum value  "
+                "   3. Perform sequential relabeling of the dask array, potentially lowering the total "
+                "      number of labels."
             )
 
         block_num = _calculate_block_num(block_id=block_id, num_blocks=num_blocks)
