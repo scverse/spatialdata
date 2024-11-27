@@ -360,6 +360,12 @@ def test_relabel_sequential(sdata_blobs):
     arr = da.asarray(np.array([2, 0]))
     assert np.array_equal(relabel_sequential(arr).compute(), np.array([1, 0]))
 
+    arr = da.asarray(np.array([0, 9, 5]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([0, 2, 1]))
+
+    arr = da.asarray(np.array([4, 1, 3]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([3, 1, 2]))
+
 
 def test_relabel_sequential_fails(sdata_blobs):
     with pytest.raises(
