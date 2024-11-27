@@ -1,28 +1,37 @@
-# Benchmarking
+# Benchmarking SpatialData code
 
-setup
+This `benchmarks` folder contains code to benchmark the performance of the SpatialData code. You can use it to see how code behaves for different options or data sizes. For more information, check the [SpatialData Contributing Guide](https://spatialdata.scverse.org/en/stable/contributing.html).
 
-```
-pip install -e '.[docs,benchmark]'
-```
+Note that to run code, your current working directory should be the SpatialData repo, not this `benchmarks/` folder.
 
-In PyCharm, configure your Configuration to include the benchmark module. In Python, you can run using
+## Installation
 
-```
-python -m benchmarks.spatialdata_benchmark
-```
-
-See napari [docs](https://napari.org/stable/developers/contributing/performance/benchmarks.html) on profiling and benchmarking for more information.
-
-run a specific benchmark
+The benchmarks use the [airspeed velocity](https://asv.readthedocs.io/en/stable/) (asv) framework. Install it with the `benchmark` option:
 
 ```
-PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b time_query_bounding_box
+pip install -e '.[docs,test,benchmark]'
 ```
 
-output:
+## Usage
 
+Running all the benchmarks is usually not needed. You can select the benchmarks your interesting in with `-b` and run them in your current environment with `--python=same`. Some example benchmarks:
+
+Importing the SpatialData library can take around 4 seconds:
 ```
+PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b timeraw_import_inspect 
+Couldn't load asv.plugins._mamba_helpers because
+No module named 'conda'
+· Discovering benchmarks
+· Running 1 total benchmarks (1 commits * 1 environments * 1 benchmarks)
+[ 0.00%] ·· Benchmarking existing-py_opt_homebrew_Caskroom_mambaforge_base_envs_spatialdata2_bin_python3.12
+[50.00%] ··· Running (spatialdata_benchmark.timeraw_import_inspect--).
+[100.00%] ··· spatialdata_benchmark.timeraw_import_inspect                                                                            3.65±0.2s
+```
+
+Querying using a bounding box without a spatial index is highly impacted by large amounts of points (transcripts), more than table rows (cells).
+```
+$ PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b time_query_bounding_box
+
 [100.00%] ··· ======== ============ ============= ============= ==============
               --                filter_table / n_transcripts_per_cell
               -------- -------------------------------------------------------
@@ -34,8 +43,31 @@ output:
               ======== ============ ============= ============= ==============
 ```
 
-run everything in new env
+You can use `asv` to run all the benchmarks in their own environment. This can take a long time, so it is not recommended for regular use:
 
 ```
-asv run
+$ asv run
+Couldn't load asv.plugins._mamba_helpers because
+No module named 'conda'
+· Creating environments....
+· Discovering benchmarks..
+·· Uninstalling from virtualenv-py3.12
+·· Building a89d16d8 <v0.2.6-pre0~7> for virtualenv-py3.12
+·· Installing a89d16d8 <v0.2.6-pre0~7> into virtualenv-py3.12.............
+· Running 6 total benchmarks (1 commits * 1 environments * 6 benchmarks)
+[ 0.00%] · For spatialdata commit a89d16d8 <v0.2.6-pre0~7>:
+[ 0.00%] ·· Benchmarking virtualenv-py3.12
+[25.00%] ··· Running (spatialdata_benchmark.TimeMapRaster.time_map_blocks--)...
+...
+[100.00%] ··· spatialdata_benchmark.timeraw_import_inspect                                                                                                                                    3.33±0.06s
+```
+
+## Notes
+
+When using PyCharm, remember to set [Configuration](https://www.jetbrains.com/help/pycharm/run-debug-configuration.html) to include the benchmark module, as this is separate from the main code module.
+
+In Python, you can run a module using the following command:
+
+```
+python -m benchmarks.spatialdata_benchmark
 ```
