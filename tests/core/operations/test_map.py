@@ -295,6 +295,7 @@ def test_map_raster_relabel_fail(sdata_blobs):
 
     element_name = "blobs_labels"
 
+    # Testing the case of having insufficient number of bits.
     with pytest.raises(
         ValueError,
         match=re.escape("Relabel was set to True, but"),
