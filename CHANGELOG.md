@@ -8,11 +8,57 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
-## [0.x.x] - 2024-xx-xx
+## [0.2.6] - 2024-11-26
+
+### Added
+
+-   Added `set_channel_names` method to `SpatialData` to change the channel names of an
+    image element in `SpatialData` #786
+-   Added `write_channel_names` method to `SpatialData` to overwrite channel metadata on disk
+    without overwriting the image array itself. #786
+
+### Changed
+
+-   Argument `c_coords` is moved out of kwargs for the `ImageModel`s. #779
+-   `get_channels` is marked for deprecation in `SpatialData` v0.3.0. Function is replaced
+    by `get_channel_names` #786
+-   Updated dependency of `multiscale-spatial-image` #792
+-   Adjust to new version of `xarray` with `DataTree` # 752
+
+### Fixed
+
+-   Updated deprecated default stages of `pre-commit` #771
+-   Preserve points `feature_key` during queries #794
+
+## [0.2.5] - 2024-11-06
+
+### Fixed
+
+-   Incompatibility issues due to newest release of `multiscale-spatial-image` #760
+
+## [0.2.4] - 2024-11-06
+
+### Major
+
+-   Enable vectorization of `bounding_box_query` for all `SpatialData` elements. #699
+
+### Minor
+
+-   Added `shortest_path` parameter to `get_transformation_between_coordinate_systems` #714
+-   Added `get_pyramid_levels()` utils API #719
+-   Improved ergonomics of `concatenate()` when element names are non-unique #720
+-   Improved performance of writing images with multiscales #577
+
+## [0.2.3] - 2024-09-25
 
 ### Minor
 
 -   Added `clip: bool = False` parameter to `polygon_query()` #670
+-   Add `sort` parameter to `PointsModel.parse()` #672
+
+### Fixed
+
+-   Fix interpolation artifact multiscale computation for labels #697
 
 ## [0.2.2] - 2024-08-07
 

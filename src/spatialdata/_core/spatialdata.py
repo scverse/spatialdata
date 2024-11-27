@@ -14,17 +14,19 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _deprecation_alias, _error_message_add_element
+from spatialdata._utils import (
+    _deprecation_alias,
+    _error_message_add_element,
+)
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -37,7 +39,12 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
-from spatialdata.models._utils import SpatialElement, convert_region_column_to_categorical, get_axes_names
+from spatialdata.models._utils import (
+    SpatialElement,
+    convert_region_column_to_categorical,
+    get_axes_names,
+    set_channel_names,
+)
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -316,6 +323,26 @@ class SpatialData:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
+    def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
+        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+        This method assumes that the `SpatialData` object and the element are already stored on disk as it will
+        also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
+        element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+
+        Parameters
+        ----------
+        element_name
+            Name of the image `SpatialElement`.
+        channel_names
+            The channel names to be assigned to the c dimension of the image `SpatialElement`.
+        write
+            Whether to overwrite the channel metadata on disk.
+        """
+        self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
+        if write:
+            self.write_channel_names(element_name)
+
     @staticmethod
     def _set_table_annotation_target(
         table: AnnData,
@@ -466,7 +493,7 @@ class SpatialData:
         table = self.tables[table_name]
         element_names = {element[1] for element in self._gen_elements()}
         if (isinstance(region, str) and region not in element_names) or (
-            isinstance(region, (list, pd.Series))
+            isinstance(region, list | pd.Series)
             and not all(region_element in element_names for region_element in region)
         ):
             raise ValueError(f"Annotation target '{region}' not present as SpatialElement in SpatialData object.")
@@ -544,7 +571,7 @@ class SpatialData:
 
     @path.setter
     def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, (str, Path)):
+        if value is None or isinstance(value, str | Path):
             self._path = value
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
@@ -1442,6 +1469,45 @@ class SpatialData:
             )
         return element_type, element
 
+    def write_channel_names(self, element_name: str | None = None) -> None:
+        """
+        Write channel names to disk for a single image element, or for all image elements, without rewriting the data.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write the channel names of. If None, write the channel names of all image
+            elements.
+        """
+        from spatialdata._core._elements import Elements
+
+        if element_name is not None:
+            Elements._check_valid_name(element_name)
+
+        # recursively write the transformation for all the SpatialElement
+        if element_name is None:
+            for element_name in list(self.images.keys()):
+                self.write_channel_names(element_name)
+            return
+
+        validation_result = self._validate_can_write_metadata_on_element(element_name)
+        if validation_result is None:
+            return
+
+        element_type, element = validation_result
+
+        # Mypy does not understand that path is not None so we have the check in the conditional
+        if element_type == "images" and self.path is not None:
+            _, _, element_group = self._get_groups_for_element(
+                zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            )
+
+            from spatialdata._io._utils import overwrite_channel_names
+
+            overwrite_channel_names(element_group, element)
+        else:
+            raise ValueError(f"Can't set channel names for element of type '{element_type}'.")
+
     def write_transformations(self, element_name: str | None = None) -> None:
         """
         Write transformations to disk for a single element, or for all elements, without rewriting the data.
@@ -1472,18 +1538,19 @@ class SpatialData:
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
 
+        # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
         _, _, element_group = self._get_groups_for_element(
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
         )
         axes = get_axes_names(element)
-        if isinstance(element, (DataArray, DataTree)):
+        if isinstance(element, DataArray | DataTree):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
 
             overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
-        elif isinstance(element, (DaskDataFrame, GeoDataFrame, AnnData)):
+        elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )
@@ -1547,9 +1614,9 @@ class SpatialData:
             Elements._check_valid_name(element_name)
 
         self.write_transformations(element_name)
+        self.write_channel_names(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
-        # TODO: write omero metadata for the channel name of images.
 
         if consolidate_metadata is None and self.has_consolidated_metadata():
             consolidate_metadata = True

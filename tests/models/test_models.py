@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from typing import Any
 
 import dask.array.core
 import dask.dataframe as dd
@@ -16,13 +17,12 @@ import pytest
 from anndata import AnnData
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -194,6 +194,27 @@ class TestModels:
         if kwargs is not None:
             with pytest.raises(ValueError):
                 model.parse(image, **kwargs)
+
+    @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+    def test_labels_model_with_multiscales(self, model):
+        # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
+        dims = np.array(model.dims.dims).tolist()
+        n_dims = len(dims)
+
+        # A labels image with one label value 4, that partially covers 2×2 blocks.
+        # Downsampling with interpolation would produce values 1, 2, 3, 4.
+        image: ArrayLike = np.array([[0, 0, 0, 0], [0, 4, 4, 4], [4, 4, 4, 4], [0, 4, 4, 4]], dtype=np.uint16)
+        if n_dims == 3:
+            image = np.stack([image] * image.shape[0])
+        actual = model.parse(image, scale_factors=(2,))
+        assert isinstance(actual, DataTree)
+        assert actual.children.keys() == {"scale0", "scale1"}
+        assert actual.scale0.image.dtype == image.dtype
+        assert actual.scale1.image.dtype == image.dtype
+        assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
+        assert set(np.unique(image)) >= set(
+            np.unique(actual.scale1.image)
+        ), "Subsequent scales should not have interpolation artifacts"
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
@@ -524,3 +545,24 @@ def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
                 match=r"The index of the dataframe is not monotonic increasing\.",
             ):
                 _ = PointsModel.parse(points, npartitions=npartitions)
+
+
+@pytest.mark.parametrize("scale_factors", [None, [2, 2]])
+def test_c_coords_2d(scale_factors: list[int] | None):
+    data = np.zeros((3, 30, 30))
+    model = Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd"], scale_factors=scale_factors)
+    if scale_factors is None:
+        assert model.coords["c"].data.tolist() == ["1st", "2nd", "3rd"]
+    else:
+        assert all(
+            model[group]["image"].coords["c"].data.tolist() == ["1st", "2nd", "3rd"] for group in list(model.keys())
+        )
+
+    with pytest.raises(ValueError, match="The number of channel names"):
+        Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd", "too_much"], scale_factors=scale_factors)
+
+
+@pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
+    with pytest.raises(ValueError, match="`c_coords` is not supported"):
+        model().parse(np.zeros((30, 30)), c_coords=["1st", "2nd", "3rd"])

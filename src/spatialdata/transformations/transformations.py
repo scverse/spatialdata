@@ -84,16 +84,16 @@ class BaseTransformation(ABC):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         pass
 
     def _get_default_coordinate_system(
         self,
         axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        name: Optional[str] = None,
+        unit: str | None = None,
+        name: str | None = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
         from spatialdata.transformations.ngff._utils import (
@@ -223,8 +223,8 @@ class Identity(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
         output_cs = self._get_default_coordinate_system(
@@ -317,8 +317,8 @@ class MapAxis(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
         output_cs = self._get_default_coordinate_system(
@@ -399,8 +399,8 @@ class Translation(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
         output_cs = self._get_default_coordinate_system(
@@ -485,8 +485,8 @@ class Scale(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
         output_cs = self._get_default_coordinate_system(
@@ -593,8 +593,8 @@ class Affine(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         new_matrix = self.to_affine_matrix(input_axes, output_axes)
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
@@ -716,8 +716,8 @@ class Sequence(BaseTransformation):
         self,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
-        unit: Optional[str] = None,
-        output_coordinate_system_name: Optional[str] = None,
+        unit: str | None = None,
+        output_coordinate_system_name: str | None = None,
     ) -> NgffBaseTransformation:
         input_cs = self._get_default_coordinate_system(axes=input_axes, unit=unit)
         output_cs = self._get_default_coordinate_system(
@@ -755,7 +755,7 @@ class Sequence(BaseTransformation):
 def _get_current_output_axes(
     transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
 ) -> tuple[ValidAxis_t, ...]:
-    if isinstance(transformation, (Identity, Translation, Scale)):
+    if isinstance(transformation, Identity | Translation | Scale):
         return input_axes
     elif isinstance(transformation, MapAxis):
         map_axis_input_axes = set(transformation.map_axis.values())

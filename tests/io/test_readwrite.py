@@ -1,7 +1,8 @@
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import dask.dataframe as dd
 import numpy as np
@@ -13,7 +14,7 @@ from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
-from spatialdata.models._utils import get_channels
+from spatialdata.models._utils import get_channel_names
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
@@ -30,8 +31,8 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
         # ensures that we are inplicitly testing the read and write of channel names
-        assert get_channels(images["image2d"]) == ["r", "g", "b"]
-        assert get_channels(images["image2d_multiscale"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d_multiscale"]) == ["r", "g", "b"]
 
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)

@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
+import dask.array as da
 import numpy as np
 import zarr
-from datatree import DataTree
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -13,11 +13,10 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _iter_multiscale,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
@@ -26,7 +25,8 @@ from spatialdata._io.format import (
     RasterFormatV01,
     _parse_version,
 )
-from spatialdata.models._utils import get_channels
+from spatialdata._utils import get_pyramid_levels
+from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -36,8 +36,8 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "labels"]) -> Union[DataArray, DataTree]:
-    assert isinstance(store, (str, Path))
+def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
+    assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
 
     f = zarr.open(store, mode="r")
@@ -81,7 +81,7 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
     # TODO: what to do with name? For now remove?
     # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
-    channels: Optional[list[Any]] = None
+    channels: list[Any] | None = None
     if raster_type == "image":
         if legacy_channels_metadata is not None:
             channels = [d["label"] for d in legacy_channels_metadata["channels"]]
@@ -92,11 +92,15 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
         multiscale_image = {}
         for i, d in enumerate(datasets):
             data = node.load(Multiscales).array(resolution=d, version=format.version)
-            multiscale_image[f"scale{i}"] = DataArray(
-                data,
-                name="image",
-                dims=axes,
-                coords={"c": channels} if channels is not None else {},
+            multiscale_image[f"scale{i}"] = Dataset(
+                {
+                    "image": DataArray(
+                        data,
+                        name="image",
+                        dims=axes,
+                        coords={"c": channels} if channels is not None else {},
+                    )
+                }
             )
         msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
@@ -114,13 +118,13 @@ def _read_multiscale(store: Union[str, Path], raster_type: Literal["image", "lab
 
 def _write_raster(
     raster_type: Literal["image", "labels"],
-    raster_data: Union[DataArray, DataTree],
+    raster_data: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    label_metadata: Optional[JSONDict] = None,
-    **metadata: Union[str, JSONDict, list[JSONDict]],
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    label_metadata: JSONDict | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     assert raster_type in ["image", "labels"]
     # the argument "name" and "label_metadata" are only used for labels (to be precise, name is used in
@@ -147,7 +151,7 @@ def _write_raster(
     # convert channel names to channel metadata in omero
     if raster_type == "image":
         metadata["metadata"] = {"omero": {"channels": []}}
-        channels = get_channels(raster_data)
+        channels = get_channel_names(raster_data)
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
@@ -180,8 +184,8 @@ def _write_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
         )
     elif isinstance(raster_data, DataTree):
-        data = _iter_multiscale(raster_data, "data")
-        list_of_input_axes: list[Any] = _iter_multiscale(raster_data, "dims")
+        data = get_pyramid_levels(raster_data, attr="data")
+        list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
         assert len(set(list_of_input_axes)) == 1
         input_axes = list_of_input_axes[0]
         # saving only the transformations of the first scale
@@ -191,11 +195,11 @@ def _write_raster(
         transformations = _get_transformations_xarray(xdata)
         assert transformations is not None
         assert len(transformations) > 0
-        chunks = _iter_multiscale(raster_data, "chunks")
-        # coords = _iter_multiscale(raster_data, "coords")
+        chunks = get_pyramid_levels(raster_data, "chunks")
+        # coords = iterate_pyramid_levels(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
-        write_multi_scale_ngff(
+        dask_delayed = write_multi_scale_ngff(
             pyramid=data,
             group=group_data,
             fmt=format,
@@ -203,7 +207,10 @@ def _write_raster(
             coordinate_transformations=None,
             storage_options=storage_options,
             **metadata,
+            compute=False,
         )
+        # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
+        da.compute(*dask_delayed)
         assert transformations is not None
         overwrite_coordinate_transformations_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=tuple(input_axes)
@@ -225,12 +232,12 @@ def _write_raster(
 
 
 def write_image(
-    image: Union[DataArray, DataTree],
+    image: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    **metadata: Union[str, JSONDict, list[JSONDict]],
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     _write_raster(
         raster_type="image",
@@ -244,12 +251,12 @@ def write_image(
 
 
 def write_labels(
-    labels: Union[DataArray, DataTree],
+    labels: DataArray | DataTree,
     group: zarr.Group,
     name: str,
     format: Format = CurrentRasterFormat(),
-    storage_options: Optional[Union[JSONDict, list[JSONDict]]] = None,
-    label_metadata: Optional[JSONDict] = None,
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    label_metadata: JSONDict | None = None,
     **metadata: JSONDict,
 ) -> None:
     _write_raster(

@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.9"
+requires-python = ">=3.10, <3.13" # include 3.13 once multiscale-spatial-image conflicts are resolved
 dynamic= [
   "version" # allow version to be set by git tags
 ]
@@ -28,8 +28,9 @@ dependencies = [
     "dask>=2024.4.1",
     "fsspec<=2023.6",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=1.0.0",
+    "multiscale_spatial_image>=2.0.2",
     "networkx",
+    "numba",
     "numpy",
     "ome_zarr>=0.8.4",
     "pandas",
@@ -38,15 +39,14 @@ dependencies = [
     "rich",
     "setuptools",
     "shapely>=2.0.1",
-    "spatial_image>=1.0.0",
+    "spatial_image>=1.1.0",
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
-    "xarray",
-    "xarray-datatree",
+    "xarray>=2024.10.0",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
-    "zarr",
+    "zarr<3",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +55,7 @@ dev = [
 ]
 docs = [
     "sphinx>=4.5",
+	"sphinx-autobuild",
     "sphinx-book-theme>=1.0.0",
     "myst-nb",
     "sphinxcontrib-bibtex>=1.0.0",
@@ -68,12 +69,14 @@ docs = [
 test = [
     "pytest",
     "pytest-cov",
+    "pytest-mock",
+    "torch",
 ]
 torch = [
     "torch"
 ]
 extra  = [
-    "napari-spatialdata[all]>=0.2.4",
+    "napari-spatialdata[all]",
     "spatialdata-plot",
     "spatialdata-io",
 ]
@@ -99,7 +102,7 @@ filterwarnings = [
 
 [tool.black]
 line-length = 120
-target-version = ['py39']
+target-version = ['py310']
 include = '\.pyi?$'
 exclude = '''
 (
@@ -144,7 +147,7 @@ exclude = [
     "setup.py",
 ]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 ignore = [
