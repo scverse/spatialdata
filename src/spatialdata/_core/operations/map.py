@@ -191,7 +191,7 @@ def _relabel(arr: da.Array) -> da.Array:
                 "      lowering the value of required shift."
                 "   2. Cast to a data type with a higher maximum value  "
                 "   3. Perform sequential relabeling of the dask array using `relabel_sequential` in `spatialdata`,"
-                "      potentially lowering the maximum value of a label (though number of distinct labels values " 
+                "      potentially lowering the maximum value of a label (though number of distinct labels values "
                 "      stays the same). For example if the unique labels values are `[0, 1, 1000]`, after the "
                 "      sequential relabeling the unique labels value will be `[0, 1, 2]`, thus requiring less bits "
                 "      to store the labels."
