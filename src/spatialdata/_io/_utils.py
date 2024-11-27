@@ -104,6 +104,27 @@ def overwrite_coordinate_transformations_raster(
     group.attrs["multiscales"] = multiscales
 
 
+def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
+    """Write channel metadata to a group."""
+    if isinstance(element, DataArray):
+        channel_names = element.coords["c"].data.tolist()
+    else:
+        channel_names = element["scale0"]["image"].coords["c"].data.tolist()
+
+    channel_metadata = [{"label": name} for name in channel_names]
+    omero_meta = group.attrs["omero"]
+    omero_meta["channels"] = channel_metadata
+    group.attrs["omero"] = omero_meta
+    multiscales_meta = group.attrs["multiscales"]
+    if len(multiscales_meta) != 1:
+        raise ValueError(
+            f"Multiscale metadata must be of length one but got length {len(multiscales_meta)}. Data might"
+            f"be corrupted."
+        )
+    multiscales_meta[0]["metadata"]["omero"]["channels"] = channel_metadata
+    group.attrs["multiscales"] = multiscales_meta
+
+
 def _write_metadata(
     group: zarr.Group,
     group_type: str,

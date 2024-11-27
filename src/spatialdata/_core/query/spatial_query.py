@@ -33,6 +33,7 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
@@ -712,9 +713,13 @@ def _(
                 points_df = p.compute().iloc[bounding_box_indices]
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
+                feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+
                 output.append(
                     PointsModel.parse(
-                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                        dd.from_pandas(points_df, npartitions=1),
+                        transformations=old_transformations.copy(),
+                        feature_key=feature_key,
                     )
                 )
     if len(output) == 0:
@@ -925,10 +930,11 @@ def _(
     queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
+    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)

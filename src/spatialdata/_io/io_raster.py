@@ -26,7 +26,7 @@ from spatialdata._io.format import (
     _parse_version,
 )
 from spatialdata._utils import get_pyramid_levels
-from spatialdata.models._utils import get_channels
+from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -151,7 +151,7 @@ def _write_raster(
     # convert channel names to channel metadata in omero
     if raster_type == "image":
         metadata["metadata"] = {"omero": {"channels": []}}
-        channels = get_channels(raster_data)
+        channels = get_channel_names(raster_data)
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
