@@ -1,10 +1,12 @@
+import math
 import re
 
+import dask.array as da
 import numpy as np
 import pytest
 from xarray import DataArray
 
-from spatialdata._core.operations.map import map_raster
+from spatialdata._core.operations.map import map_raster, relabel_sequential
 from spatialdata.transformations import Translation, get_transformation, set_transformation
 
 
@@ -28,6 +30,11 @@ def _multiply_to_labels(arr, parameter=10):
     return arr[0].astype(np.int32)
 
 
+def _to_constant(arr, constant):
+    arr[arr > 0] = constant
+    return arr
+
+
 @pytest.mark.parametrize(
     "depth",
     [
@@ -47,6 +54,7 @@ def test_map_raster(sdata_blobs, depth, element_name):
         func_kwargs=func_kwargs,
         c_coords=None,
         depth=depth,
+        relabel=False,
     )
 
     assert isinstance(se, DataArray)
@@ -162,6 +170,7 @@ def test_map_to_labels_(sdata_blobs, blockwise, chunks, drop_axis):
         chunks=chunks,
         drop_axis=drop_axis,
         dims=("y", "x"),
+        relabel=False,
     )
 
     data = sdata_blobs[img_layer].data.compute()
@@ -249,3 +258,117 @@ def test_invalid_map_raster(sdata_blobs):
             c_coords=["c"],
             depth=(0, 60, 60),
         )
+
+
+def test_map_raster_relabel(sdata_blobs):
+    constant = 2047
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+    se = map_raster(
+        sdata_blobs[element_name].chunk((100, 100)),
+        func=_to_constant,
+        func_kwargs=func_kwargs,
+        c_coords=None,
+        depth=None,
+        relabel=True,
+    )
+
+    # check if labels in different blocks are all mapped to a different value
+    assert isinstance(se, DataArray)
+    se.data.compute()
+    a = set()
+    for chunk in se.data.to_delayed().flatten():
+        chunk = chunk.compute()
+        b = set(np.unique(chunk))
+        b.remove(0)
+        assert not b.intersection(a)
+        a.update(b)
+    # 9 blocks, each block contains 'constant' left shifted by (9-1).bit_length() + block_num.
+    shift = (math.prod(se.data.numblocks) - 1).bit_length()
+    assert a == set(range(constant << shift, (constant << shift) + math.prod(se.data.numblocks)))
+
+
+def test_map_raster_relabel_fail(sdata_blobs):
+    constant = 2048
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+
+    # Testing the case of having insufficient number of bits.
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Relabel was set to True, but"),
+    ):
+        se = map_raster(
+            sdata_blobs[element_name].chunk((100, 100)),
+            func=_to_constant,
+            func_kwargs=func_kwargs,
+            c_coords=None,
+            depth=None,
+            relabel=True,
+        )
+
+        se.data.compute()
+
+    constant = 2047
+    func_kwargs = {"constant": constant}
+
+    element_name = "blobs_labels"
+    with pytest.raises(
+        ValueError,
+        match=re.escape(f"Relabeling is only supported for arrays of type {np.integer}."),
+    ):
+        se = map_raster(
+            sdata_blobs[element_name].astype(float).chunk((100, 100)),
+            func=_to_constant,
+            func_kwargs=func_kwargs,
+            c_coords=None,
+            depth=None,
+            relabel=True,
+        )
+
+
+def test_relabel_sequential(sdata_blobs):
+    def _is_sequential(arr):
+        if arr.ndim != 1:
+            raise ValueError("Input array must be one-dimensional")
+        sorted_arr = np.sort(arr)
+        expected_sequence = np.arange(sorted_arr[0], sorted_arr[0] + len(sorted_arr))
+        return np.array_equal(sorted_arr, expected_sequence)
+
+    arr = sdata_blobs["blobs_labels"].data.rechunk(100)
+
+    arr_relabeled = relabel_sequential(arr)
+
+    labels_relabeled = da.unique(arr_relabeled).compute()
+    labels_original = da.unique(arr).compute()
+
+    assert labels_relabeled.shape == labels_original.shape
+    assert _is_sequential(labels_relabeled)
+
+    # test some edge cases
+    arr = da.asarray(np.array([0]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([0]))
+
+    arr = da.asarray(np.array([1]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1]))
+
+    arr = da.asarray(np.array([2]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1]))
+
+    arr = da.asarray(np.array([2, 0]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1, 0]))
+
+    arr = da.asarray(np.array([0, 9, 5]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([0, 2, 1]))
+
+    arr = da.asarray(np.array([4, 1, 3]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([3, 1, 2]))
+
+
+def test_relabel_sequential_fails(sdata_blobs):
+    with pytest.raises(
+        ValueError, match=re.escape(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
+    ):
+        relabel_sequential(sdata_blobs["blobs_labels"].data.astype(float))
