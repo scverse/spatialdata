@@ -190,8 +190,9 @@ def _relabel(arr: da.Array) -> da.Array:
                 "   1. Rechunking using a larger chunk size, lowering the number of blocks and thereby"
                 "      lowering the value of required shift."
                 "   2. Cast to a data type with a higher maximum value  "
-                "   3. Perform sequential relabeling of the dask array, potentially lowering the total "
-                "      number of labels."
+                "   3. Perform sequential relabeling of the dask array using `relabel_sequential` in `spatialdata`,"
+                "      potentially lowering the total number of labels (though number of cells / entities stays the "
+                "      same)."
             )
 
         block_num = _calculate_block_num(block_id=block_id, num_blocks=num_blocks)
@@ -216,10 +217,10 @@ def relabel_sequential(arr: da.Array) -> da.Array:
     Relabels integers in a Dask array sequentially.
 
     This function assigns sequential labels to the integers in a Dask array starting from 1.
-    For example, if the unique values in the input array are [0, 5, 9],
+    For example, if the unique values in the input array are [0, 9, 5],
     they will be relabeled to [0, 1, 2] respectively.
-    Note that currently the labels are not harmonized across the individual blocks in the dask
-    array, see discussion https://github.com/scverse/spatialdata/pull/664.
+    Note that currently if a cell or entity to be labeled is split across adjacent chunks the same label is not
+    assigned to the cell across blocks. See discussion https://github.com/scverse/spatialdata/pull/664.
 
     Parameters
     ----------
@@ -232,6 +233,7 @@ def relabel_sequential(arr: da.Array) -> da.Array:
     """
     if not np.issubdtype(arr.dtype, np.integer):
         raise ValueError(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
+
     unique_labels = da.unique(arr).compute()
     if 0 not in unique_labels:
         # otherwise first non zero label would be relabeled to 0
@@ -241,6 +243,7 @@ def relabel_sequential(arr: da.Array) -> da.Array:
 
     new_labeling = da.full(max_label + 1, -1, dtype=arr.dtype)
 
+    # Note that both sides are ordered as da.unique returns an ordered array.
     new_labeling[unique_labels] = da.arange(len(unique_labels), dtype=arr.dtype)
 
     return da.map_blocks(operator.getitem, new_labeling, arr, dtype=arr.dtype, chunks=arr.chunks)
