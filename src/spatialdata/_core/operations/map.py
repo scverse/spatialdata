@@ -78,7 +78,7 @@ def map_raster(
         Whether to relabel the blocks of the output data.
         This option is ignored when the output data is not a labels layer (i.e., when `dims` does not contain `c`).
         It is recommended to enable relabeling if `func` returns labels that are not unique across chunks.
-        Relabeling will be done by performing a bit shift. Current implementation does not harmonize 
+        Relabeling will be done by performing a bit shift. Current implementation does not harmonize
         labels across blocks, see https://github.com/scverse/spatialdata/pull/664 for discussion.
     kwargs
         Additional keyword arguments to pass to :func:`dask.array.map_overlap` or :func:`dask.array.map_blocks`.
