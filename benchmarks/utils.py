@@ -1,4 +1,22 @@
 # type: ignore
+"""
+This utility module contains functions that are used in the benchmarks.
+
+Functions that make running and debugging benchmarks easier:
+- class Skip is used to skip benchmarks based on environment variables.
+- function run_benchmark_from_module is used to run benchmarks from a module.
+- function run_benchmark is used to run the benchmarks.
+
+Performant dataset generation functions so the benchmarks run fast even for large artificial datasets.
+By copying the same cell values instead of doing gaussian blur on the whole image, we can generate the same dataset in a fraction of the time.
+- function labeled_particles is used to generate labeled blobs.
+- function _generate_ball is used to generate a ball of given radius and dimension.
+- function _generate_density is used to generate gaussian density of given radius and dimension.
+- function cluster_blobs is used to generate a SpatialData object with blobs.
+- function _structure_at_coordinates is used to update data with structure at given coordinates.
+- function _get_slices_at is used to get slices at a given point.
+- function _update_data_with_mask is used to update data with struct where struct is nonzero.
+"""
 
 import itertools
 import os
@@ -262,6 +280,7 @@ def run_benchmark():
     run_benchmark_from_module(call_module, *benchmark_selection)
 
 
+# TODO: merge functionality of this cluster_blobs with the one in SpatialData https://github.com/scverse/spatialdata/issues/796
 @lru_cache
 def cluster_blobs(
     length=512,
@@ -329,8 +348,3 @@ def cluster_blobs(
     #     sdata[shapes_name] = sd.to_circles(sdata[labels_name])
     # add_regionprop_features(sdata, labels_layer=labels_name, table_layer=table_name)
     return sdata
-
-
-if __name__ == "__main__":
-    sdata = cluster_blobs(1_000)
-    print(sdata)

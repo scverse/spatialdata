@@ -73,17 +73,3 @@ class TimeQueries:
             target_coordinate_system="global",
             filter_table=filter_table,
         )
-
-
-if __name__ == "__main__":
-    length = 1_000
-    sdata = cluster_blobs(length)
-    # sdata.write("tmp_test")
-    sdata.query.bounding_box(
-        axes=["x", "y"],
-        min_coordinate=[0, 0],
-        max_coordinate=[length // 2, length // 2],
-        target_coordinate_system="global",
-        filter_table=True,
-    )
-    print(sdata)
