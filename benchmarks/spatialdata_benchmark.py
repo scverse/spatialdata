@@ -45,7 +45,7 @@ class TimeMapRaster:
 
 class TimeQueries:
 
-    params = ([100, 1000, 10_000], [True, False], [100, 10_000])
+    params = ([100, 1_000, 10_000], [True, False], [100, 1_000])
     param_names = ["length", "filter_table", "n_transcripts_per_cell"]
 
     def setup(self, length, filter_table, n_transcripts_per_cell):
