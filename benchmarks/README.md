@@ -14,7 +14,7 @@ pip install -e '.[docs,test,benchmark]'
 
 ## Usage
 
-Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interesting by providing a regex pattern `-b` or `--bench` that links to a function or class method e.g. the option `-b timeraw_import_inspect` selects the function `timeraw_import_inspect` in `benchmarks/spatialdata_benchmark.py`. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
+Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method e.g. the option `-b timeraw_import_inspect` selects the function `timeraw_import_inspect` in `benchmarks/spatialdata_benchmark.py`. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
 
 Importing the SpatialData library can take around 4 seconds:
 

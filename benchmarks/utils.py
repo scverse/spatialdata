@@ -8,7 +8,8 @@ Functions that make running and debugging benchmarks easier:
 - function run_benchmark is used to run the benchmarks.
 
 Performant dataset generation functions so the benchmarks run fast even for large artificial datasets.
-By copying the same cell values instead of doing gaussian blur on the whole image, we can generate the same dataset in a fraction of the time.
+The object is to generate a dataset containing many cells. By copying the same cell values instead of 
+doing gaussian blur on the whole image, we can generate the same dataset in a fraction of the time.
 - function labeled_particles is used to generate labeled blobs.
 - function _generate_ball is used to generate a ball of given radius and dimension.
 - function _generate_density is used to generate gaussian density of given radius and dimension.
