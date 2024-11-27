@@ -29,6 +29,7 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, MapAxis, set_transformation
 from tests.conftest import _make_points, _make_squares
@@ -204,6 +205,21 @@ def test_query_points(is_3d: bool, is_bb_3d: bool, with_polygon_query: bool, mul
     np.testing.assert_allclose(points_element["y"].compute(), original_y)
     if is_3d:
         np.testing.assert_allclose(points_element["z"].compute(), original_z)
+
+    # the feature_key should be preserved
+    if not multiple_boxes:
+        assert (
+            points_result.attrs[ATTRS_KEY][PointsModel.FEATURE_KEY]
+            == points_element.attrs[ATTRS_KEY][PointsModel.FEATURE_KEY]
+        )
+    else:
+        for result in points_result:
+            if result is None:
+                continue
+            assert (
+                result.attrs[ATTRS_KEY][PointsModel.FEATURE_KEY]
+                == points_element.attrs[ATTRS_KEY][PointsModel.FEATURE_KEY]
+            )
 
 
 def test_query_points_no_points():
