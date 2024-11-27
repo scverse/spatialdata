@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from xarray import DataArray
 
-from spatialdata._core.operations.map import _relabel_sequential, map_raster
+from spatialdata._core.operations.map import map_raster, relabel_sequential
 from spatialdata.transformations import Translation, get_transformation, set_transformation
 
 
@@ -338,7 +338,7 @@ def test_relabel_sequential(sdata_blobs):
 
     arr = sdata_blobs["blobs_labels"].data.rechunk(100)
 
-    arr_relabeled = _relabel_sequential(arr)
+    arr_relabeled = relabel_sequential(arr)
 
     labels_relabeled = da.unique(arr_relabeled).compute()
     labels_original = da.unique(arr).compute()
@@ -348,20 +348,20 @@ def test_relabel_sequential(sdata_blobs):
 
     # test some edge cases
     arr = da.asarray(np.array([0]))
-    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([0]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([0]))
 
     arr = da.asarray(np.array([1]))
-    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1]))
 
     arr = da.asarray(np.array([2]))
-    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1]))
 
     arr = da.asarray(np.array([2, 0]))
-    assert np.array_equal(_relabel_sequential(arr).compute(), np.array([1, 0]))
+    assert np.array_equal(relabel_sequential(arr).compute(), np.array([1, 0]))
 
 
 def test_relabel_sequential_fails(sdata_blobs):
     with pytest.raises(
         ValueError, match=re.escape(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
     ):
-        _relabel_sequential(sdata_blobs["blobs_labels"].data.astype(float))
+        relabel_sequential(sdata_blobs["blobs_labels"].data.astype(float))
