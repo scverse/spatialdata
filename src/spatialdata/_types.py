@@ -11,6 +11,7 @@ try:
 
 except (ImportError, TypeError):
     ArrayLike = np.ndarray  # type: ignore[misc]
+    IntArray = np.ndarray  # type: ignore[misc]
     DTypeLike = np.dtype  # type: ignore[misc, assignment]
 
 Raster_T = DataArray | DataTree
