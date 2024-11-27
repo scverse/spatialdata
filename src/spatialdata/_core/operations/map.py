@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import math
+import operator
 from collections.abc import Callable, Iterable, Mapping
+from functools import reduce
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +12,7 @@ import numpy as np
 from dask.array.overlap import coerce_depth
 from xarray import DataArray, DataTree
 
+from spatialdata._types import IntArray
 from spatialdata.models._utils import get_axes_names, get_channel_names, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
 
