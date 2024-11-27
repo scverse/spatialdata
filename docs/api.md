@@ -41,6 +41,7 @@ Operations on `SpatialData` objects.
     to_polygons
     aggregate
     map_raster
+    relabel_sequential
 ```
 
 ### Operations Utilities

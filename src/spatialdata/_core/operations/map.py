@@ -16,7 +16,7 @@ from spatialdata._types import IntArray
 from spatialdata.models._utils import get_axes_names, get_channel_names, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
 
-__all__ = ["map_raster"]
+__all__ = ["map_raster", "relabel_sequential"]
 
 
 def map_raster(
@@ -210,13 +210,15 @@ def _relabel(arr: da.Array) -> da.Array:
     )
 
 
-def _relabel_sequential(arr: da.Array) -> da.Array:
+def relabel_sequential(arr: da.Array) -> da.Array:
     """
     Relabels integers in a Dask array sequentially.
 
     This function assigns sequential labels to the integers in a Dask array starting from 1.
     For example, if the unique values in the input array are [0, 5, 9],
     they will be relabeled to [0, 1, 2] respectively.
+    Note that currently the labels are not harmonized across the individual blocks in the dask
+    array, see discussion https://github.com/scverse/spatialdata/pull/664.
 
     Parameters
     ----------
