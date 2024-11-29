@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning][].
 -   Circles validation now checks for inf or nan radii #653
 -   Bug with table name in torch dataset #654 @LLehner
 
+-   Added `SpatialData.filter()` method for subsetting by `obs` and `var` @aeisenbarth
+
 ## [0.2.1] - 2024-07-04
 
 ### Minor
