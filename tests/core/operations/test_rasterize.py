@@ -205,7 +205,7 @@ def test_rasterize_shapes():
     )
     adata.obs["cat_values"] = adata.obs["cat_values"].astype("category")
     adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
-    sdata = SpatialData.init_from_elements({element_name: gdf[["geometry"]]}, table=adata)
+    sdata = SpatialData.init_from_elements({element_name: gdf[["geometry"]], "table": adata})
 
     def _rasterize(element: GeoDataFrame, **kwargs) -> SpatialImage:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
@@ -320,7 +320,7 @@ def test_rasterize_points():
     )
     adata.obs["gene"] = adata.obs["gene"].astype("category")
     adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
-    sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]]}, table=adata)
+    sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]], "table": adata})
 
     def _rasterize(element: DaskDataFrame, **kwargs) -> SpatialImage:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)

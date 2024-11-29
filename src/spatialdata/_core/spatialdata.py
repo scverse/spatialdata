@@ -218,7 +218,9 @@ class SpatialData:
                         )
 
     @staticmethod
-    def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
+    def from_elements_dict(
+        elements_dict: dict[str, SpatialElement | AnnData], attrs: Mapping[Any, Any] | None = None
+    ) -> SpatialData:
         """
         Create a SpatialData object from a dict of elements.
 
@@ -227,38 +229,20 @@ class SpatialData:
         elements_dict
             Dict of elements. The keys are the names of the elements and the values are the elements.
             A table can be present in the dict, but only at most one; its name is not used and can be anything.
+        attrs
+            Additional attributes to store in the SpatialData object.
 
         Returns
         -------
         The SpatialData object.
         """
-        d: dict[str, dict[str, SpatialElement] | AnnData | None] = {
-            "images": {},
-            "labels": {},
-            "points": {},
-            "shapes": {},
-            "tables": {},
-        }
-        for k, e in elements_dict.items():
-            schema = get_model(e)
-            if schema in (Image2DModel, Image3DModel):
-                assert isinstance(d["images"], dict)
-                d["images"][k] = e
-            elif schema in (Labels2DModel, Labels3DModel):
-                assert isinstance(d["labels"], dict)
-                d["labels"][k] = e
-            elif schema == PointsModel:
-                assert isinstance(d["points"], dict)
-                d["points"][k] = e
-            elif schema == ShapesModel:
-                assert isinstance(d["shapes"], dict)
-                d["shapes"][k] = e
-            elif schema == TableModel:
-                assert isinstance(d["tables"], dict)
-                d["tables"][k] = e
-            else:
-                raise ValueError(f"Unknown schema {schema}")
-        return SpatialData(**d)  # type: ignore[arg-type]
+        warnings.warn(
+            'This method is deprecated and will be removed in a future release. Use "SpatialData.init_from_elements('
+            ')" instead. For the momment, such methods will be automatically called.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SpatialData.init_from_elements(elements=elements_dict, attrs=attrs)
 
     @staticmethod
     def get_annotated_regions(table: AnnData) -> str | list[str]:
@@ -2130,9 +2114,11 @@ class SpatialData:
         return found[0]
 
     @classmethod
-    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
-        cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
+        cls,
+        elements: dict[str, SpatialElement],
+        tables: AnnData | dict[str, AnnData] | None = None,
+        attrs: Mapping[Any, Any] | None = None,
     ) -> SpatialData:
         """
         Create a SpatialData object from a dict of named elements and an optional table.
@@ -2143,6 +2129,8 @@ class SpatialData:
             A dict of named elements.
         tables
             An optional table or dictionary of tables
+        attrs
+            Additional attributes to store in the SpatialData object.
 
         Returns
         -------
@@ -2157,11 +2145,33 @@ class SpatialData:
                 element_type = "labels"
             elif model == PointsModel:
                 element_type = "points"
+            elif model == TableModel:
+                element_type = "tables"
             else:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        return cls(**elements_dict, tables=tables)
+        # when the "tables" argument is removed, we can remove all this if block
+        if tables is not None:
+            warnings.warn(
+                'The "tables" argument is deprecated and will be removed in a future version. Please '
+                "specifies the tables in the `elements` argument. Until the removal occurs, the `elements` "
+                "variable will be automatically populated with the tables if the `tables` argument is not None.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if "tables" in elements_dict:
+                raise ValueError(
+                    "The tables key is already present in the elements dictionary. Please do not specify "
+                    "the `tables` argument."
+                )
+            elements_dict["tables"] = {}
+            if isinstance(tables, AnnData):
+                elements_dict["tables"]["table"] = tables
+            else:
+                for name, table in tables.items():
+                    elements_dict["tables"][name] = table
+        return cls(**elements_dict)
 
     def subset(
         self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
