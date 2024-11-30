@@ -581,6 +581,30 @@ def test_incremental_io_valid_name(points: SpatialData) -> None:
     _check_valid_name(points.delete_element_from_disk)
 
 
+def test_incremental_io_attrs(points: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        my_attrs = {"a": "b", "c": 1}
+        points.attrs = my_attrs
+        points.write(f)
+
+        # test that the attributes are written to disk
+        sdata = SpatialData.read(f)
+        assert sdata.attrs == my_attrs
+
+        # test incremental io attrs (write_attrs())
+        sdata.attrs["c"] = 2
+        sdata.write_attrs()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 2
+
+        # test incremental io attrs (write_metadata())
+        sdata.attrs["c"] = 3
+        sdata.write_metadata()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 3
+
+
 cached_sdata_blobs = blobs()
 
 

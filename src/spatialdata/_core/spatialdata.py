@@ -132,7 +132,7 @@ class SpatialData:
         self._points: Points = Points(shared_keys=self._shared_keys)
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
-        self._attrs: dict[Any, Any] = dict(attrs) if attrs else {}
+        self.attrs = attrs if attrs else {}  # type: ignore[assignment]
 
         # Workaround to allow for backward compatibility
         if isinstance(tables, AnnData):
@@ -1570,13 +1570,13 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_attrs(self, overwrite: bool = True, zarr_group: zarr.Group | None = None) -> None:
+    def write_attrs(self, zarr_group: zarr.Group | None = None) -> None:
         store = None
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="w").store
-            zarr_group = zarr.group(store=store, overwrite=overwrite)
+            store = parse_url(self.path, mode="r+").store
+            zarr_group = zarr.group(store=store, overwrite=False)
 
         try:
             zarr_group.attrs.put(self.attrs)
@@ -2171,7 +2171,7 @@ class SpatialData:
             else:
                 for name, table in tables.items():
                     elements_dict["tables"][name] = table
-        return cls(**elements_dict)
+        return cls(**elements_dict, attrs=attrs)
 
     def subset(
         self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
@@ -2299,7 +2299,14 @@ class SpatialData:
 
     @attrs.setter
     def attrs(self, value: Mapping[Any, Any]) -> None:
-        self._attrs = dict(value)
+        if isinstance(value, dict):
+            # even if we call dict(value), we still get a shallow copy. For example, dict({'a': {'b': 1}}) will return
+            # a new dict, {'b': 1} is passed by reference. For this reason, we just pass .attrs by reference, which is
+            # more performant. The user can always use copy.deepcopy(sdata.attrs), or spatialdata.deepcopy(sdata), to
+            # get the attrs deepcopied.
+            self._attrs = value
+        else:
+            self._attrs = dict(value)
 
 
 class QueryManager:
