@@ -141,8 +141,8 @@ def read_zarr(store: str | Path | zarr.Group, selection: None | tuple[str] = Non
     # read attrs metadata
     attrs = f.attrs.asdict()
     if "spatialdata_attrs" in attrs:
-        # no need to call for SpatialDataContainerFormatV01.attrs_to_dict since currently we do not save any root-level
-        # metadata
+        # when refactoring the read_zarr function into reading componenets separately (and according to the version),
+        # we can move the code below (.pop()) into attrs_from_dict()
         attrs.pop("spatialdata_attrs")
     else:
         attrs = None

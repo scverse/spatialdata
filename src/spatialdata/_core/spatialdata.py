@@ -1583,9 +1583,8 @@ class SpatialData:
             zarr_group = zarr.group(store=store, overwrite=False)
 
         version = parsed["SpatialData"].spatialdata_format_version
-        # we currently do not save any specific root level metadata, so we don't need to call
-        # parsed['SpatialData'].dict_to_attrs()
-        attrs_to_write = {"spatialdata_attrs": {"version": version}} | self.attrs
+        version_specific_attrs = parsed["SpatialData"].attrs_to_dict()
+        attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
 
         try:
             zarr_group.attrs.put(attrs_to_write)

@@ -53,9 +53,13 @@ class SpatialDataContainerFormatV01(SpatialDataFormat):
     def spatialdata_format_version(self) -> str:
         return "0.1"
 
-    # no need for attrs_from_dict as we are not saving specific metadata at the root level
-    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, str | dict[str, Any]]:
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
         return {}
+
+    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
+        from spatialdata import __version__
+
+        return {"spatialdata_software_version": __version__}
 
 
 class RasterFormatV01(SpatialDataFormat):
