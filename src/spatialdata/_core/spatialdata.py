@@ -1570,7 +1570,11 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_attrs(self, zarr_group: zarr.Group | None = None) -> None:
+    def write_attrs(self, format: SpatialDataFormat | None = None, zarr_group: zarr.Group | None = None) -> None:
+        from spatialdata._io.format import _parse_formats
+
+        parsed = _parse_formats(formats=format)
+
         store = None
 
         if zarr_group is None:
@@ -1578,8 +1582,13 @@ class SpatialData:
             store = parse_url(self.path, mode="r+").store
             zarr_group = zarr.group(store=store, overwrite=False)
 
+        version = parsed["SpatialData"].spatialdata_format_version
+        # we currently do not save any specific root level metadata, so we don't need to call
+        # parsed['SpatialData'].dict_to_attrs()
+        attrs_to_write = {"spatialdata_attrs": {"version": version}} | self.attrs
+
         try:
-            zarr_group.attrs.put(self.attrs)
+            zarr_group.attrs.put(attrs_to_write)
         except TypeError as e:
             raise TypeError("Invalid attribute in SpatialData.attrs") from e
 
@@ -2294,11 +2303,34 @@ class SpatialData:
 
     @property
     def attrs(self) -> dict[Any, Any]:
-        """Dictionary of global attributes on this SpatialData object."""
+        """
+        Dictionary of global attributes on this SpatialData object.
+
+        Notes
+        -----
+        Operations on SpatialData objects such as `subset()`, `query()`, ..., will pass the `.attrs` by
+        reference. If you want to modify the `.attrs` without affecting the original object, you should
+        either use `copy.deepcopy(sdata.attrs)` or eventually copy the SpatialData object using
+        `spatialdata.deepcopy()`.
+        """
         return self._attrs
 
     @attrs.setter
     def attrs(self, value: Mapping[Any, Any]) -> None:
+        """
+        Set the global attributes on this SpatialData object.
+
+        Parameters
+        ----------
+        value
+            The new attributes to set.
+
+        Notes
+        -----
+        If a dict is passed, the attrs will be passed by reference, else if a mapping is passed,
+        the mapping will be casted to a dict (shallow copy), i.e. if the mapping contains a dict inside,
+        that dict will be passed by reference.
+        """
         if isinstance(value, dict):
             # even if we call dict(value), we still get a shallow copy. For example, dict({'a': {'b': 1}}) will return
             # a new dict, {'b': 1} is passed by reference. For this reason, we just pass .attrs by reference, which is

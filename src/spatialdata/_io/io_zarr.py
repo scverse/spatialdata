@@ -138,13 +138,22 @@ def read_zarr(store: str | Path | zarr.Group, selection: None | tuple[str] = Non
 
         logger.debug(f"Found {count} elements in {group}")
 
+    # read attrs metadata
+    attrs = f.attrs.asdict()
+    if "spatialdata_attrs" in attrs:
+        # no need to call for SpatialDataContainerFormatV01.attrs_to_dict since currently we do not save any root-level
+        # metadata
+        attrs.pop("spatialdata_attrs")
+    else:
+        attrs = None
+
     sdata = SpatialData(
         images=images,
         labels=labels,
         points=points,
         shapes=shapes,
         tables=tables,
-        attrs=f.attrs.asdict(),
+        attrs=attrs,
     )
     sdata.path = Path(store)
     return sdata
