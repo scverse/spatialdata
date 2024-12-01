@@ -299,7 +299,7 @@ def _(
             new_elements[element_type][k] = transform(
                 v, transformation, to_coordinate_system=to_coordinate_system, maintain_positioning=maintain_positioning
             )
-    return SpatialData(**new_elements)
+    return SpatialData(**new_elements, attrs=data.attrs)
 
 
 @transform.register(DataArray)
