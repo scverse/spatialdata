@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning][].
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
+## Incoming release
+
+### Major
+
+-   Added attributes at the SpatialData object level (`.attrs`)
+
 ## [0.2.6] - 2024-11-26
 
 ### Added
@@ -50,10 +56,6 @@ and this project adheres to [Semantic Versioning][].
 -   Improved performance of writing images with multiscales #577
 
 ## [0.2.3] - 2024-09-25
-
-### Major
-
--   Added attributes at the SpatialData object level (`.attrs`)
 
 ### Minor
 
