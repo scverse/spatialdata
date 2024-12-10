@@ -1647,7 +1647,7 @@ class SpatialData:
         self,
         key: str,
         return_as: Literal["dict", "json", "df"] | None = None,
-        sep_for_nested_keys: str = "_",
+        sep: str = "_",
         flatten: bool = True,
     ) -> dict[str, Any] | str | pd.DataFrame:
         """
@@ -1660,7 +1660,7 @@ class SpatialData:
         return_as
             The format to return the data. Options are 'dict', 'json', 'df'.
             If None, the function infers the format based on the data type.
-        sep_for_nested_keys : str, optional
+        sep : str, optional
             Separator for nested keys in flattened data, by default "_".
         flatten
             If True, flatten the data if it is a mapping.
@@ -1681,7 +1681,7 @@ class SpatialData:
         if not isinstance(key, str):
             raise TypeError("The key must be a string.")
 
-        if not isinstance(sep_for_nested_keys, str):
+        if not isinstance(sep, str):
             raise TypeError("Parameter 'sep_for_nested_keys' must be a string.")
 
         if key not in self.attrs:
@@ -1691,7 +1691,7 @@ class SpatialData:
 
         # If the data is a mapping, flatten it
         if flatten and isinstance(data, Mapping):
-            data = _flatten_mapping(data, sep=sep_for_nested_keys)
+            data = _flatten_mapping(data, sep=sep)
 
         if return_as is None:
             return data
