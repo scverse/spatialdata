@@ -519,7 +519,7 @@ class Affine(BaseTransformation):
         assert self.matrix.dtype == float
         if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
             raise ValueError("Invalid shape for affine matrix.")
-        if not np.array_equal(self.matrix[-1, :-1], np.zeros(len(input_axes))):
+        if not np.allclose(self.matrix[-1, :-1], np.zeros(len(input_axes))):
             raise ValueError("Affine matrix must be homogeneous.")
         assert self.matrix[-1, -1] == 1.0
 
