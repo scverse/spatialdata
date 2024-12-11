@@ -1709,7 +1709,7 @@ class SpatialData:
 
         if return_as == "df":
             try:
-                return pd.DataFrame([data]).T
+                return pd.DataFrame([data])
             except Exception as e:
                 raise ValueError(f"Failed to convert data to DataFrame: {e}") from e
 
