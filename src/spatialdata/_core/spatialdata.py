@@ -1656,11 +1656,12 @@ class SpatialData:
         return self._tables
 
     @tables.setter
-    def tables(self, shapes: dict[str, GeoDataFrame]) -> None:
+    def tables(self, tables: dict[str, AnnData]) -> None:
         """Set tables."""
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
-        for k, v in shapes.items():
+        for k, v in tables.items():
+            TableModel().validate(v)
             self._tables[k] = v
 
     @property
