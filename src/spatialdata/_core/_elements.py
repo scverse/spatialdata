@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import UserDict
-from collections.abc import Iterable, KeysView
+from collections.abc import Iterable, KeysView, ValuesView
 from typing import Any
 from warnings import warn
 
@@ -59,6 +59,10 @@ class Elements(UserDict[str, Any]):
     def keys(self) -> KeysView[str]:
         """Return the keys of the Elements."""
         return self.data.keys()
+
+    def values(self) -> ValuesView[Any]:
+        """Return the values of the Elements."""
+        return self.data.values()
 
 
 class Images(Elements):
