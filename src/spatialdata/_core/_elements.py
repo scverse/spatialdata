@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import UserDict
-from collections.abc import Iterable
+from collections.abc import Iterable, KeysView
 from typing import Any
 from warnings import warn
 
@@ -55,6 +55,10 @@ class Elements(UserDict[str, Any]):
     def __delitem__(self, key: str) -> None:
         self._shared_keys.remove(key)
         super().__delitem__(key)
+
+    def keys(self) -> KeysView[str]:
+        """Return the keys of the Elements."""
+        return self.data.keys()
 
 
 class Images(Elements):
