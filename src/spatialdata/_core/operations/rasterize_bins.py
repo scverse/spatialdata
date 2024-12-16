@@ -15,7 +15,7 @@ from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._types import ArrayLike
-from spatialdata.models import Image2DModel, get_table_keys
+from spatialdata.models import Image2DModel, Labels2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
 RNG = default_rng(0)
@@ -32,6 +32,7 @@ def rasterize_bins(
     col_key: str,
     row_key: str,
     value_key: str | list[str] | None = None,
+    return_region_as_labels: bool = False,
 ) -> DataArray:
     """
     Rasterizes grid-like binned shapes/points annotated by a table (e.g. Visium HD data).
@@ -51,6 +52,13 @@ def rasterize_bins(
     value_key
         The key(s) (obs columns/var names) in the table that will be used to rasterize the bins.
         If `None`, all the var names will be used, and the returned object will be lazily constructed.
+        Ignored if `return_region_as_labels` is `True`.
+    return_regions_as_labels
+        If `True` this function returns a lazy spatial image of shape `(c, y, x)` with dimension of `c` equal to
+        the number of key(s) specified in `value_key`,
+        or the number of var names in `table_name` if `value_key` is None.
+        If `False`, will return labels of shape `(y,x)`,
+        which will be the raster equivalent of bins specified in `bins`.
 
     Returns
     -------
@@ -91,63 +99,6 @@ def rasterize_bins(
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
 
-    keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
-
-    if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
-        table.X, csc_matrix | np.ndarray
-    ):
-        raise ValueError(
-            "To speed up bins rasterization, the X matrix in the table, when sparse, should be a csc_matrix matrix. "
-            "This can be done by calling `table.X = table.X.tocsc()`.",
-        )
-    sparse_matrix = isinstance(table.X, csc_matrix)
-    if isinstance(value_key, str):
-        value_key = [value_key]
-
-    if value_key is None:
-        dtype = table.X.dtype
-    else:
-        values = get_values(value_key=value_key, element=table)
-        assert isinstance(values, pd.DataFrame)
-        dtype = values[value_key[0]].dtype
-
-    if value_key is None:
-        shape = (n_rows, n_cols)
-
-        def channel_rasterization(block_id: tuple[int, int, int] | None) -> ArrayLike:
-
-            image: ArrayLike = np.zeros((1, *shape), dtype=dtype)
-
-            if block_id is None:
-                return image
-
-            col = table.X[:, block_id[0]]
-            if sparse_matrix:
-                bins_indices, data = col.indices, col.data
-                image[0, y[bins_indices], x[bins_indices]] = data
-            else:
-                image[0, y, x] = col
-            return image
-
-        image = da.map_blocks(
-            channel_rasterization,
-            chunks=((1,) * len(keys), *shape),
-            dtype=np.uint32,
-        )
-    else:
-        image = np.zeros((len(value_key), n_rows, n_cols))
-
-        if keys[0] in table.obs:
-            image[:, y, x] = table.obs[keys].values.T
-        else:
-            for i, key in enumerate(keys):
-                key_index = table.var_names.get_loc(key)
-                if sparse_matrix:
-                    bins_indices = table.X[:, key_index].indices
-                    image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
-                else:
-                    image[i, y, x] = table.X[:, key_index]
-
     # get the transformation
     if table.n_obs < 6:
         raise ValueError("At least 6 bins are needed to estimate the transformation.")
@@ -186,4 +137,84 @@ def rasterize_bins(
 
     transformations = {cs: to_bins.compose_with(t) for cs, t in bins_transformations.items()}
 
+    if return_region_as_labels:
+        dtype = _get_uint_dtype(table.obs[instance_key].max())
+        labels_element = np.zeros((n_rows, n_cols), dtype=dtype)
+        # make labels layer that can visualy represent the cells
+        labels_element[y, x] = table.obs[instance_key].values.T
+
+        return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
+
+    keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
+
+    if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
+        table.X, csc_matrix | np.ndarray
+    ):
+        raise ValueError(
+            "To speed up bins rasterization, the X matrix in the table, when sparse, should be a csc_matrix matrix. "
+            "This can be done by calling `table.X = table.X.tocsc()`.",
+        )
+    sparse_matrix = isinstance(table.X, csc_matrix)
+    if isinstance(value_key, str):
+        value_key = [value_key]
+
+    if value_key is None:
+        dtype = table.X.dtype
+    else:
+        values = get_values(value_key=value_key, element=table)
+        assert isinstance(values, pd.DataFrame)
+        dtype = values[value_key[0]].dtype
+
+    if value_key is None:
+        shape = (n_rows, n_cols)
+
+        def channel_rasterization(block_id: tuple[int, int, int] | None) -> ArrayLike:
+            image: ArrayLike = np.zeros((1, *shape), dtype=dtype)
+
+            if block_id is None:
+                return image
+
+            col = table.X[:, block_id[0]]
+            if sparse_matrix:
+                bins_indices, data = col.indices, col.data
+                image[0, y[bins_indices], x[bins_indices]] = data
+            else:
+                image[0, y, x] = col
+            return image
+
+        image = da.map_blocks(
+            channel_rasterization,
+            chunks=((1,) * len(keys), *shape),
+            dtype=np.uint32,
+        )
+    else:
+        image = np.zeros((len(value_key), n_rows, n_cols))
+
+        if keys[0] in table.obs:
+            image[:, y, x] = table.obs[keys].values.T
+        else:
+            for i, key in enumerate(keys):
+                key_index = table.var_names.get_loc(key)
+                if sparse_matrix:
+                    bins_indices = table.X[:, key_index].indices
+                    image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+                else:
+                    image[i, y, x] = table.X[:, key_index]
+
     return Image2DModel.parse(image, transformations=transformations, c_coords=keys, dims=("c", "y", "x"))
+
+
+def _get_uint_dtype(value: int) -> str:
+    max_uint64 = np.iinfo(np.uint64).max
+    max_uint32 = np.iinfo(np.uint32).max
+    max_uint16 = np.iinfo(np.uint16).max
+
+    if max_uint16 >= value:
+        dtype = "uint16"
+    elif max_uint32 >= value:
+        dtype = "uint32"
+    elif max_uint64 >= value:
+        dtype = "uint64"
+    else:
+        raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
+    return dtype
