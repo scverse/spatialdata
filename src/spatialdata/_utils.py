@@ -57,7 +57,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     offset_part = matrix[:-1, -1]
     result = data @ vector_part.T + offset_part
     assert result.shape[0] == data.shape[0]
-    return result  # type: ignore[no-any-return]
+    return result
 
 
 def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
@@ -80,7 +80,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
         others = list(data.dims)
         others.remove(axis)
         # mypy (luca's pycharm config) can't see the isclose method of dask array
-        s = da.isclose(data.sum(dim=others), 0)  # type: ignore[attr-defined]
+        s = da.isclose(data.sum(dim=others), 0)
         # TODO: rewrite this to use dask array; can't get it to work with it
         x = s.compute()
         non_zero = np.where(x == 0)[0]
