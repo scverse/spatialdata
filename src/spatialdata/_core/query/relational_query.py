@@ -214,7 +214,7 @@ def _filter_table_by_elements(
             # some instances have not a corresponding row in the table
             instances = np.setdiff1d(instances, n0)
         assert np.sum(to_keep) == len(instances)
-        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
+        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))  # type: ignore[type-var]
         table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
         matched_positions = merged["position"].to_numpy()
@@ -467,7 +467,11 @@ def _left_join_spatialelement_table(
                 )
                 continue
 
-    joined_indices = joined_indices.dropna() if joined_indices is not None else None
+    if joined_indices is not None:
+        joined_indices = joined_indices.dropna()
+        # if nan were present, the dtype would have been changed to float
+        if joined_indices.dtype == float:
+            joined_indices = joined_indices.astype(int)
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
 
