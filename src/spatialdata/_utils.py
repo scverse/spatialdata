@@ -80,7 +80,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
         others = list(data.dims)
         others.remove(axis)
         # mypy (luca's pycharm config) can't see the isclose method of dask array
-        s = da.isclose(data.sum(dim=others), 0)  # type: ignore[attr-defined]
+        s = da.isclose(data.sum(dim=others), 0)
         # TODO: rewrite this to use dask array; can't get it to work with it
         x = s.compute()
         non_zero = np.where(x == 0)[0]

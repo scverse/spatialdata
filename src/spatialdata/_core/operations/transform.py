@@ -52,7 +52,7 @@ def _transform_raster(
     c_shape: tuple[int, ...]
     c_shape = (data.shape[0],) if "c" in axes else ()
     new_spatial_shape = tuple(
-        int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))  # type: ignore[operator]
+        int(np.max(new_v[:, i]) - np.min(new_v[:, i])) for i in range(len(c_shape), n_spatial_dims + len(c_shape))
     )
     output_shape = c_shape + new_spatial_shape
     translation_vector = np.min(new_v[:, :-1], axis=0)
@@ -86,8 +86,8 @@ def _transform_raster(
             # min_y_inverse = np.min(new_v_inverse[:, 1])
 
             if "c" in axes:
-                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
+                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)
+                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)
             else:
                 plt.imshow(transformed_dask, origin="lower", alpha=0.5)
                 plt.imshow(im, origin="lower", alpha=0.5)
@@ -322,7 +322,7 @@ def _(
     )
     c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg]
     assert isinstance(transformed_data, DataArray)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
@@ -448,7 +448,7 @@ def _(
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
-        transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
+        transformed[ax] = new_ax.data.flatten()
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
@@ -481,9 +481,9 @@ def _(
     )
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings.
     # I ignored but we may want to fix this
-    affine = transformation.to_affine(axes, axes)  # type: ignore[arg-type]
+    affine = transformation.to_affine(axes, axes)
     matrix = affine.matrix
-    shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
+    shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()  # type: ignore[operator]
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
     transformed_data.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
