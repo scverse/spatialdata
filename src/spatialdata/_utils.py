@@ -57,7 +57,7 @@ def _affine_matrix_multiplication(matrix: ArrayLike, data: ArrayLike) -> ArrayLi
     offset_part = matrix[:-1, -1]
     result = data @ vector_part.T + offset_part
     assert result.shape[0] == data.shape[0]
-    return result
+    return result  # type: ignore[no-any-return]
 
 
 def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
