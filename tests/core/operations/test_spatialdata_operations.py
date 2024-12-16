@@ -390,9 +390,15 @@ def test_no_shared_transformations() -> None:
 
 
 def test_init_from_elements(full_sdata: SpatialData) -> None:
+    # this first code block needs to be removed when the tables argument is removed from init_from_elements()
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
-    sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
-    for element_type in ["images", "labels", "points", "shapes"]:
+    sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata["table"])
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
+
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_table=True)}
+    sdata = SpatialData.init_from_elements(all_elements)
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
 
 

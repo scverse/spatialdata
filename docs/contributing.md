@@ -170,6 +170,12 @@ make html
 open _build/html/index.html
 ```
 
+### Debugging and profiling
+
+There are various tools available to help you understand the existing code base and your new code contributions. For debugging code there are multiple resources available: [Scientific Python](https://lectures.scientific-python.org/advanced/debugging/index.html), [VSCode](https://code.visualstudio.com/docs/python/debugging) and [PyCharm](https://www.jetbrains.com/help/pycharm/debugging-your-first-python-application.html).
+
+To find out the time or memory performance of your code, profilers can help. Again, various resources from [Scientific Python](https://lectures.scientific-python.org/advanced/optimizing/index.html), [napari](https://napari.org/stable/developers/contributing/performance/index.html), [PyCharm](https://www.jetbrains.com/help/pycharm/profiler.html) and [Dask](https://distributed.dask.org/en/latest/diagnosing-performance.html) can be helpful.
+
 <!-- Links -->
 
 [scanpy developer guide]: https://scanpy.readthedocs.io/en/latest/dev/index.html

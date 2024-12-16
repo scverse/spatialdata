@@ -138,12 +138,22 @@ def read_zarr(store: str | Path | zarr.Group, selection: None | tuple[str] = Non
 
         logger.debug(f"Found {count} elements in {group}")
 
+    # read attrs metadata
+    attrs = f.attrs.asdict()
+    if "spatialdata_attrs" in attrs:
+        # when refactoring the read_zarr function into reading componenets separately (and according to the version),
+        # we can move the code below (.pop()) into attrs_from_dict()
+        attrs.pop("spatialdata_attrs")
+    else:
+        attrs = None
+
     sdata = SpatialData(
         images=images,
         labels=labels,
         points=points,
         shapes=shapes,
         tables=tables,
+        attrs=attrs,
     )
     sdata.path = Path(store)
     return sdata

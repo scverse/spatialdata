@@ -33,6 +33,7 @@ from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -178,7 +179,7 @@ class RasterSchema(DataArraySchema):
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
-            _reindex = lambda d: dims.index(d)  # type: ignore[union-attr]
+            _reindex = lambda d: dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
@@ -199,8 +200,9 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        if isinstance(c_coords, str):
-            c_coords = [c_coords]
+        if c_coords is not None:
+            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
+
         if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
@@ -715,7 +717,7 @@ class PointsModel:
                 stacklevel=2,
             )
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
+            table: DaskDataFrame = dd.from_pandas(
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=sort,
@@ -729,13 +731,16 @@ class PointsModel:
                     data[feature_key].astype(str).astype("category"),
                     sort=sort,
                     **kwargs,
-                )  # type: ignore[attr-defined]
+                )
                 table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
+        elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None and data[feature_key].dtype.name != "category":
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None:
+                if data[feature_key].dtype.name == "category":
+                    table[feature_key] = data[feature_key]
+                else:
+                    table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -769,7 +774,7 @@ class PointsModel:
         instance_key: str | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
-        assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
+        assert isinstance(data, dd.DataFrame)
         if feature_key is not None or instance_key is not None:
             data.attrs[ATTRS_KEY] = {}
         if feature_key is not None:
@@ -792,7 +797,7 @@ class PointsModel:
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
-        return data  # type: ignore[no-any-return]
+        return data
 
 
 class TableModel:

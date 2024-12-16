@@ -3,7 +3,7 @@ from collections.abc import MutableMapping
 from pathlib import Path
 
 import zarr
-from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defined]
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
