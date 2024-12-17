@@ -115,6 +115,9 @@ def rasterize_bins(
 
     if isinstance(element, DataArray):
         transformations = get_transformation(element, get_all=True)
+        # satisfy mypy
+        if not isinstance(transformations, dict):
+            raise TypeError("Expected transformations to be a dictionary when get_all=True.")
     else:
         # get the transformation
         if table.n_obs < 6:
@@ -228,7 +231,12 @@ def rasterize_bins(
                 else:
                     image[i, y, x] = table.X[:, key_index]
 
-    return Image2DModel.parse(image, transformations=transformations, c_coords=keys, dims=("c", "y", "x"))
+    return Image2DModel.parse(
+        data=image,
+        dims=("c", "y", "x"),
+        transformations=transformations,
+        c_coords=keys,
+    )
 
 
 def _get_uint_dtype(value: int) -> str:
