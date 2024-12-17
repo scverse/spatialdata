@@ -14,8 +14,9 @@ from skimage.transform import estimate_transform
 from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import Image2DModel, get_table_keys
+from spatialdata.models import Image2DModel, Labels2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
 RNG = default_rng(0)
@@ -32,6 +33,7 @@ def rasterize_bins(
     col_key: str,
     row_key: str,
     value_key: str | list[str] | None = None,
+    return_region_as_labels: bool = False,
 ) -> DataArray:
     """
     Rasterizes grid-like binned shapes/points annotated by a table (e.g. Visium HD data).
@@ -51,6 +53,13 @@ def rasterize_bins(
     value_key
         The key(s) (obs columns/var names) in the table that will be used to rasterize the bins.
         If `None`, all the var names will be used, and the returned object will be lazily constructed.
+        Ignored if `return_region_as_labels` is `True`.
+    return_regions_as_labels
+        If `False` this function returns a lazy spatial image of shape `(c, y, x)` with dimension of `c` equal to
+        the number of key(s) specified in `value_key`,
+        or the number of var names in `table_name` if `value_key` is `None`.
+        If `True`, will return labels of shape `(y,x)`,
+        which will be the raster equivalent of bins specified in `bins`.
 
     Returns
     -------
@@ -73,23 +82,98 @@ def rasterize_bins(
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
-    if not isinstance(element, GeoDataFrame | DaskDataFrame):
-        raise ValueError("The bins should be a GeoDataFrame or a DaskDataFrame.")
+    if not isinstance(element, GeoDataFrame | DaskDataFrame | DataArray):
+        raise ValueError("The bins should be a GeoDataFrame, a DaskDataFrame or a DataArray.")
+    if isinstance(element, DataArray):
+        if "c" in element.dims:
+            raise ValueError(
+                "If bins is a DataArray, it should hold labels. "
+                f"But found associated dimension containing 'c': {element.dims}."
+            )
+        if not np.issubdtype(element.dtype, np.integer):
+            raise ValueError(f"If bins is a DataArray, it should hold integers. Found dtype {element.dtype}.")
 
     _, region_key, instance_key = get_table_keys(table)
     if not table.obs[region_key].dtype == "category":
         raise ValueError(f"Please convert `table.obs['{region_key}']` to a category series to improve performances")
     unique_regions = table.obs[region_key].cat.categories
-    if len(unique_regions) > 1 or unique_regions[0] != bins:
+    if len(unique_regions) > 1:
+        raise ValueError(f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}.")
+    if unique_regions[0] != bins:
+        raise ValueError("The table should be associated with the specified bins.")
+
+    if isinstance(element, DataArray) and return_region_as_labels:
         raise ValueError(
-            "The table should be associated with the specified bins. "
-            f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}."
+            f"bins is already a labels layer that annotates the table '{table_name}'. "
+            "Consider setting 'return_region_as_labels' to 'False' to create a lazy spatial image."
         )
 
     min_row, min_col = table.obs[row_key].min(), table.obs[col_key].min()
     n_rows, n_cols = table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1
     y = (table.obs[row_key] - min_row).values
     x = (table.obs[col_key] - min_col).values
+
+    if isinstance(element, DataArray):
+        transformations = get_transformation(element, get_all=True)
+        # satisfy mypy
+        if not isinstance(transformations, dict):
+            raise TypeError("Expected transformations to be a dictionary when get_all=True.")
+    else:
+        # get the transformation
+        if table.n_obs < 6:
+            raise ValueError("At least 6 bins are needed to estimate the transformation.")
+
+        random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
+        location_ids = table.obs[instance_key].iloc[random_indices].values
+        sub_df, sub_table = element.loc[location_ids], table[random_indices]
+
+        src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
+        if isinstance(sub_df, GeoDataFrame):
+            if isinstance(sub_df.iloc[0].geometry, Point):
+                sub_x = sub_df.geometry.x.values
+                sub_y = sub_df.geometry.y.values
+            else:
+                assert isinstance(sub_df.iloc[0].geometry, Polygon | MultiPolygon)
+                sub_x = sub_df.centroid.x
+                sub_y = sub_df.centroid.y
+        else:
+            assert isinstance(sub_df, DaskDataFrame)
+            sub_x = sub_df.x.compute().values
+            sub_y = sub_df.y.compute().values
+        dst = np.stack([sub_x, sub_y], axis=1)
+
+        to_bins = Sequence(
+            [
+                Affine(
+                    estimate_transform(ttype="affine", src=src, dst=dst).params,
+                    input_axes=("x", "y"),
+                    output_axes=("x", "y"),
+                )
+            ]
+        )
+        bins_transformations = get_transformation(element, get_all=True)
+
+        assert isinstance(bins_transformations, dict)
+
+        transformations = {cs: to_bins.compose_with(t) for cs, t in bins_transformations.items()}
+
+    if return_region_as_labels:
+        dtype = _get_uint_dtype(table.obs[instance_key].max())
+        _min_value = table.obs[instance_key].min()
+        if _min_value == 0:
+            logger.info(
+                f"Minimum value of the instance key column ('table.obs[{instance_key}]') is 0. "
+                "Since the label 0 is reserved for the background, "
+                "both the instance key column in 'table.obs' "
+                f"and the index of the annotating element '{bins}' is incremented by 1."
+            )
+            table.obs[instance_key] += 1
+            element.index += 1
+        labels_element = np.zeros((n_rows, n_cols), dtype=dtype)
+        # make labels layer that can visualy represent the cells
+        labels_element[y, x] = table.obs[instance_key].values.T
+
+        return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
 
     keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
 
@@ -115,7 +199,6 @@ def rasterize_bins(
         shape = (n_rows, n_cols)
 
         def channel_rasterization(block_id: tuple[int, int, int] | None) -> ArrayLike:
-
             image: ArrayLike = np.zeros((1, *shape), dtype=dtype)
 
             if block_id is None:
@@ -148,42 +231,25 @@ def rasterize_bins(
                 else:
                     image[i, y, x] = table.X[:, key_index]
 
-    # get the transformation
-    if table.n_obs < 6:
-        raise ValueError("At least 6 bins are needed to estimate the transformation.")
-
-    random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
-    location_ids = table.obs[instance_key].iloc[random_indices].values
-    sub_df, sub_table = element.loc[location_ids], table[random_indices]
-
-    src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
-    if isinstance(sub_df, GeoDataFrame):
-        if isinstance(sub_df.iloc[0].geometry, Point):
-            sub_x = sub_df.geometry.x.values
-            sub_y = sub_df.geometry.y.values
-        else:
-            assert isinstance(sub_df.iloc[0].geometry, Polygon | MultiPolygon)
-            sub_x = sub_df.centroid.x
-            sub_y = sub_df.centroid.y
-    else:
-        assert isinstance(sub_df, DaskDataFrame)
-        sub_x = sub_df.x.compute().values
-        sub_y = sub_df.y.compute().values
-    dst = np.stack([sub_x, sub_y], axis=1)
-
-    to_bins = Sequence(
-        [
-            Affine(
-                estimate_transform(ttype="affine", src=src, dst=dst).params,
-                input_axes=("x", "y"),
-                output_axes=("x", "y"),
-            )
-        ]
+    return Image2DModel.parse(
+        data=image,
+        dims=("c", "y", "x"),
+        transformations=transformations,
+        c_coords=keys,
     )
-    bins_transformations = get_transformation(element, get_all=True)
 
-    assert isinstance(bins_transformations, dict)
 
-    transformations = {cs: to_bins.compose_with(t) for cs, t in bins_transformations.items()}
+def _get_uint_dtype(value: int) -> str:
+    max_uint64 = np.iinfo(np.uint64).max
+    max_uint32 = np.iinfo(np.uint32).max
+    max_uint16 = np.iinfo(np.uint16).max
 
-    return Image2DModel.parse(image, transformations=transformations, c_coords=keys, dims=("c", "y", "x"))
+    if max_uint16 >= value:
+        dtype = "uint16"
+    elif max_uint32 >= value:
+        dtype = "uint32"
+    elif max_uint64 >= value:
+        dtype = "uint64"
+    else:
+        raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
+    return dtype
