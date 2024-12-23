@@ -318,6 +318,37 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     )
 
 
+def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    table = sdata["table"][3:]
+    original_instance_id = table.obs["instance_id"]
+    reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
+    table.obs["instance_id"] = reversed_instance_id
+    sdata["table"] = table
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="left",
+    )
+
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="right",
+    )
+
+    indices = element_dict["values_circles"].index.append(element_dict["values_polygons"].index)
+
+    assert all(indices == reversed_instance_id)
+
+
 # TODO: there is a lot of dublicate code, simplify with a function that tests both the case sdata=None and sdata=sdata
 def test_match_rows_join(sdata_query_aggregation):
     sdata = sdata_query_aggregation
