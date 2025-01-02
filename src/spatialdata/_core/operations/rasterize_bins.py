@@ -56,8 +56,8 @@ def rasterize_bins(
         Ignored if `return_region_as_labels` is `True`.
     return_regions_as_labels
         If `False` this function returns a `xarray.DataArray` of shape `(c, y, x)` with dimension
-         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
-         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
+        of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
+        in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
         where each bin of the `bins` element will be represented as a pixel.
 
     Returns
