@@ -217,9 +217,9 @@ def rasterize(
         The table optionally containing the `value_key` and the name of the table in the returned `SpatialData` object.
         Must be `None` when `data` is a `SpatialData` object, otherwise it assumes the default value of `'table'`.
     return_regions_as_labels
-        By default, single-scale images of shape `(c, y, x)` are returned. If `True`, returns labels and shapes as
-        labels of shape `(y, x)` as opposed to an image of shape `(c, y, x)`. Points and images are always returned
-        as images, and multiscale raster data is always returned as single-scale data.
+        By default, single-scale images of shape `(c, y, x)` are returned. If `True`, returns labels, shapes and points
+        as labels of shape `(y, x)` as opposed to an image of shape `(c, y, x)`. Images are always returned as images,
+        and multiscale raster data is always returned as single-scale data.
     agg_func
         Available only when rasterizing points and shapes. A reduction function from datashader (its name, or a
         `Callable`). See the notes for more details on the default behavior.
@@ -233,6 +233,11 @@ def rasterize(
     The rasterized `SpatialData` object or SpatialData supported `DataArray`. Each `SpatialElement` will be rasterized
     into a `DataArray` (not a `DataTree`). So if a `SpatialData` object with elements is passed, a `SpatialData` object
     with single-scale images and labels will be returned.
+
+    When `return_regions_as_labels` is `True`, the returned `DataArray` object will have an attribute called
+    `label_index_to_category` that maps the label index to the category name. You can access it via
+    `returned_data.attrs["label_index_to_category"]`. The returned labels will start from 1 (0 is reserved for the
+    background), and will be contiguous.
 
     Notes
     -----
@@ -587,7 +592,7 @@ def rasterize_images_labels(
     )
     assert isinstance(transformed_dask, DaskArray)
     channels = xdata.coords["c"].values if schema in (Image2DModel, Image3DModel) else None
-    transformed_data = schema.parse(transformed_dask, dims=xdata.dims, c_coords=channels)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=xdata.dims, c_coords=channels)  # type: ignore[call-arg]
 
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
@@ -650,7 +655,7 @@ def rasterize_shapes_points(
     if value_key is not None:
         kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
         data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
-    elif isinstance(data, GeoDataFrame):
+    elif isinstance(data, GeoDataFrame) or isinstance(data, DaskDataFrame) and return_regions_as_labels is True:
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
     else:
@@ -706,6 +711,14 @@ def rasterize_shapes_points(
     agg = agg.fillna(0)
 
     if return_regions_as_labels:
+        if label_index_to_category is not None:
+            max_label = next(iter(reversed(label_index_to_category.keys())))
+        else:
+            max_label = int(agg.max().values)
+        max_uint16 = np.iinfo(np.uint16).max
+        if max_label > max_uint16:
+            raise ValueError(f"Maximum label index is {max_label}. Values higher than {max_uint16} are not supported.")
+        agg = agg.astype(np.uint16)
         return Labels2DModel.parse(agg, transformations=transformations)
 
     agg = agg.expand_dims(dim={"c": 1}).transpose("c", "y", "x")

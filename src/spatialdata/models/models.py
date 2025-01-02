@@ -179,7 +179,7 @@ class RasterSchema(DataArraySchema):
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
-            _reindex = lambda d: dims.index(d)  # type: ignore[union-attr]
+            _reindex = lambda d: dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
@@ -717,7 +717,7 @@ class PointsModel:
                 stacklevel=2,
             )
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
+            table: DaskDataFrame = dd.from_pandas(
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=sort,
@@ -731,9 +731,9 @@ class PointsModel:
                     data[feature_key].astype(str).astype("category"),
                     sort=sort,
                     **kwargs,
-                )  # type: ignore[attr-defined]
+                )
                 table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
+        elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
             if feature_key is not None:
@@ -774,7 +774,7 @@ class PointsModel:
         instance_key: str | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
-        assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
+        assert isinstance(data, dd.DataFrame)
         if feature_key is not None or instance_key is not None:
             data.attrs[ATTRS_KEY] = {}
         if feature_key is not None:
@@ -797,7 +797,7 @@ class PointsModel:
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
-        return data  # type: ignore[no-any-return]
+        return data
 
 
 class TableModel:
