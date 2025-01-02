@@ -88,18 +88,6 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
         sdata[labels_name] = rasterized
 
         rasterize_bins_link_table_to_labels(sdata=sdata, table_name="table", rasterized_labels_name=labels_name)
-        # adata = sdata["table"]
-        # adata.obs["region"] = labels_name
-        # adata.obs["region"] = adata.obs["region"].astype("category")
-        # del adata.uns[TableModel.ATTRS_KEY]
-        # adata = TableModel.parse(
-        #     adata,
-        #     region=labels_name,
-        #     region_key="region",
-        #     instance_key="instance_id",
-        # )
-        # del sdata["table"]
-        # sdata["table"] = adata
 
         # this fails because table already annotated by labels layer
         with pytest.raises(

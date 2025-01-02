@@ -62,7 +62,8 @@ def rasterize_bins(
         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
         where each bin of the `bins` element will be represented as a pixel. The table by default will not be set to
-        annotate the new rasterized labels; see the Notes section for how to do this.
+        annotate the new rasterized labels; this can be achieved using the helper function
+        `spatialdata.rasterize_bins_link_table_to_labels().
 
     Returns
     -------
@@ -82,10 +83,6 @@ def rasterize_bins(
 
     If `spatialdata-plot` is used to visualized the returned image, the parameter `scale='full'` needs to be passed to
     `.render_shapes()`, to disable an automatic rasterization that would confict with the rasterization performed here.
-
-    When `return_region_as_labels` is `True`, the function will return a labels layer that is not annotated by default
-    by the table. To change the annotation target of the table you can call the helper function
-    `spatialdata.rasterize_bins_link_table_to_labels()`.
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
@@ -279,17 +276,17 @@ def _relabel_labels(table: AnnData, instance_key: str) -> pd.Series:
         )
 
     relabeled_instance_key_column = table.obs[instance_key].astype("category").cat.codes + int(zero_in_instance_key)
-    # uses only allowed dtypes that passes our model validations, in particualr no uint8
+    # uses only allowed dtypes that passes our model validations, in particuar no uint8
     dtype = _get_uint_dtype(labels_values_count=relabeled_instance_key_column.max())
     return relabeled_instance_key_column.astype(dtype)
 
 
 def rasterize_bins_link_table_to_labels(sdata: SpatialData, table_name: str, rasterized_labels_name: str) -> None:
     """
-    Annotates the table with the rasterized labels.
+    Change the annotation target of the table to the rasterized labels.
 
-    This function should be called after rasterizing the bins (with `return_regions_as_labels` is `True`) and adding
-    the rasterized labels in the spatial data object.
+    This function should be called after having rasterized the bins (calling `rasterize_bins()` with
+    `return_regions_as_labels=True`) and after having added the rasterized labels to the spatial data object.
 
     Parameters
     ----------
