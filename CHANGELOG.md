@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning][].
 ### Major
 
 - Added attributes at the SpatialData object level (`.attrs`)
+- `rasterize_bins()` can now produce a labels element #811 @ArneDefauw
 
 ## [0.2.6] - 2024-11-26
 

@@ -27,6 +27,7 @@ __all__ = [
     "concatenate",
     "rasterize",
     "rasterize_bins",
+    "rasterize_bins_link_table_to_labels",
     "to_circles",
     "to_polygons",
     "transform",
@@ -61,7 +62,7 @@ from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.operations.map import map_raster, relabel_sequential
 from spatialdata._core.operations.rasterize import rasterize
-from spatialdata._core.operations.rasterize_bins import rasterize_bins
+from spatialdata._core.operations.rasterize_bins import rasterize_bins, rasterize_bins_link_table_to_labels
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata._core.query._utils import get_bounding_box_corners
