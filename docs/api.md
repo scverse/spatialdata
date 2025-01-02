@@ -37,6 +37,7 @@ Operations on `SpatialData` objects.
     transform
     rasterize
     rasterize_bins
+    rasterize_bins_link_table_to_labels
     to_circles
     to_polygons
     aggregate

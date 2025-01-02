@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import dask.array as da
 import numpy as np
 import pandas as pd
+from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
@@ -20,6 +21,8 @@ from spatialdata.models import Image2DModel, Labels2DModel, get_table_keys
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
 RNG = default_rng(0)
+
+__all__ = ["rasterize_bins", "rasterize_bins_link_table_to_labels"]
 
 
 if TYPE_CHECKING:
@@ -58,7 +61,8 @@ def rasterize_bins(
         If `False` this function returns a `xarray.DataArray` of shape `(c, y, x)` with dimension
         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
-        where each bin of the `bins` element will be represented as a pixel.
+        where each bin of the `bins` element will be represented as a pixel. The table by default will not be set to
+        annotate the new rasterized labels; see the Notes section for how to do this.
 
     Returns
     -------
@@ -78,6 +82,10 @@ def rasterize_bins(
 
     If `spatialdata-plot` is used to visualized the returned image, the parameter `scale='full'` needs to be passed to
     `.render_shapes()`, to disable an automatic rasterization that would confict with the rasterization performed here.
+
+    When `return_region_as_labels` is `True`, the function will return a labels layer that is not annotated by default
+    by the table. To change the annotation target of the table you can call the helper function
+    `spatialdata.rasterize_bins_link_table_to_labels()`.
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
@@ -159,22 +167,12 @@ def rasterize_bins(
         transformations = {cs: to_bins.compose_with(t) for cs, t in bins_transformations.items()}
 
     if return_region_as_labels:
-        dtype = _get_uint_dtype(table.obs[instance_key].max())
-        _min_value = table.obs[instance_key].min()
-        # TODO: add a new column instead of modyfing the table inplace
-        # TODO: do not modify the index of the elements
-        if _min_value == 0:
-            logger.info(
-                f"The minimum value of the instance key column ('table.obs[{instance_key}]') has been"
-                " detected to be 0. Since the label 0 is reserved for the background, "
-                "both the instance key column in 'table.obs' "
-                f"and the index of the annotating element '{bins}' is incremented by 1."
-            )
-            table.obs[instance_key] += 1
-            element.index += 1
+        new_instance_key = _get_relabeled_column_name(instance_key)
+        table.obs[new_instance_key] = _relabel_labels(table=table, instance_key=instance_key)
+        dtype = table.obs[new_instance_key].dtype
         labels_element = np.zeros((n_rows, n_cols), dtype=dtype)
         # make labels layer that can visualy represent the cells
-        labels_element[y, x] = table.obs[instance_key].values.T
+        labels_element[y, x] = table.obs[new_instance_key].values.T
 
         return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
 
@@ -242,17 +240,69 @@ def rasterize_bins(
     )
 
 
-def _get_uint_dtype(value: int) -> str:
+def _get_uint_dtype(labels_values_count: int) -> str:
     max_uint64 = np.iinfo(np.uint64).max
     max_uint32 = np.iinfo(np.uint32).max
     max_uint16 = np.iinfo(np.uint16).max
 
-    if max_uint16 >= value:
+    if max_uint16 >= labels_values_count:
         dtype = "uint16"
-    elif max_uint32 >= value:
+    elif max_uint32 >= labels_values_count:
         dtype = "uint32"
-    elif max_uint64 >= value:
+    elif max_uint64 >= labels_values_count:
         dtype = "uint64"
     else:
-        raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
+        raise ValueError(
+            f"Maximum cell number is {labels_values_count}. Values higher than {max_uint64} are not supported."
+        )
     return dtype
+
+
+def _get_relabeled_column_name(column_name: str) -> str:
+    return f"relabeled_{column_name}"
+
+
+def _relabel_labels(table: AnnData, instance_key: str) -> pd.Series:
+    labels_values_count = len(table.obs[instance_key].unique())
+
+    is_not_numeric = not np.issubdtype(table.obs[instance_key].dtype, np.number)
+    zero_in_instance_key = 0 in table.obs[instance_key].values
+    has_gaps = not is_not_numeric and labels_values_count != table.obs[instance_key].max() + int(zero_in_instance_key)
+
+    relabeling_is_needed = is_not_numeric or zero_in_instance_key or has_gaps
+    if relabeling_is_needed:
+        logger.info(
+            f"The instance_key column in 'table.obs' ('table.obs[{instance_key}]') will be relabeled to ensure"
+            " a numeric data type, with a continuous range and without including the value 0 (which is reserved "
+            "for the background). The new labels will be stored in a new column named "
+            f"{_get_relabeled_column_name(instance_key)!r}."
+        )
+
+    relabeled_instance_key_column = table.obs[instance_key].astype("category").cat.codes + int(zero_in_instance_key)
+    # uses only allowed dtypes that passes our model validations, in particualr no uint8
+    dtype = _get_uint_dtype(labels_values_count=relabeled_instance_key_column.max())
+    return relabeled_instance_key_column.astype(dtype)
+
+
+def rasterize_bins_link_table_to_labels(sdata: SpatialData, table_name: str, rasterized_labels_name: str) -> None:
+    """
+    Annotates the table with the rasterized labels.
+
+    This function should be called after rasterizing the bins (with `return_regions_as_labels` is `True`) and adding
+    the rasterized labels in the spatial data object.
+
+    Parameters
+    ----------
+    sdata
+        The spatial data object containing the rasterized labels.
+    table_name
+        The name of the table to be annotated.
+    rasterized_labels_name
+        The name of the rasterized labels in the spatial data object.
+    """
+    _, region_key, instance_key = get_table_keys(sdata[table_name])
+    sdata[table_name].obs[region_key] = rasterized_labels_name
+    relabled_instance_key = _get_relabeled_column_name(instance_key)
+    sdata.set_table_annotates_spatialelement(
+        table_name=table_name, region=rasterized_labels_name, region_key=region_key, instance_key=relabled_instance_key
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 
 import numpy as np
@@ -12,8 +13,13 @@ from scipy.sparse import csr_matrix
 from shapely.geometry import Polygon
 
 from spatialdata._core.data_extent import are_extents_equal, get_extent
-from spatialdata._core.operations.rasterize_bins import rasterize_bins
+from spatialdata._core.operations.rasterize_bins import (
+    _relabel_labels,
+    rasterize_bins,
+    rasterize_bins_link_table_to_labels,
+)
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.transformations.transformations import Scale
@@ -80,18 +86,21 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
     if return_region_as_labels:
         labels_name = "labels"
         sdata[labels_name] = rasterized
-        adata = sdata["table"]
-        adata.obs["region"] = labels_name
-        adata.obs["region"] = adata.obs["region"].astype("category")
-        del adata.uns[TableModel.ATTRS_KEY]
-        adata = TableModel.parse(
-            adata,
-            region=labels_name,
-            region_key="region",
-            instance_key="instance_id",
-        )
-        del sdata["table"]
-        sdata["table"] = adata
+
+        rasterize_bins_link_table_to_labels(sdata=sdata, table_name="table", rasterized_labels_name=labels_name)
+        # adata = sdata["table"]
+        # adata.obs["region"] = labels_name
+        # adata.obs["region"] = adata.obs["region"].astype("category")
+        # del adata.uns[TableModel.ATTRS_KEY]
+        # adata = TableModel.parse(
+        #     adata,
+        #     region=labels_name,
+        #     region_key="region",
+        #     instance_key="instance_id",
+        # )
+        # del sdata["table"]
+        # sdata["table"] = adata
+
         # this fails because table already annotated by labels layer
         with pytest.raises(
             ValueError,
@@ -265,3 +274,38 @@ def test_rasterize_bins_invalid():
             row_key="row_index",
             value_key="instance_id",
         )
+
+
+def test_relabel_labels(caplog):
+    obs = DataFrame(
+        data={
+            "instance_key0": np.arange(1, 11),
+            "instance_key1": np.arange(10),
+            "instance_key2": [1, 2] + list(range(4, 12)),
+            "instance_key3": [str(i) for i in range(1, 11)],
+        }
+    )
+    adata = AnnData(X=RNG.normal(size=(10, 2)), obs=obs)
+    _relabel_labels(table=adata, instance_key="instance_key0")
+    # check logger info message
+    expected_log_message = (
+        "will be relabeled to ensure a numeric data type, with a continuous range and without including the value 0 ("
+        "which is reserved for the background). The new labels will be stored in a new column named"
+    )
+    logger.propagate = True
+    with caplog.at_level(logging.INFO):
+        _relabel_labels(table=adata, instance_key="instance_key1")
+        assert expected_log_message in caplog.text
+
+    with caplog.at_level(logging.INFO):
+        _relabel_labels(table=adata, instance_key="instance_key2")
+        assert expected_log_message in caplog.text
+
+    with caplog.at_level(logging.INFO):
+        _relabel_labels(table=adata, instance_key="instance_key3")
+        assert expected_log_message in caplog.text
+    logger.propagate = False
+
+
+if __name__ == "__main__":
+    test_relabel_labels()
