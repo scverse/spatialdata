@@ -56,7 +56,7 @@ def rasterize_bins(
         Ignored if `return_region_as_labels` is `True`.
     return_regions_as_labels
         If `False` this function returns a `xarray.DataArray` of shape `(c, y, x)` with dimension
-         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names 
+         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
          in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
         where each bin of the `bins` element will be represented as a pixel.
 
@@ -97,9 +97,11 @@ def rasterize_bins(
         raise ValueError(f"Please convert `table.obs['{region_key}']` to a category series to improve performances")
     unique_regions = table.obs[region_key].cat.categories
     if len(unique_regions) > 1:
-        raise ValueError(f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}, 
-        currently only tables annotating a single region are supported. Please open a feature request if you are 
-        interested in the general case.")
+        raise ValueError(
+            f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}, "
+            "currently only tables annotating a single region are supported. Please open a feature request if you are "
+            "interested in the general case."
+        )
     if unique_regions[0] != bins:
         raise ValueError("The table should be associated with the specified bins.")
 
