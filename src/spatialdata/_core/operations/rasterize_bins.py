@@ -55,11 +55,10 @@ def rasterize_bins(
         If `None`, all the var names will be used, and the returned object will be lazily constructed.
         Ignored if `return_region_as_labels` is `True`.
     return_regions_as_labels
-        If `False` this function returns a lazy spatial image of shape `(c, y, x)` with dimension of `c` equal to
-        the number of key(s) specified in `value_key`,
-        or the number of var names in `table_name` if `value_key` is `None`.
-        If `True`, will return labels of shape `(y,x)`,
-        which will be the raster equivalent of bins specified in `bins`.
+        If `False` this function returns a `xarray.DataArray` of shape `(c, y, x)` with dimension
+         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names 
+         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
+        where each bin of the `bins` element will be represented as a pixel.
 
     Returns
     -------
@@ -87,8 +86,8 @@ def rasterize_bins(
     if isinstance(element, DataArray):
         if "c" in element.dims:
             raise ValueError(
-                "If bins is a DataArray, it should hold labels. "
-                f"But found associated dimension containing 'c': {element.dims}."
+                "If bins is a DataArray, it should hold labels; found a image element instead, with"
+                f" 'c': {element.dims}."
             )
         if not np.issubdtype(element.dtype, np.integer):
             raise ValueError(f"If bins is a DataArray, it should hold integers. Found dtype {element.dtype}.")
@@ -98,7 +97,9 @@ def rasterize_bins(
         raise ValueError(f"Please convert `table.obs['{region_key}']` to a category series to improve performances")
     unique_regions = table.obs[region_key].cat.categories
     if len(unique_regions) > 1:
-        raise ValueError(f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}.")
+        raise ValueError(f"Found multiple regions annotated by the table: {', '.join(list(unique_regions))}, 
+        currently only tables annotating a single region are supported. Please open a feature request if you are 
+        interested in the general case.")
     if unique_regions[0] != bins:
         raise ValueError("The table should be associated with the specified bins.")
 
@@ -115,9 +116,7 @@ def rasterize_bins(
 
     if isinstance(element, DataArray):
         transformations = get_transformation(element, get_all=True)
-        # satisfy mypy
-        if not isinstance(transformations, dict):
-            raise TypeError("Expected transformations to be a dictionary when get_all=True.")
+        assert isinstance(transformations, dict)
     else:
         # get the transformation
         if table.n_obs < 6:
@@ -160,10 +159,12 @@ def rasterize_bins(
     if return_region_as_labels:
         dtype = _get_uint_dtype(table.obs[instance_key].max())
         _min_value = table.obs[instance_key].min()
+        # TODO: add a new column instead of modyfing the table inplace
+        # TODO: do not modify the index of the elements
         if _min_value == 0:
             logger.info(
-                f"Minimum value of the instance key column ('table.obs[{instance_key}]') is 0. "
-                "Since the label 0 is reserved for the background, "
+                f"The minimum value of the instance key column ('table.obs[{instance_key}]') has been"
+                " detected to be 0. Since the label 0 is reserved for the background, "
                 "both the instance key column in 'table.obs' "
                 f"and the index of the annotating element '{bins}' is incremented by 1."
             )
