@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -367,7 +369,7 @@ def force_2d(gdf: GeoDataFrame) -> None:
         gdf.geometry = new_shapes
 
 
-def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type["RasterSchema"]:
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
     """
     Get the raster model from the dimensions of the data.
 
@@ -435,3 +437,19 @@ def set_channel_names(element: DataArray | DataTree, channel_names: str | list[s
         raise TypeError("Element model does not support setting channel names, no `c` dimension found.")
 
     return element
+
+
+def _get_uint_dtype(value: int) -> str:
+    max_uint64 = np.iinfo(np.uint64).max
+    max_uint32 = np.iinfo(np.uint32).max
+    max_uint16 = np.iinfo(np.uint16).max
+
+    if max_uint16 >= value:
+        dtype = "uint16"
+    elif max_uint32 >= value:
+        dtype = "uint32"
+    elif max_uint64 >= value:
+        dtype = "uint64"
+    else:
+        raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
+    return dtype

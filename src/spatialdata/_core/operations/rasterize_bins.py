@@ -18,6 +18,7 @@ from spatialdata._core.query.relational_query import get_values
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import Image2DModel, Labels2DModel, get_table_keys
+from spatialdata.models._utils import _get_uint_dtype
 from spatialdata.transformations import Affine, Sequence, get_transformation
 
 RNG = default_rng(0)
@@ -63,7 +64,7 @@ def rasterize_bins(
         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
         where each bin of the `bins` element will be represented as a pixel. The table by default will not be set to
         annotate the new rasterized labels; this can be achieved using the helper function
-        `spatialdata.rasterize_bins_link_table_to_labels().
+        `spatialdata.rasterize_bins_link_table_to_labels()`.
 
     Returns
     -------
@@ -237,24 +238,6 @@ def rasterize_bins(
     )
 
 
-def _get_uint_dtype(labels_values_count: int) -> str:
-    max_uint64 = np.iinfo(np.uint64).max
-    max_uint32 = np.iinfo(np.uint32).max
-    max_uint16 = np.iinfo(np.uint16).max
-
-    if max_uint16 >= labels_values_count:
-        dtype = "uint16"
-    elif max_uint32 >= labels_values_count:
-        dtype = "uint32"
-    elif max_uint64 >= labels_values_count:
-        dtype = "uint64"
-    else:
-        raise ValueError(
-            f"Maximum cell number is {labels_values_count}. Values higher than {max_uint64} are not supported."
-        )
-    return dtype
-
-
 def _get_relabeled_column_name(column_name: str) -> str:
     return f"relabeled_{column_name}"
 
@@ -277,7 +260,7 @@ def _relabel_labels(table: AnnData, instance_key: str) -> pd.Series:
 
     relabeled_instance_key_column = table.obs[instance_key].astype("category").cat.codes + int(zero_in_instance_key)
     # uses only allowed dtypes that passes our model validations, in particuar no uint8
-    dtype = _get_uint_dtype(labels_values_count=relabeled_instance_key_column.max())
+    dtype = _get_uint_dtype(value=relabeled_instance_key_column.max())
     return relabeled_instance_key_column.astype(dtype)
 
 
