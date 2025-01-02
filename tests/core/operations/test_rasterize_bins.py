@@ -238,10 +238,7 @@ def test_rasterize_bins_invalid():
     sdata["points"] = image
     with pytest.raises(
         ValueError,
-        match=re.escape(
-            f"If bins is a DataArray, it should hold labels. "
-            f"But found associated dimension containing 'c': {image.dims}."
-        ),
+        match=re.escape("If bins is a DataArray, it should hold labels; found a image element instead, with"),
     ):
         _ = rasterize_bins(
             sdata=sdata,
