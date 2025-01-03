@@ -82,13 +82,17 @@ Before making a release, you need to update the version number. Please adhere to
 >
 > Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
-We use [bump2version][] to automatically update the version number in all places and automatically create a git tag.
-Run one of the following commands in the root of the repository
+You can find the [labels for pre-release in this page](https://packaging.python.org/en/latest/discussions/versioning/#valid-version-numbers).
+
+You can either use [bump2version][] to automatically create a git tag with the updated version number, or manually create the tag yourself (locally or from the GitHub interface when making a release).
+If you use `bump2version`, you can run one of the following commands in the root of the repository
 
 ```bash
 bump2version patch
 bump2version minor
 bump2version major
+# if you want to create a pre-release
+bump2version --new-version 1.2.0rc1
 ```
 
 Once you are done, run
@@ -99,39 +103,79 @@ git push --tags
 
 to publish the created tag on GitHub.
 
+It's important that the tag for a pre-release follows this naming convention as it will determine if the package is displayed as [pre-release or release](https://pypi.org/project/spatialdata/#history) in PyPI.
+
 [bump2version]: https://github.com/c4urself/bump2version
 
-### Building and publishing the package on PyPI
+### Making a release on GitHub and publishing to PyPI
 
-Python packages are not distributed as source code, but as _distributions_. The most common distribution format is the so-called _wheel_. To build a _wheel_, run
+If you already tagged and pushed a commit as explained above and you want to create a release from that tag, you can go to the [Tags page on GitHub](https://github.com/scverse/spatialdata/tags), select the (latest) tag and press the "Create release from tag" button. Please name the release with the same string used for the tag (including the `v` prefix).
 
-```bash
-python -m build
+Alternatively you can go to the [Releases page on GitHub](https://github.com/scverse/spatialdata/releases) and press the "Draft a new release button". Now press "Choose a tag" and create a new tag.
+
+Both approaches lead to the same page and view. From this, you need to specify if the release is a pre-release or if it should be set as the latest release (please use the checkboxes accordingly).
+
+The last step is to fill the releases notes (explained in the next session), after this, you can press the "Publish release" button and the release will be available on GitHub. A [GitHub action](https://github.com/scverse/spatialdata/blob/main/.github/workflows/release.yaml) will automatically build the package and [upload it to PyPI](https://pypi.org/project/spatialdata/#history). The action may fail, so please check the [status badge of the action from the Readme](https://github.com/scverse/spatialdata/actions/workflows/release.yaml).
+
+#### Writing release notes
+
+We recommend using the button "Generate release notes" to automatically collect all the information of the pull requests that are part of the release.
+The release notes serve as a changelog for the user of the package so it's important to have them curated and well-organized. This is explained in depth below.
+
+Here is an example of automatically generated release notes for a previous release (v0.2.3):
+```
+## What's Changed
+* Add clip parameter to polygon_query; tests missing by @LucaMarconato in https://github.com/scverse/spatialdata/pull/670
+* Add sort parameter to points model by @LucaMarconato in https://github.com/scverse/spatialdata/pull/672
+* [pre-commit.ci] pre-commit autoupdate by @pre-commit-ci in https://github.com/scverse/spatialdata/pull/673
+* Docs for datasets (blobs, raccoon) by @LucaMarconato in https://github.com/scverse/spatialdata/pull/674
+* Update issue templates by @LucaMarconato in https://github.com/scverse/spatialdata/pull/675
+* Minor fixes: `id()` -> `is`, inplace category subset `AnnData` relational query by @LucaMarconato in https://github.com/scverse/spatialdata/pull/681
+* Added ColorLike to _types.py by @timtreis in https://github.com/scverse/spatialdata/pull/689
+* [pre-commit.ci] pre-commit autoupdate by @pre-commit-ci in https://github.com/scverse/spatialdata/pull/685
+* [pre-commit.ci] pre-commit autoupdate by @pre-commit-ci in https://github.com/scverse/spatialdata/pull/690
+* [pre-commit.ci] pre-commit autoupdate by @pre-commit-ci in https://github.com/scverse/spatialdata/pull/698
+* Fix labels multiscales method by @aeisenbarth in https://github.com/scverse/spatialdata/pull/697
+
+
+**Full Changelog**: https://github.com/scverse/spatialdata/compare/v0.2.2...v0.2.3
 ```
 
-This command creates a _source archive_ and a _wheel_, which are required for publishing your package to [PyPI][]. These files are created directly in the root of the repository.
+The release notes above can be hard to read, but this is addressed by our [configuration file](https://github.com/scverse/spatialdata/blob/main/.github/release.yml). It organizes release notes by change type, inferred from GitHub labels, and ignores PRs from bots. We recommend opening the PRs included in the release and adding the appropriate labels. The automatic generation will then group PRs by [release labels](https://github.com/scverse/spatialdata/labels?q=release-) and list each PR on a separate line. Here is an example output:
 
-Before uploading them to [PyPI][] you can check that your _distribution_ is valid by running:
+```
+<!-- Release notes generated using configuration in .github/release.yml at main -->
 
-```bash
-twine check dist/*
+## What's Changed
+### Major
+* Adding `attrs` at the `SpatialData` object level by @quentinblampey in https://github.com/scverse/spatialdata/pull/711
+### Minor
+* Add asv benchmark code by @berombau in https://github.com/scverse/spatialdata/pull/784
+* relabel block by @ArneDefauw in https://github.com/scverse/spatialdata/pull/664
+* validate tables while parsing by @melonora in https://github.com/scverse/spatialdata/pull/808
+### Fixed
+* relaxed fsspec version by @LucaMarconato in https://github.com/scverse/spatialdata/pull/798
+* fix for to_polygons when using processes instead of threads in dask by @ArneDefauw in https://github.com/scverse/spatialdata/pull/756
+* Fix `transform_to_data_extent` converting labels to images by @aeisenbarth in https://github.com/scverse/spatialdata/pull/791
+* fix join non matching table by @melonora in https://github.com/scverse/spatialdata/pull/813
+
+
+**Full Changelog**: https://github.com/scverse/spatialdata/compare/v0.2.6...v0.2.7
 ```
 
-and finally publishing it with:
+Use informative titles for PRs, as these will serve as section titles in the release notes (rename the PRs if necessary). You can also manually edit the release notes before publishing them to improve readability.
 
-```bash
-twine upload dist/*
-```
+Some additional considerations
+- Important! If a PR is large and its title isn't informative or requires multiple lines, **do not** add a release tag. Instead, in the first message of the PR discussion, please include a markdown section with a brief description of the intended release notes. This will allow the person making a release to manually add the PR content to the release notes during the release process.
+- Please avoid redundancy and do not add the same release notes to consecutive pre-releases/releases/post-releases.
+- When automatically generating the release notes, you can use the button "Previous tag: ..." to choose which PRs will be included in the release notes.
+- Finally, you can see an example of a release in action in from Luca [this short video tutorial](https://www.loom.com/share/7097455bc0b9449fbe72d53fc778cbf9).
 
-Provide your username and password when requested and then go check out your package on [PyPI][]!
+### Publishing to conda-forge
 
-For more information, follow the [Python packaging tutorial][].
+Shortly after you make a release in PyPI, a new PR will be automatically made in the conda-forge "feedstock repository" for the package (this has been previously setup). The PR will contain a checklist of which tasks should be done to be able to merge the PR. Once the PR is merged, the package will be available in the conda-forge channel.
 
-It is possible to automate this with GitHub actions, see also [this feature request][pypi-feature-request]
-in the cookiecutter-scverse template.
-
-[python packaging tutorial]: https://packaging.python.org/en/latest/tutorials/packaging-projects/#generating-distribution-archives
-[pypi-feature-request]: https://github.com/scverse/cookiecutter-scverse/issues/88
+Practically, the changes that usually needs to be done are comparing the package requirements in `pyproject.toml` from your repository, with the packages and versions in the `meta.yaml` file in the conda-forge feedstock repository. If there are any differences, you should update the `meta.yaml` file accordingly. After that, the CI will run and if green the PR can be merged.
 
 ## Writing documentation
 
