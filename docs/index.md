@@ -68,6 +68,7 @@ tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
 design_doc.md
 contributing.md
+changelog.md
 references.md
 ```
 
