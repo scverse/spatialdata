@@ -14,7 +14,7 @@ Install `spatialdata` by running:
 
 The SpatialData ecosystem is designed to work with the following packages:
 
--   [spatialdata-io][]: `spatialdata` readers for common spatial omics technologies.
+-   [spatialdata-io][]: `spatialdata` readers and converters for common spatial omics technologies.
 -   [spatialdata-plot][]: Static plotting library for `spatialdata`.
 -   [napari-spatialdata][]: napari plugin for `spatialdata`.
 

@@ -251,7 +251,7 @@ class MapAxis(BaseTransformation):
     Parameters
     ----------
     map_axis
-        Dictionnary with keys being the input axes and values the output axes.
+        Dictionary with keys being the input axes and values the output axes.
     """
 
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
