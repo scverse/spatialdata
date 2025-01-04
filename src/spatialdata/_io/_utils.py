@@ -16,9 +16,8 @@ import zarr
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import get_pyramid_levels
@@ -53,7 +52,7 @@ def _get_transformations_from_ngff_dict(
     list_of_ngff_transformations = [NgffBaseTransformation.from_dict(d) for d in list_of_encoded_ngff_transformations]
     list_of_transformations = [BaseTransformation.from_ngff(t) for t in list_of_ngff_transformations]
     transformations = {}
-    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations):
+    for ngff_t, t in zip(list_of_ngff_transformations, list_of_transformations, strict=True):
         assert ngff_t.output_coordinate_system is not None
         transformations[ngff_t.output_coordinate_system.name] = t
     return transformations
@@ -103,6 +102,27 @@ def overwrite_coordinate_transformations_raster(
     multiscale["coordinateTransformations"] = coordinate_transformations
     # multiscale["coordinateSystems"] = [t.output_coordinate_system_name for t in ngff_transformations]
     group.attrs["multiscales"] = multiscales
+
+
+def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
+    """Write channel metadata to a group."""
+    if isinstance(element, DataArray):
+        channel_names = element.coords["c"].data.tolist()
+    else:
+        channel_names = element["scale0"]["image"].coords["c"].data.tolist()
+
+    channel_metadata = [{"label": name} for name in channel_names]
+    omero_meta = group.attrs["omero"]
+    omero_meta["channels"] = channel_metadata
+    group.attrs["omero"] = omero_meta
+    multiscales_meta = group.attrs["multiscales"]
+    if len(multiscales_meta) != 1:
+        raise ValueError(
+            f"Multiscale metadata must be of length one but got length {len(multiscales_meta)}. Data might"
+            f"be corrupted."
+        )
+    multiscales_meta[0]["metadata"]["omero"]["channels"] = channel_metadata
+    group.attrs["multiscales"] = multiscales_meta
 
 
 def _write_metadata(
@@ -213,7 +233,7 @@ def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> l
 def _(element: SpatialData) -> list[str]:
     files: set[str] = set()
     for e in element._gen_spatial_element_values():
-        if isinstance(e, (DataArray, DataTree, DaskDataFrame)):
+        if isinstance(e, DataArray | DataTree | DaskDataFrame):
             files = files.union(get_dask_backing_files(e))
     return list(files)
 

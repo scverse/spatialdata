@@ -47,3 +47,5 @@ _version.py
 
 # other
 node_modules/
+
+.asv/

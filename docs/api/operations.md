@@ -19,11 +19,13 @@ Operations on `SpatialData` objects.
 .. autofunction:: transform
 .. autofunction:: rasterize
 .. autofunction:: rasterize_bins
+.. autofunction:: rasterize_bins_link_table_to_labels
 .. autofunction:: to_circles
 .. autofunction:: to_polygons
 .. autofunction:: aggregate
 .. autofunction:: map_raster
 .. autofunction:: unpad_raster
+.. autofunction:: relabel_sequential
 .. autofunction:: are_extents_equal
 .. autofunction:: deepcopy
 .. autofunction:: get_pyramid_levels

@@ -54,11 +54,9 @@ and [prettier][prettier-editors].
 Remember to first install the package with `pip install '-e[dev,test]'`
 ```
 
-This package uses the [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added
-to the package.
+This package uses [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added to the package.
 
-Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the
-command line by executing
+Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the command line by executing
 
 ```bash
 pytest
@@ -66,7 +64,15 @@ pytest
 
 in the root of the repository. Continuous integration will automatically run the tests on all pull requests.
 
+### Continuous integration
+
+Continuous integration will automatically run the tests on all pull requests and test against the minimum and maximum supported Python version.
+
+Additionally, there's a CI job that tests against pre-releases of all dependencies (if there are any). The purpose of this check is to detect incompatibilities of new package versions early on and gives you time to fix the issue or reach out to the developers of the dependency before the package is released to a wider audience.
+
 [scanpy-test-docs]: https://scanpy.readthedocs.io/en/latest/dev/testing.html#writing-tests
+
+By including this additional information, the document now provides a more comprehensive overview of the continuous integration process related to testing.
 
 ## Publishing a release
 
@@ -169,6 +175,12 @@ cd docs
 make html
 open _build/html/index.html
 ```
+
+### Debugging and profiling
+
+There are various tools available to help you understand the existing code base and your new code contributions. For debugging code there are multiple resources available: [Scientific Python](https://lectures.scientific-python.org/advanced/debugging/index.html), [VSCode](https://code.visualstudio.com/docs/python/debugging) and [PyCharm](https://www.jetbrains.com/help/pycharm/debugging-your-first-python-application.html).
+
+To find out the time or memory performance of your code, profilers can help. Again, various resources from [Scientific Python](https://lectures.scientific-python.org/advanced/optimizing/index.html), [napari](https://napari.org/stable/developers/contributing/performance/index.html), [PyCharm](https://www.jetbrains.com/help/pycharm/profiler.html) and [Dask](https://distributed.dask.org/en/latest/diagnosing-performance.html) can be helpful.
 
 <!-- Links -->
 

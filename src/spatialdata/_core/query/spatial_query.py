@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import warnings
 from abc import abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
 from spatialdata._core.query._utils import (
@@ -34,6 +33,7 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
@@ -534,7 +534,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -608,7 +608,7 @@ def _(
 
     if isinstance(query_result, list):
         processed_results = []
-        for result, translation_vector in zip(query_result, translation_vectors):
+        for result, translation_vector in zip(query_result, translation_vectors, strict=True):
             processed_result = _process_query_result(result, translation_vector, axes)
             if processed_result is not None:
                 processed_results.append(processed_result)
@@ -693,7 +693,7 @@ def _(
 
     # transform the element to the query coordinate system
     output: list[DaskDataFrame | None] = []
-    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate):
+    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
         if p is None:
             output.append(None)
         else:
@@ -705,8 +705,8 @@ def _(
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,
-                max_coordinate=max_c,
+                min_coordinate=min_c,  # type: ignore[arg-type]
+                max_coordinate=max_c,  # type: ignore[arg-type]
             )
             if len(bounding_box_mask) == 1:
                 bounding_box_mask = bounding_box_mask[0]
@@ -718,9 +718,13 @@ def _(
                 points_df = p.compute().iloc[bounding_box_indices]
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
+                feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+
                 output.append(
                     PointsModel.parse(
-                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                        dd.from_pandas(points_df, npartitions=1),
+                        transformations=old_transformations.copy(),
+                        feature_key=feature_key,
                     )
                 )
     if len(output) == 0:
@@ -889,7 +893,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
@@ -934,10 +938,11 @@ def _(
     queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
+    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)
