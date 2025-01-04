@@ -1,4 +1,4 @@
-## Transformations
+# Transformations
 
 The transformations that can be defined between elements and coordinate systems in `SpatialData`.
 

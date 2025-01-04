@@ -1,4 +1,4 @@
-## Transformations utils
+# Transformations utils
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.transformations

@@ -1,4 +1,4 @@
-## SpatialData object
+# SpatialData object
 
 ```{eval-rst}
 .. currentmodule:: spatialdata

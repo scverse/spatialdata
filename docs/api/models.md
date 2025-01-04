@@ -1,4 +1,4 @@
-## Models
+# Models
 
 The elements (building-blocks) that constitute `SpatialData`.
 

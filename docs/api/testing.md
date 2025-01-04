@@ -1,4 +1,4 @@
-## Testing utilities
+# Testing utilities
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.testing

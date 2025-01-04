@@ -1,4 +1,4 @@
-## Operations
+# Operations
 
 Operations on `SpatialData` objects.
 
@@ -13,7 +13,6 @@ Operations on `SpatialData` objects.
 .. autofunction:: get_centroids
 .. autofunction:: join_spatialelement_table
 .. autofunction:: match_element_to_table
-.. autofunction:: get_centroids
 .. autofunction:: match_table_to_element
 .. autofunction:: concatenate
 .. autofunction:: transform

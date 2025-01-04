@@ -1,4 +1,4 @@
-## Data Loaders
+# Data Loaders
 
 ```{eval-rst}
 .. currentmodule:: spatialdata.dataloader
