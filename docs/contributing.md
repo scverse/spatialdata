@@ -54,11 +54,9 @@ and [prettier][prettier-editors].
 Remember to first install the package with `pip install '-e[dev,test]'`
 ```
 
-This package uses the [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added
-to the package.
+This package uses [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added to the package.
 
-Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the
-command line by executing
+Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the command line by executing
 
 ```bash
 pytest
@@ -66,7 +64,15 @@ pytest
 
 in the root of the repository. Continuous integration will automatically run the tests on all pull requests.
 
+### Continuous integration
+
+Continuous integration will automatically run the tests on all pull requests and test against the minimum and maximum supported Python version.
+
+Additionally, there's a CI job that tests against pre-releases of all dependencies (if there are any). The purpose of this check is to detect incompatibilities of new package versions early on and gives you time to fix the issue or reach out to the developers of the dependency before the package is released to a wider audience.
+
 [scanpy-test-docs]: https://scanpy.readthedocs.io/en/latest/dev/testing.html#writing-tests
+
+By including this additional information, the document now provides a more comprehensive overview of the continuous integration process related to testing.
 
 ## Publishing a release
 
