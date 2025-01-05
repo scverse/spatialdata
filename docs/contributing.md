@@ -143,10 +143,10 @@ in the cookiecutter-scverse template.
 
 Please write documentation for new or changed features and use-cases. This project uses [sphinx][] with the following features:
 
--   the [myst][] extension allows to write documentation in markdown/Markedly Structured Text
--   [Numpy-style docstrings][numpydoc] (through the [napoloen][numpydoc-napoleon] extension).
--   Jupyter notebooks as tutorials through [myst-nb][] (See [Tutorials with myst-nb](#tutorials-with-myst-nb-and-jupyter-notebooks))
--   [Sphinx autodoc typehints][], to automatically reference annotated input and output types
+- the [myst][] extension allows to write documentation in markdown/Markedly Structured Text
+- [Numpy-style docstrings][numpydoc] (through the [napoloen][numpydoc-napoleon] extension).
+- Jupyter notebooks as tutorials through [myst-nb][] (See [Tutorials with myst-nb](#tutorials-with-myst-nb-and-jupyter-notebooks))
+- [Sphinx autodoc typehints][], to automatically reference annotated input and output types
 
 See the [scanpy developer docs](https://scanpy.readthedocs.io/en/latest/dev/documentation.html) for more information
 on how to write documentation.
@@ -163,10 +163,10 @@ repository.
 
 #### Hints
 
--   If you refer to objects from other packages, please add an entry to `intersphinx_mapping` in `docs/conf.py`. Only
-    if you do so can sphinx automatically create a link to the external documentation.
--   If building the documentation fails because of a missing link that is outside your control, you can add an entry to
-    the `nitpick_ignore` list in `docs/conf.py`
+- If you refer to objects from other packages, please add an entry to `intersphinx_mapping` in `docs/conf.py`. Only
+  if you do so can sphinx automatically create a link to the external documentation.
+- If building the documentation fails because of a missing link that is outside your control, you can add an entry to
+  the `nitpick_ignore` list in `docs/conf.py`
 
 #### Building the docs locally
 
