@@ -477,7 +477,6 @@ def bounding_box_query(
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or SpatialElement within a bounding box.
-    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues.
 
     This function can also be accessed as a method of a `SpatialData` object,
     via `sdata.query.bounding_box(...)`, without specifying `element`.
@@ -505,6 +504,11 @@ def bounding_box_query(
     -------
     The SpatialData object or SpatialElement containing the requested data.
     Eventual empty Elements are omitted by the SpatialData object.
+
+    Notes
+    -----
+    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
+    consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -523,8 +527,13 @@ def _(
     new_elements = {}
     if sdata.points:
         warnings.warn(
-            "Your SpatialData object has points element. Thus maybe suffer from performance issues when querying.",
+            (
+                "The object has `points` element. Depending on the number of points, querying MAY suffer from "
+                "performance issues. Please consider filtering the object before calling this function by calling the "
+                "`subset()` method of `SpatialData`."
+            ),
             UserWarning,
+            stacklevel=2,
         )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
