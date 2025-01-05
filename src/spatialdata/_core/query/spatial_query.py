@@ -504,6 +504,11 @@ def bounding_box_query(
     -------
     The SpatialData object or SpatialElement containing the requested data.
     Eventual empty Elements are omitted by the SpatialData object.
+
+    Notes
+    -----
+    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
+    consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -520,6 +525,16 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
+    if sdata.points:
+        warnings.warn(
+            (
+                "The object has `points` element. Depending on the number of points, querying MAY suffer from "
+                "performance issues. Please consider filtering the object before calling this function by calling the "
+                "`subset()` method of `SpatialData`."
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
