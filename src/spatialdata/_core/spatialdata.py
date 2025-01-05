@@ -494,6 +494,19 @@ class SpatialData:
 
     @property
     def query(self) -> QueryManager:
+        """
+        An accessor to the query operations.
+
+        Examples
+        --------
+        >>> sdata.query.bounding_box_query(...)
+        >>> sdata.query.polygon_query(...)
+
+        See Also
+        --------
+        spatialdata.bounding_box_query
+        spatialdata.polygon_query
+        """
         return self._query
 
     def aggregate(
