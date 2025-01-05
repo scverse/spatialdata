@@ -144,7 +144,7 @@ class ImageTilesDataset(Dataset):
                 **dict(rasterize_kwargs),
             )
             if rasterize
-            else bounding_box_query  # type: ignore[assignment]
+            else bounding_box_query
         )
         self._return = self._get_return(return_annotations, table_name)
         self.transform = transform

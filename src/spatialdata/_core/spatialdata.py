@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import warnings
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -23,7 +23,10 @@ from xarray import DataArray, DataTree
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _deprecation_alias, _error_message_add_element
+from spatialdata._utils import (
+    _deprecation_alias,
+    _error_message_add_element,
+)
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -36,7 +39,12 @@ from spatialdata.models import (
     get_model,
     get_table_keys,
 )
-from spatialdata.models._utils import SpatialElement, convert_region_column_to_categorical, get_axes_names
+from spatialdata.models._utils import (
+    SpatialElement,
+    convert_region_column_to_categorical,
+    get_axes_names,
+    set_channel_names,
+)
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
@@ -114,6 +122,7 @@ class SpatialData:
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
         tables: dict[str, AnnData] | Tables | None = None,
+        attrs: Mapping[Any, Any] | None = None,
     ) -> None:
         self._path: Path | None = None
 
@@ -123,6 +132,7 @@ class SpatialData:
         self._points: Points = Points(shared_keys=self._shared_keys)
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
+        self.attrs = attrs if attrs else {}  # type: ignore[assignment]
 
         # Workaround to allow for backward compatibility
         if isinstance(tables, AnnData):
@@ -208,7 +218,9 @@ class SpatialData:
                         )
 
     @staticmethod
-    def from_elements_dict(elements_dict: dict[str, SpatialElement | AnnData]) -> SpatialData:
+    def from_elements_dict(
+        elements_dict: dict[str, SpatialElement | AnnData], attrs: Mapping[Any, Any] | None = None
+    ) -> SpatialData:
         """
         Create a SpatialData object from a dict of elements.
 
@@ -217,38 +229,20 @@ class SpatialData:
         elements_dict
             Dict of elements. The keys are the names of the elements and the values are the elements.
             A table can be present in the dict, but only at most one; its name is not used and can be anything.
+        attrs
+            Additional attributes to store in the SpatialData object.
 
         Returns
         -------
         The SpatialData object.
         """
-        d: dict[str, dict[str, SpatialElement] | AnnData | None] = {
-            "images": {},
-            "labels": {},
-            "points": {},
-            "shapes": {},
-            "tables": {},
-        }
-        for k, e in elements_dict.items():
-            schema = get_model(e)
-            if schema in (Image2DModel, Image3DModel):
-                assert isinstance(d["images"], dict)
-                d["images"][k] = e
-            elif schema in (Labels2DModel, Labels3DModel):
-                assert isinstance(d["labels"], dict)
-                d["labels"][k] = e
-            elif schema == PointsModel:
-                assert isinstance(d["points"], dict)
-                d["points"][k] = e
-            elif schema == ShapesModel:
-                assert isinstance(d["shapes"], dict)
-                d["shapes"][k] = e
-            elif schema == TableModel:
-                assert isinstance(d["tables"], dict)
-                d["tables"][k] = e
-            else:
-                raise ValueError(f"Unknown schema {schema}")
-        return SpatialData(**d)  # type: ignore[arg-type]
+        warnings.warn(
+            'This method is deprecated and will be removed in a future release. Use "SpatialData.init_from_elements('
+            ')" instead. For the momment, such methods will be automatically called.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return SpatialData.init_from_elements(elements=elements_dict, attrs=attrs)
 
     @staticmethod
     def get_annotated_regions(table: AnnData) -> str | list[str]:
@@ -314,6 +308,26 @@ class SpatialData:
         if table.obs.get(instance_key) is not None:
             return table.obs[instance_key]
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
+
+    def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
+        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+        This method assumes that the `SpatialData` object and the element are already stored on disk as it will
+        also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
+        element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+
+        Parameters
+        ----------
+        element_name
+            Name of the image `SpatialElement`.
+        channel_names
+            The channel names to be assigned to the c dimension of the image `SpatialElement`.
+        write
+            Whether to overwrite the channel metadata on disk.
+        """
+        self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
+        if write:
+            self.write_channel_names(element_name)
 
     @staticmethod
     def _set_table_annotation_target(
@@ -684,7 +698,7 @@ class SpatialData:
             set(), filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
         )
 
-        return SpatialData(**elements, tables=tables)
+        return SpatialData(**elements, tables=tables, attrs=self.attrs)
 
     # TODO: move to relational query with refactor
     def _filter_tables(
@@ -926,7 +940,7 @@ class SpatialData:
                 if element_type not in elements:
                     elements[element_type] = {}
                 elements[element_type][element_name] = transformed
-        return SpatialData(**elements, tables=sdata.tables)
+        return SpatialData(**elements, tables=sdata.tables, attrs=self.attrs)
 
     def elements_are_self_contained(self) -> dict[str, bool]:
         """
@@ -1151,7 +1165,8 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
 
         store = parse_url(file_path, mode="w").store
-        _ = zarr.group(store=store, overwrite=overwrite)
+        zarr_group = zarr.group(store=store, overwrite=overwrite)
+        self.write_attrs(zarr_group=zarr_group)
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
@@ -1441,6 +1456,45 @@ class SpatialData:
             )
         return element_type, element
 
+    def write_channel_names(self, element_name: str | None = None) -> None:
+        """
+        Write channel names to disk for a single image element, or for all image elements, without rewriting the data.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to write the channel names of. If None, write the channel names of all image
+            elements.
+        """
+        from spatialdata._core._elements import Elements
+
+        if element_name is not None:
+            Elements._check_valid_name(element_name)
+
+        # recursively write the transformation for all the SpatialElement
+        if element_name is None:
+            for element_name in list(self.images.keys()):
+                self.write_channel_names(element_name)
+            return
+
+        validation_result = self._validate_can_write_metadata_on_element(element_name)
+        if validation_result is None:
+            return
+
+        element_type, element = validation_result
+
+        # Mypy does not understand that path is not None so we have the check in the conditional
+        if element_type == "images" and self.path is not None:
+            _, _, element_group = self._get_groups_for_element(
+                zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            )
+
+            from spatialdata._io._utils import overwrite_channel_names
+
+            overwrite_channel_names(element_group, element)
+        else:
+            raise ValueError(f"Can't set channel names for element of type '{element_type}'.")
+
     def write_transformations(self, element_name: str | None = None) -> None:
         """
         Write transformations to disk for a single element, or for all elements, without rewriting the data.
@@ -1471,6 +1525,7 @@ class SpatialData:
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
 
+        # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
         _, _, element_group = self._get_groups_for_element(
             zarr_path=Path(self.path), element_type=element_type, element_name=element_name
@@ -1515,7 +1570,36 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_metadata(self, element_name: str | None = None, consolidate_metadata: bool | None = None) -> None:
+    def write_attrs(self, format: SpatialDataFormat | None = None, zarr_group: zarr.Group | None = None) -> None:
+        from spatialdata._io.format import _parse_formats
+
+        parsed = _parse_formats(formats=format)
+
+        store = None
+
+        if zarr_group is None:
+            assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
+            store = parse_url(self.path, mode="r+").store
+            zarr_group = zarr.group(store=store, overwrite=False)
+
+        version = parsed["SpatialData"].spatialdata_format_version
+        version_specific_attrs = parsed["SpatialData"].attrs_to_dict()
+        attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
+
+        try:
+            zarr_group.attrs.put(attrs_to_write)
+        except TypeError as e:
+            raise TypeError("Invalid attribute in SpatialData.attrs") from e
+
+        if store is not None:
+            store.close()
+
+    def write_metadata(
+        self,
+        element_name: str | None = None,
+        consolidate_metadata: bool | None = None,
+        write_attrs: bool = True,
+    ) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
 
@@ -1546,9 +1630,12 @@ class SpatialData:
             Elements._check_valid_name(element_name)
 
         self.write_transformations(element_name)
+        self.write_channel_names(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
-        # TODO: write omero metadata for the channel name of images.
+
+        if write_attrs:
+            self.write_attrs()
 
         if consolidate_metadata is None and self.has_consolidated_metadata():
             consolidate_metadata = True
@@ -1569,11 +1656,12 @@ class SpatialData:
         return self._tables
 
     @tables.setter
-    def tables(self, shapes: dict[str, GeoDataFrame]) -> None:
+    def tables(self, tables: dict[str, AnnData]) -> None:
         """Set tables."""
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
-        for k, v in shapes.items():
+        for k, v in tables.items():
+            TableModel().validate(v)
             self._tables[k] = v
 
     @property
@@ -2035,9 +2123,11 @@ class SpatialData:
         return found[0]
 
     @classmethod
-    @_deprecation_alias(table="tables", version="0.1.0")
     def init_from_elements(
-        cls, elements: dict[str, SpatialElement], tables: AnnData | dict[str, AnnData] | None = None
+        cls,
+        elements: dict[str, SpatialElement],
+        tables: AnnData | dict[str, AnnData] | None = None,
+        attrs: Mapping[Any, Any] | None = None,
     ) -> SpatialData:
         """
         Create a SpatialData object from a dict of named elements and an optional table.
@@ -2048,6 +2138,8 @@ class SpatialData:
             A dict of named elements.
         tables
             An optional table or dictionary of tables
+        attrs
+            Additional attributes to store in the SpatialData object.
 
         Returns
         -------
@@ -2062,11 +2154,33 @@ class SpatialData:
                 element_type = "labels"
             elif model == PointsModel:
                 element_type = "points"
+            elif model == TableModel:
+                element_type = "tables"
             else:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        return cls(**elements_dict, tables=tables)
+        # when the "tables" argument is removed, we can remove all this if block
+        if tables is not None:
+            warnings.warn(
+                'The "tables" argument is deprecated and will be removed in a future version. Please '
+                "specifies the tables in the `elements` argument. Until the removal occurs, the `elements` "
+                "variable will be automatically populated with the tables if the `tables` argument is not None.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if "tables" in elements_dict:
+                raise ValueError(
+                    "The tables key is already present in the elements dictionary. Please do not specify "
+                    "the `tables` argument."
+                )
+            elements_dict["tables"] = {}
+            if isinstance(tables, AnnData):
+                elements_dict["tables"]["table"] = tables
+            else:
+                for name, table in tables.items():
+                    elements_dict["tables"][name] = table
+        return cls(**elements_dict, attrs=attrs)
 
     def subset(
         self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
@@ -2105,7 +2219,7 @@ class SpatialData:
             include_orphan_tables,
             elements_dict=elements_dict,
         )
-        return SpatialData(**elements_dict, tables=tables)
+        return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
     def __getitem__(self, item: str) -> SpatialElement:
         """
@@ -2186,6 +2300,45 @@ class SpatialData:
         """
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
+
+    @property
+    def attrs(self) -> dict[Any, Any]:
+        """
+        Dictionary of global attributes on this SpatialData object.
+
+        Notes
+        -----
+        Operations on SpatialData objects such as `subset()`, `query()`, ..., will pass the `.attrs` by
+        reference. If you want to modify the `.attrs` without affecting the original object, you should
+        either use `copy.deepcopy(sdata.attrs)` or eventually copy the SpatialData object using
+        `spatialdata.deepcopy()`.
+        """
+        return self._attrs
+
+    @attrs.setter
+    def attrs(self, value: Mapping[Any, Any]) -> None:
+        """
+        Set the global attributes on this SpatialData object.
+
+        Parameters
+        ----------
+        value
+            The new attributes to set.
+
+        Notes
+        -----
+        If a dict is passed, the attrs will be passed by reference, else if a mapping is passed,
+        the mapping will be casted to a dict (shallow copy), i.e. if the mapping contains a dict inside,
+        that dict will be passed by reference.
+        """
+        if isinstance(value, dict):
+            # even if we call dict(value), we still get a shallow copy. For example, dict({'a': {'b': 1}}) will return
+            # a new dict, {'b': 1} is passed by reference. For this reason, we just pass .attrs by reference, which is
+            # more performant. The user can always use copy.deepcopy(sdata.attrs), or spatialdata.deepcopy(sdata), to
+            # get the attrs deepcopied.
+            self._attrs = value
+        else:
+            self._attrs = dict(value)
 
 
 class QueryManager:

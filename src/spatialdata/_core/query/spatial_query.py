@@ -33,6 +33,7 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
@@ -478,8 +479,13 @@ def bounding_box_query(
     Query a SpatialData object or SpatialElement within a bounding box.
     If the object has `points` element, depending on the number of points, it MAY suffer from performance issues.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.bounding_box(...)`, without specifying `element`.
+
     Parameters
     ----------
+    element
+        The SpatialElement or SpatialData object to query.
     axes
         The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
@@ -534,7 +540,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -705,8 +711,8 @@ def _(
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,
-                max_coordinate=max_c,
+                min_coordinate=min_c,  # type: ignore[arg-type]
+                max_coordinate=max_c,  # type: ignore[arg-type]
             )
             if len(bounding_box_mask) == 1:
                 bounding_box_mask = bounding_box_mask[0]
@@ -718,9 +724,13 @@ def _(
                 points_df = p.compute().iloc[bounding_box_indices]
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
+                feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+
                 output.append(
                     PointsModel.parse(
-                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                        dd.from_pandas(points_df, npartitions=1),
+                        transformations=old_transformations.copy(),
+                        feature_key=feature_key,
                     )
                 )
     if len(output) == 0:
@@ -815,6 +825,9 @@ def polygon_query(
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.polygon(...)`, without specifying `element`.
+
     Parameters
     ----------
     element
@@ -886,7 +899,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
@@ -931,10 +944,11 @@ def _(
     queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
+    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)

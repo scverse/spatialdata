@@ -214,7 +214,7 @@ def _filter_table_by_elements(
             # some instances have not a corresponding row in the table
             instances = np.setdiff1d(instances, n0)
         assert np.sum(to_keep) == len(instances)
-        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))
+        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))  # type: ignore[type-var]
         table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
         merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
         matched_positions = merged["position"].to_numpy()
@@ -253,12 +253,12 @@ def _get_joined_table_indices(
     mask = table_instance_key_column.isin(element_indices)
     if joined_indices is None:
         if match_rows == "left":
-            joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+            _, joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
         else:
             joined_indices = table_instance_key_column[mask].index
     else:
         if match_rows == "left":
-            add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+            _, add_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
             joined_indices = joined_indices.append(add_indices)
         # in place append does not work with pd.Index
         else:
@@ -294,8 +294,14 @@ def _get_masked_element(
     mask = table_instance_key_column.isin(element_indices)
     masked_table_instance_key_column = table_instance_key_column[mask]
     mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
-    if match_rows == "right":
-        mask_values = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+    if match_rows in ["left", "right"]:
+        left_index, _ = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+
+        if mask_values is not None and len(left_index) != len(mask_values):
+            mask = left_index.isin(mask_values)
+            mask_values = left_index[mask]
+        else:
+            mask_values = left_index
 
     if isinstance(element, DaskDataFrame):
         return element.map_partitions(lambda df: df.loc[mask_values], meta=element)
@@ -404,6 +410,9 @@ def _inner_join_spatialelement_table(
                 element_dict[element_type][name] = None
                 continue
 
+    if joined_indices is not None:
+        joined_indices = joined_indices.dropna() if any(joined_indices.isna()) else joined_indices
+
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     return element_dict, joined_table
@@ -467,7 +476,11 @@ def _left_join_spatialelement_table(
                 )
                 continue
 
-    joined_indices = joined_indices.dropna() if joined_indices is not None else None
+    if joined_indices is not None:
+        joined_indices = joined_indices.dropna()
+        # if nan were present, the dtype would have been changed to float
+        if joined_indices.dtype == float:
+            joined_indices = joined_indices.astype(int)
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
 
@@ -479,22 +492,24 @@ def _match_rows(
     mask: pd.Series,
     element_indices: pd.RangeIndex,
     match_rows: str,
-) -> pd.Index:
+) -> tuple[pd.Index, pd.Index]:
     instance_id_df = pd.DataFrame(
         {"instance_id": table_instance_key_column[mask].values, "index_right": table_instance_key_column[mask].index}
     )
     element_index_df = pd.DataFrame({"index_left": element_indices})
-    index_col = "index_left" if match_rows == "right" else "index_right"
 
-    merged_df = pd.merge(
-        element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows
-    )[index_col]
+    merged_df = pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)
+    index_left = merged_df["index_left"]
+    index_right = merged_df["index_right"]
 
     # With labels it can be that index 0 is NaN
-    if isinstance(merged_df.iloc[0], float) and math.isnan(merged_df.iloc[0]):
-        merged_df = merged_df.iloc[1:]
+    if isinstance(index_left.iloc[0], float) and math.isnan(index_left.iloc[0]):
+        index_left = index_left.iloc[1:]
 
-    return pd.Index(merged_df)
+    if isinstance(index_right.iloc[0], float) and math.isnan(index_right.iloc[0]):
+        index_right = index_right.iloc[1:]
+
+    return pd.Index(index_left), pd.Index(index_right)
 
 
 class JoinTypes(Enum):

@@ -125,6 +125,7 @@ def transform_to_data_extent(
                 target_width=target_width,
                 target_height=None,
                 target_depth=None,
+                return_regions_as_labels=True,
             )
             sdata_to_return_elements[element_name] = rasterized
         else:
@@ -134,7 +135,7 @@ def transform_to_data_extent(
             set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
-    return SpatialData.from_elements_dict(sdata_to_return_elements)
+    return SpatialData.from_elements_dict(sdata_to_return_elements, attrs=sdata.attrs)
 
 
 def _parse_element(
