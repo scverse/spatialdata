@@ -46,8 +46,8 @@ If applicable, add screenshots to help explain your problem.
 
 **Desktop (optional):**
 
-- OS: [e.g. macOS, Windows, Linux]
-- Version [e.g. 22]
+-   OS: [e.g. macOS, Windows, Linux]
+-   Version [e.g. 22]
 
 **Additional context**
 Add any other context about the problem here.
