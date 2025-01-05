@@ -717,6 +717,13 @@ def test_get_values_table(sdata_blobs):
     assert len(df) == 26
 
 
+def test_get_values_table_different_layer(sdata_blobs):
+    sdata_blobs["table"].layers["layer"] = np.log1p(sdata_blobs["table"].X)
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+    df_layer = get_values(value_key="channel_0_sum", element=sdata_blobs["table"], table_layer="layer")
+    assert np.allclose(np.log1p(df), df_layer)
+
+
 def test_get_values_table_element_name(sdata_blobs):
     sdata_blobs["table"].obs["region"] = sdata_blobs["table"].obs["region"].cat.add_categories("another_region")
     sdata_blobs["table"].obs.loc["1", "region"] = "another_region"
