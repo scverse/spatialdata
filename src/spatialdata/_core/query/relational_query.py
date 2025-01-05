@@ -841,6 +841,7 @@ def get_values(
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
+    table_layer: str | None = None,
     return_obsm_as_is: bool = False,
 ) -> pd.DataFrame | ArrayLike:
     """
@@ -860,6 +861,8 @@ def get_values(
         annotating the element_name.
     table_name
         Name of the table to get the values from.
+    table_layer
+        Layer of the table to get the values from. If None, the values are taken from X.
     return_obsm_as_is
         In case the value is in obsm the value of the key can be returned as is if return_obsm_as_is is True, otherwise
         creates a dataframe and returns it.
@@ -930,7 +933,12 @@ def get_values(
             df = obs[value_key_values].copy()
         if origin == "var":
             matched_table.obs = pd.DataFrame(obs)
-            x = matched_table[:, value_key_values].X
+            if table_layer is None:
+                x = matched_table[:, value_key_values].X
+            else:
+                if table_layer not in matched_table.layers:
+                    raise ValueError(f"Layer {table_layer} was not found.")
+                x = matched_table[:, value_key_values].layers[table_layer]
             import scipy
 
             if isinstance(x, scipy.sparse.csr_matrix | scipy.sparse.csc_matrix | scipy.sparse.coo_matrix):
