@@ -1112,8 +1112,8 @@ class SpatialData:
                 )
             if not overwrite:
                 raise ValueError(
-                    "The Zarr store already exists. Use `overwrite=True` to try overwriting the store."
-                    "Please note that only Zarr stores not currently in used by the current SpatialData object can be "
+                    "The Zarr store already exists. Use `overwrite=True` to try overwriting the store. "
+                    "Please note that only Zarr stores not currently in use by the current SpatialData object can be "
                     "overwritten."
                 )
             ERROR_MSG = (
