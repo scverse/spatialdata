@@ -318,6 +318,64 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     )
 
 
+def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    sdata["values_circles"] = sdata["values_circles"][4:]
+    original_index = sdata["values_circles"].index
+    reversed_instance_id = [3, 5, 8, 7, 6, 4, 1, 2, 0] + list(reversed(range(12)))
+    sdata["table"].obs["instance_id"] = reversed_instance_id
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names="values_circles",
+        table_name="table",
+        how="inner",
+        match_rows="left",
+    )
+    assert all(table.obs["instance_id"].values == original_index)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names="values_circles",
+        table_name="table",
+        how="inner",
+        match_rows="right",
+    )
+
+    assert all(element_dict["values_circles"].index == [5, 8, 7, 6, 4])
+
+
+def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    table = sdata["table"][3:]
+    original_instance_id = table.obs["instance_id"]
+    reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
+    table.obs["instance_id"] = reversed_instance_id
+    sdata["table"] = table
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="left",
+    )
+
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="right",
+    )
+
+    indices = element_dict["values_circles"].index.append(element_dict["values_polygons"].index)
+
+    assert all(indices == reversed_instance_id)
+
+
 # TODO: there is a lot of dublicate code, simplify with a function that tests both the case sdata=None and sdata=sdata
 def test_match_rows_join(sdata_query_aggregation):
     sdata = sdata_query_aggregation
@@ -657,6 +715,13 @@ def test_get_values_table(sdata_blobs):
     df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 26
+
+
+def test_get_values_table_different_layer(sdata_blobs):
+    sdata_blobs["table"].layers["layer"] = np.log1p(sdata_blobs["table"].X)
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+    df_layer = get_values(value_key="channel_0_sum", element=sdata_blobs["table"], table_layer="layer")
+    assert np.allclose(np.log1p(df), df_layer)
 
 
 def test_get_values_table_element_name(sdata_blobs):

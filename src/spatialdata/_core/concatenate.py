@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top
 from itertools import chain
 from typing import Any
@@ -9,6 +9,7 @@ from warnings import warn
 
 import numpy as np
 from anndata import AnnData
+from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
 
 from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
@@ -51,7 +52,7 @@ def _concatenate_tables(
             raise ValueError("`instance_key` must be specified if tables have different instance keys")
 
     tables_l = []
-    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables):
+    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables, strict=True):
         rename_dict = {}
         if table_region_key != region_key:
             rename_dict[table_region_key] = region_key
@@ -80,6 +81,7 @@ def concatenate(
     concatenate_tables: bool = False,
     obs_names_make_unique: bool = True,
     modify_tables_inplace: bool = False,
+    attrs_merge: StrategiesLiteral | Callable[[list[dict[Any, Any]]], dict[Any, Any]] | None = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -108,6 +110,8 @@ def concatenate(
     modify_tables_inplace
         Whether to modify the tables in place. If `True`, the tables will be modified in place. If `False`, the tables
         will be copied before modification. Copying is enabled by default but can be disabled for performance reasons.
+    attrs_merge
+        How the elements of `.attrs` are selected. Uses the same set of strategies as the `uns_merge` argument of [anndata.concat](https://anndata.readthedocs.io/en/latest/generated/anndata.concat.html)
     kwargs
         See :func:`anndata.concat` for more details.
 
@@ -188,12 +192,16 @@ def concatenate(
                 else:
                     merged_tables[k] = v
 
+    attrs_merge = resolve_merge_strategy(attrs_merge)
+    attrs = attrs_merge([sdata.attrs for sdata in sdatas])
+
     sdata = SpatialData(
         images=merged_images,
         labels=merged_labels,
         points=merged_points,
         shapes=merged_shapes,
         tables=merged_tables,
+        attrs=attrs,
     )
     if obs_names_make_unique:
         for table in sdata.tables.values():
@@ -239,7 +247,7 @@ def _fix_ensure_unique_element_names(
             tables[new_name] = table
         tables_by_sdata.append(tables)
     sdatas_fixed = []
-    for elements, tables in zip(elements_by_sdata, tables_by_sdata):
+    for elements, tables in zip(elements_by_sdata, tables_by_sdata, strict=True):
         sdata = SpatialData.init_from_elements(elements, tables=tables)
         sdatas_fixed.append(sdata)
     return sdatas_fixed
