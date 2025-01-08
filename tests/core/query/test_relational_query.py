@@ -376,6 +376,22 @@ def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
     assert all(indices == reversed_instance_id)
 
 
+def test_inner_join_match_rows_duplicate_obs_indices(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    sdata["table"].obs.index = ["a"] * sdata["table"].n_obs
+    sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
+    sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"][:5]
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+    )
+
+    assert table.n_obs == 10
+
+
 # TODO: there is a lot of dublicate code, simplify with a function that tests both the case sdata=None and sdata=sdata
 def test_match_rows_join(sdata_query_aggregation):
     sdata = sdata_query_aggregation
