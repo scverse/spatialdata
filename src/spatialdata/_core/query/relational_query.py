@@ -380,7 +380,8 @@ def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    obs = table.obs.reset_index()
+    groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -401,7 +402,7 @@ def _inner_join_spatialelement_table(
                 element_dict[element_type][name] = masked_element
 
                 joined_indices = _get_joined_table_indices(
-                    joined_indices, element_indices, table_instance_key_column, match_rows
+                    joined_indices, masked_element.index, table_instance_key_column, match_rows
                 )
             else:
                 warnings.warn(
@@ -414,6 +415,7 @@ def _inner_join_spatialelement_table(
         joined_indices = joined_indices.dropna() if any(joined_indices.isna()) else joined_indices
 
     joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     return element_dict, joined_table
 
@@ -455,7 +457,8 @@ def _left_join_spatialelement_table(
     if match_rows == "right":
         warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    obs = table.obs.reset_index()
+    groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
