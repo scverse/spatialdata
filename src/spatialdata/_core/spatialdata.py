@@ -1664,20 +1664,26 @@ class SpatialData:
         flatten: bool = True,
     ) -> dict[str, Any] | str | pd.DataFrame:
         """
-        Return the keys from sdata.attrs in a specific format.
+        Retrieve a specific key from sdata.attrs and return it in the specified format.
 
         Parameters
         ----------
         key
             The key to retrieve from the attrs.
         return_as
-            The format to return the data. Options are 'dict', 'json', 'df'.
-            If None, the function infers the format based on the data type.
-        sep : str, optional
-            Separator for nested keys in flattened data, by default "_".
+            The format in which to return the data. Options are 'dict', 'json', 'df'.
+            If None, the function returns the data in its original format.
+        sep
+            Separator for nested keys in flattened data. Defaults to "_".
         flatten
-            If True, flatten the data if it is a mapping.
+            If True, flatten the data if it is a mapping. Defaults to True.
 
+        Returns
+        -------
+        dict[str, Any] | str | pd.DataFrame
+            The data associated with the specified key, returned in the specified format.
+            The format can be a dictionary, JSON string, or Pandas DataFrame, depending on
+            the value of `return_as`.
         """
 
         def _flatten_mapping(m: Mapping[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
