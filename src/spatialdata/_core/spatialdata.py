@@ -1680,10 +1680,9 @@ class SpatialData:
 
         Returns
         -------
-        dict[str, Any] | str | pd.DataFrame
-            The data associated with the specified key, returned in the specified format.
-            The format can be a dictionary, JSON string, or Pandas DataFrame, depending on
-            the value of `return_as`.
+        The data associated with the specified key, returned in the specified format.
+        The format can be a dictionary, JSON string, or Pandas DataFrame, depending on
+        the value of `return_as`.
         """
 
         def _flatten_mapping(m: Mapping[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:

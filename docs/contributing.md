@@ -129,6 +129,7 @@ We recommend using the button "Generate release notes" to automatically collect 
 The release notes serve as a changelog for the user of the package so it's important to have them curated and well-organized. This is explained in depth below.
 
 Here is an example of automatically generated release notes for a previous release (v0.2.3):
+
 ```
 ## What's Changed
 * Add clip parameter to polygon_query; tests missing by @LucaMarconato in https://github.com/scverse/spatialdata/pull/670
@@ -172,6 +173,7 @@ The release notes above can be hard to read, but this is addressed by our [confi
 Use informative titles for PRs, as these will serve as section titles in the release notes (rename the PRs if necessary). You can also manually edit the release notes before publishing them to improve readability.
 
 Some additional considerations
+
 - Important! If a PR is large and its title isn't informative or requires multiple lines, **do not** add a release tag. Instead, in the first message of the PR discussion, please include a markdown section with a brief description of the intended release notes. This will allow the person making a release to manually add the PR content to the release notes during the release process.
 - Please avoid redundancy and do not add the same release notes to consecutive pre-releases/releases/post-releases.
 - When automatically generating the release notes, you can use the button "Previous tag: ..." to choose which PRs will be included in the release notes.
