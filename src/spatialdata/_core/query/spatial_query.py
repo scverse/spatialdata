@@ -478,8 +478,13 @@ def bounding_box_query(
     """
     Query a SpatialData object or SpatialElement within a bounding box.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.bounding_box(...)`, without specifying `element`.
+
     Parameters
     ----------
+    element
+        The SpatialElement or SpatialData object to query.
     axes
         The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
@@ -499,6 +504,11 @@ def bounding_box_query(
     -------
     The SpatialData object or SpatialElement containing the requested data.
     Eventual empty Elements are omitted by the SpatialData object.
+
+    Notes
+    -----
+    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
+    consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -515,6 +525,16 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
+    if sdata.points:
+        warnings.warn(
+            (
+                "The object has `points` element. Depending on the number of points, querying MAY suffer from "
+                "performance issues. Please consider filtering the object before calling this function by calling the "
+                "`subset()` method of `SpatialData`."
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
@@ -700,8 +720,8 @@ def _(
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,
-                max_coordinate=max_c,
+                min_coordinate=min_c,  # type: ignore[arg-type]
+                max_coordinate=max_c,  # type: ignore[arg-type]
             )
             if len(bounding_box_mask) == 1:
                 bounding_box_mask = bounding_box_mask[0]
@@ -813,6 +833,9 @@ def polygon_query(
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
+
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.polygon(...)`, without specifying `element`.
 
     Parameters
     ----------

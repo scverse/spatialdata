@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning][].
 ### Major
 
 - Added attributes at the SpatialData object level (`.attrs`)
+- `rasterize_bins()` can now produce a labels element #811 @ArneDefauw
+
+### Minor
+
+- Added `asv` benchmark code #784 @berombau
+- Validate tables while parsing #808
+- fix join non matching tables #813
+
+### Fixed
+
+- Relaxed `fsspec` requirement #798
+- Fix for `to_polygons` when using processed instead of threads in Dask #756 @ArneDefauw
+- Fix `transform_to_data_extent` converting labels to images #791 @aeisenbarth
 
 ## [0.2.6] - 2024-11-26
 

@@ -1,0 +1,22 @@
+changelog:
+    exclude:
+        labels:
+            - release-ignore
+        authors:
+            - pre-commit-ci
+    categories:
+        - title: Major
+          labels:
+              - "release-major"
+        - title: Minor
+          labels:
+              - "release-minor"
+        - title: Changed
+          labels:
+              - "release-changed"
+        - title: Fixed
+          labels:
+              - "release-fixed"
+        - title: Other Changes
+          labels:
+              - "*"

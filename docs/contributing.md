@@ -54,11 +54,9 @@ and [prettier][prettier-editors].
 Remember to first install the package with `pip install '-e[dev,test]'`
 ```
 
-This package uses the [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added
-to the package.
+This package uses [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added to the package.
 
-Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the
-command line by executing
+Most IDEs integrate with pytest and provide a GUI to run tests. Alternatively, you can run all tests from the command line by executing
 
 ```bash
 pytest
@@ -66,7 +64,15 @@ pytest
 
 in the root of the repository. Continuous integration will automatically run the tests on all pull requests.
 
+### Continuous integration
+
+Continuous integration will automatically run the tests on all pull requests and test against the minimum and maximum supported Python version.
+
+Additionally, there's a CI job that tests against pre-releases of all dependencies (if there are any). The purpose of this check is to detect incompatibilities of new package versions early on and gives you time to fix the issue or reach out to the developers of the dependency before the package is released to a wider audience.
+
 [scanpy-test-docs]: https://scanpy.readthedocs.io/en/latest/dev/testing.html#writing-tests
+
+By including this additional information, the document now provides a more comprehensive overview of the continuous integration process related to testing.
 
 ## Publishing a release
 
@@ -137,10 +143,10 @@ in the cookiecutter-scverse template.
 
 Please write documentation for new or changed features and use-cases. This project uses [sphinx][] with the following features:
 
--   the [myst][] extension allows to write documentation in markdown/Markedly Structured Text
--   [Numpy-style docstrings][numpydoc] (through the [napoloen][numpydoc-napoleon] extension).
--   Jupyter notebooks as tutorials through [myst-nb][] (See [Tutorials with myst-nb](#tutorials-with-myst-nb-and-jupyter-notebooks))
--   [Sphinx autodoc typehints][], to automatically reference annotated input and output types
+- the [myst][] extension allows to write documentation in markdown/Markedly Structured Text
+- [Numpy-style docstrings][numpydoc] (through the [napoloen][numpydoc-napoleon] extension).
+- Jupyter notebooks as tutorials through [myst-nb][] (See [Tutorials with myst-nb](#tutorials-with-myst-nb-and-jupyter-notebooks))
+- [Sphinx autodoc typehints][], to automatically reference annotated input and output types
 
 See the [scanpy developer docs](https://scanpy.readthedocs.io/en/latest/dev/documentation.html) for more information
 on how to write documentation.
@@ -157,10 +163,10 @@ repository.
 
 #### Hints
 
--   If you refer to objects from other packages, please add an entry to `intersphinx_mapping` in `docs/conf.py`. Only
-    if you do so can sphinx automatically create a link to the external documentation.
--   If building the documentation fails because of a missing link that is outside your control, you can add an entry to
-    the `nitpick_ignore` list in `docs/conf.py`
+- If you refer to objects from other packages, please add an entry to `intersphinx_mapping` in `docs/conf.py`. Only
+  if you do so can sphinx automatically create a link to the external documentation.
+- If building the documentation fails because of a missing link that is outside your control, you can add an entry to
+  the `nitpick_ignore` list in `docs/conf.py`
 
 #### Building the docs locally
 
