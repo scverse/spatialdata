@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import warnings
 from collections.abc import Generator, Mapping
@@ -1654,6 +1655,84 @@ class SpatialData:
             consolidate_metadata = True
         if consolidate_metadata:
             self.write_consolidated_metadata()
+
+    def get_attrs(
+        self,
+        key: str,
+        return_as: Literal["dict", "json", "df"] | None = None,
+        sep: str = "_",
+        flatten: bool = True,
+    ) -> dict[str, Any] | str | pd.DataFrame:
+        """
+        Retrieve a specific key from sdata.attrs and return it in the specified format.
+
+        Parameters
+        ----------
+        key
+            The key to retrieve from the attrs.
+        return_as
+            The format in which to return the data. Options are 'dict', 'json', 'df'.
+            If None, the function returns the data in its original format.
+        sep
+            Separator for nested keys in flattened data. Defaults to "_".
+        flatten
+            If True, flatten the data if it is a mapping. Defaults to True.
+
+        Returns
+        -------
+        dict[str, Any] | str | pd.DataFrame
+            The data associated with the specified key, returned in the specified format.
+            The format can be a dictionary, JSON string, or Pandas DataFrame, depending on
+            the value of `return_as`.
+        """
+
+        def _flatten_mapping(m: Mapping[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
+
+            items: list[tuple[str, Any]] = []
+            for k, v in m.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, Mapping):
+                    items.extend(_flatten_mapping(v, new_key, sep=sep).items())
+                else:
+                    items.append((new_key, v))
+            return dict(items)
+
+        if not isinstance(key, str):
+            raise TypeError("The key must be a string.")
+
+        if not isinstance(sep, str):
+            raise TypeError("Parameter 'sep_for_nested_keys' must be a string.")
+
+        if key not in self.attrs:
+            raise KeyError(f"The key '{key}' was not found in sdata.attrs.")
+
+        data = self.attrs[key]
+
+        # If the data is a mapping, flatten it
+        if flatten and isinstance(data, Mapping):
+            data = _flatten_mapping(data, sep=sep)
+
+        if return_as is None:
+            return data
+
+        if return_as == "dict":
+            if not isinstance(data, dict):
+                raise TypeError("Cannot convert non-dictionary data to a dictionary.")
+            return data
+
+        if return_as == "json":
+            try:
+                return json.dumps(data)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Failed to convert data to JSON: {e}") from e
+
+        if return_as == "df":
+            try:
+                return pd.DataFrame([data])
+            except Exception as e:
+                raise ValueError(f"Failed to convert data to DataFrame: {e}") from e
+
+        raise ValueError(f"Invalid 'return_as' value: {return_as}. Expected 'dict', 'json', 'df', or None.")
 
     @property
     def tables(self) -> Tables:
