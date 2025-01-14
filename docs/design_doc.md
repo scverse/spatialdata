@@ -125,7 +125,7 @@ By decomposing the data model into building blocks (i.e. Elements) we support th
 _SpatialData_ follows the OME-NGFF specifications whenever possible and therefore much of its assumptions are inherited from it. Extra assumptions will be discussed with the OME-NGFF community and adapted to the community-agreed design. The key assumptions are the following:
 
 - `Images`, `Labels`, `Points` and `Shapes` MUST have one or more _coordinate systems_ and _coordinate transformations_.
-- `Tables` CAN NOT have a _coordinate system_ or _coordinate transforms_. Tables should not contain spatial coordinate: the user can decided to store them there, but they will not be processed by the library and needs to placed in a element and a coordiante system to be recognized by the framework.
+- `Tables` CAN NOT have a _coordinate system_ or _coordinate transforms_. Tables should not contain spatial coordinate: the user can decided to store them there, but they will not be processed by the library and needs to placed in a element and a coordinate system to be recognized by the framework.
 - `Labels` and `Shapes` are both instances of `Regions`, `Regions` are `Elements`.
 - Any `Element` MAY be annotated by `Tables`; also `Shapes` and `Points` MAY contain annotations within themselves as additional dataframe columns (e.g. intensity of point spread function of a each point, or gene id).
 - `Tables` CAN NOT be annotated by other `Tables`.
@@ -158,7 +158,7 @@ More precisely, we are using the [spatial-image library][] and [multiscale-spati
 
 The coordinate systems and transforms are stored in `spatial_image.SpatialImage.attrs` or in `multiscale_spatial_image.MultiscaleSpatialImage.attrs`.
 
-The xarray coordinates are not saved in the NGFF storage. APIs to take into account for the xarray coordinates, such as converting back and forth between NGFF transformations and xarray coordinates, will be implemented ([see this issue](https://github.com/scverse/spatialdata/issues/308)). In particular, the xarray coordinates will be converted to NGFF transformations before saving the images to disk, and will be reconstructed after reading the data from disk. Supporing the representation of xarray coordiantes will allow raster data types to be assigned a coordinate systems; otherwise (as of now) they must be defined in the "pixel space" (this is done implicitly).
+The xarray coordinates are not saved in the NGFF storage. APIs to take into account for the xarray coordinates, such as converting back and forth between NGFF transformations and xarray coordinates, will be implemented ([see this issue](https://github.com/scverse/spatialdata/issues/308)). In particular, the xarray coordinates will be converted to NGFF transformations before saving the images to disk, and will be reconstructed after reading the data from disk. Supporing the representation of xarray coordinates will allow raster data types to be assigned a coordinate systems; otherwise (as of now) they must be defined in the "pixel space" (this is done implicitly).
 
 <!-- Links -->
 
@@ -287,7 +287,7 @@ Furthermore, acoording to NGFF, a coordinate system:
 
 #### SpatialData approach
 
-In SpatialData we extend the concept of coordiante systems also for the other types of spatial elements (Points, Shapes, Polygons).
+In SpatialData we extend the concept of coordinate systems also for the other types of spatial elements (Points, Shapes, Polygons).
 Since elements are allowed to have only (a subset of the) c, x, y, z axes and must follow a specific schema, we can relax some restrictions of the NGFF coordinate systems and provide less verbose APIs. The framework still reads and writes to valid NGFF; converting to the SpatialData coordinate system if generally possible, and when not possible we raise an exception.
 
 In details:
