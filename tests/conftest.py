@@ -14,14 +14,13 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from scipy import ndimage as ndi
 from shapely import linearrings, polygons
 from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
@@ -67,7 +66,7 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(tables=_get_table(region="labels2d"))
+    return SpatialData(tables={"table": _get_table(region="labels2d")})
 
 
 @pytest.fixture()
@@ -94,7 +93,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        tables=_get_table(region="labels2d"),
+        tables=_get_tables(region="labels2d"),
     )
 
 
@@ -129,7 +128,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            tables=_get_table("labels2d"),
+            tables=_get_tables(region="labels2d"),
         )
     if request.param == "empty":
         return SpatialData()
@@ -279,6 +278,14 @@ def _get_points() -> dict[str, DaskDataFrame]:
     return out
 
 
+def _get_tables(
+    region: None | str | list[str] = "sample1",
+    region_key: None | str = "region",
+    instance_key: None | str = "instance_id",
+) -> dict[str, AnnData]:
+    return {"table": _get_table(region=region, region_key=region_key, instance_key=instance_key)}
+
+
 def _get_table(
     region: None | str | list[str] = "sample1",
     region_key: None | str = "region",
@@ -324,7 +331,7 @@ def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
 
 def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:
     linear_rings = []
-    for centroid, half_width in zip(centroid_coordinates, half_widths):
+    for centroid, half_width in zip(centroid_coordinates, half_widths, strict=True):
         min_coords = centroid - half_width
         max_coords = centroid + half_width
 

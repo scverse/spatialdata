@@ -9,11 +9,10 @@ import pandas as pd
 import shapely
 import skimage.measure
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
 from skimage.measure._regionprops import RegionProperties
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
@@ -106,7 +105,7 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
 @to_circles.register(GeoDataFrame)
 def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
     assert len(kwargs) == 0
-    if isinstance(element.geometry.iloc[0], (Polygon, MultiPolygon)):
+    if isinstance(element.geometry.iloc[0], Polygon | MultiPolygon):
         radius = np.sqrt(element.geometry.area / np.pi)
         centroids = _get_centroids(element)
         obs = pd.DataFrame({"radius": radius})
@@ -161,6 +160,13 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     """
     Convert a set of geometries (2D labels, 2D shapes) to approximated 2D polygons/multypolygons.
 
+    For optimal performance when converting rasters (:class:`xarray.DataArray` or :class:`datatree.DataTree`)
+    to polygons, it is recommended to configure `Dask` to use 'processes' rather than 'threads'.
+    For example, you can set this configuration with:
+
+    >>> import dask
+    >>> dask.config.set(scheduler='processes')
+
     Parameters
     ----------
     data
@@ -195,23 +201,22 @@ def _(
     else:
         element_single_scale = element
 
-    gdf_chunks = []
     chunk_sizes = element_single_scale.data.chunks
 
-    def _vectorize_chunk(chunk: np.ndarray, yoff: int, xoff: int) -> None:  # type: ignore[type-arg]
+    def _vectorize_chunk(chunk: np.ndarray, yoff: int, xoff: int) -> GeoDataFrame:  # type: ignore[type-arg]
         gdf = _vectorize_mask(chunk)
         gdf["chunk-location"] = f"({yoff}, {xoff})"
         gdf.geometry = gdf.translate(xoff, yoff)
-        gdf_chunks.append(gdf)
+        return gdf
 
     tasks = [
         dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[0][:iy]), sum(chunk_sizes[1][:ix]))
         for iy, row in enumerate(element_single_scale.data.to_delayed())
         for ix, chunk in enumerate(row)
     ]
-    dask.compute(tasks)
 
-    gdf = pd.concat(gdf_chunks)
+    results = dask.compute(*tasks)
+    gdf = pd.concat(results)
     gdf = GeoDataFrame([_dissolve_on_overlaps(*item) for item in gdf.groupby("label")], columns=["label", "geometry"])
     gdf.index = gdf["label"]
 
@@ -258,7 +263,7 @@ def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
 
 @to_polygons.register(GeoDataFrame)
 def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
-    if isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon)):
+    if isinstance(gdf.geometry.iloc[0], Polygon | MultiPolygon):
         return gdf
     if isinstance(gdf.geometry.iloc[0], Point):
         ShapesModel.validate_shapes_not_mixed_types(gdf)
@@ -274,7 +279,7 @@ def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
             # TODO replace with a function to copy the metadata (the parser could also do this): https://github.com/scverse/spatialdata/issues/258
             buffered_df.attrs[ShapesModel.TRANSFORM_KEY] = gdf.attrs[ShapesModel.TRANSFORM_KEY]
             return buffered_df
-        assert isinstance(gdf.geometry.iloc[0], (Polygon, MultiPolygon))
+        assert isinstance(gdf.geometry.iloc[0], Polygon | MultiPolygon)
         return gdf
     raise RuntimeError("Unsupported geometry type: " f"{type(gdf.geometry.iloc[0])}")
 

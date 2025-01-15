@@ -7,9 +7,8 @@ from anndata import AnnData
 from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models._utils import SpatialElement
@@ -48,7 +47,8 @@ def _(sdata: SpatialData) -> SpatialData:
     elements_dict = {}
     for _, element_name, element in sdata.gen_elements():
         elements_dict[element_name] = deepcopy(element)
-    return SpatialData.from_elements_dict(elements_dict)
+    deepcopied_attrs = _deepcopy(sdata.attrs)
+    return SpatialData.from_elements_dict(elements_dict, attrs=deepcopied_attrs)
 
 
 @deepcopy.register(DataArray)
