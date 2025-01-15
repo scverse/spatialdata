@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 
-from spatialdata import get_values, match_table_to_element
+from spatialdata import SpatialData, get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _locate_value,
     _ValueOrigin,
@@ -11,6 +11,7 @@ from spatialdata._core.query.relational_query import (
     join_spatialelement_table,
 )
 from spatialdata.models.models import TableModel
+from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
 def test_match_table_to_element(sdata_query_aggregation):
@@ -316,6 +317,105 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
         sdata["table"].obs.iloc[19:21]["instance_id"].values,
         element_dict["values_polygons"].index.values,
     )
+
+
+def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    sdata["values_circles"] = sdata["values_circles"][4:]
+    original_index = sdata["values_circles"].index
+    reversed_instance_id = [3, 5, 8, 7, 6, 4, 1, 2, 0] + list(reversed(range(12)))
+    sdata["table"].obs["instance_id"] = reversed_instance_id
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names="values_circles",
+        table_name="table",
+        how="inner",
+        match_rows="left",
+    )
+    assert all(table.obs["instance_id"].values == original_index)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names="values_circles",
+        table_name="table",
+        how="inner",
+        match_rows="right",
+    )
+
+    assert all(element_dict["values_circles"].index == [5, 8, 7, 6, 4])
+
+
+def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    table = sdata["table"][3:]
+    original_instance_id = table.obs["instance_id"]
+    reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
+    table.obs["instance_id"] = reversed_instance_id
+    sdata["table"] = table
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="left",
+    )
+
+    assert all(table.obs["instance_id"].values == original_instance_id.values)
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how="inner",
+        match_rows="right",
+    )
+
+    indices = element_dict["values_circles"].index.append(element_dict["values_polygons"].index)
+
+    assert all(indices == reversed_instance_id)
+
+
+# TODO: 'left_exclusive' is currently not working, reported in this issue:
+@pytest.mark.parametrize("join_type", ["left", "right", "inner", "right_exclusive"])
+def test_inner_join_match_rows_duplicate_obs_indices(sdata_query_aggregation: SpatialData, join_type: str) -> None:
+    sdata = sdata_query_aggregation
+    sdata["table"].obs.index = ["a"] * sdata["table"].n_obs
+    sdata["values_circles"] = sdata_query_aggregation["values_circles"][:4]
+    sdata["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
+
+    element_dict, table = join_spatialelement_table(
+        sdata=sdata,
+        spatial_element_names=["values_circles", "values_polygons"],
+        table_name="table",
+        how=join_type,
+    )
+
+    if join_type in ["left", "inner"]:
+        # table check
+        assert table.n_obs == 9
+        assert np.array_equal(table.obs["instance_id"][:4], sdata["values_circles"].index)
+        assert np.array_equal(table.obs["instance_id"][4:], sdata["values_polygons"].index)
+        # shapes check
+        assert_geodataframe_equal(element_dict["values_circles"], sdata["values_circles"])
+        assert_geodataframe_equal(element_dict["values_polygons"], sdata["values_polygons"])
+    elif join_type == "right":
+        # table check
+        assert_anndata_equal(table.obs, sdata["table"].obs)
+        # shapes check
+        assert_geodataframe_equal(element_dict["values_circles"], sdata["values_circles"])
+        assert_geodataframe_equal(element_dict["values_polygons"], sdata["values_polygons"])
+    elif join_type == "left_exclusive":
+        # TODO: currently not working, reported in this issue
+        pass
+    else:
+        assert join_type == "right_exclusive"
+        # table check
+        assert table.n_obs == sdata["table"].n_obs - len(sdata["values_circles"]) - len(sdata["values_polygons"])
+        # shapes check
+        assert element_dict["values_circles"] is None
+        assert element_dict["values_polygons"] is None
 
 
 # TODO: there is a lot of dublicate code, simplify with a function that tests both the case sdata=None and sdata=sdata
@@ -657,6 +757,13 @@ def test_get_values_table(sdata_blobs):
     df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 26
+
+
+def test_get_values_table_different_layer(sdata_blobs):
+    sdata_blobs["table"].layers["layer"] = np.log1p(sdata_blobs["table"].X)
+    df = get_values(value_key="channel_0_sum", element=sdata_blobs["table"])
+    df_layer = get_values(value_key="channel_0_sum", element=sdata_blobs["table"], table_layer="layer")
+    assert np.allclose(np.log1p(df), df_layer)
 
 
 def test_get_values_table_element_name(sdata_blobs):

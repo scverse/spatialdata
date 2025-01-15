@@ -1,7 +1,8 @@
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import dask.dataframe as dd
 import numpy as np
@@ -14,7 +15,7 @@ from spatialdata._core.validation import ValidationError
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
-from spatialdata.models._utils import get_channels
+from spatialdata.models._utils import get_channel_names
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
@@ -31,8 +32,8 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
         # ensures that we are inplicitly testing the read and write of channel names
-        assert get_channels(images["image2d"]) == ["r", "g", "b"]
-        assert get_channels(images["image2d_multiscale"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d_multiscale"]) == ["r", "g", "b"]
 
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
@@ -605,6 +606,30 @@ def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
     _check_valid_name(full_sdata.write_element)
     _check_valid_name(full_sdata.write_metadata)
     _check_valid_name(full_sdata.write_transformations)
+
+
+def test_incremental_io_attrs(points: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        my_attrs = {"a": "b", "c": 1}
+        points.attrs = my_attrs
+        points.write(f)
+
+        # test that the attributes are written to disk
+        sdata = SpatialData.read(f)
+        assert sdata.attrs == my_attrs
+
+        # test incremental io attrs (write_attrs())
+        sdata.attrs["c"] = 2
+        sdata.write_attrs()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 2
+
+        # test incremental io attrs (write_metadata())
+        sdata.attrs["c"] = 3
+        sdata.write_metadata()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 3
 
 
 cached_sdata_blobs = blobs()

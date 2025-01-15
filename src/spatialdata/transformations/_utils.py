@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
@@ -223,8 +222,10 @@ def _(data: DataTree) -> DataTree:
             offset = max_dim / n / 2
             coords = np.linspace(0, max_dim, n + 1)[:-1] + offset
             new_coords[ax] = coords
-        out[name] = dt[img_name].assign_coords(new_coords)
-    datatree = DataTree.from_dict(d=out)
+
+        # Xarray now only accepts Dataset as dictionary values for DataTree.from_dict.
+        out[name] = Dataset({img_name: dt[img_name].assign_coords(new_coords)})
+    datatree = DataTree.from_dict(out)
     # this is to trigger the validation of the dims
     _ = get_axes_names(datatree)
     return datatree
@@ -252,10 +253,12 @@ def scale_radii(radii: ArrayLike, affine: Affine, axes: tuple[str, ...]) -> Arra
     modules = np.absolute(eigenvalues)
     if not np.allclose(modules, modules[0]):
         scale_factor = np.mean(modules)
-        logger.warning(
+        warnings.warn(
             "The vector part of the transformation matrix is not isotropic, the radius will be scaled by the average "
             f"of the modules of eigenvalues of the affine transformation matrix.\nmatrix={matrix}\n"
-            f"eigenvalues={eigenvalues}\nscale_factor={scale_factor}"
+            f"eigenvalues={eigenvalues}\nscale_factor={scale_factor}",
+            UserWarning,
+            stacklevel=2,
         )
     else:
         scale_factor = modules[0]

@@ -17,6 +17,7 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
+    get_model,
     get_table_keys,
 )
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
@@ -423,9 +424,15 @@ def test_no_shared_transformations() -> None:
 
 
 def test_init_from_elements(full_sdata: SpatialData) -> None:
+    # this first code block needs to be removed when the tables argument is removed from init_from_elements()
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
-    sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
-    for element_type in ["images", "labels", "points", "shapes"]:
+    sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata["table"])
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
+
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_table=True)}
+    sdata = SpatialData.init_from_elements(all_elements)
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
 
 
@@ -502,6 +509,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         for element in elements:
             before = full_sdata[element]
             after = sdata[element]
+            assert get_model(after) == get_model(before)
             data_extent_before = get_extent(before, coordinate_system="global")
             data_extent_after = get_extent(after, coordinate_system="global")
             # huge tolerance because of the bug with pixel perfectness

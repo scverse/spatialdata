@@ -1,12 +1,10 @@
 """Models and schema for SpatialData."""
 
-from __future__ import annotations
-
 import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, Union
+from typing import Any, Literal, TypeAlias
 
 import dask.dataframe as dd
 import numpy as np
@@ -15,7 +13,6 @@ from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
@@ -25,7 +22,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import to_spatial_image
-from xarray import DataArray
+from xarray import DataArray, DataTree
 from xarray_schema.components import (
     ArrayTypeSchema,
     AttrSchema,
@@ -37,6 +34,7 @@ from xarray_schema.dataarray import DataArraySchema
 from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -54,13 +52,8 @@ from spatialdata.transformations._utils import (
 from spatialdata.transformations.transformations import BaseTransformation, Identity
 
 # Types
-Chunks_t = Union[
-    int,
-    tuple[int, ...],
-    tuple[tuple[int, ...], ...],
-    Mapping[Any, Union[None, int, tuple[int, ...]]],
-]
-ScaleFactors_t = Sequence[Union[dict[str, int], int]]
+Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
+ScaleFactors_t = Sequence[dict[str, int] | int]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 ATTRS_KEY = "spatialdata_attrs"
@@ -100,13 +93,14 @@ class RasterSchema(DataArraySchema):
         cls,
         data: ArrayLike | DataArray | DaskArray,
         dims: Sequence[str] | None = None,
+        c_coords: str | list[str] | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
         scale_factors: ScaleFactors_t | None = None,
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
     ) -> DataArray | DataTree:
-        """
+        r"""
         Validate (or parse) raster data.
 
         Parameters
@@ -119,6 +113,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
+        c_coords : str | list[str] | None
+            Channel names of image data. Must be equal to the length of dimension 'c'. Only supported for `Image`
+            models.
         transformations
             Dictionary of transformations to apply to the data. The key is the name of the target coordinate system,
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
@@ -158,7 +155,7 @@ class RasterSchema(DataArraySchema):
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
-        if isinstance(data, (DataArray)):
+        if isinstance(data, DataArray):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
             if dims is not None:
@@ -174,7 +171,7 @@ class RasterSchema(DataArraySchema):
                 raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
             _reindex = lambda d: d
         # if there are no dims in the data, use the model's dims or provided dims
-        elif isinstance(data, (np.ndarray, DaskArray)):
+        elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
             if dims is None:
@@ -183,7 +180,7 @@ class RasterSchema(DataArraySchema):
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
-            _reindex = lambda d: dims.index(d)  # type: ignore[union-attr]
+            _reindex = lambda d: dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
@@ -204,7 +201,16 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        if c_coords is not None:
+            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
+
+        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+            raise ValueError(
+                f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+                f" with length {data.shape[cls.dims.dims.index('c')]}."
+            )
+
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -248,7 +254,7 @@ class RasterSchema(DataArraySchema):
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
-        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))]):
+        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))], strict=True):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
         name = {list(data[i].data_vars.keys())[0] for i in data}
@@ -279,6 +285,8 @@ class Labels2DModel(RasterSchema):
         *args: Any,
         **kwargs: Any,
     ) -> DataArray | DataTree:
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -301,6 +309,8 @@ class Labels3DModel(RasterSchema):
 
     @classmethod
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -368,7 +378,7 @@ class ShapesModel:
         if len(data[cls.GEOMETRY_KEY]) == 0:
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
-        if not isinstance(geom_, (Polygon, MultiPolygon, Point)):
+        if not isinstance(geom_, Polygon | MultiPolygon | Point):
             raise ValueError(
                 f"Column `{cls.GEOMETRY_KEY}` can only contain `Point`, `Polygon` or `MultiPolygon` shapes,"
                 f"but it contains {type(geom_)}." + SUGGESTION
@@ -708,7 +718,7 @@ class PointsModel:
                 stacklevel=2,
             )
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
+            table: DaskDataFrame = dd.from_pandas(
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=sort,
@@ -722,13 +732,16 @@ class PointsModel:
                     data[feature_key].astype(str).astype("category"),
                     sort=sort,
                     **kwargs,
-                )  # type: ignore[attr-defined]
+                )
                 table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
+        elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None and data[feature_key].dtype.name != "category":
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None:
+                if data[feature_key].dtype.name == "category":
+                    table[feature_key] = data[feature_key]
+                else:
+                    table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -762,7 +775,7 @@ class PointsModel:
         instance_key: str | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
-        assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
+        assert isinstance(data, dd.DataFrame)
         if feature_key is not None or instance_key is not None:
             data.attrs[ATTRS_KEY] = {}
         if feature_key is not None:
@@ -785,7 +798,7 @@ class PointsModel:
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
-        return data  # type: ignore[no-any-return]
+        return data
 
 
 class TableModel:
@@ -1040,15 +1053,15 @@ class TableModel:
         return convert_region_column_to_categorical(adata)
 
 
-Schema_t = Union[
-    type[Image2DModel],
-    type[Image3DModel],
-    type[Labels2DModel],
-    type[Labels3DModel],
-    type[PointsModel],
-    type[ShapesModel],
-    type[TableModel],
-]
+Schema_t: TypeAlias = (
+    type[Image2DModel]
+    | type[Image3DModel]
+    | type[Labels2DModel]
+    | type[Labels3DModel]
+    | type[PointsModel]
+    | type[ShapesModel]
+    | type[TableModel]
+)
 
 
 def get_model(
@@ -1074,7 +1087,7 @@ def get_model(
         schema().validate(e)
         return schema
 
-    if isinstance(e, (DataArray, DataTree)):
+    if isinstance(e, DataArray | DataTree):
         axes = get_axes_names(e)
         if "c" in axes:
             if "z" in axes:

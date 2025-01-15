@@ -59,6 +59,12 @@ extensions = [
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": True,
+    "show-inheritance": True,
+}
+
 autosummary_generate = True
 autodoc_process_signature = True
 autodoc_member_order = "groupwise"
@@ -143,6 +149,7 @@ html_logo = "_static/img/spatialdata_horizontal.png"
 
 html_theme_options = {
     "navigation_with_keys": True,
+    "show_toc_level": 4,
     # "repository_url": repository_url,
     # "use_repository_button": True,
 }

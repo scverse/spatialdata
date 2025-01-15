@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
     C,
@@ -9,10 +7,12 @@ from spatialdata.models._utils import (
     Z,
     force_2d,
     get_axes_names,
+    get_channel_names,
     get_channels,
     get_spatial_axes,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
+    set_channel_names,
     validate_axes,
     validate_axis_name,
 )
@@ -51,5 +51,8 @@ __all__ = [
     "check_target_region_column_symmetry",
     "get_table_keys",
     "get_channels",
+    "get_channel_names",
+    "set_channel_names",
     "force_2d",
+    "RasterSchema",
 ]

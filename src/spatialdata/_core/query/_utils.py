@@ -5,8 +5,7 @@ from typing import Any
 import numba as nb
 import numpy as np
 from anndata import AnnData
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core._elements import Tables
 from spatialdata._core.spatialdata import SpatialData
@@ -96,7 +95,7 @@ def get_bounding_box_corners(
     return output.squeeze().drop_vars("box")
 
 
-@nb.njit(parallel=False, nopython=True)
+@nb.jit(parallel=False, nopython=True)
 def _create_slices_and_translation(
     min_values: nb.types.Array,
     max_values: nb.types.Array,
@@ -138,7 +137,7 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
     if len(scales_to_keep) == 0:
         return None
 
-    d = {k: d[k] for k in scales_to_keep}
+    d = {k: Dataset({"image": d[k]}) for k in scales_to_keep}
     result = DataTree.from_dict(d)
 
     # Rechunk the data to avoid irregular chunks
