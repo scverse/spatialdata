@@ -59,6 +59,12 @@ extensions = [
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": True,
+    "show-inheritance": True,
+}
+
 autosummary_generate = True
 autodoc_process_signature = True
 autodoc_member_order = "groupwise"

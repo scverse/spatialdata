@@ -4,5 +4,4 @@
 .. currentmodule:: spatialdata
 
 .. autoclass:: SpatialData
-   :members:
 ```

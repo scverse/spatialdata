@@ -4,5 +4,4 @@
 .. currentmodule:: spatialdata.dataloader
 
 .. autoclass:: ImageTilesDataset
-   :members:
 ```

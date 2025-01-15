@@ -7,30 +7,12 @@ These classes are useful to ensure backward compatibility whenever a major versi
 .. currentmodule:: spatialdata._io.format
 
 .. autoclass:: CurrentRasterFormat
-   :members:
-   :undoc-members:
 .. autoclass:: RasterFormatV01
-   :members:
-   :undoc-members:
 .. autoclass:: CurrentShapesFormat
-   :members:
-   :undoc-members:
 .. autoclass:: ShapesFormatV01
-   :members:
-   :undoc-members:
 .. autoclass:: ShapesFormatV02
-   :members:
-   :undoc-members:
 .. autoclass:: CurrentPointsFormat
-   :members:
-   :undoc-members:
 .. autoclass:: PointsFormatV01
-   :members:
-   :undoc-members:
 .. autoclass:: CurrentTablesFormat
-   :members:
-   :undoc-members:
 .. autoclass:: TablesFormatV01
-   :members:
-   :undoc-members:
 ```
