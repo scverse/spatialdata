@@ -174,7 +174,7 @@ Use informative titles for PRs, as these will serve as section titles in the rel
 
 Some additional considerations
 
-- Important! If a PR is large and its title isn't informative or requires multiple lines, **do not** add a release tag. Instead, in the first message of the PR discussion, please include a markdown section with a brief description of the intended release notes. This will allow the person making a release to manually add the PR content to the release notes during the release process.
+- **Important!** If a PR is large and its title isn't informative or requires multiple lines, **do not** add a release tag. Instead, at the end of the first message of the PR discussion, please include a markdown section with title `# Release notes` with a brief description of the intended release notes. This will allow the person making a release to manually add the PR content to the release notes during the release process.
 - Please avoid redundancy and do not add the same release notes to consecutive pre-releases/releases/post-releases.
 - When automatically generating the release notes, you can use the button "Previous tag: ..." to choose which PRs will be included in the release notes.
 - Finally, you can see an example of a release in action in from Luca [this short video tutorial](https://www.loom.com/share/7097455bc0b9449fbe72d53fc778cbf9).
