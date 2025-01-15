@@ -60,9 +60,9 @@ extensions = [
 ]
 
 autodoc_default_options = {
-    'members': True,
-    'inherited-members': True,
-    'show-inheritance': True,
+    "members": True,
+    "inherited-members": True,
+    "show-inheritance": True,
 }
 
 autosummary_generate = True
