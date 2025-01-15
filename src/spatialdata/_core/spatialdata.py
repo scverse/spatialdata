@@ -1509,8 +1509,10 @@ class SpatialData:
             The name of the element to write the channel names of. If None, write the channel names of all image
             elements.
         """
-        if element_name is not None and element_name not in self:
-            raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+        if element_name is not None:
+            check_valid_name(element_name)
+            if element_name not in self:
+                raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
 
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
@@ -1547,6 +1549,8 @@ class SpatialData:
         """
         if element_name is not None:
             check_valid_name(element_name)
+            if element_name not in self:
+                raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
 
         # recursively write the transformation for all the SpatialElement
         if element_name is None:
@@ -1665,6 +1669,8 @@ class SpatialData:
         """
         if element_name is not None:
             check_valid_name(element_name)
+            if element_name not in self:
+                raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
 
         self.write_transformations(element_name)
         self.write_channel_names(element_name)
