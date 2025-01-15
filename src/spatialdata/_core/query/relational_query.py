@@ -414,7 +414,7 @@ def _inner_join_spatialelement_table(
     if joined_indices is not None:
         joined_indices = joined_indices.dropna() if any(joined_indices.isna()) else joined_indices
 
-    joined_table = table[joined_indices, :].copy() if joined_indices is not None else None
+    joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
 
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     return element_dict, joined_table
