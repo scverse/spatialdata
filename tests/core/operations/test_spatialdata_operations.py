@@ -38,6 +38,7 @@ def test_element_names_unique() -> None:
     points = PointsModel.parse(np.array([[0, 0]]))
     labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
     image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
+    table = TableModel.parse(AnnData(shape=(1, 0)))
 
     with pytest.raises(KeyError):
         SpatialData(images={"image": image}, points={"image": points})
@@ -45,9 +46,15 @@ def test_element_names_unique() -> None:
         SpatialData(images={"image": image}, shapes={"image": shapes})
     with pytest.raises(KeyError):
         SpatialData(images={"image": image}, labels={"image": labels})
+    with pytest.raises(KeyError):
+        SpatialData(images={"image": image}, labels={"image": table})
 
     sdata = SpatialData(
-        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+        images={"image": image},
+        points={"points": points},
+        shapes={"shapes": shapes},
+        labels={"labels": labels},
+        tables={"table": table},
     )
 
     # add elements with the same name
@@ -60,6 +67,8 @@ def test_element_names_unique() -> None:
         sdata.shapes["shapes"] = shapes
     with pytest.warns(UserWarning):
         sdata.labels["labels"] = labels
+    with pytest.warns(UserWarning):
+        sdata.tables["table"] = table
 
     # add elements with the same name
     # of element of different type
@@ -73,11 +82,27 @@ def test_element_names_unique() -> None:
         sdata.points["shapes"] = points
     with pytest.raises(KeyError):
         sdata.shapes["labels"] = shapes
+    with pytest.raises(KeyError):
+        sdata.tables["labels"] = table
+
+    # add elements with the case-variant of an existing name
+    # of element of same type
+    with pytest.raises(KeyError):
+        sdata.images["Image"] = image
+    with pytest.raises(KeyError):
+        sdata.points["POINTS"] = points
+    with pytest.raises(KeyError):
+        sdata.shapes["Shapes"] = shapes
+    with pytest.raises(KeyError):
+        sdata.labels["Labels"] = labels
+    with pytest.raises(KeyError):
+        sdata.tables["Table"] = table
 
     assert sdata["image"].shape == image.shape
     assert sdata["labels"].shape == labels.shape
     assert len(sdata["points"]) == len(points)
     assert sdata["shapes"].shape == shapes.shape
+    assert len(sdata["table"]) == len(table)
 
     # add elements with the same name, test only couples of elements
     with pytest.raises(KeyError):
@@ -90,7 +115,11 @@ def test_element_names_unique() -> None:
 
     # test replacing complete attribute
     sdata = SpatialData(
-        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+        images={"image": image},
+        points={"points": points},
+        shapes={"shapes": shapes},
+        labels={"labels": labels},
+        tables={"table": table},
     )
     # test for images
     sdata.images = {"image2": image}
@@ -107,11 +136,16 @@ def test_element_names_unique() -> None:
     assert set(sdata.points.keys()) == {"points2"}
     assert "points2" in sdata._shared_keys
     assert "points" not in sdata._shared_keys
-    # test for points
+    # test for shapes
     sdata.shapes = {"shapes2": shapes}
     assert set(sdata.shapes.keys()) == {"shapes2"}
     assert "shapes2" in sdata._shared_keys
     assert "shapes" not in sdata._shared_keys
+    # test for tables
+    sdata.tables = {"table2": table}
+    assert set(sdata.tables.keys()) == {"table2"}
+    assert "table2" in sdata._shared_keys
+    assert "table" not in sdata._shared_keys
 
 
 def test_element_type_from_element_name(points: SpatialData) -> None:

@@ -31,6 +31,7 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
@@ -971,6 +972,7 @@ class TableModel:
         -------
         The validated data.
         """
+        validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
             return data
 
@@ -1004,6 +1006,7 @@ class TableModel:
         -------
         The parsed data.
         """
+        validate_table_attr_keys(adata)
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
@@ -1033,6 +1036,8 @@ class TableModel:
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
+        # note! this is an expensive check and therefore we skip it during validation
+        # https://github.com/scverse/spatialdata/issues/715
         grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
@@ -1124,47 +1129,3 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     raise ValueError(
         "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."
     )
-
-
-def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
-    """
-    Check region and region_key column symmetry.
-
-    This checks whether the specified targets are also present in the region key column in obs and raises an error
-    if this is not the case.
-
-    Parameters
-    ----------
-    table
-        Table annotating specific SpatialElements
-    region_key
-        The column in obs containing for each row which SpatialElement is annotated by that row.
-    target
-         Name of target(s) SpatialElement(s)
-
-    Raises
-    ------
-    ValueError
-        If there is a mismatch between specified target regions and regions in the region key column of table.obs.
-
-    Example
-    -------
-    Assuming we have a table with region column in obs given by `region_key` called 'region' for which we want to check
-    whether it contains the specified annotation targets in the `target` variable as `pd.Series['region1', 'region2']`:
-
-    ```python
-    check_target_region_column_symmetry(table, region_key=region_key, target=target)
-    ```
-
-    This returns None if both specified targets are present in the region_key obs column. In this case the annotation
-    targets can be safely set. If not then a ValueError is raised stating the elements that are not shared between
-    the region_key column in obs and the specified targets.
-    """
-    found_regions = set(table.obs[region_key].unique().tolist())
-    target_element_set = [target] if isinstance(target, str) else target
-    symmetric_difference = found_regions.symmetric_difference(target_element_set)
-    if symmetric_difference:
-        raise ValueError(
-            f"Mismatch(es) found between regions in region column in obs and target element: "
-            f"{', '.join(diff for diff in symmetric_difference)}"
-        )

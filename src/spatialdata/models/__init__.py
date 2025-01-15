@@ -1,3 +1,4 @@
+from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
     C,
     SpatialElement,
@@ -23,7 +24,6 @@ from spatialdata.models.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    check_target_region_column_symmetry,
     get_model,
     get_table_keys,
 )

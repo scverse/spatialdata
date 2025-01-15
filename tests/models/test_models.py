@@ -25,6 +25,7 @@ from spatial_image import to_spatial_image
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
 from spatialdata.models._utils import (
     force_2d,
@@ -366,6 +367,36 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_invalid_names(self, full_sdata, element_type: str, name: str):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValueError, match="Name (must|cannot)"):
+            SpatialData(**{element_type: {name: element}})
+
+    @pytest.mark.parametrize(
+        "names",
+        [
+            ["abc", "Abc"],
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_not_unique_names(self, full_sdata, element_type: str, names: list[str]):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValidationError, match="Key `.*` is not unique"):
+            SpatialData(**{element_type: {name: element for name in names}})
+
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
@@ -380,6 +411,71 @@ class TestModels:
         adata.obs["A"] = [1] * 10
         with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "_index",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_invalid_names(self, key: str, attr: str, parse: bool):
+        if attr in ("obs", "var"):
+            df = pd.DataFrame([[None]], columns=[key], index=["1"])
+            adata = AnnData(np.array([[0]]), **{attr: df})
+            with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                if parse:
+                    TableModel.parse(adata)
+                else:
+                    TableModel().validate(adata)
+        elif key != "_index":  # "_index" is only disallowed in obs/var
+            if attr in ("obsm", "varm", "obsp", "varp", "layers"):
+                array = np.array([[0]])
+                adata = AnnData(np.array([[0]]), **{attr: {key: array}})
+                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+            elif attr == "uns":
+                adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
+                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ["abc", "abc"],
+            ["abc", "Abc", "ABC"],
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "var"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
+        invalid_key = keys[1]
+        key_regex = re.escape(invalid_key)
+        df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
+        adata = AnnData(np.array([[0]]), **{attr: df})
+        with pytest.raises(
+            ValueError,
+            match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "
+            + f"Key `{key_regex}` is not unique, or another case-variant of it exists.",
+        ):
+            if parse:
+                TableModel.parse(adata)
+            else:
+                TableModel().validate(adata)
 
 
 def test_get_schema():
