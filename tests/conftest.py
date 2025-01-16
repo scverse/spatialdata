@@ -66,7 +66,7 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(tables=_get_table(region="labels2d"))
+    return SpatialData(tables={"table": _get_table(region="labels2d")})
 
 
 @pytest.fixture()
@@ -93,7 +93,7 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        tables=_get_table(region="labels2d"),
+        tables=_get_tables(region="labels2d"),
     )
 
 
@@ -128,7 +128,7 @@ def sdata(request) -> SpatialData:
             labels=_get_labels(),
             shapes=_get_shapes(),
             points=_get_points(),
-            tables=_get_table("labels2d"),
+            tables=_get_tables(region="labels2d"),
         )
     if request.param == "empty":
         return SpatialData()
@@ -276,6 +276,14 @@ def _get_points() -> dict[str, DaskDataFrame]:
         )
         out[name] = PointsModel.parse(arr, annotation=annotation, feature_key="genes", instance_key="instance_id")
     return out
+
+
+def _get_tables(
+    region: None | str | list[str] = "sample1",
+    region_key: None | str = "region",
+    instance_key: None | str = "instance_id",
+) -> dict[str, AnnData]:
+    return {"table": _get_table(region=region, region_key=region_key, instance_key=instance_key)}
 
 
 def _get_table(
