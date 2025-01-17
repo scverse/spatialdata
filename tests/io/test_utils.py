@@ -1,10 +1,12 @@
 import os
 import tempfile
+from contextlib import nullcontext
 
 import dask.dataframe as dd
+import pytest
 
 from spatialdata import read_zarr
-from spatialdata._io._utils import get_dask_backing_files
+from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
 
 
 def test_backing_files_points(points):
@@ -118,3 +120,20 @@ def test_backing_files_combining_points_and_images(points, images):
             os.path.realpath(os.path.join(f1, "images/image2d")),
         ]
         assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
+
+
+@pytest.mark.parametrize(
+    ("on_bad_files", "actual_error", "expectation"),
+    [
+        ("error", None, nullcontext()),
+        ("error", KeyError("key"), pytest.raises(KeyError)),
+        ("warn", None, nullcontext()),
+        ("warn", KeyError("key"), pytest.warns(UserWarning, match="location: KeyError")),
+        ("warn", RuntimeError("unhandled"), pytest.raises(RuntimeError)),
+    ],
+)
+def test_handle_read_errors(on_bad_files: str, actual_error: Exception, expectation):
+    with expectation:  # noqa: SIM117
+        with handle_read_errors(on_bad_files=on_bad_files, location="location", exc_types=KeyError):
+            if actual_error is not None:
+                raise actual_error

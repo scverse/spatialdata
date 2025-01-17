@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from json import JSONDecodeError
+from typing import Literal
 
 import numpy as np
 import zarr
@@ -8,14 +10,20 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
+from zarr.errors import ArrayNotFoundError
 
+from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors
 from spatialdata._io.format import CurrentTablesFormat, TablesFormats, _parse_version
 from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 
 def _read_table(
-    zarr_store_path: str, group: zarr.Group, subgroup: zarr.Group, tables: dict[str, AnnData]
+    zarr_store_path: str,
+    group: zarr.Group,
+    subgroup: zarr.Group,
+    tables: dict[str, AnnData],
+    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> dict[str, AnnData]:
     """
     Read in tables in the tables Zarr.group of a SpatialData Zarr store.
@@ -30,6 +38,8 @@ def _read_table(
         The subgroup containing the tables.
     tables
         A dictionary of tables.
+    on_bad_files
+        Specifies what to do upon encountering a bad file, e.g. corrupted, invalid or missing files.
 
     Returns
     -------
@@ -40,33 +50,38 @@ def _read_table(
         f_elem = subgroup[table_name]
         f_elem_store = os.path.join(zarr_store_path, f_elem.path)
 
-        tables[table_name] = read_anndata_zarr(f_elem_store)
+        with handle_read_errors(
+            on_bad_files=on_bad_files,
+            location=f"{subgroup.path}/{table_name}",
+            exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError),
+        ):
+            tables[table_name] = read_anndata_zarr(f_elem_store)
 
-        f = zarr.open(f_elem_store, mode="r")
-        version = _parse_version(f, expect_attrs_key=False)
-        assert version is not None
-        # since have just one table format, we currently read it but do not use it; if we ever change the format
-        # we can rename the two _ to format and implement the per-format read logic (as we do for shapes)
-        _ = TablesFormats[version]
-        f.store.close()
+            f = zarr.open(f_elem_store, mode="r")
+            version = _parse_version(f, expect_attrs_key=False)
+            assert version is not None
+            # since have just one table format, we currently read it but do not use it; if we ever change the format
+            # we can rename the two _ to format and implement the per-format read logic (as we do for shapes)
+            _ = TablesFormats[version]
+            f.store.close()
 
-        # # replace with format from above
-        # version = "0.1"
-        # format = TablesFormats[version]
-        if TableModel.ATTRS_KEY in tables[table_name].uns:
-            # fill out eventual missing attributes that has been omitted because their value was None
-            attrs = tables[table_name].uns[TableModel.ATTRS_KEY]
-            if "region" not in attrs:
-                attrs["region"] = None
-            if "region_key" not in attrs:
-                attrs["region_key"] = None
-            if "instance_key" not in attrs:
-                attrs["instance_key"] = None
-            # fix type for region
-            if "region" in attrs and isinstance(attrs["region"], np.ndarray):
-                attrs["region"] = attrs["region"].tolist()
+            # # replace with format from above
+            # version = "0.1"
+            # format = TablesFormats[version]
+            if TableModel.ATTRS_KEY in tables[table_name].uns:
+                # fill out eventual missing attributes that has been omitted because their value was None
+                attrs = tables[table_name].uns[TableModel.ATTRS_KEY]
+                if "region" not in attrs:
+                    attrs["region"] = None
+                if "region_key" not in attrs:
+                    attrs["region_key"] = None
+                if "instance_key" not in attrs:
+                    attrs["instance_key"] = None
+                # fix type for region
+                if "region" in attrs and isinstance(attrs["region"], np.ndarray):
+                    attrs["region"] = attrs["region"].tolist()
 
-        count += 1
+            count += 1
 
     logger.debug(f"Found {count} elements in {subgroup}")
     return tables
