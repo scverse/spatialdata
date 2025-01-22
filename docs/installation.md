@@ -60,6 +60,37 @@ python -c "import spatialdata; print(spatialdata.__path__)"
 
 if you get a path that contains `site-packages`, then your editable installation has been overridden and you need to reinstall the package by rerunning `pip install -e .` in the cloned `spatialdata` repo.
 
+## Conda
+
+You can install the `spatialdata`, `spatialdata-io`, `spatialdata-plot` and `napari-spatialdata` packages from the `conda-forge` channel using
+
+```bash
+mamba install -c conda-forge spatialdata spatialdata-io spatialdata-plot napari-spatialdata
+```
+
+Note: currently (Jan 2025), due to particular versions being unavailable on `conda-forge` for some dependent packages, the latest versions of the packages of the `SpatialData` ecosystem are not available on `conda-forge`. We are working on fixing this issue; please check the latest versions available on the channel.
+
+## Docker
+
+A `Dockerfile` is available in the repository; the image that can be built from it contains `spatialdata` (with `torch`), `spatialdata-io` and `spatialdata-plot` (not `napari-spatialdata`).
+
+To build the image, run:
+
+```bash
+# this is for Apple Silicon machines, if you are not using such machine you can omit the --build-arg
+docker build --build-arg TARGETPLATFORM=linux/arm64 --tag spatialdata .
+docker run -it spatialdata
+```
+
+We also publish images automatically via GitHub Actions; you can see the [list of available images here](https://github.com/scverse/spatialdata/pkgs/container/spatialdata/versions).
+
+Once you have the image name, you can pull and run it with:
+
+```bash
+docker pull ghcr.io/scverse/spatialdata:spatialdata0.3.0_spatialdata-io0.1.7_spatialdata-plot0.2.9
+docker run -it ghcr.io/scverse/spatialdata:spatialdata0.3.0_spatialdata-io0.1.7_spatialdata-plot0.2.9
+```
+
 <!-- Links -->
 
 [napari-spatialdata]: https://github.com/scverse/napari-spatialdata
