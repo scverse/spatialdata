@@ -85,7 +85,8 @@ jobs:
 
             - uses: docker/build-push-action@v5
               if: ${{ env.skip_build == 'false' }}
-              IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:${{ env.IMAGE_TAG_SUFFIX }}
+              env:
+                  IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:${{ env.IMAGE_TAG_SUFFIX }}
               with:
                   context: .
                   file: ./Dockerfile
