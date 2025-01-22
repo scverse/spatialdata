@@ -48,6 +48,20 @@ class SpatialDataFormat(CurrentFormat):
     pass
 
 
+class SpatialDataContainerFormatV01(SpatialDataFormat):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.1"
+
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
+        from spatialdata import __version__
+
+        return {"spatialdata_software_version": __version__}
+
+
 class RasterFormatV01(SpatialDataFormat):
     """Formatter for raster data."""
 
@@ -201,6 +215,7 @@ CurrentRasterFormat = RasterFormatV01
 CurrentShapesFormat = ShapesFormatV02
 CurrentPointsFormat = PointsFormatV01
 CurrentTablesFormat = TablesFormatV01
+CurrentSpatialDataContainerFormats = SpatialDataContainerFormatV01
 
 ShapesFormats = {
     "0.1": ShapesFormatV01(),
@@ -215,6 +230,9 @@ TablesFormats = {
 RasterFormats = {
     "0.1": RasterFormatV01(),
 }
+SpatialDataContainerFormats = {
+    "0.1": SpatialDataContainerFormatV01(),
+}
 
 
 def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
@@ -223,6 +241,7 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         "shapes": CurrentShapesFormat(),
         "points": CurrentPointsFormat(),
         "tables": CurrentTablesFormat(),
+        "SpatialData": CurrentSpatialDataContainerFormats(),
     }
     if formats is None:
         return parsed
@@ -236,6 +255,7 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         "shapes": False,
         "points": False,
         "tables": False,
+        "SpatialData": False,
     }
 
     def _check_modified(element_type: str) -> None:
@@ -256,6 +276,9 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         elif any(isinstance(fmt, type(v)) for v in RasterFormats.values()):
             _check_modified("raster")
             parsed["raster"] = fmt
+        elif any(isinstance(fmt, type(v)) for v in SpatialDataContainerFormats.values()):
+            _check_modified("SpatialData")
+            parsed["SpatialData"] = fmt
         else:
             raise ValueError(f"Unsupported format {fmt}")
     return parsed

@@ -303,7 +303,7 @@ class NgffAffine(NgffBaseTransformation):
         self.affine = self._parse_list_into_array(affine)
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         assert isinstance(d["affine"], list)
         last_row = [[0.0] * (len(d["affine"][0]) - 1) + [1.0]]
         return cls(d["affine"] + last_row)
@@ -340,7 +340,7 @@ class NgffAffine(NgffBaseTransformation):
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
-        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
+        return q[: len(output_axes), :].T
 
     def to_affine(self) -> "NgffAffine":
         return NgffAffine(
@@ -411,7 +411,7 @@ class NgffIdentity(NgffBaseTransformation):
 
     # TODO: remove type: ignore[valid-type] when https://github.com/python/mypy/pull/14041 is merged
     @classmethod
-    def _from_dict(cls, _: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, _: Transformation_t) -> Self:
         return cls()
 
     def to_dict(self) -> Transformation_t:
@@ -478,7 +478,7 @@ class NgffMapAxis(NgffBaseTransformation):
         self.map_axis = map_axis
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         return cls(d["mapAxis"])
 
     def to_dict(self) -> Transformation_t:
@@ -569,7 +569,7 @@ class NgffTranslation(NgffBaseTransformation):
         self.translation = self._parse_list_into_array(translation)
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         return cls(d["translation"])
 
     def to_dict(self) -> Transformation_t:
@@ -636,7 +636,7 @@ class NgffScale(NgffBaseTransformation):
         self.scale = self._parse_list_into_array(scale)
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         return cls(d["scale"])
 
     def to_dict(self) -> Transformation_t:
@@ -705,13 +705,13 @@ class NgffRotation(NgffBaseTransformation):
         self.rotation = self._parse_list_into_array(rotation)
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         x = d["rotation"]
         n = len(x)
         r = math.sqrt(n)
         assert n == int(r * r)
         m = np.array(x).reshape((int(r), int(r))).tolist()
-        return cls(m)
+        return cls(m)  # type: ignore[arg-type]
 
     def to_dict(self) -> Transformation_t:
         d = {
@@ -802,7 +802,7 @@ class NgffSequence(NgffBaseTransformation):
                 self.output_coordinate_system = cs
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         return cls([NgffBaseTransformation.from_dict(t) for t in d["transformations"]])
 
     def to_dict(self) -> Transformation_t:
@@ -941,7 +941,7 @@ class NgffSequence(NgffBaseTransformation):
         for t in self.transformations:
             latest_output_cs, input_cs, output_cs = NgffSequence._inferring_cs_pre_action(t, latest_output_cs)
             a = t.to_affine()
-            composed = a.affine @ composed
+            composed = a.affine @ composed  # type: ignore[assignment]
             NgffSequence._inferring_cs_post_action(t, input_cs, output_cs)
         if output_axes != latest_output_cs.axes_names:
             raise ValueError(
@@ -1074,7 +1074,7 @@ class NgffByDimension(NgffBaseTransformation):
         self.transformations = transformations
 
     @classmethod
-    def _from_dict(cls, d: Transformation_t) -> Self:  # type: ignore[valid-type]
+    def _from_dict(cls, d: Transformation_t) -> Self:
         return cls([NgffBaseTransformation.from_dict(t) for t in d["transformations"]])
 
     def to_dict(self) -> Transformation_t:
@@ -1133,7 +1133,7 @@ class NgffByDimension(NgffBaseTransformation):
             input_columns_stacked: ArrayLike = np.stack(input_columns, axis=1)
             output_columns_t = t.transform_points(input_columns_stacked)
             for ax, col in zip(t.output_coordinate_system.axes_names, output_columns_t.T, strict=True):
-                output_columns[ax] = col
+                output_columns[ax] = col  # type: ignore[assignment]
         output: ArrayLike = np.stack([output_columns[ax] for ax in output_axes], axis=1)
         return output
 

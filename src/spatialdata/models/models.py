@@ -31,8 +31,10 @@ from xarray_schema.components import (
 )
 from xarray_schema.dataarray import DataArraySchema
 
+from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -91,13 +93,14 @@ class RasterSchema(DataArraySchema):
         cls,
         data: ArrayLike | DataArray | DaskArray,
         dims: Sequence[str] | None = None,
+        c_coords: str | list[str] | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
         scale_factors: ScaleFactors_t | None = None,
         method: Methods | None = None,
         chunks: Chunks_t | None = None,
         **kwargs: Any,
     ) -> DataArray | DataTree:
-        """
+        r"""
         Validate (or parse) raster data.
 
         Parameters
@@ -110,6 +113,9 @@ class RasterSchema(DataArraySchema):
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
+        c_coords : str | list[str] | None
+            Channel names of image data. Must be equal to the length of dimension 'c'. Only supported for `Image`
+            models.
         transformations
             Dictionary of transformations to apply to the data. The key is the name of the target coordinate system,
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
@@ -174,7 +180,7 @@ class RasterSchema(DataArraySchema):
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
-            _reindex = lambda d: dims.index(d)  # type: ignore[union-attr]
+            _reindex = lambda d: dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
@@ -195,7 +201,16 @@ class RasterSchema(DataArraySchema):
                 ) from e
 
         # finally convert to spatial image
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, **kwargs)
+        if c_coords is not None:
+            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
+
+        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+            raise ValueError(
+                f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+                f" with length {data.shape[cls.dims.dims.index('c')]}."
+            )
+
+        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -270,6 +285,8 @@ class Labels2DModel(RasterSchema):
         *args: Any,
         **kwargs: Any,
     ) -> DataArray | DataTree:
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -292,6 +309,8 @@ class Labels3DModel(RasterSchema):
 
     @classmethod
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+        if kwargs.get("c_coords") is not None:
+            raise ValueError("`c_coords` is not supported for labels")
         if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
             # Override default scaling method to preserve labels
             kwargs["method"] = Methods.DASK_IMAGE_NEAREST
@@ -699,7 +718,7 @@ class PointsModel:
                 stacklevel=2,
             )
         if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(  # type: ignore[attr-defined]
+            table: DaskDataFrame = dd.from_pandas(
                 pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=sort,
@@ -713,13 +732,16 @@ class PointsModel:
                     data[feature_key].astype(str).astype("category"),
                     sort=sort,
                     **kwargs,
-                )  # type: ignore[attr-defined]
+                )
                 table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):  # type: ignore[attr-defined]
+        elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None and data[feature_key].dtype.name != "category":
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+            if feature_key is not None:
+                if data[feature_key].dtype.name == "category":
+                    table[feature_key] = data[feature_key]
+                else:
+                    table[feature_key] = data[feature_key].astype(str).astype("category")
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -753,7 +775,7 @@ class PointsModel:
         instance_key: str | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> DaskDataFrame:
-        assert isinstance(data, dd.DataFrame)  # type: ignore[attr-defined]
+        assert isinstance(data, dd.DataFrame)
         if feature_key is not None or instance_key is not None:
             data.attrs[ATTRS_KEY] = {}
         if feature_key is not None:
@@ -776,7 +798,7 @@ class PointsModel:
         _parse_transformations(data, transformations)
         cls.validate(data)
         # false positive with the PyCharm mypy plugin
-        return data  # type: ignore[no-any-return]
+        return data
 
 
 class TableModel:
@@ -950,6 +972,7 @@ class TableModel:
         -------
         The validated data.
         """
+        validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
             return data
 
@@ -983,6 +1006,7 @@ class TableModel:
         -------
         The parsed data.
         """
+        validate_table_attr_keys(adata)
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
@@ -1012,6 +1036,8 @@ class TableModel:
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
 
+        # note! this is an expensive check and therefore we skip it during validation
+        # https://github.com/scverse/spatialdata/issues/715
         grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
@@ -1103,47 +1129,3 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     raise ValueError(
         "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."
     )
-
-
-def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
-    """
-    Check region and region_key column symmetry.
-
-    This checks whether the specified targets are also present in the region key column in obs and raises an error
-    if this is not the case.
-
-    Parameters
-    ----------
-    table
-        Table annotating specific SpatialElements
-    region_key
-        The column in obs containing for each row which SpatialElement is annotated by that row.
-    target
-         Name of target(s) SpatialElement(s)
-
-    Raises
-    ------
-    ValueError
-        If there is a mismatch between specified target regions and regions in the region key column of table.obs.
-
-    Example
-    -------
-    Assuming we have a table with region column in obs given by `region_key` called 'region' for which we want to check
-    whether it contains the specified annotation targets in the `target` variable as `pd.Series['region1', 'region2']`:
-
-    ```python
-    check_target_region_column_symmetry(table, region_key=region_key, target=target)
-    ```
-
-    This returns None if both specified targets are present in the region_key obs column. In this case the annotation
-    targets can be safely set. If not then a ValueError is raised stating the elements that are not shared between
-    the region_key column in obs and the specified targets.
-    """
-    found_regions = set(table.obs[region_key].unique().tolist())
-    target_element_set = [target] if isinstance(target, str) else target
-    symmetric_difference = found_regions.symmetric_difference(target_element_set)
-    if symmetric_difference:
-        raise ValueError(
-            f"Mismatch(es) found between regions in region column in obs and target element: "
-            f"{', '.join(diff for diff in symmetric_difference)}"
-        )

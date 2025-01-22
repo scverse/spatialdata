@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -13,6 +15,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
+from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.transformations.transformations import BaseTransformation
 
 SpatialElement: TypeAlias = DataArray | DataTree | GeoDataFrame | DaskDataFrame
@@ -268,7 +271,7 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
 
 
 @singledispatch
-def get_channels(data: Any) -> list[Any]:
+def get_channel_names(data: Any) -> list[Any]:
     """Get channels from data for an image element (both single and multiscale).
 
     Parameters
@@ -287,12 +290,40 @@ def get_channels(data: Any) -> list[Any]:
     raise ValueError(f"Cannot get channels from {type(data)}")
 
 
-@get_channels.register
+def get_channels(data: Any) -> list[Any]:
+    """Get channels from data for an image element (both single and multiscale).
+
+    [Deprecation] This function will be deprecated in version 0.3.0. Please use
+    `get_channel_names`.
+
+    Parameters
+    ----------
+    data
+        data to get channels from
+
+    Returns
+    -------
+    List of channels
+
+    Notes
+    -----
+    For multiscale images, the channels are validated to be consistent across scales.
+    """
+    warnings.warn(
+        "The function 'get_channels' is deprecated and will be removed in version 0.3.0. "
+        "Please use 'get_channel_names' instead.",
+        DeprecationWarning,
+        stacklevel=2,  # Adjust the stack level to point to the caller
+    )
+    return get_channel_names(data)
+
+
+@get_channel_names.register
 def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
 
 
-@get_channels.register
+@get_channel_names.register
 def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
     channels = {tuple(data[i][name].coords["c"].values) for i in data}
@@ -338,7 +369,7 @@ def force_2d(gdf: GeoDataFrame) -> None:
         gdf.geometry = new_shapes
 
 
-def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type["RasterSchema"]:
+def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]:
     """
     Get the raster model from the dimensions of the data.
 
@@ -374,3 +405,51 @@ def convert_region_column_to_categorical(table: AnnData) -> AnnData:
             )
             table.obs[region_key] = pd.Categorical(table.obs[region_key])
     return table
+
+
+def set_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:
+    """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+
+    Parameters
+    ----------
+    element
+        The image `SpatialElement` or parsed `ImageModel`.
+    channel_names
+        The channel names to be assigned to the c dimension of the image `SpatialElement`.
+
+    Returns
+    -------
+    The image `SpatialElement` or parsed `ImageModel` with the channel names set to the `c` dimension.
+    """
+    from spatialdata.models import Image2DModel, Image3DModel, get_model
+
+    channel_names = channel_names if isinstance(channel_names, list) else [channel_names]
+    model = get_model(element)
+
+    # get_model cannot be used due to circular import so get_axes_names is used instead
+    if model in [Image2DModel, Image3DModel]:
+        channel_names = _check_match_length_channels_c_dim(element, channel_names, model.dims.dims)  # type: ignore[union-attr]
+        if isinstance(element, DataArray):
+            element = element.assign_coords(c=channel_names)
+        else:
+            element = element.msi.assign_coords({"c": channel_names})
+    else:
+        raise TypeError("Element model does not support setting channel names, no `c` dimension found.")
+
+    return element
+
+
+def _get_uint_dtype(value: int) -> str:
+    max_uint64 = np.iinfo(np.uint64).max
+    max_uint32 = np.iinfo(np.uint32).max
+    max_uint16 = np.iinfo(np.uint16).max
+
+    if max_uint16 >= value:
+        dtype = "uint16"
+    elif max_uint32 >= value:
+        dtype = "uint32"
+    elif max_uint64 >= value:
+        dtype = "uint64"
+    else:
+        raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
+    return dtype

@@ -40,7 +40,7 @@ def blobs(
     n_shapes: int = 5,
     extra_coord_system: str | None = None,
     n_channels: int = 3,
-    c_coords: ArrayLike | None = None,
+    c_coords: str | list[str] | None = None,
 ) -> SpatialData:
     """
     Blobs dataset.
@@ -108,7 +108,7 @@ class BlobsDataset:
         n_shapes: int = 5,
         extra_coord_system: str | None = None,
         n_channels: int = 3,
-        c_coords: ArrayLike | None = None,
+        c_coords: str | list[str] | None = None,
     ) -> None:
         """
         Blobs dataset.
@@ -176,13 +176,13 @@ class BlobsDataset:
         transformations: dict[str, Any] | None = None,
         length: int = 512,
         n_channels: int = 3,
-        c_coords: ArrayLike | None = None,
+        c_coords: str | list[str] | None = None,
         multiscale: bool = False,
     ) -> DataArray | DataTree:
         masks = []
         for i in range(n_channels):
             mask = self._generate_blobs(length=length, seed=i)
-            mask = (mask - mask.min()) / np.ptp(mask)  # type: ignore[attr-defined]
+            mask = (mask - mask.min()) / np.ptp(mask)
             masks.append(mask)
 
         x = np.stack(masks, axis=0)

@@ -11,17 +11,18 @@ from anndata import AnnData
 from numpy.random import default_rng
 
 from spatialdata import SpatialData, deepcopy, read_zarr
+from spatialdata._core.validation import ValidationError
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
-from spatialdata.models._utils import get_channels
+from spatialdata.models._utils import get_channel_names
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
     get_transformation,
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes
+from tests.conftest import _get_images, _get_labels, _get_points, _get_shapes, _get_table, _get_tables
 
 RNG = default_rng(0)
 
@@ -31,8 +32,8 @@ class TestReadWrite:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
         # ensures that we are inplicitly testing the read and write of channel names
-        assert get_channels(images["image2d"]) == ["r", "g", "b"]
-        assert get_channels(images["image2d_multiscale"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d"]) == ["r", "g", "b"]
+        assert get_channel_names(images["image2d_multiscale"]) == ["r", "g", "b"]
 
         images.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
@@ -104,33 +105,46 @@ class TestReadWrite:
             sdata.images[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.images[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_labels().items():
             sdata.labels[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.labels[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_shapes().items():
             sdata.shapes[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.shapes[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_points().items():
             sdata.points[f"additional_{k}"] = v
             with pytest.warns(UserWarning):
                 sdata.points[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
                 sdata[f"additional_{k}"] = v
-            with pytest.raises(KeyError, match="Key `table` already exists."):
+            with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
+
+        for k, v in _get_tables().items():
+            sdata.tables[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata.tables[f"additional_{k}"] = v
+            with pytest.warns(UserWarning):
+                sdata[f"additional_{k}"] = v
+            with pytest.raises(KeyError, match="Key `poly` is not unique"):
+                sdata["poly"] = v
 
     def test_incremental_io_list_of_elements(self, shapes: SpatialData) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -568,17 +582,54 @@ def _check_valid_name(f: Callable[[str], Any]) -> None:
         f(2)
     with pytest.raises(ValueError, match="Name cannot be an empty string."):
         f("")
-    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
-        f("not valid")
-    with pytest.raises(ValueError, match="Name must contain only alphanumeric characters, underscores, and hyphens."):
+    with pytest.raises(ValueError, match="Name cannot be '.'"):
+        f(".")
+    with pytest.raises(ValueError, match="Name cannot be '..'"):
+        f("..")
+    with pytest.raises(ValueError, match="Name cannot start with '__'"):
+        f("__a")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
+        f("has whitespace")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
         f("this/is/not/valid")
+    with pytest.raises(
+        ValueError, match="Name must contain only alphanumeric characters, underscores, dots and hyphens."
+    ):
+        f("non-alnum_#$%&()*+,?@")
 
 
-def test_incremental_io_valid_name(points: SpatialData) -> None:
-    _check_valid_name(points.write_element)
-    _check_valid_name(points.write_metadata)
-    _check_valid_name(points.write_transformations)
-    _check_valid_name(points.delete_element_from_disk)
+def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
+    _check_valid_name(full_sdata.write_element)
+    _check_valid_name(full_sdata.write_metadata)
+    _check_valid_name(full_sdata.write_transformations)
+
+
+def test_incremental_io_attrs(points: SpatialData) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        f = os.path.join(tmpdir, "data.zarr")
+        my_attrs = {"a": "b", "c": 1}
+        points.attrs = my_attrs
+        points.write(f)
+
+        # test that the attributes are written to disk
+        sdata = SpatialData.read(f)
+        assert sdata.attrs == my_attrs
+
+        # test incremental io attrs (write_attrs())
+        sdata.attrs["c"] = 2
+        sdata.write_attrs()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 2
+
+        # test incremental io attrs (write_metadata())
+        sdata.attrs["c"] = 3
+        sdata.write_metadata()
+        sdata2 = SpatialData.read(f)
+        assert sdata2.attrs["c"] == 3
 
 
 cached_sdata_blobs = blobs()
@@ -671,3 +722,83 @@ def test_element_already_on_disk_different_type(full_sdata, element_name: str) -
             match=ERROR_MSG,
         ):
             full_sdata.write_transformations(element_name)
+
+
+def test_writing_invalid_name(tmp_path: Path):
+    invalid_sdata = SpatialData()
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    invalid_sdata.images.data[""] = next(iter(_get_images().values()))
+    invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
+    invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.tables.data["has whitespace"] = _get_table()
+
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write(tmp_path / "data.zarr")
+
+
+def test_writing_valid_table_name_invalid_table(tmp_path: Path):
+    # also try with a valid table name but invalid table
+    # testing just one case, all the cases are in test_table_model_invalid_names()
+    invalid_sdata = SpatialData()
+    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write(tmp_path / "data.zarr")
+
+
+def test_incremental_writing_invalid_name(tmp_path: Path):
+    invalid_sdata = SpatialData()
+    invalid_sdata.write(tmp_path / "data.zarr")
+
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    invalid_sdata.images.data[""] = next(iter(_get_images().values()))
+    invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
+    invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.tables.data["has whitespace"] = _get_table()
+
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        elements = getattr(invalid_sdata, element_type)
+        for name in elements:
+            with pytest.raises(ValueError, match="Name (must|cannot)"):
+                invalid_sdata.write_element(name)
+
+
+def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
+    # also try with a valid table name but invalid table
+    # testing just one case, all the cases are in test_table_model_invalid_names()
+    invalid_sdata = SpatialData()
+    invalid_sdata.write(tmp_path / "data2.zarr")
+    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    with pytest.raises(ValueError, match="Name (must|cannot)"):
+        invalid_sdata.write_element("valid_name")
+
+
+def test_reading_invalid_name(tmp_path: Path):
+    image_name, image = next(iter(_get_images().items()))
+    labels_name, labels = next(iter(_get_labels().items()))
+    points_name, points = next(iter(_get_points().items()))
+    shapes_name, shapes = next(iter(_get_shapes().items()))
+    table_name, table = "table", _get_table()
+    valid_sdata = SpatialData(
+        images={image_name: image},
+        labels={labels_name: labels},
+        points={points_name: points},
+        shapes={shapes_name: shapes},
+        tables={table_name: table},
+    )
+    valid_sdata.write(tmp_path / "data.zarr")
+    # Circumvent validation at construction time and check validation happens again at writing time.
+    (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
+    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+
+    with pytest.raises(ValidationError, match="Cannot construct SpatialData") as exc_info:
+        read_zarr(tmp_path / "data.zarr")
+
+    actual_message = str(exc_info.value)
+    assert "points/has whitespace" in actual_message
+    assert "shapes/non-alnum_#$%&()*+,?@" in actual_message
+    assert (
+        "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707"
+        in actual_message
+    )

@@ -245,6 +245,15 @@ class Identity(BaseTransformation):
 # drop axes. When convering from MapAxis to NgffMapAxis this can be done by returing a Sequence of NgffAffine and
 # NgffMapAxis, where the NgffAffine corrects the axes
 class MapAxis(BaseTransformation):
+    """
+    Transformation that maps input axes to output axes.
+
+    Parameters
+    ----------
+    map_axis
+        Dictionary with keys being the input axes and values the output axes.
+    """
+
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
         # to avoid circular imports
         from spatialdata.models import validate_axis_name
@@ -519,7 +528,7 @@ class Affine(BaseTransformation):
         assert self.matrix.dtype == float
         if self.matrix.shape != (len(output_axes) + 1, len(input_axes) + 1):
             raise ValueError("Invalid shape for affine matrix.")
-        if not np.array_equal(self.matrix[-1, :-1], np.zeros(len(input_axes))):
+        if not np.allclose(self.matrix[-1, :-1], np.zeros(len(input_axes))):
             raise ValueError("Affine matrix must be homogeneous.")
         assert self.matrix[-1, -1] == 1.0
 
