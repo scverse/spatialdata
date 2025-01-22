@@ -1,0 +1,100 @@
+name: Build Docker image
+
+on:
+    workflow_dispatch:
+#    schedule:
+#        -   cron: '0 0 * * *'  # run daily at midnight UTC
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        defaults:
+            run:
+                shell: bash -e {0} # -e to fail on error
+
+        permissions:
+            contents: read
+            packages: write
+            attestations: write
+            id-token: write
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.x"
+
+            - name: Upgrade pip
+              run: pip install pip
+
+            - name: Get latest versions
+              id: get_versions
+              run: |
+                  SPATIALDATA_VERSION=$(pip index versions spatialdata | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  SPATIALDATA_IO_VERSION=$(pip index versions spatialdata-io | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  SPATIALDATA_PLOT_VERSION=$(pip index versions spatialdata-plot | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  echo "SPATIALDATA_VERSION=${SPATIALDATA_VERSION}" >> $GITHUB_ENV
+                  echo "SPATIALDATA_IO_VERSION=${SPATIALDATA_IO_VERSION}" >> $GITHUB_ENV
+                  echo "SPATIALDATA_PLOT_VERSION=${SPATIALDATA_PLOT_VERSION}" >> $GITHUB_ENV
+
+            - name: Check if image tag exists
+              id: check_tag
+              env:
+                  IMAGE_TAG_SUFFIX: spatialdata${{ env.SPATIALDATA_VERSION }}_spatialdata-io${{ env.SPATIALDATA_IO_VERSION }}_spatialdata-plot${{ env.SPATIALDATA_PLOT_VERSION }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # Define the API URL
+                  API_URL="https://api.github.com/orgs/scverse/packages/container/spatialdata/versions"
+
+                  # Fetch all existing versions
+                  existing_tags=$(curl -s -H "Authorization: token $GITHUB_TOKEN" $API_URL | jq -r '.[].metadata.container.tags[]')
+
+                  # Debug: Output all existing tags
+                  echo "Existing tags:"
+                  echo "$existing_tags"
+
+                  # Check if the constructed tag exists
+                  if echo "$existing_tags" | grep -q "$IMAGE_TAG_SUFFIX"; then
+                    echo "Image tag $IMAGE_TAG_SUFFIX already exists. Skipping build."
+                    echo "skip_build=true" >> $GITHUB_ENV
+                  else
+                    echo "Image tag $IMAGE_TAG_SUFFIX does not exist. Proceeding with build."
+                    echo "skip_build=false" >> $GITHUB_ENV
+                    echo "IMAGE_TAG_SUFFIX=${IMAGE_TAG_SUFFIX}" >> $GITHUB_ENV
+                  fi
+
+            - name: Login to GitHub Container Registry
+              if: ${{ env.skip_build == 'false' }}
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: docker/build-push-action@v5
+              if: ${{ env.skip_build == 'false' }}
+              env:
+                  IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:${{ env.IMAGE_TAG_SUFFIX }}
+              with:
+                  context: .
+                  file: ./Dockerfile
+                  push: true
+                  cache-from: type=registry,ref=${{ env.REGISTRY }}/scverse/spatialdata:buildcache
+                  cache-to: type=inline,ref=${{ env.REGISTRY }}/scverse/spatialdata:buildcache
+                  build-args: |
+                      SPATIALDATA_VERSION=${{ env.SPATIALDATA_VERSION }}
+                      SPATIALDATA_IO_VERSION=${{ env.SPATIALDATA_IO_VERSION }}
+                      SPATIALDATA_PLOT_VERSION=${{ env.SPATIALDATA_PLOT_VERSION }}
+                  tags: ${{ env.IMAGE_TAG }}
