@@ -1,5 +1,9 @@
 ARG TARGETPLATFORM=linux/amd64
 
+ARG SPATIALDATA_VERSION
+ARG SPATIALDATA_IO_VERSION
+ARG SPATIALDATA_PLOT_VERSION
+
 # Use the specified platform to pull the correct base image.
 # Override TARGETPLATFORM during build for different architectures, such as linux/arm64 for Apple Silicon.
 # For example, to build for ARM64 architecture (e.g., Apple Silicon),
@@ -28,7 +32,13 @@ RUN apt-get update && \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip wheel
+
+# Install the libraries with specific versions
 RUN pip install --no-cache-dir \
-    spatialdata[torch] \
-    spatialdata-io \
-    spatialdata-plot
+    spatialdata[torch]==${SPATIALDATA_VERSION} \
+    spatialdata-io==${SPATIALDATA_IO_VERSION} \
+    spatialdata-plot==${SPATIALDATA_PLOT_VERSION}
+
+LABEL spatialdata_version="${SPATIALDATA_VERSION}" \
+      spatialdata_io_version="${SPATIALDATA_IO_VERSION}" \
+      spatialdata_plot_version="${SPATIALDATA_PLOT_VERSION}"

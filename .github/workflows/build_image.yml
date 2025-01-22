@@ -1,5 +1,4 @@
 name: Build Docker image
-# adapted from https://github.com/scverse/scvi-tools/blob/main/.github/workflows/build_image_latest.yaml
 
 on:
     workflow_run:
@@ -36,7 +35,23 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - uses: docker/setup-buildx-action@v3
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.x"
+
+            - name: Install pip-tools
+              run: pip install pip
+
+            - name: Get latest versions
+              id: get_versions
+              run: |
+                  SPATIALDATA_VERSION=$(pip index versions spatialdata | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  SPATIALDATA_IO_VERSION=$(pip index versions spatialdata-io | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  SPATIALDATA_PLOT_VERSION=$(pip index versions spatialdata-plot | grep "Available versions" | sed 's/Available versions: //' | awk -F', ' '{print $1}')
+                  echo "SPATIALDATA_VERSION=${SPATIALDATA_VERSION}" >> $GITHUB_ENV
+                  echo "SPATIALDATA_IO_VERSION=${SPATIALDATA_IO_VERSION}" >> $GITHUB_ENV
+                  echo "SPATIALDATA_PLOT_VERSION=${SPATIALDATA_PLOT_VERSION}" >> $GITHUB_ENV
 
             - name: Login to GitHub Container Registry
               uses: docker/login-action@v3
@@ -45,17 +60,6 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Set build inputs
-              id: build
-              run: |
-                  INPUT_REF=${{ github.ref_name }}
-                  if [[ $INPUT_REF == "main" ]]; then
-                    VERSION="latest"
-                  else
-                    VERSION=${INPUT_REF}
-                  fi
-                  echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
             - uses: docker/build-push-action@v5
               with:
                   context: .
@@ -63,4 +67,8 @@ jobs:
                   push: true
                   cache-from: type=registry,ref=${{ env.REGISTRY }}/scverse/spatialdata:buildcache
                   cache-to: type=inline,ref=${{ env.REGISTRY }}/scverse/spatialdata:buildcache
-                  tags: ${{ env.REGISTRY }}/scverse/spatialdata:${{ steps.build.outputs.version }}
+                  build-args: |
+                      SPATIALDATA_VERSION=${{ env.SPATIALDATA_VERSION }}
+                      SPATIALDATA_IO_VERSION=${{ env.SPATIALDATA_IO_VERSION }}
+                      SPATIALDATA_PLOT_VERSION=${{ env.SPATIALDATA_PLOT_VERSION }}
+                  tags: ${{ env.REGISTRY }}/scverse/spatialdata:spatialdata${{ env.SPATIALDATA_VERSION }}_spatialdata-io${{ env.SPATIALDATA_IO_VERSION }}_spatialdata-plot${{ env.SPATIALDATA_PLOT_VERSION }}
