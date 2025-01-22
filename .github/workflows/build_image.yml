@@ -36,7 +36,7 @@ jobs:
               with:
                   python-version: "3.x"
 
-            - name: Install pip-tools
+            - name: Upgrade pip
               run: pip install pip
 
             - name: Get latest versions

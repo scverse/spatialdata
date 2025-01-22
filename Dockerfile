@@ -22,9 +22,9 @@ ARG SPATIALDATA_PLOT_VERSION
 
 # debugging
 RUN echo "Target Platform: ${TARGETPLATFORM}" && \
-    echo "Spatialdata Version: ${SPATIALDATA_VERSION}" && \
-    echo "Spatialdata IO Version: ${SPATIALDATA_IO_VERSION}" && \
-    echo "Spatialdata Plot Version: ${SPATIALDATA_PLOT_VERSION}"
+    echo "spatialdata version: ${SPATIALDATA_VERSION}" && \
+    echo "spatialdata-io version: ${SPATIALDATA_IO_VERSION}" && \
+    echo "spatialdata-plot version: ${SPATIALDATA_PLOT_VERSION}"
 
 # Update and install system dependencies.
 RUN apt-get update && \
