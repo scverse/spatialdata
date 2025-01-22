@@ -7,10 +7,9 @@ import dask.array as da
 import pandas as pd
 import xarray as xr
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata.models import get_axes_names
@@ -35,6 +34,7 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> No
 def get_centroids(
     e: SpatialElement,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """
     Get the centroids of the geometries contained in a SpatialElement, as a new Points element.
@@ -45,6 +45,8 @@ def get_centroids(
         The SpatialElement. Only points, shapes (circles, polygons and multipolygons) and labels are supported.
     coordinate_system
         The coordinate system in which the centroids are computed.
+    return_background
+        If True, the centroid of the background label (0) is included in the output.
 
     Notes
     -----
@@ -69,7 +71,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         A DataFrame containing one column, named after "axis", with the centroids of the labels along that axis.
-        The index of the DataFrame is the collection of label values, sorted ascendingly.
+        The index of the DataFrame is the collection of label values, sorted in ascending order.
     """
     centroids: dict[int, float] = defaultdict(float)
     for i in xdata[axis]:
@@ -83,7 +85,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
             centroids[label_value] += count * i.values.item()
 
     all_labels_values, all_labels_counts = da.unique(xdata.data, return_counts=True)
-    all_labels = dict(zip(all_labels_values.compute(), all_labels_counts.compute()))
+    all_labels = dict(zip(all_labels_values.compute(), all_labels_counts.compute(), strict=True))
     for label_value in centroids:
         centroids[label_value] /= all_labels[label_value]
     centroids = dict(sorted(centroids.items(), key=lambda x: x[0]))
@@ -95,6 +97,7 @@ def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
 def _(
     e: DataArray | DataTree,
     coordinate_system: str = "global",
+    return_background: bool = False,
 ) -> DaskDataFrame:
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
@@ -110,6 +113,8 @@ def _(
     for axis in get_axes_names(e):
         dfs.append(_get_centroids_for_axis(e, axis))
     df = pd.concat(dfs, axis=1)
+    if not return_background and 0 in df.index:
+        df = df.drop(index=0)  # drop the background label
     t = get_transformation(e, coordinate_system)
     centroids = PointsModel.parse(df, transformations={coordinate_system: t})
     return transform(centroids, to_coordinate_system=coordinate_system)
@@ -126,7 +131,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     if isinstance(first_geometry, Point):
         xy = e.geometry.get_coordinates().values
     else:
-        assert isinstance(first_geometry, (Polygon, MultiPolygon)), (
+        assert isinstance(first_geometry, Polygon | MultiPolygon), (
             f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
             f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
         )

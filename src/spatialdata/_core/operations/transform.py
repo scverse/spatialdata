@@ -10,15 +10,14 @@ import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import SpatialElement, get_axes_names, get_model
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channels
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -49,7 +48,7 @@ def _transform_raster(
     v: ArrayLike = np.hstack(c_channel + [binary, np.ones(len(binary)).reshape((-1, 1))])
     matrix = transformation.to_affine_matrix(input_axes=axes, output_axes=axes)
     inverse_matrix = transformation.inverse().to_affine_matrix(input_axes=axes, output_axes=axes)
-    new_v = (matrix @ v.T).T
+    new_v: ArrayLike = (matrix @ v.T).T
     c_shape: tuple[int, ...]
     c_shape = (data.shape[0],) if "c" in axes else ()
     new_spatial_shape = tuple(
@@ -87,8 +86,8 @@ def _transform_raster(
             # min_y_inverse = np.min(new_v_inverse[:, 1])
 
             if "c" in axes:
-                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
-                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)  # type: ignore[attr-defined]
+                plt.imshow(da.moveaxis(transformed_dask, 0, 2), origin="lower", alpha=0.5)
+                plt.imshow(da.moveaxis(im, 0, 2), origin="lower", alpha=0.5)
             else:
                 plt.imshow(transformed_dask, origin="lower", alpha=0.5)
                 plt.imshow(im, origin="lower", alpha=0.5)
@@ -161,13 +160,13 @@ def _set_transformation_for_transformed_elements(
         assert to_coordinate_system is None
 
     to_prepend: BaseTransformation | None
-    if isinstance(element, (DataArray, DataTree)):
+    if isinstance(element, DataArray | DataTree):
         if maintain_positioning:
             assert raster_translation is not None
             to_prepend = Sequence([raster_translation, transformation.inverse()])
         else:
             to_prepend = raster_translation
-    elif isinstance(element, (GeoDataFrame, DaskDataFrame)):
+    elif isinstance(element, GeoDataFrame | DaskDataFrame):
         assert raster_translation is None
         to_prepend = transformation.inverse() if maintain_positioning else Identity()
     else:
@@ -300,7 +299,7 @@ def _(
             new_elements[element_type][k] = transform(
                 v, transformation, to_coordinate_system=to_coordinate_system, maintain_positioning=maintain_positioning
             )
-    return SpatialData(**new_elements)
+    return SpatialData(**new_elements, attrs=data.attrs)
 
 
 @transform.register(DataArray)
@@ -323,7 +322,7 @@ def _(
     )
     c_coords = data.indexes["c"].values if "c" in data.indexes else None
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
-    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg,arg-type]
+    transformed_data = schema.parse(transformed_dask, dims=axes, c_coords=c_coords)  # type: ignore[call-arg]
     assert isinstance(transformed_data, DataArray)
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
@@ -368,7 +367,7 @@ def _(
         channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
-        channel_names = get_channels(data)
+        channel_names = get_channel_names(data)
     else:
         raise ValueError(f"DataTree with schema {schema} not supported")
 
@@ -393,8 +392,11 @@ def _(
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
         # each scale later in this function, when calling set_transformation()
-        transformed_dict[k] = DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})
+        transformed_dict[k] = Dataset(
+            {"image": DataArray(transformed_dask, dims=xdata.dims, name=xdata.name, attrs={TRANSFORM_KEY: {}})}
+        )
         if channel_names is not None:
+            # This expression returns a dataset now.
             transformed_dict[k] = transformed_dict[k].assign_coords(c=channel_names)
 
     # mypy thinks that schema could be ShapesModel, PointsModel, ...
@@ -446,7 +448,7 @@ def _(
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
-        transformed[ax] = new_ax.data.flatten()  # type: ignore[attr-defined]
+        transformed[ax] = new_ax.data.flatten()
 
     old_transformations = get_transformation(data, get_all=True)
     assert isinstance(old_transformations, dict)
@@ -479,9 +481,9 @@ def _(
     )
     # TODO: nitpick, mypy expects a listof literals and here we have a list of strings.
     # I ignored but we may want to fix this
-    affine = transformation.to_affine(axes, axes)  # type: ignore[arg-type]
+    affine = transformation.to_affine(axes, axes)
     matrix = affine.matrix
-    shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()
+    shapely_notation = matrix[:-1, :-1].ravel().tolist() + matrix[:-1, -1].tolist()  # type: ignore[operator]
     transformed_geometry = data.geometry.affine_transform(shapely_notation)
     transformed_data = data.copy(deep=True)
     transformed_data.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}

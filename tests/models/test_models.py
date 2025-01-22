@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from tempfile import TemporaryDirectory
+from typing import Any
 
 import dask.array.core
 import dask.dataframe as dd
@@ -15,13 +17,15 @@ import pytest
 from anndata import AnnData
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
+from xarray import DataArray, DataTree
+
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
 from spatialdata.models._utils import (
     force_2d,
@@ -50,8 +54,6 @@ from spatialdata.transformations.operations import (
     set_transformation,
 )
 from spatialdata.transformations.transformations import Identity, Scale
-from xarray import DataArray
-
 from tests.conftest import (
     MULTIPOLYGON_PATH,
     POINT_PATH,
@@ -194,6 +196,27 @@ class TestModels:
             with pytest.raises(ValueError):
                 model.parse(image, **kwargs)
 
+    @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+    def test_labels_model_with_multiscales(self, model):
+        # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
+        dims = np.array(model.dims.dims).tolist()
+        n_dims = len(dims)
+
+        # A labels image with one label value 4, that partially covers 2×2 blocks.
+        # Downsampling with interpolation would produce values 1, 2, 3, 4.
+        image: ArrayLike = np.array([[0, 0, 0, 0], [0, 4, 4, 4], [4, 4, 4, 4], [0, 4, 4, 4]], dtype=np.uint16)
+        if n_dims == 3:
+            image = np.stack([image] * image.shape[0])
+        actual = model.parse(image, scale_factors=(2,))
+        assert isinstance(actual, DataTree)
+        assert actual.children.keys() == {"scale0", "scale1"}
+        assert actual.scale0.image.dtype == image.dtype
+        assert actual.scale1.image.dtype == image.dtype
+        assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
+        assert set(np.unique(image)) >= set(
+            np.unique(actual.scale1.image)
+        ), "Subsequent scales should not have interpolation artifacts"
+
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
     def test_shapes_model(self, model: ShapesModel, path: Path) -> None:
@@ -221,6 +244,16 @@ class TestModels:
             poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
+
+            # tests to be restored when the validation is re-enabled (now it just raises a warning, that is tricky to
+            # capture)
+            # poly[ShapesModel.RADIUS_KEY].iloc[0] = np.nan
+            # with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
+            #     ShapesModel.validate(poly)
+            #
+            # poly[ShapesModel.RADIUS_KEY].iloc[0] = np.inf
+            # with pytest.raises(ValueError, match="Radii of circles must not be nan or inf."):
+            #     ShapesModel.validate(poly)
 
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
@@ -334,6 +367,36 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_invalid_names(self, full_sdata, element_type: str, name: str):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValueError, match="Name (must|cannot)"):
+            SpatialData(**{element_type: {name: element}})
+
+    @pytest.mark.parametrize(
+        "names",
+        [
+            ["abc", "Abc"],
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_not_unique_names(self, full_sdata, element_type: str, names: list[str]):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValidationError, match="Key `.*` is not unique"):
+            SpatialData(**{element_type: {name: element for name in names}})
+
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
@@ -348,6 +411,71 @@ class TestModels:
         adata.obs["A"] = [1] * 10
         with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "_index",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_invalid_names(self, key: str, attr: str, parse: bool):
+        if attr in ("obs", "var"):
+            df = pd.DataFrame([[None]], columns=[key], index=["1"])
+            adata = AnnData(np.array([[0]]), **{attr: df})
+            with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                if parse:
+                    TableModel.parse(adata)
+                else:
+                    TableModel().validate(adata)
+        elif key != "_index":  # "_index" is only disallowed in obs/var
+            if attr in ("obsm", "varm", "obsp", "varp", "layers"):
+                array = np.array([[0]])
+                adata = AnnData(np.array([[0]]), **{attr: {key: array}})
+                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+            elif attr == "uns":
+                adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
+                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ["abc", "abc"],
+            ["abc", "Abc", "ABC"],
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "var"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
+        invalid_key = keys[1]
+        key_regex = re.escape(invalid_key)
+        df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
+        adata = AnnData(np.array([[0]]), **{attr: df})
+        with pytest.raises(
+            ValueError,
+            match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "
+            + f"Key `{key_regex}` is not unique, or another case-variant of it exists.",
+        ):
+            if parse:
+                TableModel.parse(adata)
+            else:
+                TableModel().validate(adata)
 
 
 def test_get_schema():
@@ -453,3 +581,84 @@ def test_force2d():
     assert_elements_are_identical(circles_3d, expected_circles_2d)
     assert_elements_are_identical(polygons_3d, expected_polygons_2d)
     assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)
+
+
+def test_dask_points_unsorted_index_with_warning(points):
+    chunksize = 300
+    element = points["points_0"]
+    new_order = RNG.permutation(len(element))
+    with pytest.warns(
+        UserWarning,
+        match=r"The index of the dataframe is not monotonic increasing\.",
+    ):
+        ordered = PointsModel.parse(element.compute().iloc[new_order, :], chunksize=chunksize)
+        assert np.all(ordered.index.compute().to_numpy() == new_order)
+
+
+@pytest.mark.xfail(reason="Not supporting multiple partitions when the index is not sorted.")
+def test_dask_points_unsorted_index_with_xfail(points):
+    chunksize = 150
+    element = points["points_0"]
+    new_order = RNG.permutation(len(element))
+    with pytest.raises(
+        ValueError,
+        match=r"Not all divisions are known, can't align partitions. Please use `set_index` to set the index.",
+    ):
+        _ = PointsModel.parse(element.compute().iloc[new_order, :], chunksize=chunksize)
+    raise ValueError("pytest.raises caught an exceptionG")
+
+
+# helper function to create random points data and write to a Parquet file, used in the test below
+def create_parquet_file(temp_dir, num_points=20, sorted_index=True):
+    df = pd.DataFrame(
+        {"x": RNG.uniform(size=num_points), "y": RNG.uniform(size=num_points), "z": RNG.uniform(size=num_points)}
+    )
+    if not sorted_index:
+        new_order = RNG.permutation(len(df))
+        df = df.iloc[new_order, :]
+    file_path = f"{temp_dir}/points.parquet"
+    df.to_parquet(file_path)
+    return file_path
+
+
+# this test was added because the xenium() reader (which reads a .parquet file into a dask-dataframe, was failing before
+# https://github.com/scverse/spatialdata/pull/656.
+# Luca: actually, this test is not able to reproduce the issue; anyway this PR fixes the issue and I'll still keep the
+# test here as an explicit test for unsorted index in the case of dask dataframes.
+@pytest.mark.parametrize("npartitions", [1, 2])
+@pytest.mark.parametrize("sorted_index", [True, False])
+def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
+    with TemporaryDirectory() as temp_dir:
+        file_path = create_parquet_file(temp_dir, sorted_index=sorted_index)
+        points = dd.read_parquet(file_path)
+
+        if sorted_index:
+            _ = PointsModel.parse(points, npartitions=npartitions)
+            assert np.all(points.index.compute().to_numpy() == np.arange(len(points)))
+        else:
+            with pytest.warns(
+                UserWarning,
+                match=r"The index of the dataframe is not monotonic increasing\.",
+            ):
+                _ = PointsModel.parse(points, npartitions=npartitions)
+
+
+@pytest.mark.parametrize("scale_factors", [None, [2, 2]])
+def test_c_coords_2d(scale_factors: list[int] | None):
+    data = np.zeros((3, 30, 30))
+    model = Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd"], scale_factors=scale_factors)
+    if scale_factors is None:
+        assert model.coords["c"].data.tolist() == ["1st", "2nd", "3rd"]
+    else:
+        assert all(
+            model[group]["image"].coords["c"].data.tolist() == ["1st", "2nd", "3rd"] for group in list(model.keys())
+        )
+
+    with pytest.raises(ValueError, match="The number of channel names"):
+        Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd", "too_much"], scale_factors=scale_factors)
+
+
+@pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
+    with pytest.raises(ValueError, match="`c_coords` is not supported"):
+        model().parse(np.zeros((30, 30)), c_coords=["1st", "2nd", "3rd"])

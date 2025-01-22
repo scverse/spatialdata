@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
+
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
@@ -100,7 +101,10 @@ def test_get_centroids_shapes(shapes, coordinate_system: str, shapes_name: str):
 @pytest.mark.parametrize("coordinate_system", ["global", "aligned"])
 @pytest.mark.parametrize("is_multiscale", [False, True])
 @pytest.mark.parametrize("is_3d", [False, True])
-def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: bool, is_3d: bool):
+@pytest.mark.parametrize("return_background", [False, True])
+def test_get_centroids_labels(
+    labels, coordinate_system: str, is_multiscale: bool, is_3d: bool, return_background: bool
+):
     scale_factors = [2] if is_multiscale else None
     if is_3d:
         model = Labels3DModel
@@ -124,6 +128,8 @@ def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: boo
             },
             index=[0, 1, 2],
         )
+        if not return_background:
+            expected_centroids = expected_centroids.drop(index=0)
     else:
         array = np.array(
             [
@@ -145,10 +151,13 @@ def test_get_centroids_labels(labels, coordinate_system: str, is_multiscale: boo
 
     if coordinate_system == "aligned":
         set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
-    centroids = get_centroids(element, coordinate_system=coordinate_system)
+    centroids = get_centroids(element, coordinate_system=coordinate_system, return_background=return_background)
 
-    labels_indices = get_element_instances(element)
+    labels_indices = get_element_instances(element, return_background=return_background)
     assert np.array_equal(centroids.index.values, labels_indices)
+
+    if not return_background:
+        assert 0 not in centroids.index
 
     if coordinate_system == "global":
         assert np.array_equal(centroids.compute().values, expected_centroids.values)

@@ -3,15 +3,16 @@ from __future__ import annotations
 import functools
 import re
 import warnings
-from collections.abc import Generator
-from typing import Any, Callable, TypeVar, Union
+from collections.abc import Callable, Generator
+from itertools import islice
+from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
-from datatree import DataTree
-from xarray import DataArray
+from dask.array import Array as DaskArray
+from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
 from spatialdata.transformations import (
@@ -22,7 +23,7 @@ from spatialdata.transformations import (
 )
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
-Number = Union[int, float]
+Number = int | float
 RT = TypeVar("RT")
 
 
@@ -79,7 +80,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
         others = list(data.dims)
         others.remove(axis)
         # mypy (luca's pycharm config) can't see the isclose method of dask array
-        s = da.isclose(data.sum(dim=others), 0)  # type: ignore[attr-defined]
+        s = da.isclose(data.sum(dim=others), 0)
         # TODO: rewrite this to use dask array; can't get it to work with it
         x = s.compute()
         non_zero = np.where(x == 0)[0]
@@ -135,7 +136,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
             assert len(v.values()) == 1
             xdata = v.values().__iter__().__next__()
             if 0 not in xdata.shape:
-                d[k] = xdata
+                d[k] = Dataset({"image": xdata})
         unpadded = DataTree.from_dict(d)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
@@ -150,45 +151,53 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     return compute_coordinates(unpadded)
 
 
-# TODO: probably we want this method to live in multiscale_spatial_image
-def multiscale_spatial_image_from_data_tree(data_tree: DataTree) -> DataTree:
-    warnings.warn(
-        f"{multiscale_spatial_image_from_data_tree} is deprecated and will be removed in version 0.2.0.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    d = {}
-    for k, dt in data_tree.items():
-        v = dt.values()
-        assert len(v) == 1
-        xdata = v.__iter__().__next__()
-        d[k] = xdata
-
-    return DataTree.from_dict(d)
-
-
-# TODO: this functions is similar to _iter_multiscale(), the latter is more powerful but not exposed to the user.
-#  Use only one and expose it to the user in this file
-def iterate_pyramid_levels(image: DataTree) -> Generator[DataArray, None, None]:
+def get_pyramid_levels(image: DataTree, attr: str | None = None, n: int | None = None) -> list[Any] | Any:
     """
-    Iterate over the pyramid levels of a multiscale spatial image.
+    Access the data/attribute of the pyramid levels of a multiscale spatial image.
 
     Parameters
     ----------
     image
         The multiscale spatial image.
+    attr
+        If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
+        within the `DataArray` data.
+    n
+        If not None, return only the `n` pyramid level.
 
     Returns
     -------
-    A generator that yields the pyramid levels.
+    The pyramid levels data (or an attribute of it) as a list or a generator.
     """
-    for k in range(len(image)):
-        scale_name = f"scale{k}"
-        dt = image[scale_name]
-        v = dt.values()
-        assert len(v) == 1
-        xdata = next(iter(v))
-        yield xdata
+    generator = iterate_pyramid_levels(image, attr)
+    if n is not None:
+        return next(iter(islice(generator, n, None)))
+    return list(generator)
+
+
+def iterate_pyramid_levels(
+    data: DataTree,
+    attr: str | None,
+) -> Generator[Any, None, None]:
+    """
+    Iterate over the pyramid levels of a multiscale spatial image.
+
+    Parameters
+    ----------
+    data
+        The multiscale spatial image
+    attr
+        If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
+        within the `DataArray` data.
+
+    Returns
+    -------
+    A generator to iterate over the pyramid levels.
+    """
+    names = data["scale0"].ds.keys()
+    name: str = next(iter(names))
+    for scale in data:
+        yield data[scale][name] if attr is None else getattr(data[scale][name], attr)
 
 
 def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
@@ -303,3 +312,37 @@ def _error_message_add_element() -> None:
         "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
         "ergonomic in a follow up PR."
     )
+
+
+def _check_match_length_channels_c_dim(
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str]
+) -> list[str]:
+    """
+    Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.
+
+    Parameters
+    ----------
+    data
+        The image array
+    c_coords
+        The channel names
+    dims
+        The axes names in the order that is the same as the `ImageModel` from which it is derived.
+
+    Returns
+    -------
+    c_coords
+        The channel names as list
+    """
+    c_index = dims.index("c")
+    c_length = (
+        data.shape[c_index] if isinstance(data, DataArray | DaskArray) else data["scale0"]["image"].shape[c_index]
+    )
+    if isinstance(c_coords, str):
+        c_coords = [c_coords]
+    if c_coords is not None and len(c_coords) != c_length:
+        raise ValueError(
+            f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+            f" with length {c_length}."
+        )
+    return c_coords

@@ -10,11 +10,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from scipy import sparse
 from shapely import Point
-from xarray import DataArray
+from xarray import DataArray, DataTree
 from xrspatial import zonal_stats
 
 from spatialdata._core.operations._utils import _parse_element
@@ -246,7 +245,7 @@ def _create_sdata_from_table_and_shapes(
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int
-    if isinstance(shapes, (DataArray, DataTree)):
+    if isinstance(shapes, DataArray | DataTree):
         table.obs[instance_key] = table.obs[instance_key].astype(int)
 
     if deepcopy:
@@ -305,7 +304,7 @@ def _aggregate_image_by_labels(
 
     X = sparse.csr_matrix(df.values)
 
-    index = kwargs.get("zone_ids", None)  # `zone_ids` allows the user to select specific labels to aggregate by
+    index = kwargs.get("zone_ids")  # `zone_ids` allows the user to select specific labels to aggregate by
     if index is None:
         index = np.array(da.array.unique(by.data))
         assert np.array(index == np.insert(zones, 0, 0)).all(), "Index mismatch between zonal stats and labels."

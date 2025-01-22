@@ -27,9 +27,9 @@ class NgffAxis:
 
     name: str
     type: str
-    unit: Optional[str]
+    unit: str | None
 
-    def __init__(self, name: str, type: str, unit: Optional[str] = None):
+    def __init__(self, name: str, type: str, unit: str | None = None):
         self.name = name
         self.type = type
         self.unit = unit
@@ -138,7 +138,7 @@ class NgffCoordinateSystem:
         """Checks if two coordinate systems are the same based on the axes (ignoring the coordinate systems names)."""
         return self._axes == other._axes
 
-    def subset(self, axes_names: list[str], new_name: Optional[str] = None) -> NgffCoordinateSystem:
+    def subset(self, axes_names: list[str], new_name: str | None = None) -> NgffCoordinateSystem:
         """
         Return a new coordinate system subsetting the axes.
 
@@ -193,7 +193,7 @@ class NgffCoordinateSystem:
 
     @staticmethod
     def merge(
-        coord_sys1: NgffCoordinateSystem, coord_sys2: NgffCoordinateSystem, new_name: Optional[str] = None
+        coord_sys1: NgffCoordinateSystem, coord_sys2: NgffCoordinateSystem, new_name: str | None = None
     ) -> NgffCoordinateSystem:
         """
         Merge two coordinate systems
@@ -256,7 +256,7 @@ def _get_spatial_axes(
     return [axis.name for axis in coordinate_system._axes if axis.type == "space"]
 
 
-def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+def _make_cs(ndim: Literal[2, 3], name: str | None = None, unit: str | None = None) -> NgffCoordinateSystem:
     """helper function to make a yx or zyx coordinate system"""
     if ndim == 2:
         axes = [
@@ -278,7 +278,7 @@ def _make_cs(ndim: Literal[2, 3], name: Optional[str] = None, unit: Optional[str
     return NgffCoordinateSystem(name=name, axes=axes)
 
 
-def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+def yx_cs(name: str | None = None, unit: str | None = None) -> NgffCoordinateSystem:
     """
     Helper function to create a 2D yx coordinate system.
 
@@ -296,7 +296,7 @@ def yx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordin
     return _make_cs(name=name, ndim=2, unit=unit)
 
 
-def zyx_cs(name: Optional[str] = None, unit: Optional[str] = None) -> NgffCoordinateSystem:
+def zyx_cs(name: str | None = None, unit: str | None = None) -> NgffCoordinateSystem:
     """
     Helper function to create a 3D zyx coordinate system.
 

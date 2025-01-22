@@ -2,7 +2,8 @@ import copy
 
 import numpy as np
 import pytest
-from datatree import DataTree
+from xarray import DataArray, DataTree
+
 from spatialdata import SpatialData, deepcopy
 from spatialdata.models import (
     Image2DModel,
@@ -16,7 +17,6 @@ from spatialdata.models import (
 )
 from spatialdata.testing import assert_elements_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Scale, set_transformation
-from xarray import DataArray
 
 scale = Scale([1.0], axes=("x",))
 

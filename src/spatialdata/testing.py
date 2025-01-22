@@ -4,12 +4,10 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe.tests.test_dataframe import assert_eq as assert_dask_dataframe_equal
-from datatree import DataTree
-from datatree.testing import assert_equal as assert_datatree_equal
 from geopandas import GeoDataFrame
 from geopandas.testing import assert_geodataframe_equal
-from xarray import DataArray
-from xarray.testing import assert_equal as assert_xarray_equal
+from xarray import DataArray, DataTree
+from xarray.testing import assert_equal
 
 from spatialdata import SpatialData
 from spatialdata._core._elements import Elements
@@ -95,7 +93,7 @@ def assert_elements_are_identical(
     Please see
     :func:`spatialdata.testing.assert_spatial_data_objects_are_identical` for additional comments.
     """
-    assert type(element0) == type(element1)
+    assert type(element0) is type(element1)
     if check_transformations and not check_metadata:
         raise ValueError("check_transformations cannot be True if check_metadata is False")
 
@@ -115,10 +113,8 @@ def assert_elements_are_identical(
     # compare the elements
     if isinstance(element0, AnnData):
         assert_anndata_equal(element0, element1)
-    elif isinstance(element0, DataArray):
-        assert_xarray_equal(element0, element1)
-    elif isinstance(element0, DataTree):
-        assert_datatree_equal(element0, element1)
+    elif isinstance(element0, DataArray | DataTree):
+        assert_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
         assert_geodataframe_equal(element0, element1, check_less_precise=True)
     else:

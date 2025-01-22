@@ -6,6 +6,7 @@ import pytest
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
+
 from spatialdata import SpatialData, get_extent, transform
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata.datasets import blobs

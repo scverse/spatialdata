@@ -2,20 +2,20 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Optional, Union
 
 import zarr
 from anndata import AnnData
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import ome_zarr_logger, read_table_and_validate
+from spatialdata._io._utils import ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
+from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 
-def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, str]:
+def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
     """
     Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
 
@@ -30,13 +30,13 @@ def _open_zarr_store(store: Union[str, Path, zarr.Group]) -> tuple[zarr.Group, s
     """
     f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
     # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
-    if isinstance(store, (str, Path)) and str(store).startswith("http") and len(f) == 0:
+    if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
         f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
     f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
     return f, f_store_path
 
 
-def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str]] = None) -> SpatialData:
+def read_zarr(store: str | Path | zarr.Group, selection: None | tuple[str] = None) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
 
@@ -123,20 +123,29 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         logger.debug(f"Found {count} elements in {group}")
     if "tables" in selector and "tables" in f:
         group = f["tables"]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables)
 
     if "table" in selector and "table" in f:
         warnings.warn(
-            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store"
-            f"to use tables instead.",
+            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store to use tables "
+            f"instead.",
             DeprecationWarning,
             stacklevel=2,
         )
         subgroup_name = "table"
         group = f[subgroup_name]
-        tables = read_table_and_validate(f_store_path, f, group, tables)
+        tables = _read_table(f_store_path, f, group, tables)
 
         logger.debug(f"Found {count} elements in {group}")
+
+    # read attrs metadata
+    attrs = f.attrs.asdict()
+    if "spatialdata_attrs" in attrs:
+        # when refactoring the read_zarr function into reading componenets separately (and according to the version),
+        # we can move the code below (.pop()) into attrs_from_dict()
+        attrs.pop("spatialdata_attrs")
+    else:
+        attrs = None
 
     sdata = SpatialData(
         images=images,
@@ -144,6 +153,7 @@ def read_zarr(store: Union[str, Path, zarr.Group], selection: Optional[tuple[str
         points=points,
         shapes=shapes,
         tables=tables,
+        attrs=attrs,
     )
     sdata.path = Path(store)
     return sdata

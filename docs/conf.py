@@ -59,6 +59,12 @@ extensions = [
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
 ]
 
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": True,
+    "show-inheritance": True,
+}
+
 autosummary_generate = True
 autodoc_process_signature = True
 autodoc_member_order = "groupwise"
@@ -96,6 +102,7 @@ intersphinx_mapping = {
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
+    "shapely": ("https://shapely.readthedocs.io/en/stable", None),
 }
 
 
@@ -123,6 +130,10 @@ nitpicky = False  # TODO: solve upstream.
 #     ("py:class", "spatial_image.SpatialImage"),
 #     ("py:class", "multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage"),
 # ]
+# no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
+suppress_warnings = [
+    "autosummary.import_cycle",
+]
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -138,6 +149,7 @@ html_logo = "_static/img/spatialdata_horizontal.png"
 
 html_theme_options = {
     "navigation_with_keys": True,
+    "show_toc_level": 4,
     # "repository_url": repository_url,
     # "use_repository_button": True,
 }

@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
@@ -144,7 +144,7 @@ class ImageTilesDataset(Dataset):
                 **dict(rasterize_kwargs),
             )
             if rasterize
-            else bounding_box_query  # type: ignore[assignment]
+            else bounding_box_query
         )
         self._return = self._get_return(return_annotations, table_name)
         self.transform = transform
@@ -205,7 +205,7 @@ class ImageTilesDataset(Dataset):
                 else:
                     indices = region_elem.index.tolist()
                 table = sdata.tables[table_name]
-                if not isinstance(sdata.tables["table"].obs[region_key].dtype, CategoricalDtype):
+                if not isinstance(sdata.tables[table_name].obs[region_key].dtype, CategoricalDtype):
                     raise TypeError(
                         f"The `regions_element` column `{region_key}` in the table must be a categorical dtype. "
                         f"Please convert it."
@@ -230,8 +230,8 @@ class ImageTilesDataset(Dataset):
         """Preprocess the dataset."""
         if table_name is not None:
             _, region_key, instance_key = get_table_keys(self.sdata.tables[table_name])
-            filtered_table = self.sdata.tables["table"][
-                self.sdata.tables["table"].obs[region_key].isin(self.regions)
+            filtered_table = self.sdata.tables[table_name][
+                self.sdata.tables[table_name].obs[region_key].isin(self.regions)
             ]  # filtered table for the data loader
 
         index_df = []
@@ -260,11 +260,13 @@ class ImageTilesDataset(Dataset):
 
             if table_name is not None:
                 table_subset = filtered_table[filtered_table.obs[region_key] == region_name]
-                circles_sdata = SpatialData.init_from_elements({region_name: circles}, tables=table_subset.copy())
+                circles_sdata = SpatialData.init_from_elements(
+                    {region_name: circles}, tables={"table": table_subset.copy()}
+                )
                 _, table = join_spatialelement_table(
                     sdata=circles_sdata,
                     spatial_element_names=region_name,
-                    table_name=table_name,
+                    table_name="table",
                     how="left",
                     match_rows="left",
                 )
@@ -276,7 +278,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = AnnData.concatenate(*tables_l)
+            self.dataset_table = ad.concat(*tables_l)
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))
@@ -319,14 +321,15 @@ class ImageTilesDataset(Dataset):
             )
         # return spatialdata consisting of the image tile and, if available, the associated table
         if table_name:
-            # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
             table_row = dataset_table[idx].copy()
-            del table_row.uns[TableModel.ATTRS_KEY]
+            # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
+            if TableModel.ATTRS_KEY in table_row.uns:
+                del table_row.uns[TableModel.ATTRS_KEY]
             # TODO: add the shape used for constructing the tile; in the case of the label consider adding the circles
             # or a crop of the label
             return SpatialData(
                 images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile},
-                tables={"table": table_row},
+                tables={table_name: table_row},
             )
         return SpatialData(images={dataset_index.iloc[idx][ImageTilesDataset.IMAGE_KEY]: tile})
 

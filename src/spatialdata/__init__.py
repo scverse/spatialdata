@@ -27,6 +27,7 @@ __all__ = [
     "concatenate",
     "rasterize",
     "rasterize_bins",
+    "rasterize_bins_link_table_to_labels",
     "to_circles",
     "to_polygons",
     "transform",
@@ -44,9 +45,11 @@ __all__ = [
     "get_centroids",
     "read_zarr",
     "unpad_raster",
+    "get_pyramid_levels",
     "save_transformations",
     "get_dask_backing_files",
     "are_extents_equal",
+    "relabel_sequential",
     "map_raster",
     "deepcopy",
 ]
@@ -57,9 +60,9 @@ from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations.aggregate import aggregate
-from spatialdata._core.operations.map import map_raster
+from spatialdata._core.operations.map import map_raster, relabel_sequential
 from spatialdata._core.operations.rasterize import rasterize
-from spatialdata._core.operations.rasterize_bins import rasterize_bins
+from spatialdata._core.operations.rasterize_bins import rasterize_bins, rasterize_bins_link_table_to_labels
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata._core.query._utils import get_bounding_box_corners
@@ -75,4 +78,4 @@ from spatialdata._core.query.spatial_query import bounding_box_query, polygon_qu
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import get_dask_backing_files, save_transformations
 from spatialdata._io.io_zarr import read_zarr
-from spatialdata._utils import unpad_raster
+from spatialdata._utils import get_pyramid_levels, unpad_raster

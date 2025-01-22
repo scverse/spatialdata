@@ -1,4 +1,6 @@
 from pandas.testing import assert_frame_equal
+
+from spatialdata import SpatialData
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 
@@ -44,3 +46,18 @@ def test_deepcopy(full_sdata):
 
     assert_spatial_data_objects_are_identical(full_sdata, copied)
     assert_spatial_data_objects_are_identical(full_sdata, copied_again)
+
+
+def test_deepcopy_attrs(points: SpatialData) -> None:
+    some_attrs = {"a": {"b": 0}}
+    points.attrs = some_attrs
+
+    # before deepcopy
+    sub_points = points.subset(["points_0"])
+    assert sub_points.attrs is some_attrs
+    assert sub_points.attrs["a"] is some_attrs["a"]
+
+    # after deepcopy
+    sub_points_deepcopy = _deepcopy(sub_points)
+    assert sub_points_deepcopy.attrs is not some_attrs
+    assert sub_points_deepcopy.attrs["a"] is not some_attrs["a"]

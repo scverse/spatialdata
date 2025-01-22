@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
-from spatialdata.models import SpatialElement
+from spatialdata.models import SpatialElement, get_axes_names, get_spatial_axes
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
@@ -115,17 +114,19 @@ def transform_to_data_extent(
     }
 
     for _, element_name, element in sdata_raster.gen_spatial_elements():
-        if isinstance(element, (DataArray, DataTree)):
+        element_axes = get_spatial_axes(get_axes_names(element))
+        if isinstance(element, DataArray | DataTree):
             rasterized = rasterize(
                 element,
-                axes=data_extent_axes,
-                min_coordinate=[data_extent[ax][0] for ax in data_extent_axes],
-                max_coordinate=[data_extent[ax][1] for ax in data_extent_axes],
+                axes=element_axes,
+                min_coordinate=[data_extent[ax][0] for ax in element_axes],
+                max_coordinate=[data_extent[ax][1] for ax in element_axes],
                 target_coordinate_system=coordinate_system,
                 target_unit_to_pixels=None,
                 target_width=target_width,
                 target_height=None,
                 target_depth=None,
+                return_regions_as_labels=True,
             )
             sdata_to_return_elements[element_name] = rasterized
         else:
@@ -135,7 +136,7 @@ def transform_to_data_extent(
             set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
-    return SpatialData.from_elements_dict(sdata_to_return_elements)
+    return SpatialData.from_elements_dict(sdata_to_return_elements, attrs=sdata.attrs)
 
 
 def _parse_element(

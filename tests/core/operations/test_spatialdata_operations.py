@@ -5,12 +5,21 @@ import math
 import numpy as np
 import pytest
 from anndata import AnnData
+
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
 from spatialdata.datasets import blobs
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+    get_table_keys,
+)
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
@@ -21,7 +30,6 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
-
 from tests.conftest import _get_table
 
 
@@ -30,6 +38,7 @@ def test_element_names_unique() -> None:
     points = PointsModel.parse(np.array([[0, 0]]))
     labels = Labels2DModel.parse(np.array([[0, 0], [0, 0]]), dims=["y", "x"])
     image = Image2DModel.parse(np.array([[[0, 0], [0, 0]]]), dims=["c", "y", "x"])
+    table = TableModel.parse(AnnData(shape=(1, 0)))
 
     with pytest.raises(KeyError):
         SpatialData(images={"image": image}, points={"image": points})
@@ -37,9 +46,15 @@ def test_element_names_unique() -> None:
         SpatialData(images={"image": image}, shapes={"image": shapes})
     with pytest.raises(KeyError):
         SpatialData(images={"image": image}, labels={"image": labels})
+    with pytest.raises(KeyError):
+        SpatialData(images={"image": image}, labels={"image": table})
 
     sdata = SpatialData(
-        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+        images={"image": image},
+        points={"points": points},
+        shapes={"shapes": shapes},
+        labels={"labels": labels},
+        tables={"table": table},
     )
 
     # add elements with the same name
@@ -52,6 +67,8 @@ def test_element_names_unique() -> None:
         sdata.shapes["shapes"] = shapes
     with pytest.warns(UserWarning):
         sdata.labels["labels"] = labels
+    with pytest.warns(UserWarning):
+        sdata.tables["table"] = table
 
     # add elements with the same name
     # of element of different type
@@ -65,11 +82,27 @@ def test_element_names_unique() -> None:
         sdata.points["shapes"] = points
     with pytest.raises(KeyError):
         sdata.shapes["labels"] = shapes
+    with pytest.raises(KeyError):
+        sdata.tables["labels"] = table
+
+    # add elements with the case-variant of an existing name
+    # of element of same type
+    with pytest.raises(KeyError):
+        sdata.images["Image"] = image
+    with pytest.raises(KeyError):
+        sdata.points["POINTS"] = points
+    with pytest.raises(KeyError):
+        sdata.shapes["Shapes"] = shapes
+    with pytest.raises(KeyError):
+        sdata.labels["Labels"] = labels
+    with pytest.raises(KeyError):
+        sdata.tables["Table"] = table
 
     assert sdata["image"].shape == image.shape
     assert sdata["labels"].shape == labels.shape
     assert len(sdata["points"]) == len(points)
     assert sdata["shapes"].shape == shapes.shape
+    assert len(sdata["table"]) == len(table)
 
     # add elements with the same name, test only couples of elements
     with pytest.raises(KeyError):
@@ -82,7 +115,11 @@ def test_element_names_unique() -> None:
 
     # test replacing complete attribute
     sdata = SpatialData(
-        images={"image": image}, points={"points": points}, shapes={"shapes": shapes}, labels={"labels": labels}
+        images={"image": image},
+        points={"points": points},
+        shapes={"shapes": shapes},
+        labels={"labels": labels},
+        tables={"table": table},
     )
     # test for images
     sdata.images = {"image2": image}
@@ -99,11 +136,16 @@ def test_element_names_unique() -> None:
     assert set(sdata.points.keys()) == {"points2"}
     assert "points2" in sdata._shared_keys
     assert "points" not in sdata._shared_keys
-    # test for points
+    # test for shapes
     sdata.shapes = {"shapes2": shapes}
     assert set(sdata.shapes.keys()) == {"shapes2"}
     assert "shapes2" in sdata._shared_keys
     assert "shapes" not in sdata._shared_keys
+    # test for tables
+    sdata.tables = {"table2": table}
+    assert set(sdata.tables.keys()) == {"table2"}
+    assert "table2" in sdata._shared_keys
+    assert "table" not in sdata._shared_keys
 
 
 def test_element_type_from_element_name(points: SpatialData) -> None:
@@ -284,6 +326,46 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     assert len(list(concatenated.gen_elements())) == 3
 
 
+@pytest.mark.parametrize("concatenate_tables", [True, False])
+@pytest.mark.parametrize("obs_names_make_unique", [True, False])
+def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_make_unique: bool) -> None:
+    sdata0 = blobs()
+    sdata1 = blobs()
+
+    sdatas = {"sample0": sdata0, "sample1": sdata1}
+    with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
+        _ = concatenate(
+            sdatas.values(), concatenate_tables=concatenate_tables, obs_names_make_unique=obs_names_make_unique
+        )
+    merged = concatenate(sdatas, obs_names_make_unique=obs_names_make_unique, concatenate_tables=concatenate_tables)
+
+    if concatenate_tables:
+        assert len(merged.tables) == 1
+        table = merged["table"]
+        if obs_names_make_unique:
+            assert table.obs_names[0] == "1-sample0"
+            assert table.obs_names[-1] == "30-sample1"
+        else:
+            assert table.obs_names[0] == "1"
+    else:
+        assert merged["table-sample0"].obs_names[0] == "1"
+    assert sdata0["table"].obs_names[0] == "1"
+
+
+def test_concatenate_sdatas_single_item() -> None:
+    sdata = blobs()
+
+    def _n_elements(sdata: SpatialData) -> int:
+        return len([0 for _, _, _ in sdata.gen_elements()])
+
+    n = _n_elements(sdata)
+    assert n == _n_elements(concatenate([sdata]))
+    assert n == _n_elements(concatenate({"sample": sdata}.values()))
+    c = concatenate({"sample": sdata})
+    assert n == _n_elements(c)
+    assert "blobs_image-sample" in c.images
+
+
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
     assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]
@@ -296,7 +378,7 @@ def test_locate_spatial_element(full_sdata: SpatialData) -> None:
 
 
 def test_get_item(points: SpatialData) -> None:
-    assert id(points["points_0"]) == id(points.points["points_0"])
+    assert points["points_0"] is points.points["points_0"]
 
     # removed this test after this change: https://github.com/scverse/spatialdata/pull/145#discussion_r1133122720
     # to be uncommented/removed/modified after this is closed: https://github.com/scverse/spatialdata/issues/186
@@ -342,9 +424,15 @@ def test_no_shared_transformations() -> None:
 
 
 def test_init_from_elements(full_sdata: SpatialData) -> None:
+    # this first code block needs to be removed when the tables argument is removed from init_from_elements()
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
-    sdata = SpatialData.init_from_elements(all_elements, table=full_sdata.table)
-    for element_type in ["images", "labels", "points", "shapes"]:
+    sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata["table"])
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
+        assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
+
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_table=True)}
+    sdata = SpatialData.init_from_elements(all_elements)
+    for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
 
 
@@ -402,31 +490,46 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         "poly",
     ]
     full_sdata = full_sdata.subset(elements)
+    points = full_sdata["points_0"].compute()
+    points["z"] = points["x"]
+    points = PointsModel.parse(points)
+    full_sdata["points_0_3d"] = points
     sdata = transform_to_data_extent(full_sdata, "global", target_width=1000, maintain_positioning=maintain_positioning)
 
-    matrices = []
-    for el in sdata._gen_spatial_element_values():
+    first_a: ArrayLike | None = None
+    for _, name, el in sdata.gen_spatial_elements():
         t = get_transformation(el, to_coordinate_system="global")
         assert isinstance(t, BaseTransformation)
-        a = t.to_affine_matrix(input_axes=("x", "y", "z"), output_axes=("x", "y", "z"))
-        matrices.append(a)
+        a = t.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y"))
+        if first_a is None:
+            first_a = a
+        else:
+            # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
+            if maintain_positioning and name in ["points_0_3d", "points_0", "poly", "circles", "multipoly"]:
+                # Again, due to the "pixel perfect" bug, the 0.5 translation forth and back in the z axis that is added
+                # by rasterize() (like the one in the example belows), amplifies the error also for x and y beyond the
+                # rtol threshold below. So, let's skip that check and to an absolute check up to 0.5 (due to the
+                # half-pixel offset).
+                # Sequence
+                #     Translation (z, y, x)
+                #         [-0.5 -0.5 -0.5]
+                #     Scale (y, x)
+                #         [0.17482681 0.17485125]
+                #     Translation (y, x)
+                #         [  -3.13652607 -164.        ]
+                #     Translation (z, y, x)
+                #         [0.5 0.5 0.5]
+                assert np.allclose(a, first_a, atol=0.5)
+            else:
+                assert np.allclose(a, first_a, rtol=0.005)
 
-    first_a = matrices[0]
-    for a in matrices[1:]:
-        # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
-        assert np.allclose(a, first_a, rtol=0.005)
     if not maintain_positioning:
-        assert np.allclose(first_a, np.eye(4))
+        assert np.allclose(first_a, np.eye(3))
     else:
-        for element in elements:
-            before = full_sdata[element]
-            after = sdata[element]
-            data_extent_before = get_extent(before, coordinate_system="global")
-            data_extent_after = get_extent(after, coordinate_system="global")
-            # huge tolerance because of the bug with pixel perfectness
-            assert are_extents_equal(
-                data_extent_before, data_extent_after, atol=4
-            ), f"data_extent_before: {data_extent_before}, data_extent_after: {data_extent_after} for element {element}"
+        data_extent_before = get_extent(full_sdata, coordinate_system="global")
+        data_extent_after = get_extent(sdata, coordinate_system="global")
+        # again, due to the "pixel perfect" bug, we use an absolute tolerance of 0.5
+        assert are_extents_equal(data_extent_before, data_extent_after, atol=0.5)
 
 
 def test_validate_table_in_spatialdata(full_sdata):
