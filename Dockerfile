@@ -33,7 +33,7 @@ RUN apt-get update && \
     python3-venv \
     python3-dev \
     git \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/*
 
 # setup python virtual environment
 RUN python3 -m venv /opt/venv
