@@ -1,4 +1,4 @@
-name: build image
+name: Build Docker image
 # adapted from https://github.com/scverse/scvi-tools/blob/main/.github/workflows/build_image_latest.yaml
 
 on:
@@ -7,7 +7,6 @@ on:
         types:
             - completed
     workflow_dispatch:
-    push:
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
