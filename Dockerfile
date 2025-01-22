@@ -1,12 +1,23 @@
-FROM condaforge/mambaforge
+ARG TARGETPLATFORM=linux/amd64
 
-RUN mamba install python=3.10
+FROM --platform=$TARGETPLATFORM ubuntu:latest
+LABEL authors="Luca Marconato"
 
-# complex dependencies that needs to be solved with conda
-RUN mamba install -c conda-forge gcc libgdal gxx imagecodecs -y
+ENV PYTHONUNBUFFERED=1
 
-# satellite spatialdata projects
+# Update and install system dependencies.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-venv \
+    python3-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+#
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip wheel
 RUN pip install --no-cache-dir \
-    spatialdata \
+    spatialdata[torch] \
     spatialdata-io \
     spatialdata-plot
