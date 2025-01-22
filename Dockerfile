@@ -1,9 +1,5 @@
 ARG TARGETPLATFORM=linux/amd64
 
-ARG SPATIALDATA_VERSION
-ARG SPATIALDATA_IO_VERSION
-ARG SPATIALDATA_PLOT_VERSION
-
 # Use the specified platform to pull the correct base image.
 # Override TARGETPLATFORM during build for different architectures, such as linux/arm64 for Apple Silicon.
 # For example, to build for ARM64 architecture (e.g., Apple Silicon),
@@ -20,6 +16,16 @@ LABEL authors="Luca Marconato"
 
 ENV PYTHONUNBUFFERED=1
 
+ARG SPATIALDATA_VERSION
+ARG SPATIALDATA_IO_VERSION
+ARG SPATIALDATA_PLOT_VERSION
+
+# debugging
+RUN echo "Target Platform: ${TARGETPLATFORM}" && \
+    echo "Spatialdata Version: ${SPATIALDATA_VERSION}" && \
+    echo "Spatialdata IO Version: ${SPATIALDATA_IO_VERSION}" && \
+    echo "Spatialdata Plot Version: ${SPATIALDATA_PLOT_VERSION}"
+
 # Update and install system dependencies.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -27,8 +33,9 @@ RUN apt-get update && \
     python3-venv \
     python3-dev \
     git \
-    && rm -rf /var/lib/apt/lists/*
-#
+    && rm -rf /var/lib/apt/lists/* \
+
+# setup python virtual environment
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip wheel
