@@ -18,7 +18,6 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    get_model,
     get_table_keys,
 )
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
@@ -506,41 +505,31 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
             first_a = a
         else:
             # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
-            if name != "points_0_3d":
-                try:
-                    assert np.allclose(a, first_a, rtol=0.005)
-                except:
-                    t
-                    pass
-            # Again, due to the "pixel perfect" bug, the 0.5 translation forth and back in the z axis that is added by
-            # rasterize() (like the one in the example belows), amplifies the error also for x and y beyond the
-            # threshold above. So, let's skip this check until the bug above is addressed.
-            # Sequence
-            #     Translation (z, y, x)
-            #         [-0.5 -0.5 -0.5]
-            #     Scale (y, x)
-            #         [0.17482681 0.17485125]
-            #     Translation (y, x)
-            #         [  -3.13652607 -164.        ]
-            #     Translation (z, y, x)
-            #         [0.5 0.5 0.5]
+            if maintain_positioning and name in ["points_0_3d", "points_0", "poly", "circles", "multipoly"]:
+                # Again, due to the "pixel perfect" bug, the 0.5 translation forth and back in the z axis that is added
+                # by rasterize() (like the one in the example belows), amplifies the error also for x and y beyond the
+                # rtol threshold below. So, let's skip that check and to an absolute check up to 0.5 (due to the
+                # half-pixel offset).
+                # Sequence
+                #     Translation (z, y, x)
+                #         [-0.5 -0.5 -0.5]
+                #     Scale (y, x)
+                #         [0.17482681 0.17485125]
+                #     Translation (y, x)
+                #         [  -3.13652607 -164.        ]
+                #     Translation (z, y, x)
+                #         [0.5 0.5 0.5]
+                assert np.allclose(a, first_a, atol=0.5)
+            else:
+                assert np.allclose(a, first_a, rtol=0.005)
 
     if not maintain_positioning:
         assert np.allclose(first_a, np.eye(3))
     else:
-        for element in elements:
-            before = full_sdata[element]
-            after = sdata[element]
-            assert get_model(after) == get_model(before)
-            data_extent_before = get_extent(before, coordinate_system="global")
-            data_extent_after = get_extent(after, coordinate_system="global")
-            # huge tolerance because of the bug with pixel perfectness
-            try:
-                assert are_extents_equal(
-                    data_extent_before, data_extent_after, atol=4
-                ), f"data_extent_before: {data_extent_before}, data_extent_after: {data_extent_after} for element {element}"
-            except:
-                pass
+        data_extent_before = get_extent(full_sdata, coordinate_system="global")
+        data_extent_after = get_extent(sdata, coordinate_system="global")
+        # again, due to the "pixel perfect" bug, we use an absolute tolerance of 0.5
+        assert are_extents_equal(data_extent_before, data_extent_after, atol=0.5)
 
 
 def test_validate_table_in_spatialdata(full_sdata):
