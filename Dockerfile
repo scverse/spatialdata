@@ -1,5 +1,16 @@
 ARG TARGETPLATFORM=linux/amd64
 
+# Use the specified platform to pull the correct base image.
+# Override TARGETPLATFORM during build for different architectures, such as linux/arm64 for Apple Silicon.
+# For example, to build for ARM64 architecture (e.g., Apple Silicon),
+# use the following command on the command line:
+#
+#     docker build --build-arg TARGETPLATFORM=linux/arm64 -t my-arm-image .
+#
+# Similarly, to build for the default x86_64 architecture, you can use:
+#
+#     docker build --build-arg TARGETPLATFORM=linux/amd64 -t my-amd64-image .
+#
 FROM --platform=$TARGETPLATFORM ubuntu:latest
 LABEL authors="Luca Marconato"
 
