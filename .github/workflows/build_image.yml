@@ -52,7 +52,7 @@ jobs:
             - name: Check if image tag exists
               id: check_tag
               env:
-                  IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:spatialdata${{ env.SPATIALDATA_VERSION }}_spatialdata-io${{ env.SPATIALDATA_IO_VERSION }}_spatialdata-plot${{ env.SPATIALDATA_PLOT_VERSION }}
+                  IMAGE_TAG_SUFFIX: spatialdata${{ env.SPATIALDATA_VERSION }}_spatialdata-io${{ env.SPATIALDATA_IO_VERSION }}_spatialdata-plot${{ env.SPATIALDATA_PLOT_VERSION }}
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   # Define the API URL
@@ -66,13 +66,13 @@ jobs:
                   echo "$existing_tags"
 
                   # Check if the constructed tag exists
-                  if echo "$existing_tags" | grep -q "$IMAGE_TAG"; then
-                    echo "Image tag $IMAGE_TAG already exists. Skipping build."
+                  if echo "$existing_tags" | grep -q "$IMAGE_TAG_SUFFIX"; then
+                    echo "Image tag $IMAGE_TAG_SUFFIX already exists. Skipping build."
                     echo "skip_build=true" >> $GITHUB_ENV
                   else
-                    echo "Image tag $IMAGE_TAG does not exist. Proceeding with build."
+                    echo "Image tag $IMAGE_TAG_SUFFIX does not exist. Proceeding with build."
                     echo "skip_build=false" >> $GITHUB_ENV
-                    echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+                    echo "IMAGE_TAG_SUFFIX=${IMAGE_TAG_SUFFIX}" >> $GITHUB_ENV
                   fi
 
             - name: Login to GitHub Container Registry
@@ -85,6 +85,7 @@ jobs:
 
             - uses: docker/build-push-action@v5
               if: ${{ env.skip_build == 'false' }}
+              IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:${{ env.IMAGE_TAG_SUFFIX }}
               with:
                   context: .
                   file: ./Dockerfile
