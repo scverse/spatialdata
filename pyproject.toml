@@ -26,14 +26,14 @@ dependencies = [
     "click",
     "dask-image",
     "dask>=2024.4.1,<=2024.11.2",
-    "datashader",
-    "fsspec",
+    "fsspec[s3,http]",
     "geopandas>=0.14",
     "multiscale_spatial_image>=2.0.3",
     "networkx",
     "numba>=0.55.0",
     "numpy",
     "ome_zarr>=0.8.4",
+    "universal_pathlib>=0.2.0",
     "pandas",
     "pooch",
     "pyarrow",
@@ -72,6 +72,13 @@ docs = [
     "ipython>=8.6.0",
     "sphinx-copybutton",
     "sphinx-pytest",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "torch",
+    "moto[s3,server]"
 ]
 benchmark = [
     "asv",
