@@ -226,7 +226,6 @@ class TestRemoteMock:
         table.write(tmpdir)
         # location of table
 
-
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(elem, sdata)
 
