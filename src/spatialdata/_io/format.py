@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
+import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import CurrentFormat
+from ome_zarr.format import CurrentFormat, Format, FormatV01, FormatV02, FormatV03, FormatV04
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -45,7 +47,24 @@ def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
 
 
 class SpatialDataFormat(CurrentFormat):
-    pass
+    @property
+    def version(self) -> str:
+        return "0.6-dev"
+
+
+def format_implementations() -> Iterator[Format]:
+    """Return an instance of each format implementation, newest to oldest."""
+    yield SpatialDataFormat()
+    yield FormatV04()
+    yield FormatV03()
+    yield FormatV02()
+    yield FormatV01()
+
+
+# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
+# read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
+# not released yet)
+ome_zarr.format.format_implementations = format_implementations
 
 
 class SpatialDataContainerFormatV01(SpatialDataFormat):
