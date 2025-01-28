@@ -987,6 +987,7 @@ class TableModel:
         region: str | list[str] | None = None,
         region_key: str | None = None,
         instance_key: str | None = None,
+        overwrite_metadata: bool = False,
     ) -> AnnData:
         """
         Parse the :class:`anndata.AnnData` to be compatible with the model.
@@ -1001,6 +1002,8 @@ class TableModel:
             Key in `adata.obs` that specifies the region.
         instance_key
             Key in `adata.obs` that specifies the instance.
+        overwrite_metadata
+            If `True`, the `region`, `region_key` and `instance_key` metadata will be overwritten.
 
         Returns
         -------
@@ -1011,7 +1014,7 @@ class TableModel:
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
             return adata
-        if n_args > 0:
+        if n_args > 0 and not overwrite_metadata:
             if cls.ATTRS_KEY in adata.uns:
                 raise ValueError(
                     f"`{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and / or `{cls.INSTANCE_KEY}` is/has been passed as"

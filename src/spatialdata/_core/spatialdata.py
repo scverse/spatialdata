@@ -2417,7 +2417,7 @@ class SpatialData:
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
 
-    def filter_elements_by_instances(
+    def filter(
         self,
         element_names: Iterable[str],
         instances: Iterable[int | str],
@@ -2426,12 +2426,10 @@ class SpatialData:
         """
         Filter elements to contain only certain instances.
 
-        This filters both SpatialElements (points and shapes)
-        as well as tables to only contain certain IDs. In case of tables
-        the instance key column of table.obs will be filtered on and not
-        table.obs.index. Filtering labels by ID is currently not supported
-        as this is an expensive operation. Should you require this
-        please open an issue on github.com/scverse/spatialdata. Lastly,
+        This filters both SpatialElements (points and shapes) as well as tables to only contain certain IDs. In case of
+        tables the instance key column of table.obs will be filtered on and not table.obs.index; in case of Points and
+        Shapes, the index will be used. Filtering labels by ID is currently not supported as this is an expensive
+        operation. Should you require this please open an issue on github.com/scverse/spatialdata. Lastly,
         tables not annotating an element cannot be filtered.
 
         element_names:
@@ -2449,10 +2447,7 @@ class SpatialData:
         for element_name in element_names:
             element = self.get(element_name)
             if element is not None:
-                if (model := get_model(element)) == PointsModel:
-                    instance_key = element.attrs[PointsModel.ATTRS_KEY][PointsModel.INSTANCE_KEY]
-                    element_dict[element_name] = element[element[instance_key].isin(instances)]
-                elif model == ShapesModel:
+                if (model := get_model(element)) in [PointsModel, ShapesModel]:
                     element_dict[element_name] = element[element.index.isin(instances)]
                 elif model == TableModel:
                     instance_key = element.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]

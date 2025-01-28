@@ -770,6 +770,34 @@ def match_element_to_table(
     return element_dict, table
 
 
+def match_sdata_to_table(
+    sdata: SpatialData,
+    table: AnnData,
+    table_name: str,
+) -> SpatialData:
+    """
+    Filter the elements of a SpatialData object to match only the rows present in the table.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object containing all the elements and tables.
+    table
+        The table to join with the spatial elements.
+    table_name
+        The name of the table in the returned SpatialData object.
+
+    Notes
+    -----
+    Eventual rows in the table that do not annoate any instance are preserved.
+    """
+    annotated_regions = SpatialData.get_annotated_regions(table)
+    filtered_elements, filtered_table = join_spatialelement_table(
+        sdata, spatial_element_names=annotated_regions, table=table, how="right"
+    )
+    return SpatialData.init_from_elements(filtered_elements | {table_name: table})
+
+
 @dataclass
 class _ValueOrigin:
     origin: str
