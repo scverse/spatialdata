@@ -12,12 +12,15 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any
 
-import zarr
+import zarr.storage
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from upath import UPath
+from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.storage import FSStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import get_pyramid_levels
@@ -28,10 +31,7 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
-from spatialdata.transformations.transformations import (
-    BaseTransformation,
-    _get_current_output_axes,
-)
+from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
 
 
 # suppress logger debug from ome_zarr with context manager
@@ -383,3 +383,22 @@ def save_transformations(sdata: SpatialData) -> None:
         stacklevel=2,
     )
     sdata.write_transformations()
+
+
+type StoreLike = str | Path | UPath | zarr.storage.StoreLike
+
+
+def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
+    if isinstance(path, str | Path):
+        # if the input is str or Path, map it to UPath
+        path = UPath(path)
+    if isinstance(path, PosixUPath | WindowsUPath):
+        # if the input is a local path, use DirectoryStore
+        return zarr.storage.DirectoryStore(path.path)
+    if isinstance(path, zarr.storage.StoreLike):
+        # if the input already a store, wrap it in an FSStore
+        return FSStore(path, **kwargs)
+    if isinstance(path, UPath):
+        # if input is a remote UPath, map it to an FSStore
+        return FSStore(path.path, fs=path.fs, **kwargs)
+    raise TypeError(f"Unsupported type: {type(path)}")
