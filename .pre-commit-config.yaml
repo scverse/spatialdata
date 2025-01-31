@@ -8,18 +8,10 @@ minimum_pre_commit_version: 2.16.0
 ci:
     skip: []
 repos:
-    - repo: https://github.com/psf/black
-      rev: 24.10.0
-      hooks:
-          - id: black
     - repo: https://github.com/rbubley/mirrors-prettier
       rev: v3.4.2
       hooks:
           - id: prettier
-    - repo: https://github.com/asottile/blacken-docs
-      rev: 1.19.1
-      hooks:
-          - id: blacken-docs
     - repo: https://github.com/pre-commit/mirrors-mypy
       rev: v1.14.1
       hooks:
@@ -31,3 +23,4 @@ repos:
       hooks:
           - id: ruff
             args: [--fix, --exit-non-zero-on-fix]
+          - id: ruff-format

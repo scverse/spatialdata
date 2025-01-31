@@ -287,9 +287,9 @@ def _(
         if transformation is None and to_coordinate_system is not None:
             return data.transform_to_coordinate_system(target_coordinate_system=to_coordinate_system)
         raise RuntimeError(ERROR_MSG_AFTER_0_0_15)
-    assert bool(transformation is None) != bool(
-        to_coordinate_system is None
-    ), "When maintain_positioning is True, only one of transformation and to_coordinate_system can be None"
+    assert bool(transformation is None) != bool(to_coordinate_system is None), (
+        "When maintain_positioning is True, only one of transformation and to_coordinate_system can be None"
+    )
     new_elements: dict[str, dict[str, Any]] = {}
     for element_type in ["images", "labels", "points", "shapes"]:
         d = getattr(data, element_type)

@@ -678,9 +678,9 @@ def rasterize_shapes_points(
     elif isinstance(agg_func, str):
         AGGREGATIONS = ["sum", "count", "count_cat", "first"]
 
-        assert np.isin(
-            agg_func, AGGREGATIONS
-        ), f"Aggregation function must be one of {', '.join(AGGREGATIONS)}. Found {agg_func}"
+        assert np.isin(agg_func, AGGREGATIONS), (
+            f"Aggregation function must be one of {', '.join(AGGREGATIONS)}. Found {agg_func}"
+        )
 
         assert agg_func == "count" or value_key is not None, f"value_key cannot be done for agg_func={agg_func}"
 
