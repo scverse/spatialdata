@@ -263,6 +263,9 @@ class TestRemoteMock:
             local_sdata = SpatialData.read(sdata_path)  # noqa: F841
             remote_path = upath / "full_sdata.zarr"  # noqa: F841
 
+            remote_sdata = SpatialData.read(remote_path)
+            assert_spatial_data_objects_are_identical(local_sdata, remote_sdata)
+
             # TODO: read a single remote image from the S3 data and add it to the local SpatialData object
             # for a in remote_path.glob('**/*'):
             #     print(a)
