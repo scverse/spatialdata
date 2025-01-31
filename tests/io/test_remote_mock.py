@@ -3,7 +3,6 @@ import shlex
 import subprocess
 import time
 import uuid
-from pathlib import Path
 
 import fsspec
 import pytest
@@ -115,35 +114,35 @@ def s3_fixture(s3_server):
     yield f"s3://{bucket_name}", anon, s3so
 
 
-@pytest.fixture(scope="session")
-def http_server(tmp_path_factory):
-    http_tempdir = tmp_path_factory.mktemp("http")
+# TODO: delete these 2 fixtures since they are not used
+# @pytest.fixture(scope="session")
+# def http_server(tmp_path_factory):
+#     http_tempdir = tmp_path_factory.mktemp("http")
+#
+#     requests = pytest.importorskip("requests")
+#     pytest.importorskip("http.server")
+#     proc = subprocess.Popen(shlex.split(f"python -m http.server --directory {http_tempdir} 8080"))
+#     try:
+#         url = "http://127.0.0.1:8080/folder"
+#         path = Path(http_tempdir) / "folder"
+#         path.mkdir()
+#         timeout = 10
+#         while True:
+#             try:
+#                 r = requests.get(url, timeout=10)
+#                 if r.ok:
+#                     yield path, url
+#                     break
+#             except requests.exceptions.RequestException as e:  # noqa: E722
+#                 timeout -= 1
+#                 if timeout < 0:
+#                     raise SystemError from e
+#                 time.sleep(1)
+#     finally:
+#         proc.terminate()
+#         proc.wait()
 
-    requests = pytest.importorskip("requests")
-    pytest.importorskip("http.server")
-    proc = subprocess.Popen(shlex.split(f"python -m http.server --directory {http_tempdir} 8080"))
-    try:
-        url = "http://127.0.0.1:8080/folder"
-        path = Path(http_tempdir) / "folder"
-        path.mkdir()
-        timeout = 10
-        while True:
-            try:
-                r = requests.get(url, timeout=10)
-                if r.ok:
-                    yield path, url
-                    break
-            except requests.exceptions.RequestException as e:  # noqa: E722
-                timeout -= 1
-                if timeout < 0:
-                    raise SystemError from e
-                time.sleep(1)
-    finally:
-        proc.terminate()
-        proc.wait()
 
-
-# TODO: delete this fixture if it is not used
 # @pytest.fixture
 # def http_fixture(local_testdir, http_server):
 #     http_path, http_url = http_server
@@ -249,3 +248,17 @@ class TestRemoteMock:
         full_sdata.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(full_sdata, sdata)
+
+    def test_local_sdata_remote_image(self, upath: UPath, images: SpatialData) -> None:
+        pass
+        tmpdir = upath / "tmp.zarr"
+        images.write(tmpdir)
+        # with tempfile.TemporaryDirectory() as local_tmpdir:
+        #     pass
+        #     # images.write(local_tmpdir)
+        #     # local_sdata = SpatialData.read(local_tmpdir)
+        #
+        #     pass
+        #
+        #     # sdata = SpatialData.read(tmpdir)
+        #     # assert_spatial_data_objects_are_identical(local_sdata, sdata)
