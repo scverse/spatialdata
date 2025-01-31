@@ -99,7 +99,7 @@ class TestMultiTable:
         tmpdir = Path(tmp_path) / "tmp.zarr"
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
         with pytest.raises(
-            TypeError, match="No current annotation metadata found. " "Please specify both region_key and instance_key."
+            TypeError, match="No current annotation metadata found. Please specify both region_key and instance_key."
         ):
             full_sdata.set_table_annotates_spatialelement("table", "labels2d", region_key="non_existent")
         with pytest.raises(ValueError, match="Instance key column 'non_existent' not found in table.obs."):

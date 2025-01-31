@@ -63,7 +63,7 @@ def set_transformation(
             _set_transformations(element, transformations)
         else:
             assert isinstance(transformation, dict), (
-                "If set_all=True, transformation must be of type " "dict[str, BaseTransformation]."
+                "If set_all=True, transformation must be of type dict[str, BaseTransformation]."
             )
             assert to_coordinate_system is None, "If set_all=True, to_coordinate_system must be None."
             _set_transformations(element, transformation)

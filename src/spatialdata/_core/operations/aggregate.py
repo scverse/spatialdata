@@ -180,9 +180,9 @@ def aggregate(
         ONES_KEY = None
         if value_key is None:
             ONES_KEY = "__ones_column_aggregate"
-            assert (
-                ONES_KEY not in values_.columns
-            ), f"Column {ONES_KEY} is reserved for internal use and cannot be already present in values_"
+            assert ONES_KEY not in values_.columns, (
+                f"Column {ONES_KEY} is reserved for internal use and cannot be already present in values_"
+            )
             values_[ONES_KEY] = 1
             value_key = ONES_KEY
 
@@ -384,10 +384,10 @@ def _aggregate_shapes(
             "agg_func='sum' instead."
         )
         assert not isinstance(values.iloc[0].geometry, Point), (
-            "Fractions cannot be computed when values are points. " "Please use fractions=False."
+            "Fractions cannot be computed when values are points. Please use fractions=False."
         )
     assert not (categorical and agg_func == "mean"), (
-        "Incompatible choice: aggregating a categorical column with " "agg_func='mean'"
+        "Incompatible choice: aggregating a categorical column with agg_func='mean'"
     )
 
     # we need to add a column of ones to the values dataframe to be able to count the number of instances in each zone

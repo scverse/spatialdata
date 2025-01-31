@@ -551,7 +551,10 @@ def rasterize_images_labels(
         target_coordinate_system=target_coordinate_system,
     )
 
-    half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
+    if "z" in spatial_axes:
+        half_pixel_offset = Translation([0.5, 0.5, 0.5], axes=("z", "y", "x"))
+    else:
+        half_pixel_offset = Translation([0.5, 0.5], axes=("y", "x"))
     sequence = Sequence(
         [
             # half_pixel_offset.inverse(),
@@ -675,9 +678,9 @@ def rasterize_shapes_points(
     elif isinstance(agg_func, str):
         AGGREGATIONS = ["sum", "count", "count_cat", "first"]
 
-        assert np.isin(
-            agg_func, AGGREGATIONS
-        ), f"Aggregation function must be one of {', '.join(AGGREGATIONS)}. Found {agg_func}"
+        assert np.isin(agg_func, AGGREGATIONS), (
+            f"Aggregation function must be one of {', '.join(AGGREGATIONS)}. Found {agg_func}"
+        )
 
         assert agg_func == "count" or value_key is not None, f"value_key cannot be done for agg_func={agg_func}"
 

@@ -50,7 +50,7 @@ def ome_zarr_logger(level: Any) -> Generator[None, None, None]:
 
 
 def _get_transformations_from_ngff_dict(
-    list_of_encoded_ngff_transformations: list[dict[str, Any]]
+    list_of_encoded_ngff_transformations: list[dict[str, Any]],
 ) -> MappingToCoordinateSystem_t:
     list_of_ngff_transformations = [NgffBaseTransformation.from_dict(d) for d in list_of_encoded_ngff_transformations]
     list_of_transformations = [BaseTransformation.from_ngff(t) for t in list_of_ngff_transformations]
@@ -121,8 +121,7 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
     multiscales_meta = group.attrs["multiscales"]
     if len(multiscales_meta) != 1:
         raise ValueError(
-            f"Multiscale metadata must be of length one but got length {len(multiscales_meta)}. Data might"
-            f"be corrupted."
+            f"Multiscale metadata must be of length one but got length {len(multiscales_meta)}. Data mightbe corrupted."
         )
     multiscales_meta[0]["metadata"]["omero"]["channels"] = channel_metadata
     group.attrs["multiscales"] = multiscales_meta
