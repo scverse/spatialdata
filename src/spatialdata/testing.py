@@ -106,9 +106,9 @@ def assert_elements_are_identical(
         if check_transformations:
             assert transformations0.keys() == transformations1.keys()
             for key in transformations0:
-                assert (
-                    transformations0[key] == transformations1[key]
-                ), f"transformations0[{key}] != transformations1[{key}]"
+                assert transformations0[key] == transformations1[key], (
+                    f"transformations0[{key}] != transformations1[{key}]"
+                )
 
     # compare the elements
     if isinstance(element0, AnnData):

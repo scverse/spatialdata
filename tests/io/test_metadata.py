@@ -42,8 +42,7 @@ def test_validate_can_write_metadata_on_element(full_sdata, element_name):
         # trying to save metadata before writing the data
         with pytest.warns(
             UserWarning,
-            match="The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be "
-            "written.",
+            match="The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be written.",
         ):
             full_sdata._validate_can_write_metadata_on_element(element_name)
 

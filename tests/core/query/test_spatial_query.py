@@ -280,7 +280,11 @@ def test_query_raster(
     model = (
         Labels3DModel
         if is_labels and is_3d
-        else Labels2DModel if is_labels else Image3DModel if is_3d else Image2DModel
+        else Labels2DModel
+        if is_labels
+        else Image3DModel
+        if is_3d
+        else Image2DModel
     )
 
     image_element = model.parse(image)
@@ -420,7 +424,6 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes
         assert isinstance(polygons_result, list)
         assert len(polygons_result) == 2
         if box_outside_polygon:
-
             assert polygons_result[0] is None
             assert polygons_result[1].index[0] == 3
         else:

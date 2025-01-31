@@ -765,7 +765,7 @@ def test_get_affine_for_element(images):
         np.array(
             [
                 # fmt: off
-                #c  y  x       # noqa: E265
+                # c  y  x       # noqa: E265
                 [1, 0, 0, 0],  # c
                 [0, 0, 1, 1],  # x
                 [0, 1, 0, 2],  # y
