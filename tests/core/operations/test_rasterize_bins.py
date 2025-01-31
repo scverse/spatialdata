@@ -172,7 +172,7 @@ def test_rasterize_bins_invalid():
     table.obs["region"] = regions
     with pytest.raises(
         ValueError,
-        match="Found multiple regions annotated by the table: " "points, shapes.",
+        match="Found multiple regions annotated by the table: points, shapes.",
     ):
         _ = rasterize_bins(
             sdata=sdata,
