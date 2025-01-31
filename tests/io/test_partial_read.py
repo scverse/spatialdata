@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-import shutil
 import tempfile
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
@@ -91,7 +91,8 @@ def sdata_with_corrupted_elem_type_zgroup(session_tmp_path: Path) -> PartialRead
     sdata_path = session_tmp_path / "sdata_with_corrupted_top_level_zgroup.zarr"
     sdata.write(sdata_path)
 
-    (sdata_path / "images" / ".zgroup").unlink()  # missing, not detected by reader
+    (sdata_path / "images" / ".zgroup").unlink()  # missing, not detected by reader. So it doesn't raise an exception,
+    # but it will not be found in the read SpatialData object
     (sdata_path / "labels" / ".zgroup").write_text("")  # corrupted
     (sdata_path / "points" / ".zgroup").write_text("{}")  # invalid
     not_corrupted = [name for t, name, _ in sdata.gen_elements() if t not in ("images", "labels", "points")]
@@ -135,8 +136,10 @@ def sdata_with_corrupted_image_chunks(session_tmp_path: Path) -> PartialReadTest
     sdata.write(sdata_path)
 
     corrupted = "blobs_image"
-    shutil.rmtree(sdata_path / "images" / corrupted / "0")
+    os.unlink(sdata_path / "images" / corrupted / "0" / ".zarray")  # it will hide the "0" array from the Zarr reader
+    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
     (sdata_path / "images" / corrupted / "0").touch()
+
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
     return PartialReadTestCase(
@@ -158,8 +161,12 @@ def sdata_with_corrupted_parquet(session_tmp_path: Path) -> PartialReadTestCase:
     sdata.write(sdata_path)
 
     corrupted = "blobs_points"
-    shutil.rmtree(sdata_path / "points" / corrupted / "points.parquet")
+    os.rename(
+        sdata_path / "points" / corrupted / "points.parquet",
+        sdata_path / "points" / corrupted / "points_corrupted.parquet",
+    )
     (sdata_path / "points" / corrupted / "points.parquet").touch()
+
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
     return PartialReadTestCase(
@@ -199,7 +206,9 @@ def sdata_with_missing_image_chunks(
     sdata.write(sdata_path)
 
     corrupted = "blobs_image"
-    shutil.rmtree(sdata_path / "images" / corrupted / "0")
+    os.unlink(sdata_path / "images" / corrupted / "0" / ".zarray")
+    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
+
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
     return PartialReadTestCase(
@@ -245,7 +254,8 @@ def sdata_with_invalid_zattrs_table_region_not_found(session_tmp_path: Path) -> 
 
     corrupted = "blobs_labels"
     # The element data is missing
-    shutil.rmtree(sdata_path / "labels" / corrupted)
+    os.unlink(sdata_path / "labels" / corrupted / ".zgroup")
+    os.rename(sdata_path / "labels" / corrupted, sdata_path / "labels" / f"{corrupted}_corrupted")
     # But the labels element is referenced as a region in a table
     regions = zarr.open_group(sdata_path / "tables" / "table" / "obs" / "region", mode="r")
     assert corrupted in np.asarray(regions.categories)[regions.codes]
@@ -302,5 +312,5 @@ def test_read_zarr_with_warnings(test_case: PartialReadTestCase):
     with pytest_warns_multiple(UserWarning, matches=test_case.warnings_patterns):
         actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
 
-    for elem in test_case.expected_elements:
-        assert elem in actual
+    actual_elements = {name for _, name, _ in actual.gen_elements()}
+    assert set(test_case.expected_elements) == actual_elements
