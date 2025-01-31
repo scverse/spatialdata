@@ -13,7 +13,7 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any, Literal
 
-import zarr
+import zarr.storage
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -386,10 +386,20 @@ def save_transformations(sdata: SpatialData) -> None:
     sdata.write_transformations()
 
 
-def _open_zarr_store(path: str | UPath, **kwargs) -> zarr.storage.BaseStore:
+type StoreLike = str | Path | UPath | zarr.storage.StoreLike
+
+
+def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
     if isinstance(path, str | Path):
+        # if the input is str or Path, map it to UPath
         path = UPath(path)
     if isinstance(path, PosixUPath | WindowsUPath):
+        # if the input is a local path, use DirectoryStore
         return zarr.storage.DirectoryStore(path.path)
-    else:
+    if isinstance(path, zarr.storage.StoreLike):
+        # if the input already a store, wrap it in an FSStore
+        return FSStore(path, **kwargs)
+    if isinstance(path, UPath):
+        # if input is a remote UPath, map it to an FSStore
         return FSStore(path.path, fs=path.fs, **kwargs)
+    raise TypeError(f"Unsupported type: {type(path)}")
