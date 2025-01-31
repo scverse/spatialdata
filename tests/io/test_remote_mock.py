@@ -1,8 +1,10 @@
 import os
 import shlex
 import subprocess
+import tempfile
 import time
 import uuid
+from pathlib import Path
 
 import fsspec
 import pytest
@@ -15,11 +17,10 @@ from upath.implementations.cloud import S3Path
 from spatialdata import SpatialData
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 
+
 ## Mock setup from https://github.com/fsspec/universal_pathlib/blob/main/upath/tests/conftest.py
-# TODO: check if the tests work on Windows. If yes, we can remove this commented function and the already commented
-#  place where it is called
-# def posixify(path):
-#     return str(path).replace("\\", "/")
+def posixify(path):
+    return str(path).replace("\\", "/")
 
 
 class DummyTestFS(LocalFileSystem):
@@ -94,7 +95,7 @@ def s3_server():
 
 
 @pytest.fixture(scope="function")
-def s3_fixture(s3_server):
+def s3_fixture(s3_server, full_sdata):
     pytest.importorskip("s3fs")
     anon, s3so = s3_server
     s3 = fsspec.filesystem("s3", anon=False, **s3so)
@@ -106,10 +107,16 @@ def s3_fixture(s3_server):
                 s3.rm(f"{dir}/{key}")
     else:
         s3.mkdir(bucket_name)
-    # for x in Path(local_testdir).glob("**/*"):
-    #     target_path = f"{bucket_name}/{posixify(x.relative_to(local_testdir))}"
-    #     if x.is_file():
-    #         s3.upload(str(x), target_path)
+
+    # write a full spatialdata object to the bucket
+    with tempfile.TemporaryDirectory() as tempdir:
+        sdata_path = Path(tempdir) / "full_sdata.zarr"
+        full_sdata.write(sdata_path)
+        for x in sdata_path.glob("**/*"):
+            target_path = f"{bucket_name}/full_sdata.zarr/{posixify(x.relative_to(sdata_path))}"
+            if x.is_file():
+                s3.upload(str(x), target_path)
+
     s3.invalidate_cache()
     yield f"s3://{bucket_name}", anon, s3so
 
@@ -161,7 +168,7 @@ class TestRemoteMock:
         assert isinstance(upath, S3Path)
 
     # # Test UPath with Moto Mocking
-    def test_creating_file(self, upath):
+    def test_creating_file(self, upath: UPath) -> None:
         file_name = "file1"
         p1 = upath / file_name
         p1.touch()
@@ -250,15 +257,18 @@ class TestRemoteMock:
         assert_spatial_data_objects_are_identical(full_sdata, sdata)
 
     def test_local_sdata_remote_image(self, upath: UPath, images: SpatialData) -> None:
-        pass
-        tmpdir = upath / "tmp.zarr"
-        images.write(tmpdir)
-        # with tempfile.TemporaryDirectory() as local_tmpdir:
-        #     pass
-        #     # images.write(local_tmpdir)
-        #     # local_sdata = SpatialData.read(local_tmpdir)
-        #
-        #     pass
-        #
-        #     # sdata = SpatialData.read(tmpdir)
-        #     # assert_spatial_data_objects_are_identical(local_sdata, sdata)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sdata_path = Path(tmpdir) / "full_sdata.zarr"
+            images.write(sdata_path)
+            local_sdata = SpatialData.read(sdata_path)  # noqa: F841
+            remote_path = upath / "full_sdata.zarr"  # noqa: F841
+
+            # TODO: read a single remote image from the S3 data and add it to the local SpatialData object
+            # for a in remote_path.glob('**/*'):
+            #     print(a)
+            #
+            # import zarr.storage
+            # from zarr.storage import FSStore
+            # store = zarr.storage.FSStore(fs=upath.fs, url=remote_path)
+            # list(store.keys())
+            # store.close()
