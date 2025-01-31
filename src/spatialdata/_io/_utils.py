@@ -18,7 +18,10 @@ from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from upath import UPath
+from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.storage import FSStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import get_pyramid_levels
@@ -383,57 +386,10 @@ def save_transformations(sdata: SpatialData) -> None:
     sdata.write_transformations()
 
 
-class BadFileHandleMethod(Enum):
-    ERROR = "error"
-    WARN = "warn"
-
-
-@contextmanager
-def handle_read_errors(
-    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
-    location: str,
-    exc_types: tuple[type[Exception], ...],
-) -> Generator[None, None, None]:
-    """
-    Handle read errors according to parameter `on_bad_files`.
-
-    Parameters
-    ----------
-    on_bad_files
-        Specifies what to do upon encountering an exception.
-        Allowed values are :
-
-        - 'error', let the exception be raised.
-        - 'warn', convert the exception into a warning if it is one of the expected exception types.
-    location
-        String identifying the function call where the exception happened
-    exc_types
-        A tuple of expected exception classes that should be converted into warnings.
-
-    Raises
-    ------
-    If `on_bad_files="error"`, all encountered exceptions are raised.
-    If `on_bad_files="warn"`, any encountered exceptions not matching the `exc_types` are raised.
-    """
-    on_bad_files = BadFileHandleMethod(on_bad_files)  # str to enum
-    if on_bad_files == BadFileHandleMethod.WARN:
-        try:
-            yield
-        except exc_types as e:
-            # Extract the original filename and line number from the exception and
-            # create a warning from it.
-            exc_traceback = sys.exc_info()[-1]
-            last_frame, lineno = list(traceback.walk_tb(exc_traceback))[-1]
-            filename = last_frame.f_code.co_filename
-            # Include the location (element path) in the warning message.
-            message = f"{location}: {e.__class__.__name__}: {e.args[0]}"
-            warnings.warn_explicit(
-                message=message,
-                category=UserWarning,
-                filename=filename,
-                lineno=lineno,
-            )
-            # continue
-    else:  # on_bad_files == BadFileHandleMethod.ERROR
-        # Let it raise exceptions
-        yield
+def _open_zarr_store(path: str | UPath, **kwargs) -> zarr.storage.BaseStore:
+    if isinstance(path, str | Path):
+        path = UPath(path)
+    if isinstance(path, PosixUPath | WindowsUPath):
+        return zarr.storage.DirectoryStore(path.path)
+    else:
+        return FSStore(path.path, fs=path.fs, **kwargs)

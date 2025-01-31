@@ -31,10 +31,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import (
-    _deprecation_alias,
-    _error_message_add_element,
-)
+from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -601,7 +598,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
+        self, zarr_path: UPath, element_type: str, element_name: str
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
@@ -621,9 +618,9 @@ class SpatialData:
         -------
         either the existing Zarr subgroup or a new one.
         """
-        if not isinstance(zarr_path, Path):
-            raise ValueError("zarr_path should be a Path object")
-        store = parse_url(zarr_path, mode="r+").store
+        from spatialdata._io._utils import _open_zarr_store
+
+        store = _open_zarr_store(zarr_path, mode="r+")
         root = zarr.group(store=store)
         if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
             raise ValueError(f"Unknown element type {element_type}")
@@ -1376,7 +1373,7 @@ class SpatialData:
                 self.delete_element_from_disk(name)
             return
 
-        from spatialdata._io._utils import _backed_elements_contained_in_path
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _open_zarr_store
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
@@ -1417,7 +1414,7 @@ class SpatialData:
             )
 
         # delete the element
-        store = parse_url(self.path, mode="r+").store
+        store = _open_zarr_store(self.path)
         root = zarr.group(store=store)
         root[element_type].pop(element_name)
         store.close()
@@ -1438,7 +1435,9 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        store = parse_url(self.path, mode="r+").store
+        from spatialdata._io._utils import _open_zarr_store
+
+        store = _open_zarr_store(self.path)
         # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
         # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
         zarr.consolidate_metadata(store, metadata_key=".zmetadata")
@@ -1575,15 +1574,11 @@ class SpatialData:
         )
         axes = get_axes_names(element)
         if isinstance(element, DataArray | DataTree):
-            from spatialdata._io._utils import (
-                overwrite_coordinate_transformations_raster,
-            )
+            from spatialdata._io._utils import overwrite_coordinate_transformations_raster
 
             overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
         elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
-            from spatialdata._io._utils import (
-                overwrite_coordinate_transformations_non_raster,
-            )
+            from spatialdata._io._utils import overwrite_coordinate_transformations_non_raster
 
             overwrite_coordinate_transformations_non_raster(
                 group=element_group, axes=axes, transformations=transformations
