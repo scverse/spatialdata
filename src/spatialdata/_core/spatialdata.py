@@ -598,7 +598,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: UPath, element_type: str, element_name: str
+        self, zarr_path: Path, element_type: str, element_name: str
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
