@@ -388,7 +388,7 @@ def save_transformations(sdata: SpatialData) -> None:
 StoreLike: TypeAlias = str | Path | UPath | zarr.storage.StoreLike | zarr.Group
 
 
-def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
+def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:
     # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
         # if the input is str or Path, map it to UPath
