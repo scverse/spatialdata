@@ -24,9 +24,7 @@ def _read_points(
     store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, str | Path)
-    f = zarr.open(store, mode="r")
-
+    f = zarr.open(store, mode="r") if isinstance(store, str | Path | MutableMapping) else store
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     format = PointsFormats[version]

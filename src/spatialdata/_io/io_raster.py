@@ -13,9 +13,14 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from upath import UPath
 from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._io._utils import _get_transformations_from_ngff_dict, overwrite_coordinate_transformations_raster
+from spatialdata._io._utils import (
+    _get_transformations_from_ngff_dict,
+    _open_zarr_store,
+    overwrite_coordinate_transformations_raster,
+)
 from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
@@ -28,10 +33,12 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: zarr.storage.BaseStore, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
-    assert isinstance(store, zarr.storage.BaseStore)
+def _read_multiscale(
+    store: str | UPath | zarr.storage.BaseStore, raster_type: Literal["image", "labels"]
+) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
-
+    if isinstance(store, str | UPath):
+        store = _open_zarr_store(store)
     group = zarr.group(store=store)
     version = _parse_version(group, expect_attrs_key=True)
     # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
