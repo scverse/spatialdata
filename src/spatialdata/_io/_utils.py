@@ -407,8 +407,12 @@ def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
             # but extend the path of the store with that of the zarr.Group
             return FSStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
         if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+            # TODO: find a way to check if the consolidated metadata is still used. Probably best to wait for Zarr v3.
             # if the store is a ConsolidatedMetadataStore, just return it
-            return path.store
+            # get the FSStore url path from store and append it with the path from the Group StoreLike object
+            url = UPath(path.store.store.path + path.path)
+            # same as UPath option
+            return FSStore(url.path, fs=url.fs, **kwargs)
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, zarr.storage.StoreLike):
         # if the input already a store, wrap it in an FSStore
