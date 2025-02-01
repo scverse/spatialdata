@@ -190,7 +190,7 @@ def read_zarr(store_like: StoreLike, selection: None | tuple[str] = None) -> Spa
         )
         subgroup_name = "table"
         group = f[subgroup_name]
-        tables = _read_table(zarr_store_path=store_like, group=f, subgroup=group, tables=tables)
+        tables = _read_table(zarr_store_path=str(store_like), group=f, subgroup=group, tables=tables)
 
     # read attrs metadata
     attrs = f.attrs.asdict()
