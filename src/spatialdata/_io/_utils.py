@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from enum import Enum
 from functools import singledispatch
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, TypeAlias
 
 import zarr.storage
 from anndata import AnnData
@@ -386,16 +386,30 @@ def save_transformations(sdata: SpatialData) -> None:
     sdata.write_transformations()
 
 
-type StoreLike = str | Path | UPath | zarr.storage.StoreLike
+StoreLike: TypeAlias = str | Path | UPath | zarr.storage.StoreLike | zarr.Group
 
 
 def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
+    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
         # if the input is str or Path, map it to UPath
         path = UPath(path)
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use DirectoryStore
         return zarr.storage.DirectoryStore(path.path)
+    if isinstance(path, zarr.Group):
+        # if the input is a zarr.Group, wrap it with a store
+        if isinstance(path.store, zarr.storage.DirectoryStore):
+            # create a simple FSStore if the store is a DirectoryStore with just the path
+            return FSStore(os.path.join(path.store.path, path.path), **kwargs)
+        if isinstance(path.store, FSStore):
+            # if the store within the zarr.Group is an FSStore, return it
+            # but extend the path of the store with that of the zarr.Group
+            return FSStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
+        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+            # if the store is a ConsolidatedMetadataStore, just return it
+            return path.store
+        raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, zarr.storage.StoreLike):
         # if the input already a store, wrap it in an FSStore
         return FSStore(path, **kwargs)
@@ -403,3 +417,14 @@ def _open_zarr_store(path: StoreLike, **kwargs) -> zarr.storage.BaseStore:
         # if input is a remote UPath, map it to an FSStore
         return FSStore(path.path, fs=path.fs, **kwargs)
     raise TypeError(f"Unsupported type: {type(path)}")
+
+
+def _create_upath(path: StoreLike) -> UPath:
+    # try to create a UPath from the input
+    if isinstance(path, str | Path):
+        return Path(path)
+    if hasattr(path, "store") and isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+        # create a url from the ConsolidatedMetadataStore and append it with the path from the Group StoreLike object
+        return UPath(path.store.store.path) / path.path
+    # best effort to create a UPath
+    return UPath(path)
