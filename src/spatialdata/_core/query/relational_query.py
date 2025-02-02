@@ -774,6 +774,7 @@ def match_sdata_to_table(
     sdata: SpatialData,
     table: AnnData,
     table_name: str,
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
 ) -> SpatialData:
     """
     Filter the elements of a SpatialData object to match only the rows present in the table.
@@ -783,19 +784,27 @@ def match_sdata_to_table(
     sdata
         SpatialData object containing all the elements and tables.
     table
-        The table to join with the spatial elements.
+        The table to join with the spatial elements. Has precedence over `table_name`.
     table_name
-        The name of the table in the returned SpatialData object.
+        The name of the table to join with the SpatialData object if `table` is not provided. Also, `table_name` is used
+        to name the table in the returned `SpatialData` object.
+    how
+        The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
-    Notes
-    -----
-    Eventual rows in the table that do not annoate any instance are preserved.
     """
+    _, region_key, instance_key = get_table_keys(table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     filtered_elements, filtered_table = join_spatialelement_table(
-        sdata, spatial_element_names=annotated_regions, table=table, how="right"
+        sdata, spatial_element_names=annotated_regions, table=table, how=how
     )
-    return SpatialData.init_from_elements(filtered_elements | {table_name: table})
+    filtered_table = TableModel.parse(
+        filtered_table,
+        region=annotated_regions,
+        region_key=region_key,
+        instance_key=instance_key,
+        overwrite_metadata=True,
+    )
+    return SpatialData.init_from_elements(filtered_elements | {table_name: filtered_table})
 
 
 @dataclass
