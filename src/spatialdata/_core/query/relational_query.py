@@ -775,8 +775,8 @@ def match_element_to_table(
 
 def match_sdata_to_table(
     sdata: SpatialData,
-    table: AnnData,
     table_name: str,
+    table: AnnData | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
 ) -> SpatialData:
     """
@@ -795,6 +795,8 @@ def match_sdata_to_table(
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
     """
+    if table is None:
+        table = sdata[table_name]
     _, region_key, instance_key = get_table_keys(table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     filtered_elements, filtered_table = join_spatialelement_table(
