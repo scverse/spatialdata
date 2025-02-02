@@ -158,7 +158,6 @@ class SpatialData:
             "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
             exc_type=(ValueError, KeyError),
         ) as collect_error:
-
             if images is not None:
                 for k, v in images.items():
                     with collect_error(location=("images", k)):
@@ -1716,7 +1715,6 @@ class SpatialData:
         """
 
         def _flatten_mapping(m: Mapping[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
-
             items: list[tuple[str, Any]] = []
             for k, v in m.items():
                 new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -2008,7 +2006,7 @@ class SpatialData:
                 descr += f"{h('empty_line')}"
                 descr_class = v.__class__.__name__
                 if attr == "shapes":
-                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"shape: {v.shape} (2D shapes)"
+                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} shape: {v.shape} (2D shapes)"
                 elif attr == "points":
                     length: int | None = None
                     if len(v.dask) == 1:
@@ -2038,7 +2036,7 @@ class SpatialData:
                             + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
                             + ")"
                         )
-                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} " f"with shape: {shape_str} {dim_string}"
+                    descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} with shape: {shape_str} {dim_string}"
                 elif attr == "tables":
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} {v.shape}"
                 else:
@@ -2056,7 +2054,7 @@ class SpatialData:
                             if dims is None:
                                 dims = "".join(vv.dims)
                             shapes.append(shape)
-                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] " f"{', '.join(map(str, shapes))}"
+                        descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class}[{dims}] {', '.join(map(str, shapes))}"
                     else:
                         raise TypeError(f"Unknown type {type(v)}")
             if last_attr is True:

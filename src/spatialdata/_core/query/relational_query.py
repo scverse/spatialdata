@@ -164,9 +164,9 @@ def _filter_table_by_elements(
     """
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
     assert len(elements_dict) > 0, "elements_dict must not be empty"
-    assert any(
-        len(elements) > 0 for elements in elements_dict.values()
-    ), "elements_dict must contain at least one dict which contains at least one element"
+    assert any(len(elements) > 0 for elements in elements_dict.values()), (
+        "elements_dict must contain at least one dict which contains at least one element"
+    )
     if table is None:
         return None
     to_keep = np.zeros(len(table), dtype=bool)
@@ -693,8 +693,11 @@ def _call_join(
         raise TypeError(
             f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, ``'left'`` or ``'right'``"
         )
-    if how in JoinTypes.__dict__["_member_names_"]:
-        elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
+    # bug with Python 3.13 (https://github.com/scverse/spatialdata/issues/852)
+    # if how in JoinTypes.__dict__["_member_names_"]:
+    # hotfix for bug with Python 3.13:
+    if how in JoinTypes.__dict__:
+        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
 

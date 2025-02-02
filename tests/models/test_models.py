@@ -214,9 +214,9 @@ class TestModels:
         assert actual.scale0.image.dtype == image.dtype
         assert actual.scale1.image.dtype == image.dtype
         assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
-        assert set(np.unique(image)) >= set(
-            np.unique(actual.scale1.image)
-        ), "Subsequent scales should not have interpolation artifacts"
+        assert set(np.unique(image)) >= set(np.unique(actual.scale1.image)), (
+            "Subsequent scales should not have interpolation artifacts"
+        )
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])

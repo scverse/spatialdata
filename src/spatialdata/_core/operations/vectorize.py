@@ -113,7 +113,7 @@ def _(element: GeoDataFrame, **kwargs: Any) -> GeoDataFrame:
         return _make_circles(element, obs)
     if isinstance(element.geometry.iloc[0], Point):
         return element
-    raise RuntimeError("Unsupported geometry type: " f"{type(element.geometry.iloc[0])}")
+    raise RuntimeError(f"Unsupported geometry type: {type(element.geometry.iloc[0])}")
 
 
 @to_circles.register(DaskDataFrame)
@@ -281,7 +281,7 @@ def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
             return buffered_df
         assert isinstance(gdf.geometry.iloc[0], Polygon | MultiPolygon)
         return gdf
-    raise RuntimeError("Unsupported geometry type: " f"{type(gdf.geometry.iloc[0])}")
+    raise RuntimeError(f"Unsupported geometry type: {type(gdf.geometry.iloc[0])}")
 
 
 @to_polygons.register(DaskDataFrame)
