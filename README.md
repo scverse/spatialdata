@@ -54,7 +54,7 @@ Check out the docs for more complete [installation instructions](https://spatial
 pip install "spatialdata[extra]"
 ```
 
-~~or via conda:~~ 
+~~or via conda:~~
 Update Feb 2025: `spatialdata` cannot be currently be installed via `conda` because some dependencies of our dependencies are not updated in `conda-forge` and we are still waiting for an update. Please install from `pip`; the latest versions of the `spatialdata` libraries are always available via `PyPI`.
 
 ```bash
