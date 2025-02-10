@@ -68,11 +68,13 @@ You can install the `spatialdata`, `spatialdata-io`, `spatialdata-plot` and `nap
 mamba install -c conda-forge spatialdata spatialdata-io spatialdata-plot napari-spatialdata
 ```
 
-Note: currently (Jan 2025), due to particular versions being unavailable on `conda-forge` for some dependent packages, the latest versions of the packages of the `SpatialData` ecosystem are not available on `conda-forge`. We are working on fixing this issue; please check the latest versions available on the channel.
+Update: currently (Feb 2025), due to particular versions being unavailable on `conda-forge` for some (dependencies of our) dependencies, the latest versions of the packages of the `SpatialData` ecosystem are not available on `conda-forge`. We are waiting for the availability to be unlocked. The latest versions are always available via PyPI.
 
 ## Docker
 
-A `Dockerfile` is available in the repository; the image that can be built from it contains `spatialdata` (with `torch`), `spatialdata-io` and `spatialdata-plot` (not `napari-spatialdata`).
+## Docker
+
+A `Dockerfile` is available in the repository; the image that can be built from it contains `spatialdata` (with `torch`), `spatialdata-io` and `spatialdata-plot` (not `napari-spatialdata`)'; the libaries are installed from PyPI.
 
 To build the image, run:
 
