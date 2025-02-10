@@ -357,21 +357,23 @@ See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/n
 
 This section describes a more detailed timeline of future developments, including also more technical tasks like code refactoring of existing functionalities for improving stability/performance. Compared to the "goal" section above, here we provide an concrete timeline.
 
-#### Early 2024
+#### 2024
 
-- [ ] Simplify data models
+- [x] Simplify data models
     - [x] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
-    - [ ] Use `GeoDataFrame` for points
-- [ ] More performant disk storage
-    - [ ] Use `geoparquet` for shapes and points
-- [ ] Support for nested hierarchies in NGFF stores
+- [x] More performant disk storage
+    - [x] Use `geoparquet` for shapes and points
 - [x] Start working on multiple tables
 - [x] Start working on the transformations refactoring
-
-#### Late 2024
-
 - [x] Finalize multiple tables support
-- [ ] Finalize transformations refactoring
+
+#### 2025
+
+- [ ] Move transformation code [to `ome-zarr-models-py`](https://github.com/ome-zarr-models/ome-zarr-models-py/issues/54)
+- [ ] Refactor `spatialdata` to use `ome-zarr-models-py` as a dependency.
+- [ ] Expose public APIs for [modular `read()` operations](https://github.com/scverse/spatialdata/issues/843).
+- [ ] Support Zarr v3 (sharding).
+- [ ] Remove Dask constraints ([latest `dask-expr` versions are not compatible](https://github.com/dask/dask/issues/11146)).
 
 ---
 
