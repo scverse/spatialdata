@@ -35,7 +35,7 @@ from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
-from spatialdata.config import MAX_N_ELEMS_CHUNK_SIZE
+from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -293,16 +293,20 @@ class RasterSchema(DataArraySchema):
                 )
                 return
             n_elems = np.array(list(max_per_dimension.values())).prod().item()
-            if n_elems > MAX_N_ELEMS_CHUNK_SIZE:
+            usage = n_elems * data.dtype.itemsize
+            if usage > LARGE_CHUNK_THRESHOLD_BYTES:
                 warnings.warn(
-                    f"Detected a large number of elements for some chunks: {n_elems}. This can lead to low "
+                    f"Detected chunks larger than: {usage} > {LARGE_CHUNK_THRESHOLD_BYTES} bytes. "
+                    "This can lead to low "
                     "performance and memory issues downstream, and sometimes cause compression errors when writing "
                     "(https://github.com/scverse/spatialdata/issues/812#issuecomment-2575983527). Please consider using"
                     " 1) smaller chunks and/or 2) using a multiscale representation for the raster data.\n"
                     "1) Smaller chunks can be achieved by using the `chunks` argument in the `parse()` function or by "
                     "calling the `chunk()` method on `DataArray`/`DataTree` objects.\n"
                     "2) Multiscale representations can be achieved by using the `scale_factors` argument in the "
-                    "`parse()` function.",
+                    "`parse()` function.\n"
+                    "You can suppress this warning by increasing the value of "
+                    "`spatialdata.config.LARGE_CHUNK_THRESHOLD_BYTES`.",
                     UserWarning,
                     stacklevel=2,
                 )
