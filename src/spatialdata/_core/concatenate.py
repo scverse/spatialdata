@@ -65,7 +65,7 @@ def _concatenate_tables(
 
     merged_table = ad.concat(tables_l, **kwargs)
     attrs = {
-        TableModel.REGION_KEY: merged_table.obs[TableModel.REGION_KEY].unique().tolist(),
+        TableModel.REGION_KEY: merged_table.obs[region_key].unique().tolist(),
         TableModel.REGION_KEY_KEY: region_key,
         TableModel.INSTANCE_KEY: instance_key,
     }
