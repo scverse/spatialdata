@@ -128,12 +128,13 @@ class RasterSchema(DataArraySchema):
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling. The default method should cover the most common of use cases.
-            Please refer to :class:`multiscale_spatial_image.to_multiscale`.\n
+            Method to use for multiscale downsampling (default is `'nearest'`). Please refer to
+            :class:`multiscale_spatial_image.to_multiscale` for details.\n
             Note (advanced): the default choice (`'nearest'`) will keep the original scale lazy and compute each
-            downscaled version. On the other hand `'xarray_coarsen'` will compute each scale lazily (but will recompute
-            each scale every time unless `.persist()` is manually called to cache the date). Please refer to the
-            source code of `to_multiscale()` in the `multiscale-spatial-image` package for more information.
+            downscaled version. On the other hand `'xarray_coarsen'` will compute each scale lazily (this implies that
+            each scale will be recomputed each time it is accessed unless `.persist()` is manually called to cache the
+            intermediate results). Please refer direclty to the source code of `to_multiscale()` in the
+            `multiscale-spatial-image` for precise information on how this is handled.
         chunks
             Chunks to use for dask array.
         kwargs
@@ -290,17 +291,18 @@ class RasterSchema(DataArraySchema):
                     UserWarning,
                     stacklevel=2,
                 )
+                return
             n_elems = np.array(list(max_per_dimension.values())).prod().item()
             if n_elems > MAX_N_ELEMS_CHUNK_SIZE:
                 warnings.warn(
-                    f"Chunk size is too large: {n_elems}. This can trigger a compression error when writing,"
-                    "and in general cause low performance. Please consider using 1) smaller chunks and/or 2) using a "
-                    "multiscale representation for the raster data.\n"
-                    "1) Smaller chunks can be achieved by using the `chunks` argument in the `parse` function or by "
-                    "calling"
-                    "the `chunk` method on the `DataArray`/`DataTree` object.\n"
-                    "2) Multiscale representation can be achieved by using the `scale_factors` argument in the "
-                    "`parse` function.",
+                    f"Detected a large number of elements for some chunks: {n_elems}. This can lead to low "
+                    "performance and memory issues downstream, and sometimes cause compression errors when writing "
+                    "(https://github.com/scverse/spatialdata/issues/812#issuecomment-2575983527). Please consider using"
+                    " 1) smaller chunks and/or 2) using a multiscale representation for the raster data.\n"
+                    "1) Smaller chunks can be achieved by using the `chunks` argument in the `parse()` function or by "
+                    "calling the `chunk()` method on `DataArray`/`DataTree` objects.\n"
+                    "2) Multiscale representations can be achieved by using the `scale_factors` argument in the "
+                    "`parse()` function.",
                     UserWarning,
                     stacklevel=2,
                 )

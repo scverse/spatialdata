@@ -715,7 +715,7 @@ def test_warning_on_large_chunks():
     data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000)), dims=["x", "y"])
     assert np.array(data_large.shape).prod().item() > MAX_N_ELEMS_CHUNK_SIZE
 
-    # single and multiscale, valid chunk size
+    # single and multiscale, small chunk size
     with warnings.catch_warnings(record=True) as w:
         _ = Labels2DModel.parse(data_small)
         _ = Labels2DModel.parse(data_small, scale_factors=[2, 2])
@@ -724,15 +724,15 @@ def test_warning_on_large_chunks():
         warnings.simplefilter("always")
         assert len(w) == 0, "Warning should not be raised for valid chunk size"
 
-    # single scale, invalid chunk size
+    # single scale, large chunk size
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         _ = Labels2DModel.parse(data_large)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
-        assert "Chunk size is too large" in str(w[-1].message)
+        assert "Detected a large number of elements for some chunks" in str(w[-1].message)
 
-    # multiscale, invalid chunk size
+    # multiscale, large chunk size
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         multiscale = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
@@ -740,4 +740,4 @@ def test_warning_on_large_chunks():
         Labels2DModel().validate(multiscale)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
-        assert "Chunk size is too large" in str(w[-1].message)
+        assert "Detected a large number of elements for some chunks" in str(w[-1].message)
