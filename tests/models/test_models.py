@@ -28,7 +28,7 @@ from xarray import DataArray, DataTree
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
-from spatialdata.config import MAX_N_ELEMS_CHUNK_SIZE
+from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
 from spatialdata.models._utils import (
     force_2d,
     points_dask_dataframe_to_geopandas,
@@ -713,7 +713,7 @@ def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
 def test_warning_on_large_chunks():
     data_small = DataArray(dask.array.zeros((100, 100), chunks=(50, 50)), dims=["x", "y"])
     data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000)), dims=["x", "y"])
-    assert np.array(data_large.shape).prod().item() > MAX_N_ELEMS_CHUNK_SIZE
+    assert np.array(data_large.shape).prod().item() > LARGE_CHUNK_THRESHOLD_BYTES
 
     # single and multiscale, small chunk size
     with warnings.catch_warnings(record=True) as w:
@@ -722,7 +722,7 @@ def test_warning_on_large_chunks():
         # method 'xarray_coarsen' is used to downsample the data lazily (otherwise the test would be too slow)
         _ = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
         warnings.simplefilter("always")
-        assert len(w) == 0, "Warning should not be raised for valid chunk size"
+        assert len(w) == 0, "Warning should not be raised for small chunk size"
 
     # single scale, large chunk size
     with warnings.catch_warnings(record=True) as w:
@@ -730,7 +730,7 @@ def test_warning_on_large_chunks():
         _ = Labels2DModel.parse(data_large)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
-        assert "Detected a large number of elements for some chunks" in str(w[-1].message)
+        assert "Detected chunks larger than:" in str(w[-1].message)
 
     # multiscale, large chunk size
     with warnings.catch_warnings(record=True) as w:
@@ -740,4 +740,4 @@ def test_warning_on_large_chunks():
         Labels2DModel().validate(multiscale)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
-        assert "Detected a large number of elements for some chunks" in str(w[-1].message)
+        assert "Detected chunks larger than:" in str(w[-1].message)
