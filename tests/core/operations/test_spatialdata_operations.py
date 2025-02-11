@@ -20,8 +20,14 @@ from spatialdata.models import (
     TableModel,
     get_table_keys,
 )
-from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
-from spatialdata.transformations.operations import get_transformation, set_transformation
+from spatialdata.testing import (
+    assert_elements_dict_are_identical,
+    assert_spatial_data_objects_are_identical,
+)
+from spatialdata.transformations.operations import (
+    get_transformation,
+    set_transformation,
+)
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
@@ -30,7 +36,7 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
 )
-from tests.conftest import _get_table
+from tests.conftest import _get_shapes, _get_table
 
 
 def test_element_names_unique() -> None:
@@ -183,7 +189,10 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.tables["table"]
     full_sdata.table = TableModel.parse(
-        adata, region=["circles", "poly"], region_key="annotated_shapes", instance_key="instance_id"
+        adata,
+        region=["circles", "poly"],
+        region_key="annotated_shapes",
+        instance_key="instance_id",
     )
 
     scale = Scale([2.0], axes=("x",))
@@ -201,11 +210,19 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
 def test_rename_coordinate_systems(full_sdata: SpatialData) -> None:
     # all the elements point to global, add new coordinate systems
     set_transformation(
-        element=full_sdata.shapes["circles"], transformation=Identity(), to_coordinate_system="my_space0"
+        element=full_sdata.shapes["circles"],
+        transformation=Identity(),
+        to_coordinate_system="my_space0",
     )
-    set_transformation(element=full_sdata.shapes["poly"], transformation=Identity(), to_coordinate_system="my_space1")
     set_transformation(
-        element=full_sdata.shapes["multipoly"], transformation=Identity(), to_coordinate_system="my_space2"
+        element=full_sdata.shapes["poly"],
+        transformation=Identity(),
+        to_coordinate_system="my_space1",
+    )
+    set_transformation(
+        element=full_sdata.shapes["multipoly"],
+        transformation=Identity(),
+        to_coordinate_system="my_space2",
     )
 
     elements_in_global_before = {
@@ -234,7 +251,11 @@ def test_rename_coordinate_systems(full_sdata: SpatialData) -> None:
     # renaming, as it doesn't exist at the time of the function call)
     with pytest.raises(ValueError):
         full_sdata.rename_coordinate_systems(
-            {"my_space00": "my_space3", "my_space11": "my_space3", "my_space3": "my_space4"}
+            {
+                "my_space00": "my_space3",
+                "my_space11": "my_space3",
+                "my_space3": "my_space4",
+            }
         )
 
     # valid renaming with collisions
@@ -276,33 +297,79 @@ def test_concatenate_tables() -> None:
         "instance_key": "instance_id",
     }
 
-    table3 = _get_table(region="shapes/circles", region_key="annotated_shapes_other", instance_key="instance_id")
+    table3 = _get_table(
+        region="shapes/circles",
+        region_key="annotated_shapes_other",
+        instance_key="instance_id",
+    )
     with pytest.raises(ValueError):
         _concatenate_tables([table0, table3], region_key="region")
 
     table4 = _get_table(
-        region=["shapes/circles1", "shapes/poly1"], region_key="annotated_shape0", instance_key="instance_id"
+        region=["shapes/circles1", "shapes/poly1"],
+        region_key="annotated_shape0",
+        instance_key="instance_id",
     )
     table5 = _get_table(
-        region=["shapes/circles2", "shapes/poly2"], region_key="annotated_shape0", instance_key="instance_id"
+        region=["shapes/circles2", "shapes/poly2"],
+        region_key="annotated_shape0",
+        instance_key="instance_id",
     )
     table6 = _get_table(
-        region=["shapes/circles3", "shapes/poly3"], region_key="annotated_shape1", instance_key="instance_id"
+        region=["shapes/circles3", "shapes/poly3"],
+        region_key="annotated_shape1",
+        instance_key="instance_id",
     )
-    with pytest.raises(ValueError, match="`region_key` must be specified if tables have different region keys"):
+    with pytest.raises(
+        ValueError,
+        match="`region_key` must be specified if tables have different region keys",
+    ):
         _concatenate_tables([table4, table5, table6])
     assert len(_concatenate_tables([table4, table5, table6], region_key="region")) == len(table4) + len(table5) + len(
         table6
     )
 
 
+def test_concatenate_custom_table_metadata() -> None:
+    # test for https://github.com/scverse/spatialdata/issues/349
+    shapes0 = _get_shapes()
+    shapes1 = _get_shapes()
+    n = len(shapes0["poly"])
+    table0 = TableModel.parse(
+        AnnData(obs={"my_region": ["poly0"] * n, "my_instance_id": list(range(n))}),
+        region="poly0",
+        region_key="my_region",
+        instance_key="my_instance_id",
+    )
+    table1 = TableModel.parse(
+        AnnData(obs={"my_region": ["poly1"] * n, "my_instance_id": list(range(n))}),
+        region="poly1",
+        region_key="my_region",
+        instance_key="my_instance_id",
+    )
+    sdata0 = SpatialData.init_from_elements({"poly0": shapes0["poly"], "table": table0})
+    sdata1 = SpatialData.init_from_elements({"poly1": shapes1["poly"], "table": table1})
+    sdata = concatenate([sdata0, sdata1], concatenate_tables=True)
+    assert len(sdata["table"]) == 2 * n
+
+
 def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(images={"image2d": full_sdata.images["image2d"]})])
     with pytest.raises(KeyError):
-        concatenate([full_sdata, SpatialData(labels={"labels2d": full_sdata.labels["labels2d"]})])
+        concatenate(
+            [
+                full_sdata,
+                SpatialData(labels={"labels2d": full_sdata.labels["labels2d"]}),
+            ]
+        )
     with pytest.raises(KeyError):
-        concatenate([full_sdata, SpatialData(points={"points_0": full_sdata.points["points_0"]})])
+        concatenate(
+            [
+                full_sdata,
+                SpatialData(points={"points_0": full_sdata.points["points_0"]}),
+            ]
+        )
     with pytest.raises(KeyError):
         concatenate([full_sdata, SpatialData(shapes={"circles": full_sdata.shapes["circles"]})])
 
@@ -335,9 +402,15 @@ def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_ma
     sdatas = {"sample0": sdata0, "sample1": sdata1}
     with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
         _ = concatenate(
-            sdatas.values(), concatenate_tables=concatenate_tables, obs_names_make_unique=obs_names_make_unique
+            sdatas.values(),
+            concatenate_tables=concatenate_tables,
+            obs_names_make_unique=obs_names_make_unique,
         )
-    merged = concatenate(sdatas, obs_names_make_unique=obs_names_make_unique, concatenate_tables=concatenate_tables)
+    merged = concatenate(
+        sdatas,
+        obs_names_make_unique=obs_names_make_unique,
+        concatenate_tables=concatenate_tables,
+    )
 
     if concatenate_tables:
         assert len(merged.tables) == 1
@@ -449,10 +522,18 @@ def test_subset(full_sdata: SpatialData) -> None:
 
     adata = AnnData(
         shape=(10, 0),
-        obs={"region": ["circles"] * 5 + ["poly"] * 5, "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]},
+        obs={
+            "region": ["circles"] * 5 + ["poly"] * 5,
+            "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4],
+        },
     )
     del full_sdata.tables["table"]
-    sdata_table = TableModel.parse(adata, region=["circles", "poly"], region_key="region", instance_key="instance_id")
+    sdata_table = TableModel.parse(
+        adata,
+        region=["circles", "poly"],
+        region_key="region",
+        instance_key="instance_id",
+    )
     full_sdata["table"] = sdata_table
     full_sdata.tables["second_table"] = sdata_table
     subset1 = full_sdata.subset(["poly", "second_table"])
@@ -494,7 +575,12 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
     points["z"] = points["x"]
     points = PointsModel.parse(points)
     full_sdata["points_0_3d"] = points
-    sdata = transform_to_data_extent(full_sdata, "global", target_width=1000, maintain_positioning=maintain_positioning)
+    sdata = transform_to_data_extent(
+        full_sdata,
+        "global",
+        target_width=1000,
+        maintain_positioning=maintain_positioning,
+    )
 
     first_a: ArrayLike | None = None
     for _, name, el in sdata.gen_spatial_elements():
@@ -505,7 +591,13 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
             first_a = a
         else:
             # we are not pixel perfect because of this bug: https://github.com/scverse/spatialdata/issues/165
-            if maintain_positioning and name in ["points_0_3d", "points_0", "poly", "circles", "multipoly"]:
+            if maintain_positioning and name in [
+                "points_0_3d",
+                "points_0",
+                "poly",
+                "circles",
+                "multipoly",
+            ]:
                 # Again, due to the "pixel perfect" bug, the 0.5 translation forth and back in the z axis that is added
                 # by rasterize() (like the one in the example belows), amplifies the error also for x and y beyond the
                 # rtol threshold below. So, let's skip that check and to an absolute check up to 0.5 (due to the
