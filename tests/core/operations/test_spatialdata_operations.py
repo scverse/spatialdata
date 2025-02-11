@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
 
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
@@ -423,6 +424,37 @@ def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_ma
     else:
         assert merged["table-sample0"].obs_names[0] == "1"
     assert sdata0["table"].obs_names[0] == "1"
+
+
+def test_concatenate_two_tables_each_annotating_two_elements() -> None:
+    # let's define 4 polygon elements. Two of them are annotated by the first table and the other two by the second
+    # table. The two tables have the same region key and instance key.
+    def _get_table_and_poly(i: int) -> tuple[AnnData, GeoDataFrame]:
+        poly = _get_shapes()["poly"]
+        n = len(poly)
+        region = f"poly{i}"
+        table = TableModel.parse(
+            AnnData(obs={"region": [region] * n, "instance_id": list(range(n))}),
+            region=region,
+            region_key="region",
+            instance_key="instance_id",
+        )
+        return table, poly
+
+    table0_a, poly0_a = _get_table_and_poly(0)
+    table1_a, poly1_a = _get_table_and_poly(1)
+    table0_b, poly0_b = _get_table_and_poly(0)
+    table1_b, poly1_b = _get_table_and_poly(1)
+
+    table01_a = _concatenate_tables([table0_a, table1_a])
+    table01_b = _concatenate_tables([table0_b, table1_b])
+
+    sdata01_a = SpatialData.init_from_elements({"poly0": poly0_a, "poly1": poly1_a, "table": table01_a})
+    sdata01_b = SpatialData.init_from_elements({"poly0": poly0_b, "poly1": poly1_b, "table": table01_b})
+    sdata = concatenate({"a": sdata01_a, "b": sdata01_b}, concatenate_tables=True)
+    region, _, _ = get_table_keys(sdata["table"])
+    assert region == ["poly0-a", "poly1-a", "poly0-b", "poly1-b"]
+    assert len(sdata["table"]) == 4 * len(poly0_a)
 
 
 def test_concatenate_sdatas_single_item() -> None:
