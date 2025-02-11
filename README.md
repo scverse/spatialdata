@@ -41,7 +41,7 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 Please refer to the [documentation][link-docs]. In particular:
 
 - [API documentation][link-api].
-- [Design doc][link-design-doc].
+- [Design doc][link-design-doc] (includes the roadmap).
 - [Example notebooks][link-notebooks].
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
