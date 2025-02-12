@@ -58,6 +58,7 @@ jobs:
                     uv sync --group test
                   else
                     echo "uv cache hit"
+                    uv add --group test
                   fi
             - name: Test
               env:
