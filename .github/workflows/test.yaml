@@ -43,19 +43,19 @@ jobs:
                   cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
                   cache-dependency-glob: |
                       **/pyproject.toml
-            - name: Clean uv cache
-              # Uncomment this step if you want to regenerate the cache
-              run: |
-                  uv cache clean -v
-                  echo "CACHE_JUST_CLEARED=true" >> $GITHUB_ENV
+            #            - name: Clean uv cache
+            #              # Uncomment this step if you want to regenerate the cache
+            #              run: |
+            #                  uv cache clean -v
+            #                  echo "CACHE_JUST_CLEARED=true" >> $GITHUB_ENV
             - name: Install dependencies
               run: |
                   if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ]; then
                     echo "uv cache miss"
-                    uv sync --optional dev --optional test
+                    uv sync --group test
                   elif [ "${CACHE_JUST_CLEARED}" == "true" ]; then
                     echo "uv cache just cleared"
-                    uv sync --optional dev --optional test
+                    uv sync --group test
                   else
                     echo "uv cache hit"
                   fi
