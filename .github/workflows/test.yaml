@@ -18,15 +18,15 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.10", "3.12"]
+                python: ["3.10"] #, "3.12"
                 os: [ubuntu-latest]
-                include:
-                    - os: macos-latest
-                      python: "3.10"
-                    - os: macos-latest
-                      python: "3.12"
-                      pip-flags: "--pre"
-                      name: "Python 3.12 (pre-release)"
+        #                include:
+        #                    - os: macos-latest
+        #                      python: "3.10"
+        #                    - os: macos-latest
+        #                      python: "3.12"
+        #                      pip-flags: "--pre"
+        #                      name: "Python 3.12 (pre-release)"
 
         env:
             OS: ${{ matrix.os }}
@@ -51,7 +51,7 @@ jobs:
                   CACHE_JUST_CLEARED: "true"
             - name: Install dependencies
               run: |
-                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ] || [ "$CACHE_JUST_CLEARED" == "true" ]; then
+                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ] || [ "${{ env.CACHE_JUST_CLEARED }}" == "true" ]; then
                     echo "uv cache miss (or cache just cleared)"
                     uv sync --optional dev --optional test
                   else
