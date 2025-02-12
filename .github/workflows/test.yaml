@@ -34,30 +34,15 @@ jobs:
 
         steps:
             - uses: actions/checkout@v2
-            - name: Set up Python ${{ matrix.python }}
-              uses: actions/setup-python@v4
+            - uses: astral-sh/setup-uv@v3
               with:
-                  python-version: ${{ matrix.python }}
-                  cache: pip
-
-            - name: Get pip cache dir
-              id: pip-cache-dir
+                  version: "latest"
+              env:
+                  UV_PYTHON: ${{ matrix.version }}
+            - name: Install dependencies and test dependencies
               run: |
-                  echo "::set-output name=dir::$(pip cache dir)"
-            - name: Restore pip cache
-              uses: actions/cache@v4
-              with:
-                  path: ${{ steps.pip-cache-dir.outputs.dir }}
-                  key: pip-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('**/pyproject.toml') }}
-                  restore-keys: |
-                      pip-${{ runner.os }}-${{ env.pythonLocation }}-
-            - name: Install test dependencies
-              run: |
-                  python -m pip install --upgrade pip wheel
-                  pip install pytest-cov
-            - name: Install dependencies
-              run: |
-                  pip install ${{ matrix.pip-flags }} -e ".[dev,test,torch]"
+                  uv sync --extra dev --extra test --extra torch
+                  uv add pytest-cov
             - name: Test
               env:
                   MPLBACKEND: agg
