@@ -34,11 +34,15 @@ jobs:
 
         steps:
             - uses: actions/checkout@v2
-            - uses: astral-sh/setup-uv@v3
+            - uses: astral-sh/setup-uv@v5
               with:
                   version: "latest"
-              env:
-                  UV_PYTHON: ${{ matrix.version }}
+                  python-version: ${{ matrix.python }}
+                  enable-cache: true
+                  cache-suffix: "${{ runner.os }}-${{ env.pythonLocation }}"
+                  cache-dependency-glob: |
+                      **/pyproject.toml
+            #                    **/uv.lock  # uncomment if we start using a lockfile
             - name: Install dependencies
               run: |
                   uv sync --extra dev --extra test --extra torch
