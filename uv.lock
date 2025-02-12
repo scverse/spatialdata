@@ -3746,13 +3746,15 @@ extra = [
     { name = "spatialdata-io" },
     { name = "spatialdata-plot" },
 ]
+torch = [
+    { name = "torch" },
+]
+
+[package.dev-dependencies]
 test = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
-    { name = "torch" },
-]
-torch = [
     { name = "torch" },
 ]
 
@@ -3777,9 +3779,6 @@ requires-dist = [
     { name = "pandas" },
     { name = "pooch" },
     { name = "pyarrow" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-cov", marker = "extra == 'test'" },
-    { name = "pytest-mock", marker = "extra == 'test'" },
     { name = "rich" },
     { name = "scikit-image" },
     { name = "scipy" },
@@ -3796,13 +3795,20 @@ requires-dist = [
     { name = "sphinx-design", marker = "extra == 'docs'" },
     { name = "sphinx-pytest", marker = "extra == 'docs'" },
     { name = "sphinxcontrib-bibtex", marker = "extra == 'docs'", specifier = ">=1.0.0" },
-    { name = "torch", marker = "extra == 'test'" },
     { name = "torch", marker = "extra == 'torch'" },
     { name = "typing-extensions", specifier = ">=4.8.0" },
     { name = "xarray", specifier = ">=2024.10.0" },
     { name = "xarray-schema" },
     { name = "xarray-spatial", specifier = ">=0.3.5" },
     { name = "zarr", specifier = "<3" },
+]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "torch" },
 ]
 
 [[package]]
