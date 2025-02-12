@@ -64,7 +64,7 @@ jobs:
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  uv run pytest --cov --color=yes --cov-report=xml
+                  uv run pytest --cov --color=yes --cov-report=xml --collect-only
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v4
               with:
