@@ -43,9 +43,14 @@ jobs:
                   cache-dependency-glob: |
                       **/pyproject.toml
             #                    **/uv.lock  # uncomment if we start using a lockfile
-            - name: Print uv cache status
-              run:
-                  echo "Cache hit status: ${{ steps.setup-uv.outputs.cache-hit }}"
+            - name: Debug uv cache hit
+              run: |
+                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" == "true" ]; then
+                    echo "uv cache hit"
+                  else
+                    echo "uv cache miss"
+                  fi
+
             - name: Install dependencies
               run: |
                   uv sync --extra dev --extra test --extra torch
