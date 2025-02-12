@@ -44,15 +44,18 @@ jobs:
                   cache-dependency-glob: |
                       **/pyproject.toml
             - name: Clean uv cache
-              #              uncomment this step if you want to clean the cache
-              run: "uv cache clean -v"
+              # uncomment this step if you want to regenerate the cache
+              run: |
+                  uv cache clean -v
+              env:
+                  CACHE_JUST_CLEARED: "true"
             - name: Install dependencies
               run: |
-                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" == "true" ]; then
-                    echo "uv cache hit"
-                  else
-                    echo "uv cache miss"
+                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ] || [ "$CACHE_JUST_CLEARED" == "true" ]; then
+                    echo "uv cache miss (or cache just cleared)"
                     uv sync --optional dev --optional test
+                  else
+                    echo "uv cache hit"
                   fi
             - name: Test
               env:
