@@ -57,7 +57,7 @@ jobs:
                   else
                     echo "uv cache hit"
                   fi
-                  uv sync --group test
+                  uv sync --extra test
             - name: Test
               env:
                   MPLBACKEND: agg
