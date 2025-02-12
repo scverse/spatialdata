@@ -40,7 +40,8 @@ jobs:
                   version: "latest"
                   python-version: ${{ matrix.python }}
                   enable-cache: true
-                  #                  cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
+                  prune-cache: false
+                  cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
                   cache-dependency-glob: |
                       **/pyproject.toml
                       **/uv.lock
