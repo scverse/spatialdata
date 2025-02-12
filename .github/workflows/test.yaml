@@ -39,18 +39,16 @@ jobs:
                   version: "latest"
               env:
                   UV_PYTHON: ${{ matrix.version }}
-            - name: Install dependencies and test dependencies
+            - name: Install dependencies
               run: |
-                  uv init
                   uv sync --extra dev --extra test --extra torch
-                  uv add pytest-cov
             - name: Test
               env:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  pytest --cov --color=yes --cov-report=xml
+                  uv run pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v4
               with:
