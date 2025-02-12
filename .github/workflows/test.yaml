@@ -43,13 +43,16 @@ jobs:
                   cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
                   cache-dependency-glob: |
                       **/pyproject.toml
+            - name: Clean uv cache
+              #              uncomment this step if you want to clean the cache
+              run: "uv cache clean -v"
             - name: Install dependencies
               run: |
                   if [ "${{ steps.setup-uv.outputs.cache-hit }}" == "true" ]; then
                     echo "uv cache hit"
                   else
                     echo "uv cache miss"
-                    uv sync --extra dev --extra test --extra torch
+                    uv sync --optional dev --optional test
                   fi
             - name: Test
               env:
