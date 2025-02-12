@@ -40,9 +40,10 @@ jobs:
                   version: "latest"
                   python-version: ${{ matrix.python }}
                   enable-cache: true
-                  cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
+                  #                  cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
                   cache-dependency-glob: |
                       **/pyproject.toml
+                      **/uv.lock
             #            - name: Clean uv cache
             #              # Uncomment this step if you want to regenerate the cache
             #              run: |
@@ -52,14 +53,12 @@ jobs:
               run: |
                   if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ]; then
                     echo "uv cache miss"
-                    uv sync --group test
                   elif [ "${CACHE_JUST_CLEARED}" == "true" ]; then
                     echo "uv cache just cleared"
-                    uv sync --group test
                   else
                     echo "uv cache hit"
-                    uv add --group test pytest
                   fi
+                  uv sync --group test
             - name: Test
               env:
                   MPLBACKEND: agg
