@@ -41,6 +41,7 @@ jobs:
                   UV_PYTHON: ${{ matrix.version }}
             - name: Install dependencies and test dependencies
               run: |
+                  uv init
                   uv sync --extra dev --extra test --extra torch
                   uv add pytest-cov
             - name: Test
