@@ -18,15 +18,15 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.10"] #, "3.12"
+                python: ["3.10", "3.12"]
                 os: [ubuntu-latest]
-        #                include:
-        #                    - os: macos-latest
-        #                      python: "3.10"
-        #                    - os: macos-latest
-        #                      python: "3.12"
-        #                      pip-flags: "--pre"
-        #                      name: "Python 3.12 (pre-release)"
+                include:
+                    - os: macos-latest
+                      python: "3.10"
+                    - os: macos-latest
+                      python: "3.12"
+                      pip-flags: "--pre"
+                      name: "Python 3.12 (pre-release)"
 
         env:
             OS: ${{ matrix.os }}
@@ -39,27 +39,8 @@ jobs:
               with:
                   version: "latest"
                   python-version: ${{ matrix.python }}
-                  enable-cache: true
-                  prune-cache: false
-                  cache-suffix: "${{ runner.os }}-${{ matrix.python }}"
-                  cache-dependency-glob: |
-                      **/pyproject.toml
-                      **/uv.lock
-            #            - name: Clean uv cache
-            #              # Uncomment this step if you want to regenerate the cache
-            #              run: |
-            #                  uv cache clean -v
-            #                  echo "CACHE_JUST_CLEARED=true" >> $GITHUB_ENV
             - name: Install dependencies
-              run: |
-                  if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ]; then
-                    echo "uv cache miss"
-                  elif [ "${CACHE_JUST_CLEARED}" == "true" ]; then
-                    echo "uv cache just cleared"
-                  else
-                    echo "uv cache hit"
-                  fi
-                  uv sync --group test
+              run: "uv sync --extra test"
             - name: Test
               env:
                   MPLBACKEND: agg

@@ -53,6 +53,12 @@ dependencies = [
 dev = [
     "bump2version",
 ]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "torch",
+]
 docs = [
     "sphinx>=4.5",
 	"sphinx-autobuild",
@@ -76,14 +82,6 @@ extra  = [
     "napari-spatialdata[all]",
     "spatialdata-plot",
     "spatialdata-io",
-]
-
-[dependency-groups]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "torch",
 ]
 
 [tool.coverage.run]
