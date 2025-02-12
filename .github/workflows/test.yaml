@@ -52,14 +52,12 @@ jobs:
               run: |
                   if [ "${{ steps.setup-uv.outputs.cache-hit }}" != "true" ]; then
                     echo "uv cache miss"
-                    uv sync --group test
                   elif [ "${CACHE_JUST_CLEARED}" == "true" ]; then
                     echo "uv cache just cleared"
-                    uv sync --group test
                   else
                     echo "uv cache hit"
-                    uv add --group test
                   fi
+                  uv sync --group test
             - name: Test
               env:
                   MPLBACKEND: agg

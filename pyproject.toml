@@ -53,6 +53,12 @@ dependencies = [
 dev = [
     "bump2version",
 ]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "torch",
+]
 docs = [
     "sphinx>=4.5",
 	"sphinx-autobuild",
@@ -78,13 +84,7 @@ extra  = [
     "spatialdata-io",
 ]
 
-[dependency-groups]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "torch",
-]
+#[dependency-groups]
 
 [tool.coverage.run]
 source = ["spatialdata"]
