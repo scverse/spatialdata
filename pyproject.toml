@@ -53,6 +53,12 @@ dependencies = [
 dev = [
     "bump2version",
 ]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "torch",
+]
 docs = [
     "sphinx>=4.5",
 	"sphinx-autobuild",
@@ -65,12 +71,6 @@ docs = [
     "ipython>=8.6.0",
     "sphinx-copybutton",
     "sphinx-pytest",
-]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "torch",
 ]
 benchmark = [
     "asv",

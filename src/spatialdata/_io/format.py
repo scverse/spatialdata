@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
+import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import CurrentFormat
+from ome_zarr.format import CurrentFormat, Format, FormatV01, FormatV02, FormatV03, FormatV04
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -120,6 +122,22 @@ class RasterFormatV01(SpatialDataFormat):
     def spatialdata_format_version(self) -> str:
         return "0.1"
 
+    @property
+    def version(self) -> str:
+        return "0.4"
+
+
+class RasterFormatV02(RasterFormatV01):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
+
+    @property
+    def version(self) -> str:
+        # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
+        # https://github.com/scverse/spatialdata/pull/849
+        return "0.4-dev-spatialdata"
+
 
 class ShapesFormatV01(SpatialDataFormat):
     """Formatter for shapes."""
@@ -211,7 +229,7 @@ class TablesFormatV01(SpatialDataFormat):
             raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
 
-CurrentRasterFormat = RasterFormatV01
+CurrentRasterFormat = RasterFormatV02
 CurrentShapesFormat = ShapesFormatV02
 CurrentPointsFormat = PointsFormatV01
 CurrentTablesFormat = TablesFormatV01
@@ -229,10 +247,27 @@ TablesFormats = {
 }
 RasterFormats = {
     "0.1": RasterFormatV01(),
+    "0.2": RasterFormatV02(),
 }
 SpatialDataContainerFormats = {
     "0.1": SpatialDataContainerFormatV01(),
 }
+
+
+def format_implementations() -> Iterator[Format]:
+    """Return an instance of each format implementation, newest to oldest."""
+    yield RasterFormatV02()
+    # yield RasterFormatV01()  # same format string as FormatV04
+    yield FormatV04()
+    yield FormatV03()
+    yield FormatV02()
+    yield FormatV01()
+
+
+# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
+# read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
+# not released yet)
+ome_zarr.format.format_implementations = format_implementations
 
 
 def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
