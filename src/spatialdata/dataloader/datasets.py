@@ -163,9 +163,9 @@ class ImageTilesDataset(Dataset):
             raise ValueError("`table_name` must be provided if `return_annotations` is not `None`.")
 
         # check that the regions specified in the two dicts are the same
-        assert set(regions_to_images.keys()) == set(
-            regions_to_coordinate_systems.keys()
-        ), "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
+        assert set(regions_to_images.keys()) == set(regions_to_coordinate_systems.keys()), (
+            "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
+        )
         self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
 
         cs_region_image: list[tuple[str, str, str]] = []  # list of tuples (coordinate_system, region, image)
