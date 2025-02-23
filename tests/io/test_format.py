@@ -94,4 +94,4 @@ class TestFormat:
                     assert ngff_version == "0.4"
                 else:
                     assert format == RasterFormatV02
-                    assert ngff_version == "0.6-dev-spatialdata"
+                    assert ngff_version == "0.4-dev-spatialdata"

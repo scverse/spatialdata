@@ -77,5 +77,6 @@ from spatialdata._core.query.relational_query import (
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import get_dask_backing_files, save_transformations
+from spatialdata._io.format import SpatialDataFormat
 from spatialdata._io.io_zarr import read_zarr
 from spatialdata._utils import get_pyramid_levels, unpad_raster

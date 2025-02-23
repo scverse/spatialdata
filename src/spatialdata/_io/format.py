@@ -50,21 +50,6 @@ class SpatialDataFormat(CurrentFormat):
     pass
 
 
-def format_implementations() -> Iterator[Format]:
-    """Return an instance of each format implementation, newest to oldest."""
-    yield SpatialDataFormat()
-    yield FormatV04()
-    yield FormatV03()
-    yield FormatV02()
-    yield FormatV01()
-
-
-# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
-# read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
-# not released yet)
-ome_zarr.format.format_implementations = format_implementations
-
-
 class SpatialDataContainerFormatV01(SpatialDataFormat):
     @property
     def spatialdata_format_version(self) -> str:
@@ -151,7 +136,7 @@ class RasterFormatV02(RasterFormatV01):
     def version(self) -> str:
         # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
         # https://github.com/scverse/spatialdata/pull/849
-        return "0.6-dev-spatialdata"
+        return "0.4-dev-spatialdata"
 
 
 class ShapesFormatV01(SpatialDataFormat):
@@ -267,6 +252,22 @@ RasterFormats = {
 SpatialDataContainerFormats = {
     "0.1": SpatialDataContainerFormatV01(),
 }
+
+
+def format_implementations() -> Iterator[Format]:
+    """Return an instance of each format implementation, newest to oldest."""
+    yield RasterFormatV02()
+    # yield RasterFormatV01()  # same format string as FormatV04
+    yield FormatV04()
+    yield FormatV03()
+    yield FormatV02()
+    yield FormatV01()
+
+
+# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
+# read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
+# not released yet)
+ome_zarr.format.format_implementations = format_implementations
 
 
 def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
