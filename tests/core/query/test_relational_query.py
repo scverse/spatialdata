@@ -1052,11 +1052,3 @@ def test_get_element_annotators(full_sdata):
     full_sdata.tables["another_table"] = another_table
     names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"another_table", "table"}
-
-
-# def test_match_table_to_element(sdata_query_aggregation):
-#     matched_table = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
-#     arr = np.array(list(reversed(sdata_query_aggregation["values_circles"].index)))
-#     sdata_query_aggregation["values_circles"].index = arr
-#     matched_table_reversed = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
-#     assert matched_table.obs.index.tolist() == list(reversed(matched_table_reversed.obs.index.tolist()))
