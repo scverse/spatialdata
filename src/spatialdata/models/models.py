@@ -35,6 +35,7 @@ from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
+from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -127,7 +128,13 @@ class RasterSchema(DataArraySchema):
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling. Please refer to :class:`multiscale_spatial_image.to_multiscale`.
+            Method to use for multiscale downsampling (default is `'nearest'`). Please refer to
+            :class:`multiscale_spatial_image.to_multiscale` for details.\n
+            Note (advanced): the default choice (`'nearest'`) will keep the original scale lazy and compute each
+            downscaled version. On the other hand `'xarray_coarsen'` will compute each scale lazily (this implies that
+            each scale will be recomputed each time it is accessed unless `.persist()` is manually called to cache the
+            intermediate results). Please refer direclty to the source code of `to_multiscale()` in the
+            `multiscale-spatial-image` for precise information on how this is handled.
         chunks
             Chunks to use for dask array.
         kwargs
@@ -225,6 +232,7 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
+        cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
         return compute_coordinates(data)
 
@@ -251,6 +259,7 @@ class RasterSchema(DataArraySchema):
     @validate.register(DataArray)
     def _(self, data: DataArray) -> None:
         super().validate(data)
+        self._check_chunk_size_not_too_large(data)
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
@@ -263,6 +272,52 @@ class RasterSchema(DataArraySchema):
         name = list(name)[0]
         for d in data:
             super().validate(data[d][name])
+        self._check_chunk_size_not_too_large(data)
+
+    def _check_chunk_size_not_too_large(self, data: DataArray | DataTree) -> None:
+        if isinstance(data, DataArray):
+            try:
+                max_per_dimension: dict[int, int] = {}
+                if isinstance(data.chunks, list | tuple):
+                    for i, sizes in enumerate(data.chunks):
+                        max_per_dimension[i] = max(sizes)
+                else:
+                    assert isinstance(data.chunks, dict)
+                    for i, sizes in enumerate(data.chunks.values()):
+                        max_per_dimension[i] = max(sizes)
+            except ValueError:
+                warnings.warn(
+                    f"Unable to estimate the maximum chunk size for the data: {sizes}. Please report this bug.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return
+            n_elems = np.array(list(max_per_dimension.values())).prod().item()
+            usage = n_elems * data.dtype.itemsize
+            if usage > LARGE_CHUNK_THRESHOLD_BYTES:
+                warnings.warn(
+                    f"Detected chunks larger than: {usage} > {LARGE_CHUNK_THRESHOLD_BYTES} bytes. "
+                    "This can lead to low "
+                    "performance and memory issues downstream, and sometimes cause compression errors when writing "
+                    "(https://github.com/scverse/spatialdata/issues/812#issuecomment-2575983527). Please consider using"
+                    " 1) smaller chunks and/or 2) using a multiscale representation for the raster data.\n"
+                    "1) Smaller chunks can be achieved by using the `chunks` argument in the `parse()` function or by "
+                    "calling the `chunk()` method on `DataArray`/`DataTree` objects.\n"
+                    "2) Multiscale representations can be achieved by using the `scale_factors` argument in the "
+                    "`parse()` function.\n"
+                    "You can suppress this warning by increasing the value of "
+                    "`spatialdata.config.LARGE_CHUNK_THRESHOLD_BYTES`.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        else:
+            assert isinstance(data, DataTree)
+            name = {list(data[i].data_vars.keys())[0] for i in data}
+            assert len(name) == 1
+            name = list(name)[0]
+            for d in data:
+                super().validate(data[d][name])
+            self._check_chunk_size_not_too_large(data[d][name])
 
 
 class Labels2DModel(RasterSchema):
@@ -582,7 +637,12 @@ class PointsModel:
         SUGGESTION = " Please use PointsModel.parse() to construct data that is guaranteed to be valid."
         for ax in [X, Y, Z]:
             # TODO: check why this can return int32 on windows.
-            if ax in data.columns and data[ax].dtype not in [np.int32, np.float32, np.float64, np.int64]:
+            if ax in data.columns and data[ax].dtype not in [
+                np.int32,
+                np.float32,
+                np.float64,
+                np.int64,
+            ]:
                 raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(
@@ -675,7 +735,10 @@ class PointsModel:
 
         table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
         return cls._add_metadata_and_validate(
-            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+            table,
+            feature_key=feature_key,
+            instance_key=instance_key,
+            transformations=transformations,
         )
 
     @parse.register(pd.DataFrame)
@@ -719,7 +782,11 @@ class PointsModel:
             )
         if isinstance(data, pd.DataFrame):
             table: DaskDataFrame = dd.from_pandas(
-                pd.DataFrame(data[[coordinates[ax] for ax in axes]].to_numpy(), columns=axes, index=data.index),
+                pd.DataFrame(
+                    data[[coordinates[ax] for ax in axes]].to_numpy(),
+                    columns=axes,
+                    index=data.index,
+                ),
                 # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
                 sort=sort,
                 **kwargs,
@@ -752,11 +819,21 @@ class PointsModel:
                 )
         if Z not in axes and Z in data.columns:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
-        for c in set(data.columns) - {feature_key, instance_key, *coordinates.values(), X, Y, Z}:
+        for c in set(data.columns) - {
+            feature_key,
+            instance_key,
+            *coordinates.values(),
+            X,
+            Y,
+            Z,
+        }:
             table[c] = data[c]
 
         validated = cls._add_metadata_and_validate(
-            table, feature_key=feature_key, instance_key=instance_key, transformations=transformations
+            table,
+            feature_key=feature_key,
+            instance_key=instance_key,
+            transformations=transformations,
         )
 
         # when `coordinates` is None, and no columns have been added or removed, preserves the original order
@@ -1057,6 +1134,12 @@ class TableModel:
                 f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique values"
             )
 
+        attr = {
+            "region": region,
+            "region_key": region_key,
+            "instance_key": instance_key,
+        }
+        adata.uns[cls.ATTRS_KEY] = attr
         cls().validate(adata)
         return convert_region_column_to_categorical(adata)
 
@@ -1132,7 +1215,11 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     """
     if table.uns.get(TableModel.ATTRS_KEY):
         attrs = table.uns[TableModel.ATTRS_KEY]
-        return attrs[TableModel.REGION_KEY], attrs[TableModel.REGION_KEY_KEY], attrs[TableModel.INSTANCE_KEY]
+        return (
+            attrs[TableModel.REGION_KEY],
+            attrs[TableModel.REGION_KEY_KEY],
+            attrs[TableModel.INSTANCE_KEY],
+        )
 
     raise ValueError(
         "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."

@@ -357,199 +357,29 @@ See [this notebook](https://github.com/scverse/spatialdata-notebooks/blob/main/n
 
 This section describes a more detailed timeline of future developments, including also more technical tasks like code refactoring of existing functionalities for improving stability/performance. Compared to the "goal" section above, here we provide an concrete timeline.
 
-#### Early 2024
+#### 2024
 
-- [ ] Simplify data models
+- [x] Simplify data models
     - [x] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
-    - [ ] Use `GeoDataFrame` for points
-- [ ] More performant disk storage
-    - [ ] Use `geoparquet` for shapes and points
-- [ ] Support for nested hierarchies in NGFF stores
+- [x] More performant disk storage
+    - [x] Use `geoparquet` for shapes and points
 - [x] Start working on multiple tables
 - [x] Start working on the transformations refactoring
-
-#### Late 2024
-
 - [x] Finalize multiple tables support
-- [ ] Finalize transformations refactoring
+
+#### 2025
+
+- [ ] Move transformation code [to `ome-zarr-models-py`](https://github.com/ome-zarr-models/ome-zarr-models-py/issues/54)
+- [ ] Refactor `spatialdata` to use `ome-zarr-models-py` as a dependency.
+- [ ] Expose public APIs for [modular `read()` operations](https://github.com/scverse/spatialdata/issues/843).
+- [ ] Support Zarr v3 (sharding).
+- [ ] Remove Dask constraints ([latest `dask-expr` versions are not compatible](https://github.com/dask/dask/issues/11146)).
 
 ---
 
-### Legacy examples
+### Examples
 
-_The text down below may not reflect the latest version of the code and will be eventually replaced by notebooks_
-
-Here is a short list of examples of the elements used to represent some spatial omics datasets. Real world examples will be available as notebooks [in this repository](https://github.com/scverse/spatialdata-notebooks), furthermore, some draft [implementations are available here](https://github.com/giovp/spatialdata-sandbox).
-
-API
-
-```python
-import spatialdata as sd
-from spatialdata import SpatialData
-
-sdata = SpatialData(...)
-points = sd.transform(sdata.points["image1"], tgt="tgt_space")
-sdata = sd.transform(sdata, tgt="tgt_space")
-```
-
-The transfromation object should not have a method to apply itself to an element.
-`SpatialData` can have a `transform` method, that can be applied to either a `SpatialData` object or an element.
-
-#### Layout of a SpatialData object
-
-The layout of some common datasets.
-
-**Layout of [MERFISH example](https://github.com/giovp/spatialdata-sandbox/tree/main/merfish)**
-
-- points (coordinates of spots);
-- each point has features (e.g., gene, size, cell assignment);
-- segmented cell locations are saved as labels (missing in this example) or approximated as circles of variable diameter;
-- gene expression for cells, obtained by counting the points inside each cell;
-- large anatomical regions saved as polygons;
-- rasterized version of the single molecule points (to mimic the original hires image, missing in this example).
-
-**Layout of [Visium example](https://github.com/giovp/spatialdata-sandbox/tree/main/visium)**
-
-- The datasets include multiple slides from the same individual, or slides from multiple samples;
-- "Visium spots" (circular regions) where sequences are captured;
-- each spot has RNA expression;
-- H&E image (multiscale 2D);
-- (optional) large microscopy (e.g. 40x magnification, 50K x 50K pixels) images may be available, which would need to be aligned to the rest of spatial elements;
-- (optional) cell segmentation labels can be derived from the H&E images;
-- (optional) the cell segmentation can be annotated with image-derived features (image features/statistics).
-
-#### Code/pseudo-code workflows
-
-**Workflows to show**
-
-- [x] loading multiple samples visium data from disk (SpaceRanger), concatenating and saving them to .zarr
-- [x] loading a generic NGFF dataset
-- [ ] calling the SpatialData constructor with some transformations on it
-- [x] accumulation with multiple types of elements
-- [x] subsetting/querying by coordinate system, bounding box, spatial region, table rows
-
-#### Loading multiple Visium samples from the SpaceRanger output and saving them to NGFF using the SpatialData APIs
-
-```python
-import spatialdata as sd
-from spatialdata_io import read_visium
-
-samples = ["152806", "152807", "152810", "152811"]
-sdatas = []
-
-for sample in samples:
-    sdata = read_visium(path=sample, coordinate_system_name=sample)
-    sdatas.append(sdata)
-
-sdata = sd.SpatialData.concatenate(sdatas, merge_tables=True)
-sdata.write("data.zarr")
-```
-
-#### Loading multiple Visium samples from a generic NGFF storage with arbitrary folder structure (i.e. a NGFF file that was not created with the SpatialData APIs).
-
-This is the multislide Visium use case.
-
-```pycon
->>> # This dataset comprises multiple Visium slides which have been stored in a unique OME-NGFF store
-... ngff_store = open_container(uri)
-... ngff_store
-data.zarr
-├── sample_0
-│   ├── circles
-│   ├── hne_image
-│   └── table
-├── sample_1
-│   ├── circles
-│   ├── hne_image
-│   └── table
-├── sample_2
-│   ├── circles
-│   ├── hne_image
-│   └── table
-└── sample_3
-    ├── circles
-    ├── hne_image
-    └── table
->>> # Read in each Visium slide as a separate SpatialData object. Each table has each row associated to a Circles element, which belongs to the same coordinate system of the corresponding H&E image. For this reason specifying a table is enough to identify and extract a SpatialData object.
-... slides = {}
-... for sample_name in ["sample_1", "sample_2", "sample_3", "sample_4"]:
-...     slides[sample_name] = ngff_store.get_spatial_data(f"{sample_name}_table")
-... slides["sample_1"]
-SpatialData object with:
-├── Images
-│     ├── 'sample_1': DataArray (2000, 1969, 3)
-├── Regions
-│     ├── 'sample_1': Circles (2987)
-└── Table
-      └── 'AnnData object with n_obs × n_vars = 2987 × 31053
-    obs: "in_tissue", "array_row", "array_col", "library_id", "visium_spot_id"'
-
->>> # Combine these to do a joint analysis over a collection of slides
-... joint_dataset = spatialdata.concatenate(slides)
-... joint_dataset
-SpatialData object with:
-├── Images
-│     ├── 'sample_1': DataArray (2000, 1969, 3)
-│     ├── 'sample_2': DataArray (2000, 1969, 3)
-│     ├── 'sample_3': DataArray (2000, 1968, 3)
-│     ├── 'sample_4': DataArray (2000, 1963, 3)
-├── Regions
-│     ├── 'sample_1': Circles (2987)
-│     ├── 'sample_2': Circles (3499)
-│     ├── 'sample_3': Circles (3497)
-│     ├── 'sample_4': Circles (2409)
-└── Table
-      └── 'AnnData object with n_obs × n_vars = 12392 × 31053
-    obs: "in_tissue", "array_row", "array_col", "library_id", "visium_spot_id", "library"'
-```
-
-#### Aggregating spatial information from an element into a set of regions
-
-```python
-sdata = from_zarr("data.zarr")
-table = spatialdata.aggregate(
-    source="/images/image", regions="/circles/visium_spots", method=["mean", "std"]
-)
-```
-
-#### Subsetting/querying by coordinate system, bounding box, spatial region, table rows
-
-```python
-"""
-SpatialData object with:
-├── images
-│     ├── '/images/point16': DataArray (3, 1024, 1024), with axes: c, y, x
-│     ├── '/images/point23': DataArray (3, 1024, 1024), with axes: c, y, x
-│     └── 'point8': DataArray (3, 1024, 1024), with axes: c, y, x
-├── labels
-│     ├── '/labels/point16': DataArray (1024, 1024), with axes: y, x
-│     ├── 'point23': DataArray (1024, 1024), with axes: y, x
-│     └── 'point8': DataArray (1024, 1024), with axes: y, x
-├── polygons
-│     └── 'Shapes_point16_1': AnnData with obs.spatial describing 2 polygons, with axes x, y
-└── table
-      └── 'AnnData object with n_obs × n_vars = 3309 × 36
-    obs: 'row_num', 'point', 'cell_id', 'X1', 'center_rowcoord', 'center_colcoord', 'cell_size', 'category', 'donor', 'Cluster', 'batch', 'library_id'
-    uns: 'mapping_info'
-    obsm: 'X_scanorama', 'X_umap', 'spatial'': AnnData (3309, 36)
-with coordinate systems:
-▸ point16
-    with axes: c, y, x
-    with elements: /images/point16, /labels/point16, /polygons/Shapes_point16_1
-▸ point23
-    with axes: c, y, x
-    with elements: /images/point23, /labels/point23
-▸ point8
-    with axes: c, y, x
-    with elements: /images/point8, /labels/point8
-"""
-
-sdata0 = sdata.query.coordinate_system("point23", filter_rows=False)
-sdata1 = sdata.query.bounding_box((0, 20, 0, 300))
-sdata1 = sdata.query.polygon("/polygons/annotations")
-# TODO: syntax discussed in https://github.com/scverse/spatialdata/issues/43
-sdata1 = sdata.query.table(...)
-```
+Real world examples will be available as notebooks [in this repository](https://github.com/scverse/spatialdata-notebooks), furthermore, some draft [implementations are available here](https://github.com/giovp/spatialdata-sandbox).
 
 #### Related notes/issues/PRs
 
