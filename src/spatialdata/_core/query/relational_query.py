@@ -800,8 +800,8 @@ def match_sdata_to_table(
     table
         The table to join with the spatial elements. Has precedence over `table_name`.
     table_name
-        The name of the table to join with the SpatialData object if `table` is not provided. If table is provided, `table_name` is used
-        to name the table in the returned `SpatialData` object.
+        The name of the table to join with the SpatialData object if `table` is not provided. If table is provided,
+        `table_name` is used to name the table in the returned `SpatialData` object.
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
