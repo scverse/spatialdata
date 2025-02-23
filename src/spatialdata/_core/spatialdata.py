@@ -262,7 +262,7 @@ class SpatialData:
         return SpatialData.init_from_elements(elements=elements_dict, attrs=attrs)
 
     @staticmethod
-    def get_annotated_regions(table: AnnData) -> str | list[str]:
+    def get_annotated_regions(table: AnnData) -> list[str]:
         """
         Get the regions annotated by a table.
 
@@ -275,8 +275,9 @@ class SpatialData:
         -------
         The annotated regions.
         """
-        regions, _, _ = get_table_keys(table)
-        return regions
+        from spatialdata.models.models import _get_region_metadata_from_region_key_column
+
+        return _get_region_metadata_from_region_key_column(table)
 
     @staticmethod
     def get_region_key_column(table: AnnData) -> pd.Series:

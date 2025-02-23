@@ -29,6 +29,7 @@ from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
 from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
+from spatialdata.models import get_table_keys
 from spatialdata.models._utils import (
     force_2d,
     points_dask_dataframe_to_geopandas,
@@ -377,6 +378,46 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+        # error when trying to parse a table by specifying region, region_key, instance_key, but these keys are
+        # already set
+        with pytest.raises(ValueError, match=" has already been set"):
+            _ = TableModel.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        # error when region is missing
+        with pytest.raises(ValueError, match="`region` must be provided"):
+            _ = TableModel.parse(adata, region_key=region_key, instance_key="A", overwrite_metadata=True)
+
+        # error when region_key is missing
+        with pytest.raises(ValueError, match="`region_key` must be provided"):
+            _ = TableModel.parse(adata, region=region, instance_key="A", overwrite_metadata=True)
+
+        # error when instance_key is missing
+        with pytest.raises(ValueError, match="`instance_key` must be provided"):
+            _ = TableModel.parse(adata, region=region, region_key=region_key, overwrite_metadata=True)
+
+        # we try to overwrite, but the values in the `region_key` column do not match the expected `region` values
+        with pytest.raises(ValueError, match="values do not match with `region` values"):
+            _ = TableModel.parse(adata, region="element", region_key="B", instance_key="C", overwrite_metadata=True)
+
+        # we correctly overwrite; here we check that the metadata is updated
+        region_, region_key_, instance_key_ = get_table_keys(table)
+        assert region_ == region
+        assert region_key_ == region_key
+        assert instance_key_ == "A"
+
+        # let's fix the region_key column
+        table.obs["B"] = ["element"] * len(table)
+        _ = TableModel.parse(adata, region="element", region_key="B", instance_key="C", overwrite_metadata=True)
+
+        region_, region_key_, instance_key_ = get_table_keys(table)
+        assert region_ == "element"
+        assert region_key_ == "B"
+        assert instance_key_ == "C"
+
+        # we can parse a table when no metadata is present (i.e. the table does not annotate any element)
+        del table.uns[TableModel.ATTRS_KEY]
+        _ = TableModel.parse(table)
+
     @pytest.mark.parametrize(
         "name",
         [
@@ -423,7 +464,7 @@ class TestModels:
             ValueError,
             match=re.escape("Instance key column for region(s) `sample_1, sample_2`"),
         ):
-            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+            model.parse(adata, region=region, region_key=region_key, instance_key="A", overwrite_metadata=True)
 
     @pytest.mark.parametrize(
         "key",

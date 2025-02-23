@@ -40,6 +40,7 @@ __all__ = [
     "join_spatialelement_table",
     "match_element_to_table",
     "match_table_to_element",
+    "match_sdata_to_table",
     "SpatialData",
     "get_extent",
     "get_centroids",
@@ -72,6 +73,7 @@ from spatialdata._core.query.relational_query import (
     get_values,
     join_spatialelement_table,
     match_element_to_table,
+    match_sdata_to_table,
     match_table_to_element,
 )
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query

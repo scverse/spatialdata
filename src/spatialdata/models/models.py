@@ -1064,6 +1064,7 @@ class TableModel:
         region: str | list[str] | None = None,
         region_key: str | None = None,
         instance_key: str | None = None,
+        overwrite_metadata: bool = False,
     ) -> AnnData:
         """
         Parse the :class:`anndata.AnnData` to be compatible with the model.
@@ -1078,6 +1079,8 @@ class TableModel:
             Key in `adata.obs` that specifies the region.
         instance_key
             Key in `adata.obs` that specifies the instance.
+        overwrite_metadata
+            If `True`, the `region`, `region_key` and `instance_key` metadata will be overwritten.
 
         Returns
         -------
@@ -1087,31 +1090,38 @@ class TableModel:
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
-            return adata
-        if n_args > 0:
-            if cls.ATTRS_KEY in adata.uns:
-                raise ValueError(
-                    f"`{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and / or `{cls.INSTANCE_KEY}` is/has been passed as"
-                    f"as argument(s). However, `adata.uns[{cls.ATTRS_KEY!r}]` has already been set."
-                )
-        elif cls.ATTRS_KEY in adata.uns:
+            if cls.ATTRS_KEY not in adata.uns:
+                # table not annotating any element
+                return adata
             attr = adata.uns[cls.ATTRS_KEY]
             region = attr[cls.REGION_KEY]
             region_key = attr[cls.REGION_KEY_KEY]
             instance_key = attr[cls.INSTANCE_KEY]
+        elif n_args > 0 and not overwrite_metadata and cls.ATTRS_KEY in adata.uns:
+            raise ValueError(
+                f"`{cls.REGION_KEY}`, `{cls.REGION_KEY_KEY}` and / or `{cls.INSTANCE_KEY}` is/has been passed as"
+                f" argument(s). However, `adata.uns[{cls.ATTRS_KEY!r}]` has already been set."
+            )
 
-        if region_key is None:
-            raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided.")
-        if isinstance(region, np.ndarray):
-            region = region.tolist()
+        if cls.ATTRS_KEY not in adata.uns:
+            adata.uns[cls.ATTRS_KEY] = {}
+
         if region is None:
             raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
+        if region_key is None:
+            raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided.")
+        if instance_key is None:
+            raise ValueError("`instance_key` must be provided.")
+
+        if isinstance(region, np.ndarray):
+            region = region.tolist()
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
 
-        if instance_key is None:
-            raise ValueError("`instance_key` must be provided.")
+        adata.uns[cls.ATTRS_KEY][cls.REGION_KEY] = region
+        adata.uns[cls.ATTRS_KEY][cls.REGION_KEY_KEY] = region_key
+        adata.uns[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
         # note! this is an expensive check and therefore we skip it during validation
         # https://github.com/scverse/spatialdata/issues/715
@@ -1214,3 +1224,20 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     raise ValueError(
         "No spatialdata_attrs key found in table.uns, therefore, no table keys found. Please parse the table."
     )
+
+
+def _get_region_metadata_from_region_key_column(table: AnnData) -> list[str]:
+    _, region_key, instance_key = get_table_keys(table)
+    region_key_column = table.obs[region_key]
+    if not isinstance(region_key_column.dtype, CategoricalDtype):
+        warnings.warn(
+            f"The region key column `{region_key}` is not of type `pd.Categorical`. Consider casting it to "
+            f"improve performance.",
+            UserWarning,
+            stacklevel=2,
+        )
+        annotated_regions = region_key_column.unique().tolist()
+    else:
+        annotated_regions = table.obs[region_key].cat.remove_unused_categories().cat.categories.unique().tolist()
+    assert isinstance(annotated_regions, list)
+    return annotated_regions
