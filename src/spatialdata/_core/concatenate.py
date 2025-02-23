@@ -65,7 +65,7 @@ def _concatenate_tables(
 
     merged_table = ad.concat(tables_l, **kwargs)
     attrs = {
-        TableModel.REGION_KEY: merged_table.obs[TableModel.REGION_KEY].unique().tolist(),
+        TableModel.REGION_KEY: merged_table.obs[region_key].unique().tolist(),
         TableModel.REGION_KEY_KEY: region_key,
         TableModel.INSTANCE_KEY: instance_key,
     }
@@ -236,7 +236,13 @@ def _fix_ensure_unique_element_names(
             # fix the region_key column
             region, region_key, _ = get_table_keys(table)
             table.obs[region_key] = (table.obs[region_key].astype("str") + f"-{suffix}").astype("category")
-            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = f"{region}-{suffix}"
+            new_region: str | list[str]
+            if isinstance(region, str):
+                new_region = f"{region}-{suffix}"
+            else:
+                assert isinstance(region, list)
+                new_region = [f"{r}-{suffix}" for r in region]
+            table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
 
             # fix the obs names
             if rename_obs_names:

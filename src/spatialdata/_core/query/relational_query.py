@@ -143,6 +143,7 @@ def _(
 
 
 # TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
+# TODO: benchmark against join operations before removing
 def _filter_table_by_elements(
     table: AnnData | None, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
 ) -> AnnData | None:
@@ -164,9 +165,9 @@ def _filter_table_by_elements(
     """
     assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
     assert len(elements_dict) > 0, "elements_dict must not be empty"
-    assert any(
-        len(elements) > 0 for elements in elements_dict.values()
-    ), "elements_dict must contain at least one dict which contains at least one element"
+    assert any(len(elements) > 0 for elements in elements_dict.values()), (
+        "elements_dict must contain at least one dict which contains at least one element"
+    )
     if table is None:
         return None
     to_keep = np.zeros(len(table), dtype=bool)
@@ -312,6 +313,8 @@ def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
+    if isinstance(regions, str):
+        regions = [regions]
     groups_df = table.obs.groupby(by=region_column_name, observed=False)
     mask = []
     for element_type, name_element in element_dict.items():
@@ -350,6 +353,8 @@ def _right_join_spatialelement_table(
     if match_rows == "left":
         warnings.warn("Matching rows 'left' is not supported for 'right' join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
+    if isinstance(regions, str):
+        regions = [regions]
     groups_df = table.obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -380,6 +385,8 @@ def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
+    if isinstance(regions, str):
+        regions = [regions]
     obs = table.obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
@@ -424,6 +431,8 @@ def _left_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
+    if isinstance(regions, str):
+        regions = [regions]
     groups_df = table.obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
@@ -457,6 +466,8 @@ def _left_join_spatialelement_table(
     if match_rows == "right":
         warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
     regions, region_column_name, instance_key = get_table_keys(table)
+    if isinstance(regions, str):
+        regions = [regions]
     obs = table.obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
@@ -693,8 +704,11 @@ def _call_join(
         raise TypeError(
             f"`{match_rows}` is an invalid argument for `match_rows`. Can be either `no`, ``'left'`` or ``'right'``"
         )
-    if how in JoinTypes.__dict__["_member_names_"]:
-        elements_dict, table = JoinTypes[how](elements_dict, table, match_rows)
+    # bug with Python 3.13 (https://github.com/scverse/spatialdata/issues/852)
+    # if how in JoinTypes.__dict__["_member_names_"]:
+    # hotfix for bug with Python 3.13:
+    if how in JoinTypes.__dict__:
+        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
 

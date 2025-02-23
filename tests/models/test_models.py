@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import warnings
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -27,6 +28,7 @@ from xarray import DataArray, DataTree
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
+from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
 from spatialdata.models._utils import (
     force_2d,
     points_dask_dataframe_to_geopandas,
@@ -155,7 +157,11 @@ class TestModels:
     @pytest.mark.parametrize("permute", [True, False])
     @pytest.mark.parametrize("kwargs", [None, {"name": "test"}])
     def test_raster_schema(
-        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: dict[str, str] | None
+        self,
+        converter: Callable[..., Any],
+        model: RasterSchema,
+        permute: bool,
+        kwargs: dict[str, str] | None,
     ) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
@@ -213,9 +219,9 @@ class TestModels:
         assert actual.scale0.image.dtype == image.dtype
         assert actual.scale1.image.dtype == image.dtype
         assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
-        assert set(np.unique(image)) >= set(
-            np.unique(actual.scale1.image)
-        ), "Subsequent scales should not have interpolation artifacts"
+        assert set(np.unique(image)) >= set(np.unique(actual.scale1.image)), (
+            "Subsequent scales should not have interpolation artifacts"
+        )
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
@@ -346,14 +352,18 @@ class TestModels:
     ) -> None:
         region_key = "reg"
         obs = pd.DataFrame(
-            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False), columns=["A", "B", "C"]
+            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False),
+            columns=["A", "B", "C"],
         )
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         with pytest.raises(TypeError, match="Only int"):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
-        obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
+        obs = pd.DataFrame(
+            RNG.choice(np.arange(0, 100), size=(10, 3), replace=False),
+            columns=["A", "B", "C"],
+        )
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -409,7 +419,10 @@ class TestModels:
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
         adata.obs["A"] = [1] * 10
-        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
+        with pytest.raises(
+            ValueError,
+            match=re.escape("Instance key column for region(s) `sample_1, sample_2`"),
+        ):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
     @pytest.mark.parametrize(
@@ -431,7 +444,10 @@ class TestModels:
         if attr in ("obs", "var"):
             df = pd.DataFrame([[None]], columns=[key], index=["1"])
             adata = AnnData(np.array([[0]]), **{attr: df})
-            with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+            with pytest.raises(
+                ValueError,
+                match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+            ):
                 if parse:
                     TableModel.parse(adata)
                 else:
@@ -440,14 +456,20 @@ class TestModels:
             if attr in ("obsm", "varm", "obsp", "varp", "layers"):
                 array = np.array([[0]])
                 adata = AnnData(np.array([[0]]), **{attr: {key: array}})
-                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                with pytest.raises(
+                    ValueError,
+                    match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+                ):
                     if parse:
                         TableModel.parse(adata)
                     else:
                         TableModel().validate(adata)
             elif attr == "uns":
                 adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
-                with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}"):
+                with pytest.raises(
+                    ValueError,
+                    match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+                ):
                     if parse:
                         TableModel.parse(adata)
                     else:
@@ -570,11 +592,27 @@ def test_force2d():
 
     expected_circles_2d = ShapesModel.parse(GeoDataFrame({"geometry": (Point(1, 1), Point(2, 2)), "radius": [2, 2]}))
     expected_polygons_2d = ShapesModel.parse(
-        GeoDataFrame({"geometry": [Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])]})
+        GeoDataFrame(
+            {
+                "geometry": [
+                    Polygon([(0, 0), (1, 0), (1, 1)]),
+                    Polygon([(0, 0), (1, 0), (1, 1)]),
+                ]
+            }
+        )
     )
     expected_multipolygons_2d = ShapesModel.parse(
         GeoDataFrame(
-            {"geometry": [MultiPolygon([Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])])]}
+            {
+                "geometry": [
+                    MultiPolygon(
+                        [
+                            Polygon([(0, 0), (1, 0), (1, 1)]),
+                            Polygon([(0, 0), (1, 0), (1, 1)]),
+                        ]
+                    )
+                ]
+            }
         )
     )
 
@@ -611,7 +649,11 @@ def test_dask_points_unsorted_index_with_xfail(points):
 # helper function to create random points data and write to a Parquet file, used in the test below
 def create_parquet_file(temp_dir, num_points=20, sorted_index=True):
     df = pd.DataFrame(
-        {"x": RNG.uniform(size=num_points), "y": RNG.uniform(size=num_points), "z": RNG.uniform(size=num_points)}
+        {
+            "x": RNG.uniform(size=num_points),
+            "y": RNG.uniform(size=num_points),
+            "z": RNG.uniform(size=num_points),
+        }
     )
     if not sorted_index:
         new_order = RNG.permutation(len(df))
@@ -655,10 +697,47 @@ def test_c_coords_2d(scale_factors: list[int] | None):
         )
 
     with pytest.raises(ValueError, match="The number of channel names"):
-        Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd", "too_much"], scale_factors=scale_factors)
+        Image2DModel().parse(
+            data,
+            c_coords=["1st", "2nd", "3rd", "too_much"],
+            scale_factors=scale_factors,
+        )
 
 
 @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
 def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
     with pytest.raises(ValueError, match="`c_coords` is not supported"):
         model().parse(np.zeros((30, 30)), c_coords=["1st", "2nd", "3rd"])
+
+
+def test_warning_on_large_chunks():
+    data_small = DataArray(dask.array.zeros((100, 100), chunks=(50, 50)), dims=["x", "y"])
+    data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000)), dims=["x", "y"])
+    assert np.array(data_large.shape).prod().item() > LARGE_CHUNK_THRESHOLD_BYTES
+
+    # single and multiscale, small chunk size
+    with warnings.catch_warnings(record=True) as w:
+        _ = Labels2DModel.parse(data_small)
+        _ = Labels2DModel.parse(data_small, scale_factors=[2, 2])
+        # method 'xarray_coarsen' is used to downsample the data lazily (otherwise the test would be too slow)
+        _ = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
+        warnings.simplefilter("always")
+        assert len(w) == 0, "Warning should not be raised for small chunk size"
+
+    # single scale, large chunk size
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _ = Labels2DModel.parse(data_large)
+        assert len(w) == 1, "Warning should be raised for large chunk size"
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Detected chunks larger than:" in str(w[-1].message)
+
+    # multiscale, large chunk size
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        multiscale = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
+        multiscale = multiscale.chunk({"x": 50000, "y": 50000})
+        Labels2DModel().validate(multiscale)
+        assert len(w) == 1, "Warning should be raised for large chunk size"
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Detected chunks larger than:" in str(w[-1].message)

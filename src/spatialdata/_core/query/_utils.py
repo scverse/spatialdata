@@ -140,10 +140,32 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
     d = {k: Dataset({"image": d[k]}) for k in scales_to_keep}
     result = DataTree.from_dict(d)
 
-    # Rechunk the data to avoid irregular chunks
-    for scale in result:
-        result[scale]["image"] = result[scale]["image"].chunk("auto")
+    # rechunk the data to avoid irregular chunks
+    coords = list(result["scale0"].coords.keys())
+    result = result.chunk({c: "auto" for c in coords})
 
+    from dask.array.core import _check_regular_chunks
+
+    # check that the rechunking into regular chunks worked
+    chunks_still_irregular = False
+    for scale in result:
+        data = result[scale]["image"].data
+        chunks_still_irregular = chunks_still_irregular or not _check_regular_chunks(data.chunks)
+
+    if chunks_still_irregular:
+        # reported here: https://github.com/scverse/spatialdata/issues/821#issuecomment-2632201695
+        # seemingly due to this bug: https://github.com/dask/dask/issues/11713
+        CHUNK_SIZE = 1024
+        rechunk_strategy = {c: CHUNK_SIZE for c in coords}
+        if "c" in coords:
+            rechunk_strategy["c"] = result["scale0"]["image"].chunks[0][0]
+        result = result.chunk(rechunk_strategy)
+
+    for scale in result:
+        data = result[scale]["image"].data
+        assert _check_regular_chunks(data.chunks), (
+            f"Chunks are not regular for the {scale} of the queried data: {data.chunks}. Please report this bug."
+        )
     return result
 
 
