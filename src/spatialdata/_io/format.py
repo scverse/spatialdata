@@ -47,9 +47,7 @@ def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
 
 
 class SpatialDataFormat(CurrentFormat):
-    @property
-    def version(self) -> str:
-        return "0.6-dev"
+    pass
 
 
 def format_implementations() -> Iterator[Format]:
@@ -138,6 +136,22 @@ class RasterFormatV01(SpatialDataFormat):
     @property
     def spatialdata_format_version(self) -> str:
         return "0.1"
+
+    @property
+    def version(self) -> str:
+        return "0.4"
+
+
+class RasterFormatV02(RasterFormatV01):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
+
+    @property
+    def version(self) -> str:
+        # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
+        # https://github.com/scverse/spatialdata/pull/849
+        return "0.6-dev-spatialdata"
 
 
 class ShapesFormatV01(SpatialDataFormat):
@@ -230,7 +244,7 @@ class TablesFormatV01(SpatialDataFormat):
             raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
 
-CurrentRasterFormat = RasterFormatV01
+CurrentRasterFormat = RasterFormatV02
 CurrentShapesFormat = ShapesFormatV02
 CurrentPointsFormat = PointsFormatV01
 CurrentTablesFormat = TablesFormatV01
@@ -248,6 +262,7 @@ TablesFormats = {
 }
 RasterFormats = {
     "0.1": RasterFormatV01(),
+    "0.2": RasterFormatV02(),
 }
 SpatialDataContainerFormats = {
     "0.1": SpatialDataContainerFormatV01(),
