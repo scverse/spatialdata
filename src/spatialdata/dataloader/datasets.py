@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import Any, Callable
+from typing import Any
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
 from torch.utils.data import Dataset
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.transform import transform
@@ -163,9 +162,9 @@ class ImageTilesDataset(Dataset):
             raise ValueError("`table_name` must be provided if `return_annotations` is not `None`.")
 
         # check that the regions specified in the two dicts are the same
-        assert set(regions_to_images.keys()) == set(
-            regions_to_coordinate_systems.keys()
-        ), "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
+        assert set(regions_to_images.keys()) == set(regions_to_coordinate_systems.keys()), (
+            "The keys in `regions_to_images` and `regions_to_coordinate_systems` must be the same."
+        )
         self.regions = list(regions_to_coordinate_systems.keys())  # all regions for the dataloader
 
         cs_region_image: list[tuple[str, str, str]] = []  # list of tuples (coordinate_system, region, image)

@@ -6,17 +6,16 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.query.relational_query import get_element_instances
-from spatialdata._io._utils import _iter_multiscale
+from spatialdata._utils import get_pyramid_levels
 from spatialdata.models import PointsModel, ShapesModel, TableModel, get_axes_names
 from spatialdata.models._utils import get_spatial_axes
 from spatialdata.transformations import MapAxis
@@ -57,7 +56,7 @@ def test_rasterize_raster(_get_raster):
         if isinstance(raster, DataArray):
             return raster.data.compute()
 
-        xdata = next(iter(_iter_multiscale(raster, None)))
+        xdata = get_pyramid_levels(raster, n=0)
         return xdata.data.compute()
 
     for element_name, raster in rasters.items():
@@ -180,7 +179,7 @@ def test_rasterize_points_shapes_with_string_index(points, shapes):
         )
 
 
-def test_rasterize_shapes():
+def _rasterize_shapes_prepare_data() -> tuple[SpatialData, GeoDataFrame, str]:
     box_one = box(0, 10, 20, 40)
     box_two = box(5, 35, 15, 45)
     box_three = box(0, 0, 2, 2)
@@ -206,7 +205,11 @@ def test_rasterize_shapes():
     )
     adata.obs["cat_values"] = adata.obs["cat_values"].astype("category")
     adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
-    sdata = SpatialData.init_from_elements({element_name: gdf[["geometry"]]}, table=adata)
+    return SpatialData.init_from_elements({element_name: gdf[["geometry"]], "table": adata}), gdf, element_name
+
+
+def test_rasterize_shapes():
+    sdata, gdf, element_name = _rasterize_shapes_prepare_data()
 
     def _rasterize(element: GeoDataFrame, **kwargs) -> SpatialImage:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
@@ -293,6 +296,26 @@ def test_rasterize_shapes():
     assert res[0].max() == 2
     assert res[1].max() == 1
 
+    # test rasterize shapes to labels
+    res_xarray = _rasterize(
+        gdf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[50, 40],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1,
+        return_regions_as_labels=True,
+    )
+    d = res_xarray.attrs["label_index_to_category"]
+    assert d == {1: 0, 2: 1, 3: 2}
+    res = res_xarray.data.compute()
+
+    assert res.dtype == np.uint16
+    assert res[0, 0] == 2
+    assert res[30, 10] == 0
+    assert res[10, 30] == 1
+    assert res[10, 37] == 2
+
 
 def test_rasterize_points():
     data = {
@@ -321,7 +344,7 @@ def test_rasterize_points():
     )
     adata.obs["gene"] = adata.obs["gene"].astype("category")
     adata = TableModel.parse(adata, region=element_name, region_key="region", instance_key="instance_id")
-    sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]]}, table=adata)
+    sdata = SpatialData.init_from_elements({element_name: ddf[["x", "y"]], "table": adata})
 
     def _rasterize(element: DaskDataFrame, **kwargs) -> SpatialImage:
         return _rasterize_test_alternative_calls(element=element, sdata=sdata, element_name=element_name, **kwargs)
@@ -392,6 +415,27 @@ def test_rasterize_points():
 
     assert res[0, 0, 1] == 0.2
     assert res[0, 1, 3] == 1.2
+
+    # test rasterize points to labels
+    res_xarray = _rasterize(
+        ddf,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[5, 5],
+        target_coordinate_system="global",
+        target_unit_to_pixels=1.0,
+        return_regions_as_labels=True,
+    )
+    d = res_xarray.attrs["label_index_to_category"]
+    res = res_xarray.data.compute()
+
+    assert res[0, 0] == 1
+    assert res[0, 1] == 2
+    assert res[1, 2] == 5
+
+    assert d[res[0, 0]] == 0
+    assert d[res[0, 1]] == 1
+    assert d[res[1, 2]] == 4
 
 
 def test_rasterize_spatialdata(full_sdata):

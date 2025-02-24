@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import warnings
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
+from typing import Any
 
 import dask.array.core
 import dask.dataframe as dd
@@ -16,16 +18,18 @@ import pytest
 from anndata import AnnData
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
+from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
+from spatialdata.models import get_table_keys
 from spatialdata.models._utils import (
     force_2d,
     points_dask_dataframe_to_geopandas,
@@ -154,7 +158,11 @@ class TestModels:
     @pytest.mark.parametrize("permute", [True, False])
     @pytest.mark.parametrize("kwargs", [None, {"name": "test"}])
     def test_raster_schema(
-        self, converter: Callable[..., Any], model: RasterSchema, permute: bool, kwargs: dict[str, str] | None
+        self,
+        converter: Callable[..., Any],
+        model: RasterSchema,
+        permute: bool,
+        kwargs: dict[str, str] | None,
     ) -> None:
         dims = np.array(model.dims.dims).tolist()
         if permute:
@@ -194,6 +202,27 @@ class TestModels:
         if kwargs is not None:
             with pytest.raises(ValueError):
                 model.parse(image, **kwargs)
+
+    @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+    def test_labels_model_with_multiscales(self, model):
+        # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
+        dims = np.array(model.dims.dims).tolist()
+        n_dims = len(dims)
+
+        # A labels image with one label value 4, that partially covers 2×2 blocks.
+        # Downsampling with interpolation would produce values 1, 2, 3, 4.
+        image: ArrayLike = np.array([[0, 0, 0, 0], [0, 4, 4, 4], [4, 4, 4, 4], [0, 4, 4, 4]], dtype=np.uint16)
+        if n_dims == 3:
+            image = np.stack([image] * image.shape[0])
+        actual = model.parse(image, scale_factors=(2,))
+        assert isinstance(actual, DataTree)
+        assert actual.children.keys() == {"scale0", "scale1"}
+        assert actual.scale0.image.dtype == image.dtype
+        assert actual.scale1.image.dtype == image.dtype
+        assert set(np.unique(image)) == set(np.unique(actual.scale0.image)), "Scale0 should be preserved"
+        assert set(np.unique(image)) >= set(np.unique(actual.scale1.image)), (
+            "Subsequent scales should not have interpolation artifacts"
+        )
 
     @pytest.mark.parametrize("model", [ShapesModel])
     @pytest.mark.parametrize("path", [POLYGON_PATH, MULTIPOLYGON_PATH, POINT_PATH])
@@ -324,14 +353,18 @@ class TestModels:
     ) -> None:
         region_key = "reg"
         obs = pd.DataFrame(
-            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False), columns=["A", "B", "C"]
+            RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False),
+            columns=["A", "B", "C"],
         )
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         with pytest.raises(TypeError, match="Only int"):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
-        obs = pd.DataFrame(RNG.choice(np.arange(0, 100), size=(10, 3), replace=False), columns=["A", "B", "C"])
+        obs = pd.DataFrame(
+            RNG.choice(np.arange(0, 100), size=(10, 3), replace=False),
+            columns=["A", "B", "C"],
+        )
         obs[region_key] = region
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -345,6 +378,76 @@ class TestModels:
         assert TableModel.REGION_KEY_KEY in table.uns[TableModel.ATTRS_KEY]
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == region
 
+        # error when trying to parse a table by specifying region, region_key, instance_key, but these keys are
+        # already set
+        with pytest.raises(ValueError, match=" has already been set"):
+            _ = TableModel.parse(adata, region=region, region_key=region_key, instance_key="A")
+
+        # error when region is missing
+        with pytest.raises(ValueError, match="`region` must be provided"):
+            _ = TableModel.parse(adata, region_key=region_key, instance_key="A", overwrite_metadata=True)
+
+        # error when region_key is missing
+        with pytest.raises(ValueError, match="`region_key` must be provided"):
+            _ = TableModel.parse(adata, region=region, instance_key="A", overwrite_metadata=True)
+
+        # error when instance_key is missing
+        with pytest.raises(ValueError, match="`instance_key` must be provided"):
+            _ = TableModel.parse(adata, region=region, region_key=region_key, overwrite_metadata=True)
+
+        # we try to overwrite, but the values in the `region_key` column do not match the expected `region` values
+        with pytest.raises(ValueError, match="values do not match with `region` values"):
+            _ = TableModel.parse(adata, region="element", region_key="B", instance_key="C", overwrite_metadata=True)
+
+        # we correctly overwrite; here we check that the metadata is updated
+        region_, region_key_, instance_key_ = get_table_keys(table)
+        assert region_ == region
+        assert region_key_ == region_key
+        assert instance_key_ == "A"
+
+        # let's fix the region_key column
+        table.obs["B"] = ["element"] * len(table)
+        _ = TableModel.parse(adata, region="element", region_key="B", instance_key="C", overwrite_metadata=True)
+
+        region_, region_key_, instance_key_ = get_table_keys(table)
+        assert region_ == "element"
+        assert region_key_ == "B"
+        assert instance_key_ == "C"
+
+        # we can parse a table when no metadata is present (i.e. the table does not annotate any element)
+        del table.uns[TableModel.ATTRS_KEY]
+        _ = TableModel.parse(table)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_invalid_names(self, full_sdata, element_type: str, name: str):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValueError, match="Name (must|cannot)"):
+            SpatialData(**{element_type: {name: element}})
+
+    @pytest.mark.parametrize(
+        "names",
+        [
+            ["abc", "Abc"],
+        ],
+    )
+    @pytest.mark.parametrize("element_type", ["images", "labels", "points", "shapes", "tables"])
+    def test_model_not_unique_names(self, full_sdata, element_type: str, names: list[str]):
+        element = next(iter(getattr(full_sdata, element_type).values()))
+        with pytest.raises(ValidationError, match="Key `.*` is not unique"):
+            SpatialData(**{element_type: {name: element for name in names}})
+
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
@@ -357,8 +460,85 @@ class TestModels:
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
 
         adata.obs["A"] = [1] * 10
-        with pytest.raises(ValueError, match=re.escape("Instance key column for region(s) `sample_1, sample_2`")):
-            model.parse(adata, region=region, region_key=region_key, instance_key="A")
+        with pytest.raises(
+            ValueError,
+            match=re.escape("Instance key column for region(s) `sample_1, sample_2`"),
+        ):
+            model.parse(adata, region=region, region_key=region_key, instance_key="A", overwrite_metadata=True)
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "",
+            ".",
+            "..",
+            "__dunder",
+            "_index",
+            "has whitespace",
+            "path/separator",
+            "non-alnum_#$%&()*+,?@",
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_invalid_names(self, key: str, attr: str, parse: bool):
+        if attr in ("obs", "var"):
+            df = pd.DataFrame([[None]], columns=[key], index=["1"])
+            adata = AnnData(np.array([[0]]), **{attr: df})
+            with pytest.raises(
+                ValueError,
+                match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+            ):
+                if parse:
+                    TableModel.parse(adata)
+                else:
+                    TableModel().validate(adata)
+        elif key != "_index":  # "_index" is only disallowed in obs/var
+            if attr in ("obsm", "varm", "obsp", "varp", "layers"):
+                array = np.array([[0]])
+                adata = AnnData(np.array([[0]]), **{attr: {key: array}})
+                with pytest.raises(
+                    ValueError,
+                    match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+                ):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+            elif attr == "uns":
+                adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
+                with pytest.raises(
+                    ValueError,
+                    match=f"Table contains invalid names(.|\n)*\n  {attr}/{re.escape(key)}",
+                ):
+                    if parse:
+                        TableModel.parse(adata)
+                    else:
+                        TableModel().validate(adata)
+
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ["abc", "abc"],
+            ["abc", "Abc", "ABC"],
+        ],
+    )
+    @pytest.mark.parametrize("attr", ["obs", "var"])
+    @pytest.mark.parametrize("parse", [True, False])
+    def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
+        invalid_key = keys[1]
+        key_regex = re.escape(invalid_key)
+        df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
+        adata = AnnData(np.array([[0]]), **{attr: df})
+        with pytest.raises(
+            ValueError,
+            match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "
+            + f"Key `{key_regex}` is not unique, or another case-variant of it exists.",
+        ):
+            if parse:
+                TableModel.parse(adata)
+            else:
+                TableModel().validate(adata)
 
 
 def test_get_schema():
@@ -453,11 +633,27 @@ def test_force2d():
 
     expected_circles_2d = ShapesModel.parse(GeoDataFrame({"geometry": (Point(1, 1), Point(2, 2)), "radius": [2, 2]}))
     expected_polygons_2d = ShapesModel.parse(
-        GeoDataFrame({"geometry": [Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])]})
+        GeoDataFrame(
+            {
+                "geometry": [
+                    Polygon([(0, 0), (1, 0), (1, 1)]),
+                    Polygon([(0, 0), (1, 0), (1, 1)]),
+                ]
+            }
+        )
     )
     expected_multipolygons_2d = ShapesModel.parse(
         GeoDataFrame(
-            {"geometry": [MultiPolygon([Polygon([(0, 0), (1, 0), (1, 1)]), Polygon([(0, 0), (1, 0), (1, 1)])])]}
+            {
+                "geometry": [
+                    MultiPolygon(
+                        [
+                            Polygon([(0, 0), (1, 0), (1, 1)]),
+                            Polygon([(0, 0), (1, 0), (1, 1)]),
+                        ]
+                    )
+                ]
+            }
         )
     )
 
@@ -494,7 +690,11 @@ def test_dask_points_unsorted_index_with_xfail(points):
 # helper function to create random points data and write to a Parquet file, used in the test below
 def create_parquet_file(temp_dir, num_points=20, sorted_index=True):
     df = pd.DataFrame(
-        {"x": RNG.uniform(size=num_points), "y": RNG.uniform(size=num_points), "z": RNG.uniform(size=num_points)}
+        {
+            "x": RNG.uniform(size=num_points),
+            "y": RNG.uniform(size=num_points),
+            "z": RNG.uniform(size=num_points),
+        }
     )
     if not sorted_index:
         new_order = RNG.permutation(len(df))
@@ -524,3 +724,61 @@ def test_dask_points_from_parquet(points, npartitions: int, sorted_index: bool):
                 match=r"The index of the dataframe is not monotonic increasing\.",
             ):
                 _ = PointsModel.parse(points, npartitions=npartitions)
+
+
+@pytest.mark.parametrize("scale_factors", [None, [2, 2]])
+def test_c_coords_2d(scale_factors: list[int] | None):
+    data = np.zeros((3, 30, 30))
+    model = Image2DModel().parse(data, c_coords=["1st", "2nd", "3rd"], scale_factors=scale_factors)
+    if scale_factors is None:
+        assert model.coords["c"].data.tolist() == ["1st", "2nd", "3rd"]
+    else:
+        assert all(
+            model[group]["image"].coords["c"].data.tolist() == ["1st", "2nd", "3rd"] for group in list(model.keys())
+        )
+
+    with pytest.raises(ValueError, match="The number of channel names"):
+        Image2DModel().parse(
+            data,
+            c_coords=["1st", "2nd", "3rd", "too_much"],
+            scale_factors=scale_factors,
+        )
+
+
+@pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
+def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
+    with pytest.raises(ValueError, match="`c_coords` is not supported"):
+        model().parse(np.zeros((30, 30)), c_coords=["1st", "2nd", "3rd"])
+
+
+def test_warning_on_large_chunks():
+    data_small = DataArray(dask.array.zeros((100, 100), chunks=(50, 50)), dims=["x", "y"])
+    data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000)), dims=["x", "y"])
+    assert np.array(data_large.shape).prod().item() > LARGE_CHUNK_THRESHOLD_BYTES
+
+    # single and multiscale, small chunk size
+    with warnings.catch_warnings(record=True) as w:
+        _ = Labels2DModel.parse(data_small)
+        _ = Labels2DModel.parse(data_small, scale_factors=[2, 2])
+        # method 'xarray_coarsen' is used to downsample the data lazily (otherwise the test would be too slow)
+        _ = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
+        warnings.simplefilter("always")
+        assert len(w) == 0, "Warning should not be raised for small chunk size"
+
+    # single scale, large chunk size
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _ = Labels2DModel.parse(data_large)
+        assert len(w) == 1, "Warning should be raised for large chunk size"
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Detected chunks larger than:" in str(w[-1].message)
+
+    # multiscale, large chunk size
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        multiscale = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
+        multiscale = multiscale.chunk({"x": 50000, "y": 50000})
+        Labels2DModel().validate(multiscale)
+        assert len(w) == 1, "Warning should be raised for large chunk size"
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Detected chunks larger than:" in str(w[-1].message)

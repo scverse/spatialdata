@@ -2,8 +2,7 @@ import copy
 
 import numpy as np
 import pytest
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import SpatialData, deepcopy
 from spatialdata.models import (

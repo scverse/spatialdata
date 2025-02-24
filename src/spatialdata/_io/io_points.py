@@ -1,10 +1,9 @@
 import os
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import Union
 
 import zarr
-from dask.dataframe import DataFrame as DaskDataFrame  # type: ignore[attr-defined]
+from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
@@ -22,10 +21,10 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: Union[str, Path, MutableMapping, zarr.Group],  # type: ignore[type-arg]
+    store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, (str, Path))
+    assert isinstance(store, str | Path)
     f = zarr.open(store, mode="r")
 
     version = _parse_version(f, expect_attrs_key=True)

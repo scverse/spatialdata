@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import warnings
 from abc import abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
-from datatree import DataTree
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
 from spatialdata._core.query._utils import (
@@ -22,6 +21,7 @@ from spatialdata._core.query._utils import (
     get_bounding_box_corners,
 )
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.models import (
@@ -33,6 +33,7 @@ from spatialdata.models import (
     points_geopandas_to_dask_dataframe,
 )
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
+from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
@@ -40,7 +41,17 @@ from spatialdata.transformations.transformations import (
     _get_affine_for_element,
 )
 
+MIN_COORDINATE_DOCS = """\
+    The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+"""
+MAX_COORDINATE_DOCS = """\
+    The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes)
+"""
 
+
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
     axes: tuple[str, ...],
@@ -57,11 +68,9 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        The upper left hand corner of the bounding box (i.e., minimum coordinates
-        along all dimensions).
+    {min_coordinate_docs}
     max_coordinate
-        The lower right hand corner of the bounding box (i.e., the maximum coordinates
-        along all dimensions
+    {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
 
@@ -83,7 +92,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
 
     # we identified 5 cases (see the responsible function for details), cases 1 and 5 correspond to invertible
-    # transformations; we focus on them
+    # transformations; we focus on them. The following code triggers a validation that ensures we are in case 1 or 5.
     m_without_c_linear = m_without_c[:-1, :-1]
     _ = _get_case_of_bounding_box_query(m_without_c_linear, input_axes_without_c, output_axes_without_c)
 
@@ -235,7 +244,8 @@ def _adjust_bounding_box_to_real_axes(
 
     The bounding box is defined by the user and its axes may not coincide with the axes of the transformation.
     """
-    # axis for slicing, if axis > 0, then the min_/max_coordinate multiple bounding boxes along axis 0
+    # the following variable `axis` is the index of the axis in the variable min_coordinates that corresponds to the
+    # named axes ('x', 'y', ...). We need it to know at which index to remove/add new named axes
     axis = min_coordinate.ndim - 1
     if set(axes_bb) != set(axes_out_without_c):
         axes_only_in_bb = set(axes_bb) - set(axes_out_without_c)
@@ -330,6 +340,7 @@ class BaseSpatialRequest:
         pass
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 @dataclass(frozen=True)
 class BoundingBoxRequest(BaseSpatialRequest):
     """Query with an axis-aligned bounding box.
@@ -339,11 +350,9 @@ class BoundingBoxRequest(BaseSpatialRequest):
     axes
         The axes the coordinates are expressed in.
     min_coordinate
-        The coordinate of the lower left hand corner (i.e., minimum values)
-        of the bounding box.
+        {min_coordinate_docs}
     max_coordinate
-        The coordinate of the upper right hand corner (i.e., maximum values)
-        of the bounding box
+        {max_coordinate_docs}
     """
 
     min_coordinate: ArrayLike
@@ -379,6 +388,7 @@ class BoundingBoxRequest(BaseSpatialRequest):
         }
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _bounding_box_mask_points(
     points: DaskDataFrame,
     axes: tuple[str, ...],
@@ -394,11 +404,14 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
+        PLACEHOLDER
         The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {min_coordinate_docs}
     max_coordinate
         The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {max_coordinate_docs}
 
     Returns
     -------
@@ -450,6 +463,7 @@ def _dict_query_dispatcher(
     return queried_elements
 
 
+@docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 @singledispatch
 def bounding_box_query(
     element: SpatialElement | SpatialData,
@@ -464,14 +478,19 @@ def bounding_box_query(
     """
     Query a SpatialData object or SpatialElement within a bounding box.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.bounding_box(...)`, without specifying `element`.
+
     Parameters
     ----------
+    element
+        The SpatialElement or SpatialData object to query.
     axes
         The axes `min_coordinate` and `max_coordinate` refer to.
     min_coordinate
-        The minimum coordinates of the bounding box.
+        {min_coordinate_docs}
     max_coordinate
-        The maximum coordinates of the bounding box.
+        {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
     filter_table
@@ -485,6 +504,11 @@ def bounding_box_query(
     -------
     The SpatialData object or SpatialElement containing the requested data.
     Eventual empty Elements are omitted by the SpatialData object.
+
+    Notes
+    -----
+    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
+    consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -501,6 +525,16 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
+    if sdata.points:
+        warnings.warn(
+            (
+                "The object has `points` element. Depending on the number of points, querying MAY suffer from "
+                "performance issues. Please consider filtering the object before calling this function by calling the "
+                "`subset()` method of `SpatialData`."
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
@@ -515,7 +549,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -527,7 +561,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray | DataTree] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray] | list[DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -583,13 +617,13 @@ def _(
         return selection
 
     # query the data
-    query_result: DataArray | DataTree | list[DataArray | DataTree] = (
+    query_result: DataArray | DataTree | list[DataArray] | list[DataTree] | None = (
         image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
     )
 
     if isinstance(query_result, list):
         processed_results = []
-        for result, translation_vector in zip(query_result, translation_vectors):
+        for result, translation_vector in zip(query_result, translation_vectors, strict=True):
             processed_result = _process_query_result(result, translation_vector, axes)
             if processed_result is not None:
                 processed_results.append(processed_result)
@@ -674,7 +708,7 @@ def _(
 
     # transform the element to the query coordinate system
     output: list[DaskDataFrame | None] = []
-    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate):
+    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
         if p is None:
             output.append(None)
         else:
@@ -686,8 +720,8 @@ def _(
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,
-                max_coordinate=max_c,
+                min_coordinate=min_c,  # type: ignore[arg-type]
+                max_coordinate=max_c,  # type: ignore[arg-type]
             )
             if len(bounding_box_mask) == 1:
                 bounding_box_mask = bounding_box_mask[0]
@@ -699,9 +733,13 @@ def _(
                 points_df = p.compute().iloc[bounding_box_indices]
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
+                feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+
                 output.append(
                     PointsModel.parse(
-                        dd.from_pandas(points_df, npartitions=1), transformations=old_transformations.copy()
+                        dd.from_pandas(points_df, npartitions=1),
+                        transformations=old_transformations.copy(),
+                        feature_key=feature_key,
                     )
                 )
     if len(output) == 0:
@@ -796,6 +834,9 @@ def polygon_query(
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
 
+    This function can also be accessed as a method of a `SpatialData` object,
+    via `sdata.query.polygon(...)`, without specifying `element`.
+
     Parameters
     ----------
     element
@@ -867,7 +908,7 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables)
+    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
@@ -912,10 +953,11 @@ def _(
     queried_points = points_gdf.loc[joined["index_right"]]
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
+    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"})
+        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)

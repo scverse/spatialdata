@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
+import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import CurrentFormat
+from ome_zarr.format import CurrentFormat, Format, FormatV01, FormatV02, FormatV03, FormatV04
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -48,6 +50,20 @@ class SpatialDataFormat(CurrentFormat):
     pass
 
 
+class SpatialDataContainerFormatV01(SpatialDataFormat):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.1"
+
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
+        from spatialdata import __version__
+
+        return {"spatialdata_software_version": __version__}
+
+
 class RasterFormatV01(SpatialDataFormat):
     """Formatter for raster data."""
 
@@ -57,7 +73,7 @@ class RasterFormatV01(SpatialDataFormat):
         # calculate minimal 'scale' transform based on pyramid dims
         for shape in shapes:
             assert len(shape) == len(data_shape)
-            scale = [full / level for full, level in zip(data_shape, shape)]
+            scale = [full / level for full, level in zip(data_shape, shape, strict=True)]
             from spatialdata.transformations.ngff.ngff_transformations import NgffScale
 
             coordinate_transformations.append([NgffScale(scale=scale).to_dict()])
@@ -98,13 +114,29 @@ class RasterFormatV01(SpatialDataFormat):
             json1 = [json.dumps(p.to_dict()) for p in parsed]
             import numpy as np
 
-            assert np.all([j0 == j1 for j0, j1 in zip(json0, json1)])
+            assert np.all([j0 == j1 for j0, j1 in zip(json0, json1, strict=True)])
 
     # eventually we are fully compliant with NGFF and we can drop SPATIALDATA_FORMAT_VERSION and simply rely on
     # "version"; still, until the coordinate transformations make it into NGFF, we need to have our extension
     @property
     def spatialdata_format_version(self) -> str:
         return "0.1"
+
+    @property
+    def version(self) -> str:
+        return "0.4"
+
+
+class RasterFormatV02(RasterFormatV01):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
+
+    @property
+    def version(self) -> str:
+        # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
+        # https://github.com/scverse/spatialdata/pull/849
+        return "0.4-dev-spatialdata"
 
 
 class ShapesFormatV01(SpatialDataFormat):
@@ -197,10 +229,11 @@ class TablesFormatV01(SpatialDataFormat):
             raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
 
-CurrentRasterFormat = RasterFormatV01
+CurrentRasterFormat = RasterFormatV02
 CurrentShapesFormat = ShapesFormatV02
 CurrentPointsFormat = PointsFormatV01
 CurrentTablesFormat = TablesFormatV01
+CurrentSpatialDataContainerFormats = SpatialDataContainerFormatV01
 
 ShapesFormats = {
     "0.1": ShapesFormatV01(),
@@ -214,7 +247,27 @@ TablesFormats = {
 }
 RasterFormats = {
     "0.1": RasterFormatV01(),
+    "0.2": RasterFormatV02(),
 }
+SpatialDataContainerFormats = {
+    "0.1": SpatialDataContainerFormatV01(),
+}
+
+
+def format_implementations() -> Iterator[Format]:
+    """Return an instance of each format implementation, newest to oldest."""
+    yield RasterFormatV02()
+    # yield RasterFormatV01()  # same format string as FormatV04
+    yield FormatV04()
+    yield FormatV03()
+    yield FormatV02()
+    yield FormatV01()
+
+
+# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
+# read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
+# not released yet)
+ome_zarr.format.format_implementations = format_implementations
 
 
 def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
@@ -223,6 +276,7 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         "shapes": CurrentShapesFormat(),
         "points": CurrentPointsFormat(),
         "tables": CurrentTablesFormat(),
+        "SpatialData": CurrentSpatialDataContainerFormats(),
     }
     if formats is None:
         return parsed
@@ -236,6 +290,7 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         "shapes": False,
         "points": False,
         "tables": False,
+        "SpatialData": False,
     }
 
     def _check_modified(element_type: str) -> None:
@@ -256,6 +311,9 @@ def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) 
         elif any(isinstance(fmt, type(v)) for v in RasterFormats.values()):
             _check_modified("raster")
             parsed["raster"] = fmt
+        elif any(isinstance(fmt, type(v)) for v in SpatialDataContainerFormats.values()):
+            _check_modified("SpatialData")
+            parsed["SpatialData"] = fmt
         else:
             raise ValueError(f"Unsupported format {fmt}")
     return parsed

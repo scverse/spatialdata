@@ -7,6 +7,7 @@ import pytest
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _is_element_self_contained
 from spatialdata._logging import logger
+from spatialdata.models import get_channel_names
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 
@@ -41,8 +42,7 @@ def test_validate_can_write_metadata_on_element(full_sdata, element_name):
         # trying to save metadata before writing the data
         with pytest.warns(
             UserWarning,
-            match="The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be "
-            "written.",
+            match="The SpatialData object appears not to be backed by a Zarr storage, so metadata cannot be written.",
         ):
             full_sdata._validate_can_write_metadata_on_element(element_name)
 
@@ -111,11 +111,37 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
 
 
 # test io for channel names
-@pytest.mark.skip(reason="Not implemented yet")
-def test_save_channel_names_incremental(images: SpatialData) -> None:
-    # note: the non-incremental IO for channel names is already covered in TestReadWrite.test_images(), so here we
-    # only test the incremental IO
-    pass
+@pytest.mark.parametrize("write", ["overwrite", "write", "no"])
+def test_save_channel_names_incremental(images: SpatialData, write: str) -> None:
+    old_channels2d = get_channel_names(images["image2d"])
+    old_channels3d = get_channel_names(images["image3d_numpy"])
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        f0 = os.path.join(tmp_dir, "sdata.zarr")
+        images.write(f0)
+
+        over_write = write == "overwrite"
+
+        new_channels = ["first", "second", "third"]
+        images.set_channel_names("image2d", new_channels, write=over_write)
+        images.set_channel_names("image2d_multiscale", new_channels, write=over_write)
+        images.set_channel_names("image3d_numpy", new_channels, write=over_write)
+        images.set_channel_names("image3d_multiscale_numpy", new_channels, write=over_write)
+
+        if write == "write":
+            images.write_channel_names()
+
+        images = SpatialData.read(f0)
+        if write != "no":
+            assert images["image2d"].coords["c"].data.tolist() == new_channels
+            assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+            assert images["image3d_numpy"].coords["c"].data.tolist() == new_channels
+            assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+        else:
+            assert images["image2d"].coords["c"].data.tolist() == old_channels2d
+            assert images["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == old_channels2d
+            assert images["image3d_numpy"].coords["c"].data.tolist() == old_channels3d
+            assert images["image3d_multiscale_numpy"]["scale0"]["image"].coords["c"].data.tolist() == old_channels3d
 
 
 # test io for consolidated metadata

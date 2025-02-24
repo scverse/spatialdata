@@ -1,20 +1,14 @@
-from __future__ import annotations
-
-from typing import Union
+from typing import Any
 
 import numpy as np
-from datatree import DataTree
-from xarray import DataArray
+from xarray import DataArray, DataTree
 
 __all__ = ["ArrayLike", "ColorLike", "DTypeLike", "Raster_T"]
 
-try:
-    from numpy.typing import DTypeLike, NDArray
+from numpy.typing import DTypeLike, NDArray
 
-    ArrayLike = NDArray[np.float64]
-except (ImportError, TypeError):
-    ArrayLike = np.ndarray  # type: ignore[misc]
-    DTypeLike = np.dtype  # type: ignore[misc]
+ArrayLike = NDArray[np.floating[Any]]
+IntArrayLike = NDArray[np.integer[Any]]
 
-Raster_T = Union[DataArray, DataTree]
-ColorLike = Union[tuple[float, ...], str]
+Raster_T = DataArray | DataTree
+ColorLike = tuple[float, ...] | str

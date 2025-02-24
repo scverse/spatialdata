@@ -9,7 +9,7 @@ from xarray import DataArray
 from spatialdata import transform
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, ValidAxis_t, get_channels
+from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, ValidAxis_t, get_channel_names
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.ngff.ngff_transformations import (
@@ -557,7 +557,7 @@ def test_transform_coordinates():
         DataArray(manual0, coords={"points": range(2), "dim": ["x", "y", "z"]}),
         DataArray(manual1, coords={"points": range(2), "dim": ["x", "y", "z"]}),
     ]
-    for t, e in zip(transformaions, expected):
+    for t, e in zip(transformaions, expected, strict=True):
         transformed = t._transform_coordinates(coords)
         xarray.testing.assert_allclose(transformed, e)
 
@@ -577,7 +577,7 @@ def _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems
     if outer_sequence:
         assert t0.input_coordinate_system.name == t1.input_coordinate_system.name
         assert t0.output_coordinate_system.name == t1.output_coordinate_system.name
-    for sub0, sub1 in zip(t0.transformations, t1.transformations):
+    for sub0, sub1 in zip(t0.transformations, t1.transformations, strict=True):
         if isinstance(sub0, NgffSequence):
             assert isinstance(sub1, NgffSequence)
             _assert_sequence_transformations_equal_up_to_intermediate_coordinate_systems_names_and_units(
@@ -765,7 +765,7 @@ def test_get_affine_for_element(images):
         np.array(
             [
                 # fmt: off
-                #c  y  x       # noqa: E265
+                # c  y  x       # noqa: E265
                 [1, 0, 0, 0],  # c
                 [0, 0, 1, 1],  # x
                 [0, 1, 0, 2],  # y
@@ -994,7 +994,7 @@ def test_keep_numerical_coordinates_c(image_name):
     c_coords = range(3)
     sdata = blobs(n_channels=len(c_coords))
     t_blobs = transform(sdata.images[image_name], to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
-    assert np.array_equal(get_channels(t_blobs), c_coords)
+    assert np.array_equal(get_channel_names(t_blobs), c_coords)
 
 
 @pytest.mark.parametrize("image_name", ["blobs_image", "blobs_multiscale_image"])
@@ -1003,4 +1003,4 @@ def test_keep_string_coordinates_c(image_name):
     # n_channels will be ignored, testing also that this works
     sdata = blobs(c_coords=c_coords, n_channels=4)
     t_blobs = transform(sdata.images[image_name], to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
-    assert np.array_equal(get_channels(t_blobs), c_coords)
+    assert np.array_equal(get_channel_names(t_blobs), c_coords)
