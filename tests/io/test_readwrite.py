@@ -611,7 +611,7 @@ def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
 def test_incremental_io_attrs(points: SpatialData) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
-        my_attrs = {"a": "b", "c": 1}
+        my_attrs = {"a": "b", "c": 1, "encoding-type": "spatialdata", "encoding-version": "0.1"}
         points.attrs = my_attrs
         points.write(f)
 
