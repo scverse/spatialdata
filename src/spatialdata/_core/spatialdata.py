@@ -1215,6 +1215,13 @@ class SpatialData:
         self.write_attrs(zarr_group=zarr_group)
         store.close()
 
+        from spatialdata._io.format import SpatialDataContainerFormats
+
+        zarr_group.attrs["encoding-type"] = "spatialdata"
+        zarr_group.attrs["encoding-version"] = max(
+            SpatialDataContainerFormats.keys(), key=lambda version: float(version)
+        )
+
         for element_type, element_name, element in self.gen_elements():
             self._write_element(
                 element=element,
