@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
@@ -2454,6 +2455,76 @@ class SpatialData:
             self._attrs = value
         else:
             self._attrs = dict(value)
+
+    def filter_by_table_query(
+        self,
+        table_name: str,
+        filter_tables: bool = True,
+        include_orphan_tables: bool = False,
+        elements: list[str] | None = None,
+        obs_expr: Predicates | None = None,
+        var_expr: Predicates | None = None,
+        x_expr: Predicates | None = None,
+        obs_names_expr: Predicates | None = None,
+        var_names_expr: Predicates | None = None,
+        layer: str | None = None,
+        how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    ) -> SpatialData:
+        """Filter the SpatialData object based on a set of table queries. (:class:`anndata.AnnData`.
+
+        Parameters
+        ----------
+        table_name
+            The name of the table to filter the SpatialData object by.
+        filter_tables, optional
+            If True (default), the table is filtered to only contain rows that are annotating regions
+            contained within the element_names.
+        include_orphan_tables, optional
+            If True (not default), include tables that do not annotate SpatialElement(s). Only has an effect if
+            `filter_tables` is also set to True.
+        elements, optional
+            The names of the elements to filter the SpatialData object by.
+        obs_expr, optional
+            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs` by.
+        var_expr, optional
+            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var` by.
+        x_expr, optional
+            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.X` by.
+        obs_names_expr, optional
+            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs_names` by.
+        var_names_expr, optional
+            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var_names` by.
+        layer, optional
+            The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
+        how, optional
+            The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+
+        Returns
+        -------
+            The filtered SpatialData object.
+
+        Notes
+        -----
+        This function calls :func:`spatialdata.filter_by_table_query` with the convenience that `sdata` is the current
+        SpatialData object.
+
+        """
+        from spatialdata._core.query.relational_query import filter_by_table_query
+
+        return filter_by_table_query(
+            self,
+            table_name,
+            filter_tables,
+            include_orphan_tables,
+            elements,
+            obs_expr,
+            var_expr,
+            x_expr,
+            obs_names_expr,
+            var_names_expr,
+            layer,
+            how,
+        )
 
 
 class QueryManager:

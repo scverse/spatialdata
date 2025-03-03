@@ -41,6 +41,7 @@ __all__ = [
     "match_element_to_table",
     "match_table_to_element",
     "match_sdata_to_table",
+    "filter_by_table_query",
     "SpatialData",
     "get_extent",
     "get_centroids",
@@ -68,6 +69,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles, to_polygons
 from spatialdata._core.query._utils import get_bounding_box_corners
 from spatialdata._core.query.relational_query import (
+    filter_by_table_query,
     get_element_annotators,
     get_element_instances,
     get_values,

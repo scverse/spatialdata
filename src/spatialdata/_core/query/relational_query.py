@@ -12,6 +12,7 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
@@ -821,6 +822,33 @@ def match_sdata_to_table(
         overwrite_metadata=True,
     )
     return SpatialData.init_from_elements(filtered_elements | {table_name: filtered_table})
+
+
+def filter_by_table_query(
+    sdata: SpatialData,
+    table_name: str,
+    filter_tables: bool = True,
+    include_orphan_tables: bool = False,
+    elements: list[str] | None = None,
+    obs_expr: Predicates | None = None,
+    var_expr: Predicates | None = None,
+    x_expr: Predicates | None = None,
+    obs_names_expr: Predicates | None = None,
+    var_names_expr: Predicates | None = None,
+    layer: str | None = None,
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+) -> SpatialData:
+    sdata_subset = (
+        sdata.subset(element_names=elements, filter_tables=filter_tables, include_orphan_tables=include_orphan_tables)
+        if elements
+        else sdata
+    )
+
+    filtered_table = sdata_subset.tables[table_name].an.filter(
+        obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
+    )
+
+    return match_sdata_to_table(sdata=sdata_subset, table_name=table_name, table=filtered_table, how=how)
 
 
 @dataclass
