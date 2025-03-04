@@ -454,11 +454,10 @@ def sdata_query_aggregation() -> SpatialData:
 def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
     rng = np.random.default_rng(SEED)
     return AnnData(
-        rng.normal(size=(obs.shape[0], n_var)),
+        rng.normal(size=(obs.shape[0], n_var)).astype(np.float64),
         obs=obs,
         obsm=obsm,
         uns=uns,
-        dtype=np.float64,
     )
 
 
