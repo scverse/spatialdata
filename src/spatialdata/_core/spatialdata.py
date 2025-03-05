@@ -2460,8 +2460,7 @@ class SpatialData:
         self,
         table_name: str,
         filter_tables: bool = True,
-        include_orphan_tables: bool = False,
-        elements: list[str] | None = None,
+        element_names: list[str] | None = None,
         obs_expr: Predicates | None = None,
         var_expr: Predicates | None = None,
         x_expr: Predicates | None = None,
@@ -2479,10 +2478,7 @@ class SpatialData:
         filter_tables, optional
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
-        include_orphan_tables, optional
-            If True (not default), include tables that do not annotate SpatialElement(s). Only has an effect if
-            `filter_tables` is also set to True.
-        elements, optional
+        element_names, optional
             The names of the elements to filter the SpatialData object by.
         obs_expr, optional
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs` by.
@@ -2505,9 +2501,8 @@ class SpatialData:
 
         Notes
         -----
-        This function calls :func:`spatialdata.filter_by_table_query` with the convenience that `sdata` is the current
-        SpatialData object.
-
+        You can also use :method:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is
+        the current SpatialData object.
         """
         from spatialdata._core.query.relational_query import filter_by_table_query
 
@@ -2515,8 +2510,7 @@ class SpatialData:
             self,
             table_name,
             filter_tables,
-            include_orphan_tables,
-            elements,
+            element_names,
             obs_expr,
             var_expr,
             x_expr,

@@ -495,3 +495,139 @@ def adata_labels() -> AnnData:
         "tensor_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
     }
     return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)
+
+
+@pytest.fixture()
+def complex_sdata() -> SpatialData:
+    """
+    Create a complex SpatialData object with multiple data types for comprehensive testing.
+
+    Contains:
+    - Images (2D and 3D)
+    - Labels (2D and 3D)
+    - Shapes (polygons and circles)
+    - Points
+    - Multiple tables with different annotations
+    - Categorical and numerical values in both obs and var
+
+    Returns
+    -------
+    SpatialData
+        A complex SpatialData object for testing.
+    """
+    # Get basic components using existing functions
+    images = _get_images()
+    labels = _get_labels()
+    shapes = _get_shapes()
+    points = _get_points()
+
+    # Create tables with enhanced var data
+    n_var = 10
+
+    # Table 1: Basic table annotating labels2d
+    obs1 = pd.DataFrame(
+        {
+            "region": pd.Categorical(["labels2d"] * 50),
+            "instance_id": range(1, 51),  # Skip background (0)
+            "cell_type": pd.Categorical(RNG.choice(["T cell", "B cell", "Macrophage"], size=50)),
+            "size": RNG.uniform(10, 100, size=50),
+        }
+    )
+
+    var1 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(["gene", "protein", "gene", "protein", "gene"] * 2),
+            "importance": RNG.uniform(0, 10, size=n_var),
+            "is_marker": RNG.choice([True, False], size=n_var),
+        },
+        index=[f"feature_{i}" for i in range(n_var)],
+    )
+
+    X1 = RNG.normal(size=(50, n_var))
+    uns1 = {
+        "spatialdata_attrs": {
+            "region": "labels2d",
+            "region_key": "region",
+            "instance_key": "instance_id",
+        }
+    }
+
+    table1 = AnnData(X=X1, obs=obs1, var=var1, uns=uns1)
+
+    # Table 2: Annotating both polygons and circles from shapes
+    n_polygons = len(shapes["poly"])
+    n_circles = len(shapes["circles"])
+    total_items = n_polygons + n_circles
+
+    obs2 = pd.DataFrame(
+        {
+            "region": pd.Categorical(["poly"] * n_polygons + ["circles"] * n_circles),
+            "instance_id": np.concatenate([range(n_polygons), range(n_circles)]),
+            "category": pd.Categorical(RNG.choice(["A", "B", "C"], size=total_items)),
+            "value": RNG.normal(size=total_items),
+            "count": RNG.poisson(10, size=total_items),
+        }
+    )
+
+    var2 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(
+                ["feature_type1", "feature_type2", "feature_type1", "feature_type2", "feature_type1"] * 2
+            ),
+            "score": RNG.exponential(2, size=n_var),
+            "detected": RNG.choice([True, False], p=[0.7, 0.3], size=n_var),
+        },
+        index=[f"metric_{i}" for i in range(n_var)],
+    )
+
+    X2 = RNG.normal(size=(total_items, n_var))
+    uns2 = {
+        "spatialdata_attrs": {
+            "region": ["poly", "circles"],
+            "region_key": "region",
+            "instance_key": "instance_id",
+        }
+    }
+
+    table2 = AnnData(X=X2, obs=obs2, var=var2, uns=uns2)
+
+    # Table 3: Orphan table not annotating any elements
+    obs3 = pd.DataFrame(
+        {
+            "cluster": pd.Categorical(RNG.choice(["cluster_1", "cluster_2", "cluster_3"], size=40)),
+            "sample": pd.Categorical(["sample_A"] * 20 + ["sample_B"] * 20),
+            "qc_pass": RNG.choice([True, False], p=[0.8, 0.2], size=40),
+        }
+    )
+
+    var3 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(["gene", "protein", "gene", "protein", "gene"] * 2),
+            "mean_expression": RNG.uniform(0, 20, size=n_var),
+            "variance": RNG.gamma(2, 2, size=n_var),
+        },
+        index=[f"feature_{i}" for i in range(n_var)],
+    )
+
+    X3 = RNG.normal(size=(40, n_var))
+    table3 = AnnData(X=X3, obs=obs3, var=var3)
+
+    # Create additional coordinate system in one of the shapes for testing
+    # Modified copy of circles with an additional coordinate system
+    circles_alt_coords = shapes["circles"].copy()
+    circles_alt_coords["coordinate_system"] = "alt_system"
+
+    # Add everything to a SpatialData object
+    sdata = SpatialData(
+        images=images,
+        labels=labels,
+        shapes={**shapes, "circles_alt_coords": circles_alt_coords},
+        points=points,
+        tables={"labels_table": table1, "shapes_table": table2, "orphan_table": table3},
+    )
+
+    # Add layers to tables for testing layer-specific operations
+    sdata.tables["labels_table"].layers["scaled"] = sdata.tables["labels_table"].X * 2
+    sdata.tables["labels_table"].layers["log"] = np.log1p(np.abs(sdata.tables["labels_table"].X))
+
+    return sdata
