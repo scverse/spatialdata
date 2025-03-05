@@ -1,3 +1,4 @@
+import annsel as an
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,6 +8,7 @@ from spatialdata import SpatialData, get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _locate_value,
     _ValueOrigin,
+    filter_by_table_query,
     get_element_annotators,
     join_spatialelement_table,
 )
@@ -1052,3 +1054,210 @@ def test_get_element_annotators(full_sdata):
     full_sdata.tables["another_table"] = another_table
     names = get_element_annotators(full_sdata, "labels2d")
     assert names == {"another_table", "table"}
+
+
+def test_filter_by_table_query(complex_sdata):
+    """Test basic filtering functionality of filter_by_table_query."""
+    sdata = complex_sdata
+
+    # Test 1: Basic filtering on categorical obs column
+    result = filter_by_table_query(sdata=sdata, table_name="labels_table", obs_expr=an.col("cell_type") == "T cell")
+
+    # Check that the table was filtered properly
+    assert all(result["labels_table"].obs["cell_type"] == "T cell")
+    # Check that result has fewer rows than original
+    assert result["labels_table"].n_obs < sdata["labels_table"].n_obs
+    # Check that labels2d element is still present
+    assert "labels2d" in result.labels
+
+    # Test 2: Filtering on numerical obs column
+    result = filter_by_table_query(sdata=sdata, table_name="labels_table", obs_expr=an.col("size") > 50)
+
+    # Check that the table was filtered properly
+    assert all(result["labels_table"].obs["size"] > 50)
+    # Check that labels2d element is still present
+    assert "labels2d" in result.labels
+
+    # Test 3: Filtering with var expressions
+    result = filter_by_table_query(
+        sdata=sdata, table_name="shapes_table", var_expr=an.col("feature_type") == "feature_type1"
+    )
+
+    # Check that the filtered var dataframe only has 'spatial' feature_type
+    assert all(result["shapes_table"].var["feature_type"] == "feature_type1")
+    # Check that the filtered var dataframe has fewer rows than the original
+    assert result["shapes_table"].n_vars < sdata["shapes_table"].n_vars
+
+    # Test 4: Multiple filtering conditions (obs and var)
+    result = filter_by_table_query(
+        sdata=sdata, table_name="shapes_table", obs_expr=an.col("category") == "A", var_expr=an.col("score") > 2
+    )
+
+    # Check that both filters were applied
+    assert all(result["shapes_table"].obs["category"] == "A")
+    assert all(result["shapes_table"].var["score"] > 2)
+
+    # Test 5: Using X expressions
+    result = filter_by_table_query(sdata=sdata, table_name="labels_table", x_expr=an.col("feature_1") > 0.5)
+
+    # Check that the filter was applied to X
+    assert np.all(result["labels_table"][:, "feature_1"].X > 0.5)
+
+    # Test 6: Using different join types
+    # Test with inner join
+    result = filter_by_table_query(
+        sdata=sdata, table_name="shapes_table", obs_expr=an.col("category") == "A", how="inner"
+    )
+
+    # The elements should be filtered to only include instances in the table
+    assert "poly" in result.shapes
+    assert "circles" in result.shapes
+
+    # Test with left join
+    result = filter_by_table_query(
+        sdata=sdata, table_name="shapes_table", obs_expr=an.col("category") == "A", how="left"
+    )
+
+    # Elements should be preserved but table should be filtered
+    assert "poly" in result.shapes
+    assert "circles" in result.shapes
+    assert all(result["shapes_table"].obs["category"] == "A")
+
+    # Test 7: Filtering with specific element_names
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="shapes_table",
+        element_names=["poly"],  # Only include poly, not circles
+        obs_expr=an.col("category") == "A",
+    )
+
+    # Only specified elements should be in the result
+    assert "poly" in result.shapes
+    assert "circles" not in result.shapes
+
+    # Test 8: Testing orphan table handling
+    # First test with include_orphan_tables=False (default)
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="shapes_table",
+        obs_expr=an.col("category") == "A",
+        filter_tables=True,
+    )
+
+    # Orphan table should not be in the result
+    assert "orphan_table" not in result.tables
+
+
+def test_filter_by_table_query_with_layers(complex_sdata):
+    """Test filtering using different layers."""
+    sdata = complex_sdata
+
+    # Test filtering using a specific layer
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="labels_table",
+        x_expr=an.col("feature_1") > 1.0,
+        layer="scaled",  # The 'scaled' layer has values 2x the original X
+    )
+
+    # Values in the scaled layer's feature_1 column should be > 1.0
+    assert np.all(result["labels_table"][:, "feature_1"].layers["scaled"] > 1.0)
+
+
+def test_filter_by_table_query_edge_cases(complex_sdata):
+    """Test edge cases for filter_by_table_query."""
+    sdata = complex_sdata
+
+    # Test 1: Empty result from filtering raises AssertionError
+    with pytest.raises(AssertionError, match="No valid element to join"):
+        # This should raise an error because there are no elements matching this category
+        filter_by_table_query(
+            sdata=sdata,
+            table_name="shapes_table",
+            obs_expr=an.col("category") == "NonExistentCategory",
+            how="inner",  # Inner join requires matching elements
+        )
+
+    # Test 2: Filter by obs_names
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="shapes_table",
+        obs_names_expr=an.obs_names.str.starts_with("0"),  # Only rows with index starting with '0'
+    )
+
+    # Check that filtered table only has obs names starting with '0'
+    assert all(str(idx).startswith("0") for idx in result["shapes_table"].obs_names)
+
+    # Test 3: Invalid table name raises KeyError
+    with pytest.raises(KeyError, match="nonexistent_table"):
+        filter_by_table_query(sdata=sdata, table_name="nonexistent_table", obs_expr=an.col("category") == "A")
+
+    # Test 4: Invalid column name in expression
+    with pytest.raises(KeyError):  # The exact exception type may vary
+        filter_by_table_query(sdata=sdata, table_name="shapes_table", obs_expr=an.col("nonexistent_column") == "A")
+
+    # Test 5: Using layer that doesn't exist
+    with pytest.raises(KeyError):
+        filter_by_table_query(
+            sdata=sdata, table_name="labels_table", x_expr=an.col("feature_1") > 0.5, layer="nonexistent_layer"
+        )
+
+    # Test 6: Filter by var_names
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="labels_table",
+        var_names_expr=an.var_names.str.contains("feature_[0-4]"),  # Only features 0-4
+    )
+
+    # Check that filtered table only has var names matching the pattern
+    for idx in result["labels_table"].var_names:
+        var_name = str(idx)
+        assert var_name.startswith("feature_") and int(var_name.split("_")[1]) < 5
+
+    # Test 7: Invalid element_names (element doesn't exist)
+    with pytest.raises(AssertionError, match="elements_dict must not be empty"):
+        filter_by_table_query(
+            sdata=sdata,
+            table_name="shapes_table",
+            element_names=["nonexistent_element"],
+            obs_expr=an.col("category") == "A",
+        )
+
+    # Test 8: Invalid join type raises ValueError
+    with pytest.raises(TypeError, match="not a valid type of join."):
+        filter_by_table_query(
+            sdata=sdata,
+            table_name="shapes_table",
+            how="invalid_join_type",  # Invalid join type
+            obs_expr=an.col("category") == "A",
+        )
+
+
+def test_filter_by_table_query_complex_combination(complex_sdata):
+    """Test complex combinations of filters."""
+    sdata = complex_sdata
+
+    # Combine multiple filtering criteria
+    result = filter_by_table_query(
+        sdata=sdata,
+        table_name="shapes_table",
+        obs_expr=(an.col("category") == "A", an.col("value") > 0),
+        var_expr=an.col("feature_type") == "feature_type1",
+        how="inner",
+    )
+
+    # Validate the combined filtering results
+    assert all(result["shapes_table"].obs["category"] == "A")
+    assert all(result["shapes_table"].obs["value"] > 0)
+    assert all(result["shapes_table"].var["feature_type"] == "feature_type1")
+
+    # Both elements should be present but filtered
+    assert "circles" in result.shapes
+
+    # The filtered shapes should only contain the instances from the filtered table
+    table_instance_ids = set(
+        zip(result["shapes_table"].obs["region"], result["shapes_table"].obs["instance_id"], strict=True)
+    )
+    if "circles" in result.shapes:
+        for idx in result["circles"].index:
+            assert ("circles", idx) in table_instance_ids
