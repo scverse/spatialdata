@@ -2501,8 +2501,7 @@ class SpatialData:
 
         Notes
         -----
-        You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is
-        the current SpatialData object.
+        You can also use :func:`query.relational_query.filter_by_table_query`.
         """
         from spatialdata._core.query.relational_query import filter_by_table_query
 

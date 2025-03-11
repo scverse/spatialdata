@@ -871,9 +871,8 @@ def filter_by_table_query(
 
     Notes
     -----
-    This function calls :func:`spatialdata.filter_by_table_query` with the convenience that `sdata` is the current
-    SpatialData object.
-
+    You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is the
+    current SpatialData object.
     """
     sdata_subset: SpatialData = (
         sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
