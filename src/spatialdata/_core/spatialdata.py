@@ -2475,24 +2475,24 @@ class SpatialData:
         ----------
         table_name
             The name of the table to filter the SpatialData object by.
-        filter_tables, optional
+        filter_tables
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
-        element_names, optional
+        element_names
             The names of the elements to filter the SpatialData object by.
-        obs_expr, optional
+        obs_expr
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs` by.
-        var_expr, optional
+        var_expr
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var` by.
-        x_expr, optional
+        x_expr
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.X` by.
-        obs_names_expr, optional
+        obs_names_expr
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs_names` by.
-        var_names_expr, optional
+        var_names_expr
             A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var_names` by.
-        layer, optional
+        layer
             The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
-        how, optional
+        how
             The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
         Returns
