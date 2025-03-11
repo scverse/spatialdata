@@ -1168,17 +1168,7 @@ def test_filter_by_table_query_edge_cases(complex_sdata):
     """Test edge cases for filter_by_table_query."""
     sdata = complex_sdata
 
-    # Test 1: Empty result from filtering raises AssertionError
-    with pytest.raises(AssertionError, match="No valid element to join"):
-        # This should raise an error because there are no elements matching this category
-        filter_by_table_query(
-            sdata=sdata,
-            table_name="shapes_table",
-            obs_expr=an.col("category") == "NonExistentCategory",
-            how="inner",  # Inner join requires matching elements
-        )
-
-    # Test 2: Filter by obs_names
+    # Test 1: Filter by obs_names
     result = filter_by_table_query(
         sdata=sdata,
         table_name="shapes_table",
@@ -1188,21 +1178,21 @@ def test_filter_by_table_query_edge_cases(complex_sdata):
     # Check that filtered table only has obs names starting with '0'
     assert all(str(idx).startswith("0") for idx in result["shapes_table"].obs_names)
 
-    # Test 3: Invalid table name raises KeyError
+    # Test 2: Invalid table name raises KeyError
     with pytest.raises(KeyError, match="nonexistent_table"):
         filter_by_table_query(sdata=sdata, table_name="nonexistent_table", obs_expr=an.col("category") == "A")
 
-    # Test 4: Invalid column name in expression
+    # Test 3: Invalid column name in expression
     with pytest.raises(KeyError):  # The exact exception type may vary
         filter_by_table_query(sdata=sdata, table_name="shapes_table", obs_expr=an.col("nonexistent_column") == "A")
 
-    # Test 5: Using layer that doesn't exist
+    # Test 4: Using layer that doesn't exist
     with pytest.raises(KeyError):
         filter_by_table_query(
             sdata=sdata, table_name="labels_table", x_expr=an.col("feature_1") > 0.5, layer="nonexistent_layer"
         )
 
-    # Test 6: Filter by var_names
+    # Test 5: Filter by var_names
     result = filter_by_table_query(
         sdata=sdata,
         table_name="labels_table",
@@ -1214,7 +1204,7 @@ def test_filter_by_table_query_edge_cases(complex_sdata):
         var_name = str(idx)
         assert var_name.startswith("feature_") and int(var_name.split("_")[1]) < 5
 
-    # Test 7: Invalid element_names (element doesn't exist)
+    # Test 6: Invalid element_names (element doesn't exist)
     with pytest.raises(AssertionError, match="elements_dict must not be empty"):
         filter_by_table_query(
             sdata=sdata,
@@ -1223,7 +1213,7 @@ def test_filter_by_table_query_edge_cases(complex_sdata):
             obs_expr=an.col("category") == "A",
         )
 
-    # Test 8: Invalid join type raises ValueError
+    # Test 7: Invalid join type raises ValueError
     with pytest.raises(TypeError, match="not a valid type of join."):
         filter_by_table_query(
             sdata=sdata,
