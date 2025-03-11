@@ -15,6 +15,7 @@ Operations on `SpatialData` objects.
 .. autofunction:: match_element_to_table
 .. autofunction:: match_table_to_element
 .. autofunction:: match_sdata_to_table
+.. autofunction:: filter_by_table_query
 .. autofunction:: concatenate
 .. autofunction:: transform
 .. autofunction:: rasterize

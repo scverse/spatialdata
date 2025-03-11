@@ -103,6 +103,7 @@ intersphinx_mapping = {
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
 }
 
 
