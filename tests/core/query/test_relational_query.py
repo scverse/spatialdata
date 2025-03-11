@@ -1228,8 +1228,7 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
     sdata = complex_sdata
 
     # Combine multiple filtering criteria
-    result = filter_by_table_query(
-        sdata=sdata,
+    result = sdata.filter_by_table_query(
         table_name="shapes_table",
         obs_expr=(an.col("category") == "A", an.col("value") > 0),
         var_expr=an.col("feature_type") == "feature_type1",
