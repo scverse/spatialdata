@@ -1,5 +1,7 @@
 import logging
 import warnings
+from json import JSONDecodeError
+from typing import TYPE_CHECKING, Literal
 
 import zarr
 import zarr.storage
@@ -9,12 +11,26 @@ from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import StoreLike, _create_upath, _open_zarr_store, ome_zarr_logger
-from spatialdata._io.io_points import _read_points
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    StoreLike,
+    _create_upath,
+    _open_zarr_store,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_raster import _read_multiscale
-from spatialdata._io.io_shapes import _read_shapes
-from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+
+if TYPE_CHECKING:
+    from dask.dataframe import DataFrame as DaskDataFrame
+    from geopandas import GeoDataFrame
+    from xarray import DataArray, DataTree
+
+
+def is_hidden_zarr_entry(name: str) -> bool:
+    """Skip hidden files like .zgroup or .zmetadata"""
+    return name.rpartition("/")[2].startswith(".")
 
 
 def read_image_element(path: StoreLike) -> DataArray | DataTree:
@@ -184,7 +200,7 @@ def read_zarr(store_like: StoreLike, selection: None | tuple[str] = None) -> Spa
 
     if "table" in selector and "table" in f:
         warnings.warn(
-            f"Table group found in zarr store at location {f}. Please update the zarr store to use tables instead.",
+            f"Table group found in zarr store at location {store}. Please update the zarr store to use tables instead.",
             DeprecationWarning,
             stacklevel=2,
         )
