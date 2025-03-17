@@ -18,7 +18,6 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _open_zarr_store,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
@@ -33,12 +32,10 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(
-    store: str | UPath | zarr.storage.BaseStore, raster_type: Literal["image", "labels"]
-) -> DataArray | DataTree:
+def _read_multiscale(store: zarr.storage.BaseStore, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
     if isinstance(store, str | UPath):
-        store = _open_zarr_store(store)
+        raise NotImplementedError("removed in this PR")
     group = zarr.group(store=store)
     version = _parse_version(group, expect_attrs_key=True)
     # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
@@ -47,7 +44,7 @@ def _read_multiscale(
     store.close()
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store)
+    image_loc = ZarrLocation(store, fmt=format)
     if image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
