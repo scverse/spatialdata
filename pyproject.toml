@@ -33,7 +33,7 @@ dependencies = [
     "numba>=0.55.0",
     "numpy",
     "ome_zarr>=0.8.4",
-    "universal_pathlib>=0.2.0",
+    "universal_pathlib>=0.2.6",
     "pandas",
     "pooch",
     "pyarrow",

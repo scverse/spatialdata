@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import warnings
 from json import JSONDecodeError
@@ -19,7 +21,10 @@ from spatialdata._io._utils import (
     handle_read_errors,
     ome_zarr_logger,
 )
+from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
+from spatialdata._io.io_shapes import _read_shapes
+from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 if TYPE_CHECKING:
@@ -66,11 +71,13 @@ def read_labels_element(path: StoreLike) -> DataArray | DataTree:
 
 
 def read_points_element(path: StoreLike) -> DaskDataFrame:
-    raise NotImplementedError
+    store = _open_zarr_store(path)
+    return _read_points(store)
 
 
 def read_shapes_element(path: StoreLike) -> GeoDataFrame:
-    raise NotImplementedError
+    store = _open_zarr_store(path)
+    return _read_shapes(store)
 
 
 def read_tables_element(
@@ -80,7 +87,14 @@ def read_tables_element(
     tables: dict[str, AnnData],
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> dict[str, AnnData]:
-    raise NotImplementedError
+    store = _open_zarr_store(zarr_store_path)
+    return _read_table(
+        store,
+        group,
+        subgroup,
+        tables,
+        on_bad_files,
+    )
 
 
 def read_zarr(store_like: StoreLike, selection: None | tuple[str] = None) -> SpatialData:
