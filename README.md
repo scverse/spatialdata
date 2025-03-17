@@ -18,7 +18,8 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 
 [//]: # "numfocus-fiscal-sponsor-attribution"
 
-The spatialdata project uses a [consensus based governance model](https://scverse.org/about/roles/) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/). Consider making a [tax-deductible donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+spatialdata is part of the scverse® project ([website](https://scverse.org), [governance](https://scverse.org/about/roles)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
+If you like scverse® and want to support our mission, please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
 
 The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
@@ -41,7 +42,7 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 Please refer to the [documentation][link-docs]. In particular:
 
 - [API documentation][link-api].
-- [Design doc][link-design-doc].
+- [Design doc][link-design-doc] (includes the roadmap).
 - [Example notebooks][link-notebooks].
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
@@ -54,7 +55,8 @@ Check out the docs for more complete [installation instructions](https://spatial
 pip install "spatialdata[extra]"
 ```
 
-or via conda:
+~~or via conda:~~
+Update Feb 2025: `spatialdata` cannot be currently be installed via `conda` because some dependencies of our dependencies are not updated in `conda-forge` and we are still waiting for an update. Please install from `pip`; the latest versions of the `spatialdata` libraries are always available via `PyPI`.
 
 ```bash
 mamba install -c conda-forge spatialdata napari-spatialdata spatialdata-io spatialdata-plot

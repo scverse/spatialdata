@@ -30,7 +30,7 @@ dependencies = [
     "geopandas>=0.14",
     "multiscale_spatial_image>=2.0.2",
     "networkx",
-    "numba",
+    "numba>=0.55.0",
     "numpy",
     "ome_zarr>=0.8.4",
     "universal_pathlib>=0.2.0",
@@ -54,6 +54,13 @@ dependencies = [
 dev = [
     "bump2version",
 ]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "torch",
+    "moto[s3,server]"
+]
 docs = [
     "sphinx>=4.5",
 	"sphinx-autobuild",
@@ -66,13 +73,6 @@ docs = [
     "ipython>=8.6.0",
     "sphinx-copybutton",
     "sphinx-pytest",
-]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "torch",
-    "moto[s3,server]"
 ]
 benchmark = [
     "asv",
@@ -129,7 +129,7 @@ exclude = [
     "docs/_build",
     "dist",
     "setup.py",
-    
+
 ]
 line-length = 120
 target-version = "py310"

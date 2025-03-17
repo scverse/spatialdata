@@ -312,7 +312,6 @@ def _aggregate_image_by_labels(
         X,
         obs=pd.DataFrame(index=zones.astype(str)),
         var=pd.DataFrame(index=df.columns),
-        dtype=X.dtype,
     )
 
 
@@ -490,7 +489,6 @@ def _aggregate_shapes(
         X,
         obs=pd.DataFrame(index=rows_categories),
         var=pd.DataFrame(index=columns_categories),
-        dtype=X.dtype,
     )
 
     # cleanup: remove columns previously added

@@ -40,6 +40,7 @@ __all__ = [
     "join_spatialelement_table",
     "match_element_to_table",
     "match_table_to_element",
+    "match_sdata_to_table",
     "SpatialData",
     "get_extent",
     "get_centroids",
@@ -72,10 +73,12 @@ from spatialdata._core.query.relational_query import (
     get_values,
     join_spatialelement_table,
     match_element_to_table,
+    match_sdata_to_table,
     match_table_to_element,
 )
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import get_dask_backing_files, save_transformations
+from spatialdata._io.format import SpatialDataFormat
 from spatialdata._io.io_zarr import read_zarr
 from spatialdata._utils import get_pyramid_levels, unpad_raster
