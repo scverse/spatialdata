@@ -432,6 +432,8 @@ def _create_upath(path: StoreLike) -> UPath:
     if hasattr(path, "store") and isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
         # create a url from the ConsolidatedMetadataStore and append it with the path from the Group StoreLike object
         return UPath(path.store.store.path) / path.path
+    if isinstance(path, zarr.storage.BaseStore):
+        return UPath(path.path)
     # best effort to create a UPath
     return UPath(path)
 
