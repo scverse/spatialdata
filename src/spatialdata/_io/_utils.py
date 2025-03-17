@@ -398,7 +398,7 @@ def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:
         path = UPath(path)
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use DirectoryStore
-        return zarr.storage.DirectoryStore(path.path)
+        return zarr.storage.DirectoryStore(path.path, dimension_separator="/")
     if isinstance(path, zarr.Group):
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, zarr.storage.DirectoryStore):
