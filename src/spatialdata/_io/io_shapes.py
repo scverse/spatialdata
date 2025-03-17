@@ -12,26 +12,16 @@ from spatialdata._io._utils import (
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
-from spatialdata._io.format import (
-    CurrentShapesFormat,
-    ShapesFormats,
-    ShapesFormatV01,
-    ShapesFormatV02,
-    _parse_version,
-)
+from spatialdata._io.format import CurrentShapesFormat, ShapesFormats, ShapesFormatV01, ShapesFormatV02, _parse_version
 from spatialdata.models import ShapesModel, get_axes_names
-from spatialdata.transformations._utils import (
-    _get_transformations,
-    _set_transformations,
-)
+from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 
 def _read_shapes(
     store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    assert isinstance(store, str | Path)
-    f = zarr.open(store, mode="r")
+    f = zarr.open(store, mode="r") if isinstance(store, str | Path | MutableMapping) else store
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     format = ShapesFormats[version]
