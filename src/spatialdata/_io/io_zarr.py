@@ -1,10 +1,7 @@
 import logging
-import os
 import warnings
 from json import JSONDecodeError
-from pathlib import Path
-from typing import Literal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import zarr
 from anndata import AnnData
@@ -12,25 +9,25 @@ from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
-from spatialdata._io._utils import StoreLike
-from spatialdata._io._utils import _create_upath
-from spatialdata._io._utils import _open_zarr_store
-from spatialdata._io.io_points import _read_points
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    StoreLike,
+    _create_upath,
+    _open_zarr_store,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_raster import _read_multiscale
-from spatialdata._io.io_shapes import _read_shapes
-from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 if TYPE_CHECKING:
-    from xarray import DataArray
-    from xarray import DataTree
     from dask.dataframe import DataFrame as DaskDataFrame
     from geopandas import GeoDataFrame
+    from xarray import DataArray, DataTree
 
 
 def is_hidden_zarr_entry(name: str) -> bool:
-    """skip hidden files like .zgroup or .zmetadata"""
+    """Skip hidden files like .zgroup or .zmetadata"""
     return name.rpartition("/")[2].startswith(".")
 
 
@@ -238,8 +235,7 @@ def read_zarr(
 
     if "table" in selector and "table" in f:
         warnings.warn(
-            f"Table group found in zarr store at location {store}. Please update the zarr store to use tables "
-            f"instead.",
+            f"Table group found in zarr store at location {store}. Please update the zarr store to use tables instead.",
             DeprecationWarning,
             stacklevel=2,
         )
