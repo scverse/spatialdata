@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def is_hidden_zarr_entry(name: str) -> bool:
-    """Skip hidden files like .zgroup or .zmetadata"""
+    """Skip hidden files like '.zgroup' or '.zmetadata'."""
     return name.rpartition("/")[2].startswith(".")
 
 
@@ -64,11 +64,11 @@ def read_labels_element(path: StoreLike) -> DataArray | DataTree:
 
 
 def read_points_element(path: StoreLike) -> DaskDataFrame:
-    pass
+    raise NotImplementedError
 
 
 def read_shapes_element(path: StoreLike) -> GeoDataFrame:
-    pass
+    raise NotImplementedError
 
 
 def read_tables_element(
@@ -78,7 +78,7 @@ def read_tables_element(
     tables: dict[str, AnnData],
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> dict[str, AnnData]:
-    pass
+    raise NotImplementedError
 
 
 def read_zarr(
