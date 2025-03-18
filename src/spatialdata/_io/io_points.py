@@ -1,4 +1,3 @@
-import os
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -29,10 +28,7 @@ def _read_points(
     assert version is not None
     format = PointsFormats[version]
 
-    path = os.path.join(f._store.path, f.path, "points.parquet")
-    # cache on remote file needed for parquet reader to work
-    # TODO: allow reading in the metadata without caching all the data
-    points = read_parquet("simplecache::" + path if path.startswith("http") else path)
+    points = read_parquet(f.store.path, filesystem=f.store.fs)
     assert isinstance(points, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
