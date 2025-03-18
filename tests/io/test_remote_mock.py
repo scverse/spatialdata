@@ -133,8 +133,7 @@ class TestRemoteMock:
         [
             "images",
             "labels",
-            # TODO: fix remote reading support points
-            # "points",
+            "points",
             # TODO: fix remote reading support shapes
             # "shapes",
         ],
