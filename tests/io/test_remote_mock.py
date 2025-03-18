@@ -135,6 +135,8 @@ class TestRemoteMock:
             "labels",
             "points",
             "shapes",
+            "table_single_annotation",
+            "table_multiple_annotations",
         ],
     )
     def test_reading_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:
