@@ -1,9 +1,9 @@
-from pathlib import Path
 from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
 import zarr
+import zarr.storage
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -13,18 +13,14 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from upath import UPath
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     overwrite_coordinate_transformations_raster,
 )
-from spatialdata._io.format import (
-    CurrentRasterFormat,
-    RasterFormats,
-    RasterFormatV01,
-    _parse_version,
-)
+from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
@@ -36,19 +32,19 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
-    assert isinstance(store, str | Path)
+def _read_multiscale(store: zarr.storage.BaseStore, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
-
-    f = zarr.open(store, mode="r")
-    version = _parse_version(f, expect_attrs_key=True)
+    if isinstance(store, str | UPath):
+        raise NotImplementedError("removed in this PR")
+    group = zarr.group(store=store)
+    version = _parse_version(group, expect_attrs_key=True)
     # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
     # interpreting the lack of such information as the presence of the format v01
     format = RasterFormatV01() if version is None else RasterFormats[version]
-    f.store.close()
+    store.close()
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store)
+    image_loc = ZarrLocation(store, fmt=format)
     if image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
