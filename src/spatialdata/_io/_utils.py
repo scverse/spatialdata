@@ -425,17 +425,16 @@ def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:
     raise TypeError(f"Unsupported type: {type(path)}")
 
 
-def _create_upath(path: StoreLike) -> UPath:
+def _create_upath(path: StoreLike) -> UPath | None:
     # try to create a UPath from the input
-    if isinstance(path, str | Path):
-        return Path(path)
-    if hasattr(path, "store") and isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
-        # create a url from the ConsolidatedMetadataStore and append it with the path from the Group StoreLike object
-        return UPath(path.store.store.path) / path.path
-    if isinstance(path, zarr.storage.BaseStore):
+    if isinstance(path, zarr.storage.ConsolidatedMetadataStore):
+        path = path.store  # get the fsstore from the consolidated store
+    if isinstance(path, FSStore):
+        protocol = path.fs.protocol if isinstance(path.fs.protocol, str) else path.fs.protocol[0]
+        return UPath(path.path, protocol=protocol, **path.fs.storage_options)
+    if isinstance(path, zarr.storage.DirectoryStore):
         return UPath(path.path)
-    # best effort to create a UPath
-    return UPath(path)
+    return None
 
 
 class BadFileHandleMethod(Enum):
