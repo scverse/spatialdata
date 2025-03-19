@@ -40,6 +40,12 @@ If you like scverse® and want to support our mission, please consider making a 
 
     Learn how to install ``spatialdata``.
 
+.. card:: User Guide
+    :link: user_guide
+    :link-type: doc
+
+    Navigate your way through ``spatialdata`` tutorials.
+
 .. card:: Tutorials
     :link: tutorials/notebooks/notebooks
     :link-type: doc
@@ -77,6 +83,7 @@ If you like scverse® and want to support our mission, please consider making a 
 :maxdepth: 1
 
 installation.md
+user_guide.md
 api.md
 tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
