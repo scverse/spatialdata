@@ -227,12 +227,15 @@ def _(
     return ShapesModel.parse(gdf, transformations=transformations.copy())
 
 
-def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon:
+def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon | Polygon:
     mask = np.pad(region_props.image, 1)
     contours = skimage.measure.find_contours(mask, 0.5)
 
     # shapes with <= 3 vertices, i.e. lines, can't be converted into a polygon
     polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
+
+    assert len(polygons) > 0, "No valid polygon found in the region properties."
+
     polygon = MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
     yoff, xoff, *_ = region_props.bbox
