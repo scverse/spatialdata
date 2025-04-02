@@ -11,7 +11,7 @@ def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_o
 
     sdata_keys = ["blob1", "blob2"]
     sdata = sd.concatenate(
-        dict(zip(sdata_keys, [blob1, blob2])),
+        dict(zip(sdata_keys, [blob1, blob2], strict=True)),
         merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
     )
 
