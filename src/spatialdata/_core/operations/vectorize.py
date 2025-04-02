@@ -227,30 +227,30 @@ def _(
     return ShapesModel.parse(gdf, transformations=transformations.copy())
 
 
-def _region_props_to_polygons(region_props: RegionProperties) -> list[Polygon]:
+def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon:
     mask = np.pad(region_props.image, 1)
     contours = skimage.measure.find_contours(mask, 0.5)
 
     # shapes with <= 3 vertices, i.e. lines, can't be converted into a polygon
     polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
+    polygon = MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
     yoff, xoff, *_ = region_props.bbox
-    return [shapely.affinity.translate(poly, xoff, yoff) for poly in polygons]
+    return shapely.affinity.translate(polygon, xoff - 1, yoff - 1)  # account for the padding
 
 
 def _vectorize_mask(
     mask: np.ndarray,  # type: ignore[type-arg]
 ) -> GeoDataFrame:
     if mask.max() == 0:
-        return GeoDataFrame(geometry=[])
+        return GeoDataFrame({"label": []}, geometry=[])
 
     regions = skimage.measure.regionprops(mask)
 
-    polygons_list = [_region_props_to_polygons(region) for region in regions]
-    geoms = [poly for polygons in polygons_list for poly in polygons]
-    labels = [region.label for i, region in enumerate(regions) for _ in range(len(polygons_list[i]))]
-
-    return GeoDataFrame({"label": labels}, geometry=geoms)
+    return GeoDataFrame(
+        {"label": [region.label for region in regions]},
+        geometry=[_region_props_to_polygon(region) for region in regions],
+    )
 
 
 def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:

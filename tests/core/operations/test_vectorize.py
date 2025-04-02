@@ -3,9 +3,11 @@ import math
 import numpy as np
 import pytest
 from geopandas import GeoDataFrame
-from shapely import MultiPoint, Point
+from shapely import MultiPoint, Point, Polygon
+from shapely.ops import unary_union
+from skimage.draw import polygon
 
-from spatialdata._core.operations.vectorize import to_circles, to_polygons
+from spatialdata._core.operations.vectorize import _vectorize_mask, to_circles, to_polygons
 from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
@@ -139,3 +141,22 @@ def test_invalid_geodataframe_to_polygons() -> None:
     gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
     with pytest.raises(RuntimeError, match="Unsupported geometry type"):
         to_polygons(gdf)
+
+
+def test_vectorize_mask_almost_invertible() -> None:
+    cell = Polygon([[10, 10], [30, 40], [90, 50], [100, 20]])
+    image_shape = (70, 120)
+
+    rasterized_image = np.zeros(image_shape, dtype=np.int8)
+    x, y = cell.exterior.coords.xy
+    rr, cc = polygon(y, x, image_shape)
+    rasterized_image[rr, cc] = 1
+
+    new_cell = _vectorize_mask(rasterized_image)
+    new_cell = unary_union(new_cell.geometry)
+
+    assert new_cell.intersection(cell).area / new_cell.union(cell).area > 0.97
+
+def test_label_column_vectorize_mask() -> None:
+    assert "label" in _vectorize_mask(np.array([0]))
+    assert "label" in _vectorize_mask(np.array([[0, 1], [1, 1]]))
