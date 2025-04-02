@@ -1,4 +1,3 @@
-import pandas as pd
 import pytest
 
 import spatialdata as sd
@@ -21,24 +20,15 @@ def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_o
     expected_points = ["blobs_points"]
     expected_shapes = ["blobs_circles", "blobs_polygons", "blobs_multipolygons"]
 
-    expected_suffixed_images = [
-        f"{name}-{key}" for key in sdata_keys for name in expected_images
-    ]
-    expected_suffixed_labels = [
-        f"{name}-{key}" for key in sdata_keys for name in expected_labels
-    ]
-    expected_suffixed_points = [
-        f"{name}-{key}" for key in sdata_keys for name in expected_points
-    ]
-    expected_suffixed_shapes = [
-        f"{name}-{key}" for key in sdata_keys for name in expected_shapes
-    ]
+    expected_suffixed_images = [f"{name}-{key}" for key in sdata_keys for name in expected_images]
+    expected_suffixed_labels = [f"{name}-{key}" for key in sdata_keys for name in expected_labels]
+    expected_suffixed_points = [f"{name}-{key}" for key in sdata_keys for name in expected_points]
+    expected_suffixed_shapes = [f"{name}-{key}" for key in sdata_keys for name in expected_shapes]
 
     assert set(sdata.images.keys()) == set(expected_suffixed_images)
     assert set(sdata.labels.keys()) == set(expected_suffixed_labels)
     assert set(sdata.points.keys()) == set(expected_suffixed_points)
     assert set(sdata.shapes.keys()) == set(expected_suffixed_shapes)
-
 
     if merge_coordinate_systems_on_name:
         assert sdata.coordinate_systems == ["global"]
