@@ -157,6 +157,7 @@ def test_vectorize_mask_almost_invertible() -> None:
 
     assert new_cell.intersection(cell).area / new_cell.union(cell).area > 0.97
 
+
 def test_label_column_vectorize_mask() -> None:
     assert "label" in _vectorize_mask(np.array([0]))
     assert "label" in _vectorize_mask(np.array([[0, 1], [1, 1]]))
