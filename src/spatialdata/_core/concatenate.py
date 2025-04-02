@@ -14,6 +14,11 @@ from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
 from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import SpatialElement, TableModel, get_table_keys
+from spatialdata.transformations import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
 
 __all__ = [
     "concatenate",
@@ -30,29 +35,43 @@ def _concatenate_tables(
 
     if not all(TableModel.ATTRS_KEY in table.uns for table in tables):
         raise ValueError("Not all tables are annotating a spatial element")
-    region_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables]
-    instance_keys = [table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables]
-    regions = [table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables]
+    region_keys = [
+        table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] for table in tables
+    ]
+    instance_keys = [
+        table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY] for table in tables
+    ]
+    regions = [
+        table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] for table in tables
+    ]
 
     if len(set(region_keys)) == 1:
         region_key = list(region_keys)[0]
     else:
         if region_key is None:
-            raise ValueError("`region_key` must be specified if tables have different region keys")
+            raise ValueError(
+                "`region_key` must be specified if tables have different region keys"
+            )
 
     # get unique regions from list of lists or str
     regions_unique = list(chain(*[[i] if isinstance(i, str) else i for i in regions]))
     if len(set(regions_unique)) != len(regions_unique):
-        raise ValueError(f"Two or more tables seems to annotate regions with the same name: {regions_unique}")
+        raise ValueError(
+            f"Two or more tables seems to annotate regions with the same name: {regions_unique}"
+        )
 
     if len(set(instance_keys)) == 1:
         instance_key = list(instance_keys)[0]
     else:
         if instance_key is None:
-            raise ValueError("`instance_key` must be specified if tables have different instance keys")
+            raise ValueError(
+                "`instance_key` must be specified if tables have different instance keys"
+            )
 
     tables_l = []
-    for table_region_key, table_instance_key, table in zip(region_keys, instance_keys, tables, strict=True):
+    for table_region_key, table_instance_key, table in zip(
+        region_keys, instance_keys, tables, strict=True
+    ):
         rename_dict = {}
         if table_region_key != region_key:
             rename_dict[table_region_key] = region_key
@@ -81,7 +100,10 @@ def concatenate(
     concatenate_tables: bool = False,
     obs_names_make_unique: bool = True,
     modify_tables_inplace: bool = False,
-    attrs_merge: StrategiesLiteral | Callable[[list[dict[Any, Any]]], dict[Any, Any]] | None = None,
+    merge_coordinate_systems_on_name: bool = False,
+    attrs_merge: (
+        StrategiesLiteral | Callable[[list[dict[Any, Any]]], dict[Any, Any]] | None
+    ) = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -141,6 +163,7 @@ def concatenate(
             rename_tables=not concatenate_tables,
             rename_obs_names=obs_names_make_unique and concatenate_tables,
             modify_tables_inplace=modify_tables_inplace,
+            merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
         )
 
     ERROR_STR = (
@@ -188,7 +211,9 @@ def concatenate(
         for sdata in sdatas:
             for k, v in sdata.tables.items():
                 if k in common_keys and merged_tables.get(k) is not None:
-                    merged_tables[k] = _concatenate_tables([merged_tables[k], v], region_key, instance_key, **kwargs)
+                    merged_tables[k] = _concatenate_tables(
+                        [merged_tables[k], v], region_key, instance_key, **kwargs
+                    )
                 else:
                     merged_tables[k] = v
 
@@ -209,11 +234,15 @@ def concatenate(
     return sdata
 
 
-def _filter_table_in_coordinate_systems(table: AnnData, coordinate_systems: list[str]) -> AnnData:
+def _filter_table_in_coordinate_systems(
+    table: AnnData, coordinate_systems: list[str]
+) -> AnnData:
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
     new_table = table[table.obs[region_key].isin(coordinate_systems)].copy()
-    new_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_table.obs[region_key].unique().tolist()
+    new_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        new_table.obs[region_key].unique().tolist()
+    )
     return new_table
 
 
@@ -222,12 +251,16 @@ def _fix_ensure_unique_element_names(
     rename_tables: bool,
     rename_obs_names: bool,
     modify_tables_inplace: bool,
+    merge_coordinate_systems_on_name: bool,
 ) -> list[SpatialData]:
-    elements_by_sdata: list[dict[str, SpatialElement]] = []
-    tables_by_sdata: list[dict[str, AnnData]] = []
+    sdatas_fixed = []
     for suffix, sdata in sdatas.items():
-        elements = {f"{name}-{suffix}": el for _, name, el in sdata.gen_spatial_elements()}
-        elements_by_sdata.append(elements)
+        # Create new elements dictionary with suffixed names
+        elements = {
+            f"{name}-{suffix}": el for _, name, el in sdata.gen_spatial_elements()
+        }
+
+        # Handle tables with suffix
         tables = {}
         for name, table in sdata.tables.items():
             if not modify_tables_inplace:
@@ -235,7 +268,9 @@ def _fix_ensure_unique_element_names(
 
             # fix the region_key column
             region, region_key, _ = get_table_keys(table)
-            table.obs[region_key] = (table.obs[region_key].astype("str") + f"-{suffix}").astype("category")
+            table.obs[region_key] = (
+                table.obs[region_key].astype("str") + f"-{suffix}"
+            ).astype("category")
             new_region: str | list[str]
             if isinstance(region, str):
                 new_region = f"{region}-{suffix}"
@@ -246,14 +281,34 @@ def _fix_ensure_unique_element_names(
 
             # fix the obs names
             if rename_obs_names:
-                table.obs.index = table.obs.index.to_series().apply(lambda x, suffix=suffix: f"{x}-{suffix}")
+                table.obs.index = table.obs.index.to_series().apply(
+                    lambda x, suffix=suffix: f"{x}-{suffix}"
+                )
 
             # fix the table name
             new_name = f"{name}-{suffix}" if rename_tables else name
             tables[new_name] = table
-        tables_by_sdata.append(tables)
-    sdatas_fixed = []
-    for elements, tables in zip(elements_by_sdata, tables_by_sdata, strict=True):
-        sdata = SpatialData.init_from_elements(elements, tables=tables)
-        sdatas_fixed.append(sdata)
+
+        # Create new SpatialData object with suffixed elements and tables
+        sdata_fixed = SpatialData.init_from_elements(elements, tables=tables)
+
+        # Handle coordinate systems and transformations
+        for element_name, element in elements.items():
+            # Get the original element from the input sdata
+            original_name = element_name.replace(f"-{suffix}", "")
+            original_element = sdata.get(original_name)
+
+            # Get transformations from original element
+            transformations = get_transformation(original_element, get_all=True)
+            assert isinstance(transformations, dict)
+
+            # Remove any existing transformations from the new element
+            remove_transformation(element, remove_all=True)
+
+            # Set new transformations with suffixed coordinate system names
+            for cs, t in transformations.items():
+                new_cs = cs if merge_coordinate_systems_on_name else f"{cs}-{suffix}"
+                set_transformation(element, t, to_coordinate_system=new_cs)
+
+        sdatas_fixed.append(sdata_fixed)
     return sdatas_fixed
