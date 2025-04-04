@@ -160,19 +160,20 @@ class TestRemoteMock:
             # "images",
             # TODO: fix remote writing support labels
             # "labels",
-            # TODO: fix remote writing support points
-            # "points",
-            # TODO: fix remote writing support shapes
-            # "shapes",
+            "points",
+            "shapes",
+            "table_single_annotation",
+            "table_multiple_annotations",
         ],
     )
     def test_writing_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:
-        sdata = request.getfixturevalue(sdata_type)
-        n_elements = len(list(sdata.gen_elements()))
+        local_sdata = request.getfixturevalue(sdata_type)
+        local_len = len(list(local_sdata.gen_elements()))
+        assert local_len > 0
         # test writing to a remote path
         remote_path = upath / "tmp.zarr"
-        sdata.write(remote_path)
-        assert len(upath.glob("*")) == n_elements
+        local_sdata.write(remote_path)
         # test reading the remotely written object
         remote_sdata = SpatialData.read(remote_path)
-        assert_spatial_data_objects_are_identical(sdata, remote_sdata)
+        assert len(list(remote_sdata.gen_elements())) == local_len
+        assert_spatial_data_objects_are_identical(local_sdata, remote_sdata)

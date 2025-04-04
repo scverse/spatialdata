@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from enum import Enum
 from functools import singledispatch
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal
 
 import zarr.storage
 from anndata import AnnData
@@ -26,6 +26,7 @@ from xarray import DataArray, DataTree
 from zarr.storage import FSStore
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import StoreLike
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -386,9 +387,6 @@ def save_transformations(sdata: SpatialData) -> None:
         stacklevel=2,
     )
     sdata.write_transformations()
-
-
-StoreLike: TypeAlias = str | Path | UPath | zarr.storage.StoreLike | zarr.Group
 
 
 def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:

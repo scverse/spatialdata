@@ -13,7 +13,6 @@ from zarr.errors import ArrayNotFoundError, MetadataError
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
     BadFileHandleMethod,
-    StoreLike,
     _create_upath,
     _open_zarr_store,
     handle_read_errors,
@@ -24,6 +23,7 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+from spatialdata._types import StoreLike
 
 if TYPE_CHECKING:
     from dask.dataframe import DataFrame as DaskDataFrame

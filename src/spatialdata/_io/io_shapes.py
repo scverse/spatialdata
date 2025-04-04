@@ -1,3 +1,4 @@
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -82,8 +83,9 @@ def write_shapes(
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
-        path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
-        shapes.to_parquet(path)
+        store = shapes_group._store
+        new_path = os.path.join(store.path, shapes_group.path, "shapes.parquet")
+        shapes.to_parquet(new_path, filesystem=getattr(store, "fs", None))
 
         attrs = format.attrs_to_dict(shapes.attrs)
         attrs["version"] = format.spatialdata_format_version

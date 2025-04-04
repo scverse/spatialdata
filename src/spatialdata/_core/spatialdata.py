@@ -30,7 +30,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._types import ArrayLike, Raster_T, StoreLike
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
@@ -598,7 +598,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
+        self, zarr_path: StoreLike, element_type: str, element_name: str
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
@@ -1175,7 +1175,7 @@ class SpatialData:
 
     def write(
         self,
-        file_path: str | Path,
+        file_path: StoreLike,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
@@ -1205,12 +1205,16 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
+        from spatialdata._io._utils import _open_zarr_store
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
-        self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
-        self._validate_all_elements()
+        if isinstance(file_path, Path):
+            # TODO: also validate remote paths
+            self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
+            self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w").store
+        store = _open_zarr_store(file_path, mode="w")
         zarr_group = zarr.group(store=store, overwrite=overwrite)
         self.write_attrs(zarr_group=zarr_group)
         store.close()
@@ -1236,20 +1240,21 @@ class SpatialData:
     def _write_element(
         self,
         element: SpatialElement | AnnData,
-        zarr_container_path: Path,
+        zarr_container_path: StoreLike,
         element_type: str,
         element_name: str,
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
     ) -> None:
-        if not isinstance(zarr_container_path, Path):
+        if not isinstance(zarr_container_path, StoreLike):
             raise ValueError(
                 f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
             )
-        file_path_of_element = zarr_container_path / element_type / element_name
-        self._validate_can_safely_write_to_path(
-            file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
-        )
+        if isinstance(zarr_container_path, Path):
+            file_path_of_element = zarr_container_path / element_type / element_name
+            self._validate_can_safely_write_to_path(
+                file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
+            )
 
         root_group, element_type_group, _ = self._get_groups_for_element(
             zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
