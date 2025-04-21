@@ -1,3 +1,4 @@
+import os
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -12,26 +13,16 @@ from spatialdata._io._utils import (
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
-from spatialdata._io.format import (
-    CurrentShapesFormat,
-    ShapesFormats,
-    ShapesFormatV01,
-    ShapesFormatV02,
-    _parse_version,
-)
+from spatialdata._io.format import CurrentShapesFormat, ShapesFormats, ShapesFormatV01, ShapesFormatV02, _parse_version
 from spatialdata.models import ShapesModel, get_axes_names
-from spatialdata.transformations._utils import (
-    _get_transformations,
-    _set_transformations,
-)
+from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 
 def _read_shapes(
     store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    assert isinstance(store, str | Path)
-    f = zarr.open(store, mode="r")
+    f = zarr.open(store, mode="r") if isinstance(store, str | Path | MutableMapping) else store
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     format = ShapesFormats[version]
@@ -50,8 +41,7 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(format, ShapesFormatV02):
-        path = Path(f._store.path) / f.path / "shapes.parquet"
-        geo_df = read_parquet(path)
+        geo_df = read_parquet(f.store.path, filesystem=f.store.fs)
     else:
         raise ValueError(
             f"Unsupported shapes format {format} from version {version}. Please update the spatialdata library."
@@ -93,8 +83,9 @@ def write_shapes(
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
-        path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
-        shapes.to_parquet(path)
+        store = shapes_group._store
+        new_path = os.path.join(store.path, shapes_group.path, "shapes.parquet")
+        shapes.to_parquet(new_path, filesystem=getattr(store, "fs", None))
 
         attrs = format.attrs_to_dict(shapes.attrs)
         attrs["version"] = format.spatialdata_format_version

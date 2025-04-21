@@ -1,9 +1,9 @@
-from pathlib import Path
 from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
 import zarr
+import zarr.storage
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Label, Multiscales, Node, Reader
@@ -13,18 +13,11 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from upath import UPath
 from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._io._utils import (
-    _get_transformations_from_ngff_dict,
-    overwrite_coordinate_transformations_raster,
-)
-from spatialdata._io.format import (
-    CurrentRasterFormat,
-    RasterFormats,
-    RasterFormatV01,
-    _parse_version,
-)
+from spatialdata._io._utils import _get_transformations_from_ngff_dict, overwrite_coordinate_transformations_raster
+from spatialdata._io.format import CurrentRasterFormat, RasterFormats, RasterFormatV01, _parse_version
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
@@ -36,19 +29,19 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
-    assert isinstance(store, str | Path)
+def _read_multiscale(store: zarr.storage.BaseStore, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
-
-    f = zarr.open(store, mode="r")
-    version = _parse_version(f, expect_attrs_key=True)
+    if isinstance(store, str | UPath):
+        raise NotImplementedError("removed in this PR")
+    group = zarr.group(store=store)
+    version = _parse_version(group, expect_attrs_key=True)
     # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
     # interpreting the lack of such information as the presence of the format v01
     format = RasterFormatV01() if version is None else RasterFormats[version]
-    f.store.close()
+    store.close()
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store)
+    image_loc = ZarrLocation(store, fmt=format)
     if image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
@@ -116,6 +109,28 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     return compute_coordinates(si)
 
 
+def _extend_storage_options(storage_options: JSONDict | list[JSONDict], group: zarr.group) -> JSONDict | list[JSONDict]:
+    """Extend the storage options with the storage options of the group store."""
+
+    def _extend(storage_options: JSONDict, group: zarr.group) -> JSONDict:
+        fs = getattr(group.store, "fs", None)
+        if fs is None:
+            # no storage options to extend
+            return storage_options
+        store_storage_options = getattr(fs, "storage_options", {"storage_options": {}})
+        # merge the two dictionaries
+        return {**store_storage_options, **storage_options}
+
+    if isinstance(storage_options, list):
+        # apply storage options to all scales
+        return [_extend(opt, group=group) for opt in storage_options]
+    if isinstance(storage_options, dict):
+        return _extend(storage_options, group=group)
+    raise ValueError(
+        f"storage_options must be a dictionary or a list of dictionaries, got {type(storage_options)} instead."
+    )
+
+
 def _write_raster(
     raster_type: Literal["image", "labels"],
     raster_data: DataArray | DataTree,
@@ -166,6 +181,10 @@ def _write_raster(
                 storage_options["chunks"] = chunks
         else:
             storage_options = {"chunks": chunks}
+        # make sure the group Store storage options are also used, but overwrite them with the storage options passed
+        # to this function
+        storage_options = _extend_storage_options(storage_options, group_data)
+
         # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
         # We need this because the argument of write_image_ngff is called image while the argument of
         # write_labels_ngff is called label.
@@ -199,6 +218,9 @@ def _write_raster(
         # coords = iterate_pyramid_levels(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
+        # make sure the group Store storage options are also used, but overwrite them with the storage options passed
+        # to this function
+        storage_options = _extend_storage_options(storage_options, group_data)
         dask_delayed = write_multi_scale_ngff(
             pyramid=data,
             group=group_data,
