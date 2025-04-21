@@ -25,8 +25,8 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
-    <img height="60px" 
-         src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png" 
+    <img height="60px"
+         src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
          align="center">
   </a>
 </div>
@@ -87,11 +87,10 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 
 [scverse-discourse]: https://discourse.scverse.org/
 [issue-tracker]: https://github.com/scverse/spatialdata/issues
-[changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
-[design doc]: https://scverse-spatialdata.readthedocs.io/en/latest/design_doc.html
-[link-docs]: https://spatialdata.scverse.org/en/latest/
-[link-api]: https://spatialdata.scverse.org/en/latest/api.html
-[link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
-[link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
+[design doc]: https://scverse-spatialdata.readthedocs.io/en/stable/design_doc.html
+[link-docs]: https://spatialdata.scverse.org/en/stable/
+[link-api]: https://spatialdata.scverse.org/en/stable/api.html
+[link-design-doc]: https://spatialdata.scverse.org/en/stable/design_doc.html
+[link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
