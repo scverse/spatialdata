@@ -26,6 +26,7 @@ dependencies = [
     "click",
     "dask-image",
     "dask>=2024.4.1,<=2024.11.2",
+    "datashader",
     "fsspec",
     "geopandas>=0.14",
     "multiscale_spatial_image>=2.0.2",
