@@ -7,7 +7,11 @@ from shapely import MultiPoint, Point, Polygon
 from shapely.ops import unary_union
 from skimage.draw import polygon
 
-from spatialdata._core.operations.vectorize import _vectorize_mask, to_circles, to_polygons
+from spatialdata._core.operations.vectorize import (
+    _vectorize_mask,
+    to_circles,
+    to_polygons,
+)
 from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
@@ -76,7 +80,10 @@ def test_polygons_to_circles() -> None:
     new_circles = to_circles(element)
 
     data = {
-        "geometry": [Point(315.8120722406787, 220.18894606643332), Point(270.1386975678398, 417.8747936281634)],
+        "geometry": [
+            Point(315.8120722406787, 220.18894606643332),
+            Point(270.1386975678398, 417.8747936281634),
+        ],
         "radius": [16.608781, 17.541365],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
@@ -89,7 +96,10 @@ def test_multipolygons_to_circles() -> None:
     new_circles = to_circles(element)
 
     data = {
-        "geometry": [Point(340.37951022629096, 250.76310705786318), Point(337.1680699150594, 316.39984581697314)],
+        "geometry": [
+            Point(340.37951022629096, 250.76310705786318),
+            Point(337.1680699150594, 316.39984581697314),
+        ],
         "radius": [23.488363, 19.059285],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))

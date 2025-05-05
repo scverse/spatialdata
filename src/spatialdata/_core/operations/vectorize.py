@@ -231,10 +231,11 @@ def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon | P
     mask = np.pad(region_props.image, 1)
     contours = skimage.measure.find_contours(mask, 0.5)
 
-    # shapes with <= 3 vertices, i.e. lines, can't be converted into a polygon
-    polygons = [Polygon(contour[:, [1, 0]]) for contour in contours if contour.shape[0] >= 4]
-
-    assert len(polygons) > 0, "No valid polygon found in the region properties."
+    invalid_polygons = any(contour.shape[0] <= 3 for contour in contours)
+    if invalid_polygons:
+        # this should not happen because even a single pixel should can be converted to a polygon
+        raise RuntimeError("Invalid polygon found in the region properties.")
+    polygons = [Polygon(contour[:, [1, 0]]) for contour in contours]
 
     polygon = MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
