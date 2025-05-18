@@ -231,7 +231,6 @@ To find out the time or memory performance of your code, profilers can help. Aga
 <!-- Links -->
 
 [scanpy developer guide]: https://scanpy.readthedocs.io/en/latest/dev/index.html
-[spatialdata-io]: https://spatialdata-io.readthedocs.io/en/latest/template_usage.html
 [github quickstart guide]: https://docs.github.com/en/get-started/quickstart/create-a-repo?tool=webui
 [codecov]: https://about.codecov.io/sign-up/
 [codecov docs]: https://docs.codecov.com/docs
