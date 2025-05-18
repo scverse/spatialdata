@@ -381,6 +381,6 @@ class raise_validation_errors:
         if self._collector.errors:
             raise ValidationError(
                 title=self._message + "\nTo fix, run `spatialdata.utils.sanitize_table(adata)`.",
-                errors=self._collector.errors
+                errors=self._collector.errors,
             )
         return True
