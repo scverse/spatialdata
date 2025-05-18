@@ -357,15 +357,18 @@ def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
     3. Handling special cases like "__" prefix
     4. Ensuring the name is not empty
     5. Handling special cases for dataframe columns
+
     Parameters
     ----------
     name
         The name to sanitize
     is_dataframe_column
         Whether this name is for a dataframe column (additional restrictions apply)
+
     Returns
     -------
     A sanitized version of the name that complies with SpatialData naming rules.
+
     Examples
     --------
     >>> sanitize_name("my@invalid#name")
@@ -415,16 +418,19 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     This function sanitizes all keys in obs, var, obsm, obsp, varm, varp, uns, and layers
     while maintaining case-insensitive uniqueness. It can either modify the table in-place
     or return a new sanitized copy.
+
     Parameters
     ----------
     data
         The AnnData table to sanitize
     inplace
         Whether to modify the table in-place or return a new copy
+
     Returns
     -------
     If inplace is False, returns a new AnnData object with sanitized keys.
     If inplace is True, returns None as the original object is modified.
+
     Examples
     --------
     >>> import anndata as ad
