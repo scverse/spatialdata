@@ -351,6 +351,7 @@ def _check_match_length_channels_c_dim(
 def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
     """
     Sanitize a name to comply with SpatialData naming rules.
+
     This function converts invalid names into valid ones by:
     1. Converting to string if not already
     2. Removing invalid characters
@@ -386,35 +387,25 @@ def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
         return "unnamed"
 
     # Handle special cases
-    if name == "." or name == "..":
+    if name in {".", ".."}:
         return "unnamed"
 
     # Remove "__" prefix if present
     if name.startswith("__"):
         name = name[2:]
 
-    # Replace invalid characters with underscore
-    # Keep only alphanumeric, underscore, dot, and hyphen
-    sanitized = ""
-    for char in name:
-        if char.isalnum() or char in "_-.":
-            sanitized += char
-        else:
-            sanitized += "_"
-
+    sanitized = "".join(char if char.isalnum() or char in "_-." else "_" for char in name)
     # Remove leading underscores but keep trailing ones
     sanitized = sanitized.lstrip("_")
 
     # Ensure we don't end up with an empty string after sanitization
-    if not sanitized:
-        return "unnamed"
-
-    return sanitized
+    return sanitized or "unnamed"
 
 
 def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     """
     Sanitize all keys in an AnnData table to comply with SpatialData naming rules.
+
     This function sanitizes all keys in obs, var, obsm, obsp, varm, varp, uns, and layers
     while maintaining case-insensitive uniqueness. It can either modify the table in-place
     or return a new sanitized copy.
