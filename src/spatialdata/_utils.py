@@ -443,19 +443,21 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
 
     # Track used names to maintain case-insensitive uniqueness
     used_names: dict[str, set[str]] = defaultdict(set)
+    used_names_lower: dict[str, set[str]] = defaultdict(set)
 
     def get_unique_name(name: str, attr: str, is_dataframe_column: bool = False) -> str:
         base_name = sanitize_name(name, is_dataframe_column)
         normalized_base = base_name.lower()
 
         # If this exact name is already used, add a number
-        if normalized_base in {n.lower() for n in used_names[attr]}:
+        if normalized_base in used_names_lower[attr]:
             counter = 1
-            while f"{base_name}_{counter}".lower() in {n.lower() for n in used_names[attr]}:
+            while f"{base_name}_{counter}".lower() in used_names_lower[attr]:
                 counter += 1
             base_name = f"{base_name}_{counter}"
 
         used_names[attr].add(base_name)
+        used_names_lower[attr].add(base_name.lower())
         return base_name
 
     # Handle obs and var (dataframe columns)
