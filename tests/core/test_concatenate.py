@@ -31,6 +31,6 @@ def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_o
     assert set(sdata.shapes.keys()) == set(expected_suffixed_shapes)
 
     if merge_coordinate_systems_on_name:
-        assert sdata.coordinate_systems == ["global"]
+        assert set(sdata.coordinate_systems) == {"global"}
     else:
-        assert sdata.coordinate_systems == ["global-blob1", "global-blob2"]
+        assert set(sdata.coordinate_systems) == {"global-blob1", "global-blob2"}

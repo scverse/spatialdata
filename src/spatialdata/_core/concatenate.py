@@ -116,6 +116,8 @@ def concatenate(
     modify_tables_inplace
         Whether to modify the tables in place. If `True`, the tables will be modified in place. If `False`, the tables
         will be copied before modification. Copying is enabled by default but can be disabled for performance reasons.
+    merge_coordinate_systems_on_name
+        Whether to keep coordinate system names unchanged (True) or add suffixes (False).
     attrs_merge
         How the elements of `.attrs` are selected. Uses the same set of strategies as the `uns_merge` argument of [anndata.concat](https://anndata.readthedocs.io/en/latest/generated/anndata.concat.html)
     kwargs
@@ -272,7 +274,8 @@ def _fix_ensure_unique_element_names(
 
             # Get transformations from original element
             transformations = get_transformation(original_element, get_all=True)
-            assert isinstance(transformations, dict)
+            if not isinstance(transformations, dict):
+                raise TypeError(f"Expected 'transformations' to be a dict, but got {type(transformations).__name__}.")
 
             # Remove any existing transformations from the new element
             remove_transformation(element, remove_all=True)
