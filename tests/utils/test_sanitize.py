@@ -6,7 +6,7 @@ import pytest
 from anndata import AnnData
 
 from spatialdata import SpatialData
-from spatialdata._utils import sanitize_name, sanitize_table
+from spatialdata._core._utils import sanitize_name, sanitize_table
 
 
 @pytest.fixture
@@ -63,7 +63,10 @@ def sdata_sanitized_tables(invalid_table, invalid_table_with_index) -> SpatialDa
         ("", "unnamed"),
         (".", "unnamed"),
         ("..", "unnamed"),
-        ("__private", "private"),
+        ("__", "_"),
+        ("___", "_"),
+        ("____#@$@", "_"),
+        ("__private", "_private"),
     ],
 )
 def test_sanitize_name_strips_special_chars(raw, expected):
@@ -74,9 +77,9 @@ def test_sanitize_name_strips_special_chars(raw, expected):
     "raw,is_df_col,expected",
     [
         ("_index", True, "index"),
-        ("_index", False, "index"),
+        ("_index", False, "_index"),
         ("valid@column", True, "valid_column"),
-        ("__private", True, "private"),
+        ("__private", True, "_private"),
     ],
 )
 def test_sanitize_name_dataframe_column(raw, is_df_col, expected):
@@ -91,7 +94,7 @@ def test_sanitize_name_dataframe_column(raw, is_df_col, expected):
 def test_sanitize_table_basic_columns(invalid_table, invalid_table_with_index):
     ad1 = sanitize_table(invalid_table, inplace=False)
     assert isinstance(ad1, AnnData)
-    assert list(ad1.obs.columns) == ["invalid_", "valid_name", "private"]
+    assert list(ad1.obs.columns) == ["_invalid_", "valid_name", "_private"]
 
     ad2 = sanitize_table(invalid_table_with_index, inplace=False)
     assert list(ad2.obs.columns) == ["invalid_name", "index"]
@@ -103,7 +106,7 @@ def test_sanitize_table_basic_columns(invalid_table, invalid_table_with_index):
 def test_sanitize_table_inplace_copy(invalid_table):
     ad = invalid_table.copy()
     sanitize_table(ad)  # inplace=True is now default
-    assert list(ad.obs.columns) == ["invalid_", "valid_name", "private"]
+    assert list(ad.obs.columns) == ["_invalid_", "valid_name", "_private"]
 
 
 def test_sanitize_table_case_insensitive_collisions():
@@ -138,7 +141,7 @@ def test_sanitize_table_whitespace_collision():
 def test_sanitize_table_obs_and_obs_columns():
     ad = AnnData(obs=pd.DataFrame({"@col": [1, 2]}))
     sanitized = sanitize_table(ad, inplace=False)
-    assert list(sanitized.obs.columns) == ["col"]
+    assert list(sanitized.obs.columns) == ["_col"]
 
 
 def test_sanitize_table_obsm_and_obsp():
@@ -146,7 +149,7 @@ def test_sanitize_table_obsm_and_obsp():
     ad.obsm["@col"] = np.array([[1, 2], [3, 4]])
     ad.obsp["bad name"] = np.array([[1, 2], [3, 4]])
     sanitized = sanitize_table(ad, inplace=False)
-    assert list(sanitized.obsm.keys()) == ["col"]
+    assert list(sanitized.obsm.keys()) == ["_col"]
     assert list(sanitized.obsp.keys()) == ["bad_name"]
 
 
@@ -155,8 +158,8 @@ def test_sanitize_table_varm_and_varp():
     ad.varm["__priv"] = np.array([[1, 2], [3, 4]])
     ad.varp["_index"] = np.array([[1, 2], [3, 4]])
     sanitized = sanitize_table(ad, inplace=False)
-    assert list(sanitized.varm.keys()) == ["priv"]
-    assert list(sanitized.varp.keys()) == ["index"]
+    assert list(sanitized.varm.keys()) == ["_priv"]
+    assert list(sanitized.varp.keys()) == ["_index"]
 
 
 def test_sanitize_table_uns_and_layers():
@@ -181,9 +184,9 @@ def test_sanitize_table_preserves_underlying_data():
     ad.obsm["@invalid#"] = np.array([[1, 2], [3, 4]])
     ad.uns["invalid@key"] = "value"
     sanitized = sanitize_table(ad, inplace=False)
-    assert sanitized.obs["invalid_"].tolist() == [1, 2]
+    assert sanitized.obs["_invalid_"].tolist() == [1, 2]
     assert sanitized.obs["valid"].tolist() == [3, 4]
-    assert np.array_equal(sanitized.obsm["invalid_"], np.array([[1, 2], [3, 4]]))
+    assert np.array_equal(sanitized.obsm["_invalid_"], np.array([[1, 2], [3, 4]]))
     assert sanitized.uns["invalid_key"] == "value"
 
 
@@ -195,7 +198,7 @@ def test_sanitize_table_preserves_underlying_data():
 def test_sanitize_table_in_spatialdata_sanitized_fixture(sdata_sanitized_tables):
     t1 = sdata_sanitized_tables.tables["table1"]
     t2 = sdata_sanitized_tables.tables["table2"]
-    assert list(t1.obs.columns) == ["invalid_", "valid_name", "private"]
+    assert list(t1.obs.columns) == ["_invalid_", "valid_name", "_private"]
     assert list(t2.obs.columns) == ["invalid_name", "index"]
 
 
@@ -206,7 +209,7 @@ def test_spatialdata_retains_other_elements(full_sdata, sdata_sanitized_tables):
     full_sdata.tables["new_table"] = tbl
 
     # Verify columns and presence of other SpatialData attributes
-    assert list(full_sdata.tables["new_table"].obs.columns) == ["foo_", "bar"]
+    assert list(full_sdata.tables["new_table"].obs.columns) == ["_foo_", "bar"]
     assert "image2d" in full_sdata.images
     assert "labels2d" in full_sdata.labels
     assert "points_0" in full_sdata.points
