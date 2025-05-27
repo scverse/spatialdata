@@ -471,6 +471,40 @@ def test_concatenate_sdatas_single_item() -> None:
     assert "blobs_image-sample" in c.images
 
 
+@pytest.mark.parametrize("merge_coordinate_systems_on_name", [True, False])
+def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_on_name):
+    blob1 = blobs()
+    blob2 = blobs()
+
+    sdata_keys = ["blob1", "blob2"]
+    sdata = concatenate(
+        dict(zip(sdata_keys, [blob1, blob2], strict=True)),
+        merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
+    )
+
+    if merge_coordinate_systems_on_name:
+        assert set(sdata.coordinate_systems) == {"global"}
+    else:
+        assert set(sdata.coordinate_systems) == {"global-blob1", "global-blob2"}
+
+    # extra checks not specific to this test, we could remove them or leave them just
+    # in case
+    expected_images = ["blobs_image", "blobs_multiscale_image"]
+    expected_labels = ["blobs_labels", "blobs_multiscale_labels"]
+    expected_points = ["blobs_points"]
+    expected_shapes = ["blobs_circles", "blobs_polygons", "blobs_multipolygons"]
+
+    expected_suffixed_images = [f"{name}-{key}" for key in sdata_keys for name in expected_images]
+    expected_suffixed_labels = [f"{name}-{key}" for key in sdata_keys for name in expected_labels]
+    expected_suffixed_points = [f"{name}-{key}" for key in sdata_keys for name in expected_points]
+    expected_suffixed_shapes = [f"{name}-{key}" for key in sdata_keys for name in expected_shapes]
+
+    assert set(sdata.images.keys()) == set(expected_suffixed_images)
+    assert set(sdata.labels.keys()) == set(expected_suffixed_labels)
+    assert set(sdata.points.keys()) == set(expected_suffixed_points)
+    assert set(sdata.shapes.keys()) == set(expected_suffixed_shapes)
+
+
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
     assert full_sdata.locate_element(full_sdata.images["image2d"])[0] == "images/image2d"
     im = full_sdata.images["image2d"]

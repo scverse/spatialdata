@@ -236,7 +236,20 @@ def _fix_ensure_unique_element_names(
     sdatas_fixed = []
     for suffix, sdata in sdatas.items():
         # Create new elements dictionary with suffixed names
-        elements = {f"{name}-{suffix}": el for _, name, el in sdata.gen_spatial_elements()}
+        elements = {}
+        for _, name, el in sdata.gen_spatial_elements():
+            new_element_name = f"{name}-{suffix}"
+            if not merge_coordinate_systems_on_name:
+                # Set new transformations with suffixed coordinate system names
+                transformations = get_transformation(el, get_all=True)
+                assert isinstance(transformations, dict)
+
+                remove_transformation(el, remove_all=True)
+                for cs, t in transformations.items():
+                    new_cs = f"{cs}-{suffix}"
+                    set_transformation(el, t, to_coordinate_system=new_cs)
+
+            elements[new_element_name] = el
 
         # Handle tables with suffix
         tables = {}
@@ -265,25 +278,5 @@ def _fix_ensure_unique_element_names(
 
         # Create new SpatialData object with suffixed elements and tables
         sdata_fixed = SpatialData.init_from_elements(elements, tables=tables)
-
-        # Handle coordinate systems and transformations
-        for element_name, element in elements.items():
-            # Get the original element from the input sdata
-            original_name = element_name.replace(f"-{suffix}", "")
-            original_element = sdata.get(original_name)
-
-            # Get transformations from original element
-            transformations = get_transformation(original_element, get_all=True)
-            if not isinstance(transformations, dict):
-                raise TypeError(f"Expected 'transformations' to be a dict, but got {type(transformations).__name__}.")
-
-            # Remove any existing transformations from the new element
-            remove_transformation(element, remove_all=True)
-
-            # Set new transformations with suffixed coordinate system names
-            for cs, t in transformations.items():
-                new_cs = cs if merge_coordinate_systems_on_name else f"{cs}-{suffix}"
-                set_transformation(element, t, to_coordinate_system=new_cs)
-
         sdatas_fixed.append(sdata_fixed)
     return sdatas_fixed
