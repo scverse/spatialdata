@@ -146,7 +146,6 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
                 counter += 1
             base_name = f"{base_name}_{counter}"
 
-        used_names[attr].add(base_name)
         used_names_lower[attr].add(base_name.lower())
         return base_name
 
