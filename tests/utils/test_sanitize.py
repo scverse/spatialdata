@@ -34,6 +34,8 @@ def invalid_table_with_index() -> AnnData:
             }
         )
     )
+
+
 # -----------------------------------------------------------------------------
 # sanitize_name tests
 # -----------------------------------------------------------------------------
@@ -183,7 +185,13 @@ def test_sanitize_table_preserves_underlying_data():
 # -----------------------------------------------------------------------------
 
 
-def test_sanitize_table_in_spatialdata_sanitized_fixture(sdata_sanitized_tables):
+def test_sanitize_table_in_spatialdata_sanitized_fixture(invalid_table, invalid_table_with_index):
+    table1 = invalid_table.copy()
+    table2 = invalid_table_with_index.copy()
+    sanitize_table(table1)
+    sanitize_table(table2)
+    sdata_sanitized_tables = SpatialData(tables={"table1": table1, "table2": table2})
+
     t1 = sdata_sanitized_tables.tables["table1"]
     t2 = sdata_sanitized_tables.tables["table2"]
     assert list(t1.obs.columns) == ["_invalid_", "valid_name", "_private"]
