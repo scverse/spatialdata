@@ -2336,7 +2336,7 @@ class SpatialData:
         )
         return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
-    def __getitem__(self, item: str) -> SpatialElement:
+    def __getitem__(self, item: str) -> SpatialElement | AnnData:
         """
         Return the element with the given name.
 
