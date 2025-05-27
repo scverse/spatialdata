@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 
-from spatialdata import SpatialData
 from spatialdata._core._utils import sanitize_name, sanitize_table
 
 
@@ -34,6 +33,8 @@ def invalid_table_with_index() -> AnnData:
             }
         )
     )
+
+
 # -----------------------------------------------------------------------------
 # sanitize_name tests
 # -----------------------------------------------------------------------------
