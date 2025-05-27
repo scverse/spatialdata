@@ -53,10 +53,13 @@ __all__ = [
     "relabel_sequential",
     "map_raster",
     "deepcopy",
+    "sanitize_table",
+    "sanitize_name",
 ]
 
 from spatialdata import dataloader, datasets, models, transformations
 from spatialdata._core._deepcopy import deepcopy
+from spatialdata._core._utils import sanitize_name, sanitize_table
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.concatenate import concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
