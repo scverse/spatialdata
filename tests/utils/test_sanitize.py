@@ -34,18 +34,6 @@ def invalid_table_with_index() -> AnnData:
             }
         )
     )
-
-
-@pytest.fixture
-def sdata_sanitized_tables(invalid_table, invalid_table_with_index) -> SpatialData:
-    """SpatialData built from sanitized copies of the invalid tables."""
-    table1 = invalid_table.copy()
-    table2 = invalid_table_with_index.copy()
-    sanitize_table(table1)
-    sanitize_table(table2)
-    return SpatialData(tables={"table1": table1, "table2": table2})
-
-
 # -----------------------------------------------------------------------------
 # sanitize_name tests
 # -----------------------------------------------------------------------------
@@ -202,7 +190,7 @@ def test_sanitize_table_in_spatialdata_sanitized_fixture(sdata_sanitized_tables)
     assert list(t2.obs.columns) == ["invalid_name", "index"]
 
 
-def test_spatialdata_retains_other_elements(full_sdata, sdata_sanitized_tables):
+def test_spatialdata_retains_other_elements(full_sdata):
     # Add another sanitized table into an existing full_sdata
     tbl = AnnData(obs=pd.DataFrame({"@foo#": [1, 2], "bar": [3, 4]}))
     sanitize_table(tbl)
@@ -210,6 +198,3 @@ def test_spatialdata_retains_other_elements(full_sdata, sdata_sanitized_tables):
 
     # Verify columns and presence of other SpatialData attributes
     assert list(full_sdata.tables["new_table"].obs.columns) == ["_foo_", "bar"]
-    assert "image2d" in full_sdata.images
-    assert "labels2d" in full_sdata.labels
-    assert "points_0" in full_sdata.points

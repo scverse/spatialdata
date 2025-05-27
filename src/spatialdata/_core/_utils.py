@@ -133,7 +133,6 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     sanitized = data if inplace else copy.deepcopy(data)
 
     # Track used names to maintain case-insensitive uniqueness
-    used_names: dict[str, set[str]] = defaultdict(set)
     used_names_lower: dict[str, set[str]] = defaultdict(set)
 
     def get_unique_name(name: str, attr: str, is_dataframe_column: bool = False) -> str:

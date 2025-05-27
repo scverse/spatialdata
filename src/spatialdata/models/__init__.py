@@ -55,5 +55,4 @@ __all__ = [
     "set_channel_names",
     "force_2d",
     "RasterSchema",
-    "sani",
 ]
