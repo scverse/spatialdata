@@ -450,14 +450,14 @@ def _validate_compressor_args(compressor_dict: dict[Literal["lz4", "zstd"], int]
             raise TypeError(
                 f"Expected a dictionary with as key the type of compression to use for images and labels and "
                 f"as value the compression level which should be inclusive between 1 and 9. "
-                f"Got type: {compressor_dict}"
+                f"Got type: {type(compressor_dict)}"
             )
         if len(compressor_dict) != 1:
             raise ValueError(
                 "Expected a dictionary with a single key indicating the type of compression, either 'lz4' or "
                 "'zstd' and an `int` inclusive between 1 and 9 as value representing the compression level."
             )
-        if compression := list(compressor_dict.keys())[0] not in ["lz4", "zstd"]:
+        if (compression := list(compressor_dict.keys())[0]) not in ["lz4", "zstd"]:
             raise ValueError(f"Compression must either be `lz4` or `zstd`, got: {compression}.")
-        if not isinstance(value := list(compressor_dict.values())[0], int) or 0 <= value <= 9:
+        if not isinstance(value := list(compressor_dict.values())[0], int) or not (0 <= value <= 9):
             raise ValueError(f"The compression level must be an integer inclusive between 0 and 9. Got: {value}")

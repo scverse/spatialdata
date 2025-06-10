@@ -29,7 +29,6 @@ from spatialdata._core.validation import (
     raise_validation_errors,
     validate_table_attr_keys,
 )
-from spatialdata._io._utils import _validate_compressor_args
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import (
@@ -1212,6 +1211,8 @@ class SpatialData:
             specified, the compression will be `lz4` with compression level 5. Bytes are automatically ordered for more
             efficient compression.
         """
+        from spatialdata._io._utils import _validate_compressor_args
+
         _validate_compressor_args(compressor)
 
         if isinstance(file_path, str):
