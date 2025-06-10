@@ -126,17 +126,18 @@ def _write_raster(
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
-    assert raster_type in ["image", "labels"]
+    if raster_type not in ["image", "labels"]:
+        raise TypeError(f"Writing raster data is only supported for 'image' and 'labels'. Got: {raster_type}")
     # the argument "name" and "label_metadata" are only used for labels (to be precise, name is used in
     # write_multiscale_ngff() when writing metadata, but name is not used in write_image_ngff(). Maybe this is bug of
     # ome-zarr-py. In any case, we don't need that metadata and we use the argument name so that when we write labels
     # the correct group is created by the ome-zarr-py APIs. For images we do it manually in the function
     # _get_group_for_writing_data()
-    if raster_type == "image":
-        assert label_metadata is None
-    else:
-        metadata["name"] = name
-        metadata["label_metadata"] = label_metadata
+    if raster_type == "image" and label_metadata is not None:
+        raise ValueError("If the rastertype is 'image', 'label_metadata' should be None.")
+
+    metadata["name"] = name
+    metadata["label_metadata"] = label_metadata
 
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
