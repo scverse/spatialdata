@@ -2,7 +2,7 @@ import os
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import dask.dataframe as dd
 import numpy as np
@@ -96,9 +96,16 @@ class TestReadWrite:
 
         full_sdata.write(tmpdir, compressor={"zstd": 8})
 
-        compressor = zarr.open_group(tmpdir / "images", mode="r")["image2d"]["0"].compressor
-        assert compressor.cname == "zstd"
-        assert compressor.clevel == 8
+        # sourcery skip: no-loop-in-tests
+        for element in ["image2d", "image2d_multiscale"]:
+            compressor = zarr.open_group(tmpdir / "images", mode="r")[element]["0"].compressor
+            assert compressor.cname == "zstd"
+            assert compressor.clevel == 8
+
+        for element in ["labels2d", "labels2d_multiscale"]:
+            compressor = zarr.open_group(tmpdir / "labels", mode="r")[element]["0"].compressor
+            assert compressor.cname == "zstd"
+            assert compressor.clevel == 8
 
     def test_roundtrip(
         self,
@@ -270,24 +277,21 @@ class TestReadWrite:
                     sdata.delete_element_from_disk(name)
                     sdata.write_element(name)
 
-    def test_write_element_compression(self, tmp_path: str, full_sdata: SpatialData):
+    @pytest.mark.parametrize("compressor", [{"lz4": 3}, {"zstd": 7}])
+    @pytest.mark.parametrize("element", [("images", "image2d"), ("labels", "labels2d")])
+    def test_write_element_compression(
+        self, tmp_path: str, full_sdata: SpatialData, compressor: dict[Literal["lz4", "zstd"], int], element: str
+    ):
         tmpdir = Path(tmp_path) / "compression.zarr"
         sdata = SpatialData()
         sdata.write(tmpdir)
 
-        sdata["image_lz4"] = full_sdata["image2d"]
-        sdata["image_zstd"] = full_sdata["image2d"]
+        sdata["element"] = full_sdata[element[1]]
+        sdata.write_element("element", compressor=compressor)
 
-        sdata.write_element("image_lz4", compressor={"lz4": 3})
-        sdata.write_element("image_zstd", compressor={"zstd": 7})
-
-        compressor = zarr.open_group(tmpdir / "images", mode="r")["image_lz4"]["0"].compressor
-        assert compressor.cname == "lz4"
-        assert compressor.clevel == 3
-
-        compressor = zarr.open_group(tmpdir / "images", mode="r")["image_zstd"]["0"].compressor
-        assert compressor.cname == "zstd"
-        assert compressor.clevel == 7
+        compression = zarr.open_group(tmpdir / element[0], mode="r")["element"]["0"].compressor
+        assert compression.cname == list(compressor.keys())[0]
+        assert compression.clevel == list(compressor.values())[0]
 
     def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
         s = table_single_annotation
