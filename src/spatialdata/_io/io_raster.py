@@ -123,9 +123,12 @@ def _write_raster(
     name: str,
     format: Format = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
+    from zarr.codecs import Blosc
+
     if raster_type not in ["image", "labels"]:
         raise TypeError(f"Writing raster data is only supported for 'image' and 'labels'. Got: {raster_type}")
     # the argument "name" and "label_metadata" are only used for labels (to be precise, name is used in
@@ -167,6 +170,10 @@ def _write_raster(
                 storage_options["chunks"] = chunks
         else:
             storage_options = {"chunks": chunks}
+
+        if compressor and isinstance(storage_options, dict):
+            ((compression, compression_level),) = compressor.items()
+            storage_options["compressor"] = Blosc(cname=compression, clevel=compression_level, shuffle=1)
         # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
         # We need this because the argument of write_image_ngff is called image while the argument of
         # write_labels_ngff is called label.
@@ -200,6 +207,10 @@ def _write_raster(
         # coords = iterate_pyramid_levels(raster_data, "coords")
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
+        if compressor:
+            ((compression, compression_level),) = compressor.items()
+            for option in storage_options:
+                option["compressor"] = Blosc(cname=compression, clevel=compression_level, shuffle=1)
         dask_delayed = write_multi_scale_ngff(
             pyramid=data,
             group=group_data,
@@ -238,6 +249,7 @@ def write_image(
     name: str,
     format: Format = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     _write_raster(
@@ -247,6 +259,7 @@ def write_image(
         name=name,
         format=format,
         storage_options=storage_options,
+        compressor=compressor,
         **metadata,
     )
 

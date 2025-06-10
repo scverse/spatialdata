@@ -29,6 +29,7 @@ from spatialdata._core.validation import (
     raise_validation_errors,
     validate_table_attr_keys,
 )
+from spatialdata._io._utils import _validate_compressor_args
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import (
@@ -1179,6 +1180,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1204,7 +1206,13 @@ class SpatialData:
             By default, the latest format is used for all elements, i.e.
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+        compressor
+            A dictionary with as key the type of compression to use for images and labels and as value the compression
+            level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are supported. If not
+            specified, the compression will be `lz4` with compression level 5.
         """
+        _validate_compressor_args(compressor)
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
@@ -1223,6 +1231,7 @@ class SpatialData:
                 element_name=element_name,
                 overwrite=False,
                 format=format,
+                compressor=compressor,
             )
 
         if self.path != file_path:
@@ -1241,6 +1250,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1260,7 +1270,13 @@ class SpatialData:
         parsed = _parse_formats(formats=format)
 
         if element_type == "images":
-            write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
+            write_image(
+                image=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["raster"],
+                compressor=compressor,
+            )
         elif element_type == "labels":
             write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
         elif element_type == "points":
