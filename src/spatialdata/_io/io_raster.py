@@ -135,9 +135,9 @@ def _write_raster(
     # _get_group_for_writing_data()
     if raster_type == "image" and label_metadata is not None:
         raise ValueError("If the rastertype is 'image', 'label_metadata' should be None.")
-
-    metadata["name"] = name
-    metadata["label_metadata"] = label_metadata
+    if raster_type == "labels":
+        metadata["name"] = name
+        metadata["label_metadata"] = label_metadata
 
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
