@@ -1,10 +1,10 @@
+from functools import partial
+
 import numpy as np
 import xarray as xr
-from functools import partial
 
 from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.models.models import DataTree
-
 
 
 def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:

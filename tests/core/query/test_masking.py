@@ -1,5 +1,4 @@
 import numpy as np
-import anndata as ad
 
 from spatialdata._core.query.masking import filter_labels2dmodel_by_instance_ids, filter_shapesmodel_by_instance_ids
 from spatialdata.datasets import blobs_annotating_element
@@ -12,7 +11,9 @@ def test_filter_labels2dmodel_by_instance_ids():
     filtered_labels_element = filter_labels2dmodel_by_instance_ids(labels_element, [2, 3])
 
     # because 0 is the background, we expect the filtered ids to be the instance ids that are not 0
-    filtered_ids = set(np.unique(filtered_labels_element.data.compute())) - {0,}
+    filtered_ids = set(np.unique(filtered_labels_element.data.compute())) - {
+        0,
+    }
     preserved_ids = np.unique(labels_element.data.compute())
     assert filtered_ids == (set(all_instance_ids) - {2, 3})
     # check if there is modification of the original labels
@@ -24,7 +25,9 @@ def test_filter_labels2dmodel_by_instance_ids():
     filtered_labels_element = filter_labels2dmodel_by_instance_ids(labels_element, [2, 3])
 
     for scale in labels_element:
-        filtered_ids = set(np.unique(filtered_labels_element[scale].image.compute())) - {0,}
+        filtered_ids = set(np.unique(filtered_labels_element[scale].image.compute())) - {
+            0,
+        }
         preserved_ids = np.unique(labels_element[scale].image.compute())
         assert filtered_ids == (set(all_instance_ids) - {2, 3})
         # check if there is modification of the original labels
