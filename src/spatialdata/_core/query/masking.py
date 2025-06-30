@@ -2,9 +2,11 @@ from functools import partial
 
 import numpy as np
 import xarray as xr
+from geopandas import GeoDataFrame
+from xarray.core.dataarray import DataArray
+from xarray.core.datatree import DataTree
 
 from spatialdata.models import Labels2DModel, ShapesModel
-from spatialdata.models.models import DataTree
 
 
 def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
@@ -32,14 +34,12 @@ def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list
     computed_result = processed.compute()
 
     # Create a new DataArray to ensure persistence
-    result = xr.DataArray(
+    return xr.DataArray(
         data=computed_result.data,
         coords=image.coords,
         dims=image.dims,
         attrs=image.attrs.copy(),  # Preserve all attributes
     )
-
-    return result
 
 
 def _get_scale_factors(labels_element: Labels2DModel) -> list[tuple[float, float]]:
@@ -60,7 +60,7 @@ def _get_scale_factors(labels_element: Labels2DModel) -> list[tuple[float, float
     return scale_factors
 
 
-def filter_shapesmodel_by_instance_ids(element: ShapesModel, ids_to_remove: list[str]) -> ShapesModel:
+def filter_shapesmodel_by_instance_ids(element: ShapesModel, ids_to_remove: list[str]) -> GeoDataFrame:
     """
     Filter a ShapesModel by instance ids.
 
@@ -75,10 +75,11 @@ def filter_shapesmodel_by_instance_ids(element: ShapesModel, ids_to_remove: list
     -------
     The filtered ShapesModel.
     """
-    return element[~element.index.isin(ids_to_remove)]
+    element2: GeoDataFrame = element[~element.index.isin(ids_to_remove)]  # type: ignore[index, attr-defined]
+    return ShapesModel.parse(element2)
 
 
-def filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove: list[int]) -> Labels2DModel:
+def filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove: list[int]) -> DataArray | DataTree:
     """
     Filter a Labels2DModel by instance ids.
 
@@ -103,8 +104,8 @@ def filter_labels2dmodel_by_instance_ids(element: Labels2DModel, ids_to_remove: 
         # we extract the info to just reconstruct
         # the DataTree after filtering the max scale
         max_scale = list(element.keys())[0]
-        scale_factors = _get_scale_factors(element)
-        scale_factors = [int(sf[0]) for sf in scale_factors]
+        scale_factors_temp = _get_scale_factors(element)
+        scale_factors = [int(sf[0]) for sf in scale_factors_temp]
 
         return Labels2DModel.parse(
             data=_set_instance_ids_in_labels_to_zero(element[max_scale].image, ids_to_remove),
