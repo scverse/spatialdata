@@ -229,7 +229,7 @@ def test_transform_shapes(shapes: SpatialData):
         assert geom_almost_equals(p0["geometry"], p1["geometry"])
 
 
-def test_transform_multiscale_image():
+def test_transform_datatree_scale_handling():
     """
     Test the case in which the highest scales of the result of a
     transformed multi-scale image would be zero shape.
