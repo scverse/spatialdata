@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from spatialdata import concatenate, subset_sdata_by_table_mask
 from spatialdata._core.query.relational_query import _filter_by_instance_ids
@@ -66,3 +67,14 @@ def test_subset_sdata_by_table_mask():
 
     shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
     assert shapes_remaining_ids == {3}
+
+
+def test_subset_sdata_by_table_mask_with_no_annotated_elements():
+    with pytest.raises(ValueError, match="Table table_not_found not found in SpatialData object."):
+        sdata = blobs_annotating_element("blobs_labels")
+        _ = subset_sdata_by_table_mask(sdata, "table_not_found", sdata.tables["table"].obs["instance_id"] == 3)
+
+
+def test_filter_by_instance_ids_fails_for_unsupported_element_models():
+    with pytest.raises(NotImplementedError, match="Filtering by instance ids is not implemented for"):
+        _filter_by_instance_ids([1, 1, 1, 2], [1], "instance_id")
