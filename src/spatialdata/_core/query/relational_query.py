@@ -11,9 +11,11 @@ from typing import Any, Literal
 import dask.array as da
 import numpy as np
 import pandas as pd
+import xarray as xr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from numpy.typing import NDArray
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
@@ -1019,3 +1021,125 @@ def get_values(
         return df
 
     raise ValueError(f"Unknown origin {origin}")
+
+
+def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    # Use apply_ufunc for efficient processing
+    # Create a copy to avoid modifying read-only array
+    result = block.copy()
+    result[np.isin(result, ids_to_remove)] = 0
+    return result
+
+
+def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    processed = xr.apply_ufunc(
+        partial(_mask_block, ids_to_remove=ids_to_remove),
+        image,
+        input_core_dims=[["y", "x"]],
+        output_core_dims=[["y", "x"]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[image.dtype],
+        dataset_fill_value=0,
+        dask_gufunc_kwargs={"allow_rechunk": True},
+    )
+
+    # Force computation to ensure the changes are materialized
+    computed_result = processed.compute()
+
+    # Create a new DataArray to ensure persistence
+    return xr.DataArray(
+        data=computed_result.data,
+        coords=image.coords,
+        dims=image.dims,
+        attrs=image.attrs.copy(),  # Preserve all attributes
+    )
+
+
+def _get_scale_factors(labels_element: DataTree) -> list[tuple[float, float]]:
+    scales = list(labels_element.keys())
+
+    # Calculate relative scale factors between consecutive scales
+    scale_factors = []
+    for i in range(len(scales) - 1):
+        y_size_current = labels_element[scales[i]].image.shape[0]
+        x_size_current = labels_element[scales[i]].image.shape[1]
+        y_size_next = labels_element[scales[i + 1]].image.shape[0]
+        x_size_next = labels_element[scales[i + 1]].image.shape[1]
+        y_factor = y_size_current / y_size_next
+        x_factor = x_size_current / x_size_next
+
+        scale_factors.append((y_factor, x_factor))
+
+    return scale_factors
+
+
+@singledispatch
+def _filter_by_instance_ids(element: Any, ids_to_remove: list[str], instance_key: str) -> Any:
+    raise NotImplementedError(f"Filtering by instance ids is not implemented for {element}")
+
+
+@_filter_by_instance_ids.register(GeoDataFrame)
+def _(element: GeoDataFrame, ids_to_remove: list[str], instance_key: str) -> GeoDataFrame:
+    return element[~element.index.isin(ids_to_remove)]
+
+
+@_filter_by_instance_ids.register(DaskDataFrame)
+def _(element: DaskDataFrame, ids_to_remove: list[str], instance_key: str) -> DaskDataFrame:
+    return element[~element[instance_key].isin(ids_to_remove)]
+
+
+@_filter_by_instance_ids.register(DataArray)
+def _(element: DataArray, ids_to_remove: list[int], instance_key: str) -> DataArray:
+    del instance_key
+    return Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(element, ids_to_remove))
+
+
+@_filter_by_instance_ids.register(DataTree)
+def _(element: DataArray | DataTree, ids_to_remove: list[int], instance_key: str) -> xr.DataArray | xr.DataTree:
+    # we extract the info to just reconstruct
+    # the DataTree after filtering the max scale
+    max_scale = list(element.keys())[0]
+    scale_factors_temp = _get_scale_factors(element)
+    scale_factors = [int(sf[0]) for sf in scale_factors_temp]
+
+    return Labels2DModel.parse(
+        data=_set_instance_ids_in_labels_to_zero(element[max_scale].image, ids_to_remove),
+        scale_factors=scale_factors,
+    )
+
+
+def subset_sdata_by_table_mask(sdata: SpatialData, table_name: str, mask: NDArray[np.bool_]) -> SpatialData:
+    """
+    Subset a SpatialData object by a table and a mask.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to subset.
+    table_name
+        The name of the table to apply the mask to.
+    mask
+        Boolean mask to apply to the table.
+
+    Returns
+    -------
+    The subsetted SpatialData object.
+    """
+    table = sdata.tables.get(table_name)
+    if table is None:
+        raise ValueError(f"Table {table_name} not found in SpatialData object.")
+
+    subset_table = table[mask]
+    _, _, instance_key = get_table_keys(subset_table)
+    annotated_regions = SpatialData.get_annotated_regions(table)
+    removed_instance_ids = list(np.unique(table.obs[instance_key][~mask]))
+
+    filtered_elements = {}
+    for reg in annotated_regions:
+        elem = sdata.get(reg)
+        model = get_model(elem)
+        if model in [Labels2DModel, PointsModel, ShapesModel]:
+            filtered_elements[reg] = _filter_by_instance_ids(elem, removed_instance_ids, instance_key)
+
+    return SpatialData.init_from_elements(filtered_elements | {table_name: subset_table})
