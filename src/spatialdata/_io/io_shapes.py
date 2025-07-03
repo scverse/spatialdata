@@ -68,7 +68,7 @@ def write_shapes(
     name: str,
     group_type: str = "ngff:shapes",
     format: Format = CurrentShapesFormat(),
-    geometry_encoding: 'WKB' | 'geoarrow' = 'WKB',
+    geometry_encoding: "WKB" | "geoarrow" = "WKB",
 ) -> None:
     import numcodecs
 
