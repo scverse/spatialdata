@@ -68,6 +68,7 @@ def write_shapes(
     name: str,
     group_type: str = "ngff:shapes",
     format: Format = CurrentShapesFormat(),
+    geometry_encoding: 'WKB' | 'geoarrow' = 'WKB',
 ) -> None:
     import numcodecs
 
@@ -94,7 +95,7 @@ def write_shapes(
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
         path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
-        shapes.to_parquet(path)
+        shapes.to_parquet(path, geometry_encoding=geometry_encoding)
 
         attrs = format.attrs_to_dict(shapes.attrs)
         attrs["version"] = format.spatialdata_format_version

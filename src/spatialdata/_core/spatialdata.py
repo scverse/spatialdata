@@ -1179,6 +1179,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        shapes_geometry_encoding: 'WKB' | 'geoarrow' = 'WKB',
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1223,6 +1224,7 @@ class SpatialData:
                 element_name=element_name,
                 overwrite=False,
                 format=format,
+                shapes_geometry_encoding=shapes_geometry_encoding,
             )
 
         if self.path != file_path:
@@ -1241,6 +1243,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        shapes_geometry_encoding: 'WKB' | 'geoarrow' = 'WKB',
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1266,7 +1269,7 @@ class SpatialData:
         elif element_type == "points":
             write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"])
+            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"], geometry_encoding=shapes_geometry_encoding)
         elif element_type == "tables":
             write_table(table=element, group=element_type_group, name=element_name, format=parsed["tables"])
         else:
