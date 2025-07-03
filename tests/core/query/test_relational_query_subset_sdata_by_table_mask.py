@@ -1,8 +1,8 @@
 import numpy as np
 
+from spatialdata import concatenate, subset_sdata_by_table_mask
 from spatialdata._core.query.relational_query import _filter_by_instance_ids
 from spatialdata.datasets import blobs_annotating_element
-from spatialdata import concatenate, subset_sdata_by_table_mask
 
 
 def test_filter_labels2dmodel_by_instance_ids():
@@ -56,12 +56,13 @@ def test_subset_sdata_by_table_mask():
     assert labels_remaining_ids == {3}
 
     for scale in subset_sdata.labels["blobs_multiscale_labels-multiscale_labels"]:
-        ms_labels_remaining_ids = set(np.unique(subset_sdata.labels["blobs_multiscale_labels-multiscale_labels"][scale].image.compute())) - {0}
+        ms_labels_remaining_ids = set(
+            np.unique(subset_sdata.labels["blobs_multiscale_labels-multiscale_labels"][scale].image.compute())
+        ) - {0}
         assert ms_labels_remaining_ids == {3}
 
-    points_remaining_ids = set(np.unique(subset_sdata.points["blobs_points-points"]['instance_id'].compute())) - {0}
+    points_remaining_ids = set(np.unique(subset_sdata.points["blobs_points-points"]["instance_id"].compute())) - {0}
     assert points_remaining_ids == {3}
 
     shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
     assert shapes_remaining_ids == {3}
-

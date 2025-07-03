@@ -1110,8 +1110,15 @@ def _(element: DataArray | DataTree, ids_to_remove: list[int], instance_key: str
 
 
 def subset_sdata_by_table_mask(sdata: SpatialData, table_name: str, mask: NDArray[np.bool_]) -> SpatialData:
-    """
-    Subset a SpatialData object by a table and a mask.
+    """Subset the annotated elements of a SpatialData object by a table and a mask.
+
+    The mask is applied to the table and the annotated elements are subsetted
+    by the instance ids in the table.
+    This function returns a new SpatialData object with the subsetted elements.
+    Elements that are not annotated by the table are not included in the returned SpatialData object.
+    The element models that are
+    supported are :class:`spatialdata.models.Labels2DModel`,
+    :class:`spatialdata.models.PointsModel`, and :class:`spatialdata.models.ShapesModel`.
 
     Parameters
     ----------
@@ -1120,7 +1127,7 @@ def subset_sdata_by_table_mask(sdata: SpatialData, table_name: str, mask: NDArra
     table_name
         The name of the table to apply the mask to.
     mask
-        Boolean mask to apply to the table.
+        Boolean mask to apply to the table which is the same length as the number of rows in the table.
 
     Returns
     -------
