@@ -1044,12 +1044,9 @@ def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list
         dask_gufunc_kwargs={"allow_rechunk": True},
     )
 
-    # Force computation to ensure the changes are materialized
-    computed_result = processed.compute()
-
     # Create a new DataArray to ensure persistence
     return xr.DataArray(
-        data=computed_result.data,
+        data=processed.data,
         coords=image.coords,
         dims=image.dims,
         attrs=image.attrs.copy(),  # Preserve all attributes
@@ -1081,6 +1078,7 @@ def _filter_by_instance_ids(element: Any, ids_to_remove: list[str], instance_key
 
 @_filter_by_instance_ids.register(GeoDataFrame)
 def _(element: GeoDataFrame, ids_to_remove: list[str], instance_key: str) -> GeoDataFrame:
+    del instance_key
     return element[~element.index.isin(ids_to_remove)]
 
 
