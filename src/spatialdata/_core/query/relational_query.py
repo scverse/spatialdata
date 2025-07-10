@@ -1096,9 +1096,10 @@ def _(element: DataArray, ids_to_remove: list[int], instance_key: str) -> DataAr
 
 
 @_filter_by_instance_ids.register(DataTree)
-def _(element: DataArray | DataTree, ids_to_remove: list[int], instance_key: str) -> xr.DataArray | xr.DataTree:
+def _(element: DataTree, ids_to_remove: list[int], instance_key: str) -> DataTree:
     # we extract the info to just reconstruct
     # the DataTree after filtering the max scale
+    del instance_key
     max_scale = list(element.keys())[0]
     scale_factors_temp = _get_scale_factors(element)
     scale_factors = [int(sf[0]) for sf in scale_factors_temp]
