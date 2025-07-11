@@ -786,9 +786,11 @@ def test_warning_on_large_chunks():
 
 def test_image3d_delayed_z_scaling():
     """Test delayed Z dimension scaling for 3D images."""
-    # Create test data similar to the issue example: [1, 12, 194, 3181, 4045] (C, Z, Y, X)
-    # Use smaller dimensions for testing but maintain the same proportions
-    data = np.random.random((1, 12, 19, 32, 40)).astype(np.float32)
+    # Create test data similar to the issue example
+    # Issue shows TCZYX [1, 12, 194, 3181, 4045] 
+    # For Image3DModel (CZYX), we use proportionally smaller data: [2, 19, 32, 40]
+    # where Z=19, Y=32, X=40, and we expect Z to be preserved until min(X,Y) < 19
+    data = np.random.random((2, 19, 32, 40)).astype(np.float32)
     
     # Test that delay_z_scaling=False works as normal (backward compatibility)
     standard_result = Image3DModel.parse(data, delay_z_scaling=False)
@@ -804,19 +806,19 @@ def test_image3d_delayed_z_scaling():
     assert all(key.startswith("scale") for key in scale_keys)
     
     # Verify the shapes follow the expected pattern
-    original_z = 12
+    original_z = 19  # Z dimension from our test data
     scales = []
     for scale_key in sorted(scale_keys):
         scale_data = delayed_result[scale_key]["image"]
         scales.append(scale_data.shape)
     
     # Check that first few scales preserve Z dimension
-    # Original: (1, 12, 19, 32, 40)
-    # Scale 1: (1, 12, 19, 16, 20) - only X,Y scaled by 2
-    # Scale 2: (1, 12, 19, 8, 10) - only X,Y scaled by 2
-    # Eventually Z should start scaling when min(X,Y) < original_Z
+    # Original: (2, 19, 32, 40) where C=2, Z=19, Y=32, X=40
+    # Scale 1: (2, 19, 16, 20) - only X,Y scaled by 2
+    # Scale 2: (2, 19, 8, 10) - only X,Y scaled by 2  
+    # Eventually Z should start scaling when min(X,Y) < original_Z=19
     
-    assert scales[0] == (1, 12, 19, 32, 40)  # Original scale
+    assert scales[0] == (2, 19, 32, 40)  # Original scale
     
     # Find where Z scaling starts
     z_scaling_started = False
@@ -850,7 +852,7 @@ def test_image3d_delayed_z_scaling():
 
 def test_image3d_delayed_z_scaling_with_warning():
     """Test that providing scale_factors with delay_z_scaling=True produces a warning."""
-    data = np.random.random((1, 12, 19, 32, 40)).astype(np.float32)
+    data = np.random.random((2, 19, 32, 40)).astype(np.float32)
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -867,7 +869,7 @@ def test_image3d_delayed_z_scaling_with_warning():
 def test_image3d_delayed_z_scaling_edge_cases():
     """Test edge cases for delayed Z scaling."""
     # Test with very small image where Z is already larger than X,Y
-    small_data = np.random.random((1, 10, 8, 4, 6)).astype(np.float32)  # Z=10, Y=8, X=6
+    small_data = np.random.random((1, 20, 8, 6)).astype(np.float32)  # Z=20, Y=8, X=6
     
     result = Image3DModel.parse(small_data, delay_z_scaling=True)
     
