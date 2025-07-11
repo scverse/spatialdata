@@ -782,3 +782,100 @@ def test_warning_on_large_chunks():
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
         assert "Detected chunks larger than:" in str(w[-1].message)
+
+
+def test_image3d_delayed_z_scaling():
+    """Test delayed Z dimension scaling for 3D images."""
+    # Create test data similar to the issue example: [1, 12, 194, 3181, 4045] (C, Z, Y, X)
+    # Use smaller dimensions for testing but maintain the same proportions
+    data = np.random.random((1, 12, 19, 32, 40)).astype(np.float32)
+    
+    # Test that delay_z_scaling=False works as normal (backward compatibility)
+    standard_result = Image3DModel.parse(data, delay_z_scaling=False)
+    assert isinstance(standard_result, DataArray)
+    
+    # Test with delay_z_scaling=True and verify the computed scale factors
+    delayed_result = Image3DModel.parse(data, delay_z_scaling=True)
+    assert isinstance(delayed_result, DataTree)
+    
+    # Check that we have multiple scales
+    scale_keys = list(delayed_result.keys())
+    assert len(scale_keys) > 1
+    assert all(key.startswith("scale") for key in scale_keys)
+    
+    # Verify the shapes follow the expected pattern
+    original_z = 12
+    scales = []
+    for scale_key in sorted(scale_keys):
+        scale_data = delayed_result[scale_key]["image"]
+        scales.append(scale_data.shape)
+    
+    # Check that first few scales preserve Z dimension
+    # Original: (1, 12, 19, 32, 40)
+    # Scale 1: (1, 12, 19, 16, 20) - only X,Y scaled by 2
+    # Scale 2: (1, 12, 19, 8, 10) - only X,Y scaled by 2
+    # Eventually Z should start scaling when min(X,Y) < original_Z
+    
+    assert scales[0] == (1, 12, 19, 32, 40)  # Original scale
+    
+    # Find where Z scaling starts
+    z_scaling_started = False
+    for i in range(1, len(scales)):
+        prev_shape = scales[i-1]
+        curr_shape = scales[i]
+        
+        # Check if Z dimension was scaled
+        if curr_shape[1] < prev_shape[1]:
+            z_scaling_started = True
+            # Once Z scaling starts, min(X,Y) should be < original_Z
+            min_xy = min(curr_shape[2], curr_shape[3])
+            assert min_xy < original_z, f"Z scaling started too early at scale {i}"
+            break
+    
+    # Verify that before Z scaling starts, only X and Y are scaled
+    for i in range(1, len(scales)):
+        prev_shape = scales[i-1]
+        curr_shape = scales[i]
+        
+        if curr_shape[1] == prev_shape[1]:  # Z not scaled yet
+            # X and Y should be scaled by 2
+            assert curr_shape[2] <= prev_shape[2] // 2 + 1  # Account for rounding
+            assert curr_shape[3] <= prev_shape[3] // 2 + 1
+            # C should never change
+            assert curr_shape[0] == prev_shape[0]
+        else:
+            # Z scaling has started
+            break
+
+
+def test_image3d_delayed_z_scaling_with_warning():
+    """Test that providing scale_factors with delay_z_scaling=True produces a warning."""
+    data = np.random.random((1, 12, 19, 32, 40)).astype(np.float32)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        result = Image3DModel.parse(data, scale_factors=[2, 2], delay_z_scaling=True)
+        
+        assert len(w) == 1
+        assert issubclass(w[0].category, UserWarning)
+        assert "scale_factors parameter is ignored" in str(w[0].message)
+        
+        # Should still work and return a DataTree
+        assert isinstance(result, DataTree)
+
+
+def test_image3d_delayed_z_scaling_edge_cases():
+    """Test edge cases for delayed Z scaling."""
+    # Test with very small image where Z is already larger than X,Y
+    small_data = np.random.random((1, 10, 8, 4, 6)).astype(np.float32)  # Z=10, Y=8, X=6
+    
+    result = Image3DModel.parse(small_data, delay_z_scaling=True)
+    
+    # Should still work and create multiscale
+    assert isinstance(result, DataTree)
+    
+    # Test with invalid data (missing dimensions)
+    with pytest.raises(ValueError, match="dimension not found"):
+        # Create 2D data and try to use it with Image3DModel
+        invalid_data = np.random.random((10, 10))
+        Image3DModel.parse(invalid_data, delay_z_scaling=True)
