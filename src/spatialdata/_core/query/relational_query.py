@@ -1076,17 +1076,6 @@ def _filter_by_instance_ids(element: Any, ids_to_remove: list[str], instance_key
     raise NotImplementedError(f"Filtering by instance ids is not implemented for {element}")
 
 
-@_filter_by_instance_ids.register(GeoDataFrame)
-def _(element: GeoDataFrame, ids_to_remove: list[str], instance_key: str) -> GeoDataFrame:
-    del instance_key
-    return element[~element.index.isin(ids_to_remove)]
-
-
-@_filter_by_instance_ids.register(DaskDataFrame)
-def _(element: DaskDataFrame, ids_to_remove: list[str], instance_key: str) -> DaskDataFrame:
-    return element[~element[instance_key].isin(ids_to_remove)]
-
-
 @_filter_by_instance_ids.register(DataArray)
 def _(element: DataArray, ids_to_remove: list[int], instance_key: str) -> DataArray:
     del instance_key
@@ -1137,6 +1126,7 @@ def subset_sdata_by_table_mask(sdata: SpatialData, table_name: str, mask: NDArra
         raise ValueError(f"Table {table_name} not found in SpatialData object.")
 
     subset_table = table[mask]
+    sdata.tables[table_name] = subset_table
     _, _, instance_key = get_table_keys(subset_table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     removed_instance_ids = list(np.unique(table.obs[instance_key][~mask]))
@@ -1145,7 +1135,10 @@ def subset_sdata_by_table_mask(sdata: SpatialData, table_name: str, mask: NDArra
     for reg in annotated_regions:
         elem = sdata.get(reg)
         model = get_model(elem)
-        if model in [Labels2DModel, PointsModel, ShapesModel]:
+        if model is Labels2DModel:
             filtered_elements[reg] = _filter_by_instance_ids(elem, removed_instance_ids, instance_key)
+        elif model in [PointsModel, ShapesModel]:
+            element_dict, _ = match_element_to_table(sdata, element_name=reg, table_name=table_name)
+            filtered_elements[reg] = element_dict[reg]
 
     return SpatialData.init_from_elements(filtered_elements | {table_name: subset_table})

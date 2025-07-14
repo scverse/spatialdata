@@ -6,7 +6,7 @@ from spatialdata._core.query.relational_query import _filter_by_instance_ids
 from spatialdata.datasets import blobs_annotating_element
 
 
-def test_filter_labels2dmodel_by_instance_ids():
+def test_filter_labels2dmodel_by_instance_ids() -> None:
     sdata = blobs_annotating_element("blobs_labels")
     labels_element = sdata["blobs_labels"]
     all_instance_ids = sdata.tables["table"].obs["instance_id"].unique()
@@ -36,7 +36,7 @@ def test_filter_labels2dmodel_by_instance_ids():
         assert set(preserved_ids) == set(all_instance_ids) | {0}
 
 
-def test_subset_sdata_by_table_mask():
+def test_subset_sdata_by_table_mask() -> None:
     sdata = concatenate(
         {
             "labels": blobs_annotating_element("blobs_labels"),
@@ -62,19 +62,19 @@ def test_subset_sdata_by_table_mask():
         ) - {0}
         assert ms_labels_remaining_ids == {3}
 
-    points_remaining_ids = set(np.unique(subset_sdata.points["blobs_points-points"]["instance_id"].compute())) - {0}
+    points_remaining_ids = set(np.unique(subset_sdata.points["blobs_points-points"].index)) - {0}
     assert points_remaining_ids == {3}
 
     shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
     assert shapes_remaining_ids == {3}
 
 
-def test_subset_sdata_by_table_mask_with_no_annotated_elements():
+def test_subset_sdata_by_table_mask_with_no_annotated_elements() -> None:
     with pytest.raises(ValueError, match="Table table_not_found not found in SpatialData object."):
         sdata = blobs_annotating_element("blobs_labels")
         _ = subset_sdata_by_table_mask(sdata, "table_not_found", sdata.tables["table"].obs["instance_id"] == 3)
 
 
-def test_filter_by_instance_ids_fails_for_unsupported_element_models():
+def test_filter_by_instance_ids_fails_for_unsupported_element_models() -> None:
     with pytest.raises(NotImplementedError, match="Filtering by instance ids is not implemented for"):
         _filter_by_instance_ids([1, 1, 1, 2], [1], "instance_id")
