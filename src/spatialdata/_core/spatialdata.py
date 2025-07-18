@@ -1179,7 +1179,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
-        shapes_geometry_encoding: "WKB" | "geoarrow" = "WKB",
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1243,7 +1243,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
-        shapes_geometry_encoding: "WKB" | "geoarrow" = "WKB",
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
