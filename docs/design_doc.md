@@ -234,7 +234,7 @@ The requirements are the following:
 - The table MUST contains axis name to represent the axes.
     - If it's 2D, the axes should be `["x","y"]`.
     - If it's 3D, the axes should be `["x","y","z"]`.
-- It MUST also contain coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]` (or on-disk in `.attrs["coordinateTransformations"]` for the Zarr Group containing the Element).
+- It MUST also contain coordinate transformations in `dask.dataframe.DataFrame().attrs["transform"]` (or on-disk in `.attrs["coordinateTransformations"]` for the Zarr Group containing the Element).
 
 Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]` (or on-disk in `.attrs["spatialdata_attrs"]` for the Zarr Group containing the Element).
 
