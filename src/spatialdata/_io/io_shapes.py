@@ -1,5 +1,6 @@
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import zarr
