@@ -11,7 +11,11 @@ from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -36,14 +40,20 @@ def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
     # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
     if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
         f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
+    f_store_path = (
+        f.store.store.path
+        if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore)
+        else f.store.path
+    )
     return f, f_store_path
 
 
 def read_zarr(
     store: str | Path | zarr.Group,
     selection: None | tuple[str] = None,
-    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
+    on_bad_files: Literal[
+        BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN
+    ] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
@@ -80,7 +90,11 @@ def read_zarr(
     shapes = {}
 
     # TODO: remove table once deprecated.
-    selector = {"images", "labels", "points", "shapes", "tables", "table"} if not selection else set(selection or [])
+    selector = (
+        {"images", "labels", "points", "shapes", "tables", "table"}
+        if not selection
+        else set(selection or [])
+    )
     logger.debug(f"Reading selection {selector}")
 
     # read multiscale images
@@ -133,9 +147,17 @@ def read_zarr(
                     with handle_read_errors(
                         on_bad_files,
                         location=f"{group.path}/{subgroup_name}",
-                        exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
+                        exc_types=(
+                            JSONDecodeError,
+                            KeyError,
+                            ValueError,
+                            ArrayNotFoundError,
+                            TypeError,
+                        ),
                     ):
-                        labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
+                        labels[subgroup_name] = _read_multiscale(
+                            f_elem_store, raster_type="labels"
+                        )
                         count += 1
                 logger.debug(f"Found {count} elements in {group}")
 
@@ -197,7 +219,9 @@ def read_zarr(
             exc_types=(JSONDecodeError, MetadataError),
         ):
             group = f["tables"]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
+            tables = _read_table(
+                f_store_path, f, group, tables, on_bad_files=on_bad_files
+            )
 
     if "table" in selector and "table" in f:
         warnings.warn(
@@ -213,7 +237,9 @@ def read_zarr(
             exc_types=(JSONDecodeError, MetadataError),
         ):
             group = f[subgroup_name]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
+            tables = _read_table(
+                f_store_path, f, group, tables, on_bad_files=on_bad_files
+            )
 
             logger.debug(f"Found {count} elements in {group}")
 
@@ -234,5 +260,5 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = Path(store)
+    sdata.path = Path(store.path) if isinstance(store, zarr.Group) else Path(store)
     return sdata
