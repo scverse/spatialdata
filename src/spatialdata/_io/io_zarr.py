@@ -11,11 +11,7 @@ from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import (
-    BadFileHandleMethod,
-    handle_read_errors,
-    ome_zarr_logger,
-)
+from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -137,13 +133,7 @@ def read_zarr(
                     with handle_read_errors(
                         on_bad_files,
                         location=f"{group.path}/{subgroup_name}",
-                        exc_types=(
-                            JSONDecodeError,
-                            KeyError,
-                            ValueError,
-                            ArrayNotFoundError,
-                            TypeError,
-                        ),
+                        exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
                     ):
                         labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                         count += 1
