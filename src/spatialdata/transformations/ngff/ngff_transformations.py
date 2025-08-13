@@ -335,7 +335,7 @@ class NgffAffine(NgffBaseTransformation):
         input_axes, output_axes = self._get_axes_from_coordinate_systems()
         return input_axes, output_axes
 
-    def transform_points(self, points: ArrayLike) -> ArrayLike:
+    def transform_points(self, points: ArrayLike) -> Any:
         input_axes, output_axes = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         p = np.vstack([points.T, np.ones(points.shape[0])])
@@ -741,7 +741,7 @@ class NgffRotation(NgffBaseTransformation):
             raise ValueError("Input and output axes must be the same")
         return input_axes, output_axes
 
-    def transform_points(self, points: ArrayLike) -> ArrayLike:
+    def transform_points(self, points: ArrayLike) -> Any:
         input_axes, _ = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         return (self.rotation @ points.T).T
