@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import dask_image.ndinterp
 import datashader as ds
 import numpy as np

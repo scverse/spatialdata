@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Collection
 from types import TracebackType
 from typing import NamedTuple, cast
@@ -277,7 +275,7 @@ class _ErrorDetailsCollector:
         self,
         location: str | tuple[str, ...] = (),
         expected_exception: type[BaseException] | tuple[type[BaseException], ...] | None = None,
-    ) -> _ErrorDetailsCollector:
+    ) -> "_ErrorDetailsCollector":
         """
         Set or override error details in advance before an exception is raised.
 
