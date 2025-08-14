@@ -1,12 +1,7 @@
-from __future__ import annotations
-
 import copy
 
 from spatialdata.models import C, X, Y, Z
-from spatialdata.transformations.ngff.ngff_coordinate_system import (
-    NgffAxis,
-    NgffCoordinateSystem,
-)
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffAxis, NgffCoordinateSystem
 
 __all__ = "get_default_coordinate_system"
 

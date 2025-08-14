@@ -1,5 +1,3 @@
-from typing import Union
-
 try:
     from spatialdata.dataloader.datasets import ImageTilesDataset
 except ImportError as e:

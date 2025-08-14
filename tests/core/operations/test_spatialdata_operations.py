@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 
 import numpy as np
@@ -13,22 +11,9 @@ from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.datasets import blobs
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-    get_table_keys,
-)
-from spatialdata.testing import (
-    assert_elements_dict_are_identical,
-    assert_spatial_data_objects_are_identical,
-)
-from spatialdata.transformations.operations import (
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,

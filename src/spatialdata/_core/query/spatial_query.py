@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from abc import abstractmethod
 from collections.abc import Callable, Mapping
@@ -16,10 +14,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
-from spatialdata._core.query._utils import (
-    _get_filtered_or_unfiltered_tables,
-    get_bounding_box_corners,
-)
+from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike
@@ -35,11 +30,7 @@ from spatialdata.models import (
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
-from spatialdata.transformations.transformations import (
-    Affine,
-    BaseTransformation,
-    _get_affine_for_element,
-)
+from spatialdata.transformations.transformations import Affine, BaseTransformation, _get_affine_for_element
 
 MIN_COORDINATE_DOCS = """\
     The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).

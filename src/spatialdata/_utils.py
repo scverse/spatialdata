@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import functools
 import re
 import warnings
@@ -15,12 +13,7 @@ from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations import (
-    Sequence,
-    Translation,
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.transformations import Sequence, Translation, get_transformation, set_transformation
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = int | float

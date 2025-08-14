@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 __all__ = ["NgffCoordinateSystem", "NgffAxis"]
 
 Axis_t = dict[str, str]
-CoordSystem_t = dict[str, Union[str, list[dict[str, str]]]]
+CoordSystem_t = dict[str, str | list[dict[str, str]]]
 AXIS_ORDER = ["t", "c", "z", "y", "x"]
 
 
@@ -62,7 +62,7 @@ class NgffCoordinateSystem:
         names of the axes of the coordinate system
     """
 
-    def __init__(self, name: str, axes: Optional[list[NgffAxis]] = None):
+    def __init__(self, name: str, axes: list[NgffAxis] | None = None):
         self.name = name
         self._axes = axes if axes is not None else []
         if len(self._axes) != len({axis.name for axis in self._axes}):
@@ -106,7 +106,7 @@ class NgffCoordinateSystem:
         return out
 
     @staticmethod
-    def from_json(data: Union[str, bytes]) -> NgffCoordinateSystem:
+    def from_json(data: str | bytes) -> NgffCoordinateSystem:
         """Initialize a coordinate system from it's json representation."""
         coord_sys = json.loads(data)
         return NgffCoordinateSystem.from_dict(coord_sys)
