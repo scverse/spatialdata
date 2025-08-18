@@ -47,7 +47,7 @@ dependencies = [
     "xarray>=2024.10.0",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
-    "zarr<3",
+    "zarr>=3.0.0",
 ]
 
 [project.optional-dependencies]
