@@ -16,7 +16,7 @@ import py
 import pytest
 import zarr
 from pyarrow import ArrowInvalid
-from zarr.errors import ArrayNotFoundError, MetadataError
+from zarr.errors import MetadataValidationError
 
 from spatialdata import SpatialData, read_zarr
 from spatialdata.datasets import blobs
@@ -100,8 +100,8 @@ def sdata_with_corrupted_elem_type_zgroup(session_tmp_path: Path) -> PartialRead
     return PartialReadTestCase(
         path=sdata_path,
         expected_elements=not_corrupted,
-        expected_exceptions=(JSONDecodeError, MetadataError),
-        warnings_patterns=["labels: JSONDecodeError", "points: MetadataError"],
+        expected_exceptions=(JSONDecodeError, MetadataValidationError),
+        warnings_patterns=["labels: JSONDecodeError", "points: MetadataValidationError"],
     )
 
 
@@ -146,10 +146,11 @@ def sdata_with_corrupted_image_chunks(session_tmp_path: Path) -> PartialReadTest
         path=sdata_path,
         expected_elements=not_corrupted,
         expected_exceptions=(
-            ArrayNotFoundError,
+            # ArrayNotFoundError,  # removed in Zarr 3.0
             TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
         ),
-        warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
+        warnings_patterns=[rf"images/{corrupted}: (TypeError)"],
+        # warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
     )
 
 
@@ -215,10 +216,11 @@ def sdata_with_missing_image_chunks(
         path=sdata_path,
         expected_elements=not_corrupted,
         expected_exceptions=(
-            ArrayNotFoundError,
+            # ArrayNotFoundError,  # removed in Zarr v3
             TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
         ),
-        warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
+        # warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
+        warnings_patterns=[rf"images/{corrupted}: (TypeError)"],
     )
 
 

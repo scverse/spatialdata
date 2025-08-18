@@ -623,7 +623,7 @@ class SpatialData:
         """
         if not isinstance(zarr_path, Path):
             raise ValueError("zarr_path should be a Path object")
-        store = parse_url(zarr_path, mode="r+").store
+        store = parse_url(zarr_path, mode="r+", fmt=SpatialDataFormat).store
         root = zarr.group(store=store)
         if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
             raise ValueError(f"Unknown element type {element_type}")
@@ -646,7 +646,7 @@ class SpatialData:
         -------
         True if the group exists, False otherwise.
         """
-        store = parse_url(zarr_path, mode="r").store
+        store = parse_url(zarr_path, mode="r", fmt=SpatialDataFormat).store
         root = zarr.group(store=store)
         assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
         exists = element_type in root and element_name in root[element_type]
@@ -1070,7 +1070,7 @@ class SpatialData:
         """
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
-        store = parse_url(self.path, mode="r").store
+        store = parse_url(self.path, mode="r", fmt=SpatialDataFormat).store
         root = zarr.group(store=store)
         elements_in_zarr = []
 
@@ -1123,7 +1123,7 @@ class SpatialData:
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
         if os.path.exists(file_path):
-            if parse_url(file_path, mode="r") is None:
+            if parse_url(file_path, mode="r", fmt=SpatialDataFormat) is None:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
@@ -1210,7 +1210,7 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w").store
+        store = parse_url(file_path, mode="w", fmt=SpatialDataFormat).store
         zarr_group = zarr.group(store=store, overwrite=overwrite)
         self.write_attrs(zarr_group=zarr_group)
         store.close()
@@ -1417,7 +1417,7 @@ class SpatialData:
             )
 
         # delete the element
-        store = parse_url(self.path, mode="r+").store
+        store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat).store
         root = zarr.group(store=store)
         root[element_type].pop(element_name)
         store.close()
@@ -1438,7 +1438,7 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        store = parse_url(self.path, mode="r+").store
+        store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat).store
         # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
         # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
         zarr.consolidate_metadata(store, metadata_key=".zmetadata")
@@ -1446,7 +1446,7 @@ class SpatialData:
 
     def has_consolidated_metadata(self) -> bool:
         return_value = False
-        store = parse_url(self.path, mode="r").store
+        store = parse_url(self.path, mode="r", fmt=SpatialDataFormat).store
         if "zmetadata" in store:
             return_value = True
         store.close()
@@ -1622,7 +1622,7 @@ class SpatialData:
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="r+").store
+            store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat).store
             zarr_group = zarr.group(store=store, overwrite=False)
 
         version = parsed["SpatialData"].spatialdata_format_version

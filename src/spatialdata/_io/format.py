@@ -6,7 +6,7 @@ from typing import Any
 import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import CurrentFormat, Format, FormatV01, FormatV02, FormatV03, FormatV04
+from ome_zarr.format import Format, FormatV01, FormatV02, FormatV03, FormatV04
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -46,7 +46,7 @@ def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
     return version
 
 
-class SpatialDataFormat(CurrentFormat):
+class SpatialDataFormat(FormatV04):
     pass
 
 
