@@ -31,7 +31,8 @@ def _read_points(
     assert version is not None
     format = PointsFormats[version]
 
-    path = os.path.join(f._store.path, f.path, "points.parquet")
+    store_root = f.store_path.store.root
+    path = os.path.join(store_root, f.path, "points.parquet")
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
     points = read_parquet("simplecache::" + path if path.startswith("http") else path)
@@ -57,7 +58,9 @@ def write_points(
     t = _get_transformations(points)
 
     points_groups = group.require_group(name)
-    path = Path(points_groups._store.path) / points_groups.path / "points.parquet"
+    store_root = points_groups.store_path.store.root
+    group_path = points_groups.path
+    path = Path(store_root) / group_path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the

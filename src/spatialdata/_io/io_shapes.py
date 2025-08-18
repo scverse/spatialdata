@@ -50,7 +50,8 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(format, ShapesFormatV02):
-        path = Path(f._store.path) / f.path / "shapes.parquet"
+        store_root = f.store_path.store.root
+        path = Path(store_root) / f.path / "shapes.parquet"
         geo_df = read_parquet(path)
     else:
         raise ValueError(
@@ -93,7 +94,8 @@ def write_shapes(
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
-        path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
+        store_root = shapes_group.store_path.store.root
+        path = Path(store_root) / shapes_group.path / "shapes.parquet"
         shapes.to_parquet(path)
 
         attrs = format.attrs_to_dict(shapes.attrs)

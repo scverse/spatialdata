@@ -326,7 +326,7 @@ def _(data: DataArray) -> list[Any]:
 @get_channel_names.register
 def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
-    channels = {tuple(data[i][name].coords["c"].values) for i in data}
+    channels = {tuple(data[i][name].coords["c"].values.tolist()) for i in data}
     if len(channels) > 1:
         raise ValueError(f"Channels are not consistent across scales: {channels}")
     return list(next(iter(channels)))
