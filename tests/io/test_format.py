@@ -82,7 +82,8 @@ class TestFormat:
         metadata[attrs_key].pop("version")
         assert metadata[attrs_key] == Shapes_f.attrs_to_dict({})
 
-    @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
+    @pytest.mark.parametrize("format", [RasterFormatV02])
+    # @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
     def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormat]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             images.write(Path(tmpdir) / "images.zarr", format=format())

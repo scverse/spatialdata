@@ -5,13 +5,17 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Literal
 
-import zarr
+import zarr.storage
 from anndata import AnnData
 from pyarrow import ArrowInvalid
-from zarr.errors import ArrayNotFoundError, MetadataError
+from zarr.errors import MetadataValidationError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -32,11 +36,15 @@ def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
     -------
     A tuple of the zarr.Group object and the path to the store.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
+    f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode="r")
     # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
-    if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
-        f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
+    # not needed, consolidated metadata is always used if present
+    # if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
+    #     f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
+    # the metadata is accessible here:
+    # f.metadata.consolidated_metadata.metadata
+    f_store_path = f.store.root
+    # f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
     return f, f_store_path
 
 
@@ -88,7 +96,7 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location="images",
-            exc_types=(JSONDecodeError, MetadataError),
+            exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f["images"]
             count = 0
@@ -105,7 +113,7 @@ def read_zarr(
                         JSONDecodeError,  # JSON parse error
                         ValueError,  # ome_zarr: Unable to read the NGFF file
                         KeyError,  # Missing JSON key
-                        ArrayNotFoundError,  # Image chunks missing
+                        # ArrayNotFoundError,  # Image chunks missing, removed in Zarr v3
                         TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
                     ),
                 ):
@@ -120,7 +128,7 @@ def read_zarr(
             with handle_read_errors(
                 on_bad_files,
                 location="labels",
-                exc_types=(JSONDecodeError, MetadataError),
+                exc_types=(JSONDecodeError, MetadataValidationError),
             ):
                 group = f["labels"]
                 count = 0
@@ -133,7 +141,13 @@ def read_zarr(
                     with handle_read_errors(
                         on_bad_files,
                         location=f"{group.path}/{subgroup_name}",
-                        exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
+                        exc_types=(
+                            JSONDecodeError,
+                            KeyError,
+                            ValueError,
+                            # ArrayNotFoundError,  # removed in Zarr v3
+                            TypeError,
+                        ),
                     ):
                         labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                         count += 1
@@ -144,7 +158,7 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location="points",
-            exc_types=(JSONDecodeError, MetadataError),
+            exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f["points"]
             count = 0
@@ -167,7 +181,7 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location="shapes",
-            exc_types=(JSONDecodeError, MetadataError),
+            exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f["shapes"]
             count = 0
@@ -184,7 +198,7 @@ def read_zarr(
                         JSONDecodeError,
                         ValueError,
                         KeyError,
-                        ArrayNotFoundError,
+                        # ArrayNotFoundError,  # removed in Zarr v3
                     ),
                 ):
                     shapes[subgroup_name] = _read_shapes(f_elem_store)
@@ -194,7 +208,7 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location="tables",
-            exc_types=(JSONDecodeError, MetadataError),
+            exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f["tables"]
             tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
@@ -210,7 +224,7 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location=subgroup_name,
-            exc_types=(JSONDecodeError, MetadataError),
+            exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f[subgroup_name]
             tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
