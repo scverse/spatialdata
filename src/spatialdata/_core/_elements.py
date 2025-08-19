@@ -1,7 +1,5 @@
 """SpatialData elements."""
 
-from __future__ import annotations
-
 from collections import UserDict
 from collections.abc import Iterable, KeysView, ValuesView
 from typing import TypeVar

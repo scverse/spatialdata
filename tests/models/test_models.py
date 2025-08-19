@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import re
 import tempfile
@@ -49,13 +47,8 @@ from spatialdata.models.models import (
     get_model,
 )
 from spatialdata.testing import assert_elements_are_identical
-from spatialdata.transformations._utils import (
-    _set_transformations,
-)
-from spatialdata.transformations.operations import (
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.transformations._utils import _set_transformations
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import (
     MULTIPOLYGON_PATH,

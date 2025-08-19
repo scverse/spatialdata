@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.10, <3.13" # include 3.13 once multiscale-spatial-image conflicts are resolved
+requires-python = ">=3.10"
 dynamic= [
   "version" # allow version to be set by git tags
 ]
@@ -29,7 +29,7 @@ dependencies = [
     "datashader",
     "fsspec",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=2.0.2",
+    "multiscale_spatial_image>=2.0.3",
     "networkx",
     "numba>=0.55.0",
     "numpy",
@@ -40,14 +40,13 @@ dependencies = [
     "rich",
     "setuptools",
     "shapely>=2.0.1",
-    "spatial_image>=1.1.0",
+    "spatial_image>=1.2.3",
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
     "xarray>=2024.10.0",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
-	"xarray-dataclasses>=1.8.0",
     "zarr<3",
 ]
 
