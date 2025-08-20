@@ -92,6 +92,6 @@ references.md
 [napari-spatialdata-repo]: https://github.com/scverse/napari-spatialdata
 [spatialdata-io-repo]: https://github.com/scverse/spatialdata-io
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
-[napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html
-[spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/latest/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/latest/api.html
+[napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
+[spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html

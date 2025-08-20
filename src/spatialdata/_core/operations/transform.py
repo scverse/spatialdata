@@ -21,10 +21,7 @@ from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_nam
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
-    from spatialdata.transformations.transformations import (
-        BaseTransformation,
-        Translation,
-    )
+    from spatialdata.transformations.transformations import BaseTransformation, Translation
 
 DEBUG_WITH_PLOTS = False
 ERROR_MSG_AFTER_0_0_15 = """\
@@ -350,12 +347,7 @@ def _(
         data, transformation, maintain_positioning, to_coordinate_system
     )
     schema = get_model(data)
-    from spatialdata.models import (
-        Image2DModel,
-        Image3DModel,
-        Labels2DModel,
-        Labels3DModel,
-    )
+    from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence

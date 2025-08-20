@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import warnings
 from json import JSONDecodeError
@@ -129,7 +127,7 @@ def read_zarr(
     A SpatialData object.
     """
     _store = _open_zarr_store(store)
-    f = zarr.group(_store)
+    f = zarr.group(store)
 
     images = {}
     labels = {}
