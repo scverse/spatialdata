@@ -12,6 +12,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._types import StoreLike
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -44,6 +45,7 @@ def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
     name: str,
+    zarr_container_path: StoreLike,
     group_type: str = "ngff:points",
     format: Format = CurrentPointsFormat(),
 ) -> None:
@@ -51,7 +53,8 @@ def write_points(
     t = _get_transformations(points)
 
     points_groups = group.require_group(name)
-    path = Path(points_groups._store.path) / points_groups.path / "points.parquet"
+    store = points_groups._store
+    path = zarr_container_path / points_groups.path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -64,7 +67,7 @@ def write_points(
             c = c.cat.as_known()
             points[column_name] = c
 
-    points.to_parquet(path)
+    points.to_parquet(path, filesystem=getattr(store, "fs", None))
 
     attrs = format.attrs_to_dict(points.attrs)
     attrs["version"] = format.spatialdata_format_version

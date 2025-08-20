@@ -13,6 +13,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentShapesFormat, ShapesFormats, ShapesFormatV01, ShapesFormatV02, _parse_version
+from spatialdata._types import StoreLike
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
@@ -55,6 +56,7 @@ def write_shapes(
     shapes: GeoDataFrame,
     group: zarr.Group,
     name: str,
+    zarr_container_path: StoreLike,
     group_type: str = "ngff:shapes",
     format: Format = CurrentShapesFormat(),
 ) -> None:
@@ -82,8 +84,11 @@ def write_shapes(
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02):
-        path = Path(shapes_group._store.path) / shapes_group.path / "shapes.parquet"
-        shapes.to_parquet(path)
+        store = shapes_group._store
+        path = zarr_container_path / shapes_group.path / "shapes.parquet"
+
+        # Geopandas only allows path-like objects for local filesystems and not remote ones.
+        shapes.to_parquet(str(path), filesystem=getattr(store, "fs", None))
 
         attrs = format.attrs_to_dict(shapes.attrs)
         attrs["version"] = format.spatialdata_format_version

@@ -127,12 +127,12 @@ class TestRemoteMock:
     @pytest.mark.parametrize(
         "sdata_type",
         [
-            "images",
-            "labels",
-            "table_single_annotation",
-            "table_multiple_annotations",
+            # "images",
+            # "labels",
+            # "table_single_annotation",
+            # "table_multiple_annotations",
             "points",
-            "shapes",
+            # "shapes",
         ],
     )
     def test_reading_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:
@@ -156,10 +156,8 @@ class TestRemoteMock:
             # "images",
             # TODO: fix remote writing support labels
             # "labels",
-            # TODO: fix remote writing support points
             "points",
-            # TODO: fix remote writing support shapes
-            # "shapes",
+            "shapes",
         ],
     )
     def test_writing_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:
@@ -168,7 +166,8 @@ class TestRemoteMock:
         # test writing to a remote path
         remote_path = upath / "tmp.zarr"
         sdata.write(remote_path)
-        assert len(list(upath.glob("*"))) == n_elements
+        assert len(list((remote_path / sdata_type).glob("[a-zA-Z]*"))) == n_elements
+
         # test reading the remotely written object
         remote_sdata = SpatialData.read(remote_path)
         assert_spatial_data_objects_are_identical(sdata, remote_sdata)

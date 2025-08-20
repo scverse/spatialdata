@@ -598,7 +598,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
+        self, zarr_path: StoreLike, element_type: str, element_name: str
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
@@ -1246,14 +1246,16 @@ class SpatialData:
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
     ) -> None:
-        if not isinstance(zarr_container_path, Path):
+        if not isinstance(zarr_container_path, StoreLike):
             raise ValueError(
-                f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
+                f"zarr_container_path must be a 'StoreLike' object "
+                f"(str | Path | UPath | zarr.storage.StoreLike | zarr.Group), got: {type(zarr_container_path)}."
             )
-        file_path_of_element = zarr_container_path / element_type / element_name
-        self._validate_can_safely_write_to_path(
-            file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
-        )
+        if isinstance(zarr_container_path, Path):
+            file_path_of_element = zarr_container_path / element_type / element_name
+            self._validate_can_safely_write_to_path(
+                file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
+            )
 
         root_group, element_type_group, _ = self._get_groups_for_element(
             zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
@@ -1263,14 +1265,27 @@ class SpatialData:
 
         parsed = _parse_formats(formats=format)
 
+        # We pass on zarr_container_path to ensure proper paths when writing to remote system even when on windows.
         if element_type == "images":
             write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
         elif element_type == "labels":
             write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
         elif element_type == "points":
-            write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
+            write_points(
+                points=element,
+                group=element_type_group,
+                name=element_name,
+                zarr_container_path=zarr_container_path,
+                format=parsed["points"],
+            )
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"])
+            write_shapes(
+                shapes=element,
+                group=element_type_group,
+                name=element_name,
+                zarr_container_path=zarr_container_path,
+                format=parsed["shapes"],
+            )
         elif element_type == "tables":
             write_table(table=element, group=element_type_group, name=element_name, format=parsed["tables"])
         else:
