@@ -91,7 +91,7 @@ def upload_to_upath(upath, sdata):
 
 
 @pytest.fixture(scope="function")
-def s3_fixture(s3_server):
+def upath(s3_server):
     # make a mock bucket available for testing
     pytest.importorskip("s3fs")
     anon, s3so = s3_server
@@ -102,16 +102,12 @@ def s3_fixture(s3_server):
     s3.mkdir(bucket_name)
     # here you could write existing test files to s3.upload if needed
     s3.invalidate_cache()
-    yield f"s3://{bucket_name}", anon, s3so
+
+    upath = UPath(f"s3://{bucket_name}", anon=anon, **s3so)
+    yield upath
 
 
 class TestRemoteMock:
-    @pytest.fixture(scope="function")
-    def upath(self, s3_fixture):
-        # create a UPath object for the mock s3 bucket
-        path, anon, s3so = s3_fixture
-        return UPath(path, anon=anon, **s3so)
-
     def test_is_S3Path(self, upath):
         assert isinstance(upath, S3Path)
 
