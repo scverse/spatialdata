@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Iterator
 from typing import Any
 
@@ -106,9 +104,7 @@ class RasterFormatV01(SpatialDataFormat):
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata.transformations.ngff.ngff_transformations import (
-                NgffBaseTransformation,
-            )
+            from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 
             parsed = [NgffBaseTransformation.from_dict(t) for t in transformations]
             json1 = [json.dumps(p.to_dict()) for p in parsed]

@@ -1,13 +1,14 @@
-from __future__ import annotations
-
 import logging
 import warnings
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import zarr
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from pyarrow import ArrowInvalid
+from xarray import DataArray, DataTree
 from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata._core.spatialdata import SpatialData
@@ -24,11 +25,6 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-
-if TYPE_CHECKING:
-    from dask.dataframe import DataFrame as DaskDataFrame
-    from geopandas import GeoDataFrame
-    from xarray import DataArray, DataTree
 
 
 def is_hidden_zarr_entry(name: str) -> bool:
@@ -129,7 +125,7 @@ def read_zarr(
     A SpatialData object.
     """
     _store = _open_zarr_store(store)
-    f = zarr.group(_store)
+    f = zarr.group(store)
 
     images = {}
     labels = {}

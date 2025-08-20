@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -10,14 +8,19 @@ from xarray import DataArray, DataTree
 from xarray.testing import assert_equal
 
 from spatialdata import SpatialData
-from spatialdata._core._elements import Elements
+from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata.models import PointsModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations.operations import get_transformation
 
+_Elements = Images | Labels | Shapes | Points | Tables
+
 
 def assert_elements_dict_are_identical(
-    elements0: Elements, elements1: Elements, check_transformations: bool = True, check_metadata: bool = True
+    elements0: _Elements,
+    elements1: _Elements,
+    check_transformations: bool = True,
+    check_metadata: bool = True,
 ) -> None:
     """
     Compare two dictionaries of elements and assert that they are identical (except for the order of the keys).
@@ -55,7 +58,10 @@ def assert_elements_dict_are_identical(
         element0 = elements0[k]
         element1 = elements1[k]
         assert_elements_are_identical(
-            element0, element1, check_transformations=check_transformations, check_metadata=check_metadata
+            element0,
+            element1,
+            check_transformations=check_transformations,
+            check_metadata=check_metadata,
         )
 
 
@@ -125,7 +131,10 @@ def assert_elements_are_identical(
 
 
 def assert_spatial_data_objects_are_identical(
-    sdata0: SpatialData, sdata1: SpatialData, check_transformations: bool = True, check_metadata: bool = True
+    sdata0: SpatialData,
+    sdata1: SpatialData,
+    check_transformations: bool = True,
+    check_metadata: bool = True,
 ) -> None:
     """
     Compare two SpatialData objects and assert that they are identical.
@@ -169,5 +178,8 @@ def assert_spatial_data_objects_are_identical(
         element0 = sdata0[element_name]
         element1 = sdata1[element_name]
         assert_elements_are_identical(
-            element0, element1, check_transformations=check_transformations, check_metadata=check_metadata
+            element0,
+            element1,
+            check_transformations=check_transformations,
+            check_metadata=check_metadata,
         )
