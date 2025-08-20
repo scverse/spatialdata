@@ -17,7 +17,6 @@ from dask.dataframe import read_parquet
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from ome_zarr.io import parse_url
-from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
 
@@ -31,7 +30,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T, StoreLike
-from spatialdata._utils import _deprecation_alias, _error_message_add_element
+from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -1816,41 +1815,16 @@ class SpatialData:
         -------
         The table.
         """
-        warnings.warn(
-            "Table accessor will be deprecated with SpatialData version 0.1, use sdata.tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # Isinstance will still return table if anndata has 0 rows.
-        if isinstance(self.tables.get("table"), AnnData):
-            return self.tables["table"]
-        return None
+        raise AttributeError("The property 'table' is deprecated. use '.tables' instead.")
 
     @table.setter
     def table(self, table: AnnData) -> None:
-        warnings.warn(
-            "Table setter will be deprecated with SpatialData version 0.1, use tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        TableModel().validate(table)
-        if self.tables.get("table") is not None:
-            raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
-        self.tables["table"] = table
+        raise AttributeError("The property 'table' is deprecated. use '.tables' instead.")
 
     @table.deleter
     def table(self) -> None:
         """Delete the table."""
-        warnings.warn(
-            "del sdata.table will be deprecated with SpatialData version 0.1, use del sdata.tables['table'] instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if self.tables.get("table"):
-            del self.tables["table"]
-        else:
-            # More informative than the error in the zarr library.
-            raise KeyError("table with name 'table' not present in the SpatialData object.")
+        raise AttributeError("The property 'table' is deprecated. use '.tables' instead.")
 
     @staticmethod
     def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
@@ -1871,44 +1845,6 @@ class SpatialData:
         from spatialdata import read_zarr
 
         return read_zarr(file_path, selection=selection)
-
-    def add_image(
-        self,
-        name: str,
-        image: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = image` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_labels(
-        self,
-        name: str,
-        labels: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = labels` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_points(
-        self,
-        name: str,
-        points: DaskDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = points` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_shapes(
-        self,
-        name: str,
-        shapes: GeoDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = shapes` instead."""  # noqa: D401
-        _error_message_add_element()
 
     @property
     def images(self) -> Images:
