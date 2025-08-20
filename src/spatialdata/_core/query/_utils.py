@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 import numba as nb
@@ -12,11 +10,7 @@ from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import Number, _parse_list_into_array
 from spatialdata.transformations._utils import compute_coordinates
-from spatialdata.transformations.transformations import (
-    BaseTransformation,
-    Sequence,
-    Translation,
-)
+from spatialdata.transformations.transformations import BaseTransformation, Sequence, Translation
 
 
 def get_bounding_box_corners(
@@ -142,7 +136,7 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
 
     # rechunk the data to avoid irregular chunks
     coords = list(result["scale0"].coords.keys())
-    result = result.chunk({c: "auto" for c in coords})
+    result = result.chunk(dict.fromkeys(coords, "auto"))
 
     from dask.array.core import _check_regular_chunks
 
@@ -156,7 +150,7 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
         # reported here: https://github.com/scverse/spatialdata/issues/821#issuecomment-2632201695
         # seemingly due to this bug: https://github.com/dask/dask/issues/11713
         CHUNK_SIZE = 1024
-        rechunk_strategy = {c: CHUNK_SIZE for c in coords}
+        rechunk_strategy = dict.fromkeys(coords, CHUNK_SIZE)
         if "c" in coords:
             rechunk_strategy["c"] = result["scale0"]["image"].chunks[0][0]
         result = result.chunk(rechunk_strategy)

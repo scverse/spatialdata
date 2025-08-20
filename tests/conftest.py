@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import dask
 
 dask.config.set({"dataframe.query-planning": False})

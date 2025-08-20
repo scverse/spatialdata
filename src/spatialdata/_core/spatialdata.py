@@ -252,7 +252,7 @@ class SpatialData:
         """
         warnings.warn(
             'This method is deprecated and will be removed in a future release. Use "SpatialData.init_from_elements('
-            ')" instead. For the momment, such methods will be automatically called.',
+            ')" instead. For the moment, such methods will be automatically called.',
             DeprecationWarning,
             stacklevel=2,
         )
@@ -2341,7 +2341,7 @@ class SpatialData:
         )
         return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
-    def __getitem__(self, item: str) -> SpatialElement:
+    def __getitem__(self, item: str) -> SpatialElement | AnnData:
         """
         Return the element with the given name.
 

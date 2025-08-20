@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import re
 import tempfile
@@ -49,13 +47,8 @@ from spatialdata.models.models import (
     get_model,
 )
 from spatialdata.testing import assert_elements_are_identical
-from spatialdata.transformations._utils import (
-    _set_transformations,
-)
-from spatialdata.transformations.operations import (
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.transformations._utils import _set_transformations
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import (
     MULTIPOLYGON_PATH,
@@ -446,7 +439,7 @@ class TestModels:
     def test_model_not_unique_names(self, full_sdata, element_type: str, names: list[str]):
         element = next(iter(getattr(full_sdata, element_type).values()))
         with pytest.raises(ValidationError, match="Key `.*` is not unique"):
-            SpatialData(**{element_type: {name: element for name in names}})
+            SpatialData(**{element_type: dict.fromkeys(names, element)})
 
     @pytest.mark.parametrize("model", [TableModel])
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])

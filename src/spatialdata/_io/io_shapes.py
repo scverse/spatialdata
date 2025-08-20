@@ -40,8 +40,7 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(format, ShapesFormatV02):
-        path = Path(f._store.path) / f.path / "shapes.parquet"
-        geo_df = read_parquet(path)
+        geo_df = read_parquet(f.store.path, filesystem=f.store.fs)
     else:
         raise ValueError(
             f"Unsupported shapes format {format} from version {version}. Please update the spatialdata library."

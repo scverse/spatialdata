@@ -133,12 +133,10 @@ class TestRemoteMock:
         [
             "images",
             "labels",
-            # TODO: fix remote reading support points
-            # "points",
-            # TODO: fix remote reading support shapes
-            # "shapes",
             "table_single_annotation",
             "table_multiple_annotations",
+            "points",
+            "shapes",
         ],
     )
     def test_reading_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:

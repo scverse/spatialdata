@@ -1,7 +1,5 @@
 """SpatialData datasets."""
 
-from __future__ import annotations
-
 from typing import Any, Literal
 
 import dask.dataframe.core
@@ -22,13 +20,7 @@ from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.transformations import Identity
 
 __all__ = ["blobs", "raccoon"]
