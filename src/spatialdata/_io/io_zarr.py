@@ -125,7 +125,7 @@ def read_zarr(
     A SpatialData object.
     """
     _store = _open_zarr_store(store)
-    f = zarr.group(store)
+    f = zarr.group(_store)
 
     images = {}
     labels = {}
