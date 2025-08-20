@@ -133,6 +133,8 @@ class TestRemoteMock:
         [
             "images",
             "labels",
+            "table_single_annotation",
+            "table_multiple_annotations",
             "points",
             "shapes",
         ],
