@@ -60,6 +60,7 @@ test = [
     "pytest-cov",
     "pytest-mock",
     "torch",
+    "moto[s3,server]"
 ]
 docs = [
     "sphinx>=4.5",
@@ -73,13 +74,6 @@ docs = [
     "ipython>=8.6.0",
     "sphinx-copybutton",
     "sphinx-pytest",
-]
-test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "torch",
-    "moto[s3,server]"
 ]
 benchmark = [
     "asv",
