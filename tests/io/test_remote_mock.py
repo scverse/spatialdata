@@ -157,7 +157,7 @@ class TestRemoteMock:
             # TODO: fix remote writing support labels
             # "labels",
             # TODO: fix remote writing support points
-            # "points",
+            "points",
             # TODO: fix remote writing support shapes
             # "shapes",
         ],
@@ -168,7 +168,7 @@ class TestRemoteMock:
         # test writing to a remote path
         remote_path = upath / "tmp.zarr"
         sdata.write(remote_path)
-        assert len(upath.glob("*")) == n_elements
+        assert len(list(upath.glob("*"))) == n_elements
         # test reading the remotely written object
         remote_sdata = SpatialData.read(remote_path)
         assert_spatial_data_objects_are_identical(sdata, remote_sdata)

@@ -30,7 +30,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._types import ArrayLike, Raster_T, StoreLike
 from spatialdata._utils import _deprecation_alias, _error_message_add_element
 from spatialdata.models import (
     Image2DModel,
@@ -1205,12 +1205,16 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
+        from spatialdata._io._utils import _open_zarr_store
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
-        self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
-        self._validate_all_elements()
+        if isinstance(file_path, Path):
+            # TODO: also validate remote paths
+            self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
+            self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w").store
+        store = _open_zarr_store(file_path, mode="w")
         zarr_group = zarr.group(store=store, overwrite=overwrite)
         self.write_attrs(zarr_group=zarr_group)
         store.close()
@@ -1236,7 +1240,7 @@ class SpatialData:
     def _write_element(
         self,
         element: SpatialElement | AnnData,
-        zarr_container_path: Path,
+        zarr_container_path: StoreLike,
         element_type: str,
         element_name: str,
         overwrite: bool,
