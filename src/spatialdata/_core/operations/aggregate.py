@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from typing import Any
 
@@ -21,14 +19,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-    get_model,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_model
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 __all__ = ["aggregate"]
