@@ -154,8 +154,8 @@ class TestRemoteMock:
         [
             "images",
             "labels",
-            # "table_single_annotation",
-            # "table_multiple_annotations",
+            "table_single_annotation",
+            "table_multiple_annotations",
             "points",
             "shapes",
         ],
@@ -166,7 +166,10 @@ class TestRemoteMock:
         # test writing to a remote path
         remote_path = upath / "tmp.zarr"
         sdata.write(remote_path)
-        assert len(list((remote_path / sdata_type).glob("[a-zA-Z]*"))) == n_elements
+        if not sdata_type.startswith("table"):
+            assert len(list((remote_path / sdata_type).glob("[a-zA-Z]*"))) == n_elements
+        else:
+            assert len(list((remote_path / "tables").glob("[a-zA-Z]*"))) == n_elements
 
         # test reading the remotely written object
         remote_sdata = SpatialData.read(remote_path)
