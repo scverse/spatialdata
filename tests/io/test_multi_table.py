@@ -127,30 +127,6 @@ class TestMultiTable:
         )
         full_sdata.write(tmpdir)
 
-    def test_old_accessor_deprecation(self, full_sdata, tmp_path):
-        # To test self._backed
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        full_sdata.write(tmpdir)
-        adata0 = _get_table(region="polygon")
-
-        with pytest.warns(DeprecationWarning):
-            _ = full_sdata.table
-        with pytest.raises(ValueError):
-            full_sdata.table = adata0
-        with pytest.warns(DeprecationWarning):
-            del full_sdata.table
-        with pytest.raises(KeyError):
-            del full_sdata["table"]
-        with pytest.warns(DeprecationWarning):
-            full_sdata.table = adata0  # this gets placed in sdata['table']
-
-        assert_equal(adata0, full_sdata["table"])
-
-        del full_sdata["table"]
-
-        full_sdata.tables["my_new_table0"] = adata0
-        assert full_sdata.get("table") is None
-
     @pytest.mark.parametrize("region", ["test_shapes", "non_existing"])
     def test_single_table(self, tmp_path: str, region: str):
         tmpdir = Path(tmp_path) / "tmp.zarr"

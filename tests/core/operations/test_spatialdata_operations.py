@@ -174,7 +174,7 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.tables["table"]
-    full_sdata.table = TableModel.parse(
+    full_sdata["table"] = TableModel.parse(
         adata,
         region=["circles", "poly"],
         region_key="annotated_shapes",
