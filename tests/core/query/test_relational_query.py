@@ -15,10 +15,14 @@ from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
 def test_match_table_to_element(sdata_query_aggregation):
-    matched_table = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
+    matched_table = match_table_to_element(
+        sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+    )
     arr = np.array(list(reversed(sdata_query_aggregation["values_circles"].index)))
     sdata_query_aggregation["values_circles"].index = arr
-    matched_table_reversed = match_table_to_element(sdata=sdata_query_aggregation, element_name="values_circles")
+    matched_table_reversed = match_table_to_element(
+        sdata=sdata_query_aggregation, element_name="values_circles", table_name="table"
+    )
     assert matched_table.obs.index.tolist() == list(reversed(matched_table_reversed.obs.index.tolist()))
 
     # TODO: add tests for labels

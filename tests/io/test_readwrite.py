@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -251,27 +252,6 @@ class TestReadWrite:
                     # a. rewrite the original data (risky!)
                     sdata.delete_element_from_disk(name)
                     sdata.write_element(name)
-
-    def test_incremental_io_table_legacy(self, table_single_annotation: SpatialData) -> None:
-        s = table_single_annotation
-        t = s["table"][:10, :].copy()
-        with pytest.raises(ValueError):
-            s.table = t
-        del s["table"]
-        s.table = t
-
-        with tempfile.TemporaryDirectory() as td:
-            f = os.path.join(td, "data.zarr")
-            s.write(f)
-            s2 = SpatialData.read(f)
-            assert len(s2["table"]) == len(t)
-            del s2["table"]
-            s2.table = s["table"]
-            assert len(s2["table"]) == len(s["table"])
-            f2 = os.path.join(td, "data2.zarr")
-            s2.write(f2)
-            s3 = SpatialData.read(f2)
-            assert len(s3["table"]) == len(s2["table"])
 
     def test_io_and_lazy_loading_points(self, points):
         with tempfile.TemporaryDirectory() as td:
@@ -774,6 +754,7 @@ def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
         invalid_sdata.write_element("valid_name")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Renaming fails as windows path already sees the name as invalid.")
 def test_reading_invalid_name(tmp_path: Path):
     image_name, image = next(iter(_get_images().items()))
     labels_name, labels = next(iter(_get_labels().items()))
@@ -789,8 +770,10 @@ def test_reading_invalid_name(tmp_path: Path):
     )
     valid_sdata.write(tmp_path / "data.zarr")
     # Circumvent validation at construction time and check validation happens again at writing time.
-    (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
-    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+    (tmp_path / "data.zarr" / "points" / points_name).rename(tmp_path / "data.zarr" / "points" / "has whitespace")
+    (tmp_path / "data.zarr" / "shapes" / shapes_name).rename(
+        tmp_path / "data.zarr" / "shapes" / "non-alnum_#$%&()*+,?@"
+    )
 
     with pytest.raises(ValidationError, match="Cannot construct SpatialData") as exc_info:
         read_zarr(tmp_path / "data.zarr")

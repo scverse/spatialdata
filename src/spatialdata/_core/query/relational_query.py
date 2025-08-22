@@ -716,7 +716,7 @@ def _call_join(
     return elements_dict, table
 
 
-def match_table_to_element(sdata: SpatialData, element_name: str, table_name: str = "table") -> AnnData:
+def match_table_to_element(sdata: SpatialData, element_name: str, table_name: str) -> AnnData:
     """
     Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
@@ -738,14 +738,6 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     match_element_to_table : Function to match a spatial element to a table.
     join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
-    if table_name is None:
-        warnings.warn(
-            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-            "Please provide the name of the table as argument to table_name.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        table_name = "table"
     _, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
     )
