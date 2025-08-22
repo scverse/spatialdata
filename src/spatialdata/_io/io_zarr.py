@@ -46,7 +46,7 @@ def read_image_element(path: StoreLike) -> DataArray | DataTree:
     """
     # stay in sync with ome v4 format spec:
     # https://github.com/ome/ome-zarr-py/blob/7d1ae35c97/ome_zarr/format.py#L189-L192
-    store = _open_zarr_store(path, dimension_separator="/", normalize_keys=False)
+    store = _open_zarr_store(path, normalize_keys=False)
     return _read_multiscale(store, raster_type="image")
 
 

@@ -127,12 +127,12 @@ class TestRemoteMock:
     @pytest.mark.parametrize(
         "sdata_type",
         [
-            # "images",
-            # "labels",
-            # "table_single_annotation",
-            # "table_multiple_annotations",
+            "images",
+            "labels",
+            "table_single_annotation",
+            "table_multiple_annotations",
             "points",
-            # "shapes",
+            "shapes",
         ],
     )
     def test_reading_mocked_elements(self, upath: UPath, sdata_type: str, request) -> None:
@@ -152,10 +152,10 @@ class TestRemoteMock:
     @pytest.mark.parametrize(
         "sdata_type",
         [
-            # TODO: fix remote writing support images
-            # "images",
-            # TODO: fix remote writing support labels
-            # "labels",
+            "images",
+            "labels",
+            # "table_single_annotation",
+            # "table_multiple_annotations",
             "points",
             "shapes",
         ],
