@@ -162,7 +162,12 @@ class ShapesFormatV01(SpatialDataFormat):
         return typ
 
     def attrs_to_dict(self, geometry: GeometryType) -> dict[str, str | dict[str, Any]]:
-        return {Shapes_s.GEOS_KEY: {Shapes_s.NAME_KEY: geometry.name, Shapes_s.TYPE_KEY: geometry.value}}
+        return {
+            Shapes_s.GEOS_KEY: {
+                Shapes_s.NAME_KEY: geometry.name,
+                Shapes_s.TYPE_KEY: geometry.value,
+            }
+        }
 
 
 class ShapesFormatV02(SpatialDataFormat):
@@ -252,6 +257,14 @@ RasterFormats = {
 SpatialDataContainerFormats = {
     "0.1": SpatialDataContainerFormatV01(),
 }
+ShapesFormatType = ShapesFormatV01 | ShapesFormatV02
+PointsFormatType = PointsFormatV01
+TablesFormatType = TablesFormatV01
+RasterFormatType = RasterFormatV01 | RasterFormatV02
+SpatialDataContainerFormatType = SpatialDataContainerFormatV01
+SpatialDataFormatType = (
+    ShapesFormatType | PointsFormatType | TablesFormatType | RasterFormatType | SpatialDataContainerFormatType
+)
 
 
 def format_implementations() -> Iterator[Format]:
@@ -270,7 +283,9 @@ def format_implementations() -> Iterator[Format]:
 ome_zarr.format.format_implementations = format_implementations
 
 
-def _parse_formats(formats: SpatialDataFormat | list[SpatialDataFormat] | None) -> dict[str, SpatialDataFormat]:
+def _parse_formats(
+    formats: SpatialDataFormatType | list[SpatialDataFormatType] | None,
+) -> dict[str, SpatialDataFormatType]:
     parsed = {
         "raster": CurrentRasterFormat(),
         "shapes": CurrentShapesFormat(),

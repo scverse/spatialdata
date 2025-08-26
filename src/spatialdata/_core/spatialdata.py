@@ -55,7 +55,7 @@ from spatialdata.models._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
-    from spatialdata._io.format import SpatialDataFormat
+    from spatialdata._io.format import SpatialDataContainerFormatType, SpatialDataFormat
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -236,7 +236,8 @@ class SpatialData:
 
     @staticmethod
     def from_elements_dict(
-        elements_dict: dict[str, SpatialElement | AnnData], attrs: Mapping[Any, Any] | None = None
+        elements_dict: dict[str, SpatialElement | AnnData],
+        attrs: Mapping[Any, Any] | None = None,
     ) -> SpatialData:
         """
         Create a SpatialData object from a dict of elements.
@@ -275,7 +276,9 @@ class SpatialData:
         -------
         The annotated regions.
         """
-        from spatialdata.models.models import _get_region_metadata_from_region_key_column
+        from spatialdata.models.models import (
+            _get_region_metadata_from_region_key_column,
+        )
 
         return _get_region_metadata_from_region_key_column(table)
 
@@ -628,7 +631,14 @@ class SpatialData:
         store = SpatialDataFormat().init_store(str(zarr_path), mode="r+")
         # store = parse_url(zarr_path, mode="r+", fmt=SpatialDataFormat()).store
         root = zarr.open_group(store=store, mode="r+")
-        if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
+        if element_type not in [
+            "images",
+            "labels",
+            "points",
+            "polygons",
+            "shapes",
+            "tables",
+        ]:
             raise ValueError(f"Unknown element type {element_type}")
         element_type_group = root.require_group(element_type)
         element_name_group = element_type_group.require_group(element_name)
@@ -653,7 +663,14 @@ class SpatialData:
 
         store = parse_url(zarr_path, mode="r", fmt=SpatialDataFormat()).store
         root = zarr.open_group(store=store, mode="r")
-        assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
+        assert element_type in [
+            "images",
+            "labels",
+            "points",
+            "polygons",
+            "shapes",
+            "tables",
+        ]
         exists = element_type in root and element_name in root[element_type]
         store.close()
         return exists
@@ -689,7 +706,10 @@ class SpatialData:
 
     @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
-        self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
+        self,
+        coordinate_system: str | list[str],
+        filter_tables: bool = True,
+        include_orphan_tables: bool = False,
     ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
@@ -731,7 +751,11 @@ class SpatialData:
                         elements[element_type][element_name] = element
                         element_names_in_coordinate_system.append(element_name)
         tables = self._filter_tables(
-            set(), filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
+            set(),
+            filter_tables,
+            "cs",
+            include_orphan_tables,
+            element_names=element_names_in_coordinate_system,
         )
 
         return SpatialData(**elements, tables=tables, attrs=self.attrs)
@@ -784,14 +808,18 @@ class SpatialData:
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
                 if by == "cs":
-                    from spatialdata._core.query.relational_query import _filter_table_by_element_names
+                    from spatialdata._core.query.relational_query import (
+                        _filter_table_by_element_names,
+                    )
 
                     assert element_names is not None
                     table = _filter_table_by_element_names(table, element_names)
                     if len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
-                    from spatialdata._core.query.relational_query import _filter_table_by_elements
+                    from spatialdata._core.query.relational_query import (
+                        _filter_table_by_elements,
+                    )
 
                     assert elements_dict is not None
                     table = _filter_table_by_elements(table, elements_dict=elements_dict)
@@ -816,7 +844,10 @@ class SpatialData:
         The method does not allow to rename a coordinate system into an existing one, unless the existing one is also
         renamed in the same call.
         """
-        from spatialdata.transformations.operations import get_transformation, set_transformation
+        from spatialdata.transformations.operations import (
+            get_transformation,
+            set_transformation,
+        )
 
         # check that the rename_dict is valid
         old_names = self.coordinate_systems
@@ -860,7 +891,10 @@ class SpatialData:
 
     @_deprecation_alias(element="element_name", version="0.3.0")
     def transform_element_to_coordinate_system(
-        self, element_name: str, target_coordinate_system: str, maintain_positioning: bool = False
+        self,
+        element_name: str,
+        target_coordinate_system: str,
+        maintain_positioning: bool = False,
     ) -> SpatialElement:
         """
         Transform an element to a given coordinate system.
@@ -912,7 +946,9 @@ class SpatialData:
                 d[target_coordinate_system] = t
                 to_remove = True
             transformed = transform(
-                element, to_coordinate_system=target_coordinate_system, maintain_positioning=maintain_positioning
+                element,
+                to_coordinate_system=target_coordinate_system,
+                maintain_positioning=maintain_positioning,
             )
             if to_remove:
                 del d[target_coordinate_system]
@@ -971,7 +1007,9 @@ class SpatialData:
         for element_type, element_name, element in sdata.gen_elements():
             if element_type != "tables":
                 transformed = sdata.transform_element_to_coordinate_system(
-                    element, target_coordinate_system, maintain_positioning=maintain_positioning
+                    element,
+                    target_coordinate_system,
+                    maintain_positioning=maintain_positioning,
                 )
                 if element_type not in elements:
                     elements[element_type] = {}
@@ -1127,7 +1165,10 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
+        from spatialdata._io._utils import (
+            _backed_elements_contained_in_path,
+            _is_subfolder,
+        )
         from spatialdata._io.format import SpatialDataFormat
 
         if isinstance(file_path, str):
@@ -1268,23 +1309,56 @@ class SpatialData:
         )
 
         root_group, element_type_group, _ = self._get_groups_for_element(
-            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
+            zarr_path=zarr_container_path,
+            element_type=element_type,
+            element_name=element_name,
         )
-        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+        from spatialdata._io import (
+            write_image,
+            write_labels,
+            write_points,
+            write_shapes,
+            write_table,
+        )
         from spatialdata._io.format import _parse_formats
 
         parsed = _parse_formats(formats=format)
 
         if element_type == "images":
-            write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
+            write_image(
+                image=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["raster"],
+            )
         elif element_type == "labels":
-            write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
+            write_labels(
+                labels=element,
+                group=root_group,
+                name=element_name,
+                format=parsed["raster"],
+            )
         elif element_type == "points":
-            write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
+            write_points(
+                points=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["points"],
+            )
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"])
+            write_shapes(
+                shapes=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["shapes"],
+            )
         elif element_type == "tables":
-            write_table(table=element, group=element_type_group, name=element_name, format=parsed["tables"])
+            write_table(
+                table=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["tables"],
+            )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
 
@@ -1499,7 +1573,9 @@ class SpatialData:
 
         # check if the element exists in the Zarr storage
         if not self._group_for_element_exists(
-            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            zarr_path=Path(self.path),
+            element_type=element_type,
+            element_name=element_name,
         ):
             warnings.warn(
                 f"Not saving the metadata to element {element_type}/{element_name} as it is"
@@ -1550,7 +1626,9 @@ class SpatialData:
         # Mypy does not understand that path is not None so we have the check in the conditional
         if element_type == "images" and self.path is not None:
             _, _, element_group = self._get_groups_for_element(
-                zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+                zarr_path=Path(self.path),
+                element_type=element_type,
+                element_name=element_name,
             )
 
             from spatialdata._io._utils import overwrite_channel_names
@@ -1592,7 +1670,9 @@ class SpatialData:
         # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
         _, _, element_group = self._get_groups_for_element(
-            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            zarr_path=Path(self.path),
+            element_type=element_type,
+            element_name=element_name,
         )
         axes = get_axes_names(element)
         if isinstance(element, DataArray | DataTree):
@@ -1634,10 +1714,16 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_attrs(self, format: SpatialDataFormat | None = None, zarr_group: zarr.Group | None = None) -> None:
+    def write_attrs(
+        self,
+        format: SpatialDataContainerFormatType | None = None,
+        zarr_group: zarr.Group | None = None,
+    ) -> None:
         from spatialdata._io.format import SpatialDataFormat, _parse_formats
 
         parsed = _parse_formats(formats=format)
+        spatialdata_container_format = parsed["SpatialData"]
+        assert isinstance(spatialdata_container_format, SpatialDataContainerFormatType)
 
         store = None
 
@@ -1646,8 +1732,8 @@ class SpatialData:
             store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat()).store
             zarr_group = zarr.open_group(store=store, overwrite=False, mode="r+")
 
-        version = parsed["SpatialData"].spatialdata_format_version
-        version_specific_attrs = parsed["SpatialData"].attrs_to_dict()
+        version = spatialdata_container_format.spatialdata_format_version
+        version_specific_attrs = spatialdata_container_format.attrs_to_dict()
         attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
 
         try:
@@ -2054,7 +2140,9 @@ class SpatialData:
                     else:
                         shape_str = (
                             "("
-                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                            + ", ".join(
+                                [(str(dim) if not isinstance(dim, Delayed) else "<Delayed>") for dim in v.shape]
+                            )
                             + ")"
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} with shape: {shape_str} {dim_string}"
@@ -2187,7 +2275,9 @@ class SpatialData:
             for k, v in d.items():
                 yield element_type, k, v
 
-    def gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    def gen_spatial_elements(
+        self,
+    ) -> Generator[tuple[str, str, SpatialElement], None, None]:
         """
         Generate spatial elements within the SpatialData object.
 
@@ -2200,7 +2290,9 @@ class SpatialData:
         """
         return self._gen_elements()
 
-    def gen_elements(self) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    def gen_elements(
+        self,
+    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         """
         Generate elements within the SpatialData object.
 
@@ -2319,7 +2411,10 @@ class SpatialData:
         return cls(**elements_dict, attrs=attrs)
 
     def subset(
-        self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
+        self,
+        element_names: list[str],
+        filter_tables: bool = True,
+        include_orphan_tables: bool = False,
     ) -> SpatialData:
         """
         Subset the SpatialData object.

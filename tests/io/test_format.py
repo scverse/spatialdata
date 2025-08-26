@@ -6,41 +6,48 @@ from typing import Any
 import pytest
 from shapely import GeometryType
 
+from spatialdata import read_zarr
 from spatialdata._io.format import (
-    CurrentPointsFormat,
-    CurrentShapesFormat,
+    PointsFormatType,
+    PointsFormatV01,
     RasterFormatV01,
     RasterFormatV02,
+    # CurrentPointsFormat,
+    # CurrentShapesFormat,
     ShapesFormatV01,
+    ShapesFormatV02,
     SpatialDataFormat,
 )
 from spatialdata.models import PointsModel, ShapesModel
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 
-Points_f = CurrentPointsFormat()
-Shapes_f = CurrentShapesFormat()
+# Points_f = CurrentPointsFormat()
+# Shapes_f = CurrentShapesFormat()
 
 
 class TestFormat:
     """Test format."""
 
+    @pytest.mark.parametrize("format", [PointsFormatV01()])
     @pytest.mark.parametrize("attrs_key", [PointsModel.ATTRS_KEY])
     @pytest.mark.parametrize("feature_key", [None, PointsModel.FEATURE_KEY])
     @pytest.mark.parametrize("instance_key", [None, PointsModel.INSTANCE_KEY])
-    def test_format_points(
+    def test_format_points_v1(
         self,
+        format: PointsFormatType,
         attrs_key: str | None,
         feature_key: str | None,
         instance_key: str | None,
     ) -> None:
-        metadata: dict[str, Any] = {attrs_key: {"version": Points_f.spatialdata_format_version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": format.spatialdata_format_version}}
         format_metadata: dict[str, Any] = {attrs_key: {}}
         if feature_key is not None:
             metadata[attrs_key][feature_key] = "target"
         if instance_key is not None:
             metadata[attrs_key][instance_key] = "cell_id"
-        format_metadata[attrs_key] = Points_f.attrs_from_dict(metadata)
+        format_metadata[attrs_key] = format.attrs_from_dict(metadata)
         metadata[attrs_key].pop("version")
-        assert metadata[attrs_key] == Points_f.attrs_to_dict(format_metadata)
+        assert metadata[attrs_key] == format.attrs_to_dict(format_metadata)
         if feature_key is None and instance_key is None:
             assert len(format_metadata[attrs_key]) == len(metadata[attrs_key]) == 0
 
@@ -49,7 +56,7 @@ class TestFormat:
     @pytest.mark.parametrize("type_key", [ShapesModel.TYPE_KEY])
     @pytest.mark.parametrize("name_key", [ShapesModel.NAME_KEY])
     @pytest.mark.parametrize("shapes_type", [0, 3, 6])
-    def test_format_shapes_v1(
+    def test_format_shape_v1(
         self,
         attrs_key: str,
         geos_key: str,
@@ -77,13 +84,11 @@ class TestFormat:
         self,
         attrs_key: str,
     ) -> None:
-        # not testing anything, maybe remove
-        metadata: dict[str, Any] = {attrs_key: {"version": Shapes_f.spatialdata_format_version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": ShapesFormatV02().spatialdata_format_version}}
         metadata[attrs_key].pop("version")
-        assert metadata[attrs_key] == Shapes_f.attrs_to_dict({})
+        assert metadata[attrs_key] == ShapesFormatV02().attrs_to_dict({})
 
-    @pytest.mark.parametrize("format", [RasterFormatV02])
-    # @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
+    @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
     def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormat]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             images.write(Path(tmpdir) / "images.zarr", format=format())
@@ -96,3 +101,38 @@ class TestFormat:
                 else:
                     assert format == RasterFormatV02
                     assert ngff_version == "0.4-dev-spatialdata"
+
+
+class TestFormatConversions:
+    """Test format conversions between older formats and newer."""
+
+    def test_shapes_v1_to_v2(self, shapes):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+
+            shapes.write(f1, format=ShapesFormatV01())
+            shapes_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(shapes, shapes_read_v1)
+
+            shapes_read_v1.write(f2, format=ShapesFormatV02())
+            shapes_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(shapes, shapes_read_v2)
+
+    def test_raster_v1_to_v2_to_v3(self, images):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+            # f3 = Path(tmpdir) / "data3.zarr"
+
+            images.write(f1, format=RasterFormatV01())
+            images_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(images, images_read_v1)
+
+            images_read_v1.write(f2, format=RasterFormatV02())
+            images_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(images, images_read_v2)
+            #
+            # images_read_v2.write(f3, format=RasterFormatV02())
+            # images_read_v3 = read_zarr(f3)
+            # assert_spatial_data_objects_are_identical(images, images_read_v3)
