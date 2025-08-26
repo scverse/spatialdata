@@ -6,7 +6,7 @@ from typing import Any
 import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import Format, FormatV01, FormatV02, FormatV03, FormatV04
+from ome_zarr.format import Format, FormatV01, FormatV02, FormatV03, FormatV04, FormatV05
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -16,6 +16,8 @@ CoordinateTransform_t = list[dict[str, Any]]
 
 Shapes_s = ShapesModel()
 Points_s = PointsModel()
+
+# TODO: change for element in spatialdata_format_version for elements into something like element_container_version
 
 
 def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
@@ -46,27 +48,7 @@ def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
     return version
 
 
-class SpatialDataFormat(FormatV04):
-    pass
-
-
-class SpatialDataContainerFormatV01(SpatialDataFormat):
-    @property
-    def spatialdata_format_version(self) -> str:
-        return "0.1"
-
-    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        return {}
-
-    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
-        from spatialdata import __version__
-
-        return {"spatialdata_software_version": __version__}
-
-
-class RasterFormatV01(SpatialDataFormat):
-    """Formatter for raster data."""
-
+class CoordinateMixinV01:
     def generate_coordinate_transformations(self, shapes: list[tuple[Any]]) -> None | list[list[dict[str, Any]]]:
         data_shape = shapes[0]
         coordinate_transformations: list[list[dict[str, Any]]] = []
@@ -116,6 +98,78 @@ class RasterFormatV01(SpatialDataFormat):
 
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1, strict=True)])
 
+
+class PointAttrsMixinV01:
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        if Points_s.ATTRS_KEY not in metadata:
+            raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
+        metadata_ = metadata[Points_s.ATTRS_KEY]
+        assert self.spatialdata_format_version == metadata_["version"]
+        d = {}
+        if Points_s.FEATURE_KEY in metadata_:
+            d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
+        if Points_s.INSTANCE_KEY in metadata_:
+            d[Points_s.INSTANCE_KEY] = metadata_[Points_s.INSTANCE_KEY]
+        return d
+
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        d = {}
+        if Points_s.ATTRS_KEY in data:
+            if Points_s.INSTANCE_KEY in data[Points_s.ATTRS_KEY]:
+                d[Points_s.INSTANCE_KEY] = data[Points_s.ATTRS_KEY][Points_s.INSTANCE_KEY]
+            if Points_s.FEATURE_KEY in data[Points_s.ATTRS_KEY]:
+                d[Points_s.FEATURE_KEY] = data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]
+        return d
+
+
+class TableValidateMixinV01:
+    def validate_table(
+        self,
+        table: AnnData,
+        region_key: None | str = None,
+        instance_key: None | str = None,
+    ) -> None:
+        if not isinstance(table, AnnData):
+            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
+        if region_key is not None and not isinstance(table.obs[region_key].dtype, CategoricalDtype):
+            raise ValueError(
+                f"`table.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
+            )
+        if instance_key is not None and table.obs[instance_key].isnull().values.any():
+            raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
+
+
+class SpatialDataContainerFormatV01(FormatV04):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.1"
+
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
+        from spatialdata import __version__
+
+        return {"spatialdata_software_version": __version__}
+
+
+class SpatialDataContainerFormatV02(FormatV05):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
+
+    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def attrs_to_dict(self) -> dict[str, str | dict[str, Any]]:
+        from spatialdata import __version__
+
+        return {"spatialdata_software_version": __version__}
+
+
+class RasterFormatV01(FormatV04, CoordinateMixinV01):
+    """Formatter for raster data."""
+
     # eventually we are fully compliant with NGFF and we can drop SPATIALDATA_FORMAT_VERSION and simply rely on
     # "version"; still, until the coordinate transformations make it into NGFF, we need to have our extension
     @property
@@ -139,7 +193,19 @@ class RasterFormatV02(RasterFormatV01):
         return "0.4-dev-spatialdata"
 
 
-class ShapesFormatV01(SpatialDataFormat):
+class RasterFormatV03(FormatV05, CoordinateMixinV01):
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.3"
+
+    @property
+    def version(self) -> str:
+        # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
+        # https://github.com/scverse/spatialdata/pull/849
+        return "0.4-dev-spatialdata"
+
+
+class ShapesFormatV01(FormatV04):
     """Formatter for shapes."""
 
     @property
@@ -170,7 +236,7 @@ class ShapesFormatV01(SpatialDataFormat):
         }
 
 
-class ShapesFormatV02(SpatialDataFormat):
+class ShapesFormatV02(FormatV04):
     """Formatter for shapes."""
 
     @property
@@ -182,80 +248,77 @@ class ShapesFormatV02(SpatialDataFormat):
         return {}
 
 
-class PointsFormatV01(SpatialDataFormat):
+class ShapesFormatV03(FormatV05):
+    """Formatter for shapes."""
+
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.3"
+
+    # no need for attrs_from_dict as we are not saving metadata except for the coordinate transformations
+    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, str | dict[str, Any]]:
+        return {}
+
+
+class PointsFormatV01(FormatV04, PointAttrsMixinV01):
     """Formatter for points."""
 
     @property
     def spatialdata_format_version(self) -> str:
         return "0.1"
 
-    def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        if Points_s.ATTRS_KEY not in metadata:
-            raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
-        metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.spatialdata_format_version == metadata_["version"]
-        d = {}
-        if Points_s.FEATURE_KEY in metadata_:
-            d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
-        if Points_s.INSTANCE_KEY in metadata_:
-            d[Points_s.INSTANCE_KEY] = metadata_[Points_s.INSTANCE_KEY]
-        return d
 
-    def attrs_to_dict(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        d = {}
-        if Points_s.ATTRS_KEY in data:
-            if Points_s.INSTANCE_KEY in data[Points_s.ATTRS_KEY]:
-                d[Points_s.INSTANCE_KEY] = data[Points_s.ATTRS_KEY][Points_s.INSTANCE_KEY]
-            if Points_s.FEATURE_KEY in data[Points_s.ATTRS_KEY]:
-                d[Points_s.FEATURE_KEY] = data[Points_s.ATTRS_KEY][Points_s.FEATURE_KEY]
-        return d
+class PointsFormatV02(FormatV05, PointAttrsMixinV01):
+    """Formatter for points."""
+
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
 
 
-class TablesFormatV01(SpatialDataFormat):
+class TablesFormatV01(FormatV04, TableValidateMixinV01):
     """Formatter for the table."""
 
     @property
     def spatialdata_format_version(self) -> str:
         return "0.1"
 
-    def validate_table(
-        self,
-        table: AnnData,
-        region_key: None | str = None,
-        instance_key: None | str = None,
-    ) -> None:
-        if not isinstance(table, AnnData):
-            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
-        if region_key is not None and not isinstance(table.obs[region_key].dtype, CategoricalDtype):
-            raise ValueError(
-                f"`table.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
-            )
-        if instance_key is not None and table.obs[instance_key].isnull().values.any():
-            raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
+
+class TablesFormatV02(FormatV05, TableValidateMixinV01):
+    """Formatter for the table."""
+
+    @property
+    def spatialdata_format_version(self) -> str:
+        return "0.2"
 
 
-CurrentRasterFormat = RasterFormatV02
-CurrentShapesFormat = ShapesFormatV02
-CurrentPointsFormat = PointsFormatV01
-CurrentTablesFormat = TablesFormatV01
-CurrentSpatialDataContainerFormats = SpatialDataContainerFormatV01
+CurrentRasterFormat = RasterFormatV03
+CurrentShapesFormat = ShapesFormatV03
+CurrentPointsFormat = PointsFormatV02
+CurrentTablesFormat = TablesFormatV02
+CurrentSpatialDataContainerFormats = SpatialDataContainerFormatV02
 
 ShapesFormats = {
     "0.1": ShapesFormatV01(),
     "0.2": ShapesFormatV02(),
+    "0.3": ShapesFormatV03(),
 }
 PointsFormats = {
     "0.1": PointsFormatV01(),
+    "0.2": PointsFormatV02(),
 }
 TablesFormats = {
     "0.1": TablesFormatV01(),
+    "0.2": TablesFormatV02(),
 }
 RasterFormats = {
     "0.1": RasterFormatV01(),
     "0.2": RasterFormatV02(),
+    "0.3": RasterFormatV03(),
 }
 SpatialDataContainerFormats = {
     "0.1": SpatialDataContainerFormatV01(),
+    "0.2": SpatialDataContainerFormatV02(),
 }
 ShapesFormatType = ShapesFormatV01 | ShapesFormatV02
 PointsFormatType = PointsFormatV01
@@ -269,8 +332,11 @@ SpatialDataFormatType = (
 
 def format_implementations() -> Iterator[Format]:
     """Return an instance of each format implementation, newest to oldest."""
+    yield RasterFormatV03()
     yield RasterFormatV02()
-    # yield RasterFormatV01()  # same format string as FormatV04
+    yield RasterFormatV01()  # same format string as FormatV04
+
+    yield FormatV05()
     yield FormatV04()
     yield FormatV03()
     yield FormatV02()
