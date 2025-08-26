@@ -22,6 +22,7 @@ from spatialdata._io._utils import (
 from spatialdata._io.format import (
     CurrentRasterFormat,
     RasterFormats,
+    RasterFormatType,
     RasterFormatV01,
     _parse_version,
 )
@@ -44,7 +45,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     version = _parse_version(f, expect_attrs_key=True)
     # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
     # interpreting the lack of such information as the presence of the format v01
-    format = RasterFormatV01() if version is None else RasterFormats[version]
+    format: RasterFormatType = RasterFormatV01() if version is None else RasterFormats[version]
     f.store.close()
 
     nodes: list[Node] = []

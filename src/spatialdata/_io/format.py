@@ -6,7 +6,14 @@ from typing import Any
 import ome_zarr.format
 import zarr
 from anndata import AnnData
-from ome_zarr.format import Format, FormatV01, FormatV02, FormatV03, FormatV04, FormatV05
+from ome_zarr.format import (
+    Format,
+    FormatV01,
+    FormatV02,
+    FormatV03,
+    FormatV04,
+    FormatV05,
+)
 from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
@@ -99,12 +106,12 @@ class CoordinateMixinV01:
             assert np.all([j0 == j1 for j0, j1 in zip(json0, json1, strict=True)])
 
 
-class PointAttrsMixinV01:
+class PointsAttrsMixinV01:
     def attrs_from_dict(self, metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if Points_s.ATTRS_KEY not in metadata:
             raise KeyError(f"Missing key {Points_s.ATTRS_KEY} in points metadata.")
         metadata_ = metadata[Points_s.ATTRS_KEY]
-        assert self.spatialdata_format_version == metadata_["version"]
+        assert self.spatialdata_format_version == metadata_["version"]  # type: ignore[attr-defined]
         d = {}
         if Points_s.FEATURE_KEY in metadata_:
             d[Points_s.FEATURE_KEY] = metadata_[Points_s.FEATURE_KEY]
@@ -260,7 +267,7 @@ class ShapesFormatV03(FormatV05):
         return {}
 
 
-class PointsFormatV01(FormatV04, PointAttrsMixinV01):
+class PointsFormatV01(FormatV04, PointsAttrsMixinV01):
     """Formatter for points."""
 
     @property
@@ -268,7 +275,7 @@ class PointsFormatV01(FormatV04, PointAttrsMixinV01):
         return "0.1"
 
 
-class PointsFormatV02(FormatV05, PointAttrsMixinV01):
+class PointsFormatV02(FormatV05, PointsAttrsMixinV01):
     """Formatter for points."""
 
     @property
@@ -296,38 +303,39 @@ CurrentRasterFormat = RasterFormatV03
 CurrentShapesFormat = ShapesFormatV03
 CurrentPointsFormat = PointsFormatV02
 CurrentTablesFormat = TablesFormatV02
-CurrentSpatialDataContainerFormats = SpatialDataContainerFormatV02
+CurrentSpatialDataContainerFormat = SpatialDataContainerFormatV02
 
-ShapesFormats = {
+ShapesFormatType = ShapesFormatV01 | ShapesFormatV02 | ShapesFormatV03
+PointsFormatType = PointsFormatV01 | PointsFormatV02
+TablesFormatType = TablesFormatV01 | TablesFormatV02
+RasterFormatType = RasterFormatV01 | RasterFormatV02 | RasterFormatV03
+SpatialDataContainerFormatType = SpatialDataContainerFormatV01 | SpatialDataContainerFormatV02
+SpatialDataFormatType = (
+    ShapesFormatType | PointsFormatType | TablesFormatType | RasterFormatType | SpatialDataContainerFormatType
+)
+
+ShapesFormats: dict[str, ShapesFormatType] = {
     "0.1": ShapesFormatV01(),
     "0.2": ShapesFormatV02(),
     "0.3": ShapesFormatV03(),
 }
-PointsFormats = {
+PointsFormats: dict[str, PointsFormatType] = {
     "0.1": PointsFormatV01(),
     "0.2": PointsFormatV02(),
 }
-TablesFormats = {
+TablesFormats: dict[str, TablesFormatType] = {
     "0.1": TablesFormatV01(),
     "0.2": TablesFormatV02(),
 }
-RasterFormats = {
+RasterFormats: dict[str, RasterFormatType] = {
     "0.1": RasterFormatV01(),
     "0.2": RasterFormatV02(),
     "0.3": RasterFormatV03(),
 }
-SpatialDataContainerFormats = {
+SpatialDataContainerFormats: dict[str, SpatialDataContainerFormatType] = {
     "0.1": SpatialDataContainerFormatV01(),
     "0.2": SpatialDataContainerFormatV02(),
 }
-ShapesFormatType = ShapesFormatV01 | ShapesFormatV02
-PointsFormatType = PointsFormatV01
-TablesFormatType = TablesFormatV01
-RasterFormatType = RasterFormatV01 | RasterFormatV02
-SpatialDataContainerFormatType = SpatialDataContainerFormatV01
-SpatialDataFormatType = (
-    ShapesFormatType | PointsFormatType | TablesFormatType | RasterFormatType | SpatialDataContainerFormatType
-)
 
 
 def format_implementations() -> Iterator[Format]:
@@ -352,12 +360,12 @@ ome_zarr.format.format_implementations = format_implementations
 def _parse_formats(
     formats: SpatialDataFormatType | list[SpatialDataFormatType] | None,
 ) -> dict[str, SpatialDataFormatType]:
-    parsed = {
+    parsed: dict[str, SpatialDataFormatType] = {
         "raster": CurrentRasterFormat(),
         "shapes": CurrentShapesFormat(),
         "points": CurrentPointsFormat(),
         "tables": CurrentTablesFormat(),
-        "SpatialData": CurrentSpatialDataContainerFormats(),
+        "SpatialData": CurrentSpatialDataContainerFormat(),
     }
     if formats is None:
         return parsed

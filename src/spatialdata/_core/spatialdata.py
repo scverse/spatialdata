@@ -55,7 +55,7 @@ from spatialdata.models._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
-    from spatialdata._io.format import SpatialDataContainerFormatType, SpatialDataFormat
+    from spatialdata._io.format import SpatialDataContainerFormatType, SpatialDataFormatType
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -624,12 +624,11 @@ class SpatialData:
         -------
         either the existing Zarr subgroup or a new one.
         """
-        from spatialdata._io.format import SpatialDataFormat
+        from spatialdata._io._utils import _open_zarr_store
 
         if not isinstance(zarr_path, Path):
             raise ValueError("zarr_path should be a Path object")
-        store = SpatialDataFormat().init_store(str(zarr_path), mode="r+")
-        # store = parse_url(zarr_path, mode="r+", fmt=SpatialDataFormat()).store
+        store = _open_zarr_store(zarr_path, mode="r+")
         root = zarr.open_group(store=store, mode="r+")
         if element_type not in [
             "images",
@@ -659,9 +658,9 @@ class SpatialData:
         -------
         True if the group exists, False otherwise.
         """
-        from spatialdata._io.format import SpatialDataFormat
+        from spatialdata._io._utils import _open_zarr_store
 
-        store = parse_url(zarr_path, mode="r", fmt=SpatialDataFormat()).store
+        store = _open_zarr_store(zarr_path, mode="r")
         root = zarr.open_group(store=store, mode="r")
         assert element_type in [
             "images",
@@ -1111,12 +1110,12 @@ class SpatialData:
         -------
         A list of paths of the elements saved in the Zarr store.
         """
-        from spatialdata._io.format import SpatialDataFormat
+        from spatialdata._io._utils import _open_zarr_store
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
 
-        store = parse_url(self.path, mode="r", fmt=SpatialDataFormat()).store
+        store = _open_zarr_store(self.path, mode="r")
         root = zarr.open_group(store=store, mode="r")
         elements_in_zarr = []
 
@@ -1165,11 +1164,7 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import (
-            _backed_elements_contained_in_path,
-            _is_subfolder,
-        )
-        from spatialdata._io.format import SpatialDataFormat
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder, _open_zarr_store
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1178,6 +1173,7 @@ class SpatialData:
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
         if os.path.exists(file_path):
+            store = _open_zarr_store(file_path, mode="r")
             if parse_url(file_path, mode="r", fmt=SpatialDataFormat()) is None:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
@@ -1233,7 +1229,7 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1297,7 +1293,7 @@ class SpatialData:
         element_type: str,
         element_name: str,
         overwrite: bool,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1366,7 +1362,7 @@ class SpatialData:
         self,
         element_name: str | list[str],
         overwrite: bool = False,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
