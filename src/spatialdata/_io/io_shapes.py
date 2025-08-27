@@ -17,6 +17,7 @@ from spatialdata._io.format import (
     ShapesFormats,
     ShapesFormatV01,
     ShapesFormatV02,
+    ShapesFormatV03,
     _parse_version,
 )
 from spatialdata.models import ShapesModel, get_axes_names
@@ -49,7 +50,7 @@ def _read_shapes(
             offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    elif isinstance(format, ShapesFormatV02):
+    elif isinstance(format, ShapesFormatV02 | ShapesFormatV03):
         store_root = f.store_path.store.root
         path = Path(store_root) / f.path / "shapes.parquet"
         geo_df = read_parquet(path)
@@ -93,7 +94,7 @@ def write_shapes(
 
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
-    elif isinstance(format, ShapesFormatV02):
+    elif isinstance(format, ShapesFormatV02 | ShapesFormatV03):
         store_root = shapes_group.store_path.store.root
         path = Path(store_root) / shapes_group.path / "shapes.parquet"
         shapes.to_parquet(path)

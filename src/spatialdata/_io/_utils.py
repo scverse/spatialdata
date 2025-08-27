@@ -15,15 +15,15 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any, Literal
 
-import zarr.storage
+import zarr
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from upath import UPath
-from upath.implementations import PosixUPath, WindowsUPath
+from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
-from zarr.storage import FSStore
+from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import StoreLike
@@ -99,16 +99,17 @@ def overwrite_coordinate_transformations_raster(
         )
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
-    multiscales = group.attrs["multiscales"]
-    assert len(multiscales) == 1
+    if len_scales := len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
     multiscale = multiscales[0]
     # the transformation present in multiscale["datasets"] are the ones for the multiscale, so and we leave them intact
     # we update multiscale["coordinateTransformations"] and multiscale["coordinateSystems"]
     # see the first post of https://github.com/scverse/spatialdata/issues/39 for an overview
     # fix the io to follow the NGFF specs, see https://github.com/scverse/spatialdata/issues/114
+
+    # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
     multiscale["coordinateTransformations"] = coordinate_transformations
-    # multiscale["coordinateSystems"] = [t.output_coordinate_system_name for t in ngff_transformations]
-    group.attrs["multiscales"] = multiscales
+    group.attrs["coordinateTransformations"] = coordinate_transformations
 
 
 def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
@@ -294,8 +295,9 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                 name = k
             if name is not None:
                 if name.startswith("original-from-zarr"):
-                    path = v.store.path
-                    files.append(os.path.realpath(path))
+                    # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
+                    path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
+                    files.append(str(path))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
                     if hasattr(v, "creation_info"):
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L625
@@ -372,6 +374,7 @@ def _is_element_self_contained(
 ) -> bool:
     if isinstance(element, DaskDataFrame):
         pass
+    # TODO when running test_save_transformations it seems that for the same element this is called multiple times
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
@@ -397,28 +400,30 @@ def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:
     if isinstance(path, str | Path):
         # if the input is str or Path, map it to UPath
         path = UPath(path)
+
     if isinstance(path, PosixUPath | WindowsUPath):
-        # if the input is a local path, use DirectoryStore
-        return zarr.storage.DirectoryStore(path.path, dimension_separator="/")
+        # if the input is a local path, use LocalStore
+        return LocalStore(path.path)
+
     if isinstance(path, zarr.Group):
         # if the input is a zarr.Group, wrap it with a store
-        if isinstance(path.store, zarr.storage.DirectoryStore):
-            # create a simple FSStore if the store is a DirectoryStore with just the path
-            return FSStore(os.path.join(path.store.path, path.path), **kwargs)
-        if isinstance(path.store, FSStore):
+        if isinstance(path.store, LocalStore):
+            # create a simple FSStore if the store is a LocalStore with just the path
+            return FsspecStore(os.path.join(path.store.path, path.path), **kwargs)
+        if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
-            return FSStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
+            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
         if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
             # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
             return path.store.store
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, zarr.storage.StoreLike):
         # if the input already a store, wrap it in an FSStore
-        return FSStore(path, **kwargs)
+        return FsspecStore(path, **kwargs)
     if isinstance(path, UPath):
         # if input is a remote UPath, map it to an FSStore
-        return FSStore(path.path, fs=path.fs, **kwargs)
+        return FsspecStore(path.path, fs=path.fs, **kwargs)
     raise TypeError(f"Unsupported type: {type(path)}")
 
 

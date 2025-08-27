@@ -137,7 +137,7 @@ def read_zarr(
                         # skip hidden files like .zgroup or .zmetadata
                         continue
                     f_elem = group[subgroup_name]
-                    f_elem_store = os.path.join(f_store_path, f_elem.path)
+                    f_elem_store = f_store_path / f_elem.path
                     with handle_read_errors(
                         on_bad_files,
                         location=f"{group.path}/{subgroup_name}",

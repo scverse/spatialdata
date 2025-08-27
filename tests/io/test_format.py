@@ -16,7 +16,7 @@ from spatialdata._io.format import (
     # CurrentShapesFormat,
     ShapesFormatV01,
     ShapesFormatV02,
-    SpatialDataFormat,
+    SpatialDataFormatType,
 )
 from spatialdata.models import PointsModel, ShapesModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
@@ -89,7 +89,7 @@ class TestFormat:
         assert metadata[attrs_key] == ShapesFormatV02().attrs_to_dict({})
 
     @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
-    def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormat]) -> None:
+    def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormatType]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             images.write(Path(tmpdir) / "images.zarr", format=format())
             zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/.zattrs"

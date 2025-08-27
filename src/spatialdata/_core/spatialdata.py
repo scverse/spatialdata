@@ -16,6 +16,7 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
+from ome_zarr.format import FormatV05
 from ome_zarr.io import parse_url
 from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
@@ -1173,8 +1174,8 @@ class SpatialData:
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
         if os.path.exists(file_path):
-            store = _open_zarr_store(file_path, mode="r")
-            if parse_url(file_path, mode="r", fmt=SpatialDataFormat()) is None:
+            _open_zarr_store(file_path, mode="r")
+            if parse_url(file_path, mode="r", fmt=FormatV05()) is None:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
@@ -1256,14 +1257,12 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
-        from spatialdata._io.format import SpatialDataFormat
-
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w", fmt=SpatialDataFormat()).store
+        store = parse_url(file_path, mode="w", fmt=FormatV05()).store
         zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
         self.write_attrs(zarr_group=zarr_group)
         store.close()
@@ -1457,7 +1456,6 @@ class SpatialData:
         appropriately (or implement a tailored solution), to prevent data loss.
         """
         from spatialdata._io._utils import _backed_elements_contained_in_path
-        from spatialdata._io.format import SpatialDataFormat
 
         if isinstance(element_name, list):
             for name in element_name:
@@ -1504,7 +1502,7 @@ class SpatialData:
             )
 
         # delete the element
-        store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat()).store
+        store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
         root = zarr.open_group(store=store, mode="r+")
         root[element_type].pop(element_name)
         store.close()
@@ -1525,19 +1523,15 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        from spatialdata._io.format import SpatialDataFormat
-
-        store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat()).store
+        store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
         # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
         # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
         zarr.consolidate_metadata(store)
         store.close()
 
     def has_consolidated_metadata(self) -> bool:
-        from spatialdata._io.format import SpatialDataFormat
-
         return_value = False
-        store = parse_url(self.path, mode="r", fmt=SpatialDataFormat()).store
+        store = parse_url(self.path, mode="r", fmt=FormatV05()).store
         if "zmetadata" in store:
             return_value = True
         store.close()
@@ -1715,7 +1709,7 @@ class SpatialData:
         format: SpatialDataContainerFormatType | None = None,
         zarr_group: zarr.Group | None = None,
     ) -> None:
-        from spatialdata._io.format import SpatialDataFormat, _parse_formats
+        from spatialdata._io.format import SpatialDataContainerFormatType, _parse_formats
 
         parsed = _parse_formats(formats=format)
         spatialdata_container_format = parsed["SpatialData"]
@@ -1725,7 +1719,7 @@ class SpatialData:
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="r+", fmt=SpatialDataFormat()).store
+            store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
             zarr_group = zarr.open_group(store=store, overwrite=False, mode="r+")
 
         version = spatialdata_container_format.spatialdata_format_version

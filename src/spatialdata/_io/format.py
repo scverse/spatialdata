@@ -351,7 +351,7 @@ def format_implementations() -> Iterator[Format]:
     yield FormatV01()
 
 
-# monkeypatch the ome_zarr.format module to include the SpatialDataFormat (we want to use the APIs from ome_zarr to
+# monkeypatch the ome_zarr.format module to include the SpatialDataFormatType (we want to use the APIs from ome_zarr to
 # read, but signal that the format we are using is a dev version of NGFF, since it builds on some open PR that are
 # not released yet)
 ome_zarr.format.format_implementations = format_implementations

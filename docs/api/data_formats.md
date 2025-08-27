@@ -1,6 +1,6 @@
 # Data formats (advanced)
 
-The SpatialData format is defined as a set of versioned subclasses of `spatialdata._io.format.SpatialDataFormat`, one per type of element.
+The SpatialData format is defined as a set of versioned subclasses of `spatialdata._io.format.SpatialDataFormatType`, one per type of element.
 These classes are useful to ensure backward compatibility whenever a major version change is introduced. We also provide pointers to the latest format.
 
 ```{eval-rst}

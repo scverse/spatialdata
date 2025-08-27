@@ -6,7 +6,7 @@ import numpy as np
 import zarr
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
-from ome_zarr.reader import Label, Multiscales, Node, Reader
+from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes
 from ome_zarr.writer import write_image as write_image_ngff
@@ -21,10 +21,6 @@ from spatialdata._io._utils import (
 )
 from spatialdata._io.format import (
     CurrentRasterFormat,
-    RasterFormats,
-    RasterFormatType,
-    RasterFormatV01,
-    _parse_version,
 )
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
@@ -41,13 +37,6 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
 
-    f = zarr.open(store, mode="r")
-    version = _parse_version(f, expect_attrs_key=True)
-    # old spatialdata datasets don't have format metadata for raster elements; this line ensure backwards compatibility,
-    # interpreting the lack of such information as the presence of the format v01
-    format: RasterFormatType = RasterFormatV01() if version is None else RasterFormats[version]
-    f.store.close()
-
     nodes: list[Node] = []
     image_loc = ZarrLocation(store)
     if image_loc.exists():
@@ -55,12 +44,17 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         image_nodes = list(image_reader)
         if len(image_nodes):
             for node in image_nodes:
-                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and (
-                    raster_type == "image"
-                    and np.all([not isinstance(spec, Label) for spec in node.specs])
-                    or raster_type == "labels"
-                    and np.any([isinstance(spec, Label) for spec in node.specs])
-                ):
+                # if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and (
+                #     raster_type == "image"
+                #     and np.all([not isinstance(spec, Label) for spec in node.specs])
+                #     or raster_type == "labels"
+                #     and np.any([isinstance(spec, Label) for spec in node.specs])
+                # ):
+                # Labels are not also Multiscales
+                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and raster_type in [
+                    "image",
+                    "labels",
+                ]:
                     nodes.append(node)
     if len(nodes) != 1:
         raise ValueError(
@@ -71,6 +65,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
     omero_metadata = node.load(Multiscales).zarr.root_attrs.get("omero", None)
+    # TODO: check if below is still valid
     legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
@@ -92,7 +87,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     if len(datasets) > 1:
         multiscale_image = {}
         for i, d in enumerate(datasets):
-            data = node.load(Multiscales).array(resolution=d, version=format.version)
+            data = node.load(Multiscales).array(resolution=d)
             multiscale_image[f"scale{i}"] = Dataset(
                 {
                     "image": DataArray(
@@ -106,7 +101,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
-    data = node.load(Multiscales).array(resolution=datasets[0], version=format.version)
+    data = node.load(Multiscales).array(resolution=datasets[0])
     si = DataArray(
         data,
         name="image",
@@ -171,6 +166,7 @@ def _write_raster(
         # We need this because the argument of write_image_ngff is called image while the argument of
         # write_labels_ngff is called label.
         metadata[raster_type] = data
+        # TODO: check purpose of _get_group_for_writing_transformations here as it seems to return same as group_data
         write_single_scale_ngff(
             group=group_data,
             scaler=None,
@@ -180,7 +176,8 @@ def _write_raster(
             storage_options=storage_options,
             **metadata,
         )
-        assert transformations is not None
+        if not transformations:
+            raise ValueError(f"No transformations specified to be written for element {name}.")
         overwrite_coordinate_transformations_raster(
             group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
         )
