@@ -58,8 +58,8 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
     # (see issue https://github.com/scverse/spatialdata/issues/577).
     # Instead of measuring the time (which would have high variation if not using big datasets),
     # we watch the number of read and write accesses and compare to the theoretical number.
-    zarr_chunk_write_spy = mocker.spy(zarr.core.Array, "__setitem__")
-    zarr_chunk_read_spy = mocker.spy(zarr.core.Array, "__getitem__")
+    zarr_chunk_write_spy = mocker.spy(zarr.Array, "__setitem__")
+    zarr_chunk_read_spy = mocker.spy(zarr.Array, "__getitem__")
 
     image_name, image = next(iter(sdata_with_image.images.items()))
     element_type_group = zarr.group(store=tmp_path / "sdata.zarr", path="/images")

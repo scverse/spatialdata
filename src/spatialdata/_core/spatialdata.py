@@ -1504,7 +1504,7 @@ class SpatialData:
         # delete the element
         store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
         root = zarr.open_group(store=store, mode="r+")
-        root[element_type].pop(element_name)
+        del root[element_type][element_name]
         store.close()
 
         if self.has_consolidated_metadata():
@@ -1532,7 +1532,8 @@ class SpatialData:
     def has_consolidated_metadata(self) -> bool:
         return_value = False
         store = parse_url(self.path, mode="r", fmt=FormatV05()).store
-        if "zmetadata" in store:
+        group = zarr.open_group(store, mode="r")
+        if getattr(group.metadata, "consolidated_metadata", None):
             return_value = True
         store.close()
         return return_value

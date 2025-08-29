@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -774,6 +775,7 @@ def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
         invalid_sdata.write_element("valid_name")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Renaming fails as windows path already sees the name as invalid.")
 def test_reading_invalid_name(tmp_path: Path):
     image_name, image = next(iter(_get_images().items()))
     labels_name, labels = next(iter(_get_labels().items()))
