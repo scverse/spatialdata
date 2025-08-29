@@ -86,6 +86,11 @@ def tables() -> list[AnnData]:
     return _tables
 
 
+@pytest.fixture  # (params=['images', 'labels', 'shapes', 'points', 'tables'])
+def corrupted_sdata(request):
+    return request.getfixturevalue(request.param)
+
+
 @pytest.fixture()
 def full_sdata() -> SpatialData:
     return SpatialData(

@@ -8,7 +8,7 @@ from typing import Literal
 import zarr.storage
 from anndata import AnnData
 from pyarrow import ArrowInvalid
-from zarr.errors import MetadataValidationError
+from zarr.errors import ArrayNotFoundError, MetadataValidationError
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
@@ -91,67 +91,58 @@ def read_zarr(
     selector = {"images", "labels", "points", "shapes", "tables", "table"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
-    # read multiscale images
+    # We raise OS errors instead for some read errors now as in zarr v3 with some corruptions nothing will be read.
+    # related to images / labels.
     if "images" in selector and "images" in f:
-        with handle_read_errors(
-            on_bad_files,
-            location="images",
-            exc_types=(JSONDecodeError, MetadataValidationError),
-        ):
-            group = f["images"]
+        group = f["images"]
+        count = 0
+        for subgroup_name in group:
+            if Path(subgroup_name).name.startswith("."):
+                # skip hidden files like .zgroup or .zmetadata
+                continue
+            f_elem = group[subgroup_name]
+            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            with handle_read_errors(
+                on_bad_files,
+                location=f"{group.path}/{subgroup_name}",
+                exc_types=(
+                    JSONDecodeError,  # JSON parse error
+                    ValueError,  # ome_zarr: Unable to read the NGFF file
+                    KeyError,  # Missing JSON key
+                    ArrayNotFoundError,  # Image chunks missing
+                    TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
+                ),
+            ):
+                element = _read_multiscale(f_elem_store, raster_type="image")
+                images[subgroup_name] = element
+                count += 1
+        logger.debug(f"Found {count} elements in {group}")
+
+    # read multiscale labels
+    with ome_zarr_logger(logging.ERROR):
+        if "labels" in selector and "labels" in f:
+            group = f["labels"]
             count = 0
             for subgroup_name in group:
                 if Path(subgroup_name).name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
+                f_elem_store = f_store_path / f_elem.path
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
                     exc_types=(
-                        JSONDecodeError,  # JSON parse error
-                        ValueError,  # ome_zarr: Unable to read the NGFF file
-                        KeyError,  # Missing JSON key
-                        # ArrayNotFoundError,  # Image chunks missing, removed in Zarr v3
-                        TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
+                        JSONDecodeError,
+                        KeyError,
+                        ValueError,
+                        ArrayNotFoundError,
+                        TypeError,
                     ),
                 ):
-                    element = _read_multiscale(f_elem_store, raster_type="image")
-                    images[subgroup_name] = element
+                    labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
-
-    # read multiscale labels
-    with ome_zarr_logger(logging.ERROR):
-        if "labels" in selector and "labels" in f:
-            with handle_read_errors(
-                on_bad_files,
-                location="labels",
-                exc_types=(JSONDecodeError, MetadataValidationError),
-            ):
-                group = f["labels"]
-                count = 0
-                for subgroup_name in group:
-                    if Path(subgroup_name).name.startswith("."):
-                        # skip hidden files like .zgroup or .zmetadata
-                        continue
-                    f_elem = group[subgroup_name]
-                    f_elem_store = f_store_path / f_elem.path
-                    with handle_read_errors(
-                        on_bad_files,
-                        location=f"{group.path}/{subgroup_name}",
-                        exc_types=(
-                            JSONDecodeError,
-                            KeyError,
-                            ValueError,
-                            # ArrayNotFoundError,  # removed in Zarr v3
-                            TypeError,
-                        ),
-                    ):
-                        labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
-                        count += 1
-                logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
     if "points" in selector and "points" in f:
