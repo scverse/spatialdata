@@ -147,11 +147,12 @@ def _write_raster(
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
 
-    group_data = group.require_group(name) if raster_type == "image" else group
+    group_data = (group[name] if name in group else group.require_group(name)) if raster_type == "image" else group
 
     def _get_group_for_writing_transformations() -> zarr.Group:
         if raster_type == "image":
-            return group.require_group(name)
+            # At this point name should just be in group already so we access it this way instead of require_group
+            return group[name]
         return group["labels"][name]
 
     # convert channel names to channel metadata in omero
