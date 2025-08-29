@@ -62,7 +62,7 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
     zarr_chunk_read_spy = mocker.spy(zarr.Array, "__getitem__")
 
     image_name, image = next(iter(sdata_with_image.images.items()))
-    element_type_group = zarr.group(store=tmp_path / "sdata.zarr", path="/images")
+    element_type_group = zarr.group(store=tmp_path / "image.zarr", path="/images")
 
     write_image(
         image=image,
