@@ -147,7 +147,7 @@ def _write_raster(
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
 
-    group_data = (group[name] if name in group else group.require_group(name)) if raster_type == "image" else group
+    group_data = group  # (group[name] if name in group else group.require_group(name)) if raster_type == "image" else
 
     def _get_group_for_writing_transformations() -> zarr.Group:
         if raster_type == "image":
@@ -189,9 +189,12 @@ def _write_raster(
         )
         if not transformations:
             raise ValueError(f"No transformations specified to be written for element {name}.")
-        overwrite_coordinate_transformations_raster(
-            group=_get_group_for_writing_transformations(), transformations=transformations, axes=input_axes
-        )
+        # TODO refactor this as it is ugly
+        if raster_type == "labels":
+            trans_group = group["labels"][name]
+        else:
+            trans_group = group_data
+        overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
     elif isinstance(raster_data, DataTree):
         data = get_pyramid_levels(raster_data, attr="data")
         list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
@@ -221,8 +224,13 @@ def _write_raster(
         # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
         da.compute(*dask_delayed)
         assert transformations is not None
+        # TODO refactor this as it is ugly
+        if raster_type == "labels":
+            trans_group = group["labels"][name]
+        else:
+            trans_group = group_data
         overwrite_coordinate_transformations_raster(
-            group=_get_group_for_writing_transformations(), transformations=transformations, axes=tuple(input_axes)
+            group=trans_group, transformations=transformations, axes=tuple(input_axes)
         )
     else:
         raise ValueError("Not a valid labels object")
@@ -231,7 +239,7 @@ def _write_raster(
     # our spatialdata extension also for raster type (eventually it will be dropped in favor of pure NGFF). Until then,
     # saving the NGFF version (i.e. 0.4) is not enough, and we need to also record which version of the spatialdata
     # format we are using for raster types
-    group = _get_group_for_writing_transformations()
+    group = group_data
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]

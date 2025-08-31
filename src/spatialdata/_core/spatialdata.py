@@ -1303,7 +1303,7 @@ class SpatialData:
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
         )
 
-        root_group, element_type_group, _ = self._get_groups_for_element(
+        root_group, element_type_group, element_group = self._get_groups_for_element(
             zarr_path=zarr_container_path,
             element_type=element_type,
             element_name=element_name,
@@ -1322,7 +1322,7 @@ class SpatialData:
         if element_type == "images":
             write_image(
                 image=element,
-                group=element_type_group,
+                group=element_group,
                 name=element_name,
                 format=parsed["raster"],
             )
@@ -1421,6 +1421,9 @@ class SpatialData:
             overwrite=overwrite,
             format=format,
         )
+        # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
+        if self.has_consolidated_metadata():
+            self.write_consolidated_metadata()
 
     def delete_element_from_disk(self, element_name: str | list[str]) -> None:
         """
