@@ -1721,7 +1721,7 @@ class SpatialData:
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
             store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
-            zarr_group = zarr.open_group(store=store, overwrite=False, mode="r+")
+            zarr_group = zarr.open_group(store=store, mode="r+")
 
         version = spatialdata_container_format.spatialdata_format_version
         version_specific_attrs = spatialdata_container_format.attrs_to_dict()
