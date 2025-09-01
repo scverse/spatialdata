@@ -103,6 +103,8 @@ def write_table(
         format.validate_table(table, region_key, instance_key)
     else:
         region, region_key, instance_key = (None, None, None)
+
+    # TODO: Problem is that tables group already exists and thus has consolidated_metadata, cannot write repeatedly.
     write_adata(group, name, table)  # creates group[name]
     tables_group = group[name]
     tables_group.attrs["spatialdata-encoding-type"] = group_type

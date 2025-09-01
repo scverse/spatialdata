@@ -605,7 +605,7 @@ class SpatialData:
             )
 
     def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
+        self, zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
     ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
         """
         Get the Zarr groups for the root, element_type and element for a specific element.
@@ -641,7 +641,11 @@ class SpatialData:
         ]:
             raise ValueError(f"Unknown element type {element_type}")
         element_type_group = root.require_group(element_type)
+        # This is required as adata performs a consolidated check before writing anything.
+        if not use_consolidated and element_type in ["labels", "tables"]:
+            element_type_group = zarr.open_group(element_type_group.store_path, mode="w", use_consolidated=False)
         element_name_group = None
+        # when downstream libraries do this again and consolidated metadata is present, this leads to issues.
         if element_type not in ["labels", "tables"]:
             element_name_group = element_type_group.require_group(element_name)
         return root, element_type_group, element_name_group
@@ -1306,9 +1310,7 @@ class SpatialData:
         )
 
         root_group, element_type_group, element_group = self._get_groups_for_element(
-            zarr_path=zarr_container_path,
-            element_type=element_type,
-            element_name=element_name,
+            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name, use_consolidated=False
         )
         from spatialdata._io import (
             write_image,
