@@ -642,7 +642,7 @@ class SpatialData:
             raise ValueError(f"Unknown element type {element_type}")
         element_type_group = root.require_group(element_type)
         # This is required as adata performs a consolidated check before writing anything.
-        if not use_consolidated and element_type in ["labels", "tables"]:
+        if not use_consolidated and element_type == "tables":
             element_type_group = zarr.open_group(element_type_group.store_path, mode="w", use_consolidated=False)
         element_name_group = None
         # when downstream libraries do this again and consolidated metadata is present, this leads to issues.
