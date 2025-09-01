@@ -641,7 +641,9 @@ class SpatialData:
         ]:
             raise ValueError(f"Unknown element type {element_type}")
         element_type_group = root.require_group(element_type)
-        element_name_group = element_type_group.require_group(element_name)
+        element_name_group = None
+        if element_type not in ["labels", "tables"]:
+            element_name_group = element_type_group.require_group(element_name)
         return root, element_type_group, element_name_group
 
     def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:
@@ -1336,14 +1338,14 @@ class SpatialData:
         elif element_type == "points":
             write_points(
                 points=element,
-                group=element_type_group,
+                group=element_group,
                 name=element_name,
                 format=parsed["points"],
             )
         elif element_type == "shapes":
             write_shapes(
                 shapes=element,
-                group=element_type_group,
+                group=element_group,
                 name=element_name,
                 format=parsed["shapes"],
             )

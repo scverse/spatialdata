@@ -21,7 +21,6 @@ from spatialdata.models import TableModel
 def _read_table(
     zarr_store_path: str,
     group: zarr.Group,
-    subgroup: zarr.Group,
     tables: dict[str, AnnData],
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> dict[str, AnnData]:
@@ -33,9 +32,7 @@ def _read_table(
     zarr_store_path
         The path to the Zarr store.
     group
-        The parent group containing the subgroup.
-    subgroup
-        The subgroup containing the tables.
+        The tables parent group containing the subgroup.
     tables
         A dictionary of tables.
     on_bad_files
@@ -46,13 +43,13 @@ def _read_table(
     The modified dictionary with the tables.
     """
     count = 0
-    for table_name in subgroup:
-        f_elem = subgroup[table_name]
+    for table_name in group:
+        f_elem = group[table_name]
         f_elem_store = os.path.join(zarr_store_path, f_elem.path)
 
         with handle_read_errors(
             on_bad_files=on_bad_files,
-            location=f"{subgroup.path}/{table_name}",
+            location=f"{group.path}/{table_name}",
             exc_types=(
                 JSONDecodeError,
                 KeyError,
@@ -88,7 +85,7 @@ def _read_table(
 
             count += 1
 
-    logger.debug(f"Found {count} elements in {subgroup}")
+    logger.debug(f"Found {count} elements in {group}")
     return tables
 
 

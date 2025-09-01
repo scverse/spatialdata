@@ -76,27 +76,23 @@ def write_shapes(
     axes = get_axes_names(shapes)
     t = _get_transformations(shapes)
 
-    shapes_group = group.require_group(name)
-
     if isinstance(format, ShapesFormatV01):
         geometry, coords, offsets = to_ragged_array(shapes.geometry)
-        shapes_group.create_dataset(name="coords", data=coords)
+        group.create_array(name="coords", data=coords)
         for i, o in enumerate(offsets):
-            shapes_group.create_dataset(name=f"offset{i}", data=o)
+            group.create_array(name=f"offset{i}", data=o)
         if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
-            shapes_group.create_dataset(
-                name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8()
-            )
+            group.create_array(name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8())
         else:
-            shapes_group.create_dataset(name="Index", data=shapes.index.values)
+            group.create_array(name="Index", data=shapes.index.values)
         if geometry.name == "POINT":
-            shapes_group.create_dataset(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+            group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
 
         attrs = format.attrs_to_dict(geometry)
         attrs["version"] = format.spatialdata_format_version
     elif isinstance(format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = shapes_group.store_path.store.root
-        path = Path(store_root) / shapes_group.path / "shapes.parquet"
+        store_root = group.store_path.store.root
+        path = store_root / group.path / "shapes.parquet"
         shapes.to_parquet(path)
 
         attrs = format.attrs_to_dict(shapes.attrs)
@@ -105,10 +101,10 @@ def write_shapes(
         raise ValueError(f"Unsupported format version {format.version}. Please update the spatialdata library.")
 
     _write_metadata(
-        shapes_group,
+        group,
         group_type=group_type,
         axes=list(axes),
         attrs=attrs,
     )
     assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=shapes_group, axes=axes, transformations=t)
+    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=t)

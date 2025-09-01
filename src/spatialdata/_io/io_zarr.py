@@ -1,6 +1,5 @@
 import logging
 import os
-import warnings
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Literal
@@ -88,7 +87,7 @@ def read_zarr(
     shapes = {}
 
     # TODO: remove table once deprecated.
-    selector = {"images", "labels", "points", "shapes", "tables", "table"} if not selection else set(selection or [])
+    selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
     # We raise OS errors instead for some read errors now as in zarr v3 with some corruptions nothing will be read.
@@ -202,25 +201,7 @@ def read_zarr(
             exc_types=(JSONDecodeError, MetadataValidationError),
         ):
             group = f["tables"]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
-
-    if "table" in selector and "table" in f:
-        warnings.warn(
-            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store to use tables "
-            f"instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        subgroup_name = "table"
-        with handle_read_errors(
-            on_bad_files,
-            location=subgroup_name,
-            exc_types=(JSONDecodeError, MetadataValidationError),
-        ):
-            group = f[subgroup_name]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
-
-            logger.debug(f"Found {count} elements in {group}")
+            tables = _read_table(f_store_path, group, tables, on_bad_files=on_bad_files)
 
     # read attrs metadata
     attrs = f.attrs.asdict()

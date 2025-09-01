@@ -57,10 +57,9 @@ def write_points(
     axes = get_axes_names(points)
     t = _get_transformations(points)
 
-    points_groups = group.require_group(name)
-    store_root = points_groups.store_path.store.root
-    group_path = points_groups.path
-    path = Path(store_root) / group_path / "points.parquet"
+    store_root = group.store_path.store.root
+    group_path = group.path
+    path = store_root / group_path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -79,10 +78,10 @@ def write_points(
     attrs["version"] = format.spatialdata_format_version
 
     _write_metadata(
-        points_groups,
+        group,
         group_type=group_type,
         axes=list(axes),
         attrs=attrs,
     )
     assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=points_groups, axes=axes, transformations=t)
+    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=t)
