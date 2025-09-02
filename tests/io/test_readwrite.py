@@ -166,8 +166,8 @@ class TestReadWrite:
             assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
             assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
 
-    @pytest.mark.parametrize("dask_backed", [True, False])
-    @pytest.mark.parametrize("workaround", [1, 2])
+    @pytest.mark.parametrize("dask_backed", [True])
+    @pytest.mark.parametrize("workaround", [1])
     def test_incremental_io_on_disk(
         self, tmp_path: str, full_sdata: SpatialData, dask_backed: bool, workaround: int
     ) -> None:

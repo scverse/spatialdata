@@ -629,8 +629,7 @@ class SpatialData:
 
         if not isinstance(zarr_path, Path):
             raise ValueError("zarr_path should be a Path object")
-        store = _open_zarr_store(zarr_path, mode="r+")
-        root = zarr.open_group(store=store, mode="r+")
+
         if element_type not in [
             "images",
             "labels",
@@ -640,14 +639,26 @@ class SpatialData:
             "tables",
         ]:
             raise ValueError(f"Unknown element type {element_type}")
+
+        store = _open_zarr_store(zarr_path, mode="r+")
+        if element_type != "labels":
+            root = zarr.open_group(store=store, mode="r+")
+        else:
+            # This is required as ome-zarr accesses the labels group within root. If data has been consolidated
+            # before it will already look for the labels element just added, but the data has not been reconsolidated
+            # yet. Thus, when writing we open the root store here with use_consolidated == False.
+            root = zarr.open_group(store=store, mode="r+", use_consolidated=use_consolidated)
+
         element_type_group = root.require_group(element_type)
-        # This is required as adata performs a consolidated check before writing anything.
+        # This is required as adata performs a consolidated check before writing anything. If the Tables group was
+        # consolidated before, this prevents anndata from writing. Therefore, we read with use_consolidated == False
+        # when writing.
         if not use_consolidated and element_type == "tables":
-            element_type_group = zarr.open_group(element_type_group.store_path, mode="w", use_consolidated=False)
-        element_name_group = None
-        # when downstream libraries do this again and consolidated metadata is present, this leads to issues.
-        if element_type not in ["labels", "tables"]:
-            element_name_group = element_type_group.require_group(element_name)
+            element_type_group = zarr.open_group(
+                element_type_group.store_path, mode="r+", use_consolidated=use_consolidated
+            )
+
+        element_name_group = element_type_group.require_group(element_name)
         return root, element_type_group, element_name_group
 
     def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:

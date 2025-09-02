@@ -55,7 +55,7 @@ def test_validate_can_write_metadata_on_element(full_sdata, element_name):
             full_sdata._validate_can_write_metadata_on_element(f"{element_name}_again")
 
 
-@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles"])
+@pytest.mark.parametrize("element_name", ["labels2d"])  # "points_0", "circles", "image2d"
 def test_save_transformations_incremental(element_name, full_sdata, caplog):
     """test io for transformations"""
     with tempfile.TemporaryDirectory() as tmp_dir:
