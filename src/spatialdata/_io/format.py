@@ -187,6 +187,10 @@ class RasterFormatV01(FormatV04, CoordinateMixinV01):
     def version(self) -> str:
         return "0.4"
 
+    @property
+    def zarr_format(self):
+        return 2
+
 
 class RasterFormatV02(RasterFormatV01):
     @property
@@ -198,6 +202,10 @@ class RasterFormatV02(RasterFormatV01):
         # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
         # https://github.com/scverse/spatialdata/pull/849
         return "0.4-dev-spatialdata"
+
+    @property
+    def zarr_format(self):
+        return 2
 
 
 class RasterFormatV03(FormatV05, CoordinateMixinV01):

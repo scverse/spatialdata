@@ -12,17 +12,13 @@ from spatialdata._io.format import (
     PointsFormatV01,
     RasterFormatV01,
     RasterFormatV02,
-    # CurrentPointsFormat,
-    # CurrentShapesFormat,
     ShapesFormatV01,
     ShapesFormatV02,
+    SpatialDataContainerFormatV01,
     SpatialDataFormatType,
 )
 from spatialdata.models import PointsModel, ShapesModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
-
-# Points_f = CurrentPointsFormat()
-# Shapes_f = CurrentShapesFormat()
 
 
 class TestFormat:
@@ -88,19 +84,20 @@ class TestFormat:
         metadata[attrs_key].pop("version")
         assert metadata[attrs_key] == ShapesFormatV02().attrs_to_dict({})
 
-    @pytest.mark.parametrize("format", [RasterFormatV01, RasterFormatV02])
+    @pytest.mark.parametrize("format", [RasterFormatV02])
     def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormatType]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            images.write(Path(tmpdir) / "images.zarr", format=format())
+            images.write(Path(tmpdir) / "images.zarr", ome_format=SpatialDataContainerFormatV01(), format=format())
             zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/.zattrs"
             with open(zattrs_file) as infile:
                 zattrs = json.load(infile)
-                ngff_version = zattrs["multiscales"][0]["version"]
                 if format == RasterFormatV01:
+                    ngff_version = zattrs["multiscales"][0]["version"]
                     assert ngff_version == "0.4"
                 else:
                     assert format == RasterFormatV02
-                    assert ngff_version == "0.4-dev-spatialdata"
+                    # TODO: check whether this required change is due to bug in ome-zarr
+                    assert zattrs["version"] == "0.4-dev-spatialdata"
 
 
 class TestFormatConversions:

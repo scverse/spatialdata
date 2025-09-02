@@ -149,12 +149,6 @@ def _write_raster(
 
     group_data = group  # (group[name] if name in group else group.require_group(name)) if raster_type == "image" else
 
-    def _get_group_for_writing_transformations() -> zarr.Group:
-        if raster_type == "image":
-            # At this point name should just be in group already so we access it this way instead of require_group
-            return group[name]
-        return group["labels"][name]
-
     # convert channel names to channel metadata in omero
     if raster_type == "image":
         metadata["metadata"] = {"omero": {"channels": []}}

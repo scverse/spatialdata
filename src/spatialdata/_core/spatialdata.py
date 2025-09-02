@@ -642,20 +642,20 @@ class SpatialData:
 
         store = _open_zarr_store(zarr_path, mode="r+")
         if element_type != "labels":
-            root = zarr.open_group(store=store, mode="r+")
+            root = zarr.open_group(store=store, mode="a")
         else:
             # This is required as ome-zarr accesses the labels group within root. If data has been consolidated
             # before it will already look for the labels element just added, but the data has not been reconsolidated
             # yet. Thus, when writing we open the root store here with use_consolidated == False.
-            root = zarr.open_group(store=store, mode="r+", use_consolidated=use_consolidated)
+            root = zarr.open_group(store=store, mode="a", use_consolidated=use_consolidated)
 
         element_type_group = root.require_group(element_type)
         # This is required as adata performs a consolidated check before writing anything. If the Tables group was
         # consolidated before, this prevents anndata from writing. Therefore, we read with use_consolidated == False
         # when writing.
-        if not use_consolidated and element_type == "tables":
+        if not use_consolidated and element_type in ["labels", "tables"]:
             element_type_group = zarr.open_group(
-                element_type_group.store_path, mode="r+", use_consolidated=use_consolidated
+                element_type_group.store_path, mode="a", use_consolidated=use_consolidated
             )
 
         element_name_group = element_type_group.require_group(element_name)
@@ -1247,6 +1247,7 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
+        ome_format: SpatialDataContainerFormatType | None = None,
         format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
@@ -1274,12 +1275,17 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
+        from spatialdata._io.format import SpatialDataContainerFormatV02
+
+        if not ome_format:
+            ome_format = SpatialDataContainerFormatV02()
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w", fmt=FormatV05()).store
+        store = parse_url(file_path, mode="w", fmt=ome_format).store
         zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
         self.write_attrs(zarr_group=zarr_group)
         store.close()

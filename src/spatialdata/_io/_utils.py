@@ -99,17 +99,21 @@ def overwrite_coordinate_transformations_raster(
         )
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
-    if len_scales := len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
-        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
-    multiscale = multiscales[0]
-    # the transformation present in multiscale["datasets"] are the ones for the multiscale, so and we leave them intact
-    # we update multiscale["coordinateTransformations"] and multiscale["coordinateSystems"]
-    # see the first post of https://github.com/scverse/spatialdata/issues/39 for an overview
-    # fix the io to follow the NGFF specs, see https://github.com/scverse/spatialdata/issues/114
+    if group.metadata.zarr_format == 3:
+        if len_scales := len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+            raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
+        multiscale = multiscales[0]
 
-    # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
-    multiscale["coordinateTransformations"] = coordinate_transformations
-    group.attrs["coordinateTransformations"] = coordinate_transformations
+        # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
+        multiscale["coordinateTransformations"] = coordinate_transformations
+        group.attrs["coordinateTransformations"] = coordinate_transformations
+    elif group.metadata.zarr_format == 2:
+        multiscales = group.attrs["multiscales"]
+        if (len_scales := len(multiscales)) != 1:
+            raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
+        multiscale = multiscales[0]
+        multiscale["coordinateTransformations"] = coordinate_transformations
+        group.attrs["multiscales"] = multiscales
 
 
 def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
