@@ -1682,6 +1682,7 @@ class SpatialData:
             zarr_path=Path(self.path),
             element_type=element_type,
             element_name=element_name,
+            use_consolidated=False,
         )
         axes = get_axes_names(element)
         if isinstance(element, DataArray | DataTree):
