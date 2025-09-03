@@ -15,6 +15,7 @@ from spatialdata._io.format import (
     RasterFormatV03,
     ShapesFormatV01,
     ShapesFormatV02,
+    ShapesFormatV03,
     SpatialDataContainerFormatV01,
     SpatialDataContainerFormatV02,
     SpatialDataFormatType,
@@ -105,10 +106,11 @@ class TestFormat:
 class TestFormatConversions:
     """Test format conversions between older formats and newer."""
 
-    def test_shapes_v1_to_v2(self, shapes):
+    def test_shapes_v1_to_v2_to_v3(self, shapes):
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
+            f3 = Path(tmpdir) / "data3.zarr"
 
             shapes.write(f1, sdata_formats=[ShapesFormatV01(), SpatialDataContainerFormatV01()])
             shapes_read_v1 = read_zarr(f1)
@@ -117,6 +119,10 @@ class TestFormatConversions:
             shapes_read_v1.write(f2, sdata_formats=[ShapesFormatV02(), SpatialDataContainerFormatV01()])
             shapes_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v2)
+
+            shapes_read_v1.write(f3, sdata_formats=[ShapesFormatV03(), SpatialDataContainerFormatV02()])
+            shapes_read_v3 = read_zarr(f3)
+            assert_spatial_data_objects_are_identical(shapes, shapes_read_v3)
 
     def test_raster_v1_to_v2_to_v3(self, images):
         with tempfile.TemporaryDirectory() as tmpdir:
