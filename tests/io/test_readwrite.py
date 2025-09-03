@@ -1,5 +1,4 @@
 import os
-import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -776,7 +775,6 @@ def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
         invalid_sdata.write_element("valid_name")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Renaming fails as windows path already sees the name as invalid.")
 def test_reading_invalid_name(tmp_path: Path):
     image_name, image = next(iter(_get_images().items()))
     labels_name, labels = next(iter(_get_labels().items()))
@@ -793,14 +791,19 @@ def test_reading_invalid_name(tmp_path: Path):
     valid_sdata.write(tmp_path / "data.zarr")
     # Circumvent validation at construction time and check validation happens again at writing time.
     (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
-    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+    # This one is not allowed on windows
+    if os.name != "nt":
+        (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+    # We do this as the key of the element is otherwise not in the consolidated metadata, leading to an error.
+    valid_sdata.write_consolidated_metadata()
 
     with pytest.raises(ValidationError, match="Cannot construct SpatialData") as exc_info:
         read_zarr(tmp_path / "data.zarr")
 
     actual_message = str(exc_info.value)
     assert "points/has whitespace" in actual_message
-    assert "shapes/non-alnum_#$%&()*+,?@" in actual_message
+    if os.name != "nt":
+        assert "shapes/non-alnum_#$%&()*+,?@" in actual_message
     assert (
         "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707"
         in actual_message
