@@ -637,7 +637,7 @@ cached_sdata_blobs = blobs()
 
 
 # TODO: make consolidated metadata open cleaner
-@pytest.mark.parametrize("element_name", ["labels2d"])  # "image2d" , "points_0", "circles", "table"  "labels2d"
+@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
 def test_delete_element_from_disk(full_sdata, element_name: str) -> None:
     # can't delete an element for a SpatialData object without associated Zarr store
     with pytest.raises(ValueError, match="The SpatialData object is not backed by a Zarr store."):

@@ -1529,7 +1529,7 @@ class SpatialData:
 
         # delete the element
         store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
-        root = zarr.open_group(store=store, mode="r+")
+        root = zarr.open_group(store=store, mode="r+", use_consolidated=False)
         del root[element_type][element_name]
         store.close()
 
