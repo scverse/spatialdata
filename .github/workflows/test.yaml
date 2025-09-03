@@ -27,6 +27,8 @@ jobs:
                       python: "3.12"
                       pip-flags: "--pre"
                       name: "Python 3.12 (pre-release)"
+                    - os: windows-latest
+                      python: "3.11"
 
         env:
             OS: ${{ matrix.os }}

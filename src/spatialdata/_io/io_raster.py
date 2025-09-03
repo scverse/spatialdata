@@ -198,10 +198,10 @@ def _write_raster(
         assert len(d) == 1
         xdata = d.values().__iter__().__next__()
         transformations = _get_transformations_xarray(xdata)
-        assert transformations is not None
-        assert len(transformations) > 0
+        if not transformations:
+            raise ValueError(f"No transformations specified to be written for element {name}.")
         chunks = get_pyramid_levels(raster_data, "chunks")
-        # coords = iterate_pyramid_levels(raster_data, "coords")
+
         parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
         storage_options = [{"chunks": chunk} for chunk in chunks]
         dask_delayed = write_multi_scale_ngff(
@@ -216,7 +216,6 @@ def _write_raster(
         )
         # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
         da.compute(*dask_delayed)
-        assert transformations is not None
 
         # Cannot move before conditional as group_data is updated when writing ngff scales
         trans_group = group["labels"][name] if raster_type == "labels" else group_data
