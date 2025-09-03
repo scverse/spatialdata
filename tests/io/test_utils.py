@@ -99,8 +99,8 @@ def test_backing_files_combining_points_and_images(points, images):
     from examining its computational graph
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        f0 = os.path.join(tmp_dir, "points0.zarr")
-        f1 = os.path.join(tmp_dir, "images1.zarr")
+        f0 = UPath(tmp_dir) / "points0.zarr"
+        f1 = UPath(tmp_dir) / "images1.zarr"
         points.write(f0)
         images.write(f1)
         points0 = read_zarr(f0)
@@ -113,12 +113,12 @@ def test_backing_files_combining_points_and_images(points, images):
         im2 = v + im1
         files = get_dask_backing_files(im2)
         expected_zarr_locations_old = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str(f0 / "points" / "points_0" / "points.parquet"),
+            str(f1 / "images" / "image2d"),
         ]
         expected_zarr_locations_new = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet/part.0.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str(f0 / "points" / "points_0" / "points.parquet" / "part.0.parquet"),
+            str(f1 / "images" / "image2d"),
         ]
         assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
 
