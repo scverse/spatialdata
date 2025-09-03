@@ -120,7 +120,7 @@ class TestFormatConversions:
             shapes_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v2)
 
-            shapes_read_v1.write(f3, sdata_formats=[ShapesFormatV03(), SpatialDataContainerFormatV02()])
+            shapes_read_v2.write(f3, sdata_formats=[ShapesFormatV03(), SpatialDataContainerFormatV02()])
             shapes_read_v3 = read_zarr(f3)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v3)
 
