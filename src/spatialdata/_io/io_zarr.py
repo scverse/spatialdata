@@ -188,7 +188,7 @@ def read_zarr(
                         JSONDecodeError,
                         ValueError,
                         KeyError,
-                        # ArrayNotFoundError,  # removed in Zarr v3
+                        ArrayNotFoundError,
                     ),
                 ):
                     shapes[subgroup_name] = _read_shapes(f_elem_store)
