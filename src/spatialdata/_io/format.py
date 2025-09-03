@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from collections.abc import Iterator
 from typing import Any
@@ -24,8 +22,6 @@ CoordinateTransform_t = list[dict[str, Any]]
 
 Shapes_s = ShapesModel()
 Points_s = PointsModel()
-
-# TODO: change for element in spatialdata_format_version for elements into something like element_container_version
 
 
 def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
