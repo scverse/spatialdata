@@ -1247,7 +1247,6 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
-        # sdata_format: SpatialDataContainerFormatType | None = None,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
