@@ -35,28 +35,32 @@ def _read_shapes(
     f = zarr.open(store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
-    format = ShapesFormats[version]
+    shape_format = ShapesFormats[version]
 
-    if isinstance(format, ShapesFormatV01):
+    if isinstance(shape_format, ShapesFormatV01):
         coords = np.array(f["coords"])
         index = np.array(f["Index"])
-        typ = format.attrs_from_dict(f.attrs.asdict())
+        typ = shape_format.attrs_from_dict(f.attrs.asdict())
         if typ.name == "POINT":
             radius = np.array(f["radius"])
             geometry = from_ragged_array(typ, coords)
             geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
         else:
             offsets_keys = [k for k in f if k.startswith("offset")]
+
+            # We do this because of async reading not necessarily leading to ordered offset keys.
+            # We can't use sorted because if offsets are higher than 11 we get 1, 11, 2
+            offsets_keys = [f"offset{i}" for i in range(len(offsets_keys))]
             offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
-    elif isinstance(format, ShapesFormatV02 | ShapesFormatV03):
+    elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
         store_root = f.store_path.store.root
         path = Path(store_root) / f.path / "shapes.parquet"
         geo_df = read_parquet(path)
     else:
         raise ValueError(
-            f"Unsupported shapes format {format} from version {version}. Please update the spatialdata library."
+            f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
         )
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
