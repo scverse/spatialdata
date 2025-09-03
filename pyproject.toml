@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dynamic= [
   "version" # allow version to be set by git tags
 ]
