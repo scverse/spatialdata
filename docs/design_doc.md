@@ -268,7 +268,7 @@ In `spatialdata-io` we use a consistent naming scheme for the `region_key` and `
 ### Summary
 
 - Image `type: Image`
-- Regions `type: Union[Labels, Shapes]`
+- Regions `type: Labels | Shapes`
     - Labels `type: Labels`
     - Shapes `type: Shapes`
 - Points `type: Points`

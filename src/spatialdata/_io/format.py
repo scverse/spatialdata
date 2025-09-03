@@ -92,9 +92,7 @@ class CoordinateMixinV01:
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata.transformations.ngff.ngff_transformations import (
-                NgffBaseTransformation,
-            )
+            from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 
             parsed = [NgffBaseTransformation.from_dict(t) for t in transformations]
             json1 = [json.dumps(p.to_dict()) for p in parsed]

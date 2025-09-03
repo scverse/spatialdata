@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import filecmp
 import logging
 import os.path
@@ -35,10 +33,7 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
-from spatialdata.transformations.transformations import (
-    BaseTransformation,
-    _get_current_output_axes,
-)
+from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
 
 
 # suppress logger debug from ome_zarr with context manager
