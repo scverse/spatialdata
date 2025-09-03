@@ -1,10 +1,9 @@
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
-from typing_extensions import Self
 
 from spatialdata._types import ArrayLike
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
