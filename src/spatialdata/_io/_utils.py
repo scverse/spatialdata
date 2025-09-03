@@ -290,7 +290,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                 if name.startswith("original-from-zarr"):
                     # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
-                    files.append(str(path))
+                    files.append(str(UPath(path).resolve()))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
                     if hasattr(v, "creation_info"):
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L625
@@ -301,7 +301,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                                 f"report this bug."
                             )
                         parquet_file = t[0]
-                        files.append(os.path.realpath(parquet_file))
+                        files.append(str(UPath(parquet_file).resolve()))
                     elif isinstance(v, tuple) and len(v) > 1 and isinstance(v[1], dict) and "piece" in v[1]:
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
                         parquet_file, check0, check1 = v[1]["piece"]
