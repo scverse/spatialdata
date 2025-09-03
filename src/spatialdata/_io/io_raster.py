@@ -156,6 +156,7 @@ def _write_raster(
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
+    trans_group = group["labels"][name] if raster_type == "labels" else group_data
     if isinstance(raster_data, DataArray):
         data = raster_data.data
         transformations = _get_transformations(raster_data)
@@ -183,11 +184,6 @@ def _write_raster(
         )
         if not transformations:
             raise ValueError(f"No transformations specified to be written for element {name}.")
-        # TODO refactor this as it is ugly
-        if raster_type == "labels":
-            trans_group = group["labels"][name]
-        else:
-            trans_group = group_data
         overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
     elif isinstance(raster_data, DataTree):
         data = get_pyramid_levels(raster_data, attr="data")
@@ -218,11 +214,6 @@ def _write_raster(
         # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
         da.compute(*dask_delayed)
         assert transformations is not None
-        # TODO refactor this as it is ugly
-        if raster_type == "labels":
-            trans_group = group["labels"][name]
-        else:
-            trans_group = group_data
         overwrite_coordinate_transformations_raster(
             group=trans_group, transformations=transformations, axes=tuple(input_axes)
         )
