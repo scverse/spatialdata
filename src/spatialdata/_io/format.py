@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterator
 from typing import Any
 
@@ -187,9 +188,9 @@ class RasterFormatV01(FormatV04, CoordinateMixinV01):
     def version(self) -> str:
         return "0.4"
 
-    @property
-    def zarr_format(self):
-        return 2
+    # @property
+    # def zarr_format(self):
+    #     return 2
 
 
 class RasterFormatV02(RasterFormatV01):
@@ -203,9 +204,9 @@ class RasterFormatV02(RasterFormatV01):
         # https://github.com/scverse/spatialdata/pull/849
         return "0.4-dev-spatialdata"
 
-    @property
-    def zarr_format(self):
-        return 2
+    # @property
+    # def zarr_format(self):
+    #     return 2
 
 
 class RasterFormatV03(FormatV05, CoordinateMixinV01):
@@ -344,6 +345,28 @@ SpatialDataContainerFormats: dict[str, SpatialDataContainerFormatType] = {
     "0.1": SpatialDataContainerFormatV01(),
     "0.2": SpatialDataContainerFormatV02(),
 }
+ContainerFormatValidElements = {
+    SpatialDataContainerFormatV01().__str__(): [
+        RasterFormatV01().__str__(),
+        RasterFormatV02().__str__(),
+        PointsFormatV01().__str__(),
+        ShapesFormatV01().__str__(),
+        ShapesFormatV02().__str__(),
+        TablesFormatV01().__str__(),
+    ],
+    SpatialDataContainerFormatV02().__str__(): [
+        RasterFormatV03().__str__(),
+        PointsFormatV02().__str__(),
+        ShapesFormatV03().__str__(),
+        TablesFormatV02().__str__(),
+    ],
+}
+ContainerV01DefaultTypes: dict[str, SpatialDataFormatType] = {
+    "raster": RasterFormatV02(),
+    "shapes": ShapesFormatV02(),
+    "points": PointsFormatV01(),
+    "tables": TablesFormatV01(),
+}
 
 
 def format_implementations() -> Iterator[Format]:
@@ -413,4 +436,27 @@ def _parse_formats(
             parsed["SpatialData"] = fmt
         else:
             raise ValueError(f"Unsupported format {fmt}")
+
+    if parsed["SpatialData"].__str__() == "SpatialDataContainerFormatV01":
+        warnings.warn(
+            "SpatialData format defined to be 'SpatialDataContainerFormatV01'. Defaulting undefined element "
+            "formats to element formats valid for 'SpatialDataContainerFormatV01'.",
+            UserWarning,
+            stacklevel=2,
+        )
+        for el_type, value in modified.items():
+            if el_type != "SpatialData" and not value:
+                parsed[el_type] = ContainerV01DefaultTypes[el_type]
+
+    if any(
+        (invalid := el_format.__str__()) not in ContainerFormatValidElements[parsed["SpatialData"].__str__()]
+        for el_type, el_format in parsed.items()
+        if el_type != "SpatialData"
+    ):
+        raise ValueError(
+            f"Unsupported format '{invalid}' for SpatialDataContainerFormat '{parsed['SpatialData'].__str__()}'. "
+            f"Please ensure all element formats are either of these: "
+            f"'{' '.join(f for f in ContainerFormatValidElements[parsed['SpatialData'].__str__()])}'"
+        )
+
     return parsed

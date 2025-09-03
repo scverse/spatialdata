@@ -332,7 +332,7 @@ class SpatialData:
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
     def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
-        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+        """Set the channel names for an image `SpatialElement` in the `SpatialData` object.
 
         This method assumes that the `SpatialData` object and the element are already stored on disk as it will
         also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
@@ -1247,8 +1247,8 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
-        ome_format: SpatialDataContainerFormatType | None = None,
-        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        # sdata_format: SpatialDataContainerFormatType | None = None,
+        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1275,17 +1275,16 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
-        from spatialdata._io.format import SpatialDataContainerFormatV02
+        from spatialdata._io.format import _parse_formats
 
-        if not ome_format:
-            ome_format = SpatialDataContainerFormatV02()
+        parsed = _parse_formats(sdata_formats)
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w", fmt=ome_format).store
+        store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
         zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
         self.write_attrs(zarr_group=zarr_group)
         store.close()
@@ -1296,8 +1295,8 @@ class SpatialData:
                 zarr_container_path=file_path,
                 element_type=element_type,
                 element_name=element_name,
-                overwrite=False,
-                format=format,
+                overwrite=overwrite,
+                parsed_formats=parsed,
             )
 
         if self.path != file_path:
@@ -1315,7 +1314,7 @@ class SpatialData:
         element_type: str,
         element_name: str,
         overwrite: bool,
-        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        parsed_formats: dict[str, SpatialDataFormatType] | None = None,
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1338,42 +1337,43 @@ class SpatialData:
         )
         from spatialdata._io.format import _parse_formats
 
-        parsed = _parse_formats(formats=format)
+        if parsed_formats is None:
+            parsed_formats = _parse_formats(formats=parsed_formats)
 
         if element_type == "images":
             write_image(
                 image=element,
                 group=element_group,
                 name=element_name,
-                format=parsed["raster"],
+                format=parsed_formats["raster"],
             )
         elif element_type == "labels":
             write_labels(
                 labels=element,
                 group=root_group,
                 name=element_name,
-                format=parsed["raster"],
+                format=parsed_formats["raster"],
             )
         elif element_type == "points":
             write_points(
                 points=element,
                 group=element_group,
                 name=element_name,
-                format=parsed["points"],
+                format=parsed_formats["points"],
             )
         elif element_type == "shapes":
             write_shapes(
                 shapes=element,
                 group=element_group,
                 name=element_name,
-                format=parsed["shapes"],
+                format=parsed_formats["shapes"],
             )
         elif element_type == "tables":
             write_table(
                 table=element,
                 group=element_type_group,
                 name=element_name,
-                format=parsed["tables"],
+                format=parsed_formats["tables"],
             )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
@@ -1382,7 +1382,7 @@ class SpatialData:
         self,
         element_name: str | list[str],
         overwrite: bool = False,
-        format: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1410,6 +1410,9 @@ class SpatialData:
                 self.write_element(name, overwrite=overwrite)
             return
 
+        from spatialdata._io.format import _parse_formats
+
+        parsed_formats = _parse_formats(formats=sdata_formats)
         check_valid_name(element_name)
         self._validate_element_names_are_unique()
         element = self.get(element_name)
@@ -1440,7 +1443,7 @@ class SpatialData:
             element_type=element_type,
             element_name=element_name,
             overwrite=overwrite,
-            format=format,
+            parsed_formats=parsed_formats,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():

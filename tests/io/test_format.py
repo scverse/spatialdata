@@ -12,9 +12,11 @@ from spatialdata._io.format import (
     PointsFormatV01,
     RasterFormatV01,
     RasterFormatV02,
+    RasterFormatV03,
     ShapesFormatV01,
     ShapesFormatV02,
     SpatialDataContainerFormatV01,
+    SpatialDataContainerFormatV02,
     SpatialDataFormatType,
 )
 from spatialdata.models import PointsModel, ShapesModel
@@ -84,18 +86,18 @@ class TestFormat:
         metadata[attrs_key].pop("version")
         assert metadata[attrs_key] == ShapesFormatV02().attrs_to_dict({})
 
-    @pytest.mark.parametrize("format", [RasterFormatV02])
-    def test_format_raster_v1_v2(self, images, format: type[SpatialDataFormatType]) -> None:
+    @pytest.mark.parametrize("rformat", [RasterFormatV01, RasterFormatV02])
+    def test_format_raster_v1_v2(self, images, rformat: type[SpatialDataFormatType]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            images.write(Path(tmpdir) / "images.zarr", ome_format=SpatialDataContainerFormatV01(), format=format())
+            images.write(Path(tmpdir) / "images.zarr", sdata_formats=[SpatialDataContainerFormatV01(), rformat()])
             zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/.zattrs"
             with open(zattrs_file) as infile:
                 zattrs = json.load(infile)
-                if format == RasterFormatV01:
+                if rformat == RasterFormatV01:
                     ngff_version = zattrs["multiscales"][0]["version"]
                     assert ngff_version == "0.4"
                 else:
-                    assert format == RasterFormatV02
+                    assert rformat == RasterFormatV02
                     # TODO: check whether this required change is due to bug in ome-zarr
                     assert zattrs["version"] == "0.4-dev-spatialdata"
 
@@ -108,11 +110,11 @@ class TestFormatConversions:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
 
-            shapes.write(f1, format=ShapesFormatV01())
+            shapes.write(f1, sdata_formats=[ShapesFormatV01(), SpatialDataContainerFormatV01()])
             shapes_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v1)
 
-            shapes_read_v1.write(f2, format=ShapesFormatV02())
+            shapes_read_v1.write(f2, sdata_formats=[ShapesFormatV02(), SpatialDataContainerFormatV01()])
             shapes_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v2)
 
@@ -120,16 +122,19 @@ class TestFormatConversions:
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
-            # f3 = Path(tmpdir) / "data3.zarr"
+            f3 = Path(tmpdir) / "data3.zarr"
 
-            images.write(f1, format=RasterFormatV01())
+            with pytest.raises(ValueError, match="Unsupported format"):
+                images.write(f1, sdata_formats=RasterFormatV01())
+
+            images.write(f1, sdata_formats=[RasterFormatV01(), SpatialDataContainerFormatV01()])
             images_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(images, images_read_v1)
 
-            images_read_v1.write(f2, format=RasterFormatV02())
+            images_read_v1.write(f2, sdata_formats=[RasterFormatV02(), SpatialDataContainerFormatV01()])
             images_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(images, images_read_v2)
-            #
-            # images_read_v2.write(f3, format=RasterFormatV02())
-            # images_read_v3 = read_zarr(f3)
-            # assert_spatial_data_objects_are_identical(images, images_read_v3)
+
+            images_read_v2.write(f3, sdata_formats=[RasterFormatV03(), SpatialDataContainerFormatV02()])
+            images_read_v3 = read_zarr(f3)
+            assert_spatial_data_objects_are_identical(images, images_read_v3)

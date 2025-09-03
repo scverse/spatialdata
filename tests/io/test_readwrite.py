@@ -166,8 +166,8 @@ class TestReadWrite:
             assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
             assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
 
-    @pytest.mark.parametrize("dask_backed", [True])
-    @pytest.mark.parametrize("workaround", [1])
+    @pytest.mark.parametrize("dask_backed", [True, False])
+    @pytest.mark.parametrize("workaround", [1, 2])
     def test_incremental_io_on_disk(
         self, tmp_path: str, full_sdata: SpatialData, dask_backed: bool, workaround: int
     ) -> None:
@@ -637,7 +637,7 @@ cached_sdata_blobs = blobs()
 
 
 # TODO: make consolidated metadata open cleaner
-@pytest.mark.parametrize("element_name", ["labels2d"])  # "image2d" , "points_0", "circles", "table"
+@pytest.mark.parametrize("element_name", ["labels2d"])  # "image2d" , "points_0", "circles", "table"  "labels2d"
 def test_delete_element_from_disk(full_sdata, element_name: str) -> None:
     # can't delete an element for a SpatialData object without associated Zarr store
     with pytest.raises(ValueError, match="The SpatialData object is not backed by a Zarr store."):

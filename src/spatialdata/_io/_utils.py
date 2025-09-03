@@ -100,7 +100,8 @@ def overwrite_coordinate_transformations_raster(
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
     if group.metadata.zarr_format == 3:
-        if len_scales := len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+        if len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+            len_scales = len(multiscales)
             raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
         multiscale = multiscales[0]
 
