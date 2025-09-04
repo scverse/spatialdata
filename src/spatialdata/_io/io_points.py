@@ -50,7 +50,7 @@ def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
     group_type: str = "ngff:points",
-    format: Format = CurrentPointsFormat(),
+    element_format: Format = CurrentPointsFormat(),
 ) -> None:
     """Write a points element to a zarr store.
 
@@ -59,10 +59,10 @@ def write_points(
     points: DaskDataFrame
         The dataframe of the points element.
     group: zarr.Group
-        The zarr group to in the 'points' zarr group to write the points element to.
+        The zarr group in the 'points' zarr group to write the points element to.
     group_type: str
-        The type of the element
-    format:
+        The type of the element.
+    element_format: Format
         The format of the points element used to store it.
     """
     axes = get_axes_names(points)
@@ -84,8 +84,8 @@ def write_points(
 
     points.to_parquet(path)
 
-    attrs = format.attrs_to_dict(points.attrs)
-    attrs["version"] = format.spatialdata_format_version
+    attrs = element_format.attrs_to_dict(points.attrs)
+    attrs["version"] = element_format.spatialdata_format_version
 
     _write_metadata(
         group,

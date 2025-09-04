@@ -1256,27 +1256,26 @@ class SpatialData:
                 image=element,
                 group=element_group,
                 name=element_name,
-                format=parsed_formats["raster"],
+                element_format=parsed_formats["raster"],
             )
         elif element_type == "labels":
             write_labels(
                 labels=element,
                 group=root_group,
                 name=element_name,
-                format=parsed_formats["raster"],
+                element_format=parsed_formats["raster"],
             )
         elif element_type == "points":
             write_points(
                 points=element,
                 group=element_group,
-                format=parsed_formats["points"],
+                element_format=parsed_formats["points"],
             )
         elif element_type == "shapes":
             write_shapes(
                 shapes=element,
                 group=element_group,
-                name=element_name,
-                format=parsed_formats["shapes"],
+                element_format=parsed_formats["shapes"],
             )
         elif element_type == "tables":
             write_table(

@@ -1,5 +1,6 @@
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import zarr
@@ -71,38 +72,32 @@ def _read_shapes(
 def write_shapes(
     shapes: GeoDataFrame,
     group: zarr.Group,
-    name: str,
     group_type: str = "ngff:shapes",
-    format: Format = CurrentShapesFormat(),
+    element_format: Format = CurrentShapesFormat(),
 ) -> None:
-    import numcodecs
+    """Write shapes to spatialdata zarr store.
 
+    Parameters
+    ----------
+    shapes: GeoDataFrame
+        The shapes dataframe
+    group: zarr.Group
+        The zarr group in the 'shapes' zarr group to write the shapes element to.
+    group_type: str
+        The type of the element.
+    element_format: Format
+        The format of the shapes element used to store it.
+    """
     axes = get_axes_names(shapes)
-    t = _get_transformations(shapes)
-
-    if isinstance(format, ShapesFormatV01):
-        geometry, coords, offsets = to_ragged_array(shapes.geometry)
-        group.create_array(name="coords", data=coords)
-        for i, o in enumerate(offsets):
-            group.create_array(name=f"offset{i}", data=o)
-        if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
-            group.create_array(name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8())
-        else:
-            group.create_array(name="Index", data=shapes.index.values)
-        if geometry.name == "POINT":
-            group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
-
-        attrs = format.attrs_to_dict(geometry)
-        attrs["version"] = format.spatialdata_format_version
-    elif isinstance(format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = group.store_path.store.root
-        path = store_root / group.path / "shapes.parquet"
-        shapes.to_parquet(path)
-
-        attrs = format.attrs_to_dict(shapes.attrs)
-        attrs["version"] = format.spatialdata_format_version
+    transformations = _get_transformations(shapes)
+    if transformations is None:
+        raise ValueError(f"{group.basename} does not have any transformations and can therefore not be written.")
+    if isinstance(element_format, ShapesFormatV01):
+        attrs = _write_shapes_v01(shapes, group, element_format)
+    elif isinstance(element_format, ShapesFormatV02 | ShapesFormatV03):
+        attrs = _write_shapes_v02_v03(shapes, group, element_format)
     else:
-        raise ValueError(f"Unsupported format version {format.version}. Please update the spatialdata library.")
+        raise ValueError(f"Unsupported format version {element_format.version}. Please update the spatialdata library.")
 
     _write_metadata(
         group,
@@ -110,5 +105,56 @@ def write_shapes(
         axes=list(axes),
         attrs=attrs,
     )
-    assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=t)
+
+    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
+
+
+def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
+    """Write shapes to spatialdata zarr store using format ShapesFormatV01.
+
+    Parameters
+    ----------
+    shapes: GeoDataFrame
+        The shapes dataframe
+    group: zarr.Group
+        The zarr group in the 'shapes' zarr group to write the shapes element to.
+    element_format: Format
+        The format of the shapes element used to store it.
+    """
+    import numcodecs
+
+    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    group.create_array(name="coords", data=coords)
+    for i, o in enumerate(offsets):
+        group.create_array(name=f"offset{i}", data=o)
+    if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
+        group.create_array(name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8())
+    else:
+        group.create_array(name="Index", data=shapes.index.values)
+    if geometry.name == "POINT":
+        group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+
+    attrs = element_format.attrs_to_dict(geometry)
+    attrs["version"] = element_format.spatialdata_format_version
+    return attrs
+
+
+def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
+    """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV02.
+
+    Parameters
+    ----------
+    shapes: GeoDataFrame
+        The shapes dataframe
+    group: zarr.Group
+        The zarr group in the 'shapes' zarr group to write the shapes element to.
+    element_format: Format
+        The format of the shapes element used to store it.
+    """
+    store_root = group.store_path.store.root
+    path = store_root / group.path / "shapes.parquet"
+    shapes.to_parquet(path)
+
+    attrs = element_format.attrs_to_dict(shapes.attrs)
+    attrs["version"] = element_format.spatialdata_format_version
+    return attrs

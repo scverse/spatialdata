@@ -124,6 +124,27 @@ def _write_raster(
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
+    """Write raster data to disk.
+
+    Parameters
+    ----------
+    raster_type: Literal["image", "labels"]
+        Whether the raster data pertains to a image or labels 'SpatialElement`.
+    raster_data: DataArray | DataTree
+        The raster data to write.
+    group: zarr.Group
+        The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
+    name: str
+        The name of the raster element.
+    raster_format: Format
+        The format used to write the raster data.
+    storage_options: JSONDict | list[JSONDict] | None
+        Additional options for writing the raster data, like chunks and compression.
+    label_metadata: JSONDict | None
+        Label metadata which can only be defined when writing 'labels'.
+    metadata: str | JSONDict | list[JSONDict]
+        Additional metadata for the raster element
+    """
     if raster_type not in ["image", "labels"]:
         raise ValueError(f"{raster_type} is not a valid raster type. Must be 'image' or 'labels'.")
     # "name" and "label_metadata" are only used for labels. "name" is written in write_multiscale_ngff() but ignored in
@@ -161,18 +182,37 @@ def _write_raster(
 def _write_raster_dataarray(
     raster_type: Literal["image", "labels"],
     group: zarr.Group,
-    name: str,
+    element_name: str,
     raster_data: DataArray,
     raster_format: Format,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
+    """Write raster data of type DataArray to disk.
+
+    Parameters
+    ----------
+    raster_type: Literal["image", "labels"]
+        Whether the raster data pertains to a image or labels 'SpatialElement`.
+    group: zarr.Group
+        The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
+    element_name: str
+        The name of the raster element.
+    raster_data: DataArray
+        The raster data to write.
+    raster_format: Format
+        The format used to write the raster data.
+    storage_options: JSONDict | list[JSONDict] | None
+        Additional options for writing the raster data, like chunks and compression.
+    metadata: str | JSONDict | list[JSONDict]
+        Additional metadata for the raster element
+    """
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
     if transformations is None:
-        raise ValueError(f"{name} does not have any transformations and can therefore not be written.")
+        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     chunks = raster_data.chunks
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
@@ -193,19 +233,38 @@ def _write_raster_dataarray(
         **metadata,
     )
 
-    trans_group = group["labels"][name] if raster_type == "labels" else group
+    trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
 
 
 def _write_raster_datatree(
     raster_type: Literal["image", "labels"],
     group: zarr.Group,
-    name: str,
-    raster_data: DataArray,
+    element_name: str,
+    raster_data: DataTree,
     raster_format: Format,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
+    """Write raster data of type DataTree to disk.
+
+    Parameters
+    ----------
+    raster_type: Literal["image", "labels"]
+        Whether the raster data pertains to a image or labels 'SpatialElement`.
+    group: zarr.Group
+        The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
+    element_name: str
+        The name of the raster element.
+    raster_data: DataTree
+        The raster data to write.
+    raster_format: Format
+        The format used to write the raster data.
+    storage_options: JSONDict | list[JSONDict] | None
+        Additional options for writing the raster data, like chunks and compression.
+    metadata: str | JSONDict | list[JSONDict]
+        Additional metadata for the raster element
+    """
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
     data = get_pyramid_levels(raster_data, attr="data")
     list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
@@ -217,7 +276,7 @@ def _write_raster_datatree(
     xdata = d.values().__iter__().__next__()
     transformations = _get_transformations_xarray(xdata)
     if transformations is None:
-        raise ValueError(f"{name} does not have any transformations and can therefore not be written.")
+        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     chunks = get_pyramid_levels(raster_data, "chunks")
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
@@ -235,7 +294,7 @@ def _write_raster_datatree(
     # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
     da.compute(*dask_delayed)
 
-    trans_group = group["labels"][name] if raster_type == "labels" else group
+    trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(
         group=trans_group, transformations=transformations, axes=tuple(input_axes)
     )
@@ -245,7 +304,7 @@ def write_image(
     image: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    format: Format = CurrentRasterFormat(),
+    element_format: Format = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -254,7 +313,7 @@ def write_image(
         raster_data=image,
         group=group,
         name=name,
-        raster_format=format,
+        raster_format=element_format,
         storage_options=storage_options,
         **metadata,
     )
@@ -264,7 +323,7 @@ def write_labels(
     labels: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    format: Format = CurrentRasterFormat(),
+    element_format: Format = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: JSONDict,
@@ -274,7 +333,7 @@ def write_labels(
         raster_data=labels,
         group=group,
         name=name,
-        raster_format=format,
+        raster_format=element_format,
         storage_options=storage_options,
         label_metadata=label_metadata,
         **metadata,
