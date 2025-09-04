@@ -22,6 +22,8 @@ from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 
+# TODO: remove with incoming remote read / write PR
+# Not removing this now as it requires substantial extra refactor beyond scope of zarrv3 PR.
 def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
     """
     Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
@@ -222,3 +224,88 @@ def read_zarr(
     )
     sdata.path = Path(store)
     return sdata
+
+
+def _get_groups_for_element(
+    zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
+) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
+    """
+    Get the Zarr groups for the root, element_type and element for a specific element.
+
+    The store must exist, but creates the element type group and the element group if they don't exist.
+
+    Parameters
+    ----------
+    zarr_path
+        The path to the Zarr storage.
+    element_type
+        type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+    element_name
+        name of the element
+    use_consolidated
+        whether to open zarr groups using consolidated metadata. This should be false when writing as we open
+        zarr groups multiple times when writing an element. If the consolidated metadata store is out of sync with
+        what is written on disk this leads to errors.
+
+    Returns
+    -------
+    either the existing Zarr subgroup or a new one.
+    """
+    if not isinstance(zarr_path, Path):
+        raise ValueError("zarr_path should be a Path object")
+
+    if element_type not in [
+        "images",
+        "labels",
+        "points",
+        "polygons",
+        "shapes",
+        "tables",
+    ]:
+        raise ValueError(f"Unknown element type {element_type}")
+    # TODO: remove local import after remote PR
+    from spatialdata._io._utils import _open_zarr_store
+
+    store = _open_zarr_store(zarr_path, mode="r+")
+
+    # When writing, use_consolidated must be set to False. Otherwise, the metadata store
+    # can get out of sync with newly added elements (e.g., labels), leading to errors.
+    root = zarr.open_group(store=store, mode="a", use_consolidated=use_consolidated)
+    element_type_group = root.require_group(element_type)
+    element_type_group = zarr.open_group(element_type_group.store_path, mode="a", use_consolidated=use_consolidated)
+
+    element_name_group = element_type_group.require_group(element_name)
+    return root, element_type_group, element_name_group
+
+
+def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
+    """
+    Check if the group for an element exists.
+
+    Parameters
+    ----------
+    element_type
+        type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+    element_name
+        name of the element
+
+    Returns
+    -------
+    True if the group exists, False otherwise.
+    """
+    # TODO: remove local import after remote PR
+    from spatialdata._io._utils import _open_zarr_store
+
+    store = _open_zarr_store(zarr_path, mode="r")
+    root = zarr.open_group(store=store, mode="r")
+    assert element_type in [
+        "images",
+        "labels",
+        "points",
+        "polygons",
+        "shapes",
+        "tables",
+    ]
+    exists = element_type in root and element_name in root[element_type]
+    store.close()
+    return exists

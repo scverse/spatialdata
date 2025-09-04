@@ -148,7 +148,7 @@ def test_element_type_from_element_name(points: SpatialData) -> None:
 
 
 def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
-    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
+    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_tables=False)
     assert_spatial_data_objects_are_identical(sdata, full_sdata)
 
     scale = Scale([2.0], axes=("x",))
@@ -156,12 +156,12 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
 
-    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
     assert len(list(sdata_my_space.gen_elements())) == 3
     assert_elements_dict_are_identical(sdata_my_space.tables, full_sdata.tables)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
-        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
+        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_tables=False
     )
     assert len(list(sdata_my_space1.gen_elements())) == 4
 
@@ -187,7 +187,7 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
 
     filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
     filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
-    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
 
     assert len(filtered_sdata0["table"]) + len(filtered_sdata1["table"]) == len(full_sdata["table"])
     assert len(filtered_sdata2["table"]) == len(full_sdata["table"])
@@ -363,10 +363,10 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
-    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
+    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_tables=False)
     assert len(list(filtered.gen_elements())) == 3
-    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
-    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
+    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
+    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_tables=False)
     # this is needed cause we can't handle regions with same name.
     # TODO: fix this
     new_region = "sample2"

@@ -122,7 +122,6 @@ class SpatialData:
     annotation directly.
     """
 
-    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -604,94 +603,6 @@ class SpatialData:
                 f" the implications of working with SpatialData objects that are not self-contained."
             )
 
-    def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
-    ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
-        """
-        Get the Zarr groups for the root, element_type and element for a specific element.
-
-        The store must exist, but creates the element type group and the element group if they don't exist.
-
-        Parameters
-        ----------
-        zarr_path
-            The path to the Zarr storage.
-        element_type
-            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
-        element_name
-            name of the element
-
-        Returns
-        -------
-        either the existing Zarr subgroup or a new one.
-        """
-        from spatialdata._io._utils import _open_zarr_store
-
-        if not isinstance(zarr_path, Path):
-            raise ValueError("zarr_path should be a Path object")
-
-        if element_type not in [
-            "images",
-            "labels",
-            "points",
-            "polygons",
-            "shapes",
-            "tables",
-        ]:
-            raise ValueError(f"Unknown element type {element_type}")
-
-        store = _open_zarr_store(zarr_path, mode="r+")
-        if element_type != "labels":
-            root = zarr.open_group(store=store, mode="a")
-        else:
-            # This is required as ome-zarr accesses the labels group within root. If data has been consolidated
-            # before it will already look for the labels element just added, but the data has not been reconsolidated
-            # yet. Thus, when writing we open the root store here with use_consolidated == False.
-            root = zarr.open_group(store=store, mode="a", use_consolidated=use_consolidated)
-
-        element_type_group = root.require_group(element_type)
-        # This is required as adata performs a consolidated check before writing anything. If the Tables group was
-        # consolidated before, this prevents anndata from writing. Therefore, we read with use_consolidated == False
-        # when writing.
-        if not use_consolidated and element_type in ["labels", "tables"]:
-            element_type_group = zarr.open_group(
-                element_type_group.store_path, mode="a", use_consolidated=use_consolidated
-            )
-
-        element_name_group = element_type_group.require_group(element_name)
-        return root, element_type_group, element_name_group
-
-    def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:
-        """
-        Check if the group for an element exists.
-
-        Parameters
-        ----------
-        element_type
-            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
-        element_name
-            name of the element
-
-        Returns
-        -------
-        True if the group exists, False otherwise.
-        """
-        from spatialdata._io._utils import _open_zarr_store
-
-        store = _open_zarr_store(zarr_path, mode="r")
-        root = zarr.open_group(store=store, mode="r")
-        assert element_type in [
-            "images",
-            "labels",
-            "points",
-            "polygons",
-            "shapes",
-            "tables",
-        ]
-        exists = element_type in root and element_name in root[element_type]
-        store.close()
-        return exists
-
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
         Locate a SpatialElement within the SpatialData object and returns its Zarr paths relative to the root.
@@ -721,7 +632,6 @@ class SpatialData:
             raise ValueError("Found an element name with a '/' character. This is not allowed.")
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
-    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
         self,
         coordinate_system: str | list[str],
@@ -1315,6 +1225,8 @@ class SpatialData:
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
     ) -> None:
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
                 f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
@@ -1324,7 +1236,7 @@ class SpatialData:
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
         )
 
-        root_group, element_type_group, element_group = self._get_groups_for_element(
+        root_group, element_type_group, element_group = _get_groups_for_element(
             zarr_path=zarr_container_path, element_type=element_type, element_name=element_name, use_consolidated=False
         )
         from spatialdata._io import (
@@ -1567,6 +1479,7 @@ class SpatialData:
     def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
         """Validate if metadata can be written on an element, returns None if it cannot be written."""
         from spatialdata._io._utils import _is_element_self_contained
+        from spatialdata._io.io_zarr import _group_for_element_exists
 
         # check the element exists in the SpatialData object
         element = self.get(element_name)
@@ -1589,7 +1502,7 @@ class SpatialData:
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
         # check if the element exists in the Zarr storage
-        if not self._group_for_element_exists(
+        if not _group_for_element_exists(
             zarr_path=Path(self.path),
             element_type=element_type,
             element_name=element_name,
@@ -1623,6 +1536,8 @@ class SpatialData:
             The name of the element to write the channel names of. If None, write the channel names of all image
             elements.
         """
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if element_name is not None:
             check_valid_name(element_name)
             if element_name not in self:
@@ -1642,10 +1557,8 @@ class SpatialData:
 
         # Mypy does not understand that path is not None so we have the check in the conditional
         if element_type == "images" and self.path is not None:
-            _, _, element_group = self._get_groups_for_element(
-                zarr_path=Path(self.path),
-                element_type=element_type,
-                element_name=element_name,
+            _, _, element_group = _get_groups_for_element(
+                zarr_path=Path(self.path), element_type=element_type, element_name=element_name, use_consolidated=False
             )
 
             from spatialdata._io._utils import overwrite_channel_names
@@ -1663,6 +1576,8 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if element_name is not None:
             check_valid_name(element_name)
             if element_name not in self:
@@ -1686,7 +1601,7 @@ class SpatialData:
 
         # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
-        _, _, element_group = self._get_groups_for_element(
+        _, _, element_group = _get_groups_for_element(
             zarr_path=Path(self.path),
             element_type=element_type,
             element_name=element_name,
@@ -1805,6 +1720,8 @@ class SpatialData:
         if write_attrs:
             self.write_attrs()
 
+        # TODO: discuss when has_consolidated_metadata that we should just consolidate it because after a writing
+        # operation the consolidated store could otherwise be out of sync.
         if consolidate_metadata is None and self.has_consolidated_metadata():
             consolidate_metadata = True
         if consolidate_metadata:
