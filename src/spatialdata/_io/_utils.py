@@ -80,6 +80,24 @@ def overwrite_coordinate_transformations_non_raster(
 def overwrite_coordinate_transformations_raster(
     group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: MappingToCoordinateSystem_t
 ) -> None:
+    """Write transformations of raster elements to disk.
+
+    This function supports both writing of transformations for raster elements stored using zarr v3 and v2.
+    For the case of zarr v3, there is already a 'coordinateTransformations' from ome-zarr in the metadata of
+    the group. However, we store our transformations in the first element of the 'multiscales' of the attributes
+    in the group metadata. This is subject to change.
+    In the case of zarr v2 the existing 'coordinateTransformations' from ome-zarr is overwritten.
+
+    Parameters
+    ----------
+    group: zarr.Group
+        The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['image2d'].
+    axes: tuple[ValidAxis_t, ...]
+        The list with axes names in the same order as the dimensions of the raster element.
+    transformations
+        Mapping between names of the coordinate system and the transformations.
+    """
     _validate_mapping_to_coordinate_system_type(transformations)
     # prepare the transformations in the dict representation
     ngff_transformations = []
@@ -95,21 +113,54 @@ def overwrite_coordinate_transformations_raster(
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
     if group.metadata.zarr_format == 3:
-        if len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
-            len_scales = len(multiscales)
-            raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
-        multiscale = multiscales[0]
-
-        # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
-        multiscale["coordinateTransformations"] = coordinate_transformations
-        group.attrs["coordinateTransformations"] = coordinate_transformations
+        _write_coordinate_transformations_raster_zarrv3(group, coordinate_transformations)
     elif group.metadata.zarr_format == 2:
-        multiscales = group.attrs["multiscales"]
-        if (len_scales := len(multiscales)) != 1:
-            raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
-        multiscale = multiscales[0]
-        multiscale["coordinateTransformations"] = coordinate_transformations
-        group.attrs["multiscales"] = multiscales
+        _overwrite_coordinate_transformations_raster_zarrv2(group, coordinate_transformations)
+
+
+# TODO: check type coordinate_transformations here
+def _write_coordinate_transformations_raster_zarrv3(
+    group: zarr.Group, coordinate_transformations: list[dict[str, BaseTransformation]]
+) -> None:
+    """Write transformations of raster elements to disk in zarr v3.
+
+    Parameters
+    ----------
+    group: zarr.Group
+        The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['image2d'].
+    coordinate_transformations: list[dict[str, BaseTransformation]]
+        List of NGFF transformation representations as dictionaries.
+    """
+    if len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+        len_scales = len(multiscales)
+        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
+    multiscale = multiscales[0]
+
+    # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
+    multiscale["coordinateTransformations"] = coordinate_transformations
+    group.attrs["coordinateTransformations"] = coordinate_transformations
+
+
+def _overwrite_coordinate_transformations_raster_zarrv2(
+    group: zarr.Group, coordinate_transformations: list[dict[str, BaseTransformation]]
+) -> None:
+    """Overwrite transformations of raster elements on disk in zarr v2.
+
+    Parameters
+    ----------
+    group: zarr.Group
+        The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['image2d'].
+    coordinate_transformations: list[dict[str, BaseTransformation]]
+        List of NGFF transformation representations as dictionaries.
+    """
+    multiscales = group.attrs["multiscales"]
+    if (len_scales := len(multiscales)) != 1:
+        raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
+    multiscale = multiscales[0]
+    multiscale["coordinateTransformations"] = coordinate_transformations
+    group.attrs["multiscales"] = multiscales
 
 
 def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
