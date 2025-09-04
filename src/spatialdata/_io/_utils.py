@@ -63,6 +63,18 @@ def _get_transformations_from_ngff_dict(
 def overwrite_coordinate_transformations_non_raster(
     group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: MappingToCoordinateSystem_t
 ) -> None:
+    """Write coordinate transformations of non-raster element to disk.
+
+    Parameters
+    ----------
+    group: zarr.Group
+        The zarr group containing the non-raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['points'].
+    axes: tuple[ValidAxis_t, ...]
+        The list with axes names in the same order as the coordinates of the non-raster element.
+    transformations: MappingToCoordinateSystem_t
+        Mapping between names of the coordinate system and the transformations.
+    """
     _validate_mapping_to_coordinate_system_type(transformations)
     ngff_transformations = []
     for target_coordinate_system, t in transformations.items():
@@ -95,7 +107,7 @@ def overwrite_coordinate_transformations_raster(
         containing sdata['image2d'].
     axes: tuple[ValidAxis_t, ...]
         The list with axes names in the same order as the dimensions of the raster element.
-    transformations
+    transformations: MappingToCoordinateSystem_t
         Mapping between names of the coordinate system and the transformations.
     """
     _validate_mapping_to_coordinate_system_type(transformations)
@@ -146,6 +158,11 @@ def _overwrite_coordinate_transformations_raster_zarrv2(
     group: zarr.Group, coordinate_transformations: list[dict[str, BaseTransformation]]
 ) -> None:
     """Overwrite transformations of raster elements on disk in zarr v2.
+
+    The transformation present in multiscale["datasets"] are the ones for the multiscale, so and we leave them intact
+    we update multiscale["coordinateTransformations"] and multiscale["coordinateSystems"]
+    see the first post of https://github.com/scverse/spatialdata/issues/39 for an overview
+    fix the io to follow the NGFF specs, see https://github.com/scverse/spatialdata/issues/114
 
     Parameters
     ----------

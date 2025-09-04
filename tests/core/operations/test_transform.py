@@ -587,7 +587,7 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
             labels=dict(full_sdata.labels),
             points=dict(full_sdata.points),
             shapes=dict(full_sdata.shapes),
-            table=full_sdata["table"],
+            tables=full_sdata["table"],
         )
         temp["transformed_element"] = transformed_element
         transformation = get_transformation_between_coordinate_systems(
