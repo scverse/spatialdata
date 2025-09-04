@@ -1269,7 +1269,6 @@ class SpatialData:
             write_points(
                 points=element,
                 group=element_group,
-                name=element_name,
                 format=parsed_formats["points"],
             )
         elif element_type == "shapes":

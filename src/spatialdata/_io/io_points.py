@@ -49,16 +49,27 @@ def _read_points(
 def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
-    name: str,
     group_type: str = "ngff:points",
     format: Format = CurrentPointsFormat(),
 ) -> None:
+    """Write a points element to a zarr store.
+
+    Parameters
+    ----------
+    points: DaskDataFrame
+        The dataframe of the points element.
+    group: zarr.Group
+        The zarr group to in the 'points' zarr group to write the points element to.
+    group_type: str
+        The type of the element
+    format:
+        The format of the points element used to store it.
+    """
     axes = get_axes_names(points)
-    t = _get_transformations(points)
+    transformations = _get_transformations(points)
 
     store_root = group.store_path.store.root
-    group_path = group.path
-    path = store_root / group_path / "points.parquet"
+    path = store_root / group.path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -82,5 +93,6 @@ def write_points(
         axes=list(axes),
         attrs=attrs,
     )
-    assert t is not None
-    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=t)
+    if transformations is None:
+        raise ValueError(f"No transformations specified for element '{group.basename}'. Cannot write.")
+    overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)

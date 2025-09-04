@@ -44,13 +44,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         image_nodes = list(image_reader)
         if len(image_nodes):
             for node in image_nodes:
-                # if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and (
-                #     raster_type == "image"
-                #     and np.all([not isinstance(spec, Label) for spec in node.specs])
-                #     or raster_type == "labels"
-                #     and np.any([isinstance(spec, Label) for spec in node.specs])
-                # ):
-                # Labels are not also Multiscales
+                # Labels are now also Multiscales in newer version of ome-zarr-py
                 if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and raster_type in [
                     "image",
                     "labels",
@@ -84,8 +78,6 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     # and for instance in the xenium example
     encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
-    # TODO: what to do with name? For now remove?
-    # name = os.path.basename(node.metadata["name"])
     # if image, read channels metadata
     channels: list[Any] | None = None
     if raster_type == "image":
@@ -127,27 +119,19 @@ def _write_raster(
     raster_data: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    format: Format = CurrentRasterFormat(),
+    raster_format: Format,
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
-    assert raster_type in ["image", "labels"]
-    # the argument "name" and "label_metadata" are only used for labels (to be precise, name is used in
-    # write_multiscale_ngff() when writing metadata, but name is not used in write_image_ngff(). Maybe this is bug of
-    # ome-zarr-py. In any case, we don't need that metadata and we use the argument name so that when we write labels
-    # the correct group is created by the ome-zarr-py APIs. For images we do it manually in the function
-    # _get_group_for_writing_data()
-    if raster_type == "image":
-        assert label_metadata is None
-    else:
+    if raster_type not in ["image", "labels"]:
+        raise ValueError(f"{raster_type} is not a valid raster type. Must be 'image' or 'labels'.")
+    # "name" and "label_metadata" are only used for labels. "name" is written in write_multiscale_ngff() but ignored in
+    # write_image_ngff() (possibly an ome-zarr-py bug). We only use "name" to ensure correct group access in the
+    # ome-zarr API.
+    if raster_type == "labels":
         metadata["name"] = name
         metadata["label_metadata"] = label_metadata
-
-    write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
-    write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
-
-    group_data = group  # (group[name] if name in group else group.require_group(name)) if raster_type == "image" else
 
     # convert channel names to channel metadata in omero
     if raster_type == "image":
@@ -156,86 +140,105 @@ def _write_raster(
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
-    # TODO refactor as function is way too big
     if isinstance(raster_data, DataArray):
-        data = raster_data.data
-        transformations = _get_transformations(raster_data)
-        input_axes: tuple[str, ...] = tuple(raster_data.dims)
-        chunks = raster_data.chunks
-        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
-        if storage_options is not None:
-            if "chunks" not in storage_options and isinstance(storage_options, dict):
-                storage_options["chunks"] = chunks
-        else:
-            storage_options = {"chunks": chunks}
-        # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
-        # We need this because the argument of write_image_ngff is called image while the argument of
-        # write_labels_ngff is called label.
-        metadata[raster_type] = data
-        # TODO: check purpose of _get_group_for_writing_transformations here as it seems to return same as group_data
-        write_single_scale_ngff(
-            group=group_data,
-            scaler=None,
-            fmt=format,
-            axes=parsed_axes,
-            coordinate_transformations=None,
-            storage_options=storage_options,
-            **metadata,
-        )
-        if not transformations:
-            raise ValueError(f"No transformations specified to be written for element {name}.")
-
-        # Cannot move before conditional as group_data is updated when writing ngff scales
-        trans_group = group["labels"][name] if raster_type == "labels" else group_data
-        overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
+        _write_raster_dataarray(raster_type, group, name, raster_data, raster_format, storage_options, **metadata)
     elif isinstance(raster_data, DataTree):
-        data = get_pyramid_levels(raster_data, attr="data")
-        list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
-        assert len(set(list_of_input_axes)) == 1
-        input_axes = list_of_input_axes[0]
-        # saving only the transformations of the first scale
-        d = dict(raster_data["scale0"])
-        assert len(d) == 1
-        xdata = d.values().__iter__().__next__()
-        transformations = _get_transformations_xarray(xdata)
-        if not transformations:
-            raise ValueError(f"No transformations specified to be written for element {name}.")
-        chunks = get_pyramid_levels(raster_data, "chunks")
-
-        parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=format)
-        storage_options = [{"chunks": chunk} for chunk in chunks]
-        dask_delayed = write_multi_scale_ngff(
-            pyramid=data,
-            group=group_data,
-            fmt=format,
-            axes=parsed_axes,
-            coordinate_transformations=None,
-            storage_options=storage_options,
-            **metadata,
-            compute=False,
-        )
-        # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
-        da.compute(*dask_delayed)
-
-        # Cannot move before conditional as group_data is updated when writing ngff scales
-        trans_group = group["labels"][name] if raster_type == "labels" else group_data
-        overwrite_coordinate_transformations_raster(
-            group=trans_group, transformations=transformations, axes=tuple(input_axes)
-        )
+        _write_raster_datatree(raster_type, group, name, raster_data, raster_format, storage_options, **metadata)
     else:
         raise ValueError("Not a valid labels object")
 
-    # as explained in a comment in format.py, since coordinate transformations are not part of NGFF yet, we need to have
-    # our spatialdata extension also for raster type (eventually it will be dropped in favor of pure NGFF). Until then,
-    # saving the NGFF version (i.e. 0.4) is not enough, and we need to also record which version of the spatialdata
-    # format we are using for raster types
-    group = group_data
+    # Since NGFF does not yet support coordinate transformations, we need a SpatialData extension for rasters. This will
+    # be dropped once NGFF supports it. For now, saving the NGFF version (0.4) is not enough—we must also record the
+    # SpatialData format version.
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]
-    attrs["version"] = format.spatialdata_format_version
+    attrs["version"] = raster_format.spatialdata_format_version
     # triggers the write operation
     group.attrs[ATTRS_KEY] = attrs
+
+
+def _write_raster_dataarray(
+    raster_type: Literal["image", "labels"],
+    group: zarr.Group,
+    name: str,
+    raster_data: DataArray,
+    raster_format: Format,
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
+) -> None:
+    write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
+
+    data = raster_data.data
+    transformations = _get_transformations(raster_data)
+    if transformations is None:
+        raise ValueError(f"{name} does not have any transformations and can therefore not be written.")
+    input_axes: tuple[str, ...] = tuple(raster_data.dims)
+    chunks = raster_data.chunks
+    parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
+    if storage_options is not None:
+        if "chunks" not in storage_options and isinstance(storage_options, dict):
+            storage_options["chunks"] = chunks
+    else:
+        storage_options = {"chunks": chunks}
+    # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
+    metadata[raster_type] = data
+    write_single_scale_ngff(
+        group=group,
+        scaler=None,
+        fmt=raster_format,
+        axes=parsed_axes,
+        coordinate_transformations=None,
+        storage_options=storage_options,
+        **metadata,
+    )
+
+    trans_group = group["labels"][name] if raster_type == "labels" else group
+    overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
+
+
+def _write_raster_datatree(
+    raster_type: Literal["image", "labels"],
+    group: zarr.Group,
+    name: str,
+    raster_data: DataArray,
+    raster_format: Format,
+    storage_options: JSONDict | list[JSONDict] | None = None,
+    **metadata: str | JSONDict | list[JSONDict],
+) -> None:
+    write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
+    data = get_pyramid_levels(raster_data, attr="data")
+    list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
+    assert len(set(list_of_input_axes)) == 1
+    input_axes = list_of_input_axes[0]
+    # saving only the transformations of the first scale
+    d = dict(raster_data["scale0"])
+    assert len(d) == 1
+    xdata = d.values().__iter__().__next__()
+    transformations = _get_transformations_xarray(xdata)
+    if transformations is None:
+        raise ValueError(f"{name} does not have any transformations and can therefore not be written.")
+    chunks = get_pyramid_levels(raster_data, "chunks")
+
+    parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
+    storage_options = [{"chunks": chunk} for chunk in chunks]
+    dask_delayed = write_multi_scale_ngff(
+        pyramid=data,
+        group=group,
+        fmt=raster_format,
+        axes=parsed_axes,
+        coordinate_transformations=None,
+        storage_options=storage_options,
+        **metadata,
+        compute=False,
+    )
+    # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
+    da.compute(*dask_delayed)
+
+    trans_group = group["labels"][name] if raster_type == "labels" else group
+    overwrite_coordinate_transformations_raster(
+        group=trans_group, transformations=transformations, axes=tuple(input_axes)
+    )
 
 
 def write_image(
@@ -251,7 +254,7 @@ def write_image(
         raster_data=image,
         group=group,
         name=name,
-        format=format,
+        raster_format=format,
         storage_options=storage_options,
         **metadata,
     )
@@ -271,7 +274,7 @@ def write_labels(
         raster_data=labels,
         group=group,
         name=name,
-        format=format,
+        raster_format=format,
         storage_options=storage_options,
         label_metadata=label_metadata,
         **metadata,

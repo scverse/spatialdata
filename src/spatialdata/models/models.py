@@ -260,6 +260,7 @@ class RasterSchema(DataArraySchema):
     def _(self, data: DataArray) -> None:
         super().validate(data)
         self._check_chunk_size_not_too_large(data)
+        self._check_transforms_present(data)
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
@@ -273,6 +274,15 @@ class RasterSchema(DataArraySchema):
         for d in data:
             super().validate(data[d][name])
         self._check_chunk_size_not_too_large(data)
+        self._check_transforms_present(data)
+
+    def _check_transforms_present(self, data: DataArray | DataTree) -> None:
+        parsed_transform = _get_transformations(data)
+        if parsed_transform is None:
+            raise ValueError(
+                f"No transformation found for `{data}`. At least one transformation is required for "
+                f"raster elements, e.g. images, labels."
+            )
 
     def _check_chunk_size_not_too_large(self, data: DataArray | DataTree) -> None:
         if isinstance(data, DataArray):
