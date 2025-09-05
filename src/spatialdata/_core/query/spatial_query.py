@@ -797,19 +797,6 @@ def _(
     return queried_polygons
 
 
-# TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter
-def _check_deprecated_kwargs(kwargs: dict[str, Any]) -> None:
-    deprecated_args = ["shapes", "points", "images", "labels"]
-    for arg in deprecated_args:
-        if arg in kwargs and kwargs[arg] is False:
-            warnings.warn(
-                f"The '{arg}' argument is deprecated and will be removed in one of the next following releases. Please "
-                f"filter the SpatialData object before calling this function.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-
 @singledispatch
 def polygon_query(
     element: SpatialElement | SpatialData,
@@ -817,10 +804,6 @@ def polygon_query(
     target_coordinate_system: str,
     filter_table: bool = True,
     clip: bool = False,
-    shapes: bool = True,
-    points: bool = True,
-    images: bool = True,
-    labels: bool = True,
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
@@ -879,12 +862,7 @@ def _(
     target_coordinate_system: str,
     filter_table: bool = True,
     clip: bool = False,
-    shapes: bool = True,
-    points: bool = True,
-    images: bool = True,
-    labels: bool = True,
 ) -> SpatialData:
-    _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
@@ -911,7 +889,6 @@ def _(
     return_request_only: bool = False,
     **kwargs: Any,
 ) -> DataArray | DataTree | None:
-    _check_deprecated_kwargs(kwargs)
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
     return bounding_box_query(
@@ -933,7 +910,6 @@ def _(
 ) -> DaskDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
@@ -966,7 +942,6 @@ def _(
 ) -> GeoDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 

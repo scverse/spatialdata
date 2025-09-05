@@ -157,7 +157,7 @@ def test_get_centroids_labels(
     assert np.array_equal(centroids.index.values, labels_indices)
 
     if not return_background:
-        assert 0 not in centroids.index
+        assert not (centroids.index == 0).any()
 
     if coordinate_system == "global":
         assert np.array_equal(centroids.compute().values, expected_centroids.values)

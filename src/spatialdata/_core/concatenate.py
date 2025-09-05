@@ -252,6 +252,8 @@ def _fix_ensure_unique_element_names(
         tables_by_sdata.append(tables)
     sdatas_fixed = []
     for elements, tables in zip(elements_by_sdata, tables_by_sdata, strict=True):
-        sdata = SpatialData.init_from_elements(elements, tables=tables)
+        if tables is not None:
+            elements.update(tables)
+        sdata = SpatialData.init_from_elements(elements)
         sdatas_fixed.append(sdata)
     return sdatas_fixed

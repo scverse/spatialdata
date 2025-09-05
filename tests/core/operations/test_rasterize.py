@@ -134,7 +134,7 @@ def test_rasterize_labels_value_key_specified():
         region_key="region",
         instance_key="instance_id",
     )
-    sdata = SpatialData.init_from_elements({element_name: raster}, tables={table_name: table})
+    sdata = SpatialData.init_from_elements({element_name: raster, table_name: table})
     result = rasterize(
         data=element_name,
         sdata=sdata,

@@ -33,7 +33,6 @@ from spatialdata._core.validation import (
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import (
-    _deprecation_alias,
     _error_message_add_element,
 )
 from spatialdata.models import (
@@ -233,34 +232,6 @@ class SpatialData:
                             f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
                             f"the annotated element ({dtype})."
                         )
-
-    @staticmethod
-    def from_elements_dict(
-        elements_dict: dict[str, SpatialElement | AnnData],
-        attrs: Mapping[Any, Any] | None = None,
-    ) -> SpatialData:
-        """
-        Create a SpatialData object from a dict of elements.
-
-        Parameters
-        ----------
-        elements_dict
-            Dict of elements. The keys are the names of the elements and the values are the elements.
-            A table can be present in the dict, but only at most one; its name is not used and can be anything.
-        attrs
-            Additional attributes to store in the SpatialData object.
-
-        Returns
-        -------
-        The SpatialData object.
-        """
-        warnings.warn(
-            'This method is deprecated and will be removed in a future release. Use "SpatialData.init_from_elements('
-            ')" instead. For the moment, such methods will be automatically called.',
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return SpatialData.init_from_elements(elements=elements_dict, attrs=attrs)
 
     @staticmethod
     def get_annotated_regions(table: AnnData) -> list[str]:
@@ -816,7 +787,6 @@ class SpatialData:
             # set the new transformations
             set_transformation(element=element, transformation=new_transformations, set_all=True)
 
-    @_deprecation_alias(element="element_name", version="0.3.0")
     def transform_element_to_coordinate_system(
         self,
         element_name: str,
@@ -1282,7 +1252,7 @@ class SpatialData:
                 table=element,
                 group=element_type_group,
                 name=element_name,
-                format=parsed_formats["tables"],
+                element_format=parsed_formats["tables"],
             )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
@@ -1304,7 +1274,7 @@ class SpatialData:
             The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
-        format
+        sdata_formats
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
 
@@ -1823,51 +1793,6 @@ class SpatialData:
             TableModel().validate(v)
             self._tables[k] = v
 
-    @property
-    def table(self) -> None | AnnData:
-        """
-        Return table with name table from tables if it exists.
-
-        Returns
-        -------
-        The table.
-        """
-        warnings.warn(
-            "Table accessor will be deprecated with SpatialData version 0.1, use sdata.tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # Isinstance will still return table if anndata has 0 rows.
-        if isinstance(self.tables.get("table"), AnnData):
-            return self.tables["table"]
-        return None
-
-    @table.setter
-    def table(self, table: AnnData) -> None:
-        warnings.warn(
-            "Table setter will be deprecated with SpatialData version 0.1, use tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        TableModel().validate(table)
-        if self.tables.get("table") is not None:
-            raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
-        self.tables["table"] = table
-
-    @table.deleter
-    def table(self) -> None:
-        """Delete the table."""
-        warnings.warn(
-            "del sdata.table will be deprecated with SpatialData version 0.1, use del sdata.tables['table'] instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if self.tables.get("table"):
-            del self.tables["table"]
-        else:
-            # More informative than the error in the zarr library.
-            raise KeyError("table with name 'table' not present in the SpatialData object.")
-
     @staticmethod
     def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
         """
@@ -2185,14 +2110,14 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(
-        self, include_table: bool = False
+        self, include_tables: bool = False
     ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         """
         Generate elements contained in the SpatialData instance.
 
         Parameters
         ----------
-        include_table
+        include_tables
             Whether to also generate table elements.
 
         Returns
@@ -2201,7 +2126,7 @@ class SpatialData:
         itself.
         """
         element_types = ["images", "labels", "points", "shapes"]
-        if include_table:
+        if include_tables:
             element_types.append("tables")
         for element_type in element_types:
             d = getattr(SpatialData, element_type).fget(self)
@@ -2235,7 +2160,7 @@ class SpatialData:
         -------
         A generator that yields tuples containing the name, description, and element objects themselves.
         """
-        return self._gen_elements(include_table=True)
+        return self._gen_elements(include_tables=True)
 
     def _validate_element_names_are_unique(self) -> None:
         """
@@ -2370,7 +2295,7 @@ class SpatialData:
         """
         elements_dict: dict[str, SpatialElement] = {}
         names_tables_to_keep: set[str] = set()
-        for element_type, element_name, element in self._gen_elements(include_table=True):
+        for element_type, element_name, element in self._gen_elements(include_tables=True):
             if element_name in element_names:
                 if element_type != "tables":
                     elements_dict.setdefault(element_type, {})[element_name] = element
@@ -2403,7 +2328,7 @@ class SpatialData:
 
     def __contains__(self, key: str) -> bool:
         element_dict = {
-            element_name: element_value for _, element_name, element_value in self._gen_elements(include_table=True)
+            element_name: element_value for _, element_name, element_value in self._gen_elements(include_tables=True)
         }
         return key in element_dict
 

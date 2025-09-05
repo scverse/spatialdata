@@ -174,7 +174,7 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.tables["table"]
-    full_sdata.table = TableModel.parse(
+    full_sdata["table"] = TableModel.parse(
         adata,
         region=["circles", "poly"],
         region_key="annotated_shapes",
@@ -520,7 +520,7 @@ def test_init_from_elements(full_sdata: SpatialData) -> None:
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
 
-    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_table=True)}
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_tables=True)}
     sdata = SpatialData.init_from_elements(all_elements)
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())

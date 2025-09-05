@@ -290,34 +290,6 @@ def get_channel_names(data: Any) -> list[Any]:
     raise ValueError(f"Cannot get channels from {type(data)}")
 
 
-def get_channels(data: Any) -> list[Any]:
-    """Get channels from data for an image element (both single and multiscale).
-
-    [Deprecation] This function will be deprecated in version 0.3.0. Please use
-    `get_channel_names`.
-
-    Parameters
-    ----------
-    data
-        data to get channels from
-
-    Returns
-    -------
-    List of channels
-
-    Notes
-    -----
-    For multiscale images, the channels are validated to be consistent across scales.
-    """
-    warnings.warn(
-        "The function 'get_channels' is deprecated and will be removed in version 0.3.0. "
-        "Please use 'get_channel_names' instead.",
-        DeprecationWarning,
-        stacklevel=2,  # Adjust the stack level to point to the caller
-    )
-    return get_channel_names(data)
-
-
 @get_channel_names.register
 def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]

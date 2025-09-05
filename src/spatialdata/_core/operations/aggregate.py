@@ -242,7 +242,7 @@ def _create_sdata_from_table_and_shapes(
     if deepcopy:
         shapes = _deepcopy(shapes)
 
-    return SpatialData.from_elements_dict({shapes_name: shapes, table_name: table})
+    return SpatialData.init_from_elements({shapes_name: shapes, table_name: table})
 
 
 def _aggregate_image_by_labels(

@@ -238,10 +238,10 @@ class TestModels:
         assert poly.equals(other_poly)
 
         if ShapesModel.RADIUS_KEY in poly.columns:
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = -1
+            poly.loc[0, ShapesModel.RADIUS_KEY] = -1
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
+            poly.loc[0, ShapesModel.RADIUS_KEY] = 0
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
 

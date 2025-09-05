@@ -68,7 +68,7 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
         image=image,
         group=element_type_group,
         name=image_name,
-        format=CurrentRasterFormat(),
+        element_format=CurrentRasterFormat(),
     )
 
     # The number of chunks of scale level 0

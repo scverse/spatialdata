@@ -679,7 +679,7 @@ def join_spatialelement_table(
     if sdata is not None:
         elements_dict = _create_sdata_elements_dict_for_join(sdata, spatial_element_names)
     else:
-        derived_sdata = SpatialData.from_elements_dict(dict(zip(spatial_element_names, spatial_elements, strict=True)))
+        derived_sdata = SpatialData.init_from_elements(dict(zip(spatial_element_names, spatial_elements, strict=True)))
         element_types = ["labels", "shapes", "points"]
         elements_dict = defaultdict(lambda: defaultdict(dict))
         for element_type in element_types:

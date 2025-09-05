@@ -555,20 +555,18 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         values_sdata,
         polygon=polygon,
         target_coordinate_system="global",
-        shapes=True,
-        points=False,
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
     assert len(queried["table"]) == 8
 
-    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
     assert len(queried["table"]) == 16
 
-    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4

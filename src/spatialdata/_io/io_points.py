@@ -28,7 +28,7 @@ def _read_points(
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
-    format = PointsFormats[version]
+    points_format = PointsFormats[version]
 
     store_root = f.store_path.store.root
     path = store_root / f.path / "points.parquet"
@@ -40,7 +40,7 @@ def _read_points(
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(points, transformations)
 
-    attrs = format.attrs_from_dict(f.attrs.asdict())
+    attrs = points_format.attrs_from_dict(f.attrs.asdict())
     if len(attrs):
         points.attrs["spatialdata_attrs"] = attrs
     return points

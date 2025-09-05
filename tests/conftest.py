@@ -445,7 +445,7 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     table = TableModel.parse(
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
-    sdata.table = table
+    sdata["table"] = table
     return sdata
 
 

@@ -63,7 +63,7 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
     table = TableModel.parse(
         AnnData(X=X, var=var, obs=obs), region="points", region_key="region", instance_key="instance_id"
     )
-    sdata = SpatialData.init_from_elements({"points": points}, tables={"table": table})
+    sdata = SpatialData.init_from_elements({"points": points, "table": table})
     rasterized = rasterize_bins(
         sdata=sdata,
         bins="points",
@@ -130,7 +130,7 @@ def test_rasterize_bins_invalid():
             region_key="region",
             instance_key="instance_id",
         )
-        return SpatialData.init_from_elements({"points": points}, tables={"table": table})
+        return SpatialData.init_from_elements({"points": points, "table": table})
 
     # sdata with not enough bins (2*2) to estimate transformation
     sdata = _get_sdata(n=2)

@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
+from zarr.errors import ArrayNotFoundError
 
 # from zarr.errors import ArrayNotFoundError  # removed in zarr 3.0
 from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors
@@ -52,7 +53,7 @@ def _read_table(
                 JSONDecodeError,
                 KeyError,
                 ValueError,
-                # ArrayNotFoundError,  # removed in zarr 3.0
+                ArrayNotFoundError,
             ),
         ):
             tables[table_name] = read_anndata_zarr(f_elem_store)
@@ -65,6 +66,7 @@ def _read_table(
             _ = TablesFormats[version]
             f.store.close()
 
+            # TODO: implement per read logic of format
             # # replace with format from above
             # version = "0.1"
             # format = TablesFormats[version]
@@ -92,21 +94,20 @@ def write_table(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
-    format: Format = CurrentTablesFormat(),
+    element_format: Format = CurrentTablesFormat(),
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
         region = table.uns["spatialdata_attrs"]["region"]
         region_key = table.uns["spatialdata_attrs"].get("region_key", None)
         instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
-        format.validate_table(table, region_key, instance_key)
+        element_format.validate_table(table, region_key, instance_key)
     else:
         region, region_key, instance_key = (None, None, None)
 
-    # TODO: Problem is that tables group already exists and thus has consolidated_metadata, cannot write repeatedly.
-    write_adata(group, name, table)  # creates group[name]
+    write_adata(group, name, table)
     tables_group = group[name]
     tables_group.attrs["spatialdata-encoding-type"] = group_type
     tables_group.attrs["region"] = region
     tables_group.attrs["region_key"] = region_key
     tables_group.attrs["instance_key"] = instance_key
-    tables_group.attrs["version"] = format.spatialdata_format_version
+    tables_group.attrs["version"] = element_format.spatialdata_format_version
