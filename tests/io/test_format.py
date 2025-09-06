@@ -97,13 +97,12 @@ class TestFormat:
             zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/.zattrs"
             with open(zattrs_file) as infile:
                 zattrs = json.load(infile)
+                ngff_version = zattrs["multiscales"][0]["version"]
                 if rformat == RasterFormatV01:
-                    ngff_version = zattrs["multiscales"][0]["version"]
                     assert ngff_version == "0.4"
                 else:
                     assert rformat == RasterFormatV02
-                    # TODO: check whether this required change is due to bug in ome-zarr
-                    assert zattrs["version"] == "0.4-dev-spatialdata"
+                    assert ngff_version == "0.4-dev-spatialdata"
 
 
 class TestFormatConversions:
