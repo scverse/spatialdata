@@ -1429,11 +1429,9 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
-        # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
-        # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
-        zarr.consolidate_metadata(store)
-        store.close()
+        from spatialdata._io.io_zarr import _write_consolidated_metadata
+
+        _write_consolidated_metadata(self.path)
 
     def has_consolidated_metadata(self) -> bool:
         return_value = False
@@ -1794,7 +1792,9 @@ class SpatialData:
             self._tables[k] = v
 
     @staticmethod
-    def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
+    def read(
+        file_path: Path | str, selection: tuple[str] | None = None, reconsolidate_metadata: bool = False
+    ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
 
@@ -1804,12 +1804,19 @@ class SpatialData:
             The path or URL to the Zarr storage.
         selection
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
+        reconsolidate_metadata
+            If the consolidated metadata store got corrupted this can lead to errors when trying to read the data.
 
         Returns
         -------
         The SpatialData object.
         """
         from spatialdata import read_zarr
+
+        if reconsolidate_metadata:
+            from spatialdata._io.io_zarr import _write_consolidated_metadata
+
+            _write_consolidated_metadata(file_path)
 
         return read_zarr(file_path, selection=selection)
 
@@ -1821,34 +1828,6 @@ class SpatialData:
         overwrite: bool = False,
     ) -> None:
         """Deprecated. Use `sdata[name] = image` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_labels(
-        self,
-        name: str,
-        labels: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = labels` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_points(
-        self,
-        name: str,
-        points: DaskDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = points` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_shapes(
-        self,
-        name: str,
-        shapes: GeoDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = shapes` instead."""  # noqa: D401
         _error_message_add_element()
 
     @property

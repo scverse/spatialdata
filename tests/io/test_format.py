@@ -10,6 +10,7 @@ from spatialdata import read_zarr
 from spatialdata._io.format import (
     PointsFormatType,
     PointsFormatV01,
+    PointsFormatV02,
     RasterFormatV01,
     RasterFormatV02,
     RasterFormatV03,
@@ -19,6 +20,8 @@ from spatialdata._io.format import (
     SpatialDataContainerFormatV01,
     SpatialDataContainerFormatV02,
     SpatialDataFormatType,
+    TablesFormatV01,
+    TablesFormatV02,
 )
 from spatialdata.models import PointsModel, ShapesModel
 from spatialdata.testing import assert_spatial_data_objects_are_identical
@@ -115,16 +118,19 @@ class TestFormatConversions:
             shapes.write(f1, sdata_formats=[ShapesFormatV01(), SpatialDataContainerFormatV01()])
             shapes_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v1)
+            assert shapes_read_v1.is_self_contained()
 
             shapes_read_v1.write(f2, sdata_formats=[ShapesFormatV02(), SpatialDataContainerFormatV01()])
             shapes_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v2)
+            assert shapes_read_v2.is_self_contained()
 
             shapes_read_v2.write(f3, sdata_formats=[ShapesFormatV03(), SpatialDataContainerFormatV02()])
             shapes_read_v3 = read_zarr(f3)
             assert_spatial_data_objects_are_identical(shapes, shapes_read_v3)
+            assert shapes_read_v3.is_self_contained()
 
-    def test_raster_v1_to_v2_to_v3(self, images):
+    def test_raster_images_v1_to_v2_to_v3(self, images):
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
@@ -136,11 +142,76 @@ class TestFormatConversions:
             images.write(f1, sdata_formats=[RasterFormatV01(), SpatialDataContainerFormatV01()])
             images_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(images, images_read_v1)
+            assert images_read_v1.is_self_contained()
 
             images_read_v1.write(f2, sdata_formats=[RasterFormatV02(), SpatialDataContainerFormatV01()])
             images_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(images, images_read_v2)
+            assert images_read_v2.is_self_contained()
 
             images_read_v2.write(f3, sdata_formats=[RasterFormatV03(), SpatialDataContainerFormatV02()])
             images_read_v3 = read_zarr(f3)
             assert_spatial_data_objects_are_identical(images, images_read_v3)
+            assert images_read_v3.is_self_contained()
+
+    def test_raster_labels_v1_to_v2_to_v3(self, labels):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+            f3 = Path(tmpdir) / "data3.zarr"
+
+            labels.write(f1, sdata_formats=[RasterFormatV01(), SpatialDataContainerFormatV01()])
+            labels_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(labels, labels_read_v1)
+            assert labels_read_v1.is_self_contained()
+
+            labels_read_v1.write(f2, sdata_formats=[RasterFormatV02(), SpatialDataContainerFormatV01()])
+            labels_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(labels, labels_read_v2)
+            assert labels_read_v2.is_self_contained()
+
+            labels_read_v2.write(f3, sdata_formats=[RasterFormatV03(), SpatialDataContainerFormatV02()])
+            labels_read_v3 = read_zarr(f3)
+            assert_spatial_data_objects_are_identical(labels, labels_read_v3)
+            assert labels_read_v3.is_self_contained()
+
+    def test_points_v1_to_v2(self, points):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+
+            points.write(f1, sdata_formats=[PointsFormatV01(), SpatialDataContainerFormatV01()])
+            points_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(points, points_read_v1)
+
+            points_read_v1.write(f2, sdata_formats=[PointsFormatV02(), SpatialDataContainerFormatV02()])
+            points_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(points, points_read_v2)
+
+    def test_tables_v1_to_v2(self, table_multiple_annotations):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+
+            table_multiple_annotations.write(f1, sdata_formats=[TablesFormatV01(), SpatialDataContainerFormatV01()])
+            table_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(table_multiple_annotations, table_read_v1)
+
+            table_read_v1.write(f2, sdata_formats=[TablesFormatV02(), SpatialDataContainerFormatV02()])
+            table_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(table_multiple_annotations, table_read_v2)
+
+    def test_container_v1_to_v2(self, full_sdata):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+
+            full_sdata.write(f1, sdata_formats=[SpatialDataContainerFormatV01()])
+            sdata_read_v1 = read_zarr(f1)
+            assert_spatial_data_objects_are_identical(full_sdata, sdata_read_v1)
+            assert sdata_read_v1.is_self_contained()
+
+            sdata_read_v1.write(f2, sdata_formats=[SpatialDataContainerFormatV02()])
+            sdata_read_v2 = read_zarr(f2)
+            assert_spatial_data_objects_are_identical(full_sdata, sdata_read_v2)
+            assert sdata_read_v2.is_self_contained()

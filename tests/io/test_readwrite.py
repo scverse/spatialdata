@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 from collections.abc import Callable
@@ -7,8 +8,10 @@ from typing import Any
 import dask.dataframe as dd
 import numpy as np
 import pytest
+import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from zarr.errors import GroupNotFoundError
 
 from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._core.validation import ValidationError
@@ -787,3 +790,31 @@ def test_reading_invalid_name(tmp_path: Path):
         "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707"
         in actual_message
     )
+
+
+def test_write_store_unconsolidated_and_read(full_sdata):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "data.zarr"
+        full_sdata.write(path, consolidate_metadata=False)
+
+        group = zarr.open_group(path, mode="r")
+        assert group.metadata.consolidated_metadata is None
+        second_read = SpatialData.read(path)
+        assert_spatial_data_objects_are_identical(full_sdata, second_read)
+
+
+def test_can_read_sdata_with_reconsolidation(full_sdata):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "data.zarr"
+        full_sdata.write(path)
+
+        json_path = path / "zarr.json"
+        json_dict = json.loads(json_path.read_text())
+        del json_dict["consolidated_metadata"]["metadata"]["images/image2d"]
+        json_path.write_text(json.dumps(json_dict, indent=4))
+
+        with pytest.raises(GroupNotFoundError):
+            SpatialData.read(path)
+
+        new_sdata = SpatialData.read(path, reconsolidate_metadata=True)
+        assert_spatial_data_objects_are_identical(full_sdata, new_sdata)

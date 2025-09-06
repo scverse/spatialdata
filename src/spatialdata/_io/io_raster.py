@@ -6,7 +6,7 @@ import numpy as np
 import zarr
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
-from ome_zarr.reader import Multiscales, Node, Reader
+from ome_zarr.reader import Label, Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes
 from ome_zarr.writer import write_image as write_image_ngff
@@ -33,6 +33,22 @@ from spatialdata.transformations._utils import (
 )
 
 
+def _get_nodes_zarr_v3(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
+    if len(image_nodes):
+        for node in image_nodes:
+            # Labels are now also Multiscales in newer version of ome-zarr-py
+            if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
+                nodes.append(node)
+    return nodes
+
+
+def _get_label_nodes_zarr_v2(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
+    for node in image_nodes:
+        if np.any([isinstance(spec, Label) for spec in node.specs]):
+            nodes.append(node)
+    return nodes
+
+
 def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
     assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
@@ -42,14 +58,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
-        if len(image_nodes):
-            for node in image_nodes:
-                # Labels are now also Multiscales in newer version of ome-zarr-py
-                if np.any([isinstance(spec, Multiscales) for spec in node.specs]) and raster_type in [
-                    "image",
-                    "labels",
-                ]:
-                    nodes.append(node)
+        nodes = _get_nodes_zarr_v3(image_nodes, nodes)
     else:
         raise OSError(
             f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json file "
@@ -57,14 +66,18 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         )
     if len(nodes) != 1:
         if exists:
+            nodes = _get_label_nodes_zarr_v2(image_nodes, nodes)
+        else:
+            raise ValueError(
+                f"len(nodes) = {len(nodes)}, expected 1 and image location {image_loc} does not exist. Unable to read "
+                f"the NGFF file. Please report this bug and attach a minimal data example."
+            )
+        if len(nodes) != 1:
             raise OSError(
                 f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
                 f"{image_loc.basename()} is potentially corrupted."
             )
-        raise ValueError(
-            f"len(nodes) = {len(nodes)}, expected 1 and image location {image_loc} does not exist. Unable to read "
-            f"the NGFF file. Please report this bug and attach a minimal data example."
-        )
+
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
     multiscales = node.load(Multiscales).zarr.root_attrs["multiscales"]
@@ -171,6 +184,8 @@ def _write_raster(
     # Since NGFF does not yet support coordinate transformations, we need a SpatialData extension for rasters. This will
     # be dropped once NGFF supports it. For now, saving the NGFF version (0.4) is not enough—we must also record the
     # SpatialData format version.
+
+    group = group["labels"][name] if raster_type == "labels" else group
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]

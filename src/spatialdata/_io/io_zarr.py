@@ -24,7 +24,9 @@ from spatialdata._logging import logger
 
 # TODO: remove with incoming remote read / write PR
 # Not removing this now as it requires substantial extra refactor beyond scope of zarrv3 PR.
-def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
+def _open_zarr_store(
+    store: str | Path | zarr.Group, mode: Literal["r", "r+", "a", "w", "w-"] = "r", use_consolidated: bool | None = None
+) -> tuple[zarr.Group, str]:
     """
     Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
 
@@ -37,16 +39,8 @@ def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
     -------
     A tuple of the zarr.Group object and the path to the store.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode="r")
-    # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
-    # not needed, consolidated metadata is always used if present
-    # if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
-    #     f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    # the metadata is accessible here:
-    # f.metadata.consolidated_metadata.metadata
-    f_store_path = f.store.root
-    # f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
-    return f, f_store_path
+    f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode=mode, use_consolidated=use_consolidated)
+    return f, f.store.root
 
 
 def read_zarr(
@@ -309,3 +303,10 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
     exists = element_type in root and element_name in root[element_type]
     store.close()
     return exists
+
+
+def _write_consolidated_metadata(path: Path | str | None) -> None:
+    if path is not None:
+        f, f_store_path = _open_zarr_store(path, mode="r+", use_consolidated=False)
+        zarr.consolidate_metadata(f.store)
+        f.store.close()
