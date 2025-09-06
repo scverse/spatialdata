@@ -156,6 +156,12 @@ class RasterSchema(DataArraySchema):
         You can also pass the `rgb` argument to `kwargs` to automatically set the `c_coords` to `["r", "g", "b"]`.
         Please refer to :func:`to_spatial_image` for more information. Note: if you set `rgb=None` in `kwargs`, 3-4
         channel images will be interpreted automatically as RGB(A) images.
+
+        **Setting axes / dims**
+        In case of the data being a numpy or dask array, there are no named axes yet. In this case, we first try to
+        use the dimensions specified by the user in the `dims` argument of `.parse`. These dimensions are potentially
+        transposed. See the description of the `dims` argument above. If `dims` is not specified, the dims are set
+        to (c)(z)yx, dependent on the number of dimensions of the data.
         """
         if transformations:
             transformations = transformations.copy()
@@ -182,7 +188,6 @@ class RasterSchema(DataArraySchema):
                 data = from_array(data)
             if dims is None:
                 dims = cls.dims.dims
-                logger.info(f"no axes information specified in the object, setting `dims` to: {dims}")
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
