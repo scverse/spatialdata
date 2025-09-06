@@ -52,7 +52,7 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
     assert centroids.columns.tolist() == list(axes)
 
     # check the index is preserved
-    assert np.array_equal(centroids.index.values, element.index.values)
+    assert np.array_equal(centroids.index.compute().values, element.index.values)
 
     # the centroids should not contain extra columns
     assert "genes" in element.columns and "genes" not in centroids.columns
@@ -63,7 +63,7 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
 
     # let's check the values
     if coordinate_system == "global":
-        assert np.array_equal(centroids.compute().values, element[list(axes)].compute().values)
+        assert np.array_equal(centroids.compute().values, element[list(axes)].values)
     else:
         matrix = affine.to_affine_matrix(input_axes=axes, output_axes=axes)
         centroids_untransformed = element[list(axes)].compute().values
@@ -82,7 +82,7 @@ def test_get_centroids_shapes(shapes, coordinate_system: str, shapes_name: str):
         set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
     centroids = get_centroids(element, coordinate_system=coordinate_system)
 
-    assert np.array_equal(centroids.index.values, element.index.values)
+    assert np.array_equal(centroids.index.compute().values, element.index.values)
 
     if shapes_name == "circles":
         xy = element.geometry.get_coordinates().values
@@ -154,7 +154,7 @@ def test_get_centroids_labels(
     centroids = get_centroids(element, coordinate_system=coordinate_system, return_background=return_background)
 
     labels_indices = get_element_instances(element, return_background=return_background)
-    assert np.array_equal(centroids.index.values, labels_indices)
+    assert np.array_equal(centroids.index.compute().values, labels_indices)
 
     if not return_background:
         assert not (centroids.index == 0).any()

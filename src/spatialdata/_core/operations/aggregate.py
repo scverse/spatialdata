@@ -440,7 +440,7 @@ def _aggregate_shapes(
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
-        aggregated = joined.groupby([INDEX, vk])[ONES_COLUMN].agg(agg_func).reset_index()
+        aggregated = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN].agg(agg_func).reset_index()
         aggregated_values = aggregated[ONES_COLUMN].values
     else:
         if fractions_of_values is not None:

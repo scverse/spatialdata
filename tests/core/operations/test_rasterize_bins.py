@@ -165,7 +165,7 @@ def test_rasterize_bins_invalid():
     # table annotating multiple elements
     regions = table.obs["region"].copy()
     regions = regions.cat.add_categories(["shapes"])
-    regions[0] = "shapes"
+    regions.iloc[0] = "shapes"
     sdata["shapes"] = sdata["points"]
     table.obs["region"] = regions
     with pytest.raises(

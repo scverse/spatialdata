@@ -272,7 +272,7 @@ def _(gdf: GeoDataFrame, buffer_resolution: int = 16) -> GeoDataFrame:
         if isinstance(gdf.geometry.iloc[0], Point):
             buffered_df = gdf.copy()
             buffered_df["geometry"] = buffered_df.apply(
-                lambda row: row.geometry.buffer(row[ShapesModel.RADIUS_KEY], resolution=buffer_resolution), axis=1
+                lambda row: row.geometry.buffer(row[ShapesModel.RADIUS_KEY], quad_segs=buffer_resolution), axis=1
             )
 
             # Ensure the GeoDataFrame recognizes the updated geometry column
