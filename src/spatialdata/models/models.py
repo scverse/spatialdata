@@ -170,7 +170,6 @@ class RasterSchema(DataArraySchema):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
-                logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
                 dims = data.dims
             # but if dims don't match the model's dims, throw error
