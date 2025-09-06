@@ -199,7 +199,6 @@ class RasterSchema(DataArraySchema):
                     data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
                 else:
                     raise ValueError(f"Unsupported data type: {type(data)}.")
-                logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError as e:
                 raise ValueError(
                     f"Cannot transpose arrays to match `dims`: {dims}.",
