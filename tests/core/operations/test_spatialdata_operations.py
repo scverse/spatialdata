@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -170,7 +171,9 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     from spatialdata.models import TableModel
 
     rng = np.random.default_rng(seed=0)
-    full_sdata["table"].obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
+    full_sdata["table"].obs["annotated_shapes"] = pd.Categorical(
+        rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
+    )
     adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
     del full_sdata.tables["table"]
@@ -322,13 +325,13 @@ def test_concatenate_custom_table_metadata() -> None:
     shapes1 = _get_shapes()
     n = len(shapes0["poly"])
     table0 = TableModel.parse(
-        AnnData(obs={"my_region": ["poly0"] * n, "my_instance_id": list(range(n))}),
+        AnnData(obs={"my_region": pd.Categorical(["poly0"] * n), "my_instance_id": list(range(n))}),
         region="poly0",
         region_key="my_region",
         instance_key="my_instance_id",
     )
     table1 = TableModel.parse(
-        AnnData(obs={"my_region": ["poly1"] * n, "my_instance_id": list(range(n))}),
+        AnnData(obs={"my_region": pd.Categorical(["poly1"] * n), "my_instance_id": list(range(n))}),
         region="poly1",
         region_key="my_region",
         instance_key="my_instance_id",
@@ -419,7 +422,12 @@ def test_concatenate_two_tables_each_annotating_two_elements() -> None:
         n = len(poly)
         region = f"poly{i}"
         table = TableModel.parse(
-            AnnData(obs={"region": [region] * n, "instance_id": list(range(n))}),
+            AnnData(
+                obs=pd.DataFrame(
+                    {"region": pd.Categorical([region] * n), "instance_id": list(range(n))},
+                    index=[f"{i}" for i in range(n)],
+                )
+            ),
             region=region,
             region_key="region",
             instance_key="instance_id",
@@ -540,7 +548,7 @@ def test_subset(full_sdata: SpatialData) -> None:
     adata = AnnData(
         shape=(10, 0),
         obs={
-            "region": ["circles"] * 5 + ["poly"] * 5,
+            "region": pd.Categorical(["circles"] * 5 + ["poly"] * 5),
             "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4],
         },
     )
@@ -653,7 +661,7 @@ def test_validate_table_in_spatialdata(full_sdata):
     with pytest.warns(UserWarning, match="in the SpatialData object"):
         full_sdata.validate_table_in_spatialdata(table)
 
-    table.obs[region_key] = "points_0"
+    table.obs[region_key] = pd.Categorical(["points_0"] * table.n_obs)
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
     full_sdata.validate_table_in_spatialdata(table)

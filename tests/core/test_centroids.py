@@ -52,7 +52,7 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
     assert centroids.columns.tolist() == list(axes)
 
     # check the index is preserved
-    assert np.array_equal(centroids.index.compute().values, element.index.values)
+    assert np.array_equal(centroids.index.compute().values, element.index.compute().values)
 
     # the centroids should not contain extra columns
     assert "genes" in element.columns and "genes" not in centroids.columns
@@ -63,7 +63,7 @@ def test_get_centroids_points(points, coordinate_system: str, is_3d: bool):
 
     # let's check the values
     if coordinate_system == "global":
-        assert np.array_equal(centroids.compute().values, element[list(axes)].values)
+        assert np.array_equal(centroids.compute().values, element[list(axes)].compute().values)
     else:
         matrix = affine.to_affine_matrix(input_axes=axes, output_axes=axes)
         centroids_untransformed = element[list(axes)].compute().values
@@ -178,7 +178,7 @@ def test_get_centroids_invalid_element(images):
     # cannot compute centroids for tables
     N = 10
     adata = TableModel.parse(
-        AnnData(X=RNG.random((N, N)), obs={"region": ["dummy" for _ in range(N)], "instance_id": np.arange(N)}),
+        AnnData(X=RNG.random((N, N)), obs={"region": pd.Categorical(["dummy"] * N), "instance_id": np.arange(N)}),
         region="dummy",
         region_key="region",
         instance_key="instance_id",

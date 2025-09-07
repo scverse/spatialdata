@@ -232,7 +232,7 @@ def _create_sdata_from_table_and_shapes(
             f"Instance key column dtype in table resulting from aggregation cannot be cast to the dtype of"
             f"element {shapes_name}.index"
         ) from err
-    table.obs[region_key] = shapes_name
+    table.obs[region_key] = pd.Categorical([shapes_name] * len(table))
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int

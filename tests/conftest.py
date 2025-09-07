@@ -293,7 +293,10 @@ def _get_table(
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> AnnData:
-    adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    adata = AnnData(
+        RNG.normal(size=(100, 10)),
+        obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"], index=[f"{i}" for i in range(100)]),
+    )
     if not all(var for var in (region, region_key, instance_key)):
         return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
@@ -301,6 +304,7 @@ def _get_table(
         adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
+    adata.obs[region_key] = adata.obs[region_key].astype("category")
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
 
 
@@ -442,6 +446,7 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
         ),
         var=pd.DataFrame(index=["numerical_in_var"]),
     )
+    table.obs["region"] = table.obs["region"].astype("category")
     table = TableModel.parse(
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
