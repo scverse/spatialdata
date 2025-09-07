@@ -151,7 +151,7 @@ def _write_coordinate_transformations_raster_zarrv3(
 
     # zarr v3 ome-zarr requires the coordinate transformations to be written this way, leaving one out won't work.
     multiscale["coordinateTransformations"] = coordinate_transformations
-    group.attrs["coordinateTransformations"] = coordinate_transformations
+    group.attrs["multiscales"] = multiscales
 
 
 def _overwrite_coordinate_transformations_raster_zarrv2(
