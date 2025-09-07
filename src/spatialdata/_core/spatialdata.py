@@ -820,18 +820,7 @@ class SpatialData:
             set_transformation,
         )
 
-        # TODO remove after deprecation
-        if not isinstance(element_name, str):
-            warnings.warn(
-                "Passing a SpatialElement is as element will be deprecated in SpatialData v0.3.0. Pass"
-                "element_name as string to silence this warning.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            element = element_name
-        else:
-            element = self.get(element_name)
-
+        element = self.get(element_name)
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:
             transformed = transform(element, transformation=t, maintain_positioning=maintain_positioning)
@@ -901,10 +890,10 @@ class SpatialData:
         """
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_tables=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
-        for element_type, element_name, element in sdata.gen_elements():
+        for element_type, element_name, _ in sdata.gen_elements():
             if element_type != "tables":
                 transformed = sdata.transform_element_to_coordinate_system(
-                    element,
+                    element_name,
                     target_coordinate_system,
                     maintain_positioning=maintain_positioning,
                 )
