@@ -16,7 +16,8 @@ def invalid_table() -> AnnData:
                 "@invalid#": [1, 2],
                 "valid_name": [3, 4],
                 "__private": [5, 6],
-            }
+            },
+            index=["0", "1"],
         )
     )
 
@@ -29,7 +30,8 @@ def invalid_table_with_index() -> AnnData:
             {
                 "invalid name": [1, 2],
                 "_index": [3, 4],
-            }
+            },
+            index=["0", "1"],
         )
     )
 
@@ -103,7 +105,8 @@ def test_sanitize_table_case_insensitive_collisions():
             "Column1": [1, 2],
             "column1": [3, 4],
             "COLUMN1": [5, 6],
-        }
+        },
+        index=["0", "1"],
     )
     ad = AnnData(obs=obs)
     sanitized = sanitize_table(ad, inplace=False)
@@ -113,7 +116,7 @@ def test_sanitize_table_case_insensitive_collisions():
 
 def test_sanitize_table_whitespace_collision():
     """Ensure 'a b' → 'a_b' doesn't collide silently with existing 'a_b'."""
-    obs = pd.DataFrame({"a b": [1], "a_b": [2]})
+    obs = pd.DataFrame({"a b": [1], "a_b": [2]}, index=["0"])
     ad = AnnData(obs=obs)
     sanitized = sanitize_table(ad, inplace=False)
     cols = list(sanitized.obs.columns)
@@ -127,13 +130,13 @@ def test_sanitize_table_whitespace_collision():
 
 
 def test_sanitize_table_obs_and_obs_columns():
-    ad = AnnData(obs=pd.DataFrame({"@col": [1, 2]}))
+    ad = AnnData(obs=pd.DataFrame({"@col": [1, 2]}, index=["0", "1"]))
     sanitized = sanitize_table(ad, inplace=False)
     assert list(sanitized.obs.columns) == ["_col"]
 
 
 def test_sanitize_table_obsm_and_obsp():
-    ad = AnnData(obs=pd.DataFrame({"@col": [1, 2]}))
+    ad = AnnData(obs=pd.DataFrame({"@col": [1, 2]}, index=["0", "1"]))
     ad.obsm["@col"] = np.array([[1, 2], [3, 4]])
     ad.obsp["bad name"] = np.array([[1, 2], [3, 4]])
     sanitized = sanitize_table(ad, inplace=False)
@@ -142,7 +145,7 @@ def test_sanitize_table_obsm_and_obsp():
 
 
 def test_sanitize_table_varm_and_varp():
-    ad = AnnData(obs=pd.DataFrame({"x": [1, 2]}), var=pd.DataFrame(index=["v1", "v2"]))
+    ad = AnnData(obs=pd.DataFrame({"x": [1, 2]}, index=["0", "1"]), var=pd.DataFrame(index=["v1", "v2"]))
     ad.varm["__priv"] = np.array([[1, 2], [3, 4]])
     ad.varp["_index"] = np.array([[1, 2], [3, 4]])
     sanitized = sanitize_table(ad, inplace=False)
@@ -151,7 +154,7 @@ def test_sanitize_table_varm_and_varp():
 
 
 def test_sanitize_table_uns_and_layers():
-    ad = AnnData(obs=pd.DataFrame({"x": [1, 2]}), var=pd.DataFrame(index=["v1", "v2"]))
+    ad = AnnData(obs=pd.DataFrame({"x": [1, 2]}, index=["0", "1"]), var=pd.DataFrame(index=["v1", "v2"]))
     ad.uns["bad@key"] = "val"
     ad.layers["bad#layer"] = np.array([[0, 1], [1, 0]])
     sanitized = sanitize_table(ad, inplace=False)
@@ -168,7 +171,7 @@ def test_sanitize_table_empty_returns_empty():
 
 
 def test_sanitize_table_preserves_underlying_data():
-    ad = AnnData(obs=pd.DataFrame({"@invalid#": [1, 2], "valid": [3, 4]}))
+    ad = AnnData(obs=pd.DataFrame({"@invalid#": [1, 2], "valid": [3, 4]}, index=["0", "1"]))
     ad.obsm["@invalid#"] = np.array([[1, 2], [3, 4]])
     ad.uns["invalid@key"] = "value"
     sanitized = sanitize_table(ad, inplace=False)
@@ -198,7 +201,7 @@ def test_sanitize_table_in_spatialdata_sanitized_fixture(invalid_table, invalid_
 
 def test_spatialdata_retains_other_elements(full_sdata):
     # Add another sanitized table into an existing full_sdata
-    tbl = AnnData(obs=pd.DataFrame({"@foo#": [1, 2], "bar": [3, 4]}))
+    tbl = AnnData(obs=pd.DataFrame({"@foo#": [1, 2], "bar": [3, 4]}, index=["0", "1"]))
     sanitize_table(tbl)
     full_sdata.tables["new_table"] = tbl
 

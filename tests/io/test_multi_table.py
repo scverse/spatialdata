@@ -74,7 +74,7 @@ class TestMultiTable:
             full_sdata.set_table_annotates_spatialelement("table", "poly")
 
         del full_sdata["table"].obs["instance_id"]
-        full_sdata["table"].obs["region"] = ["poly"] * n_obs
+        full_sdata["table"].obs["region"] = pd.Categorical(["poly"] * n_obs)
         with pytest.raises(ValueError, match=error_msg):
             full_sdata.set_table_annotates_spatialelement(
                 "table", "poly", region_key=region_key, instance_key=instance_key
@@ -114,14 +114,14 @@ class TestMultiTable:
             "table", "labels2d", region_key="region", instance_key="instance_id"
         )
 
-        region = ["circles"] * 50 + ["poly"] * 50
+        region = pd.Categorical(["circles"] * 50 + ["poly"] * 50)
         full_sdata["table"].obs["region"] = region
 
         full_sdata.set_table_annotates_spatialelement(
             "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"
         )
 
-        full_sdata["table"].obs["region"] = "circles"
+        full_sdata["table"].obs["region"] = pd.Categorical(["circles"] * full_sdata["table"].n_obs)
         full_sdata.set_table_annotates_spatialelement(
             "table", "circles", region_key="region", instance_key="instance_id"
         )

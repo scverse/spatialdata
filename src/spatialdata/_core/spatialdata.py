@@ -140,10 +140,6 @@ class SpatialData:
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
         self.attrs = attrs if attrs else {}  # type: ignore[assignment]
 
-        # Workaround to allow for backward compatibility
-        if isinstance(tables, AnnData):
-            tables = {"table": tables}
-
         element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
 
         if len(element_names) != len(set(element_names)):

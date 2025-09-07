@@ -160,7 +160,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            tables=table,
+            tables={"table": table},
         )
 
     def _image_blobs(

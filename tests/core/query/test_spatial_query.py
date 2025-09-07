@@ -545,7 +545,7 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        tables=sdata["table"],
+        tables={"table": sdata["table"]},
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
