@@ -478,7 +478,7 @@ def _aggregate_shapes(
 
     anndata = ad.AnnData(
         X,
-        obs=pd.DataFrame(index=rows_categories),
+        obs=pd.DataFrame(index=list(map(str, rows_categories))),
         var=pd.DataFrame(index=columns_categories),
     )
 

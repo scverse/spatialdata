@@ -502,7 +502,7 @@ def test_query_filter_table(with_polygon_query: bool):
     circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
     circles1 = ShapesModel.parse(coords1, geometry=0, radius=1)
     table = AnnData(shape=(3, 0))
-    table.obs["region"] = ["circles0", "circles0", "circles1"]
+    table.obs["region"] = pd.Categorical(["circles0", "circles0", "circles1"])
     table.obs["instance"] = [0, 1, 0]
     table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
     sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, tables={"table": table})

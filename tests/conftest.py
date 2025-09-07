@@ -430,10 +430,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 
     # generate table
     x = RNG.random((21, 1))
-    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    region = pd.Categorical(np.array(["values_circles"] * 9 + ["values_polygons"] * 12))
     instance_id = np.array(list(range(9)) + list(range(12)))
-    categorical_obs = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3))
-    numerical_obs = pd.Series(RNG.random(21))
+    categorical_obs = pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3)
+    numerical_obs = RNG.random(21)
     table = AnnData(
         x,
         obs=pd.DataFrame(
@@ -442,11 +442,11 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
                 "instance_id": instance_id,
                 "categorical_in_obs": categorical_obs,
                 "numerical_in_obs": numerical_obs,
-            }
+            },
+            index=list(map(str, range(21))),
         ),
         var=pd.DataFrame(index=["numerical_in_var"]),
     )
-    table.obs["region"] = table.obs["region"].astype("category")
     table = TableModel.parse(
         table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
     )
@@ -492,7 +492,7 @@ def adata_labels() -> AnnData:
             "instance_id": range(n_obs_labels),
             "region": ["test"] * n_obs_labels,
         },
-        index=np.arange(n_obs_labels),
+        index=np.arange(n_obs_labels).astype(str),
     )
     uns_labels = {
         "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},

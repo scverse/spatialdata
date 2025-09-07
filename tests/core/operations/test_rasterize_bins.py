@@ -2,6 +2,7 @@ import logging
 import re
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -56,7 +57,13 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
         points = ShapesModel.parse(gdf, transformations={"global": scale})
 
     obs = DataFrame(
-        data={"region": ["points"] * n * n, "instance_id": np.arange(n * n), "col_index": x, "row_index": y}
+        data={
+            "region": pd.Categorical(["points"] * n * n),
+            "instance_id": np.arange(n * n),
+            "col_index": x,
+            "row_index": y,
+        },
+        index=[f"{i}" for i in range(n * n)],
     )
     X = RNG.normal(size=(n * n, 2))
     var = DataFrame(index=["gene0", "gene1"])
@@ -122,7 +129,13 @@ def test_rasterize_bins_invalid():
         data, x, y = _get_bins_data(n)
         points = PointsModel.parse(data)
         obs = DataFrame(
-            data={"region": ["points"] * n * n, "instance_id": np.arange(n * n), "col_index": x, "row_index": y}
+            data={
+                "region": pd.Categorical(["points"] * n * n),
+                "instance_id": np.arange(n * n),
+                "col_index": x,
+                "row_index": y,
+            },
+            index=[f"{i}" for i in range(n * n)],
         )
         table = TableModel.parse(
             AnnData(X=RNG.normal(size=(n * n, 2)), obs=obs),
@@ -269,7 +282,8 @@ def test_relabel_labels(caplog):
             "instance_key1": np.arange(10),
             "instance_key2": [1, 2] + list(range(4, 12)),
             "instance_key3": [str(i) for i in range(1, 11)],
-        }
+        },
+        index=[f"{i}" for i in range(10)],
     )
     adata = AnnData(X=RNG.normal(size=(10, 2)), obs=obs)
     _relabel_labels(table=adata, instance_key="instance_key0")

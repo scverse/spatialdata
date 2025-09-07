@@ -123,10 +123,11 @@ def test_rasterize_labels_value_key_specified():
     labels_indices = get_element_instances(raster)
     obs = pd.DataFrame(
         {
-            "region": [element_name] * len(labels_indices),
+            "region": pd.Categorical([element_name] * len(labels_indices)),
             "instance_id": labels_indices,
             value_key: [True] * 10 + [False] * (len(labels_indices) - 10),
-        }
+        },
+        index=[f"{i}" for i in range(len(labels_indices))],
     )
     table = TableModel.parse(
         AnnData(shape=(len(labels_indices), 0), obs=obs),
@@ -194,11 +195,12 @@ def _rasterize_shapes_prepare_data() -> tuple[SpatialData, GeoDataFrame, str]:
         X=np.arange(len(gdf)).reshape(-1, 1),
         obs=pd.DataFrame(
             {
-                "region": [element_name] * len(gdf),
+                "region": pd.Categorical([element_name] * len(gdf)),
                 "instance_id": gdf.index,
-                "values": gdf["values"],
-                "cat_values": gdf["cat_values"],
-            }
+                "values": gdf["values"].to_numpy(),
+                "cat_values": gdf["cat_values"].to_numpy(),
+            },
+            index=[str(i) for i in range(len(gdf))],
         ),
     )
     adata.obs["cat_values"] = adata.obs["cat_values"].astype("category")
@@ -333,11 +335,12 @@ def test_rasterize_points():
         X=np.arange(len(ddf)).reshape(-1, 1),
         obs=pd.DataFrame(
             {
-                "region": [element_name] * len(ddf),
+                "region": pd.Categorical([element_name] * len(ddf)),
                 "instance_id": ddf.index,
                 "gene": data["gene"],
                 "value": data["value"],
-            }
+            },
+            index=[f"{i}" for i in range(len(ddf))],
         ),
     )
     adata.obs["gene"] = adata.obs["gene"].astype("category")
