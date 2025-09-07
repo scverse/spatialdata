@@ -828,18 +828,6 @@ def polygon_query(
         Importantly, when clipping is enabled, the circles will be converted to polygons before the clipping. This may
         affect downstream operations that rely on the circle radius or on performance, so it is recommended to disable
         clipping when querying circles or when querying a `SpatialData` object that contains circles.
-    shapes [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    points [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    images [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    labels [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
 
     Returns
     -------

@@ -439,23 +439,6 @@ def _is_element_self_contained(
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def save_transformations(sdata: SpatialData) -> None:
-    """
-    Save all the transformations of a SpatialData object to disk.
-
-    sdata
-        The SpatialData object
-    """
-    warnings.warn(
-        "This function is deprecated and should be replaced by `SpatialData.write_transformations()` or "
-        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. This function will call"
-        " `SpatialData.write_transformations()`; please call this function directly.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    sdata.write_transformations()
-
-
 def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.StoreLike:
     # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):

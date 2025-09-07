@@ -18,7 +18,6 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from ome_zarr.format import FormatV05
 from ome_zarr.io import parse_url
-from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
 
@@ -32,9 +31,6 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import (
-    _error_message_add_element,
-)
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -1805,16 +1801,6 @@ class SpatialData:
 
         return read_zarr(file_path, selection=selection)
 
-    def add_image(
-        self,
-        name: str,
-        image: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = image` instead."""  # noqa: D401
-        _error_message_add_element()
-
     @property
     def images(self) -> Images:
         """Return images as a Dict of name to image data."""
@@ -2210,26 +2196,6 @@ class SpatialData:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        # when the "tables" argument is removed, we can remove all this if block
-        if tables is not None:
-            warnings.warn(
-                'The "tables" argument is deprecated and will be removed in a future version. Please '
-                "specifies the tables in the `elements` argument. Until the removal occurs, the `elements` "
-                "variable will be automatically populated with the tables if the `tables` argument is not None.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if "tables" in elements_dict:
-                raise ValueError(
-                    "The tables key is already present in the elements dictionary. Please do not specify "
-                    "the `tables` argument."
-                )
-            elements_dict["tables"] = {}
-            if isinstance(tables, AnnData):
-                elements_dict["tables"]["table"] = tables
-            else:
-                for name, table in tables.items():
-                    elements_dict["tables"][name] = table
         return cls(**elements_dict, attrs=attrs)
 
     def subset(
