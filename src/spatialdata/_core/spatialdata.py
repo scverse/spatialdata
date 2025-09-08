@@ -296,9 +296,10 @@ class SpatialData:
     def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
         """Set the channel names for an image `SpatialElement` in the `SpatialData` object.
 
-        This method assumes that the `SpatialData` object and the element are already stored on disk as it will
-        also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
-        element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+        This method will overwrite the element in memory with the same element, but with new channel names.
+        If 'write` is 'True', this method assumes that the `SpatialData` object and the element are already stored on
+        disk as it will also overwrite the channel names metadata on disk. In case either the `SpatialData` object or
+        the element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
 
         Parameters
         ----------
@@ -307,9 +308,11 @@ class SpatialData:
         channel_names
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
         write
-            Whether to overwrite the channel metadata on disk.
+            Whether to overwrite the channel metadata on disk. This will not rewrite the pixel data itself.
         """
-        self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
         if write:
             self.write_channel_names(element_name)
 

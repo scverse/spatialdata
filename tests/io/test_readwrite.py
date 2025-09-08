@@ -63,7 +63,9 @@ class TestReadWrite:
 
         # check the index is correctly written and then read
         new_index = dd.from_array(np.arange(1, len(points["points_0"]) + 1))
-        points["points_0"] = points["points_0"].set_index(new_index)
+        el_point = points["points_0"].set_index(new_index)
+        del points["points_0"]
+        points["points_0"] = el_point
 
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)
@@ -337,6 +339,7 @@ class TestReadWrite:
                 # now we have a sdata with dask-backed elements
                 sdata2 = SpatialData.read(f)
                 p = sdata2[element]
+                del full_sdata[element]
                 full_sdata[element] = p
                 with pytest.raises(
                     ValueError,
