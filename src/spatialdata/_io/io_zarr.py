@@ -82,7 +82,6 @@ def read_zarr(
     tables: dict[str, AnnData] = {}
     shapes = {}
 
-    # TODO: remove table once deprecated.
     selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
