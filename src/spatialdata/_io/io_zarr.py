@@ -10,11 +10,7 @@ from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, MetadataValidationError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import (
-    BadFileHandleMethod,
-    handle_read_errors,
-    ome_zarr_logger,
-)
+from spatialdata._io._utils import BadFileHandleMethod, _resolve_zarr_store, handle_read_errors, ome_zarr_logger
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -24,7 +20,7 @@ from spatialdata._logging import logger
 
 # TODO: remove with incoming remote read / write PR
 # Not removing this now as it requires substantial extra refactor beyond scope of zarrv3 PR.
-def _open_zarr_store(
+def _open_zarr(
     store: str | Path | zarr.Group, mode: Literal["r", "r+", "a", "w", "w-"] = "r", use_consolidated: bool | None = None
 ) -> tuple[zarr.Group, str]:
     """
@@ -74,7 +70,10 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    f, f_store_path = _open_zarr_store(store)
+    from spatialdata._io._utils import _resolve_zarr_store as rzs
+
+    resolved_store = rzs(store)
+    root_group, root_store_path = _open_zarr(resolved_store)
 
     images = {}
     labels = {}
@@ -87,15 +86,15 @@ def read_zarr(
 
     # We raise OS errors instead for some read errors now as in zarr v3 with some corruptions nothing will be read.
     # related to images / labels.
-    if "images" in selector and "images" in f:
-        group = f["images"]
+    if "images" in selector and "images" in root_group:
+        group = root_group["images"]
         count = 0
         for subgroup_name in group:
             if Path(subgroup_name).name.startswith("."):
                 # skip hidden files like .zgroup or .zmetadata
                 continue
-            f_elem = group[subgroup_name]
-            f_elem_store = os.path.join(f_store_path, f_elem.path)
+            elem_group = group[subgroup_name]
+            elem_group_path = os.path.join(root_store_path, elem_group.path)
             with handle_read_errors(
                 on_bad_files,
                 location=f"{group.path}/{subgroup_name}",
@@ -107,22 +106,22 @@ def read_zarr(
                     TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
                 ),
             ):
-                element = _read_multiscale(f_elem_store, raster_type="image")
+                element = _read_multiscale(elem_group_path, raster_type="image")
                 images[subgroup_name] = element
                 count += 1
         logger.debug(f"Found {count} elements in {group}")
 
     # read multiscale labels
     with ome_zarr_logger(logging.ERROR):
-        if "labels" in selector and "labels" in f:
-            group = f["labels"]
+        if "labels" in selector and "labels" in root_group:
+            group = root_group["labels"]
             count = 0
             for subgroup_name in group:
                 if Path(subgroup_name).name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
-                f_elem = group[subgroup_name]
-                f_elem_store = f_store_path / f_elem.path
+                elem_group = group[subgroup_name]
+                elem_group_path = root_store_path / elem_group.path
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -134,48 +133,48 @@ def read_zarr(
                         TypeError,
                     ),
                 ):
-                    labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
+                    labels[subgroup_name] = _read_multiscale(elem_group_path, raster_type="labels")
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
 
     # now read rest of the data
-    if "points" in selector and "points" in f:
+    if "points" in selector and "points" in root_group:
         with handle_read_errors(
             on_bad_files,
             location="points",
             exc_types=(JSONDecodeError, MetadataValidationError),
         ):
-            group = f["points"]
+            group = root_group["points"]
             count = 0
             for subgroup_name in group:
-                f_elem = group[subgroup_name]
+                elem_group = group[subgroup_name]
                 if Path(subgroup_name).name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
+                elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
                     exc_types=(JSONDecodeError, KeyError, ArrowInvalid),
                 ):
-                    points[subgroup_name] = _read_points(f_elem_store)
+                    points[subgroup_name] = _read_points(elem_group_path)
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
 
-    if "shapes" in selector and "shapes" in f:
+    if "shapes" in selector and "shapes" in root_group:
         with handle_read_errors(
             on_bad_files,
             location="shapes",
             exc_types=(JSONDecodeError, MetadataValidationError),
         ):
-            group = f["shapes"]
+            group = root_group["shapes"]
             count = 0
             for subgroup_name in group:
                 if Path(subgroup_name).name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
-                f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
+                elem_group = group[subgroup_name]
+                elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -186,20 +185,20 @@ def read_zarr(
                         ArrayNotFoundError,
                     ),
                 ):
-                    shapes[subgroup_name] = _read_shapes(f_elem_store)
+                    shapes[subgroup_name] = _read_shapes(elem_group_path)
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
-    if "tables" in selector and "tables" in f:
+    if "tables" in selector and "tables" in root_group:
         with handle_read_errors(
             on_bad_files,
             location="tables",
             exc_types=(JSONDecodeError, MetadataValidationError),
         ):
-            group = f["tables"]
-            tables = _read_table(f_store_path, group, tables, on_bad_files=on_bad_files)
+            group = root_group["tables"]
+            tables = _read_table(root_store_path, group, tables, on_bad_files=on_bad_files)
 
     # read attrs metadata
-    attrs = f.attrs.asdict()
+    attrs = root_group.attrs.asdict()
     if "spatialdata_attrs" in attrs:
         # when refactoring the read_zarr function into reading componenets separately (and according to the version),
         # we can move the code below (.pop()) into attrs_from_dict()
@@ -261,19 +260,16 @@ def _get_groups_for_element(
         "tables",
     ]:
         raise ValueError(f"Unknown element type {element_type}")
-    # TODO: remove local import after remote PR
-    from spatialdata._io._utils import _open_zarr_store
-
-    store = _open_zarr_store(zarr_path, mode="r+")
+    resolved_store = _resolve_zarr_store(zarr_path)
 
     # When writing, use_consolidated must be set to False. Otherwise, the metadata store
     # can get out of sync with newly added elements (e.g., labels), leading to errors.
-    root = zarr.open_group(store=store, mode="a", use_consolidated=use_consolidated)
-    element_type_group = root.require_group(element_type)
+    root_group = zarr.open_group(store=resolved_store, mode="a", use_consolidated=use_consolidated)
+    element_type_group = root_group.require_group(element_type)
     element_type_group = zarr.open_group(element_type_group.store_path, mode="a", use_consolidated=use_consolidated)
 
     element_name_group = element_type_group.require_group(element_name)
-    return root, element_type_group, element_name_group
+    return root_group, element_type_group, element_name_group
 
 
 def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
@@ -291,10 +287,7 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
     -------
     True if the group exists, False otherwise.
     """
-    # TODO: remove local import after remote PR
-    from spatialdata._io._utils import _open_zarr_store
-
-    store = _open_zarr_store(zarr_path, mode="r")
+    store = _resolve_zarr_store(zarr_path, mode="r")
     root = zarr.open_group(store=store, mode="r")
     assert element_type in [
         "images",
@@ -311,6 +304,6 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
 
 def _write_consolidated_metadata(path: Path | str | None) -> None:
     if path is not None:
-        f, f_store_path = _open_zarr_store(path, mode="r+", use_consolidated=False)
+        f, f_store_path = _open_zarr(path, mode="r+", use_consolidated=False)
         zarr.consolidate_metadata(f.store)
         f.store.close()

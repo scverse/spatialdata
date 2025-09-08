@@ -438,7 +438,37 @@ def _is_element_self_contained(
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.StoreLike:
+def _resolve_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.StoreLike:
+    """
+    Normalize different Zarr store inputs into a usable store instance.
+
+    This function accepts various forms of input (e.g. filesystem paths,
+    UPath objects, existing Zarr stores, or `zarr.Group`s) and resolves
+    them into a `StoreLike` that can be passed to Zarr APIs. It handles
+    local files, fsspec-backed stores, consolidated metadata stores, and
+    groups with nested paths.
+
+    Parameters
+    ----------
+    path : StoreLike | str | Path | UPath | zarr.Group
+        The input representing a Zarr store or group. Can be a filesystem
+        path, remote path, existing store, or Zarr group.
+    **kwargs : Any
+        Additional keyword arguments forwarded to the underlying store
+        constructor (e.g. `mode`, `storage_options`).
+
+    Returns
+    -------
+    zarr.storage.StoreLike
+        A normalized store instance suitable for use with Zarr.
+
+    Raises
+    ------
+    TypeError
+        If the input type is unsupported.
+    ValueError
+        If a `zarr.Group` has an unsupported store type.
+    """
     # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
         # if the input is str or Path, map it to UPath

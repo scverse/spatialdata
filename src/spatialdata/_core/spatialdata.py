@@ -989,12 +989,12 @@ class SpatialData:
         -------
         A list of paths of the elements saved in the Zarr store.
         """
-        from spatialdata._io._utils import _open_zarr_store
+        from spatialdata._io._utils import _resolve_zarr_store
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
 
-        store = _open_zarr_store(self.path, mode="r")
+        store = _resolve_zarr_store(self.path)
         root = zarr.open_group(store=store, mode="r")
         elements_in_zarr = []
 
