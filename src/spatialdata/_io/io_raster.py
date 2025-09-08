@@ -6,7 +6,7 @@ import numpy as np
 import zarr
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
-from ome_zarr.reader import Label, Multiscales, Node, Reader
+from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes
 from ome_zarr.writer import write_image as write_image_ngff
@@ -33,19 +33,31 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _get_nodes_zarr_v3(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
+def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
+    """Get nodes with Multiscales spec from a list of nodes.
+
+    The nodes with the Multiscales spec are the nodes used for reading in image and label data. We only have to check
+    the multiscales now, while before we also had to check the label spec. In the new ome-zarr-py though labels can have
+    the Label spec, these do not contain the multiscales anymore used to read the data. They can contain label specific
+    metadata though.
+
+    Parameters
+    ----------
+    image_nodes: list[Node]
+        List of nodes returned from the ome-zarr-py Reader.
+    nodes: list[Node]
+        List to append the nodes with the multiscales spec to.
+
+    Returns
+    -------
+    list[Node]
+        List of nodes with the multiscales spec.
+    """
     if len(image_nodes):
         for node in image_nodes:
             # Labels are now also Multiscales in newer version of ome-zarr-py
             if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
                 nodes.append(node)
-    return nodes
-
-
-def _get_label_nodes_zarr_v2(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
-    for node in image_nodes:
-        if np.any([isinstance(spec, Label) for spec in node.specs]):
-            nodes.append(node)
     return nodes
 
 
@@ -58,25 +70,22 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
-        nodes = _get_nodes_zarr_v3(image_nodes, nodes)
+        nodes = _get_multiscale_nodes(image_nodes, nodes)
     else:
         raise OSError(
             f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json file "
             f"inside is corrupted or not present or the image files themselves are corrupted."
         )
     if len(nodes) != 1:
-        if exists:
-            nodes = _get_label_nodes_zarr_v2(image_nodes, nodes)
-        else:
+        if not exists:
             raise ValueError(
                 f"len(nodes) = {len(nodes)}, expected 1 and image location {image_loc} does not exist. Unable to read "
                 f"the NGFF file. Please report this bug and attach a minimal data example."
             )
-        if len(nodes) != 1:
-            raise OSError(
-                f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
-                f"{image_loc.basename()} is potentially corrupted."
-            )
+        raise OSError(
+            f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
+            f"{image_loc.basename()} is potentially corrupted."
+        )
 
     node = nodes[0]
     datasets = node.load(Multiscales).datasets
