@@ -226,7 +226,12 @@ def _get_groups_for_element(
     """
     Get the Zarr groups for the root, element_type and element for a specific element.
 
-    The store must exist, but creates the element type group and the element group if they don't exist.
+    The store must exist, but creates the element type group and the element group if they don't exist. In all cases
+    the zarr group will also be opened. When writing data to disk this should always be done with 'use_consolidated'
+    being 'False'. If a user wrote the data previously with consolidation of the metadata and then they write new data
+    in the zarr store, it can give errors otherwise, due to partially written elements not yet being present in the
+    consolidated metadata store, e.g. when first writing the element and then opening the zarr group again for writing
+    transformations.
 
     Parameters
     ----------
@@ -243,7 +248,7 @@ def _get_groups_for_element(
 
     Returns
     -------
-    either the existing Zarr subgroup or a new one.
+    The Zarr groups for the root, element_type and element for a specific element.
     """
     if not isinstance(zarr_path, Path):
         raise ValueError("zarr_path should be a Path object")
