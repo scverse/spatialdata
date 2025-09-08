@@ -140,7 +140,7 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
 
 
 def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
-    """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV02.
+    """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV03.
 
     Parameters
     ----------
