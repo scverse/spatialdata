@@ -125,13 +125,12 @@ def overwrite_coordinate_transformations_raster(
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
     if group.metadata.zarr_format == 3:
-        _write_coordinate_transformations_raster_zarrv3(group, coordinate_transformations)
+        _overwrite_coordinate_transformations_raster_zarrv3(group, coordinate_transformations)
     elif group.metadata.zarr_format == 2:
         _overwrite_coordinate_transformations_raster_zarrv2(group, coordinate_transformations)
 
 
-# TODO: check type coordinate_transformations here
-def _write_coordinate_transformations_raster_zarrv3(
+def _overwrite_coordinate_transformations_raster_zarrv3(
     group: zarr.Group, coordinate_transformations: list[dict[str, BaseTransformation]]
 ) -> None:
     """Write transformations of raster elements to disk in zarr v3.
