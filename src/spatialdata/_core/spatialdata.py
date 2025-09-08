@@ -1043,7 +1043,7 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder, _open_zarr_store
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1052,7 +1052,6 @@ class SpatialData:
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
         if os.path.exists(file_path):
-            _open_zarr_store(file_path, mode="r")
             if parse_url(file_path, mode="r", fmt=FormatV05()) is None:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
