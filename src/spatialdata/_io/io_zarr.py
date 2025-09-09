@@ -265,7 +265,7 @@ def _get_groups_for_element(
 
     # When writing, use_consolidated must be set to False. Otherwise, the metadata store
     # can get out of sync with newly added elements (e.g., labels), leading to errors.
-    root_group = zarr.open_group(store=resolved_store, mode="a", use_consolidated=use_consolidated)
+    root_group = zarr.open_group(store=resolved_store, mode="r+", use_consolidated=use_consolidated)
     element_type_group = root_group.require_group(element_type)
     element_type_group = zarr.open_group(element_type_group.store_path, mode="a", use_consolidated=use_consolidated)
 
