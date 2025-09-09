@@ -77,6 +77,9 @@ def write_shapes(
 ) -> None:
     """Write shapes to spatialdata zarr store.
 
+    Note that the parquet file is not recognized as part of the zarr hierarchy as it is not a valid component of a
+    zarr store, e.g. group, array or metadata file.
+
     Parameters
     ----------
     shapes: GeoDataFrame
@@ -105,7 +108,6 @@ def write_shapes(
         axes=list(axes),
         attrs=attrs,
     )
-
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
 
 

@@ -42,7 +42,13 @@ class Elements(UserDict[str, T]):
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
         check_valid_name(key)
         if key in element_keys:
-            warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
+            warn(
+                f"Key `{key}` already exists. Overwriting it in-memory. If you want to silence this warning "
+                f"either delete it from memory 'del sdata[{key}]' (does not make changes on disk) or filter the "
+                f"warning.",
+                UserWarning,
+                stacklevel=2,
+            )
         else:
             try:
                 check_key_is_case_insensitively_unique(key, shared_keys)

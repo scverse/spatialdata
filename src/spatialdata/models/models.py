@@ -228,6 +228,10 @@ class RasterSchema(DataArraySchema):
             parsed_transform = _get_transformations(data)
             # delete transforms
             del data.attrs["transform"]
+            if isinstance(chunks, tuple):
+                chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
+            if isinstance(chunks, float):
+                chunks = {dim: chunks for index, dim in data.dims}
             data = to_multiscale(
                 data,
                 scale_factors=scale_factors,

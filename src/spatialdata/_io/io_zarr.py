@@ -1,5 +1,6 @@
 import logging
 import os
+import warnings
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Literal
@@ -305,5 +306,9 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
 def _write_consolidated_metadata(path: Path | str | None) -> None:
     if path is not None:
         f, f_store_path = _open_zarr(path, mode="r+", use_consolidated=False)
-        zarr.consolidate_metadata(f.store)
+        # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
+        # and therefore we silence it for our users as they can't do anything about this.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=zarr.errors.ZarrUserWarning)
+            zarr.consolidate_metadata(f.store)
         f.store.close()

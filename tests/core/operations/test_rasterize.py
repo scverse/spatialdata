@@ -158,8 +158,11 @@ def test_rasterize_points_shapes_with_string_index(points, shapes):
     sdata = SpatialData.init_from_elements({"points_0": points["points_0"], "circles": shapes["circles"]})
 
     # make the indices of the points_0 and circles dataframes strings
-    sdata["points_0"]["str_index"] = dd.from_pandas(pd.Series([str(i) for i in sdata["points_0"].index]), npartitions=1)
-    sdata["points_0"] = sdata["points_0"].set_index("str_index")
+    points = sdata["points_0"]
+    points["str_index"] = dd.from_pandas(pd.Series([str(i) for i in sdata["points_0"].index]), npartitions=1)
+    points = points.set_index("str_index")
+    del sdata["points_0"]
+    sdata["points_0"] = points
     sdata["circles"].index = [str(i) for i in sdata["circles"].index]
 
     data_extent = get_extent(sdata)
