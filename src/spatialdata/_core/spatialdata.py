@@ -2163,8 +2163,7 @@ class SpatialData:
     @classmethod
     def init_from_elements(
         cls,
-        elements: dict[str, SpatialElement],
-        tables: AnnData | dict[str, AnnData] | None = None,
+        elements: dict[str, SpatialElement | AnnData],
         attrs: Mapping[Any, Any] | None = None,
     ) -> SpatialData:
         """
@@ -2173,9 +2172,7 @@ class SpatialData:
         Parameters
         ----------
         elements
-            A dict of named elements.
-        tables
-            An optional table or dictionary of tables
+            A dict of named elements, e.g. SpatialElements like images and labels and AnnData tables.
         attrs
             Additional attributes to store in the SpatialData object.
 
