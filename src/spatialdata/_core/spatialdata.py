@@ -2180,7 +2180,7 @@ class SpatialData:
         -------
         The SpatialData object.
         """
-        elements_dict: dict[str, SpatialElement] = {}
+        elements_dict: dict[str, SpatialElement | AnnData] = {}
         for name, element in elements.items():
             model = get_model(element)
             if model in [Image2DModel, Image3DModel]:
