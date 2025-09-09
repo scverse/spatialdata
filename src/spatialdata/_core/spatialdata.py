@@ -1146,6 +1146,7 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
+        # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
         store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
         zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
         self.write_attrs(zarr_group=zarr_group)
@@ -1390,8 +1391,10 @@ class SpatialData:
                 "more elements in the SpatialData object. Deleting the data would corrupt the SpatialData object."
             )
 
+        from spatialdata._io._utils import _resolve_zarr_store
+
         # delete the element
-        store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
+        store = _resolve_zarr_store(self.path)
         root = zarr.open_group(store=store, mode="r+", use_consolidated=False)
         del root[element_type][element_name]
         store.close()
