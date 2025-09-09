@@ -71,9 +71,9 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    from spatialdata._io._utils import _resolve_zarr_store as rzs
+    from spatialdata._io._utils import _resolve_zarr_store
 
-    resolved_store = rzs(store)
+    resolved_store = _resolve_zarr_store(store)
     root_group, root_store_path = _open_zarr(resolved_store)
 
     images = {}
