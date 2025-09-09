@@ -300,15 +300,20 @@ CurrentPointsFormat = PointsFormatV02
 CurrentTablesFormat = TablesFormatV02
 CurrentSpatialDataContainerFormat = SpatialDataContainerFormatV02
 
+RasterFormatType = RasterFormatV01 | RasterFormatV02 | RasterFormatV03
 ShapesFormatType = ShapesFormatV01 | ShapesFormatV02 | ShapesFormatV03
 PointsFormatType = PointsFormatV01 | PointsFormatV02
 TablesFormatType = TablesFormatV01 | TablesFormatV02
-RasterFormatType = RasterFormatV01 | RasterFormatV02 | RasterFormatV03
 SpatialDataContainerFormatType = SpatialDataContainerFormatV01 | SpatialDataContainerFormatV02
 SpatialDataFormatType = (
-    ShapesFormatType | PointsFormatType | TablesFormatType | RasterFormatType | SpatialDataContainerFormatType
+    RasterFormatType | ShapesFormatType | PointsFormatType | TablesFormatType | SpatialDataContainerFormatType
 )
 
+RasterFormats: dict[str, RasterFormatType] = {
+    "0.1": RasterFormatV01(),
+    "0.2": RasterFormatV02(),
+    "0.3": RasterFormatV03(),
+}
 ShapesFormats: dict[str, ShapesFormatType] = {
     "0.1": ShapesFormatV01(),
     "0.2": ShapesFormatV02(),
@@ -322,11 +327,6 @@ TablesFormats: dict[str, TablesFormatType] = {
     "0.1": TablesFormatV01(),
     "0.2": TablesFormatV02(),
 }
-RasterFormats: dict[str, RasterFormatType] = {
-    "0.1": RasterFormatV01(),
-    "0.2": RasterFormatV02(),
-    "0.3": RasterFormatV03(),
-}
 SpatialDataContainerFormats: dict[str, SpatialDataContainerFormatType] = {
     "0.1": SpatialDataContainerFormatV01(),
     "0.2": SpatialDataContainerFormatV02(),
@@ -335,15 +335,15 @@ ContainerFormatValidElements = {
     SpatialDataContainerFormatV01().__str__(): [
         RasterFormatV01().__str__(),
         RasterFormatV02().__str__(),
-        PointsFormatV01().__str__(),
         ShapesFormatV01().__str__(),
         ShapesFormatV02().__str__(),
+        PointsFormatV01().__str__(),
         TablesFormatV01().__str__(),
     ],
     SpatialDataContainerFormatV02().__str__(): [
         RasterFormatV03().__str__(),
-        PointsFormatV02().__str__(),
         ShapesFormatV03().__str__(),
+        PointsFormatV02().__str__(),
         TablesFormatV02().__str__(),
     ],
 }

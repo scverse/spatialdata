@@ -161,7 +161,6 @@ def _overwrite_coordinate_transformations_raster_zarrv2(
     The transformation present in multiscale["datasets"] are the ones for the multiscale, so and we leave them intact
     we update multiscale["coordinateTransformations"] and multiscale["coordinateSystems"]
     see the first post of https://github.com/scverse/spatialdata/issues/39 for an overview
-    fix the io to follow the NGFF specs, see https://github.com/scverse/spatialdata/issues/114
 
     Parameters
     ----------
