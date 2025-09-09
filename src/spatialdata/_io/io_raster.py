@@ -43,9 +43,9 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
 
     Parameters
     ----------
-    image_nodes: list[Node]
+    image_nodes
         List of nodes returned from the ome-zarr-py Reader.
-    nodes: list[Node]
+    nodes
         List to append the nodes with the multiscales spec to.
 
     Returns
@@ -73,7 +73,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         nodes = _get_multiscale_nodes(image_nodes, nodes)
     else:
         raise OSError(
-            f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json file "
+            f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json (or .zattrs) file "
             f"inside is corrupted or not present or the image files themselves are corrupted."
         )
     if len(nodes) != 1:
@@ -84,7 +84,7 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
             )
         raise OSError(
             f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
-            f"{image_loc.basename()} is potentially corrupted."
+            f"{image_loc.basename()} is potentially corrupted. Please report this bug and attach a minimal data example."
         )
 
     node = nodes[0]
@@ -246,6 +246,8 @@ def _write_raster_dataarray(
     else:
         storage_options = {"chunks": chunks}
     # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
+    # We need this because the argument of write_image_ngff is called image while the argument of
+    # write_labels_ngff is called label.
     metadata[raster_type] = data
     write_single_scale_ngff(
         group=group,

@@ -56,13 +56,13 @@ def write_points(
 
     Parameters
     ----------
-    points: DaskDataFrame
+    points
         The dataframe of the points element.
-    group: zarr.Group
+    group
         The zarr group in the 'points' zarr group to write the points element to.
-    group_type: str
+    group_type
         The type of the element.
-    element_format: Format
+    element_format
         The format of the points element used to store it.
     """
     axes = get_axes_names(points)
