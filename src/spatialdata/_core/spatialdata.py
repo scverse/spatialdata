@@ -311,9 +311,7 @@ class SpatialData:
             Whether to overwrite the channel metadata on disk (lightweight operation). This will not rewrite the pixel
             data itself (heavy operation).
         """
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning)
-            self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
+        self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
         if write:
             self.write_channel_names(element_name)
 
