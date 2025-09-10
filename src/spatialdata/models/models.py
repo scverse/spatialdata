@@ -1066,9 +1066,32 @@ class TableModel:
         -------
         The validated data.
         """
+        if not isinstance(data, AnnData):
+            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(data)}.")
+
         validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
             return data
+
+        _, region_key, instance_key = get_table_keys(data)
+        if region_key is not None:
+            if region_key not in data.obs:
+                raise ValueError(
+                    f"Region key `{region_key}` not in `adata.obs`. Please create the column and parse "
+                    f"using TableModel.parse(adata)."
+                )
+            if not isinstance(data.obs[region_key].dtype, CategoricalDtype):
+                raise ValueError(
+                    f"`table.obs[{region_key}]` must be of type `categorical`, not `{type(data.obs[region_key])}`."
+                )
+        if instance_key:
+            if instance_key not in data.obs:
+                raise ValueError(
+                    f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
+                    f" using TableModel.parse(adata)."
+                )
+            if data.obs[instance_key].isnull().values.any():
+                raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
         self._validate_table_annotation_metadata(data)
 
@@ -1157,8 +1180,9 @@ class TableModel:
             "instance_key": instance_key,
         }
         adata.uns[cls.ATTRS_KEY] = attr
+        convert_region_column_to_categorical(adata)
         cls().validate(adata)
-        return convert_region_column_to_categorical(adata)
+        return adata
 
 
 Schema_t: TypeAlias = (

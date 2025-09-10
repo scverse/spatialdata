@@ -51,19 +51,6 @@ def test_element_names_unique() -> None:
     )
 
     # add elements with the same name
-    # of element of same type
-    with pytest.warns(UserWarning):
-        sdata.images["image"] = image
-    with pytest.warns(UserWarning):
-        sdata.points["points"] = points
-    with pytest.warns(UserWarning):
-        sdata.shapes["shapes"] = shapes
-    with pytest.warns(UserWarning):
-        sdata.labels["labels"] = labels
-    with pytest.warns(UserWarning):
-        sdata.tables["table"] = table
-
-    # add elements with the same name
     # of element of different type
     with pytest.raises(KeyError):
         sdata.images["points"] = image
@@ -100,8 +87,6 @@ def test_element_names_unique() -> None:
     # add elements with the same name, test only couples of elements
     with pytest.raises(KeyError):
         sdata["labels"] = image
-    with pytest.warns(UserWarning):
-        sdata["points"] = points
 
     # this should not raise warnings because it's a different (new) name
     sdata["image2"] = image
@@ -176,7 +161,6 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     )
     adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
-    del full_sdata.tables["table"]
     full_sdata["table"] = TableModel.parse(
         adata,
         region=["circles", "poly"],
@@ -374,7 +358,6 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
     # TODO: fix this
     new_region = "sample2"
     table_new = filtered1["table"].copy()
-    del filtered1.tables["table"]
     filtered1["table"] = table_new
     filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
     filtered1["table"].obs[filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
@@ -492,8 +475,6 @@ def test_get_item(points: SpatialData) -> None:
 def test_set_item(full_sdata: SpatialData) -> None:
     for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
         full_sdata[name + "_again"] = full_sdata[name]
-        with pytest.warns(UserWarning):
-            full_sdata[name] = full_sdata[name]
 
 
 def test_del_item(full_sdata: SpatialData) -> None:
@@ -552,7 +533,6 @@ def test_subset(full_sdata: SpatialData) -> None:
             "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4],
         },
     )
-    del full_sdata.tables["table"]
     sdata_table = TableModel.parse(
         adata,
         region=["circles", "poly"],

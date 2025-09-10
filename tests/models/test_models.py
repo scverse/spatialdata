@@ -520,15 +520,9 @@ class TestModels:
     @pytest.mark.parametrize("attr", ["obs", "var"])
     @pytest.mark.parametrize("parse", [True, False])
     def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
-        invalid_key = keys[1]
-        key_regex = re.escape(invalid_key)
         df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
         adata = AnnData(np.array([[0]]), **{attr: df})
-        with pytest.raises(
-            ValueError,
-            match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "
-            + f"Key `{key_regex}` is not unique, or another case-variant of it exists.",
-        ):
+        with pytest.raises(ValueError, match="Table contains invalid names.\nFor renaming, please"):
             if parse:
                 TableModel.parse(adata)
             else:

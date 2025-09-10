@@ -461,12 +461,13 @@ def sdata_query_aggregation() -> SpatialData:
 
 def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
     rng = np.random.default_rng(SEED)
-    return AnnData(
+    adata = AnnData(
         rng.normal(size=(obs.shape[0], n_var)).astype(np.float64),
         obs=obs,
         obsm=obsm,
         uns=uns,
     )
+    return TableModel().parse(adata)
 
 
 def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
@@ -490,7 +491,7 @@ def adata_labels() -> AnnData:
             "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
             "cell_id": pd.Categorical(seg),
             "instance_id": range(n_obs_labels),
-            "region": ["test"] * n_obs_labels,
+            "region": pd.Categorical(["test"] * n_obs_labels),
         },
         index=np.arange(n_obs_labels).astype(str),
     )

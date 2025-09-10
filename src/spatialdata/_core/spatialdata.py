@@ -31,6 +31,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -298,8 +299,8 @@ class SpatialData:
 
         This method will overwrite the element in memory with the same element, but with new channel names.
         If 'write` is 'True', this method assumes that the `SpatialData` object and the element are already stored on
-        disk as it will also overwrite the channel names metadata on disk. In case either the `SpatialData` object or
-        the element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+        disk as it will also overwrite the channel names metadata on disk. If you do not want to overwrite the element
+        on disk, or it is not stored, set `write` to False.
 
         Parameters
         ----------
@@ -308,7 +309,8 @@ class SpatialData:
         channel_names
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
         write
-            Whether to overwrite the channel metadata on disk. This will not rewrite the pixel data itself.
+            Whether to overwrite the channel metadata on disk (lightweight operation). This will not rewrite the pixel
+            data itself (heavy operation).
         """
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
@@ -1054,6 +1056,7 @@ class SpatialData:
         if not isinstance(file_path, Path):
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
+        # TODO: add test for this
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r", fmt=FormatV05()) is None:
                 raise ValueError(
@@ -1105,6 +1108,7 @@ class SpatialData:
                     with collect_error(location=element_path):
                         validate_table_attr_keys(element, location=element_path)
 
+    @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
         file_path: str | Path,
@@ -1146,6 +1150,7 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
+        # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
         store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
         zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
         self.write_attrs(zarr_group=zarr_group)
@@ -1390,8 +1395,10 @@ class SpatialData:
                 "more elements in the SpatialData object. Deleting the data would corrupt the SpatialData object."
             )
 
+        from spatialdata._io._utils import _resolve_zarr_store
+
         # delete the element
-        store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
+        store = _resolve_zarr_store(self.path)
         root = zarr.open_group(store=store, mode="r+", use_consolidated=False)
         del root[element_type][element_name]
         store.close()
@@ -1417,8 +1424,10 @@ class SpatialData:
         _write_consolidated_metadata(self.path)
 
     def has_consolidated_metadata(self) -> bool:
+        from spatialdata._io._utils import _resolve_zarr_store
+
         return_value = False
-        store = parse_url(self.path, mode="r", fmt=FormatV05()).store
+        store = _resolve_zarr_store(self.path)
         group = zarr.open_group(store, mode="r")
         if getattr(group.metadata, "consolidated_metadata", None):
             return_value = True
@@ -1601,6 +1610,7 @@ class SpatialData:
         format: SpatialDataContainerFormatType | None = None,
         zarr_group: zarr.Group | None = None,
     ) -> None:
+        from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import SpatialDataContainerFormatType, _parse_formats
 
         parsed = _parse_formats(formats=format)
@@ -1611,7 +1621,7 @@ class SpatialData:
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
+            store = _resolve_zarr_store(self.path)
             zarr_group = zarr.open_group(store=store, mode="r+")
 
         version = spatialdata_container_format.spatialdata_format_version

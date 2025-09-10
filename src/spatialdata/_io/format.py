@@ -4,7 +4,6 @@ from typing import Any
 
 import ome_zarr.format
 import zarr
-from anndata import AnnData
 from ome_zarr.format import (
     Format,
     FormatV01,
@@ -13,7 +12,6 @@ from ome_zarr.format import (
     FormatV04,
     FormatV05,
 )
-from pandas.api.types import CategoricalDtype
 from shapely import GeometryType
 
 from spatialdata.models.models import ATTRS_KEY, PointsModel, ShapesModel
@@ -124,23 +122,6 @@ class PointsAttrsMixinV01:
         return d
 
 
-class TableValidateMixinV01:
-    def validate_table(
-        self,
-        table: AnnData,
-        region_key: None | str = None,
-        instance_key: None | str = None,
-    ) -> None:
-        if not isinstance(table, AnnData):
-            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(table)}.")
-        if region_key is not None and not isinstance(table.obs[region_key].dtype, CategoricalDtype):
-            raise ValueError(
-                f"`table.obs[region_key]` must be of type `categorical`, not `{type(table.obs[region_key])}`."
-            )
-        if instance_key is not None and table.obs[instance_key].isnull().values.any():
-            raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
-
-
 class SpatialDataContainerFormatV01(FormatV04):
     @property
     def spatialdata_format_version(self) -> str:
@@ -204,7 +185,7 @@ class RasterFormatV03(FormatV05, CoordinateMixinV01):
     def version(self) -> str:
         # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
         # https://github.com/scverse/spatialdata/pull/849
-        return "0.4-dev-spatialdata"
+        return "0.5-dev-spatialdata"
 
 
 class ShapesFormatV01(FormatV04):
@@ -278,7 +259,7 @@ class PointsFormatV02(FormatV05, PointsAttrsMixinV01):
         return "0.2"
 
 
-class TablesFormatV01(FormatV04, TableValidateMixinV01):
+class TablesFormatV01(FormatV04):
     """Formatter for the table."""
 
     @property
@@ -286,7 +267,7 @@ class TablesFormatV01(FormatV04, TableValidateMixinV01):
         return "0.1"
 
 
-class TablesFormatV02(FormatV05, TableValidateMixinV01):
+class TablesFormatV02(FormatV05):
     """Formatter for the table."""
 
     @property

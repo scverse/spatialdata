@@ -68,8 +68,7 @@ def _concatenate_tables(
         TableModel.INSTANCE_KEY: instance_key,
     }
     merged_table.uns[TableModel.ATTRS_KEY] = attrs
-
-    return TableModel().validate(merged_table)
+    return TableModel().parse(merged_table)
 
 
 def concatenate(

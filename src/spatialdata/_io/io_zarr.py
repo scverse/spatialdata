@@ -284,7 +284,7 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
     -------
     True if the group exists, False otherwise.
     """
-    store = _resolve_zarr_store(zarr_path, mode="r")
+    store = _resolve_zarr_store(zarr_path)
     root = zarr.open_group(store=store, mode="r")
     assert element_type in [
         "images",
