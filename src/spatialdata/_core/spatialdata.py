@@ -51,7 +51,10 @@ from spatialdata.models._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
-    from spatialdata._io.format import SpatialDataContainerFormatType, SpatialDataFormatType
+    from spatialdata._io.format import (
+        SpatialDataContainerFormatType,
+        SpatialDataFormatType,
+    )
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -1147,13 +1150,13 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
-        store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
-        zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
-        self.write_attrs(zarr_group=zarr_group)
-        store.close()
-
-        for element_type, element_name, element in self.gen_elements():
+        for index, (element_type, element_name, element) in enumerate(self.gen_elements()):
+            if index == 0:
+                # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
+                store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
+                zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
+                self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
+                store.close()
             self._write_element(
                 element=element,
                 zarr_container_path=file_path,
@@ -1163,13 +1166,14 @@ class SpatialData:
                 parsed_formats=parsed,
             )
 
-        if self.path != file_path:
-            old_path = self.path
-            self.path = file_path
-            logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
+        if parse_url(file_path):
+            if self.path != file_path:
+                old_path = self.path
+                self.path = file_path
+                logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
 
-        if consolidate_metadata:
-            self.write_consolidated_metadata()
+            if consolidate_metadata:
+                self.write_consolidated_metadata()
 
     def _write_element(
         self,
@@ -1602,17 +1606,17 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
+    @_deprecation_alias(format="sdata_format", version="0.7.0")
     def write_attrs(
         self,
-        format: SpatialDataContainerFormatType | None = None,
+        sdata_format: SpatialDataContainerFormatType | None = None,
         zarr_group: zarr.Group | None = None,
     ) -> None:
         from spatialdata._io._utils import _resolve_zarr_store
-        from spatialdata._io.format import SpatialDataContainerFormatType, _parse_formats
+        from spatialdata._io.format import CurrentSpatialDataContainerFormat, SpatialDataContainerFormatType
 
-        parsed = _parse_formats(formats=format)
-        spatialdata_container_format = parsed["SpatialData"]
-        assert isinstance(spatialdata_container_format, SpatialDataContainerFormatType)
+        sdata_format = sdata_format if sdata_format is not None else CurrentSpatialDataContainerFormat
+        assert isinstance(sdata_format, SpatialDataContainerFormatType)
 
         store = None
 
@@ -1621,8 +1625,8 @@ class SpatialData:
             store = _resolve_zarr_store(self.path)
             zarr_group = zarr.open_group(store=store, mode="r+")
 
-        version = spatialdata_container_format.spatialdata_format_version
-        version_specific_attrs = spatialdata_container_format.attrs_to_dict()
+        version = sdata_format.spatialdata_format_version
+        version_specific_attrs = sdata_format.attrs_to_dict()
         attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
 
         try:
