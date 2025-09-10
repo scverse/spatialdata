@@ -16,7 +16,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
-from ome_zarr.format import FormatV05
 from ome_zarr.io import parse_url
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
@@ -1058,7 +1057,7 @@ class SpatialData:
 
         # TODO: add test for this
         if os.path.exists(file_path):
-            if parse_url(file_path, mode="r", fmt=FormatV05()) is None:
+            if parse_url(file_path, mode="r") is None:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
