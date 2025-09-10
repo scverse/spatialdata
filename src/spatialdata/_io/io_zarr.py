@@ -90,6 +90,7 @@ def read_zarr(
                     KeyError,  # Missing JSON key
                     ArrayNotFoundError,  # Image chunks missing
                     TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
+                    OSError,
                 ),
             ):
                 element = _read_multiscale(elem_group_path, raster_type="image")
@@ -117,6 +118,7 @@ def read_zarr(
                         ValueError,
                         ArrayNotFoundError,
                         TypeError,
+                        OSError,
                     ),
                 ):
                     labels[subgroup_name] = _read_multiscale(elem_group_path, raster_type="labels")
