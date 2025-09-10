@@ -84,11 +84,6 @@ def tables() -> list[AnnData]:
     return _tables
 
 
-@pytest.fixture  # (params=['images', 'labels', 'shapes', 'points', 'tables'])
-def corrupted_sdata(request):
-    return request.getfixturevalue(request.param)
-
-
 @pytest.fixture()
 def full_sdata() -> SpatialData:
     return SpatialData(
@@ -98,24 +93,6 @@ def full_sdata() -> SpatialData:
         points=_get_points(),
         tables=_get_tables(region="labels2d"),
     )
-
-
-# @pytest.fixture()
-# def empty_points() -> SpatialData:
-#     geo_df = GeoDataFrame(
-#         geometry=[],
-#     )
-#     from spatialdata import NgffIdentity
-#     _set_transformations(geo_df, NgffIdentity())
-#
-#     return SpatialData(points={"empty": geo_df})
-
-
-# @pytest.fixture()
-# def empty_table() -> SpatialData:
-#     adata = AnnData(shape=(0, 0), obs=pd.DataFrame(columns="region"), var=pd.DataFrame())
-#     adata = TableModel.parse(adata=adata)
-#     return SpatialData(table=adata)
 
 
 @pytest.fixture(
