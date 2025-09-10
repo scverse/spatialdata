@@ -364,7 +364,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     return Labels3DModel if Z in dims else Labels2DModel
 
 
-def convert_region_column_to_categorical(table: AnnData) -> AnnData:
+def convert_region_column_to_categorical(table: AnnData) -> None:
     from spatialdata.models.models import TableModel
 
     if TableModel.ATTRS_KEY in table.uns:
@@ -376,7 +376,6 @@ def convert_region_column_to_categorical(table: AnnData) -> AnnData:
                 stacklevel=2,
             )
             table.obs[region_key] = pd.Categorical(table.obs[region_key])
-    return table
 
 
 def set_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:

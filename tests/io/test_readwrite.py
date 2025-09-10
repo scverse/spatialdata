@@ -728,7 +728,6 @@ def test_incremental_io_attrs(points: SpatialData, sdata_container_format: Spati
 cached_sdata_blobs = blobs()
 
 
-# TODO: make consolidated metadata open cleaner
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_delete_element_from_disk(
@@ -895,8 +894,7 @@ def test_reading_invalid_name(tmp_path: Path):
     # Circumvent validation at construction time and check validation happens again at writing time.
     (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
     # This one is not allowed on windows
-    if os.name != "nt":
-        (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()*+,?@")
+    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()+,@")
     # We do this as the key of the element is otherwise not in the consolidated metadata, leading to an error.
     valid_sdata.write_consolidated_metadata()
 
@@ -905,8 +903,7 @@ def test_reading_invalid_name(tmp_path: Path):
 
     actual_message = str(exc_info.value)
     assert "points/has whitespace" in actual_message
-    if os.name != "nt":
-        assert "shapes/non-alnum_#$%&()*+,?@" in actual_message
+    assert "shapes/non-alnum_#$%&()+,@" in actual_message
     assert (
         "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707"
         in actual_message
