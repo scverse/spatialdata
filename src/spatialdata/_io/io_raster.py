@@ -190,10 +190,6 @@ def _write_raster(
     else:
         raise ValueError("Not a valid labels object")
 
-    # Since NGFF does not yet support coordinate transformations, we need a SpatialData extension for rasters. This will
-    # be dropped once NGFF supports it. For now, saving the NGFF version (0.4) is not enough—we must also record the
-    # SpatialData format version.
-
     group = group["labels"][name] if raster_type == "labels" else group
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
