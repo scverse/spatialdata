@@ -204,6 +204,8 @@ class TestFormatConversions:
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
+            f3 = Path(tmpdir) / "data3.zarr"
+            f4 = Path(tmpdir) / "data4.zarr"
 
             full_sdata.write(f1, sdata_formats=[SpatialDataContainerFormatV01()])
             sdata_read_v1 = read_zarr(f1)
@@ -216,3 +218,17 @@ class TestFormatConversions:
             assert_spatial_data_objects_are_identical(full_sdata, sdata_read_v2)
             assert sdata_read_v2.is_self_contained()
             assert sdata_read_v2.has_consolidated_metadata()
+
+            new_channels = ["first", "second", "third"]
+            sdata_read_v1.set_channel_names("image2d", new_channels, write=True)
+            sdata_read_v1.set_channel_names("image2d_multiscale", new_channels, write=True)
+            assert sdata_read_v1["image2d"].coords["c"].data.tolist() == new_channels
+            assert sdata_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+            sdata_read_v1.write(f3, sdata_formats=[SpatialDataContainerFormatV01()])
+            sdata_read_v1 = read_zarr(f3)
+            assert sdata_read_v1["image2d"].coords["c"].data.tolist() == new_channels
+            assert sdata_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+            sdata_read_v1.write(f4, sdata_formats=[SpatialDataContainerFormatV02()])
+            sdata_read_v2 = read_zarr(f4)
+            assert sdata_read_v2["image2d"].coords["c"].data.tolist() == new_channels
+            assert sdata_read_v2["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
