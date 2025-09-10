@@ -31,6 +31,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -1055,6 +1056,7 @@ class SpatialData:
         if not isinstance(file_path, Path):
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
+        # TODO: add test for this
         if os.path.exists(file_path):
             if parse_url(file_path, mode="r", fmt=FormatV05()) is None:
                 raise ValueError(
@@ -1106,6 +1108,7 @@ class SpatialData:
                     with collect_error(location=element_path):
                         validate_table_attr_keys(element, location=element_path)
 
+    @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
         file_path: str | Path,
@@ -1421,8 +1424,10 @@ class SpatialData:
         _write_consolidated_metadata(self.path)
 
     def has_consolidated_metadata(self) -> bool:
+        from spatialdata._io._utils import _resolve_zarr_store
+
         return_value = False
-        store = parse_url(self.path, mode="r", fmt=FormatV05()).store
+        store = _resolve_zarr_store(self.path)
         group = zarr.open_group(store, mode="r")
         if getattr(group.metadata, "consolidated_metadata", None):
             return_value = True
