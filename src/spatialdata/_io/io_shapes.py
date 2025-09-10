@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 import zarr
 from geopandas import GeoDataFrame, read_parquet
+from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
 
@@ -48,10 +49,7 @@ def _read_shapes(
             geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
         else:
             offsets_keys = [k for k in f if k.startswith("offset")]
-
-            # We do this because of async reading not necessarily leading to ordered offset keys.
-            # We can't use sorted because if offsets are higher than 11 we get 1, 11, 2
-            offsets_keys = [f"offset{i}" for i in range(len(offsets_keys))]
+            offsets_keys = natsorted(offsets_keys)
             offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
@@ -82,13 +80,13 @@ def write_shapes(
 
     Parameters
     ----------
-    shapes: GeoDataFrame
+    shapes
         The shapes dataframe
-    group: zarr.Group
+    group
         The zarr group in the 'shapes' zarr group to write the shapes element to.
-    group_type: str
+    group_type
         The type of the element.
-    element_format: Format
+    element_format
         The format of the shapes element used to store it.
     """
     axes = get_axes_names(shapes)
@@ -116,11 +114,11 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
 
     Parameters
     ----------
-    shapes: GeoDataFrame
+    shapes
         The shapes dataframe
-    group: zarr.Group
+    group
         The zarr group in the 'shapes' zarr group to write the shapes element to.
-    element_format: Format
+    element_format
         The format of the shapes element used to store it.
     """
     import numcodecs
@@ -146,11 +144,11 @@ def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_forma
 
     Parameters
     ----------
-    shapes: GeoDataFrame
+    shapes
         The shapes dataframe
-    group: zarr.Group
+    group
         The zarr group in the 'shapes' zarr group to write the shapes element to.
-    element_format: Format
+    element_format
         The format of the shapes element used to store it.
     """
     store_root = group.store_path.store.root

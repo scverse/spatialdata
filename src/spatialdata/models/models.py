@@ -157,11 +157,11 @@ class RasterSchema(DataArraySchema):
         Please refer to :func:`to_spatial_image` for more information. Note: if you set `rgb=None` in `kwargs`, 3-4
         channel images will be interpreted automatically as RGB(A) images.
 
-        **Setting axes / dims**
-        In case of the data being a numpy or dask array, there are no named axes yet. In this case, we first try to
-        use the dimensions specified by the user in the `dims` argument of `.parse`. These dimensions are potentially
-        transposed. See the description of the `dims` argument above. If `dims` is not specified, the dims are set
-        to (c)(z)yx, dependent on the number of dimensions of the data.
+        **Setting axes / dims** In case of the data being a numpy or dask array, there are no named axes yet. In this
+        case, we first try to use the dimensions specified by the user in the `dims` argument of `.parse`. These
+        dimensions are used to potentially transpose the data to match the order (c)(z)yx. See the description of the
+        `dims` argument above. If `dims` is not specified, the dims are set to (c)(z)yx, dependent on the number of
+        dimensions of the data.
         """
         if transformations:
             transformations = transformations.copy()

@@ -10,7 +10,6 @@ from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 from zarr.errors import ArrayNotFoundError
 
-# from zarr.errors import ArrayNotFoundError  # removed in zarr 3.0
 from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors
 from spatialdata._io.format import CurrentTablesFormat, TablesFormats, _parse_version
 from spatialdata._logging import logger

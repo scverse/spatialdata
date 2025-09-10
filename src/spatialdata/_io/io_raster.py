@@ -73,18 +73,21 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         nodes = _get_multiscale_nodes(image_nodes, nodes)
     else:
         raise OSError(
-            f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json (or .zattrs) file "
-            f"inside is corrupted or not present or the image files themselves are corrupted."
+            f"Image location {image_loc} does not seem to exist. If it does, "
+            "potentially the zarr.json (or .zattrs) file inside is corrupted or not "
+            "present or the image files themselves are corrupted."
         )
     if len(nodes) != 1:
         if not exists:
             raise ValueError(
-                f"len(nodes) = {len(nodes)}, expected 1 and image location {image_loc} does not exist. Unable to read "
-                f"the NGFF file. Please report this bug and attach a minimal data example."
+                f"len(nodes) = {len(nodes)}, expected 1 and image location {image_loc} "
+                "does not exist. Unable to read the NGFF file. Please report this bug "
+                "and attach a minimal data example."
             )
         raise OSError(
-            f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
-            f"{image_loc.basename()} is potentially corrupted. Please report this bug and attach a minimal data example."
+            f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, "
+            f"expected 1. Element {image_loc.basename()} is potentially corrupted. "
+            "Please report this bug and attach a minimal data example."
         )
 
     node = nodes[0]

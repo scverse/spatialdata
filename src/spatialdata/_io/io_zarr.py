@@ -11,7 +11,12 @@ from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, MetadataValidationError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, _resolve_zarr_store, handle_read_errors, ome_zarr_logger
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    _resolve_zarr_store,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -19,29 +24,8 @@ from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 
 
-# TODO: remove with incoming remote read / write PR
-# Not removing this now as it requires substantial extra refactor beyond scope of zarrv3 PR.
-def _open_zarr(
-    store: str | Path | zarr.Group, mode: Literal["r", "r+", "a", "w", "w-"] = "r", use_consolidated: bool | None = None
-) -> tuple[zarr.Group, str]:
-    """
-    Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
-
-    Parameters
-    ----------
-    store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
-
-    Returns
-    -------
-    A tuple of the zarr.Group object and the path to the store.
-    """
-    f = store if isinstance(store, zarr.Group) else zarr.open_group(store, mode=mode, use_consolidated=use_consolidated)
-    return f, f.store.root
-
-
 def read_zarr(
-    store: str | Path | zarr.Group,
+    store: str | Path,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
@@ -51,7 +35,7 @@ def read_zarr(
     Parameters
     ----------
     store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+        Path to the zarr store (on-disk or remote).
 
     selection
         List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
@@ -74,7 +58,8 @@ def read_zarr(
     from spatialdata._io._utils import _resolve_zarr_store
 
     resolved_store = _resolve_zarr_store(store)
-    root_group, root_store_path = _open_zarr(resolved_store)
+    root_group = zarr.open_group(resolved_store, mode="r")
+    root_store_path = root_group.store.root
 
     images = {}
     labels = {}
@@ -197,6 +182,17 @@ def read_zarr(
         ):
             group = root_group["tables"]
             tables = _read_table(root_store_path, group, tables, on_bad_files=on_bad_files)
+    if "tables" in selector and "table" in root_group:
+        with handle_read_errors(
+            on_bad_files,
+            location="table",
+            exc_types=(ValueError,),
+        ):
+            raise ValueError(
+                f"`table` group found in zarr store at location {root_store_path} "
+                "instead of `tables`. Please update the zarr store to use `tables` "
+                "instead.",
+            )
 
     # read attrs metadata
     attrs = root_group.attrs.asdict()
@@ -305,7 +301,7 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
 
 def _write_consolidated_metadata(path: Path | str | None) -> None:
     if path is not None:
-        f, f_store_path = _open_zarr(path, mode="r+", use_consolidated=False)
+        f = zarr.open_group(path, mode="r+", use_consolidated=False)
         # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
         # and therefore we silence it for our users as they can't do anything about this.
         with warnings.catch_warnings():

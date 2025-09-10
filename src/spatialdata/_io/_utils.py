@@ -24,7 +24,6 @@ from xarray import DataArray, DataTree
 from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import StoreLike
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -437,7 +436,9 @@ def _is_element_self_contained(
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def _resolve_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.StoreLike:
+def _resolve_zarr_store(
+    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
+) -> zarr.storage.StoreLike:
     """
     Normalize different Zarr store inputs into a usable store instance.
 
