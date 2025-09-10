@@ -304,6 +304,8 @@ def _write_consolidated_metadata(path: Path | str | None) -> None:
         f = zarr.open_group(path, mode="r+", use_consolidated=False)
         # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
         # and therefore we silence it for our users as they can't do anything about this.
+        # TODO check with remote PR whether we can prevent this warning at least for points data and whether with zarrv3
+        # that pr would still work.
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=zarr.errors.ZarrUserWarning)
             zarr.consolidate_metadata(f.store)
