@@ -751,7 +751,6 @@ def test_spatial_query_different_axes(full_sdata, name: str):
         if name == "multipoly":
             new_data = GeoDataFrame({"geometry": [MultiPolygon([Polygon([(3, 1), (4, 1), (3, 0)])])]})
         gdf = pd.concat([gdf, new_data], ignore_index=True)
-        del full_sdata[name]
         full_sdata[name] = ShapesModel.parse(gdf)
 
     map_axis = MapAxis(map_axis={"x": "y", "y": "x"})

@@ -64,7 +64,6 @@ class TestReadWrite:
         # check the index is correctly written and then read
         new_index = dd.from_array(np.arange(1, len(points["points_0"]) + 1))
         el_point = points["points_0"].set_index(new_index)
-        del points["points_0"]
         points["points_0"] = el_point
 
         points.write(tmpdir)
@@ -108,46 +107,26 @@ class TestReadWrite:
 
         for k, v in _get_images().items():
             sdata.images[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata.images[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_labels().items():
             sdata.labels[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata.labels[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_shapes().items():
             sdata.shapes[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata.shapes[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_points().items():
             sdata.points[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata.points[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `table` is not unique"):
                 sdata["table"] = v
 
         for k, v in _get_tables().items():
             sdata.tables[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata.tables[f"additional_{k}"] = v
-            with pytest.warns(UserWarning):
-                sdata[f"additional_{k}"] = v
             with pytest.raises(KeyError, match="Key `poly` is not unique"):
                 sdata["poly"] = v
 
@@ -339,7 +318,6 @@ class TestReadWrite:
                 # now we have a sdata with dask-backed elements
                 sdata2 = SpatialData.read(f)
                 p = sdata2[element]
-                del full_sdata[element]
                 full_sdata[element] = p
                 with pytest.raises(
                     ValueError,

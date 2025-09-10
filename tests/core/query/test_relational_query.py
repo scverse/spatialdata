@@ -37,7 +37,6 @@ def test_join_using_string_instance_id_and_index(sdata_query_aggregation):
 
     values_polygons = sdata_query_aggregation["values_polygons"][:5]
     values_circles = sdata_query_aggregation["values_circles"][:5]
-    del sdata_query_aggregation["values_polygons"], sdata_query_aggregation["values_circles"]
     sdata_query_aggregation["values_polygons"] = values_polygons
     sdata_query_aggregation["values_circles"] = values_circles
 
@@ -89,7 +88,6 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert all(element_dict[key] is None for key in element_dict)
 
     values_polygons = sdata["values_polygons"].drop([10, 11])
-    del sdata["values_polygons"]
     sdata["values_polygons"] = values_polygons
     with pytest.raises(ValueError, match="No table with"):
         join_spatialelement_table(
@@ -153,7 +151,6 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
 
     # check multiple elements joined to table.
     values_circles = sdata["values_circles"].drop([7, 8])
-    del sdata["values_circles"]
     sdata["values_circles"] = values_circles
     element_dict, table = join_spatialelement_table(
         sdata=sdata,
@@ -297,7 +294,6 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
 
     # Dropped indices correspond to instance ids 7, 8 for 'values_circles' and 10, 11 for 'values_polygons'
     table_update = sdata["table"][sdata["table"].obs.index.drop(["7", "8", "19", "20"])]
-    del sdata["table"]
     sdata["table"] = table_update
     with pytest.warns(UserWarning, match="The element"):
         element_dict, table = join_spatialelement_table(
@@ -382,7 +378,6 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
 def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     circles = sdata["values_circles"][4:]
-    del sdata["values_circles"]
     sdata["values_circles"] = circles
     original_index = sdata["values_circles"].index
     reversed_instance_id = [3, 5, 8, 7, 6, 4, 1, 2, 0] + list(reversed(range(12)))
@@ -414,7 +409,6 @@ def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
     original_instance_id = table.obs["instance_id"]
     reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
     table.obs["instance_id"] = reversed_instance_id
-    del sdata["table"]
     sdata["table"] = table
 
     element_dict, table = join_spatialelement_table(
@@ -447,7 +441,6 @@ def test_inner_join_match_rows_duplicate_obs_indices(sdata_query_aggregation: Sp
     sdata["table"].obs.index = ["a"] * sdata["table"].n_obs
     values_circles = sdata_query_aggregation["values_circles"][:4]
     values_polygons = sdata_query_aggregation["values_polygons"][:5]
-    del sdata["values_circles"], sdata["values_polygons"]
     sdata["values_circles"] = values_circles
     sdata["values_polygons"] = values_polygons
 
@@ -765,7 +758,6 @@ def test_get_values_df_shapes(sdata_query_aggregation):
         var=pd.DataFrame(index=["numerical_in_var", "another_numerical_in_var"]),
         uns=adata.uns,
     )
-    del sdata_query_aggregation.tables["table"]
     sdata_query_aggregation["table"] = new_adata
     # test
     v = get_values(
@@ -839,7 +831,6 @@ def test_get_values_df_points(points):
         region_key="region",
         instance_key="instance_id",
     )
-    del points["points_0"]
     points["points_0"] = p
     points["table"] = table
 
@@ -922,7 +913,6 @@ def test_filter_table_non_annotating(full_sdata):
     obs = pd.DataFrame({"test": ["a", "b", "c"]}, index=list(map(str, range(3))))
     adata = AnnData(obs=obs)
     table = TableModel.parse(adata)
-    del full_sdata["table"]
     full_sdata["table"] = table
     full_sdata.filter_by_coordinate_system("global")
 

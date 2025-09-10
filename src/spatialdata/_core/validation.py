@@ -185,7 +185,10 @@ def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]
     """
     normalized_key = key.lower()
     if normalized_key in other_keys:
-        raise ValueError(f"Key `{key}` is not unique, or another case-variant of it exists.")
+        raise ValueError(
+            f"Key `{key}` is not unique as it exists with a different element type, or another "
+            f"case-variant of it exists."
+        )
 
 
 def check_valid_dataframe_column_name(name: str) -> None:
