@@ -144,6 +144,7 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
         channel_names = element["scale0"]["image"].coords["c"].data.tolist()
 
     channel_metadata = [{"label": name} for name in channel_names]
+    # This is required here as we do not use the load node API of ome-zarr
     omero_meta = group.attrs.get("omero", None) or group.attrs.get("ome", {}).get("omero")
     omero_meta["channels"] = channel_metadata
     if ome_meta := group.attrs.get("ome", None):

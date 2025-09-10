@@ -91,7 +91,8 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
     node = nodes[0]
     loaded_node = node.load(Multiscales)
     datasets, multiscales = loaded_node.datasets, loaded_node.zarr.root_attrs["multiscales"]
-    omero_metadata = loaded_node.zarr.root_attrs.get("omero") or loaded_node.zarr.root_attrs.get("ome", {}).get("omero")
+    # This works for all versions as in zarr v3 the level of the 'ome' key is taken as root_attrs.
+    omero_metadata = loaded_node.zarr.root_attrs.get("omero")
     # TODO: check if below is still valid
     legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
