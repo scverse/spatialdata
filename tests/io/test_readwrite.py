@@ -932,11 +932,14 @@ def test_can_read_sdata_with_reconsolidation(full_sdata, sdata_container_format:
         full_sdata.write(path, sdata_formats=sdata_container_format)
 
         if isinstance(sdata_container_format, SpatialDataContainerFormatV01):
-            json_path = path / "zarr.json"
+            json_path = path / ".zmetadata"
+            json_dict = json.loads(json_path.read_text())
+            # TODO: this raises no exception!
+            del json_dict["metadata"]["images/image2d/0/.zattrs"]
         else:
-            json_path = path / ".zattrs"
-        json_dict = json.loads(json_path.read_text())
-        del json_dict["consolidated_metadata"]["metadata"]["images/image2d"]
+            json_path = path / "zarr.json"
+            json_dict = json.loads(json_path.read_text())
+            del json_dict["consolidated_metadata"]["metadata"]["images/image2d"]
         json_path.write_text(json.dumps(json_dict, indent=4))
 
         with pytest.raises(GroupNotFoundError):
