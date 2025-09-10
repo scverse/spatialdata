@@ -50,8 +50,7 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
 
     Returns
     -------
-    list[Node]
-        List of nodes with the multiscales spec.
+    List of nodes with the multiscales spec.
     """
     if len(image_nodes):
         for node in image_nodes:
