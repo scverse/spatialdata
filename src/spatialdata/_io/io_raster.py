@@ -4,7 +4,6 @@ from typing import Any, Literal
 import dask.array as da
 import numpy as np
 import zarr
-from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
@@ -21,6 +20,7 @@ from spatialdata._io._utils import (
 )
 from spatialdata._io.format import (
     CurrentRasterFormat,
+    RasterFormatType,
 )
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
@@ -73,8 +73,8 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
         nodes = _get_multiscale_nodes(image_nodes, nodes)
     else:
         raise OSError(
-            f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json (or .zattrs) file "
-            f"inside is corrupted or not present or the image files themselves are corrupted."
+            f"Image location {image_loc} does not seem to exist. If it does, potentially the zarr.json (or .zattrs) "
+            f"file inside is corrupted or not present or the image files themselves are corrupted."
         )
     if len(nodes) != 1:
         if not exists:
@@ -84,7 +84,8 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
             )
         raise OSError(
             f"Image location {image_loc} exists, but len(nodes) = {len(nodes)}, expected 1. Element "
-            f"{image_loc.basename()} is potentially corrupted. Please report this bug and attach a minimal data example."
+            f"{image_loc.basename()} is potentially corrupted. Please report this bug and attach a minimal data "
+            f"example."
         )
 
     node = nodes[0]
@@ -141,7 +142,7 @@ def _write_raster(
     raster_data: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    raster_format: Format,
+    raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
@@ -208,7 +209,7 @@ def _write_raster_dataarray(
     group: zarr.Group,
     element_name: str,
     raster_data: DataArray,
-    raster_format: Format,
+    raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -268,7 +269,7 @@ def _write_raster_datatree(
     group: zarr.Group,
     element_name: str,
     raster_data: DataTree,
-    raster_format: Format,
+    raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -330,7 +331,7 @@ def write_image(
     image: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    element_format: Format = CurrentRasterFormat(),
+    element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -349,7 +350,7 @@ def write_labels(
     labels: DataArray | DataTree,
     group: zarr.Group,
     name: str,
-    element_format: Format = CurrentRasterFormat(),
+    element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: JSONDict,
