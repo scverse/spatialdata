@@ -234,7 +234,7 @@ class TestFormatConversions:
             assert sdata_read_v2.is_self_contained()
             assert sdata_read_v2.has_consolidated_metadata()
 
-    def test_chanel_names_raster_images_v1_to_v2_to_v3(self, images):
+    def test_channel_names_raster_images_v1_to_v2_to_v3(self, images):
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
