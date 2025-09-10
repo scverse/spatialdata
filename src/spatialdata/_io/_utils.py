@@ -102,12 +102,12 @@ def overwrite_coordinate_transformations_raster(
 
     Parameters
     ----------
-    group: zarr.Group
+    group
         The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
         containing sdata['image2d'].
-    axes: tuple[ValidAxis_t, ...]
+    axes
         The list with axes names in the same order as the dimensions of the raster element.
-    transformations: MappingToCoordinateSystem_t
+    transformations
         Mapping between names of the coordinate system and the transformations.
     """
     _validate_mapping_to_coordinate_system_type(transformations)
@@ -137,10 +137,10 @@ def _overwrite_coordinate_transformations_raster_zarrv3(
 
     Parameters
     ----------
-    group: zarr.Group
+    group
         The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
         containing sdata['image2d'].
-    coordinate_transformations: list[dict[str, BaseTransformation]]
+    coordinate_transformations
         List of NGFF transformation representations as dictionaries.
     """
     if len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
@@ -164,10 +164,10 @@ def _overwrite_coordinate_transformations_raster_zarrv2(
 
     Parameters
     ----------
-    group: zarr.Group
+    group
         The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
         containing sdata['image2d'].
-    coordinate_transformations: list[dict[str, BaseTransformation]]
+    coordinate_transformations
         List of NGFF transformation representations as dictionaries.
     """
     multiscales = group.attrs["multiscales"]
@@ -449,17 +449,16 @@ def _resolve_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.StoreLik
 
     Parameters
     ----------
-    path : StoreLike | str | Path | UPath | zarr.Group
+    path
         The input representing a Zarr store or group. Can be a filesystem
         path, remote path, existing store, or Zarr group.
-    **kwargs : Any
+    **kwargs
         Additional keyword arguments forwarded to the underlying store
         constructor (e.g. `mode`, `storage_options`).
 
     Returns
     -------
-    zarr.storage.StoreLike
-        A normalized store instance suitable for use with Zarr.
+    A normalized store instance suitable for use with Zarr.
 
     Raises
     ------
