@@ -63,8 +63,7 @@ class TestReadWrite:
 
         # check the index is correctly written and then read
         new_index = dd.from_array(np.arange(1, len(points["points_0"]) + 1))
-        el_point = points["points_0"].set_index(new_index)
-        points["points_0"] = el_point
+        points["points_0"] = points["points_0"].set_index(new_index)
 
         points.write(tmpdir)
         sdata = SpatialData.read(tmpdir)

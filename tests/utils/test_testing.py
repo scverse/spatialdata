@@ -46,8 +46,7 @@ def _change_metadata_tables(sdata: SpatialData, element_name: str) -> None:
 def _change_metadata_image(sdata: SpatialData, element_name: str, coords: bool, transformations: bool) -> None:
     if coords:
         if isinstance(sdata[element_name], DataArray):
-            element = sdata[element_name].assign_coords({"c": np.array(["m", "l", "b"])})
-            sdata[element_name] = element
+            sdata[element_name] = sdata[element_name].assign_coords({"c": np.array(["m", "l", "b"])})
         else:
             assert isinstance(sdata[element_name], DataTree)
 

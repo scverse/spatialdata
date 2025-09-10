@@ -35,10 +35,8 @@ def test_join_using_string_instance_id_and_index(sdata_query_aggregation):
         [f"string_{i}" for i in sdata_query_aggregation["values_polygons"].index]
     )
 
-    values_polygons = sdata_query_aggregation["values_polygons"][:5]
-    values_circles = sdata_query_aggregation["values_circles"][:5]
-    sdata_query_aggregation["values_polygons"] = values_polygons
-    sdata_query_aggregation["values_circles"] = values_circles
+    sdata_query_aggregation["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
+    sdata_query_aggregation["values_circles"] = sdata_query_aggregation["values_circles"][:5]
 
     element_dict, table = join_spatialelement_table(
         sdata=sdata_query_aggregation,
@@ -87,8 +85,7 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert table is None
     assert all(element_dict[key] is None for key in element_dict)
 
-    values_polygons = sdata["values_polygons"].drop([10, 11])
-    sdata["values_polygons"] = values_polygons
+    sdata["values_polygons"] = sdata["values_polygons"].drop([10, 11])
     with pytest.raises(ValueError, match="No table with"):
         join_spatialelement_table(
             sdata=sdata,
@@ -150,8 +147,7 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert "by_polygons" in element_dict
 
     # check multiple elements joined to table.
-    values_circles = sdata["values_circles"].drop([7, 8])
-    sdata["values_circles"] = values_circles
+    sdata["values_circles"] = sdata["values_circles"].drop([7, 8])
     element_dict, table = join_spatialelement_table(
         sdata=sdata,
         spatial_element_names=["values_circles", "values_polygons"],
@@ -293,8 +289,7 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
     assert table is None
 
     # Dropped indices correspond to instance ids 7, 8 for 'values_circles' and 10, 11 for 'values_polygons'
-    table_update = sdata["table"][sdata["table"].obs.index.drop(["7", "8", "19", "20"])]
-    sdata["table"] = table_update
+    sdata["table"] = sdata["table"][sdata["table"].obs.index.drop(["7", "8", "19", "20"])]
     with pytest.warns(UserWarning, match="The element"):
         element_dict, table = join_spatialelement_table(
             sdata=sdata,
@@ -377,8 +372,7 @@ def test_left_exclusive_and_right_join(sdata_query_aggregation):
 
 def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
     sdata = sdata_query_aggregation
-    circles = sdata["values_circles"][4:]
-    sdata["values_circles"] = circles
+    sdata["values_circles"] = sdata["values_circles"][4:]
     original_index = sdata["values_circles"].index
     reversed_instance_id = [3, 5, 8, 7, 6, 4, 1, 2, 0] + list(reversed(range(12)))
     sdata["table"].obs["instance_id"] = reversed_instance_id
@@ -439,10 +433,8 @@ def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
 def test_inner_join_match_rows_duplicate_obs_indices(sdata_query_aggregation: SpatialData, join_type: str) -> None:
     sdata = sdata_query_aggregation
     sdata["table"].obs.index = ["a"] * sdata["table"].n_obs
-    values_circles = sdata_query_aggregation["values_circles"][:4]
-    values_polygons = sdata_query_aggregation["values_polygons"][:5]
-    sdata["values_circles"] = values_circles
-    sdata["values_polygons"] = values_polygons
+    sdata["values_circles"] = sdata_query_aggregation["values_circles"][:4]
+    sdata["values_polygons"] = sdata_query_aggregation["values_polygons"][:5]
 
     element_dict, table = join_spatialelement_table(
         sdata=sdata,

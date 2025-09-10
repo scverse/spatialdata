@@ -14,6 +14,7 @@ from spatialdata._io.format import (
     RasterFormatV01,
     RasterFormatV02,
     RasterFormatV03,
+    ShapesFormatType,
     ShapesFormatV01,
     ShapesFormatV02,
     ShapesFormatV03,
@@ -30,11 +31,11 @@ from spatialdata.testing import assert_spatial_data_objects_are_identical
 class TestFormat:
     """Test format."""
 
-    @pytest.mark.parametrize("element_format", [PointsFormatV01()])
+    @pytest.mark.parametrize("element_format", [PointsFormatV01(), PointsFormatV02()])
     @pytest.mark.parametrize("attrs_key", [PointsModel.ATTRS_KEY])
     @pytest.mark.parametrize("feature_key", [None, PointsModel.FEATURE_KEY])
     @pytest.mark.parametrize("instance_key", [None, PointsModel.INSTANCE_KEY])
-    def test_format_points_v1(
+    def test_format_points_v1_v2(
         self,
         element_format: PointsFormatType,
         attrs_key: str | None,
@@ -81,28 +82,42 @@ class TestFormat:
         geometry = GeometryType(metadata[attrs_key][geos_key][type_key])
         assert metadata[attrs_key] == ShapesFormatV01().attrs_to_dict(geometry)
 
+    @pytest.mark.parametrize("element_format", [ShapesFormatV02(), ShapesFormatV03()])
     @pytest.mark.parametrize("attrs_key", [ShapesModel.ATTRS_KEY])
-    def test_format_shapes_v2(
+    def test_format_shapes_v2_v3(
         self,
+        element_format: ShapesFormatType,
         attrs_key: str,
     ) -> None:
-        metadata: dict[str, Any] = {attrs_key: {"version": ShapesFormatV02().spatialdata_format_version}}
+        metadata: dict[str, Any] = {attrs_key: {"version": element_format.spatialdata_format_version}}
         metadata[attrs_key].pop("version")
-        assert metadata[attrs_key] == ShapesFormatV02().attrs_to_dict({})
+        assert metadata[attrs_key] == element_format.attrs_to_dict({})
 
-    @pytest.mark.parametrize("rformat", [RasterFormatV01, RasterFormatV02])
-    def test_format_raster_v1_v2(self, images, rformat: type[SpatialDataFormatType]) -> None:
+    @pytest.mark.parametrize("rformat", [RasterFormatV01, RasterFormatV02, RasterFormatV03])
+    def test_format_raster_v1_v2_v3(self, images, rformat: type[SpatialDataFormatType]) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            images.write(Path(tmpdir) / "images.zarr", sdata_formats=[SpatialDataContainerFormatV01(), rformat()])
-            zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/.zattrs"
+            sdata_container_format = (
+                SpatialDataContainerFormatV01() if rformat != RasterFormatV03 else SpatialDataContainerFormatV02()
+            )
+            images.write(Path(tmpdir) / "images.zarr", sdata_formats=[sdata_container_format, rformat()])
+
+            metadata_file = ".zattrs" if rformat != RasterFormatV03 else "zarr.json"
+            zattrs_file = Path(tmpdir) / "images.zarr/images/image2d/" / metadata_file
+
             with open(zattrs_file) as infile:
                 zattrs = json.load(infile)
-                ngff_version = zattrs["multiscales"][0]["version"]
                 if rformat == RasterFormatV01:
+                    ngff_version = zattrs["multiscales"][0]["version"]
                     assert ngff_version == "0.4"
-                else:
-                    assert rformat == RasterFormatV02
+                elif rformat == RasterFormatV02:
+                    ngff_version = zattrs["multiscales"][0]["version"]
                     assert ngff_version == "0.4-dev-spatialdata"
+                else:
+                    ngff_version = zattrs["attributes"]["ome"]["version"]
+                    assert rformat == RasterFormatV03
+                    assert ngff_version == "0.5-dev-spatialdata"
+
+    # TODO: add tests for TablesFormatV01 and TablesFormatV02
 
 
 class TestFormatConversions:
@@ -182,10 +197,12 @@ class TestFormatConversions:
             points.write(f1, sdata_formats=[PointsFormatV01(), SpatialDataContainerFormatV01()])
             points_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(points, points_read_v1)
+            assert points_read_v1.is_self_contained()
 
             points_read_v1.write(f2, sdata_formats=[PointsFormatV02(), SpatialDataContainerFormatV02()])
             points_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(points, points_read_v2)
+            assert points_read_v2.is_self_contained()
 
     def test_tables_v1_to_v2(self, table_multiple_annotations):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -204,8 +221,6 @@ class TestFormatConversions:
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"
-            f3 = Path(tmpdir) / "data3.zarr"
-            f4 = Path(tmpdir) / "data4.zarr"
 
             full_sdata.write(f1, sdata_formats=[SpatialDataContainerFormatV01()])
             sdata_read_v1 = read_zarr(f1)
@@ -219,16 +234,27 @@ class TestFormatConversions:
             assert sdata_read_v2.is_self_contained()
             assert sdata_read_v2.has_consolidated_metadata()
 
+    def test_chanel_names_raster_images_v1_to_v2_to_v3(self, images):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f1 = Path(tmpdir) / "data1.zarr"
+            f2 = Path(tmpdir) / "data2.zarr"
+            f3 = Path(tmpdir) / "data3.zarr"
+
             new_channels = ["first", "second", "third"]
-            sdata_read_v1.set_channel_names("image2d", new_channels, write=True)
-            sdata_read_v1.set_channel_names("image2d_multiscale", new_channels, write=True)
-            assert sdata_read_v1["image2d"].coords["c"].data.tolist() == new_channels
-            assert sdata_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
-            sdata_read_v1.write(f3, sdata_formats=[SpatialDataContainerFormatV01()])
-            sdata_read_v1 = read_zarr(f3)
-            assert sdata_read_v1["image2d"].coords["c"].data.tolist() == new_channels
-            assert sdata_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
-            sdata_read_v1.write(f4, sdata_formats=[SpatialDataContainerFormatV02()])
-            sdata_read_v2 = read_zarr(f4)
+
+            images.write(f1, sdata_formats=[RasterFormatV01(), SpatialDataContainerFormatV01()])
+            images_read_v1 = read_zarr(f1)
+            images_read_v1.set_channel_names("image2d", new_channels, write=True)
+            images_read_v1.set_channel_names("image2d_multiscale", new_channels, write=True)
+            assert images_read_v1["image2d"].coords["c"].data.tolist() == new_channels
+            assert images_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+
+            images_read_v1.write(f2, sdata_formats=[SpatialDataContainerFormatV01()])
+            images_read_v1 = read_zarr(f2)
+            assert images_read_v1["image2d"].coords["c"].data.tolist() == new_channels
+            assert images_read_v1["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
+
+            images_read_v1.write(f3, sdata_formats=[SpatialDataContainerFormatV02()])
+            sdata_read_v2 = read_zarr(f3)
             assert sdata_read_v2["image2d"].coords["c"].data.tolist() == new_channels
             assert sdata_read_v2["image2d_multiscale"]["scale0"]["image"].coords["c"].data.tolist() == new_channels
