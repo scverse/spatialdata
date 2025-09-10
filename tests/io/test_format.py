@@ -209,8 +209,10 @@ class TestFormatConversions:
             sdata_read_v1 = read_zarr(f1)
             assert_spatial_data_objects_are_identical(full_sdata, sdata_read_v1)
             assert sdata_read_v1.is_self_contained()
+            assert sdata_read_v1.has_consolidated_metadata()
 
             sdata_read_v1.write(f2, sdata_formats=[SpatialDataContainerFormatV02()])
             sdata_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(full_sdata, sdata_read_v2)
             assert sdata_read_v2.is_self_contained()
+            assert sdata_read_v2.has_consolidated_metadata()

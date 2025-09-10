@@ -1610,6 +1610,7 @@ class SpatialData:
         format: SpatialDataContainerFormatType | None = None,
         zarr_group: zarr.Group | None = None,
     ) -> None:
+        from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import SpatialDataContainerFormatType, _parse_formats
 
         parsed = _parse_formats(formats=format)
@@ -1620,7 +1621,7 @@ class SpatialData:
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="r+", fmt=FormatV05()).store
+            store = _resolve_zarr_store(self.path)
             zarr_group = zarr.open_group(store=store, mode="r+")
 
         version = spatialdata_container_format.spatialdata_format_version
