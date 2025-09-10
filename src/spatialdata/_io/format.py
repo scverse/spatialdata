@@ -204,7 +204,7 @@ class RasterFormatV03(FormatV05, CoordinateMixinV01):
     def version(self) -> str:
         # 0.1 -> 0.2 changed the version string for the NGFF format, from 0.4 to 0.6-dev-spatialdata as discussed here
         # https://github.com/scverse/spatialdata/pull/849
-        return "0.4-dev-spatialdata"
+        return "0.5-dev-spatialdata"
 
 
 class ShapesFormatV01(FormatV04):
