@@ -308,7 +308,8 @@ class SpatialData:
         channel_names
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
         write
-            Whether to overwrite the channel metadata on disk. This will not rewrite the pixel data itself.
+            Whether to overwrite the channel metadata on disk (lightweight operation). This will not rewrite the pixel
+            data itself (heavy operation).
         """
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
