@@ -151,21 +151,21 @@ def _write_raster(
 
     Parameters
     ----------
-    raster_type: Literal["image", "labels"]
+    raster_type
         Whether the raster data pertains to a image or labels 'SpatialElement`.
-    raster_data: DataArray | DataTree
+    raster_data
         The raster data to write.
-    group: zarr.Group
+    group
         The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
     name: str
         The name of the raster element.
-    raster_format: Format
+    raster_format
         The format used to write the raster data.
-    storage_options: JSONDict | list[JSONDict] | None
+    storage_options
         Additional options for writing the raster data, like chunks and compression.
-    label_metadata: JSONDict | None
+    label_metadata
         Label metadata which can only be defined when writing 'labels'.
-    metadata: str | JSONDict | list[JSONDict]
+    metadata
         Additional metadata for the raster element
     """
     if raster_type not in ["image", "labels"]:
@@ -217,19 +217,19 @@ def _write_raster_dataarray(
 
     Parameters
     ----------
-    raster_type: Literal["image", "labels"]
+    raster_type
         Whether the raster data pertains to a image or labels 'SpatialElement`.
-    group: zarr.Group
+    group
         The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
-    element_name: str
+    element_name
         The name of the raster element.
-    raster_data: DataArray
+    raster_data
         The raster data to write.
-    raster_format: Format
+    raster_format
         The format used to write the raster data.
-    storage_options: JSONDict | list[JSONDict] | None
+    storage_options
         Additional options for writing the raster data, like chunks and compression.
-    metadata: str | JSONDict | list[JSONDict]
+    metadata
         Additional metadata for the raster element
     """
     write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
@@ -277,19 +277,19 @@ def _write_raster_datatree(
 
     Parameters
     ----------
-    raster_type: Literal["image", "labels"]
+    raster_type
         Whether the raster data pertains to a image or labels 'SpatialElement`.
-    group: zarr.Group
+    group
         The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
-    element_name: str
+    element_name
         The name of the raster element.
-    raster_data: DataTree
+    raster_data
         The raster data to write.
-    raster_format: Format
+    raster_format
         The format used to write the raster data.
-    storage_options: JSONDict | list[JSONDict] | None
+    storage_options
         Additional options for writing the raster data, like chunks and compression.
-    metadata: str | JSONDict | list[JSONDict]
+    metadata
         Additional metadata for the raster element
     """
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
