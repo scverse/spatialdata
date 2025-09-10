@@ -242,7 +242,7 @@ def _write_raster_dataarray(
     else:
         storage_options = {"chunks": chunks}
     # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
-    # We need this because the argument of write_image_ngff is called image while the argument of
+    # We need  this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
     metadata[raster_type] = data
     write_single_scale_ngff(
