@@ -298,8 +298,8 @@ class SpatialData:
 
         This method will overwrite the element in memory with the same element, but with new channel names.
         If 'write` is 'True', this method assumes that the `SpatialData` object and the element are already stored on
-        disk as it will also overwrite the channel names metadata on disk. In case either the `SpatialData` object or
-        the element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+        disk as it will also overwrite the channel names metadata on disk. If you do not want to overwrite the element
+        on disk, or it is not stored, set `write` to False.
 
         Parameters
         ----------
