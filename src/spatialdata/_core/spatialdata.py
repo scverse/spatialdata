@@ -1638,6 +1638,7 @@ class SpatialData:
         element_name: str | None = None,
         consolidate_metadata: bool | None = None,
         write_attrs: bool = True,
+        format: SpatialDataContainerFormatType | None = None,
     ) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
@@ -1674,7 +1675,7 @@ class SpatialData:
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
 
         if write_attrs:
-            self.write_attrs()
+            self.write_attrs(format=format)
 
         # TODO: discuss when has_consolidated_metadata that we should just consolidate it because after a writing
         # operation the consolidated store could otherwise be out of sync.
