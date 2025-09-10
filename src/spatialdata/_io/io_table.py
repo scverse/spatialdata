@@ -14,7 +14,7 @@ from zarr.errors import ArrayNotFoundError
 from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors
 from spatialdata._io.format import CurrentTablesFormat, TablesFormats, _parse_version
 from spatialdata._logging import logger
-from spatialdata.models import TableModel
+from spatialdata.models import TableModel, get_table_keys
 
 
 def _read_table(
@@ -97,10 +97,8 @@ def write_table(
     element_format: Format = CurrentTablesFormat(),
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
-        region = table.uns["spatialdata_attrs"]["region"]
-        region_key = table.uns["spatialdata_attrs"].get("region_key", None)
-        instance_key = table.uns["spatialdata_attrs"].get("instance_key", None)
-        element_format.validate_table(table, region_key, instance_key)
+        region, region_key, instance_key = get_table_keys(table)
+        TableModel().validate(table)
     else:
         region, region_key, instance_key = (None, None, None)
 

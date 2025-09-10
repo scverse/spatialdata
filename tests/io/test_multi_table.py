@@ -24,8 +24,13 @@ class TestMultiTable:
         adata2 = adata0.copy()
         del adata2.obs["region"]
         # fails because either none either all three 'region', 'region_key', 'instance_key' are required
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Region key `region` not in `adata.obs`."):
             full_sdata["not_added_table"] = adata2
+
+        adata3 = adata0.copy()
+        del adata3.obs["instance_id"]
+        with pytest.raises(ValueError, match="Instance key `instance_id` not in `adata.obs`."):
+            full_sdata["not_added_table"] = adata3
 
         assert len(full_sdata.tables) == 3
         assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
@@ -247,13 +252,13 @@ def test_static_set_annotation_target():
     )
     table = _get_table(region="test_non_shapes")
     table_target = table.copy()
-    table_target.obs["region"] = "test_shapes"
+    table_target.obs["region"] = pd.Categorical(["test_shapes"] * table_target.n_obs)
     table_target = SpatialData.update_annotated_regions_metadata(table_target)
     assert table_target.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
 
     test_sdata["another_table"] = table_target
 
-    table.obs["diff_region"] = "test_shapes"
+    table.obs["diff_region"] = pd.Categorical(["test_shapes"] * table.n_obs)
     table = SpatialData.update_annotated_regions_metadata(table, region_key="diff_region")
     assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
 
