@@ -160,10 +160,7 @@ class TestReadWrite:
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2, sdata_formats=sdata_container_format)
-        if len(list(sdata.gen_elements())) > 0:
-            _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
-        else:
-            assert tmpdir.exists() and tmpdir2.exists()
+        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
     def test_incremental_io_list_of_elements(
         self,
