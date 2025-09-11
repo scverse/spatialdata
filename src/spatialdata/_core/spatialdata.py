@@ -1701,9 +1701,7 @@ class SpatialData:
         if write_attrs:
             self.write_attrs(sdata_format=sdata_format)
 
-        # TODO: discuss when has_consolidated_metadata that we should just consolidate it because after a writing
-        # operation the consolidated store could otherwise be out of sync.
-        if consolidate_metadata is None and self.has_consolidated_metadata():
+        if self.has_consolidated_metadata():
             consolidate_metadata = True
         if consolidate_metadata:
             self.write_consolidated_metadata()
