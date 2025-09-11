@@ -1115,7 +1115,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
-    ) -> tuple[Path | None, Path | None]:
+    ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
 
@@ -1140,10 +1140,6 @@ class SpatialData:
             By default, the latest format is used for all elements, i.e.
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
-
-        Returns
-        -------
-        The old path and the new path of the SpatialData zarr store.
         """
         from spatialdata._io.format import _parse_formats
 
@@ -1170,14 +1166,11 @@ class SpatialData:
                 parsed_formats=parsed,
             )
 
-        old_path = self.path
         if self.path != file_path:
             self.path = file_path
 
         if consolidate_metadata:
             self.write_consolidated_metadata()
-
-        return old_path, self.path
 
     def _write_element(
         self,
@@ -1279,13 +1272,11 @@ class SpatialData:
         from spatialdata._io.format import _parse_formats
 
         parsed_formats = _parse_formats(formats=sdata_formats)
-        if parse_url(self.path) is None:
-            store = parse_url(self.path, mode="w", fmt=parsed_formats["SpatialData"]).store
-            store.close()
+
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
-                self.write_element(name, overwrite=overwrite)
+                self.write_element(name, overwrite=overwrite, sdata_formats=sdata_formats)
             return
 
         check_valid_name(element_name)
