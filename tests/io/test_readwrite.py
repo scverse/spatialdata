@@ -503,7 +503,7 @@ def test_incremental_io_in_memory(
         with pytest.raises(KeyError, match="Key `table` is not unique"):
             sdata["table"] = v
 
-    for k, v in _get_tables().items():
+    for k, v in _get_tables(region="labels2d").items():
         sdata.tables[f"additional_{k}"] = v
         with pytest.raises(KeyError, match="Key `poly` is not unique"):
             sdata["poly"] = v
@@ -715,13 +715,13 @@ def test_incremental_io_attrs(points: SpatialData, sdata_container_format: Spati
 
         # test incremental io attrs (write_attrs())
         sdata.attrs["c"] = 2
-        sdata.write_attrs(format=sdata_container_format)
+        sdata.write_attrs(sdata_format=sdata_container_format)
         sdata2 = SpatialData.read(f)
         assert sdata2.attrs["c"] == 2
 
         # test incremental io attrs (write_metadata())
         sdata.attrs["c"] = 3
-        sdata.write_metadata(format=sdata_container_format)
+        sdata.write_metadata(sdata_format=sdata_container_format)
         sdata2 = SpatialData.read(f)
         assert sdata2.attrs["c"] == 3
 
@@ -819,7 +819,7 @@ def test_element_already_on_disk_different_type(
             ValueError,
             match=ERROR_MSG,
         ):
-            full_sdata.write_metadata(element_name, format=sdata_container_format)
+            full_sdata.write_metadata(element_name, sdata_format=sdata_container_format)
 
         with pytest.raises(
             ValueError,
@@ -835,7 +835,7 @@ def test_writing_invalid_name(tmp_path: Path):
     invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
     invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
     invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
-    invalid_sdata.tables.data["has whitespace"] = _get_table()
+    invalid_sdata.tables.data["has whitespace"] = _get_table(region="any")
 
     with pytest.raises(ValueError, match="Name (must|cannot)"):
         invalid_sdata.write(tmp_path / "data.zarr")
@@ -859,7 +859,7 @@ def test_incremental_writing_invalid_name(tmp_path: Path):
     invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
     invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
     invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
-    invalid_sdata.tables.data["has whitespace"] = _get_table()
+    invalid_sdata.tables.data["has whitespace"] = _get_table(region="any")
 
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
         elements = getattr(invalid_sdata, element_type)
@@ -883,7 +883,7 @@ def test_reading_invalid_name(tmp_path: Path):
     labels_name, labels = next(iter(_get_labels().items()))
     points_name, points = next(iter(_get_points().items()))
     shapes_name, shapes = next(iter(_get_shapes().items()))
-    table_name, table = "table", _get_table()
+    table_name, table = "table", _get_table(region="labels2d")
     valid_sdata = SpatialData(
         images={image_name: image},
         labels={labels_name: labels},

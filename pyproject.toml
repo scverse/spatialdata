@@ -98,7 +98,7 @@ xfail_strict = true
 addopts = [
 #    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name
-    "-s"  # print output from tests
+    "-s",  # print output from tests
 ]
 # These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
 markers = [

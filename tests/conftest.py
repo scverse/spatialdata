@@ -64,12 +64,16 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region="labels2d")})
+    return SpatialData(tables={"table": _get_table(region="labels2d")}, labels=_get_labels())
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
+    return SpatialData(
+        tables={"table": _get_table(region=["labels2d", "poly"])},
+        labels=_get_labels(),
+        shapes=_get_shapes(),
+    )
 
 
 @pytest.fixture()
@@ -91,13 +95,20 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        tables=_get_tables(region="labels2d"),
+        tables=_get_tables(region="labels2d", region_key="region", instance_key="instance_id"),
     )
 
 
 @pytest.fixture(
     # params=["labels"]
-    params=["full", "empty"] + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
+    params=["full", "empty"]
+    + [
+        "images",
+        "labels",
+        "points",
+        "table_single_annotation",
+        "table_multiple_annotations",
+    ]
     # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
 def sdata(request) -> SpatialData:
@@ -258,7 +269,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_tables(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> dict[str, AnnData]:
@@ -266,13 +277,17 @@ def _get_tables(
 
 
 def _get_table(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> AnnData:
     adata = AnnData(
         RNG.normal(size=(100, 10)),
-        obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"], index=[f"{i}" for i in range(100)]),
+        obs=pd.DataFrame(
+            RNG.normal(size=(100, 3)),
+            columns=["a", "b", "c"],
+            index=[f"{i}" for i in range(100)],
+        ),
     )
     if not all(var for var in (region, region_key, instance_key)):
         return TableModel.parse(adata=adata)
@@ -392,7 +407,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     s_num = pd.Series(RNG.random(20))
     # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
     values_points = PointsModel.parse(
-        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+        dd.from_pandas(
+            values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num),
+            npartitions=1,
+        )
     )
 
     sdata = SpatialData(
@@ -425,7 +443,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
         var=pd.DataFrame(index=["numerical_in_var"]),
     )
     table = TableModel.parse(
-        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+        table,
+        region=["values_circles", "values_polygons"],
+        region_key="region",
+        instance_key="instance_id",
     )
     sdata["table"] = table
     return sdata
@@ -473,7 +494,11 @@ def adata_labels() -> AnnData:
         index=np.arange(n_obs_labels).astype(str),
     )
     uns_labels = {
-        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+        "spatialdata_attrs": {
+            "region": "test",
+            "region_key": "region",
+            "instance_key": "instance_id",
+        },
     }
     obsm_labels = {
         "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),

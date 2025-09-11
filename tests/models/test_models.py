@@ -534,7 +534,7 @@ def test_get_schema():
     labels = _get_labels()
     points = _get_points()
     shapes = _get_shapes()
-    table = _get_table()
+    table = _get_table(region="any", region_key="region", instance_key="instance_id")
     for k, v in images.items():
         schema = get_model(v)
         if "2d" in k:

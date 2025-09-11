@@ -132,7 +132,8 @@ def rasterize_bins(
 
         random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
         location_ids = table.obs[instance_key].iloc[random_indices].values
-        sub_df, sub_table = element.loc[location_ids], table[random_indices]
+        sub_df = element.loc[location_ids]
+        sub_table = table[random_indices]
 
         src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
         if isinstance(sub_df, GeoDataFrame):

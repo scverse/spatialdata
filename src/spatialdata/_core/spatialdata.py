@@ -18,6 +18,7 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
+from zarr.errors import GroupNotFoundError
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._core.validation import (
@@ -563,13 +564,6 @@ class SpatialData:
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
 
-        if not self.is_self_contained():
-            logger.info(
-                "The SpatialData object is not self-contained (i.e. it contains some elements that are Dask-backed from"
-                f" locations outside {self.path}). Please see the documentation of `is_self_contained()` to understand"
-                f" the implications of working with SpatialData objects that are not self-contained."
-            )
-
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
         Locate a SpatialElement within the SpatialData object and returns its Zarr paths relative to the root.
@@ -1047,7 +1041,7 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder, _resolve_zarr_store
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1057,11 +1051,14 @@ class SpatialData:
 
         # TODO: add test for this
         if os.path.exists(file_path):
-            if parse_url(file_path, mode="r") is None:
+            store = _resolve_zarr_store(file_path)
+            try:
+                zarr.open(store, mode="r")
+            except GroupNotFoundError as err:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
-                )
+                ) from err
             if not overwrite:
                 raise ValueError(
                     "The Zarr store already exists. Use `overwrite=True` to try overwriting the store. "
@@ -1113,6 +1110,7 @@ class SpatialData:
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
+        update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
@@ -1129,16 +1127,35 @@ class SpatialData:
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
             cloud stores (such as S3).
-        format
+        update_sdata_path
+            Whether to update the `path` attribute of the `SpatialData` object to `file_path` after a successful write
+            (default yes). Here are the implications.
+
+                - If `True`, and if the `SpatialData` object has dask-backed elements, the object will become "not
+                 self-contained" because the dask-backed element will have a path that is different from the new
+                 `sdata.path` attribute (now equal to `file_path`). By re-reading the object from disk, the object will
+                 become self-contained again.
+                - If `False`, the `SpatialData` object will keep its current `path` attribute, meaning that calling
+                `sdata.write_element()`, `sdata.write_attrs()`, ... will write the data to the current `sdata.path`
+                location, not to the `file_path` location.
+
+            Please consult :func:`spatialdata.SpatialData.is_self_contained` for more information on the implications of
+            working with self-contained and non-self-contained SpatialData objects.
+        sdata_formats
             The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
             parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
-            either a format for an element, or a list of formats.
-            For example it can be a subset of the following list `[RasterFormatVXX(), ShapesFormatVXX(),
-            PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the version number, and should be replaced with the
-            respective format; the version numbers can differ across elements).
-            By default, the latest format is used for all elements, i.e.
-            :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
-            :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+            either a format for an element, or a list of formats. For example it can be a subset of the following
+            list `[RasterFormatVXX(), ShapesFormatVXX(), PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the
+            version number, and should be replaced with the respective format; the version numbers can differ across
+            elements). By default, the latest format is used for all elements,
+            i.e. :class:`~spatialdata._io.format.CurrentRasterFormat`,
+            :class:`~spatialdata._io.format.CurrentShapesFormat`,
+            :class:`~spatialdata._io.format.CurrentPointsFormat`,
+            :class:`~spatialdata._io.format.CurrentTablesFormat`. Also, by default, if a format for the SpatialData
+            "container" object (i.e. SpatialDataContainerFormatVXX) is specified, but the format for some elements is
+            unspecified, the element formats will be set to the latest element format compatible with the specified
+            SpatialData container format. All the formats and relationships between them are defined in
+            `spatialdata._io.format.py`.
         """
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats
@@ -1166,7 +1183,7 @@ class SpatialData:
                 parsed_formats=parsed,
             )
 
-        if self.path != file_path:
+        if self.path != file_path and update_sdata_path:
             self.path = file_path
 
         if consolidate_metadata:
@@ -1640,7 +1657,7 @@ class SpatialData:
         element_name: str | None = None,
         consolidate_metadata: bool | None = None,
         write_attrs: bool = True,
-        format: SpatialDataContainerFormatType | None = None,
+        sdata_format: SpatialDataContainerFormatType | None = None,
     ) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
@@ -1661,6 +1678,11 @@ class SpatialData:
         consolidate_metadata
             If True, consolidate the metadata to more easily support remote reading. By default write the metadata
             only if the metadata was already consolidated.
+        write_attrs
+            If True, write the SpatialData.attrs metadata to the root of the Zarr store.
+        sdata_format
+            The format to use for writing the metadata of the `SpatialData` object. See more details in the
+            documentation of `SpatialData.write()`.
 
         Notes
         -----
@@ -1677,7 +1699,7 @@ class SpatialData:
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
 
         if write_attrs:
-            self.write_attrs(format=format)
+            self.write_attrs(sdata_format=sdata_format)
 
         # TODO: discuss when has_consolidated_metadata that we should just consolidate it because after a writing
         # operation the consolidated store could otherwise be out of sync.

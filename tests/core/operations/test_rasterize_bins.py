@@ -20,7 +20,13 @@ from spatialdata._core.operations.rasterize_bins import (
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
+from spatialdata.models.models import (
+    Image2DModel,
+    Labels2DModel,
+    PointsModel,
+    ShapesModel,
+    TableModel,
+)
 from spatialdata.transformations.transformations import Scale
 
 RNG = default_rng(0)
@@ -42,24 +48,29 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
     n = 10
     data, x, y = _get_bins_data(n)
     scale = Scale([2.0], axes=("x",))
+    index = np.arange(1, len(data) + 1)
 
     if geometry == "points":
-        points = PointsModel.parse(data, transformations={"global": scale})
+        points = PointsModel.parse(
+            data,
+            transformations={"global": scale},
+            annotation=pd.DataFrame(index=index),
+        )
     elif geometry == "circles":
-        points = ShapesModel.parse(data, geometry=0, radius=1, transformations={"global": scale})
+        points = ShapesModel.parse(data, geometry=0, radius=1, transformations={"global": scale}, index=index)
     else:
         assert geometry == "squares"
 
         gdf = GeoDataFrame(
-            data={"geometry": [Polygon([(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1), (x, y)]) for x, y in data]}
+            index=index,
+            data={"geometry": [Polygon([(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1), (x, y)]) for x, y in data]},
         )
-
         points = ShapesModel.parse(gdf, transformations={"global": scale})
 
     obs = DataFrame(
         data={
             "region": pd.Categorical(["points"] * n * n),
-            "instance_id": np.arange(n * n),
+            "instance_id": index,
             "col_index": x,
             "row_index": y,
         },
@@ -68,7 +79,10 @@ def test_rasterize_bins(geometry: str, value_key: str | list[str] | None, return
     X = RNG.normal(size=(n * n, 2))
     var = DataFrame(index=["gene0", "gene1"])
     table = TableModel.parse(
-        AnnData(X=X, var=var, obs=obs), region="points", region_key="region", instance_key="instance_id"
+        AnnData(X=X, var=var, obs=obs),
+        region="points",
+        region_key="region",
+        instance_key="instance_id",
     )
     sdata = SpatialData.init_from_elements({"points": points, "table": table})
     rasterized = rasterize_bins(
@@ -215,7 +229,10 @@ def test_rasterize_bins_invalid():
     sdata = _get_sdata(n=3)
     table = sdata.tables["table"]
     table.obs["region"] = table.obs["region"].astype(str)
-    with pytest.raises(ValueError, match="Please convert `table.obs.*` to a category series to improve performances"):
+    with pytest.raises(
+        ValueError,
+        match="Please convert `table.obs.*` to a category series to improve performances",
+    ):
         _ = rasterize_bins(
             sdata=sdata,
             bins="points",

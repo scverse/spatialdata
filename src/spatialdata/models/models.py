@@ -667,8 +667,8 @@ class PointsModel:
             )
         if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
             feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
-            if not isinstance(data[feature_key].dtype, CategoricalDtype):
-                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
+            if feature_key not in data.columns:
+                warnings.warn(f"Column `{feature_key}` not found." + SUGGESTION, UserWarning, stacklevel=2)
 
     @singledispatchmethod
     @classmethod

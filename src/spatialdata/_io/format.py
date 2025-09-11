@@ -1,4 +1,3 @@
-import warnings
 from collections.abc import Iterator
 from typing import Any
 
@@ -405,12 +404,7 @@ def _parse_formats(
             raise ValueError(f"Unsupported format {fmt}")
 
     if parsed["SpatialData"].__str__() == "SpatialDataContainerFormatV01":
-        warnings.warn(
-            "SpatialData format defined to be 'SpatialDataContainerFormatV01'. Defaulting undefined element "
-            "formats to element formats valid for 'SpatialDataContainerFormatV01'.",
-            UserWarning,
-            stacklevel=2,
-        )
+        # defaulting undefined element formats to element formats valid for 'SpatialDataContainerFormatV01'
         for el_type, value in modified.items():
             if el_type != "SpatialData" and not value:
                 parsed[el_type] = ContainerV01DefaultTypes[el_type]
