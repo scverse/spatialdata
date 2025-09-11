@@ -16,7 +16,6 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from dask.delayed import Delayed
 from geopandas import GeoDataFrame
-from ome_zarr.io import parse_url
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
 
@@ -1141,6 +1140,7 @@ class SpatialData:
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
         """
+        from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats
 
         parsed = _parse_formats(sdata_formats)
@@ -1150,9 +1150,9 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
-        store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
-        zarr_group = zarr.open_group(store=store, mode="r+")
+        store = _resolve_zarr_store(file_path)
+        zarr_format = parsed["SpatialData"].zarr_format
+        zarr_group = zarr.create_group(store=store, overwrite=overwrite, zarr_format=zarr_format)
         self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
         store.close()
 
@@ -1162,7 +1162,7 @@ class SpatialData:
                 zarr_container_path=file_path,
                 element_type=element_type,
                 element_name=element_name,
-                overwrite=overwrite,
+                overwrite=False,
                 parsed_formats=parsed,
             )
 
