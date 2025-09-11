@@ -1154,7 +1154,7 @@ class SpatialData:
             if index == 0:
                 # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
                 store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
-                zarr_group = zarr.open_group(store=store, mode="w" if overwrite else "a")
+                zarr_group = zarr.open_group(store=store, mode="r+" if overwrite else "a")
                 self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
                 store.close()
             self._write_element(
