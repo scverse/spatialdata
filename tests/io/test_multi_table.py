@@ -41,6 +41,14 @@ class TestMultiTable:
         assert_equal(adata1, full_sdata["adata1"])
         assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
 
+    def test_null_values_in_instance_key_column(self, full_sdata: SpatialData):
+        n_obs = full_sdata["table"].n_obs
+        full_sdata["table"].obs["instance_id"] = range(n_obs)
+        # introduce null values
+        full_sdata["table"].obs.loc[0, "instance_id"] = None
+        with pytest.raises(ValueError, match="must not contain null values, but it does."):
+            full_sdata.validate_table_in_spatialdata(table=full_sdata["table"])
+
     @pytest.mark.parametrize(
         "region_key, instance_key, error_msg",
         [

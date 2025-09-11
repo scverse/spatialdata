@@ -54,6 +54,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "bump2version",
+    "sentry-prevent-cli",
 ]
 test = [
     "pytest",
