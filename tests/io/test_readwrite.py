@@ -933,7 +933,7 @@ def test_can_read_sdata_with_reconsolidation(full_sdata, sdata_container_format:
             json_path = path / ".zmetadata"
             json_dict = json.loads(json_path.read_text())
             # TODO: this raises no exception!
-            del json_dict["metadata"]["images/image2d/0/.zattrs"]
+            del json_dict["metadata"]["images/image2d/.zgroup"]
         else:
             json_path = path / "zarr.json"
             json_dict = json.loads(json_path.read_text())
