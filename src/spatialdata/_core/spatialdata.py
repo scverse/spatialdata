@@ -1154,13 +1154,13 @@ class SpatialData:
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        for index, (element_type, element_name, element) in enumerate(self.gen_elements()):
-            if index == 0:
-                # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
-                store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
-                zarr_group = zarr.open_group(store=store, mode="r+" if overwrite else "a")
-                self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
-                store.close()
+        # parse_url cannot be replaced here as it actually also initialized an ome-zarr store.
+        store = parse_url(file_path, mode="w", fmt=parsed["SpatialData"]).store
+        zarr_group = zarr.open_group(store=store, mode="r+")
+        self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
+        store.close()
+
+        for element_type, element_name, element in self.gen_elements():
             self._write_element(
                 element=element,
                 zarr_container_path=file_path,
@@ -1173,15 +1173,9 @@ class SpatialData:
         old_path = self.path
         if self.path != file_path:
             self.path = file_path
-        if parse_url(file_path):
-            if consolidate_metadata:
-                self.write_consolidated_metadata()
-        else:
-            warnings.warn(
-                "The SpatialData object is empty. Only the directory has been written, but it is nozarr store.",
-                UserWarning,
-                stacklevel=2,
-            )
+
+        if consolidate_metadata:
+            self.write_consolidated_metadata()
 
         return old_path, self.path
 

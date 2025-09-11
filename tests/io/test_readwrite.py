@@ -160,7 +160,10 @@ class TestReadWrite:
         sdata2 = SpatialData.read(tmpdir)
         tmpdir2 = Path(tmp_path) / "tmp2.zarr"
         sdata2.write(tmpdir2, sdata_formats=sdata_container_format)
-        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+        if len(list(sdata.gen_elements())) > 0:
+            _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+        else:
+            assert tmpdir.exists() and tmpdir2.exists()
 
     def test_incremental_io_list_of_elements(
         self,
@@ -371,16 +374,17 @@ class TestReadWrite:
                 t1 = get_transformation(SpatialData.read(f)[elem_name])
                 assert isinstance(t1, Scale)
 
-    def test_overwrite_works_when_no_zarr_store(
+    def test_write_overwrite_fails_when_no_zarr_store(
         self, full_sdata, sdata_container_format: SpatialDataContainerFormatType
     ):
         with tempfile.TemporaryDirectory() as tmpdir:
-            f = os.path.join(tmpdir, "data.zarr")
+            f = Path(tmpdir) / "data.zarr"
+            f.mkdir()
             old_data = SpatialData()
-            old_data.write(f, sdata_formats=sdata_container_format)
-            # Since no, no risk of overwriting backing data.
-            # Should not raise "The file path specified is the same as the one used for backing."
-            full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
+            with pytest.raises(ValueError, match="The target file path specified already exists"):
+                old_data.write(f, sdata_formats=sdata_container_format)
+            with pytest.raises(ValueError, match="The target file path specified already exists"):
+                full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
 
     def test_overwrite_fails_when_no_zarr_store_bug_dask_backed_data(
         self,
