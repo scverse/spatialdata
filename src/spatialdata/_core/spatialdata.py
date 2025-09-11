@@ -1615,7 +1615,7 @@ class SpatialData:
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import CurrentSpatialDataContainerFormat, SpatialDataContainerFormatType
 
-        sdata_format = sdata_format if sdata_format is not None else CurrentSpatialDataContainerFormat
+        sdata_format = sdata_format if sdata_format is not None else CurrentSpatialDataContainerFormat()
         assert isinstance(sdata_format, SpatialDataContainerFormatType)
 
         store = None
