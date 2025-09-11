@@ -1115,7 +1115,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
-    ) -> None:
+    ) -> tuple[Path | None, Path | None]:
         """
         Write the `SpatialData` object to a Zarr store.
 
@@ -1140,6 +1140,10 @@ class SpatialData:
             By default, the latest format is used for all elements, i.e.
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+
+        Returns
+        -------
+        The old path and the new path of the SpatialData zarr store.
         """
         from spatialdata._io.format import _parse_formats
 
@@ -1166,14 +1170,20 @@ class SpatialData:
                 parsed_formats=parsed,
             )
 
+        old_path = self.path
+        if self.path != file_path:
+            self.path = file_path
         if parse_url(file_path):
-            if self.path != file_path:
-                old_path = self.path
-                self.path = file_path
-                logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
-
             if consolidate_metadata:
                 self.write_consolidated_metadata()
+        else:
+            warnings.warn(
+                "The SpatialData object is empty. Only the directory has been written, but it is nozarr store.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        return old_path, self.path
 
     def _write_element(
         self,
@@ -1272,15 +1282,18 @@ class SpatialData:
         If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
         an element, the writing of the remaining elements will not be attempted.
         """
+        from spatialdata._io.format import _parse_formats
+
+        parsed_formats = _parse_formats(formats=sdata_formats)
+        if parse_url(self.path) is None:
+            store = parse_url(self.path, mode="w", fmt=parsed_formats["SpatialData"]).store
+            store.close()
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
                 self.write_element(name, overwrite=overwrite)
             return
 
-        from spatialdata._io.format import _parse_formats
-
-        parsed_formats = _parse_formats(formats=sdata_formats)
         check_valid_name(element_name)
         self._validate_element_names_are_unique()
         element = self.get(element_name)
