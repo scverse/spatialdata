@@ -1,4 +1,5 @@
-import os
+from __future__ import annotations
+
 from json import JSONDecodeError
 from typing import Literal
 
@@ -46,22 +47,19 @@ def _read_table(
     count = 0
     for table_name in subgroup:
         f_elem = subgroup[table_name]
-        f_elem_store = os.path.join(zarr_store_path, f_elem.path)
 
         with handle_read_errors(
             on_bad_files=on_bad_files,
             location=f"{subgroup.path}/{table_name}",
             exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError),
         ):
-            tables[table_name] = read_anndata_zarr(f_elem_store)
+            tables[table_name] = read_anndata_zarr(f_elem)
 
-            f = zarr.open(f_elem_store, mode="r")
-            version = _parse_version(f, expect_attrs_key=False)
+            version = _parse_version(f_elem, expect_attrs_key=False)
             assert version is not None
             # since have just one table format, we currently read it but do not use it; if we ever change the format
             # we can rename the two _ to format and implement the per-format read logic (as we do for shapes)
             _ = TablesFormats[version]
-            f.store.close()
 
             # # replace with format from above
             # version = "0.1"

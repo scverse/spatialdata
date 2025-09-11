@@ -253,7 +253,7 @@ SpatialDataContainerFormats = {
 def format_implementations() -> Iterator[Format]:
     """Return an instance of each format implementation, newest to oldest."""
     yield RasterFormatV02()
-    # yield RasterFormatV01()  # same format string as FormatV04
+    yield RasterFormatV01()  # same format string as FormatV04
     yield FormatV04()
     yield FormatV03()
     yield FormatV02()

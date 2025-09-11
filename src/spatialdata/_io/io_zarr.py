@@ -1,47 +1,100 @@
 import logging
-import os
 import warnings
 from json import JSONDecodeError
-from pathlib import Path
 from typing import Literal
 
 import zarr
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from pyarrow import ArrowInvalid
+from xarray import DataArray, DataTree
 from zarr.errors import ArrayNotFoundError, MetadataError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    _create_upath,
+    _open_zarr_store,
+    handle_read_errors,
+    ome_zarr_logger,
+)
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+from spatialdata._types import StoreLike
 
 
-def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
-    """
-    Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
+def is_hidden_zarr_entry(name: str) -> bool:
+    """Skip hidden files like '.zgroup' or '.zmetadata'."""
+    return name.rpartition("/")[2].startswith(".")
+
+
+def read_image_element(path: StoreLike) -> DataArray | DataTree:
+    """Read a single image element from a store location.
 
     Parameters
     ----------
-    store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+    path
+        Path to the zarr store.
 
     Returns
     -------
-    A tuple of the zarr.Group object and the path to the store.
+    A DataArray or DataTree object.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
-    # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
-    if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
-        f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
-    return f, f_store_path
+    # stay in sync with ome v4 format spec:
+    # https://github.com/ome/ome-zarr-py/blob/7d1ae35c97/ome_zarr/format.py#L189-L192
+    store = _open_zarr_store(path, normalize_keys=False)
+    return _read_multiscale(store, raster_type="image")
+
+
+def read_labels_element(path: StoreLike) -> DataArray | DataTree:
+    """Read a single image element from a store location.
+
+    Parameters
+    ----------
+    path
+        Path to the zarr store.
+
+    Returns
+    -------
+    A DataArray or DataTree object.
+    """
+    store = _open_zarr_store(path)
+    return _read_multiscale(store, raster_type="labels")
+
+
+def read_points_element(path: StoreLike) -> DaskDataFrame:
+    store = _open_zarr_store(path)
+    return _read_points(store)
+
+
+def read_shapes_element(path: StoreLike) -> GeoDataFrame:
+    store = _open_zarr_store(path)
+    return _read_shapes(store)
+
+
+def read_tables_element(
+    zarr_store_path: StoreLike,
+    group: zarr.Group,
+    subgroup: zarr.Group,
+    tables: dict[str, AnnData],
+    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
+) -> dict[str, AnnData]:
+    store = _open_zarr_store(zarr_store_path)
+    return _read_table(
+        store,
+        group,
+        subgroup,
+        tables,
+        on_bad_files,
+    )
 
 
 def read_zarr(
-    store: str | Path | zarr.Group,
+    store: StoreLike,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
@@ -71,7 +124,8 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    f, f_store_path = _open_zarr_store(store)
+    _store = _open_zarr_store(store)
+    f = zarr.group(_store)
 
     images = {}
     labels = {}
@@ -93,11 +147,9 @@ def read_zarr(
             group = f["images"]
             count = 0
             for subgroup_name in group:
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
+                if is_hidden_zarr_entry(subgroup_name):
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -109,7 +161,7 @@ def read_zarr(
                         TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
                     ),
                 ):
-                    element = _read_multiscale(f_elem_store, raster_type="image")
+                    element = read_image_element(f_elem)
                     images[subgroup_name] = element
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
@@ -125,17 +177,15 @@ def read_zarr(
                 group = f["labels"]
                 count = 0
                 for subgroup_name in group:
-                    if Path(subgroup_name).name.startswith("."):
-                        # skip hidden files like .zgroup or .zmetadata
+                    if is_hidden_zarr_entry(subgroup_name):
                         continue
                     f_elem = group[subgroup_name]
-                    f_elem_store = os.path.join(f_store_path, f_elem.path)
                     with handle_read_errors(
                         on_bad_files,
                         location=f"{group.path}/{subgroup_name}",
                         exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
                     ):
-                        labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
+                        labels[subgroup_name] = read_labels_element(f_elem)
                         count += 1
                 logger.debug(f"Found {count} elements in {group}")
 
@@ -150,16 +200,14 @@ def read_zarr(
             count = 0
             for subgroup_name in group:
                 f_elem = group[subgroup_name]
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
+                if is_hidden_zarr_entry(subgroup_name):
                     continue
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
                     exc_types=(JSONDecodeError, KeyError, ArrowInvalid),
                 ):
-                    points[subgroup_name] = _read_points(f_elem_store)
+                    points[subgroup_name] = read_points_element(f_elem)
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
 
@@ -172,11 +220,9 @@ def read_zarr(
             group = f["shapes"]
             count = 0
             for subgroup_name in group:
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
+                if is_hidden_zarr_entry(subgroup_name):
                     continue
                 f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -187,7 +233,7 @@ def read_zarr(
                         ArrayNotFoundError,
                     ),
                 ):
-                    shapes[subgroup_name] = _read_shapes(f_elem_store)
+                    shapes[subgroup_name] = read_shapes_element(f_elem)
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
     if "tables" in selector and "tables" in f:
@@ -197,12 +243,11 @@ def read_zarr(
             exc_types=(JSONDecodeError, MetadataError),
         ):
             group = f["tables"]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
+            tables = read_tables_element(_store, f, group, tables, on_bad_files=on_bad_files)
 
     if "table" in selector and "table" in f:
         warnings.warn(
-            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store to use tables "
-            f"instead.",
+            f"Table group found in zarr store at location {store}. Please update the zarr store to use tables instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -213,7 +258,7 @@ def read_zarr(
             exc_types=(JSONDecodeError, MetadataError),
         ):
             group = f[subgroup_name]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
+            tables = read_tables_element(store, f, group, tables, on_bad_files=on_bad_files)
 
             logger.debug(f"Found {count} elements in {group}")
 
@@ -234,5 +279,5 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = Path(store)
+    sdata.path = _create_upath(_store)
     return sdata

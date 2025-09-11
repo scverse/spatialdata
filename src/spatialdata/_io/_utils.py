@@ -13,14 +13,18 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any, Literal
 
-import zarr
+import zarr.storage
 from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from upath import UPath
+from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.storage import FSStore
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import StoreLike
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -381,6 +385,48 @@ def save_transformations(sdata: SpatialData) -> None:
         stacklevel=2,
     )
     sdata.write_transformations()
+
+
+def _open_zarr_store(path: StoreLike, **kwargs: Any) -> zarr.storage.BaseStore:
+    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
+    if isinstance(path, str | Path):
+        # if the input is str or Path, map it to UPath
+        path = UPath(path)
+    if isinstance(path, PosixUPath | WindowsUPath):
+        # if the input is a local path, use DirectoryStore
+        return zarr.storage.DirectoryStore(path.path, dimension_separator="/")
+    if isinstance(path, zarr.Group):
+        # if the input is a zarr.Group, wrap it with a store
+        if isinstance(path.store, zarr.storage.DirectoryStore):
+            # create a simple FSStore if the store is a DirectoryStore with just the path
+            return FSStore(os.path.join(path.store.path, path.path), **kwargs)
+        if isinstance(path.store, FSStore):
+            # if the store within the zarr.Group is an FSStore, return it
+            # but extend the path of the store with that of the zarr.Group
+            return FSStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
+        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
+            return path.store.store
+        raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
+    if isinstance(path, zarr.storage.StoreLike):
+        # if the input already a store, wrap it in an FSStore
+        return FSStore(path, **kwargs)
+    if isinstance(path, UPath):
+        # if input is a remote UPath, map it to an FSStore
+        return FSStore(path.path, fs=path.fs, **kwargs)
+    raise TypeError(f"Unsupported type: {type(path)}")
+
+
+def _create_upath(path: StoreLike) -> UPath | None:
+    # try to create a UPath from the input
+    if isinstance(path, zarr.storage.ConsolidatedMetadataStore):
+        path = path.store  # get the fsstore from the consolidated store
+    if isinstance(path, FSStore):
+        protocol = path.fs.protocol if isinstance(path.fs.protocol, str) else path.fs.protocol[0]
+        return UPath(path.path, protocol=protocol, **path.fs.storage_options)
+    if isinstance(path, zarr.storage.DirectoryStore):
+        return UPath(path.path)
+    return None
 
 
 class BadFileHandleMethod(Enum):
