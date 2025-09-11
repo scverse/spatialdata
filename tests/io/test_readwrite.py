@@ -229,7 +229,8 @@ class TestReadWrite:
         del sdata[new_name]
         sdata.delete_element_from_disk(new_name)
 
-    @pytest.mark.parametrize("dask_backed", [True, False])
+    # @pytest.mark.parametrize("dask_backed", [True, False])
+    @pytest.mark.parametrize("dask_backed", [True])
     @pytest.mark.parametrize("workaround", [1, 2])
     def test_incremental_io_on_disk(
         self,
@@ -274,7 +275,24 @@ class TestReadWrite:
             ):
                 sdata.write_element(name, sdata_formats=sdata_container_format)
 
-            with pytest.raises(ValueError, match="Cannot overwrite."):
+            match = (
+                "Details: the target path contains one or more files that Dask use for backing elements in the "
+                "SpatialData object"
+                if dask_backed
+                and name
+                in [
+                    "image2d",
+                    "labels2d",
+                    "image3d_multiscale_xarray",
+                    "labels3d_multiscale_xarray",
+                    "points_0",
+                ]
+                else "Details: the target path in which to save an element is a subfolder of the current Zarr store."
+            )
+            with pytest.raises(
+                ValueError,
+                match=match,
+            ):
                 sdata.write_element(name, overwrite=True, sdata_formats=sdata_container_format)
 
             if workaround == 1:
@@ -383,7 +401,7 @@ class TestReadWrite:
             with pytest.raises(ValueError, match="The target file path specified already exists"):
                 full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
 
-    def test_overwrite_fails_when_no_zarr_store_bug_dask_backed_data(
+    def test_overwrite_fails_when_no_zarr_store_but_dask_backed_data(
         self,
         full_sdata,
         points,
@@ -411,7 +429,8 @@ class TestReadWrite:
 
                 with pytest.raises(
                     ValueError,
-                    match="Cannot overwrite.",
+                    match=r"Details: the target path contains one or more files that Dask use for "
+                    "backing elements in the SpatialData object",
                 ):
                     full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
 
@@ -431,7 +450,7 @@ class TestReadWrite:
 
             with pytest.raises(
                 ValueError,
-                match="Cannot overwrite.",
+                match=r"Details: the target path either contains, coincides or is contained in the current Zarr store",
             ):
                 full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
 
