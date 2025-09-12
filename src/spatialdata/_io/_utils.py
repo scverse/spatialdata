@@ -1,5 +1,4 @@
 import filecmp
-import logging
 import os.path
 import re
 import sys
@@ -33,18 +32,6 @@ from spatialdata.models._utils import (
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
-
-
-# suppress logger debug from ome_zarr with context manager
-@contextmanager
-def ome_zarr_logger(level: Any) -> Generator[None, None, None]:
-    logger = logging.getLogger("ome_zarr")
-    current_level = logger.getEffectiveLevel()
-    logger.setLevel(level)
-    try:
-        yield
-    finally:
-        logger.setLevel(current_level)
 
 
 def _get_transformations_from_ngff_dict(
@@ -472,7 +459,7 @@ class BadFileHandleMethod(Enum):
 def handle_read_errors(
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
     location: str,
-    exc_types: tuple[type[Exception], ...],
+    exc_types: type[BaseException] | tuple[type[BaseException], ...],
 ) -> Generator[None, None, None]:
     """
     Handle read errors according to parameter `on_bad_files`.

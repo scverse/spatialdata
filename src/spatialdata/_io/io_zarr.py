@@ -1,4 +1,3 @@
-import logging
 import os
 import warnings
 from json import JSONDecodeError
@@ -8,14 +7,13 @@ from typing import Literal
 import zarr.storage
 from anndata import AnnData
 from pyarrow import ArrowInvalid
-from zarr.errors import ArrayNotFoundError, MetadataValidationError
+from zarr.errors import ArrayNotFoundError
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
     BadFileHandleMethod,
     _resolve_zarr_store,
     handle_read_errors,
-    ome_zarr_logger,
 )
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
@@ -72,34 +70,40 @@ def read_zarr(
 
     # We raise OS errors instead for some read errors now as in zarr v3 with some corruptions nothing will be read.
     # related to images / labels.
-    if "images" in selector and "images" in root_group:
-        group = root_group["images"]
-        count = 0
-        for subgroup_name in group:
-            if Path(subgroup_name).name.startswith("."):
-                # skip hidden files like .zgroup or .zmetadata
-                continue
-            elem_group = group[subgroup_name]
-            elem_group_path = os.path.join(root_store_path, elem_group.path)
-            with handle_read_errors(
-                on_bad_files,
-                location=f"{group.path}/{subgroup_name}",
-                exc_types=(
-                    JSONDecodeError,  # JSON parse error
-                    ValueError,  # ome_zarr: Unable to read the NGFF file
-                    KeyError,  # Missing JSON key
-                    ArrayNotFoundError,  # Image chunks missing
-                    TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
-                    OSError,
-                ),
-            ):
-                element = _read_multiscale(elem_group_path, raster_type="image")
-                images[subgroup_name] = element
-                count += 1
-        logger.debug(f"Found {count} elements in {group}")
+    with handle_read_errors(
+        on_bad_files,
+        location="images",
+        exc_types=JSONDecodeError,
+    ):
+        if "images" in selector and "images" in root_group:
+            group = root_group["images"]
+            count = 0
+            for subgroup_name in group:
+                if Path(subgroup_name).name.startswith("."):
+                    # skip hidden files like .zgroup or .zmetadata
+                    continue
+                elem_group = group[subgroup_name]
+                elem_group_path = os.path.join(root_store_path, elem_group.path)
+                with handle_read_errors(
+                    on_bad_files,
+                    location=f"{group.path}/{subgroup_name}",
+                    exc_types=(
+                        KeyError,
+                        ArrayNotFoundError,
+                        OSError,
+                    ),
+                ):
+                    element = _read_multiscale(elem_group_path, raster_type="image")
+                    images[subgroup_name] = element
+                    count += 1
+            logger.debug(f"Found {count} elements in {group}")
 
     # read multiscale labels
-    with ome_zarr_logger(logging.ERROR):
+    with handle_read_errors(
+        on_bad_files,
+        location="labels",
+        exc_types=JSONDecodeError,
+    ):
         if "labels" in selector and "labels" in root_group:
             group = root_group["labels"]
             count = 0
@@ -113,25 +117,21 @@ def read_zarr(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
                     exc_types=(
-                        JSONDecodeError,
                         KeyError,
-                        ValueError,
                         ArrayNotFoundError,
-                        TypeError,
                         OSError,
                     ),
                 ):
                     labels[subgroup_name] = _read_multiscale(elem_group_path, raster_type="labels")
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
-
     # now read rest of the data
-    if "points" in selector and "points" in root_group:
-        with handle_read_errors(
-            on_bad_files,
-            location="points",
-            exc_types=(JSONDecodeError, MetadataValidationError),
-        ):
+    with handle_read_errors(
+        on_bad_files,
+        location="points",
+        exc_types=JSONDecodeError,
+    ):
+        if "points" in selector and "points" in root_group:
             group = root_group["points"]
             count = 0
             for subgroup_name in group:
@@ -143,18 +143,18 @@ def read_zarr(
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
-                    exc_types=(JSONDecodeError, KeyError, ArrowInvalid),
+                    exc_types=(KeyError, ArrowInvalid, JSONDecodeError),
                 ):
                     points[subgroup_name] = _read_points(elem_group_path)
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
 
-    if "shapes" in selector and "shapes" in root_group:
-        with handle_read_errors(
-            on_bad_files,
-            location="shapes",
-            exc_types=(JSONDecodeError, MetadataValidationError),
-        ):
+    with handle_read_errors(
+        on_bad_files,
+        location="shapes",
+        exc_types=JSONDecodeError,
+    ):
+        if "shapes" in selector and "shapes" in root_group:
             group = root_group["shapes"]
             count = 0
             for subgroup_name in group:
@@ -168,7 +168,6 @@ def read_zarr(
                     location=f"{group.path}/{subgroup_name}",
                     exc_types=(
                         JSONDecodeError,
-                        ValueError,
                         KeyError,
                         ArrayNotFoundError,
                     ),
@@ -180,21 +179,10 @@ def read_zarr(
         with handle_read_errors(
             on_bad_files,
             location="tables",
-            exc_types=(JSONDecodeError, MetadataValidationError),
+            exc_types=JSONDecodeError,
         ):
             group = root_group["tables"]
             tables = _read_table(root_store_path, group, tables, on_bad_files=on_bad_files)
-    if "tables" in selector and "table" in root_group:
-        with handle_read_errors(
-            on_bad_files,
-            location="table",
-            exc_types=(ValueError,),
-        ):
-            raise ValueError(
-                f"`table` group found in zarr store at location {root_store_path} "
-                "instead of `tables`. Please update the zarr store to use `tables` "
-                "instead.",
-            )
 
     # read attrs metadata
     attrs = root_group.attrs.asdict()
