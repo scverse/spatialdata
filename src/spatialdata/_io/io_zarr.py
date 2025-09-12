@@ -42,7 +42,7 @@ def _read_zarr_group_spatialdata_element(
     ):
         if group_name in selector and group_name in root_group:
             group = root_group[group_name]
-            if isinstance(read_func, TablesReader) and element_type == "tables":
+            if isinstance(read_func, TablesReader):
                 read_func(root_store_path, group, element_container, on_bad_files=on_bad_files)
             else:
                 count = 0
@@ -57,7 +57,7 @@ def _read_zarr_group_spatialdata_element(
                         location=f"{group.path}/{subgroup_name}",
                         exc_types=(KeyError, ArrayNotFoundError, OSError, ArrowInvalid, JSONDecodeError),
                     ):
-                        if isinstance(read_func, MultiscaleReader) and element_type in ("image", "labels"):
+                        if isinstance(read_func, MultiscaleReader):
                             element = read_func(elem_group_path, cast(Literal["image", "labels"], element_type))
                         if isinstance(read_func, PointsReader | ShapesReader):
                             element = read_func(elem_group_path)
