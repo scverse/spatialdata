@@ -21,7 +21,7 @@ def _read_table(
     group: zarr.Group,
     tables: dict[str, AnnData],
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
-) -> dict[str, AnnData]:
+) -> None:
     """
     Read in tables in the tables Zarr.group of a SpatialData Zarr store.
 
@@ -85,7 +85,17 @@ def _read_table(
             count += 1
 
     logger.debug(f"Found {count} elements in {group}")
-    return tables
+
+
+class TablesReader:
+    def __call__(
+        self,
+        path: str,
+        group: zarr.Group,
+        container: dict[str, AnnData],
+        on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
+    ) -> None:
+        return _read_table(path, group, container, on_bad_files)
 
 
 def write_table(
