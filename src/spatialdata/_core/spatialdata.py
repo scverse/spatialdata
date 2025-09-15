@@ -1179,6 +1179,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1204,7 +1205,16 @@ class SpatialData:
             By default, the latest format is used for all elements, i.e.
             :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
             :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+        compressor
+            A dictionary with as key the type of compression to use for images and labels and as value the compression
+            level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are supported. If not
+            specified, the compression will be `lz4` with compression level 5. Bytes are automatically ordered for more
+            efficient compression.
         """
+        from spatialdata._io._utils import _validate_compressor_args
+
+        _validate_compressor_args(compressor)
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
@@ -1223,6 +1233,7 @@ class SpatialData:
                 element_name=element_name,
                 overwrite=False,
                 format=format,
+                compressor=compressor,
             )
 
         if self.path != file_path:
@@ -1241,6 +1252,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
@@ -1260,9 +1272,17 @@ class SpatialData:
         parsed = _parse_formats(formats=format)
 
         if element_type == "images":
-            write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
+            write_image(
+                image=element,
+                group=element_type_group,
+                name=element_name,
+                format=parsed["raster"],
+                compressor=compressor,
+            )
         elif element_type == "labels":
-            write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
+            write_labels(
+                labels=element, group=root_group, name=element_name, format=parsed["raster"], compressor=compressor
+            )
         elif element_type == "points":
             write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
         elif element_type == "shapes":
@@ -1277,6 +1297,7 @@ class SpatialData:
         element_name: str | list[str],
         overwrite: bool = False,
         format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1292,6 +1313,11 @@ class SpatialData:
         format
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
+        compressor
+            A dictionary with as key the type of compression to use for images and labels and as value the compression
+            level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are supported. If not
+            specified, the compression will be `lz4` with compression level 5. Bytes are automatically ordered for more
+            efficient compression.
 
         Notes
         -----
@@ -1301,7 +1327,7 @@ class SpatialData:
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
-                self.write_element(name, overwrite=overwrite)
+                self.write_element(name, overwrite=overwrite, compressor=compressor)
             return
 
         check_valid_name(element_name)
@@ -1335,6 +1361,7 @@ class SpatialData:
             element_name=element_name,
             overwrite=overwrite,
             format=format,
+            compressor=compressor,
         )
 
     def delete_element_from_disk(self, element_name: str | list[str]) -> None:
