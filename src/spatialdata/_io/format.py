@@ -421,3 +421,11 @@ def _parse_formats(
         )
 
     return parsed
+
+
+def get_ome_zarr_format(raster_format: RasterFormatType) -> Format:
+    if isinstance(raster_format, RasterFormatV01 | RasterFormatV02):
+        return FormatV04()
+    if isinstance(raster_format, RasterFormatV03):
+        return FormatV05()
+    raise ValueError(f"Unsupported raster format {raster_format}")

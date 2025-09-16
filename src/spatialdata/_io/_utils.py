@@ -23,6 +23,7 @@ from xarray import DataArray, DataTree
 from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -76,7 +77,10 @@ def overwrite_coordinate_transformations_non_raster(
 
 
 def overwrite_coordinate_transformations_raster(
-    group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: MappingToCoordinateSystem_t
+    group: zarr.Group,
+    axes: tuple[ValidAxis_t, ...],
+    transformations: MappingToCoordinateSystem_t,
+    raster_format: RasterFormatType | None = None,
 ) -> None:
     """Write transformations of raster elements to disk.
 
@@ -120,6 +124,14 @@ def overwrite_coordinate_transformations_raster(
     multiscale = multiscales[0]
 
     multiscale["coordinateTransformations"] = coordinate_transformations
+    if raster_format is not None:
+        if isinstance(raster_format, RasterFormatV01 | RasterFormatV02):
+            multiscale["version"] = raster_format.version
+        elif isinstance(raster_format, RasterFormatV03):
+            group.metadata.attributes["ome"]["version"] = raster_format.version
+        else:
+            raise ValueError(f"Unsupported raster format: {type(raster_format)}")
+
     group.attrs["multiscales"] = multiscales
 
 
