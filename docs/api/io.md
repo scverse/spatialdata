@@ -7,6 +7,5 @@ use any of the [spatialdata-io readers](https://spatialdata.scverse.org/projects
 .. currentmodule:: spatialdata
 
 .. autofunction:: read_zarr
-.. autofunction:: save_transformations
 .. autofunction:: get_dask_backing_files
 ```
