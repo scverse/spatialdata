@@ -133,6 +133,13 @@ def read_zarr(
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
     sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
+    if sdata_version == "0.1":
+        warnings.warn(
+            "SpatialData is not stored in the most current format. If you want to use Zarr v3"
+            ", please write the store to a new location.",
+            UserWarning,
+            stacklevel=2,
+        )
     root_store_path = root_group.store.root
 
     images: dict[str, SpatialElement] = {}

@@ -1698,14 +1698,13 @@ class SpatialData:
             check_valid_name(element_name)
             if element_name not in self:
                 raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+        if write_attrs:
+            self.write_attrs(sdata_format=sdata_format)
 
         self.write_transformations(element_name)
         self.write_channel_names(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
-
-        if write_attrs:
-            self.write_attrs(sdata_format=sdata_format)
 
         if self.has_consolidated_metadata():
             consolidate_metadata = True
