@@ -1132,12 +1132,12 @@ class SpatialData:
             (default yes). Here are the implications.
 
                 - If `True`, and if the `SpatialData` object has dask-backed elements, the object will become "not
-                 self-contained" because the dask-backed element will have a path that is different from the new
-                 `sdata.path` attribute (now equal to `file_path`). By re-reading the object from disk, the object will
-                 become self-contained again.
+                    self-contained" because the dask-backed element will have a path that is different from the new
+                    `sdata.path` attribute (now equal to `file_path`). By re-reading the object from disk, the object
+                    will become self-contained again.
                 - If `False`, the `SpatialData` object will keep its current `path` attribute, meaning that calling
-                `sdata.write_element()`, `sdata.write_attrs()`, ... will write the data to the current `sdata.path`
-                location, not to the `file_path` location.
+                    `sdata.write_element()`, `sdata.write_attrs()`, ... will write the data to the current `sdata.path`
+                    location, not to the `file_path` location.
 
             Please consult :func:`spatialdata.SpatialData.is_self_contained` for more information on the implications of
             working with self-contained and non-self-contained SpatialData objects.
@@ -1586,15 +1586,21 @@ class SpatialData:
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
+            from spatialdata._io.format import RasterFormats
 
-            overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
+            raster_format = RasterFormats[element_group.metadata.attributes["spatialdata_attrs"]["version"]]
+            overwrite_coordinate_transformations_raster(
+                group=element_group, axes=axes, transformations=transformations, raster_format=raster_format
+            )
         elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )
 
             overwrite_coordinate_transformations_non_raster(
-                group=element_group, axes=axes, transformations=transformations
+                group=element_group,
+                axes=axes,
+                transformations=transformations,
             )
         else:
             raise ValueError(f"Unknown element type {type(element)}")

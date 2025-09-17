@@ -11,7 +11,6 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
 import py
 import pytest
 import zarr
@@ -31,7 +30,7 @@ def pytest_warns_multiple(
     expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning, matches: Iterable[str] = ()
 ) -> Generator[None, None, None]:
     """
-    Assert that code raises a warnings matching particular patterns.
+    Assert that code raises warnings matching particular patterns.
 
     Like `pytest.warns`, but with multiple patterns which each must match a warning.
 
@@ -109,7 +108,7 @@ def sdata_with_corrupted_elem_types_zgroup(session_tmp_path: Path) -> PartialRea
 
 @pytest.fixture(scope="module")
 def sdata_with_corrupted_elem_types_zarr_json(session_tmp_path: Path) -> PartialReadTestCase:
-    # Zarr v2
+    # Zarr v3
     sdata = blobs()
     sdata_path = session_tmp_path / "sdata_with_corrupted_top_level_zarr_json.zarr"
     # Errors only when no consolidation metadata store is used as this takes precedence over group metadata when reading
@@ -399,33 +398,6 @@ def sdata_with_invalid_zarr_json_element_violating_spec(session_tmp_path: Path) 
 
 
 @pytest.fixture(scope="module")
-def sdata_with_invalid_zattrs_table_region_not_found(session_tmp_path: Path) -> PartialReadTestCase:
-    # table/table/.zarr referring to a region that is not found
-    # This has been emitting just a warning, but does not fail reading the table element.
-    sdata = blobs()
-    sdata_path = session_tmp_path / "sdata_with_invalid_zattrs_table_region_not_found.zarr"
-    sdata.write(sdata_path)
-
-    corrupted = "blobs_labels"
-    # The element data is missing
-    os.unlink(sdata_path / "labels" / corrupted / ".zgroup")
-    os.rename(sdata_path / "labels" / corrupted, sdata_path / "labels" / f"{corrupted}_corrupted")
-    # But the labels element is referenced as a region in a table
-    regions = zarr.open_group(sdata_path / "tables" / "table" / "obs" / "region", mode="r")
-    assert corrupted in np.asarray(regions.categories)[regions.codes]
-    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
-
-    return PartialReadTestCase(
-        path=sdata_path,
-        expected_elements=not_corrupted,
-        expected_exceptions=(),
-        warnings_patterns=[
-            rf"The table is annotating '{re.escape(corrupted)}', which is not present in the SpatialData object"
-        ],
-    )
-
-
-@pytest.fixture(scope="module")
 def sdata_with_table_region_not_found_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
     # table/table/.zarr referring to a region that is not found
     # This has been emitting just a warning, but does not fail reading the table element.
@@ -482,22 +454,22 @@ def sdata_with_table_region_not_found_zarrv2(session_tmp_path: Path) -> PartialR
 @pytest.mark.parametrize(
     "test_case",
     [
-        sdata_with_corrupted_zattrs_elements,  # OSError
-        sdata_with_corrupted_zarr_json_elements,  # OSError
-        sdata_with_corrupted_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
-        sdata_with_corrupted_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
-        sdata_with_corrupted_parquet_zarrv2,  # ArrowInvalid
-        sdata_with_corrupted_parquet_zarrv3,  # ArrowInvalid
-        sdata_with_missing_zattrs_element,  # OSError
-        sdata_with_missing_zarr_json_element,  # OSError
-        sdata_with_missing_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
-        sdata_with_missing_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
-        sdata_with_invalid_zattrs_element_violating_spec,  # KeyError
-        sdata_with_invalid_zarr_json_element_violating_spec,  # KeyError
         sdata_with_corrupted_elem_types_zgroup,  # JSONDecodeError
         sdata_with_corrupted_elem_types_zarr_json,  # JSONDecodeError
-        sdata_with_table_region_not_found_zarrv2,
+        sdata_with_corrupted_zarr_json_elements,  # OSError
+        sdata_with_corrupted_zattrs_elements,  # OSError
+        sdata_with_corrupted_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
+        sdata_with_corrupted_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
+        sdata_with_corrupted_parquet_zarrv3,  # ArrowInvalid
+        sdata_with_corrupted_parquet_zarrv2,  # ArrowInvalid
+        sdata_with_missing_zarr_json_element,  # OSError
+        sdata_with_missing_zattrs_element,  # OSError
+        sdata_with_missing_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
+        sdata_with_missing_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
+        sdata_with_invalid_zattrs_element_violating_spec,  # KeyError
+        sdata_with_invalid_zarr_json_element_violating_spec,  # KeyError
         sdata_with_table_region_not_found_zarrv3,
+        sdata_with_table_region_not_found_zarrv2,
     ],
     indirect=True,
 )
@@ -512,22 +484,22 @@ def test_read_zarr_with_error(test_case: PartialReadTestCase):
 @pytest.mark.parametrize(
     "test_case",
     [
-        sdata_with_corrupted_zattrs_elements,  # JSONDecodeError for non raster, else OSError
+        sdata_with_corrupted_elem_types_zgroup,  # JSONDecodeError
+        sdata_with_corrupted_elem_types_zarr_json,  # JSONDecodeError
         sdata_with_corrupted_zarr_json_elements,  # JSONDecodeError for non raster, else OSError
-        sdata_with_corrupted_image_chunks_zarrv2,  # ArrayNotFoundError
-        sdata_with_corrupted_image_chunks_zarrv3,  # ArrayNotFoundError
-        sdata_with_corrupted_parquet_zarrv2,  # ArrowInvalid
+        sdata_with_corrupted_zattrs_elements,  # JSONDecodeError for non raster, else OSError
+        sdata_with_corrupted_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
+        sdata_with_corrupted_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
         sdata_with_corrupted_parquet_zarrv3,  # ArrowInvalid
-        sdata_with_missing_zattrs_element,  # OSError
+        sdata_with_corrupted_parquet_zarrv2,  # ArrowInvalid
         sdata_with_missing_zarr_json_element,  # OSError
-        sdata_with_missing_image_chunks_zarrv2,  # ArrayNotFoundError
-        sdata_with_missing_image_chunks_zarrv3,  # ArrayNotFoundError
+        sdata_with_missing_zattrs_element,  # OSError
+        sdata_with_missing_image_chunks_zarrv3,  # zarr.errors.ArrayNotFoundError
+        sdata_with_missing_image_chunks_zarrv2,  # zarr.errors.ArrayNotFoundError
         sdata_with_invalid_zattrs_element_violating_spec,  # KeyError
         sdata_with_invalid_zarr_json_element_violating_spec,  # KeyError
-        sdata_with_corrupted_elem_types_zgroup,  # ZarrUserWarning
-        sdata_with_corrupted_elem_types_zarr_json,  # JSONDecodeError
-        sdata_with_table_region_not_found_zarrv2,
         sdata_with_table_region_not_found_zarrv3,
+        sdata_with_table_region_not_found_zarrv2,
     ],
     indirect=True,
 )

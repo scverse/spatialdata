@@ -289,6 +289,7 @@ SpatialDataFormatType = (
     RasterFormatType | ShapesFormatType | PointsFormatType | TablesFormatType | SpatialDataContainerFormatType
 )
 
+SdataVersion_to_Format = {"0.4": FormatV04(), "0.4-dev-spatialdata": FormatV04(), "0.5-dev-spatialdata": FormatV05()}
 RasterFormats: dict[str, RasterFormatType] = {
     "0.1": RasterFormatV01(),
     "0.2": RasterFormatV02(),
@@ -421,3 +422,11 @@ def _parse_formats(
         )
 
     return parsed
+
+
+def get_ome_zarr_format(raster_format: RasterFormatType) -> Format:
+    if isinstance(raster_format, RasterFormatV01 | RasterFormatV02):
+        return FormatV04()
+    if isinstance(raster_format, RasterFormatV03):
+        return FormatV05()
+    raise ValueError(f"Unsupported raster format {raster_format}")

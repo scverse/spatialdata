@@ -4,6 +4,7 @@ from typing import Any, Literal
 import dask.array as da
 import numpy as np
 import zarr
+from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
@@ -21,6 +22,7 @@ from spatialdata._io._utils import (
 from spatialdata._io.format import (
     CurrentRasterFormat,
     RasterFormatType,
+    get_ome_zarr_format,
 )
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
@@ -33,12 +35,14 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
+def _read_multiscale(
+    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+) -> DataArray | DataTree:
     assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store)
+    image_loc = ZarrLocation(store, fmt=reader_format)
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
@@ -63,7 +67,10 @@ def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"])
 
     node = nodes[0]
     loaded_node = node.load(Multiscales)
-    datasets, multiscales = loaded_node.datasets, loaded_node.zarr.root_attrs["multiscales"]
+    datasets, multiscales = (
+        loaded_node.datasets,
+        loaded_node.zarr.root_attrs["multiscales"],
+    )
     # This works for all versions as in zarr v3 the level of the 'ome' key is taken as root_attrs.
     omero_metadata = loaded_node.zarr.root_attrs.get("omero")
     # TODO: check if below is still valid
@@ -140,8 +147,10 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
 
 
 class MultiscaleReader:
-    def __call__(self, path: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
-        return _read_multiscale(path, raster_type)
+    def __call__(
+        self, path: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    ) -> DataArray | DataTree:
+        return _read_multiscale(path, raster_type, reader_format)
 
 
 def _write_raster(
@@ -192,9 +201,25 @@ def _write_raster(
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
     if isinstance(raster_data, DataArray):
-        _write_raster_dataarray(raster_type, group, name, raster_data, raster_format, storage_options, **metadata)
+        _write_raster_dataarray(
+            raster_type,
+            group,
+            name,
+            raster_data,
+            raster_format,
+            storage_options,
+            **metadata,
+        )
     elif isinstance(raster_data, DataTree):
-        _write_raster_datatree(raster_type, group, name, raster_data, raster_format, storage_options, **metadata)
+        _write_raster_datatree(
+            raster_type,
+            group,
+            name,
+            raster_data,
+            raster_format,
+            storage_options,
+            **metadata,
+        )
     else:
         raise ValueError("Not a valid labels object")
 
@@ -253,10 +278,11 @@ def _write_raster_dataarray(
     # We need  this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
     metadata[raster_type] = data
+    ome_zarr_format = get_ome_zarr_format(raster_format)
     write_single_scale_ngff(
         group=group,
         scaler=None,
-        fmt=raster_format,
+        fmt=ome_zarr_format,
         axes=parsed_axes,
         coordinate_transformations=None,
         storage_options=storage_options,
@@ -264,7 +290,12 @@ def _write_raster_dataarray(
     )
 
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
-    overwrite_coordinate_transformations_raster(group=trans_group, transformations=transformations, axes=input_axes)
+    overwrite_coordinate_transformations_raster(
+        group=trans_group,
+        transformations=transformations,
+        axes=input_axes,
+        raster_format=raster_format,
+    )
 
 
 def _write_raster_datatree(
@@ -311,10 +342,11 @@ def _write_raster_datatree(
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = [{"chunks": chunk} for chunk in chunks]
+    ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
         pyramid=data,
         group=group,
-        fmt=raster_format,
+        fmt=ome_zarr_format,
         axes=parsed_axes,
         coordinate_transformations=None,
         storage_options=storage_options,
@@ -326,7 +358,10 @@ def _write_raster_datatree(
 
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(
-        group=trans_group, transformations=transformations, axes=tuple(input_axes)
+        group=trans_group,
+        transformations=transformations,
+        axes=tuple(input_axes),
+        raster_format=raster_format,
     )
 
 

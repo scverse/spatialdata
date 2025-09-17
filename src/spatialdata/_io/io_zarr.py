@@ -6,6 +6,7 @@ from typing import Literal, cast
 
 import zarr.storage
 from anndata import AnnData
+from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError
 
@@ -28,6 +29,7 @@ ReadClasses = MultiscaleReader | PointsReader | ShapesReader | TablesReader
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
     root_store_path: str,
+    sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: ReadClasses,
     group_name: Literal["images", "labels", "shapes", "points", "tables"],
@@ -58,12 +60,41 @@ def _read_zarr_group_spatialdata_element(
                         exc_types=(KeyError, ArrayNotFoundError, OSError, ArrowInvalid, JSONDecodeError),
                     ):
                         if isinstance(read_func, MultiscaleReader):
-                            element = read_func(elem_group_path, cast(Literal["image", "labels"], element_type))
+                            reader_format = get_raster_format_for_read(elem_group, sdata_version)
+                            element = read_func(
+                                elem_group_path, cast(Literal["image", "labels"], element_type), reader_format
+                            )
                         if isinstance(read_func, PointsReader | ShapesReader):
                             element = read_func(elem_group_path)
                         element_container[subgroup_name] = element
                         count += 1
                 logger.debug(f"Found {count} elements in {group}")
+
+
+def get_raster_format_for_read(group: zarr.Group, sdata_version: Literal["0.1", "0.2"]) -> Format:
+    """Get raster format of stored raster data.
+
+    This checks the image or label element zarr group metadata to retrieve the format that is used by
+    ome-zarr's ZarrLocation for reading the data.
+
+    Parameters
+    ----------
+    group
+        The zarr group of the raster element to be read.
+    sdata_version
+        The version of the SpatialData zarr store retrieved from the spatialdata attributes.
+
+    Returns
+    -------
+    The ome-zarr format to use for reading the raster element.
+    """
+    from spatialdata._io.format import SdataVersion_to_Format
+
+    if sdata_version == "0.1":
+        group_version = group.metadata.attributes["multiscales"][0]["version"]
+    if sdata_version == "0.2":
+        group_version = group.metadata.attributes["ome"]["version"]
+    return SdataVersion_to_Format[group_version]
 
 
 def read_zarr(
@@ -101,6 +132,7 @@ def read_zarr(
 
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
+    sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
     root_store_path = root_group.store.root
 
     images: dict[str, SpatialElement] = {}
@@ -128,6 +160,7 @@ def read_zarr(
         _read_zarr_group_spatialdata_element(
             root_group,
             root_store_path,
+            sdata_version,
             selector,
             reader,
             group_name,
