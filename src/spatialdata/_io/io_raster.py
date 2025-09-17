@@ -35,33 +35,6 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
-    """Get nodes with Multiscales spec from a list of nodes.
-
-    The nodes with the Multiscales spec are the nodes used for reading in image and label data. We only have to check
-    the multiscales now, while before we also had to check the label spec. In the new ome-zarr-py though labels can have
-    the Label spec, these do not contain the multiscales anymore used to read the data. They can contain label specific
-    metadata though.
-
-    Parameters
-    ----------
-    image_nodes
-        List of nodes returned from the ome-zarr-py Reader.
-    nodes
-        List to append the nodes with the multiscales spec to.
-
-    Returns
-    -------
-    List of nodes with the multiscales spec.
-    """
-    if len(image_nodes):
-        for node in image_nodes:
-            # Labels are now also Multiscales in newer version of ome-zarr-py
-            if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
-                nodes.append(node)
-    return nodes
-
-
 def _read_multiscale(
     store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
@@ -134,6 +107,7 @@ def _read_multiscale(
         msi = DataTree.from_dict(multiscale_image)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
+
     data = node.load(Multiscales).array(resolution=datasets[0])
     si = DataArray(
         data,
@@ -143,6 +117,40 @@ def _read_multiscale(
     )
     _set_transformations(si, transformations)
     return compute_coordinates(si)
+
+
+def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[Node]:
+    """Get nodes with Multiscales spec from a list of nodes.
+
+    The nodes with the Multiscales spec are the nodes used for reading in image and label data. We only have to check
+    the multiscales now, while before we also had to check the label spec. In the new ome-zarr-py though labels can have
+    the Label spec, these do not contain the multiscales anymore used to read the data. They can contain label specific
+    metadata though.
+
+    Parameters
+    ----------
+    image_nodes
+        List of nodes returned from the ome-zarr-py Reader.
+    nodes
+        List to append the nodes with the multiscales spec to.
+
+    Returns
+    -------
+    List of nodes with the multiscales spec.
+    """
+    if len(image_nodes):
+        for node in image_nodes:
+            # Labels are now also Multiscales in newer version of ome-zarr-py
+            if np.any([isinstance(spec, Multiscales) for spec in node.specs]):
+                nodes.append(node)
+    return nodes
+
+
+class MultiscaleReader:
+    def __call__(
+        self, path: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    ) -> DataArray | DataTree:
+        return _read_multiscale(path, raster_type, reader_format)
 
 
 def _write_raster(

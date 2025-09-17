@@ -46,6 +46,11 @@ def _read_points(
     return points
 
 
+class PointsReader:
+    def __call__(self, store: str | Path | MutableMapping[str, object] | zarr.Group) -> DaskDataFrame:
+        return _read_points(store)
+
+
 def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
