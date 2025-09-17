@@ -289,6 +289,7 @@ SpatialDataFormatType = (
     RasterFormatType | ShapesFormatType | PointsFormatType | TablesFormatType | SpatialDataContainerFormatType
 )
 
+SdataVersion_to_Format = {"0.4": FormatV04(), "0.4-dev-spatialdata": FormatV04(), "0.5-dev-spatialdata": FormatV05()}
 RasterFormats: dict[str, RasterFormatType] = {
     "0.1": RasterFormatV01(),
     "0.2": RasterFormatV02(),

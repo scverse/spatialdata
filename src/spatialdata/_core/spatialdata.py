@@ -1586,15 +1586,21 @@ class SpatialData:
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
+            from spatialdata._io.format import RasterFormats
 
-            overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
+            raster_format = RasterFormats[element_group.metadata.attributes["spatialdata_attrs"]["version"]]
+            overwrite_coordinate_transformations_raster(
+                group=element_group, axes=axes, transformations=transformations, raster_format=raster_format
+            )
         elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )
 
             overwrite_coordinate_transformations_non_raster(
-                group=element_group, axes=axes, transformations=transformations
+                group=element_group,
+                axes=axes,
+                transformations=transformations,
             )
         else:
             raise ValueError(f"Unknown element type {type(element)}")

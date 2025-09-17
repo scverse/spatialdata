@@ -80,7 +80,7 @@ def overwrite_coordinate_transformations_raster(
     group: zarr.Group,
     axes: tuple[ValidAxis_t, ...],
     transformations: MappingToCoordinateSystem_t,
-    raster_format: RasterFormatType | None = None,
+    raster_format: RasterFormatType,
 ) -> None:
     """Write transformations of raster elements to disk.
 
@@ -99,6 +99,9 @@ def overwrite_coordinate_transformations_raster(
         The list with axes names in the same order as the dimensions of the raster element.
     transformations
         Mapping between names of the coordinate system and the transformations.
+    raster_format
+        The raster format of the raster element used to determine where in the metadata the transformations should be
+        written.
     """
     _validate_mapping_to_coordinate_system_type(transformations)
     # prepare the transformations in the dict representation
@@ -123,16 +126,20 @@ def overwrite_coordinate_transformations_raster(
             raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
     multiscale = multiscales[0]
 
+    # Previously, there was CoordinateTransformations key present at the level of multiscale and datasets in multiscale.
+    # This is not the case anymore so we are creating a new key here and keeping the one in datasets intact.
     multiscale["coordinateTransformations"] = coordinate_transformations
     if raster_format is not None:
         if isinstance(raster_format, RasterFormatV01 | RasterFormatV02):
             multiscale["version"] = raster_format.version
+            group.attrs["multiscales"] = multiscales
         elif isinstance(raster_format, RasterFormatV03):
-            group.metadata.attributes["ome"]["version"] = raster_format.version
+            ome = group.metadata.attributes["ome"]
+            ome["version"] = raster_format.version
+            ome["multiscales"] = multiscales
+            group.attrs["ome"] = ome
         else:
             raise ValueError(f"Unsupported raster format: {type(raster_format)}")
-
-    group.attrs["multiscales"] = multiscales
 
 
 def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:

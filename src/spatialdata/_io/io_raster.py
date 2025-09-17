@@ -4,6 +4,7 @@ from typing import Any, Literal
 import dask.array as da
 import numpy as np
 import zarr
+from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
 from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
@@ -61,12 +62,14 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
-def _read_multiscale(store: str | Path, raster_type: Literal["image", "labels"]) -> DataArray | DataTree:
+def _read_multiscale(
+    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+) -> DataArray | DataTree:
     assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store)
+    image_loc = ZarrLocation(store, fmt=reader_format)
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)

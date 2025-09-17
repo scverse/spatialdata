@@ -6,6 +6,7 @@ from typing import Literal
 
 import zarr.storage
 from anndata import AnnData
+from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError
 
@@ -20,6 +21,32 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+
+
+def get_raster_format_for_read(group: zarr.Group, sdata_version: Literal["0.1", "0.2"]) -> Format:
+    """Get raster format of stored raster data.
+
+    This checks the image or label element zarr group metadata to retrieve the format that is used by
+    ome-zarr's ZarrLocation for reading the data.
+
+    Parameters
+    ----------
+    group
+        The zarr group of the raster element to be read.
+    sdata_version
+        The version of the SpatialData zarr store retrieved from the spatialdata attributes.
+
+    Returns
+    -------
+    The ome-zarr format to use for reading the raster element.
+    """
+    from spatialdata._io.format import SdataVersion_to_Format
+
+    if sdata_version == "0.1":
+        group_version = group.metadata.attributes["multiscales"][0]["version"]
+    if sdata_version == "0.2":
+        group_version = group.metadata.attributes["ome"]["version"]
+    return SdataVersion_to_Format[group_version]
 
 
 def read_zarr(
@@ -57,6 +84,7 @@ def read_zarr(
 
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
+    sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
     root_store_path = root_group.store.root
 
     images = {}
@@ -83,6 +111,7 @@ def read_zarr(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
+                reader_format = get_raster_format_for_read(elem_group, sdata_version)
                 elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
@@ -93,7 +122,7 @@ def read_zarr(
                         OSError,
                     ),
                 ):
-                    element = _read_multiscale(elem_group_path, raster_type="image")
+                    element = _read_multiscale(elem_group_path, raster_type="image", reader_format=reader_format)
                     images[subgroup_name] = element
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
@@ -112,6 +141,7 @@ def read_zarr(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
+                reader_format = get_raster_format_for_read(elem_group, sdata_version)
                 elem_group_path = root_store_path / elem_group.path
                 with handle_read_errors(
                     on_bad_files,
@@ -122,7 +152,9 @@ def read_zarr(
                         OSError,
                     ),
                 ):
-                    labels[subgroup_name] = _read_multiscale(elem_group_path, raster_type="labels")
+                    labels[subgroup_name] = _read_multiscale(
+                        elem_group_path, raster_type="labels", reader_format=reader_format
+                    )
                     count += 1
             logger.debug(f"Found {count} elements in {group}")
     # now read rest of the data
