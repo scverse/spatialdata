@@ -23,20 +23,22 @@ Points_s = PointsModel()
 
 def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
     """
-    Parse the version of the spatialdata encoding for the element.
+    Parse the version of the spatialdata encoding for the given element.
 
     Parameters
     ----------
     group
         The Zarr group where the element is stored.
     expect_attrs_key
-        Boolean value specifying if the version is expected to be found as a key-value store in the .attrs[ATTRS_KEY],
-         where .attrs is the attrs of the Zarr group (expect_attrs_key == True), or if the version is expected to be
-         found as key-value store directly in .attrs
+        Boolean flag indicating where the version key-value store is located:
+
+            - If True: the version is stored under .attrs[ATTRS_KEY] of the Zarr group.
+            - If False: the version is stored directly in .attrs of the Zarr group.
 
     Returns
     -------
-    The string specifying the encoding version of the element, if found. `None` otherwise.
+    str | None
+        The encoding version string if found, otherwise None.
     """
     if expect_attrs_key and ATTRS_KEY not in group.attrs:
         return None
@@ -289,7 +291,13 @@ SpatialDataFormatType = (
     RasterFormatType | ShapesFormatType | PointsFormatType | TablesFormatType | SpatialDataContainerFormatType
 )
 
-SdataVersion_to_Format = {"0.4": FormatV04(), "0.4-dev-spatialdata": FormatV04(), "0.5-dev-spatialdata": FormatV05()}
+# the keys are the version values for the OME-Zarr version used to store the raster data. Until we fully implement 0.6,
+# we had a spatialdata suffix to signal that we are using a dev version of NGFF
+sdata_zarr_version_to_ome_zarr_format = {
+    "0.4": FormatV04(),
+    "0.4-dev-spatialdata": FormatV04(),
+    "0.5-dev-spatialdata": FormatV05(),
+}
 RasterFormats: dict[str, RasterFormatType] = {
     "0.1": RasterFormatV01(),
     "0.2": RasterFormatV02(),

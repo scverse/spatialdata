@@ -1,4 +1,3 @@
-from collections.abc import MutableMapping
 from pathlib import Path
 
 import zarr
@@ -20,10 +19,9 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: str | Path | MutableMapping | zarr.Group,  # type: ignore[type-arg]
+    store: str | Path,
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    assert isinstance(store, str | Path)
     f = zarr.open(store, mode="r")
 
     version = _parse_version(f, expect_attrs_key=True)
@@ -44,11 +42,6 @@ def _read_points(
     if len(attrs):
         points.attrs["spatialdata_attrs"] = attrs
     return points
-
-
-class PointsReader:
-    def __call__(self, store: str | Path | MutableMapping[str, object] | zarr.Group) -> DaskDataFrame:
-        return _read_points(store)
 
 
 def write_points(

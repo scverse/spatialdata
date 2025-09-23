@@ -26,7 +26,8 @@ def sdata_with_image(request: "_pytest.fixtures.SubRequest", tmp_path: Path) -> 
     # Create a disk-backed Dask array for scale 0.
     npg = np.random.default_rng(0)
     array = npg.integers(low=0, high=2**16, size=(1, width, width))
-    array_path = tmp_path / "image.zarr"
+    # this is a pure zarr array, not written with SpatialData/OME-Zarr APIs, but with Zarr APIs
+    array_path = tmp_path / "array.zarr"
     dask.array.from_array(array).rechunk(chunksize).to_zarr(array_path)
     array_backed = dask.array.from_zarr(array_path)
     # Create an in-memory SpatialData with disk-backed scale 0.

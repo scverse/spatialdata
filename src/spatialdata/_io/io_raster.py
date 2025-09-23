@@ -146,13 +146,6 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
-class MultiscaleReader:
-    def __call__(
-        self, path: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
-    ) -> DataArray | DataTree:
-        return _read_multiscale(path, raster_type, reader_format)
-
-
 def _write_raster(
     raster_type: Literal["image", "labels"],
     raster_data: DataArray | DataTree,

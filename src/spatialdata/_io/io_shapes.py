@@ -1,4 +1,3 @@
-from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -30,10 +29,9 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path | MutableMapping[str, object] | zarr.Group,
+    store: str | Path,
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    assert isinstance(store, str | Path)
     f = zarr.open(store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
@@ -65,11 +63,6 @@ def _read_shapes(
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(geo_df, transformations)
     return geo_df
-
-
-class ShapesReader:
-    def __call__(self, store: str | Path | MutableMapping[str, object] | zarr.Group) -> GeoDataFrame:
-        return _read_shapes(store)
 
 
 def write_shapes(

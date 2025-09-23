@@ -1,8 +1,9 @@
 import os
 import warnings
+from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import zarr.storage
 from anndata import AnnData
@@ -16,14 +17,12 @@ from spatialdata._io._utils import (
     _resolve_zarr_store,
     handle_read_errors,
 )
-from spatialdata._io.io_points import PointsReader
-from spatialdata._io.io_raster import MultiscaleReader
-from spatialdata._io.io_shapes import ShapesReader
-from spatialdata._io.io_table import TablesReader
+from spatialdata._io.io_points import _read_points
+from spatialdata._io.io_raster import _read_multiscale
+from spatialdata._io.io_shapes import _read_shapes
+from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 from spatialdata.models import SpatialElement
-
-ReadClasses = MultiscaleReader | PointsReader | ShapesReader | TablesReader
 
 
 def _read_zarr_group_spatialdata_element(
@@ -31,7 +30,7 @@ def _read_zarr_group_spatialdata_element(
     root_store_path: str,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
-    read_func: ReadClasses,
+    read_func: Callable[..., Any],
     group_name: Literal["images", "labels", "shapes", "points", "tables"],
     element_type: Literal["image", "labels", "shapes", "points", "tables"],
     element_container: dict[str, SpatialElement | AnnData],
@@ -44,31 +43,42 @@ def _read_zarr_group_spatialdata_element(
     ):
         if group_name in selector and group_name in root_group:
             group = root_group[group_name]
-            if isinstance(read_func, TablesReader):
-                read_func(root_store_path, group, element_container, on_bad_files=on_bad_files)
-            else:
-                count = 0
-                for subgroup_name in group:
-                    if Path(subgroup_name).name.startswith("."):
-                        # skip hidden files like .zgroup or .zmetadata
-                        continue
-                    elem_group = group[subgroup_name]
-                    elem_group_path = os.path.join(root_store_path, elem_group.path)
-                    with handle_read_errors(
-                        on_bad_files,
-                        location=f"{group.path}/{subgroup_name}",
-                        exc_types=(KeyError, ArrayNotFoundError, OSError, ArrowInvalid, JSONDecodeError),
-                    ):
-                        if isinstance(read_func, MultiscaleReader):
-                            reader_format = get_raster_format_for_read(elem_group, sdata_version)
-                            element = read_func(
-                                elem_group_path, cast(Literal["image", "labels"], element_type), reader_format
-                            )
-                        if isinstance(read_func, PointsReader | ShapesReader):
-                            element = read_func(elem_group_path)
-                        element_container[subgroup_name] = element
-                        count += 1
-                logger.debug(f"Found {count} elements in {group}")
+            # if isinstance(read_func, TablesReader):
+            #     read_func(root_store_path, group, element_container, on_bad_files=on_bad_files)
+            # else:
+            count = 0
+            for subgroup_name in group:
+                if Path(subgroup_name).name.startswith("."):
+                    # skip hidden files like .zgroup or .zmetadata
+                    continue
+                elem_group = group[subgroup_name]
+                elem_group_path = os.path.join(root_store_path, elem_group.path)
+                with handle_read_errors(
+                    on_bad_files,
+                    location=f"{group.path}/{subgroup_name}",
+                    exc_types=(
+                        KeyError,
+                        ArrayNotFoundError,
+                        OSError,
+                        ArrowInvalid,
+                        JSONDecodeError,
+                        ValueError,
+                    ),
+                ):
+                    if element_type in ["image", "labels"]:
+                        reader_format = get_raster_format_for_read(elem_group, sdata_version)
+                        element = read_func(
+                            elem_group_path,
+                            cast(Literal["image", "labels"], element_type),
+                            reader_format,
+                        )
+                    elif element_type in ["shapes", "points", "tables"]:
+                        element = read_func(elem_group_path)
+                    else:
+                        raise ValueError(f"Unknown element type {element_type}")
+                    element_container[subgroup_name] = element
+                    count += 1
+            logger.debug(f"Found {count} elements in {group}")
 
 
 def get_raster_format_for_read(group: zarr.Group, sdata_version: Literal["0.1", "0.2"]) -> Format:
@@ -88,13 +98,13 @@ def get_raster_format_for_read(group: zarr.Group, sdata_version: Literal["0.1", 
     -------
     The ome-zarr format to use for reading the raster element.
     """
-    from spatialdata._io.format import SdataVersion_to_Format
+    from spatialdata._io.format import sdata_zarr_version_to_ome_zarr_format
 
     if sdata_version == "0.1":
         group_version = group.metadata.attributes["multiscales"][0]["version"]
     if sdata_version == "0.2":
         group_version = group.metadata.attributes["ome"]["version"]
-    return SdataVersion_to_Format[group_version]
+    return sdata_zarr_version_to_ome_zarr_format[group_version]
 
 
 def read_zarr(
@@ -132,6 +142,7 @@ def read_zarr(
 
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
+    # the following is the SpatialDataContainerFormat version
     sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
     if sdata_version == "0.1":
         warnings.warn(
@@ -154,14 +165,16 @@ def read_zarr(
     group_readers: dict[
         Literal["images", "labels", "shapes", "points", "tables"],
         tuple[
-            ReadClasses, Literal["image", "labels", "shapes", "points", "tables"], dict[str, SpatialElement | AnnData]
+            Callable[..., Any],
+            Literal["image", "labels", "shapes", "points", "tables"],
+            dict[str, SpatialElement | AnnData],
         ],
     ] = {
-        "images": (MultiscaleReader(), "image", images),
-        "labels": (MultiscaleReader(), "labels", labels),
-        "points": (PointsReader(), "points", points),
-        "shapes": (ShapesReader(), "shapes", shapes),
-        "tables": (TablesReader(), "tables", tables),
+        "images": (_read_multiscale, "image", images),
+        "labels": (_read_multiscale, "labels", labels),
+        "points": (_read_points, "points", points),
+        "shapes": (_read_shapes, "shapes", shapes),
+        "tables": (_read_table, "tables", tables),
     }
     for group_name, (reader, raster_type, container) in group_readers.items():
         _read_zarr_group_spatialdata_element(
