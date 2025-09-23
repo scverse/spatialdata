@@ -7,6 +7,8 @@ from typing import Any, Literal, cast
 
 import zarr.storage
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
 from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError
@@ -22,7 +24,7 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata.models import SpatialElement
+from spatialdata._types import Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
@@ -33,7 +35,7 @@ def _read_zarr_group_spatialdata_element(
     read_func: Callable[..., Any],
     group_name: Literal["images", "labels", "shapes", "points", "tables"],
     element_type: Literal["image", "labels", "shapes", "points", "tables"],
-    element_container: dict[str, SpatialElement | AnnData],
+    element_container: dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
 ) -> None:
     with handle_read_errors(
@@ -43,9 +45,6 @@ def _read_zarr_group_spatialdata_element(
     ):
         if group_name in selector and group_name in root_group:
             group = root_group[group_name]
-            # if isinstance(read_func, TablesReader):
-            #     read_func(root_store_path, group, element_container, on_bad_files=on_bad_files)
-            # else:
             count = 0
             for subgroup_name in group:
                 if Path(subgroup_name).name.startswith("."):
@@ -153,40 +152,42 @@ def read_zarr(
         )
     root_store_path = root_group.store.root
 
-    images: dict[str, SpatialElement] = {}
-    labels: dict[str, SpatialElement] = {}
-    points: dict[str, SpatialElement] = {}
+    images: dict[str, Raster_T] = {}
+    labels: dict[str, Raster_T] = {}
+    points: dict[str, DaskDataFrame] = {}
+    shapes: dict[str, GeoDataFrame] = {}
     tables: dict[str, AnnData] = {}
-    shapes: dict[str, SpatialElement] = {}
 
     selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
+    # we could make this more readable. One can get lost when looking at this dict and iteration over the items
     group_readers: dict[
         Literal["images", "labels", "shapes", "points", "tables"],
         tuple[
             Callable[..., Any],
             Literal["image", "labels", "shapes", "points", "tables"],
-            dict[str, SpatialElement | AnnData],
+            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
         ],
     ] = {
+        # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
         "images": (_read_multiscale, "image", images),
         "labels": (_read_multiscale, "labels", labels),
         "points": (_read_points, "points", points),
         "shapes": (_read_shapes, "shapes", shapes),
         "tables": (_read_table, "tables", tables),
     }
-    for group_name, (reader, raster_type, container) in group_readers.items():
+    for group_name, (read_func, element_type, element_container) in group_readers.items():
         _read_zarr_group_spatialdata_element(
-            root_group,
-            root_store_path,
-            sdata_version,
-            selector,
-            reader,
-            group_name,
-            raster_type,
-            container,
-            on_bad_files,
+            root_group=root_group,
+            root_store_path=root_store_path,
+            sdata_version=sdata_version,
+            selector=selector,
+            read_func=read_func,
+            group_name=group_name,
+            element_type=element_type,
+            element_container=element_container,
+            on_bad_files=on_bad_files,
         )
 
     # read attrs metadata
