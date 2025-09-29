@@ -134,31 +134,37 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
     d = {k: Dataset({"image": d[k]}) for k in scales_to_keep}
     result = DataTree.from_dict(d)
 
-    # rechunk the data to avoid irregular chunks
-    for scale in result:
-        result[scale]["image"].data = result[scale]["image"].data.rechunk(result[scale]["image"].data.chunksize)
-
-    # sanity check
     from dask.array.core import _check_regular_chunks
 
+    # rechunk to avoid irregular chunks
     for scale in result:
         data = result[scale]["image"].data
-        assert _check_regular_chunks(data.chunks), (
-            f"Chunks are not regular for the {scale} of the queried data: {data.chunks}. Please report this bug."
-        )
+        chunks = data.chunks
+        if not _check_regular_chunks(chunks):
+            data = data.rechunk(data.chunksize)
+            if not _check_regular_chunks(data.chunks):
+                raise ValueError(
+                    f"Chunks are not regular for {scale} of the queried data: {chunks} "
+                    "and could also not be rechunked regularly. Please report this bug."
+                )
+            result[scale]["image"].data = data
+
     return result
 
 
 def _process_query_result(
     result: DataArray | DataTree, translation_vector: ArrayLike, axes: tuple[str, ...]
 ) -> DataArray | DataTree | None:
+    from dask.array.core import _check_regular_chunks
+
     from spatialdata.transformations import get_transformation, set_transformation
 
     if isinstance(result, DataArray):
         if 0 in result.shape:
             return None
-        # rechunk the data to avoid irregular chunks
-        result.data = result.data.rechunk(result.data.chunksize)
+        # rechunk to avoid irregular chunks
+        if not _check_regular_chunks(result.data.chunks):
+            result.data = result.data.rechunk(result.data.chunksize)
     elif isinstance(result, DataTree):
         result = _process_data_tree_query_result(result)
         if result is None:
