@@ -1,5 +1,4 @@
 import filecmp
-import logging
 import os.path
 import re
 import sys
@@ -18,9 +17,13 @@ from anndata import AnnData
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from upath import UPath
+from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -30,18 +33,6 @@ from spatialdata.models._utils import (
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
-
-
-# suppress logger debug from ome_zarr with context manager
-@contextmanager
-def ome_zarr_logger(level: Any) -> Generator[None, None, None]:
-    logger = logging.getLogger("ome_zarr")
-    current_level = logger.getEffectiveLevel()
-    logger.setLevel(level)
-    try:
-        yield
-    finally:
-        logger.setLevel(current_level)
 
 
 def _get_transformations_from_ngff_dict(
@@ -59,6 +50,18 @@ def _get_transformations_from_ngff_dict(
 def overwrite_coordinate_transformations_non_raster(
     group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: MappingToCoordinateSystem_t
 ) -> None:
+    """Write coordinate transformations of non-raster element to disk.
+
+    Parameters
+    ----------
+    group: zarr.Group
+        The zarr group containing the non-raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['points'].
+    axes: tuple[ValidAxis_t, ...]
+        The list with axes names in the same order as the coordinates of the non-raster element.
+    transformations: MappingToCoordinateSystem_t
+        Mapping between names of the coordinate system and the transformations.
+    """
     _validate_mapping_to_coordinate_system_type(transformations)
     ngff_transformations = []
     for target_coordinate_system, t in transformations.items():
@@ -74,8 +77,32 @@ def overwrite_coordinate_transformations_non_raster(
 
 
 def overwrite_coordinate_transformations_raster(
-    group: zarr.Group, axes: tuple[ValidAxis_t, ...], transformations: MappingToCoordinateSystem_t
+    group: zarr.Group,
+    axes: tuple[ValidAxis_t, ...],
+    transformations: MappingToCoordinateSystem_t,
+    raster_format: RasterFormatType,
 ) -> None:
+    """Write transformations of raster elements to disk.
+
+    This function supports both writing of transformations for raster elements stored using zarr v3 and v2.
+    For the case of zarr v3, there is already a 'coordinateTransformations' from ome-zarr in the metadata of
+    the group. However, we store our transformations in the first element of the 'multiscales' of the attributes
+    in the group metadata. This is subject to change.
+    In the case of zarr v2 the existing 'coordinateTransformations' from ome-zarr is overwritten.
+
+    Parameters
+    ----------
+    group
+        The zarr group containing the raster element for which to write the transformations, e.g. the zarr group
+        containing sdata['image2d'].
+    axes
+        The list with axes names in the same order as the dimensions of the raster element.
+    transformations
+        Mapping between names of the coordinate system and the transformations.
+    raster_format
+        The raster format of the raster element used to determine where in the metadata the transformations should be
+        written.
+    """
     _validate_mapping_to_coordinate_system_type(transformations)
     # prepare the transformations in the dict representation
     ngff_transformations = []
@@ -90,16 +117,29 @@ def overwrite_coordinate_transformations_raster(
         )
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
-    multiscales = group.attrs["multiscales"]
-    assert len(multiscales) == 1
+    if group.metadata.zarr_format == 3 and len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
+        len_scales = len(multiscales)
+        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
+    if group.metadata.zarr_format == 2:
+        multiscales = group.attrs["multiscales"]
+        if (len_scales := len(multiscales)) != 1:
+            raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
     multiscale = multiscales[0]
-    # the transformation present in multiscale["datasets"] are the ones for the multiscale, so and we leave them intact
-    # we update multiscale["coordinateTransformations"] and multiscale["coordinateSystems"]
-    # see the first post of https://github.com/scverse/spatialdata/issues/39 for an overview
-    # fix the io to follow the NGFF specs, see https://github.com/scverse/spatialdata/issues/114
+
+    # Previously, there was CoordinateTransformations key present at the level of multiscale and datasets in multiscale.
+    # This is not the case anymore so we are creating a new key here and keeping the one in datasets intact.
     multiscale["coordinateTransformations"] = coordinate_transformations
-    # multiscale["coordinateSystems"] = [t.output_coordinate_system_name for t in ngff_transformations]
-    group.attrs["multiscales"] = multiscales
+    if raster_format is not None:
+        if isinstance(raster_format, RasterFormatV01 | RasterFormatV02):
+            multiscale["version"] = raster_format.version
+            group.attrs["multiscales"] = multiscales
+        elif isinstance(raster_format, RasterFormatV03):
+            ome = group.metadata.attributes["ome"]
+            ome["version"] = raster_format.version
+            ome["multiscales"] = multiscales
+            group.attrs["ome"] = ome
+        else:
+            raise ValueError(f"Unsupported raster format: {type(raster_format)}")
 
 
 def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) -> None:
@@ -110,16 +150,14 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
         channel_names = element["scale0"]["image"].coords["c"].data.tolist()
 
     channel_metadata = [{"label": name} for name in channel_names]
-    omero_meta = group.attrs["omero"]
+    # This is required here as we do not use the load node API of ome-zarr
+    omero_meta = group.attrs.get("omero", None) or group.attrs.get("ome", {}).get("omero")
     omero_meta["channels"] = channel_metadata
-    group.attrs["omero"] = omero_meta
-    multiscales_meta = group.attrs["multiscales"]
-    if len(multiscales_meta) != 1:
-        raise ValueError(
-            f"Multiscale metadata must be of length one but got length {len(multiscales_meta)}. Data mightbe corrupted."
-        )
-    multiscales_meta[0]["metadata"]["omero"]["channels"] = channel_metadata
-    group.attrs["multiscales"] = multiscales_meta
+    if ome_meta := group.attrs.get("ome", None):
+        ome_meta["omero"] = omero_meta
+        group.attrs["ome"] = ome_meta
+    else:
+        group.attrs["omero"] = omero_meta
 
 
 def _write_metadata(
@@ -285,8 +323,9 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                 name = k
             if name is not None:
                 if name.startswith("original-from-zarr"):
-                    path = v.store.path
-                    files.append(os.path.realpath(path))
+                    # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
+                    path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
+                    files.append(str(UPath(path).resolve()))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
                     if hasattr(v, "creation_info"):
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L625
@@ -297,7 +336,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                                 f"report this bug."
                             )
                         parquet_file = t[0]
-                        files.append(os.path.realpath(parquet_file))
+                        files.append(str(UPath(parquet_file).resolve()))
                     elif isinstance(v, tuple) and len(v) > 1 and isinstance(v[1], dict) and "piece" in v[1]:
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
                         parquet_file, check0, check1 = v[1]["piece"]
@@ -363,24 +402,71 @@ def _is_element_self_contained(
 ) -> bool:
     if isinstance(element, DaskDataFrame):
         pass
+    # TODO when running test_save_transformations it seems that for the same element this is called multiple times
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def save_transformations(sdata: SpatialData) -> None:
+def _resolve_zarr_store(
+    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
+) -> zarr.storage.StoreLike:
     """
-    Save all the transformations of a SpatialData object to disk.
+    Normalize different Zarr store inputs into a usable store instance.
 
-    sdata
-        The SpatialData object
+    This function accepts various forms of input (e.g. filesystem paths,
+    UPath objects, existing Zarr stores, or `zarr.Group`s) and resolves
+    them into a `StoreLike` that can be passed to Zarr APIs. It handles
+    local files, fsspec-backed stores, consolidated metadata stores, and
+    groups with nested paths.
+
+    Parameters
+    ----------
+    path
+        The input representing a Zarr store or group. Can be a filesystem
+        path, remote path, existing store, or Zarr group.
+    **kwargs
+        Additional keyword arguments forwarded to the underlying store
+        constructor (e.g. `mode`, `storage_options`).
+
+    Returns
+    -------
+    A normalized store instance suitable for use with Zarr.
+
+    Raises
+    ------
+    TypeError
+        If the input type is unsupported.
+    ValueError
+        If a `zarr.Group` has an unsupported store type.
     """
-    warnings.warn(
-        "This function is deprecated and should be replaced by `SpatialData.write_transformations()` or "
-        "`SpatialData.write_metadata()`, which gives more control over which metadata to write. This function will call"
-        " `SpatialData.write_transformations()`; please call this function directly.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    sdata.write_transformations()
+    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
+    if isinstance(path, str | Path):
+        # if the input is str or Path, map it to UPath
+        path = UPath(path)
+
+    if isinstance(path, PosixUPath | WindowsUPath):
+        # if the input is a local path, use LocalStore
+        return LocalStore(path.path)
+
+    if isinstance(path, zarr.Group):
+        # if the input is a zarr.Group, wrap it with a store
+        if isinstance(path.store, LocalStore):
+            # create a simple FSStore if the store is a LocalStore with just the path
+            return FsspecStore(os.path.join(path.store.path, path.path), **kwargs)
+        if isinstance(path.store, FsspecStore):
+            # if the store within the zarr.Group is an FSStore, return it
+            # but extend the path of the store with that of the zarr.Group
+            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
+        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
+            return path.store.store
+        raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
+    if isinstance(path, zarr.storage.StoreLike):
+        # if the input already a store, wrap it in an FSStore
+        return FsspecStore(path, **kwargs)
+    if isinstance(path, UPath):
+        # if input is a remote UPath, map it to an FSStore
+        return FsspecStore(path.path, fs=path.fs, **kwargs)
+    raise TypeError(f"Unsupported type: {type(path)}")
 
 
 class BadFileHandleMethod(Enum):
@@ -392,7 +478,7 @@ class BadFileHandleMethod(Enum):
 def handle_read_errors(
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
     location: str,
-    exc_types: tuple[type[Exception], ...],
+    exc_types: type[BaseException] | tuple[type[BaseException], ...],
 ) -> Generator[None, None, None]:
     """
     Handle read errors according to parameter `on_bad_files`.

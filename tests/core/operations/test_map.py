@@ -109,7 +109,7 @@ def test_map_raster_output_chunks(sdata_blobs):
     func_kwargs = {"parameter": 20}
     output_channels = ["test"]
     se = map_raster(
-        sdata_blobs["blobs_image"].chunk((3, 100, 100)),
+        sdata_blobs["blobs_image"].chunk({"c": 3, "y": 100, "x": 100}),
         func=_multiply_alter_c,
         func_kwargs=func_kwargs,
         chunks=(
@@ -160,9 +160,8 @@ def test_map_to_labels_(sdata_blobs, blockwise, chunks, drop_axis):
     func_kwargs = {"parameter": 20}
 
     se = sdata_blobs[img_layer]
-
     se = map_raster(
-        se.chunk((3, 256, 256)),
+        se.chunk({"c": 3, "y": 256, "x": 256}),
         func=_multiply_to_labels,
         func_kwargs=func_kwargs,
         c_coords=None,
@@ -183,7 +182,7 @@ def test_map_squeeze_z(full_sdata):
     func_kwargs = {"parameter": 20}
 
     se = map_raster(
-        full_sdata[img_layer].chunk((3, 2, 64, 64)),
+        full_sdata[img_layer].chunk({"c": 3, "z": 2, "y": 64, "x": 64}),
         func=_multiply_squeeze_z,
         func_kwargs=func_kwargs,
         chunks=((3,), (64,), (64,)),
@@ -212,7 +211,7 @@ def test_map_squeeze_z_fails(full_sdata):
         ),
     ):
         map_raster(
-            full_sdata[img_layer].chunk((3, 2, 64, 64)),
+            full_sdata[img_layer].chunk({"c": 3, "z": 2, "y": 64, "x": 64}),
             func=_multiply_squeeze_z,
             func_kwargs=func_kwargs,
             chunks=((3,), (64,), (64,)),
@@ -266,7 +265,7 @@ def test_map_raster_relabel(sdata_blobs):
 
     element_name = "blobs_labels"
     se = map_raster(
-        sdata_blobs[element_name].chunk((100, 100)),
+        sdata_blobs[element_name].chunk({"y": 100, "x": 100}),
         func=_to_constant,
         func_kwargs=func_kwargs,
         c_coords=None,
@@ -301,7 +300,7 @@ def test_map_raster_relabel_fail(sdata_blobs):
         match=re.escape("Relabel was set to True, but"),
     ):
         se = map_raster(
-            sdata_blobs[element_name].chunk((100, 100)),
+            sdata_blobs[element_name].chunk({"y": 100, "x": 100}),
             func=_to_constant,
             func_kwargs=func_kwargs,
             c_coords=None,
@@ -319,8 +318,8 @@ def test_map_raster_relabel_fail(sdata_blobs):
         ValueError,
         match=re.escape(f"Relabeling is only supported for arrays of type {np.integer}."),
     ):
-        se = map_raster(
-            sdata_blobs[element_name].astype(float).chunk((100, 100)),
+        map_raster(
+            sdata_blobs[element_name].astype(float).chunk({"y": 100, "x": 100}),
             func=_to_constant,
             func_kwargs=func_kwargs,
             c_coords=None,

@@ -156,6 +156,12 @@ class RasterSchema(DataArraySchema):
         You can also pass the `rgb` argument to `kwargs` to automatically set the `c_coords` to `["r", "g", "b"]`.
         Please refer to :func:`to_spatial_image` for more information. Note: if you set `rgb=None` in `kwargs`, 3-4
         channel images will be interpreted automatically as RGB(A) images.
+
+        **Setting axes / dims** In case of the data being a numpy or dask array, there are no named axes yet. In this
+        case, we first try to use the dimensions specified by the user in the `dims` argument of `.parse`. These
+        dimensions are used to potentially transpose the data to match the order (c)(z)yx. See the description of the
+        `dims` argument above. If `dims` is not specified, the dims are set to (c)(z)yx, dependent on the number of
+        dimensions of the data.
         """
         if transformations:
             transformations = transformations.copy()
@@ -170,7 +176,6 @@ class RasterSchema(DataArraySchema):
                     raise ValueError(
                         f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
                     )
-                logger.info("`dims` is specified redundantly: found also inside `data`.")
             else:
                 dims = data.dims
             # but if dims don't match the model's dims, throw error
@@ -183,7 +188,6 @@ class RasterSchema(DataArraySchema):
                 data = from_array(data)
             if dims is None:
                 dims = cls.dims.dims
-                logger.info(f"no axes information specified in the object, setting `dims` to: {dims}")
             else:
                 if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
                     raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
@@ -200,7 +204,6 @@ class RasterSchema(DataArraySchema):
                     data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
                 else:
                     raise ValueError(f"Unsupported data type: {type(data)}.")
-                logger.info(f"Transposing `data` of type: {type(data)} to {cls.dims.dims}.")
             except ValueError as e:
                 raise ValueError(
                     f"Cannot transpose arrays to match `dims`: {dims}.",
@@ -225,6 +228,10 @@ class RasterSchema(DataArraySchema):
             parsed_transform = _get_transformations(data)
             # delete transforms
             del data.attrs["transform"]
+            if isinstance(chunks, tuple):
+                chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
+            if isinstance(chunks, float):
+                chunks = {dim: chunks for index, dim in data.dims}
             data = to_multiscale(
                 data,
                 scale_factors=scale_factors,
@@ -260,6 +267,7 @@ class RasterSchema(DataArraySchema):
     def _(self, data: DataArray) -> None:
         super().validate(data)
         self._check_chunk_size_not_too_large(data)
+        self._check_transforms_present(data)
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
@@ -273,6 +281,15 @@ class RasterSchema(DataArraySchema):
         for d in data:
             super().validate(data[d][name])
         self._check_chunk_size_not_too_large(data)
+        self._check_transforms_present(data)
+
+    def _check_transforms_present(self, data: DataArray | DataTree) -> None:
+        parsed_transform = _get_transformations(data)
+        if parsed_transform is None:
+            raise ValueError(
+                f"No transformation found for `{data}`. At least one transformation is required for "
+                f"raster elements, e.g. images, labels."
+            )
 
     def _check_chunk_size_not_too_large(self, data: DataArray | DataTree) -> None:
         if isinstance(data, DataArray):
@@ -650,8 +667,8 @@ class PointsModel:
             )
         if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
             feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
-            if not isinstance(data[feature_key].dtype, CategoricalDtype):
-                logger.info(f"Feature key `{feature_key}`could be of type `pd.Categorical`. Consider casting it.")
+            if feature_key not in data.columns:
+                warnings.warn(f"Column `{feature_key}` not found." + SUGGESTION, UserWarning, stacklevel=2)
 
     @singledispatchmethod
     @classmethod
@@ -1049,9 +1066,32 @@ class TableModel:
         -------
         The validated data.
         """
+        if not isinstance(data, AnnData):
+            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(data)}.")
+
         validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
             return data
+
+        _, region_key, instance_key = get_table_keys(data)
+        if region_key is not None:
+            if region_key not in data.obs:
+                raise ValueError(
+                    f"Region key `{region_key}` not in `adata.obs`. Please create the column and parse "
+                    f"using TableModel.parse(adata)."
+                )
+            if not isinstance(data.obs[region_key].dtype, CategoricalDtype):
+                raise ValueError(
+                    f"`table.obs[{region_key}]` must be of type `categorical`, not `{type(data.obs[region_key])}`."
+                )
+        if instance_key:
+            if instance_key not in data.obs:
+                raise ValueError(
+                    f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
+                    f" using TableModel.parse(adata)."
+                )
+            if data.obs[instance_key].isnull().values.any():
+                raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
         self._validate_table_annotation_metadata(data)
 
@@ -1140,8 +1180,9 @@ class TableModel:
             "instance_key": instance_key,
         }
         adata.uns[cls.ATTRS_KEY] = attr
+        convert_region_column_to_categorical(adata)
         cls().validate(adata)
-        return convert_region_column_to_categorical(adata)
+        return adata
 
 
 Schema_t: TypeAlias = (
