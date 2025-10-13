@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from copy import deepcopy as _deepcopy
 from functools import singledispatch
 
@@ -48,7 +46,7 @@ def _(sdata: SpatialData) -> SpatialData:
     for _, element_name, element in sdata.gen_elements():
         elements_dict[element_name] = deepcopy(element)
     deepcopied_attrs = _deepcopy(sdata.attrs)
-    return SpatialData.from_elements_dict(elements_dict, attrs=deepcopied_attrs)
+    return SpatialData.init_from_elements(elements_dict, attrs=deepcopied_attrs)
 
 
 @deepcopy.register(DataArray)

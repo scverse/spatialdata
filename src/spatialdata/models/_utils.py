@@ -292,34 +292,6 @@ def get_channel_names(data: Any) -> list[Any]:
     raise ValueError(f"Cannot get channels from {type(data)}")
 
 
-def get_channels(data: Any) -> list[Any]:
-    """Get channels from data for an image element (both single and multiscale).
-
-    [Deprecation] This function will be deprecated in version 0.3.0. Please use
-    `get_channel_names`.
-
-    Parameters
-    ----------
-    data
-        data to get channels from
-
-    Returns
-    -------
-    List of channels
-
-    Notes
-    -----
-    For multiscale images, the channels are validated to be consistent across scales.
-    """
-    warnings.warn(
-        "The function 'get_channels' is deprecated and will be removed in version 0.3.0. "
-        "Please use 'get_channel_names' instead.",
-        DeprecationWarning,
-        stacklevel=2,  # Adjust the stack level to point to the caller
-    )
-    return get_channel_names(data)
-
-
 @get_channel_names.register
 def _(data: DataArray) -> list[Any]:
     return data.coords["c"].values.tolist()  # type: ignore[no-any-return]
@@ -328,7 +300,7 @@ def _(data: DataArray) -> list[Any]:
 @get_channel_names.register
 def _(data: DataTree) -> list[Any]:
     name = list({list(data[i].data_vars.keys())[0] for i in data})[0]
-    channels = {tuple(data[i][name].coords["c"].values) for i in data}
+    channels = {tuple(data[i][name].coords["c"].values.tolist()) for i in data}
     if len(channels) > 1:
         raise ValueError(f"Channels are not consistent across scales: {channels}")
     return list(next(iter(channels)))
@@ -394,7 +366,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     return Labels3DModel if Z in dims else Labels2DModel
 
 
-def convert_region_column_to_categorical(table: AnnData) -> AnnData:
+def convert_region_column_to_categorical(table: AnnData) -> None:
     from spatialdata.models.models import TableModel
 
     if TableModel.ATTRS_KEY in table.uns:
@@ -406,7 +378,6 @@ def convert_region_column_to_categorical(table: AnnData) -> AnnData:
                 stacklevel=2,
             )
             table.obs[region_key] = pd.Categorical(table.obs[region_key])
-    return table
 
 
 def set_channel_names(element: DataArray | DataTree, channel_names: str | list[str]) -> DataArray | DataTree:

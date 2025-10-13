@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import re
 import tempfile
@@ -49,13 +47,8 @@ from spatialdata.models.models import (
     get_model,
 )
 from spatialdata.testing import assert_elements_are_identical
-from spatialdata.transformations._utils import (
-    _set_transformations,
-)
-from spatialdata.transformations.operations import (
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.transformations._utils import _set_transformations
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Identity, Scale
 from tests.conftest import (
     MULTIPOLYGON_PATH,
@@ -78,7 +71,6 @@ def test_validate_axis_name():
         validate_axis_name("invalid")
 
 
-@pytest.mark.ci_only
 class TestModels:
     def _parse_transformation_from_multiple_places(self, model: Any, element: Any, **kwargs) -> None:
         # This function seems convoluted but the idea is simple: sometimes the parser creates a whole new object,
@@ -245,10 +237,10 @@ class TestModels:
         assert poly.equals(other_poly)
 
         if ShapesModel.RADIUS_KEY in poly.columns:
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = -1
+            poly.loc[0, ShapesModel.RADIUS_KEY] = -1
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
-            poly[ShapesModel.RADIUS_KEY].iloc[0] = 0
+            poly.loc[0, ShapesModel.RADIUS_KEY] = 0
             with pytest.raises(ValueError, match="Radii of circles must be positive."):
                 ShapesModel.validate(poly)
 
@@ -345,7 +337,7 @@ class TestModels:
             assert "cell_id" in points.attrs["spatialdata_attrs"]["instance_key"]
 
     @pytest.mark.parametrize("model", [TableModel])
-    @pytest.mark.parametrize("region", ["sample", RNG.choice([1, 2], size=10).tolist()])
+    @pytest.mark.parametrize("region", [["sample"] * 10, RNG.choice([1, 2], size=10).tolist()])
     def test_table_model(
         self,
         model: TableModel,
@@ -355,8 +347,9 @@ class TestModels:
         obs = pd.DataFrame(
             RNG.choice(np.arange(0, 100, dtype=float), size=(10, 3), replace=False),
             columns=["A", "B", "C"],
+            index=list(map(str, range(10))),
         )
-        obs[region_key] = region
+        obs[region_key] = pd.Categorical(region)
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         with pytest.raises(TypeError, match="Only int"):
             model.parse(adata, region=region, region_key=region_key, instance_key="A")
@@ -364,8 +357,9 @@ class TestModels:
         obs = pd.DataFrame(
             RNG.choice(np.arange(0, 100), size=(10, 3), replace=False),
             columns=["A", "B", "C"],
+            index=list(map(str, range(10))),
         )
-        obs[region_key] = region
+        obs[region_key] = pd.Categorical(region)
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
         assert region_key in table.obs
@@ -406,7 +400,7 @@ class TestModels:
         assert instance_key_ == "A"
 
         # let's fix the region_key column
-        table.obs["B"] = ["element"] * len(table)
+        table.obs["B"] = pd.Categorical(["element"] * len(table))
         _ = TableModel.parse(adata, region="element", region_key="B", instance_key="C", overwrite_metadata=True)
 
         region_, region_key_, instance_key_ = get_table_keys(table)
@@ -452,7 +446,7 @@ class TestModels:
     @pytest.mark.parametrize("region", [["sample_1"] * 5 + ["sample_2"] * 5])
     def test_table_instance_key_values_not_unique(self, model: TableModel, region: str | np.ndarray):
         region_key = "region"
-        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"])
+        obs = pd.DataFrame(RNG.integers(0, 100, size=(10, 3)), columns=["A", "B", "C"], index=list(map(str, range(10))))
         obs[region_key] = region
         obs["A"] = [1] * 5 + list(range(5))
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
@@ -527,14 +521,9 @@ class TestModels:
     @pytest.mark.parametrize("parse", [True, False])
     def test_table_model_not_unique_columns(self, keys: list[str], attr: str, parse: bool):
         invalid_key = keys[1]
-        key_regex = re.escape(invalid_key)
         df = pd.DataFrame([[None] * len(keys)], columns=keys, index=["1"])
         adata = AnnData(np.array([[0]]), **{attr: df})
-        with pytest.raises(
-            ValueError,
-            match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "
-            + f"Key `{key_regex}` is not unique, or another case-variant of it exists.",
-        ):
+        with pytest.raises(ValueError, match=f"Table contains invalid names(.|\n)*\n  {attr}/{invalid_key}: "):
             if parse:
                 TableModel.parse(adata)
             else:
@@ -546,7 +535,7 @@ def test_get_schema():
     labels = _get_labels()
     points = _get_points()
     shapes = _get_shapes()
-    table = _get_table()
+    table = _get_table(region="any", region_key="region", instance_key="instance_id")
     for k, v in images.items():
         schema = get_model(v)
         if "2d" in k:

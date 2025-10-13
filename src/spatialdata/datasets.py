@@ -1,7 +1,6 @@
 """SpatialData datasets."""
 
-from __future__ import annotations
-
+import warnings
 from typing import Any, Literal
 
 import dask.dataframe.core
@@ -20,15 +19,8 @@ from xarray import DataArray, DataTree
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.transformations import Identity
 
 __all__ = ["blobs", "raccoon"]
@@ -134,9 +126,11 @@ class BlobsDataset:
         self.c_coords = c_coords
         if c_coords is not None:
             if n_channels != len(c_coords):
-                logger.info(
+                warnings.warn(
                     f"Number of channels ({n_channels}) and c_coords ({len(c_coords)}) do not match; ignoring "
-                    f"n_channels value"
+                    f"n_channels value",
+                    UserWarning,
+                    stacklevel=2,
                 )
             n_channels = len(c_coords)
         self.n_channels = n_channels
@@ -168,7 +162,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            tables=table,
+            tables={"table": table},
         )
 
     def _image_blobs(
@@ -373,7 +367,7 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
         index = sdata[name].index
         instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.core.Index) else index.tolist()
     n = len(instance_id)
-    new_table = AnnData(shape=(n, 0), obs={"region": [name for _ in range(n)], "instance_id": instance_id})
+    new_table = AnnData(shape=(n, 0), obs={"region": pd.Categorical([name] * n), "instance_id": instance_id})
     new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
     del sdata.tables["table"]
     sdata["table"] = new_table

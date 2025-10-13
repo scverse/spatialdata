@@ -26,7 +26,8 @@ def sdata_with_image(request: "_pytest.fixtures.SubRequest", tmp_path: Path) -> 
     # Create a disk-backed Dask array for scale 0.
     npg = np.random.default_rng(0)
     array = npg.integers(low=0, high=2**16, size=(1, width, width))
-    array_path = tmp_path / "image.zarr"
+    # this is a pure zarr array, not written with SpatialData/OME-Zarr APIs, but with Zarr APIs
+    array_path = tmp_path / "array.zarr"
     dask.array.from_array(array).rechunk(chunksize).to_zarr(array_path)
     array_backed = dask.array.from_zarr(array_path)
     # Create an in-memory SpatialData with disk-backed scale 0.
@@ -58,17 +59,17 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
     # (see issue https://github.com/scverse/spatialdata/issues/577).
     # Instead of measuring the time (which would have high variation if not using big datasets),
     # we watch the number of read and write accesses and compare to the theoretical number.
-    zarr_chunk_write_spy = mocker.spy(zarr.core.Array, "__setitem__")
-    zarr_chunk_read_spy = mocker.spy(zarr.core.Array, "__getitem__")
+    zarr_chunk_write_spy = mocker.spy(zarr.Array, "__setitem__")
+    zarr_chunk_read_spy = mocker.spy(zarr.Array, "__getitem__")
 
     image_name, image = next(iter(sdata_with_image.images.items()))
-    element_type_group = zarr.group(store=tmp_path / "sdata.zarr", path="/images")
+    element_type_group = zarr.group(store=tmp_path / "image.zarr", path="/images")
 
     write_image(
         image=image,
         group=element_type_group,
         name=image_name,
-        format=CurrentRasterFormat(),
+        element_format=CurrentRasterFormat(),
     )
 
     # The number of chunks of scale level 0

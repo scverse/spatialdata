@@ -4,6 +4,7 @@ from contextlib import nullcontext
 
 import dask.dataframe as dd
 import pytest
+from upath import UPath
 
 from spatialdata import read_zarr
 from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
@@ -37,8 +38,8 @@ def test_backing_files_images(images):
     computational graph
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        f0 = os.path.join(tmp_dir, "images0.zarr")
-        f1 = os.path.join(tmp_dir, "images1.zarr")
+        f0 = UPath(tmp_dir) / "images0.zarr"
+        f1 = UPath(tmp_dir) / "images1.zarr"
         images.write(f0)
         images.write(f1)
         images0 = read_zarr(f0)
@@ -49,7 +50,7 @@ def test_backing_files_images(images):
         im1 = images1.images["image2d"]
         im2 = im0 + im1
         files = get_dask_backing_files(im2)
-        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d")) for f in [f0, f1]]
+        expected_zarr_locations = [str((f / "images" / "image2d").resolve()) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
         # multiscale
@@ -57,7 +58,7 @@ def test_backing_files_images(images):
         im4 = images1.images["image2d_multiscale"]
         im5 = im3 + im4
         files = get_dask_backing_files(im5)
-        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d_multiscale")) for f in [f0, f1]]
+        expected_zarr_locations = [str((f / "images" / "image2d_multiscale").resolve()) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
 
@@ -98,8 +99,8 @@ def test_backing_files_combining_points_and_images(points, images):
     from examining its computational graph
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        f0 = os.path.join(tmp_dir, "points0.zarr")
-        f1 = os.path.join(tmp_dir, "images1.zarr")
+        f0 = UPath(tmp_dir) / "points0.zarr"
+        f1 = UPath(tmp_dir) / "images1.zarr"
         points.write(f0)
         images.write(f1)
         points0 = read_zarr(f0)
@@ -112,12 +113,12 @@ def test_backing_files_combining_points_and_images(points, images):
         im2 = v + im1
         files = get_dask_backing_files(im2)
         expected_zarr_locations_old = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str((f0 / "points" / "points_0" / "points.parquet").resolve()),
+            str((f1 / "images" / "image2d").resolve()),
         ]
         expected_zarr_locations_new = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet/part.0.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str((f0 / "points" / "points_0" / "points.parquet" / "part.0.parquet").resolve()),
+            str((f1 / "images" / "image2d").resolve()),
         ]
         assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
 

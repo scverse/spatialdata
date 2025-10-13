@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from typing import Any
 
@@ -21,14 +19,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-    get_model,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_model
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
 __all__ = ["aggregate"]
@@ -241,7 +232,7 @@ def _create_sdata_from_table_and_shapes(
             f"Instance key column dtype in table resulting from aggregation cannot be cast to the dtype of"
             f"element {shapes_name}.index"
         ) from err
-    table.obs[region_key] = shapes_name
+    table.obs[region_key] = pd.Categorical([shapes_name] * len(table))
     table = TableModel.parse(table, region=shapes_name, region_key=region_key, instance_key=instance_key)
 
     # labels case, needs conversion from str to int
@@ -251,7 +242,7 @@ def _create_sdata_from_table_and_shapes(
     if deepcopy:
         shapes = _deepcopy(shapes)
 
-    return SpatialData.from_elements_dict({shapes_name: shapes, table_name: table})
+    return SpatialData.init_from_elements({shapes_name: shapes, table_name: table})
 
 
 def _aggregate_image_by_labels(
@@ -449,7 +440,7 @@ def _aggregate_shapes(
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
-        aggregated = joined.groupby([INDEX, vk])[ONES_COLUMN].agg(agg_func).reset_index()
+        aggregated = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN].agg(agg_func).reset_index()
         aggregated_values = aggregated[ONES_COLUMN].values
     else:
         if fractions_of_values is not None:
@@ -487,7 +478,7 @@ def _aggregate_shapes(
 
     anndata = ad.AnnData(
         X,
-        obs=pd.DataFrame(index=rows_categories),
+        obs=pd.DataFrame(index=list(map(str, rows_categories))),
         var=pd.DataFrame(index=columns_categories),
     )
 

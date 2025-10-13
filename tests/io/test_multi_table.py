@@ -24,8 +24,13 @@ class TestMultiTable:
         adata2 = adata0.copy()
         del adata2.obs["region"]
         # fails because either none either all three 'region', 'region_key', 'instance_key' are required
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Region key `region` not in `adata.obs`."):
             full_sdata["not_added_table"] = adata2
+
+        adata3 = adata0.copy()
+        del adata3.obs["instance_id"]
+        with pytest.raises(ValueError, match="Instance key `instance_id` not in `adata.obs`."):
+            full_sdata["not_added_table"] = adata3
 
         assert len(full_sdata.tables) == 3
         assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
@@ -35,6 +40,14 @@ class TestMultiTable:
         assert_equal(adata0, full_sdata["adata0"])
         assert_equal(adata1, full_sdata["adata1"])
         assert "adata0" in full_sdata.tables and "adata1" in full_sdata.tables
+
+    def test_null_values_in_instance_key_column(self, full_sdata: SpatialData):
+        n_obs = full_sdata["table"].n_obs
+        full_sdata["table"].obs["instance_id"] = range(n_obs)
+        # introduce null values
+        full_sdata["table"].obs.loc[0, "instance_id"] = None
+        with pytest.raises(ValueError, match="must not contain null values, but it does."):
+            full_sdata.validate_table_in_spatialdata(table=full_sdata["table"])
 
     @pytest.mark.parametrize(
         "region_key, instance_key, error_msg",
@@ -74,7 +87,7 @@ class TestMultiTable:
             full_sdata.set_table_annotates_spatialelement("table", "poly")
 
         del full_sdata["table"].obs["instance_id"]
-        full_sdata["table"].obs["region"] = ["poly"] * n_obs
+        full_sdata["table"].obs["region"] = pd.Categorical(["poly"] * n_obs)
         with pytest.raises(ValueError, match=error_msg):
             full_sdata.set_table_annotates_spatialelement(
                 "table", "poly", region_key=region_key, instance_key=instance_key
@@ -114,42 +127,18 @@ class TestMultiTable:
             "table", "labels2d", region_key="region", instance_key="instance_id"
         )
 
-        region = ["circles"] * 50 + ["poly"] * 50
+        region = pd.Categorical(["circles"] * 50 + ["poly"] * 50)
         full_sdata["table"].obs["region"] = region
 
         full_sdata.set_table_annotates_spatialelement(
             "table", pd.Series(["circles", "poly"]), region_key="region", instance_key="instance_id"
         )
 
-        full_sdata["table"].obs["region"] = "circles"
+        full_sdata["table"].obs["region"] = pd.Categorical(["circles"] * full_sdata["table"].n_obs)
         full_sdata.set_table_annotates_spatialelement(
             "table", "circles", region_key="region", instance_key="instance_id"
         )
         full_sdata.write(tmpdir)
-
-    def test_old_accessor_deprecation(self, full_sdata, tmp_path):
-        # To test self._backed
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-        full_sdata.write(tmpdir)
-        adata0 = _get_table(region="polygon")
-
-        with pytest.warns(DeprecationWarning):
-            _ = full_sdata.table
-        with pytest.raises(ValueError):
-            full_sdata.table = adata0
-        with pytest.warns(DeprecationWarning):
-            del full_sdata.table
-        with pytest.raises(KeyError):
-            del full_sdata["table"]
-        with pytest.warns(DeprecationWarning):
-            full_sdata.table = adata0  # this gets placed in sdata['table']
-
-        assert_equal(adata0, full_sdata["table"])
-
-        del full_sdata["table"]
-
-        full_sdata.tables["my_new_table0"] = adata0
-        assert full_sdata.get("table") is None
 
     @pytest.mark.parametrize("region", ["test_shapes", "non_existing"])
     def test_single_table(self, tmp_path: str, region: str):
@@ -271,13 +260,13 @@ def test_static_set_annotation_target():
     )
     table = _get_table(region="test_non_shapes")
     table_target = table.copy()
-    table_target.obs["region"] = "test_shapes"
+    table_target.obs["region"] = pd.Categorical(["test_shapes"] * table_target.n_obs)
     table_target = SpatialData.update_annotated_regions_metadata(table_target)
     assert table_target.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
 
     test_sdata["another_table"] = table_target
 
-    table.obs["diff_region"] = "test_shapes"
+    table.obs["diff_region"] = pd.Categorical(["test_shapes"] * table.n_obs)
     table = SpatialData.update_annotated_regions_metadata(table, region_key="diff_region")
     assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] == ["test_shapes"]
 
