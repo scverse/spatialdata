@@ -132,7 +132,8 @@ def rasterize_bins(
 
         random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
         location_ids = table.obs[instance_key].iloc[random_indices].values
-        sub_df, sub_table = element.loc[location_ids], table[random_indices]
+        sub_df = element.loc[location_ids]
+        sub_table = table[random_indices]
 
         src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
         if isinstance(sub_df, GeoDataFrame):
@@ -281,7 +282,7 @@ def rasterize_bins_link_table_to_labels(sdata: SpatialData, table_name: str, ras
         The name of the rasterized labels in the spatial data object.
     """
     _, region_key, instance_key = get_table_keys(sdata[table_name])
-    sdata[table_name].obs[region_key] = rasterized_labels_name
+    sdata[table_name].obs[region_key] = pd.Categorical([rasterized_labels_name] * sdata[table_name].n_obs)
     relabled_instance_key = _get_relabeled_column_name(instance_key)
     sdata.set_table_annotates_spatialelement(
         table_name=table_name, region=rasterized_labels_name, region_key=region_key, instance_key=relabled_instance_key
