@@ -7,7 +7,6 @@ import warnings
 from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
-from upath import UPath
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
@@ -19,6 +18,7 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from ome_zarr.io import parse_url
 from shapely import MultiPolygon, Polygon
+from upath import UPath
 from xarray import DataArray, DataTree
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
@@ -588,7 +588,7 @@ class SpatialData:
         if value is None or isinstance(value, str | Path | UPath):
             self._path = value
         else:
-            raise TypeError("Path must be `None`, a `str` or a `Path` object, but is {}".format(type(value)))
+            raise TypeError(f"Path must be `None`, a `str` or a `Path` object, but is {type(value)}")
 
         if not self.is_self_contained():
             logger.info(

@@ -35,7 +35,6 @@ from spatialdata.models._utils import (
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
 
-from upath import UPath
 
 # suppress logger debug from ome_zarr with context manager
 @contextmanager
@@ -339,7 +338,7 @@ def _backed_elements_contained_in_path(path: Path, object: SpatialData | Spatial
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
-def _is_subfolder(parent: Path | UPath, child: Path |UPath) -> bool:
+def _is_subfolder(parent: Path | UPath, child: Path | UPath) -> bool:
     """
     Check if a path is a subfolder of another path.
 
@@ -359,18 +358,22 @@ def _is_subfolder(parent: Path | UPath, child: Path |UPath) -> bool:
     if isinstance(parent, str):
         parent = Path(parent)
 
-    if not isinstance(parent, Path|UPath) or not isinstance(child, Path|UPath):
+    if not isinstance(parent, Path | UPath) or not isinstance(child, Path | UPath):
         raise TypeError(f"Expected a Path object, got {type(parent)} and {type(child)}")
-    
+
     if isinstance(parent, UPath) and isinstance(child, UPath):
         # if both are UPath, use the resolve method to check relative path
-        return child.relative_to(parent)
-    elif isinstance(parent, Path) and isinstance(child, Path):
-        return child.resolve().is_relative_to(parent.resolve())
+        try:
+            child.relative_to(parent)  # .resolve is not needed here, as UPath already resolves the path correctly
+            return True
+        except ValueError:
+            return False
+
+    return child.resolve().is_relative_to(parent.resolve())
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path |UPath
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path | UPath
 ) -> bool:
     if isinstance(element, DaskDataFrame):
         pass
