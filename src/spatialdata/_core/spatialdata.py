@@ -7,6 +7,7 @@ import warnings
 from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
+from upath import UPath
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
@@ -62,7 +63,6 @@ Shape_s = ShapesModel()
 Point_s = PointsModel()
 Table_s = TableModel()
 
-import upath
 
 class SpatialData:
     """
@@ -585,11 +585,8 @@ class SpatialData:
 
     @path.setter
     def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, str | Path):
+        if value is None or isinstance(value, str | Path | UPath):
             self._path = value
-        elif isinstance(value ,upath.implementations.cloud.S3Path):
-            self._path = value
-        
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object, but is {}".format(type(value)))
 
