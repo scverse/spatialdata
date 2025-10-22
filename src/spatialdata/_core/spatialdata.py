@@ -62,6 +62,7 @@ Shape_s = ShapesModel()
 Point_s = PointsModel()
 Table_s = TableModel()
 
+import upath
 
 class SpatialData:
     """
@@ -586,8 +587,11 @@ class SpatialData:
     def path(self, value: Path | None) -> None:
         if value is None or isinstance(value, str | Path):
             self._path = value
+        elif isinstance(value ,upath.implementations.cloud.S3Path):
+            self._path = value
+        
         else:
-            raise TypeError("Path must be `None`, a `str` or a `Path` object.")
+            raise TypeError("Path must be `None`, a `str` or a `Path` object, but is {}".format(type(value)))
 
         if not self.is_self_contained():
             logger.info(
