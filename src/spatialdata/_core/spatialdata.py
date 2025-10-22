@@ -18,6 +18,7 @@ from dask.delayed import Delayed
 from geopandas import GeoDataFrame
 from ome_zarr.io import parse_url
 from shapely import MultiPolygon, Polygon
+from upath import UPath
 from xarray import DataArray, DataTree
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
@@ -584,10 +585,10 @@ class SpatialData:
 
     @path.setter
     def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, str | Path):
+        if value is None or isinstance(value, str | Path | UPath):
             self._path = value
         else:
-            raise TypeError("Path must be `None`, a `str` or a `Path` object.")
+            raise TypeError(f"Path must be `None`, a `str` or a `Path` object, but is {type(value)}")
 
         if not self.is_self_contained():
             logger.info(

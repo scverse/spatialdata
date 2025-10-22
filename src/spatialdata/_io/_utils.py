@@ -333,12 +333,12 @@ def _backed_elements_contained_in_path(path: Path, object: SpatialData | Spatial
     If an object does not have a Dask computational graph, it will return an empty list.
     It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
     """
-    if not isinstance(path, Path):
+    if not isinstance(path, Path | UPath):
         raise TypeError(f"Expected a Path object, got {type(path)}")
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
-def _is_subfolder(parent: Path, child: Path) -> bool:
+def _is_subfolder(parent: Path | UPath, child: Path | UPath) -> bool:
     """
     Check if a path is a subfolder of another path.
 
@@ -357,13 +357,42 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
         child = Path(child)
     if isinstance(parent, str):
         parent = Path(parent)
-    if not isinstance(parent, Path) or not isinstance(child, Path):
+
+    if not isinstance(parent, Path | UPath) or not isinstance(child, Path | UPath):
         raise TypeError(f"Expected a Path object, got {type(parent)} and {type(child)}")
-    return child.resolve().is_relative_to(parent.resolve())
+
+    # both UPath
+    if isinstance(parent, UPath) and isinstance(child, UPath):
+        try:
+            child.relative_to(parent)
+            return True
+        except ValueError:
+            return False
+
+    # both pathlib
+    if isinstance(parent, Path) and isinstance(child, Path):
+        return child.resolve().is_relative_to(parent.resolve())
+
+    # mixed: only valid if both are local paths
+    if isinstance(parent, UPath) and isinstance(child, Path):
+        if getattr(parent, "protocol", None) in (None, "file"):
+            return child.resolve().is_relative_to(Path(parent).resolve())
+        return False
+
+    if isinstance(parent, Path) and isinstance(child, UPath):
+        if getattr(child, "protocol", None) in (None, "file"):
+            try:
+                UPath(child).relative_to(UPath(parent))
+                return True
+            except ValueError:
+                return False
+        return False
+
+    return False
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path | UPath
 ) -> bool:
     if isinstance(element, DaskDataFrame):
         pass
