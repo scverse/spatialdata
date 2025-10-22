@@ -361,15 +361,34 @@ def _is_subfolder(parent: Path | UPath, child: Path | UPath) -> bool:
     if not isinstance(parent, Path | UPath) or not isinstance(child, Path | UPath):
         raise TypeError(f"Expected a Path object, got {type(parent)} and {type(child)}")
 
+    # both UPath
     if isinstance(parent, UPath) and isinstance(child, UPath):
-        # if both are UPath, use the resolve method to check relative path
         try:
-            child.relative_to(parent)  # .resolve is not needed here, as UPath already resolves the path correctly
+            child.relative_to(parent)
             return True
         except ValueError:
             return False
 
-    return child.resolve().is_relative_to(parent.resolve())
+    # both pathlib
+    if isinstance(parent, Path) and isinstance(child, Path):
+        return child.resolve().is_relative_to(parent.resolve())
+
+    # mixed: only valid if both are local paths
+    if isinstance(parent, UPath) and isinstance(child, Path):
+        if getattr(parent, "protocol", None) in (None, "file"):
+            return child.resolve().is_relative_to(Path(parent).resolve())
+        return False
+
+    if isinstance(parent, Path) and isinstance(child, UPath):
+        if getattr(child, "protocol", None) in (None, "file"):
+            try:
+                UPath(child).relative_to(UPath(parent))
+                return True
+            except ValueError:
+                return False
+        return False
+
+    return False
 
 
 def _is_element_self_contained(
