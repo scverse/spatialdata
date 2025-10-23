@@ -1,6 +1,3 @@
-import dask
-
-dask.config.set({"dataframe.query-planning": False})
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
