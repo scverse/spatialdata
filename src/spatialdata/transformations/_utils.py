@@ -55,7 +55,7 @@ def _set_transformations_to_element(element: Any, transformations: MappingToCoor
         attrs[TRANSFORM_KEY] = {}
     attrs[TRANSFORM_KEY] = transformations
     # this calls an eventual setter in the element class; modifying the attrs directly would not trigger the setter
-    element.attrs = attrs
+    # element.attrs = attrs
 
 
 @singledispatch

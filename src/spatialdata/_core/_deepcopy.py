@@ -94,9 +94,11 @@ def _(gdf: GeoDataFrame) -> GeoDataFrame:
 @deepcopy.register(DaskDataFrame)
 def _(df: DaskDataFrame) -> DaskDataFrame:
     # bug: the parser may change the order of the columns
-    new_ddf = PointsModel.parse(df.compute().copy(deep=True))
+    compute_df = df.compute().copy(deep=True)
+    new_ddf = PointsModel.parse(compute_df)
     # the problem is not .copy(deep=True), but the parser, which discards some metadata https://github.com/scverse/spatialdata/issues/503#issuecomment-2015275322
-    new_ddf.attrs = _deepcopy(df.attrs)
+    # We need to use the compute_df here as with deepcopy, df._attrs does not exist anymore.
+    new_ddf.attrs = _deepcopy(compute_df.attrs)
     return new_ddf
 
 

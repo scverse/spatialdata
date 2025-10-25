@@ -672,8 +672,8 @@ def _(
         max_coordinate=max_coordinate_intrinsic,
     )
 
-    # assert that the number of bounding boxes is correct
-    assert len(in_intrinsic_bounding_box) == len(min_coordinate)
+    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
+        raise ValueError(f"Number of dataframes `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
     for mask in in_intrinsic_bounding_box:
         if mask.sum() == 0:
