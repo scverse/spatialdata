@@ -91,7 +91,9 @@ class CoordinateMixinV01:
             import json
 
             json0 = [json.dumps(t) for t in transformations]
-            from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
+            from spatialdata.transformations.ngff.ngff_transformations import (
+                NgffBaseTransformation,
+            )
 
             parsed = [NgffBaseTransformation.from_dict(t) for t in transformations]
             json1 = [json.dumps(p.to_dict()) for p in parsed]
@@ -297,6 +299,10 @@ sdata_zarr_version_to_ome_zarr_format = {
     "0.4": FormatV04(),
     "0.4-dev-spatialdata": FormatV04(),
     "0.5-dev-spatialdata": FormatV05(),
+}
+sdata_zarr_version_to_raster_format: dict[str, FormatV04 | FormatV05] = {
+    fmt.version: fmt  # type: ignore[attr-defined]
+    for fmt in [RasterFormatV01(), RasterFormatV02(), RasterFormatV03()]
 }
 RasterFormats: dict[str, RasterFormatType] = {
     "0.1": RasterFormatV01(),
