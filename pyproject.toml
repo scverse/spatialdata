@@ -36,7 +36,7 @@ dependencies = [
     "ome_zarr>=0.12.2",
     "pandas",
     "pooch",
-    "pyarrow",
+    "pyarrow<22.0.0",  # https://github.com/scverse/spatialdata/issues/1000
     "rich",
     "setuptools",
     "shapely>=2.0.1",
