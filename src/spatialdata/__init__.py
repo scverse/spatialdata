@@ -1,4 +1,5 @@
 from importlib.metadata import version
+
 # TODO chance * import
 from spatialdata._io.accessor import *
 
