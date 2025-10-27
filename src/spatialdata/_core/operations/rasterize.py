@@ -666,6 +666,10 @@ def rasterize_shapes_points(
     label_index_to_category = None
     if VALUES_COLUMN in data and data[VALUES_COLUMN].dtype == "category":
         if isinstance(data, DaskDataFrame):
+            # We have to do this because as_known() does not preserve the order anymore in latest dask versions
+            # TODO discuss whether we can always expect the index from before to be monotonically increasing, because
+            # then we don't have to check order
+            # data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.set_categories(data.index, ordered=True)
             data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
         label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
 
