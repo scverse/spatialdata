@@ -97,6 +97,8 @@ def wrap_loc_with_attrs():
                 result = self._parent_loc[key]
                 if hasattr(self._parent_df, "_attrs"):
                     result.attrs = self._parent_df._attrs.copy()
+                if hasattr(self._parent_df, "attrs"):
+                    result.attrs = self._parent_df.attrs.copy()
                 return result
 
             def __setitem__(self, key, value):
@@ -130,6 +132,8 @@ def wrap_iloc_with_attrs():
                 result = self._parent_iloc[key]
                 if hasattr(self._parent_df, "_attrs"):
                     result.attrs = self._parent_df._attrs.copy()
+                if hasattr(self._parent_df, "attrs"):
+                    result.attrs = self._parent_df.attrs.copy()
                 return result
 
             def __setitem__(self, key, value):
