@@ -1,5 +1,6 @@
 from importlib.metadata import version
-# TODO chance * import
+
+# TODO change * import
 from spatialdata._io.accessor import *
 
 __version__ = version("spatialdata")
