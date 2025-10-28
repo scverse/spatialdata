@@ -653,12 +653,14 @@ def rasterize_shapes_points(
 
     table_name = table_name if table_name is not None else "table"
 
+    index = False
     if value_key is not None:
         kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
         data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
     elif isinstance(data, GeoDataFrame) or isinstance(data, DaskDataFrame) and return_regions_as_labels is True:
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
+        index = True
     else:
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = 1
@@ -668,9 +670,11 @@ def rasterize_shapes_points(
         if isinstance(data, DaskDataFrame):
             # We have to do this because as_known() does not preserve the order anymore in latest dask versions
             # TODO discuss whether we can always expect the index from before to be monotonically increasing, because
-            # then we don't have to check order
-            # data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.set_categories(data.index, ordered=True)
-            data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
+            # then we don't have to check order.
+            if index:
+                data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.set_categories(data.index, ordered=True)
+            else:
+                data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
         label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
 
     if return_single_channel is None:
