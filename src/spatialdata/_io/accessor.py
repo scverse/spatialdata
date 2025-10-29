@@ -163,6 +163,3 @@ for method_name in methods_to_wrap:
     if hasattr(dd.DataFrame, method_name):
         original_method = getattr(dd.DataFrame, method_name)
         setattr(dd.DataFrame, method_name, wrap_with_attrs(original_method))
-
-wrap_loc_with_attrs()
-wrap_iloc_with_attrs()

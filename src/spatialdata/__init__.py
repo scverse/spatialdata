@@ -1,7 +1,12 @@
 from importlib.metadata import version
 
-# TODO change * import
-from spatialdata._io.accessor import *
+from spatialdata._io.accessor import (
+    DfAttrsAccessor,
+    SeriesAttrsAccessor,
+    wrap_iloc_with_attrs,
+    wrap_loc_with_attrs,
+    wrap_with_attrs,
+)
 
 __version__ = version("spatialdata")
 
@@ -71,3 +76,6 @@ from spatialdata._io._utils import get_dask_backing_files
 from spatialdata._io.format import SpatialDataFormatType
 from spatialdata._io.io_zarr import read_zarr
 from spatialdata._utils import get_pyramid_levels, unpad_raster
+
+wrap_loc_with_attrs()
+wrap_iloc_with_attrs()
