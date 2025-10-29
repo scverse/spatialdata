@@ -1,44 +1,44 @@
-from collections.abc import MutableMapping
+from collections.abc import Callable, Iterator, MutableMapping
 from typing import Any
 
 import dask.dataframe as dd
 from dask.dataframe.extensions import register_dataframe_accessor, register_series_accessor
 
 
-class _AttrsBase(MutableMapping):
+class _AttrsBase(MutableMapping[str, str | dict[str, str]]):
     """Base accessor that stores arbitrary metadata on Dask objects."""
 
-    def __init__(self, dask_obj):
+    def __init__(self, dask_obj: dd.DataFrame | dd.Series):
         self._obj = dask_obj
         if not hasattr(dask_obj, "_attrs"):
             dask_obj._attrs = {}
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         return self._obj._attrs[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: str | dict[str, str]) -> None:
         self._obj._attrs[key] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         del self._obj._attrs[key]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self._obj._attrs)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._obj._attrs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self._obj._attrs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self._obj._attrs)
 
-    def copy(self):
+    def copy(self) -> Any:
         return self._obj._attrs.copy()
 
     @property
-    def data(self):
+    def data(self) -> Any:
         """Access the raw internal attrs dict."""
         return self._obj._attrs
 
@@ -57,14 +57,14 @@ class SeriesAttrsAccessor(_AttrsBase):
     pass
 
 
-def wrap_with_attrs(method: Any):
+def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
     Copies _attrs from self before calling method, then assigns to result.
     Safe for lazy operations like set_index, assign, map_partitions.
     """
 
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         old_accessor = getattr(self, "attrs", {})
         if hasattr(old_accessor, "_obj") and hasattr(old_accessor._obj, "_attrs"):
             old_attrs = old_accessor._obj._attrs.copy()
@@ -79,21 +79,20 @@ def wrap_with_attrs(method: Any):
     return wrapper
 
 
-def wrap_loc_with_attrs():
+def wrap_loc_with_attrs() -> None:
     """Patch dd.DataFrame.loc to preserve _attrs."""
     original_property = dd.DataFrame.loc  # this is a property
 
-    @property
-    def loc_with_attrs(self):
+    def loc_with_attrs(self: dd.DataFrame) -> Any:
         df = self
         loc = original_property.fget(df)
 
         class LocWrapper:
-            def __init__(self, parent_loc, parent_df):
+            def __init__(self, parent_loc: Any, parent_df: dd.DataFrame) -> None:
                 self._parent_loc = parent_loc
                 self._parent_df = parent_df
 
-            def __getitem__(self, key):
+            def __getitem__(self, key: str) -> Any:
                 result = self._parent_loc[key]
                 if hasattr(self._parent_df, "_attrs"):
                     result.attrs = self._parent_df._attrs.copy()
@@ -101,34 +100,33 @@ def wrap_loc_with_attrs():
                     result.attrs = self._parent_df.attrs.copy()
                 return result
 
-            def __setitem__(self, key, value):
+            def __setitem__(self, key: str, value: Any) -> dd.DataFrame:
                 # preserve attrs even if user assigns via .loc
                 self._parent_loc[key] = value
                 return self._parent_df
 
-            def __repr__(self):
+            def __repr__(self) -> str:
                 return repr(self._parent_loc)
 
         return LocWrapper(loc, df)
 
-    dd.DataFrame.loc = loc_with_attrs
+    dd.DataFrame.loc = property(loc_with_attrs)
 
 
-def wrap_iloc_with_attrs():
+def wrap_iloc_with_attrs() -> None:
     """Patch dd.DataFrame.iloc to preserve _attrs."""
     original_property = dd.DataFrame.iloc  # this is a property
 
-    @property
-    def iloc_with_attrs(self):
+    def iloc_with_attrs(self: dd.DataFrame) -> Any:
         df = self
         iloc = original_property.fget(df)
 
         class ILocWrapper:
-            def __init__(self, parent_iloc, parent_df):
+            def __init__(self, parent_iloc: Any, parent_df: dd.DataFrame) -> None:
                 self._parent_iloc = parent_iloc
                 self._parent_df = parent_df
 
-            def __getitem__(self, key):
+            def __getitem__(self, key: str) -> Any:
                 result = self._parent_iloc[key]
                 if hasattr(self._parent_df, "_attrs"):
                     result.attrs = self._parent_df._attrs.copy()
@@ -136,16 +134,16 @@ def wrap_iloc_with_attrs():
                     result.attrs = self._parent_df.attrs.copy()
                 return result
 
-            def __setitem__(self, key, value):
+            def __setitem__(self, key: str, value: Any) -> dd.DataFrame:
                 self._parent_iloc[key] = value
                 return self._parent_df
 
-            def __repr__(self):
+            def __repr__(self) -> str:
                 return repr(self._parent_iloc)
 
         return ILocWrapper(iloc, df)
 
-    dd.DataFrame.iloc = iloc_with_attrs
+    dd.DataFrame.iloc = property(iloc_with_attrs)
 
 
 methods_to_wrap = [
