@@ -115,8 +115,6 @@ def get_transformation(
     from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
     transformations = _get_transformations(element)
-    # if not isinstance(transformations, dict):
-    #     print()
     assert isinstance(transformations, dict)
 
     if get_all is False:
