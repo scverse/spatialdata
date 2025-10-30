@@ -224,7 +224,7 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = Path(store)
+    sdata.path = Path(store.path) if isinstance(store, zarr.Group) else Path(store)
     return sdata
 
 
