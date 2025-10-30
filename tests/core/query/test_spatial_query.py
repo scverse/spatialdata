@@ -645,7 +645,7 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name:
         geopandas.testing.assert_geodataframe_equal(queried[name], queried_back[name])
 
 
-@pytest.mark.parametrize("with_polygon_query", [False])
+@pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     p0 = points["points_0"]
     attrs = p0.attrs.copy()
