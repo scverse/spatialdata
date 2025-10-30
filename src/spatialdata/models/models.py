@@ -885,7 +885,8 @@ class PointsModel:
             # It also just changes the state of the series, so it is not a big deal.
             if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
                 try:
-                    data[c] = data[c].cat.set_categories(data[c].head(1).cat.categories)
+                    data[c] = data[c].cat.as_known()
+                    data[c] = data[c].cat.set_categories(data[c]._meta.cat.categories)
                 except ValueError:
                     logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
 
