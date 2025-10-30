@@ -1,5 +1,5 @@
 from collections.abc import Callable, Iterator, MutableMapping
-from typing import Any
+from typing import Any, Literal
 
 import dask.dataframe as dd
 from dask.dataframe.extensions import register_dataframe_accessor, register_series_accessor
@@ -79,23 +79,25 @@ def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-def wrap_loc_with_attrs() -> None:
-    """Patch dd.DataFrame.loc to preserve _attrs."""
-    original_property = dd.DataFrame.loc  # this is a property
+def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
+    """Patch dd.DataFrame.loc or iloc to preserve _attrs.
 
-    def loc_with_attrs(self: dd.DataFrame) -> Any:
+    Reason for having this separate from methods is because both loc and iloc are a property that return an indexer.
+    Therefore, they have to be wrapped differently from methods in order to preserve attrs.
+    """
+    original_property = getattr(dd.DataFrame, indexer_name)  # this is a property
+
+    def indexer_with_attrs(self: dd.DataFrame) -> Any:
         df = self
         loc = original_property.fget(df)
 
-        class LocWrapper:
+        class IndexerWrapper:
             def __init__(self, parent_loc: Any, parent_df: dd.DataFrame) -> None:
                 self._parent_loc = parent_loc
                 self._parent_df = parent_df
 
             def __getitem__(self, key: str) -> Any:
                 result = self._parent_loc[key]
-                if hasattr(self._parent_df, "_attrs"):
-                    result.attrs = self._parent_df._attrs.copy()
                 if hasattr(self._parent_df, "attrs"):
                     result.attrs = self._parent_df.attrs.copy()
                 return result
@@ -108,42 +110,9 @@ def wrap_loc_with_attrs() -> None:
             def __repr__(self) -> str:
                 return repr(self._parent_loc)
 
-        return LocWrapper(loc, df)
+        return IndexerWrapper(loc, df)
 
-    dd.DataFrame.loc = property(loc_with_attrs)
-
-
-def wrap_iloc_with_attrs() -> None:
-    """Patch dd.DataFrame.iloc to preserve _attrs."""
-    original_property = dd.DataFrame.iloc  # this is a property
-
-    def iloc_with_attrs(self: dd.DataFrame) -> Any:
-        df = self
-        iloc = original_property.fget(df)
-
-        class ILocWrapper:
-            def __init__(self, parent_iloc: Any, parent_df: dd.DataFrame) -> None:
-                self._parent_iloc = parent_iloc
-                self._parent_df = parent_df
-
-            def __getitem__(self, key: str) -> Any:
-                result = self._parent_iloc[key]
-                if hasattr(self._parent_df, "_attrs"):
-                    result.attrs = self._parent_df._attrs.copy()
-                if hasattr(self._parent_df, "attrs"):
-                    result.attrs = self._parent_df.attrs.copy()
-                return result
-
-            def __setitem__(self, key: str, value: Any) -> dd.DataFrame:
-                self._parent_iloc[key] = value
-                return self._parent_df
-
-            def __repr__(self) -> str:
-                return repr(self._parent_iloc)
-
-        return ILocWrapper(iloc, df)
-
-    dd.DataFrame.iloc = property(iloc_with_attrs)
+    setattr(dd.DataFrame, indexer_name, property(indexer_with_attrs))
 
 
 methods_to_wrap = [
@@ -154,9 +123,6 @@ methods_to_wrap = [
     "copy",
     "cat",
     "map_partitions",
-    # "merge",
-    # "join",
-    # "repartition",
 ]
 
 for method_name in methods_to_wrap:
