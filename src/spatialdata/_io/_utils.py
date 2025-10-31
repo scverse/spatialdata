@@ -337,15 +337,25 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                             )
                         parquet_file = t[0]
                         files.append(str(UPath(parquet_file).resolve()))
-                    elif isinstance(v, tuple) and len(v) > 1 and isinstance(v[1], dict) and "piece" in v[1]:
+                    elif "piece" in v.args[0]:
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
-                        parquet_file, check0, check1 = v[1]["piece"]
+                        parquet_file, check0, check1 = v.args[0]["piece"]
                         if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
                             raise ValueError(
                                 f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
                                 f"report this bug."
                             )
                         files.append(os.path.realpath(parquet_file))
+                    else:
+                        for task in v.args[0].value:
+                            if isinstance(task.args[0], dict) and "piece" in task.args[0]:
+                                parquet_file, check0, check1 = task.args[0]["piece"]
+                                if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
+                                    raise ValueError(
+                                        f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
+                                        f"report this bug."
+                                    )
+                                files.append(os.path.realpath(parquet_file))
 
 
 def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:

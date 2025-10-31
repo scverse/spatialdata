@@ -229,8 +229,7 @@ class TestReadWrite:
         del sdata[new_name]
         sdata.delete_element_from_disk(new_name)
 
-    # @pytest.mark.parametrize("dask_backed", [True, False])
-    @pytest.mark.parametrize("dask_backed", [True])
+    @pytest.mark.parametrize("dask_backed", [True, False])
     @pytest.mark.parametrize("workaround", [1, 2])
     def test_incremental_io_on_disk(
         self,
