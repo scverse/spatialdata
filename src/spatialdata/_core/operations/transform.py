@@ -434,10 +434,7 @@ def _(
     # dummy transformation that will be replaced by _adjust_transformation()
     default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     transformed.attrs[TRANSFORM_KEY] = default_cs
-    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
-    #  this! Reported here: ...
-    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
-    assert isinstance(transformed, DaskDataFrame)
+
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
