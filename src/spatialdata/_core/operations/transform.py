@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
+import pandas as pd
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -438,7 +439,11 @@ def _(
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
-        transformed[ax] = new_ax.data.flatten()
+        # TODO: discuss with dask team
+        # This is not nice, but otherwise there is a problem with the joint graph of new_ax and transformed, causing
+        # a getattr missing dependency of dependent from_dask_array.
+        new_col = pd.Series(new_ax.data.flatten().compute(), index=transformed.index)
+        transformed[ax] = new_col
 
     old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
 
