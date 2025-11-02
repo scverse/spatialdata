@@ -1,7 +1,8 @@
 from collections.abc import Iterator, MutableMapping
 from typing import Any, Literal
 
-import dask.dataframe as dd
+from dask.dataframe import DataFrame as DaskDataFrame
+from dask.dataframe import Series as DaskSeries
 from dask.dataframe.extensions import (
     register_dataframe_accessor,
     register_series_accessor,
@@ -13,7 +14,7 @@ from dask.dataframe.extensions import (
 class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
     """Accessor that stores a dict of arbitrary metadata on Dask objects."""
 
-    def __init__(self, dask_obj: dd.DataFrame | dd.Series):
+    def __init__(self, dask_obj: DaskDataFrame | DaskSeries):
         self._obj = dask_obj
         if not hasattr(dask_obj, "_attrs"):
             dask_obj._attrs = {}
@@ -48,7 +49,7 @@ class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
         return self._obj._attrs
 
 
-def wrap_method_with_attrs(method_name: str, dask_class: type[dd.DataFrame] | type[dd.Series]) -> None:
+def wrap_method_with_attrs(method_name: str, dask_class: type[DaskDataFrame] | type[DaskSeries]) -> None:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
     Copies _attrs from self before calling method, then assigns to result.
@@ -78,7 +79,7 @@ def wrap_method_with_attrs(method_name: str, dask_class: type[dd.DataFrame] | ty
 
 
 def wrap_indexer_with_attrs(
-    indexer_name: Literal["loc", "iloc"], dask_class: type[dd.DataFrame] | type[dd.Series]
+    indexer_name: Literal["loc", "iloc"], dask_class: type[DaskDataFrame] | type[DaskSeries]
 ) -> None:
     """Patch dd.DataFrame or dd.Series loc or iloc to preserve _attrs.
 
@@ -87,12 +88,12 @@ def wrap_indexer_with_attrs(
     """
     original_property = getattr(dask_class, indexer_name)  # this is a property
 
-    def indexer_with_attrs(self: dd.DataFrame | dd.Series) -> Any:
+    def indexer_with_attrs(self: DaskDataFrame | DaskSeries) -> Any:
         parent_obj = self
         indexer = original_property.fget(parent_obj)
 
         class IndexerWrapper:
-            def __init__(self, parent_indexer: Any, parent_obj: dd.DataFrame | dd.Series) -> None:
+            def __init__(self, parent_indexer: Any, parent_obj: DaskDataFrame | DaskSeries) -> None:
                 self._parent_indexer = parent_indexer
                 self._parent_obj = parent_obj
 
@@ -102,7 +103,7 @@ def wrap_indexer_with_attrs(
                     result._attrs = self._parent_obj.attrs.copy()
                 return result
 
-            def __setitem__(self, key: str, value: Any) -> dd.DataFrame | dd.Series:
+            def __setitem__(self, key: str, value: Any) -> DaskDataFrame | DaskSeries:
                 # preserve attrs even if user assigns via .loc
                 self._parent_indexer[key] = value
                 return self._parent_obj
@@ -123,7 +124,7 @@ for method_name in [
     "map_partitions",
     "set_index",
 ]:
-    wrap_method_with_attrs(method_name=method_name, dask_class=dd.DataFrame)
+    wrap_method_with_attrs(method_name=method_name, dask_class=DaskDataFrame)
 
 for method_name in [
     "__getitem__",
@@ -131,9 +132,9 @@ for method_name in [
     "copy",
     "map_partitions",
 ]:
-    wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
+    wrap_method_with_attrs(method_name=method_name, dask_class=DaskSeries)
 
-wrap_indexer_with_attrs(indexer_name="loc", dask_class=dd.DataFrame)
-wrap_indexer_with_attrs(indexer_name="iloc", dask_class=dd.DataFrame)
-wrap_indexer_with_attrs(indexer_name="loc", dask_class=dd.Series)
-# dd.Series do not have iloc
+wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskDataFrame)
+wrap_indexer_with_attrs(indexer_name="iloc", dask_class=DaskDataFrame)
+wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskSeries)
+# DaskSeries do not have iloc

@@ -2,7 +2,7 @@ import dask.dataframe as dd
 import pandas as pd
 import pytest
 
-from spatialdata._io.accessor import AttrsAccessor
+from spatialdata.models._accessor import AttrsAccessor
 
 # ============================================================================
 # General tests

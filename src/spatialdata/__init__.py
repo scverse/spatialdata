@@ -1,6 +1,6 @@
 from importlib.metadata import version
 
-import spatialdata._io.accessor  # noqa: F401
+import spatialdata.models._accessor  # noqa: F401
 
 __version__ = version("spatialdata")
 
