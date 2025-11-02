@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import dask.array as da
 import dask_image.ndinterp
@@ -440,8 +440,8 @@ def _(
         new_ax = xtransformed[:, indices]
         transformed[ax] = new_ax.data.flatten()
 
-    old_transformations = get_transformation(data, get_all=True)
-    assert isinstance(old_transformations, dict)
+    old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
+
     _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,
