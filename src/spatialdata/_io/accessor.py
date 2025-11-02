@@ -48,13 +48,13 @@ class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
         return self._obj._attrs
 
 
-def wrap_method_with_attrs(method_name: str) -> None:
+def wrap_method_with_attrs(method_name: str, dask_class: type[dd.DataFrame] | type[dd.Series]) -> None:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
     Copies _attrs from self before calling method, then assigns to result.
     Safe for lazy operations like set_index, assign, map_partitions.
     """
-    original_method = getattr(dd.DataFrame, method_name)
+    original_method = getattr(dask_class, method_name)
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         if not isinstance(self.attrs, AttrsAccessor):
@@ -70,7 +70,7 @@ def wrap_method_with_attrs(method_name: str) -> None:
         result.attrs.update(old_attrs)
         return result
 
-    setattr(dd.DataFrame, method_name, wrapper)
+    setattr(dask_class, method_name, wrapper)
 
 
 def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
@@ -117,8 +117,15 @@ for method_name in [
     "copy",
     "map_partitions",
 ]:
-    wrap_method_with_attrs(method_name)
+    wrap_method_with_attrs(method_name=method_name, dask_class=dd.DataFrame)
 
+for method_name in [
+    "compute",
+    "__getitem__",
+    "copy",
+    "map_partitions",
+]:
+    wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
 
 for indexer_name in ["loc", "iloc"]:
     wrap_indexer_with_attrs(cast(Literal["loc", "iloc"], indexer_name))
