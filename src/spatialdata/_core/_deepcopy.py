@@ -98,7 +98,8 @@ def _(df: DaskDataFrame) -> DaskDataFrame:
     new_ddf = PointsModel.parse(compute_df)
     # the problem is not .copy(deep=True), but the parser, which discards some metadata https://github.com/scverse/spatialdata/issues/503#issuecomment-2015275322
     # We need to use the compute_df here as with deepcopy, df._attrs does not exist anymore.
-    new_ddf.attrs = _deepcopy(compute_df.attrs)
+    # print(type(new_ddf.attrs))
+    new_ddf.attrs.update(_deepcopy(compute_df.attrs))
     return new_ddf
 
 

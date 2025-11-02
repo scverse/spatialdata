@@ -2,7 +2,10 @@ from collections.abc import Callable, Iterator, MutableMapping
 from typing import Any, Literal
 
 import dask.dataframe as dd
-from dask.dataframe.extensions import register_dataframe_accessor, register_series_accessor
+from dask.dataframe.extensions import (
+    register_dataframe_accessor,
+    register_series_accessor,
+)
 
 
 class _AttrsBase(MutableMapping[str, str | dict[str, str]]):
@@ -65,15 +68,28 @@ def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
     """
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        old_accessor = getattr(self, "attrs", {})
-        if hasattr(old_accessor, "_obj") and hasattr(old_accessor._obj, "_attrs"):
-            old_attrs = old_accessor._obj._attrs.copy()
-        elif isinstance(old_accessor, dict):
-            old_attrs = old_accessor.copy()
-        else:
+        old_accessor = getattr(self, "attrs")
+        if isinstance(old_accessor, dict):
+            raise RuntimeError(
+                "Invalid type (.attrs is a `dict` and not a , likely due to an invalid assignment: my_dd_object.attrs was overwritten with a dict. "
+                "Do not assign to 'attrs'. Use my_dd_object.attrs.update(...) instead."
+            )
+        if not hasattr(old_accessor._obj, "_attrs"):
             old_attrs = {}
+        else:
+            old_attrs = old_accessor._obj._attrs.copy()
+
         result = method(self, *args, **kwargs)
-        result.attrs = old_attrs
+        # Check if result is a Dask object (has the attrs accessor) vs pandas (plain dict attrs)
+        if isinstance(result, (dd.DataFrame, dd.Series)):
+            # Dask DataFrame/Series: initialize _attrs if needed, then assign
+            result.attrs.update(old_attrs)
+            # if not hasattr(result, "_attrs"):
+            #     result._attrs = {}
+            # result._attrs = old_attrs
+        else:
+            # Pandas DataFrame/Series: assign to attrs (which is a plain dict attribute)
+            result.attrs = old_attrs
         return result
 
     return wrapper
@@ -99,7 +115,7 @@ def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
             def __getitem__(self, key: str) -> Any:
                 result = self._parent_loc[key]
                 if hasattr(self._parent_df, "attrs"):
-                    result.attrs = self._parent_df.attrs.copy()
+                    result._attrs = self._parent_df.attrs.copy()
                 return result
 
             def __setitem__(self, key: str, value: Any) -> dd.DataFrame:
