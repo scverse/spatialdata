@@ -8,8 +8,10 @@ from dask.dataframe.extensions import (
 )
 
 
-class _AttrsBase(MutableMapping[str, str | dict[str, str]]):
-    """Base accessor that stores arbitrary metadata on Dask objects."""
+@register_dataframe_accessor("attrs")
+@register_series_accessor("attrs")
+class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
+    """Accessor that stores a dict of arbitrary metadata on Dask objects."""
 
     def __init__(self, dask_obj: dd.DataFrame | dd.Series):
         self._obj = dask_obj
@@ -19,7 +21,7 @@ class _AttrsBase(MutableMapping[str, str | dict[str, str]]):
     def __getitem__(self, key: str) -> Any:
         return self._obj._attrs[key]
 
-    def __setitem__(self, key: str, value: str | dict[str, str]) -> None:
+    def __setitem__(self, key: str, value: str | dict[str, Any]) -> None:
         self._obj._attrs[key] = value
 
     def __delitem__(self, key: str) -> None:
@@ -46,20 +48,6 @@ class _AttrsBase(MutableMapping[str, str | dict[str, str]]):
         return self._obj._attrs
 
 
-@register_dataframe_accessor("attrs")
-class DfAttrsAccessor(_AttrsBase):
-    """Dict-like .attrs accessor for Dask DataFrames."""
-
-    pass
-
-
-@register_series_accessor("attrs")
-class SeriesAttrsAccessor(_AttrsBase):
-    """Dict-like .attrs accessor for Dask Series."""
-
-    pass
-
-
 def wrap_with_attrs(method_name: str) -> None:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
@@ -69,9 +57,9 @@ def wrap_with_attrs(method_name: str) -> None:
     original_method = getattr(dd.DataFrame, method_name)
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        if not isinstance(self.attrs, DfAttrsAccessor | SeriesAttrsAccessor):
+        if not isinstance(self.attrs, AttrsAccessor):
             raise RuntimeError(
-                "Invalid .attrs: expected an accessor (DfAttrsAccessor or SeriesAttrsAccessor), "
+                "Invalid .attrs: expected an accessor (`AttrsAccessor`), "
                 f"got {type(self.attrs).__name__}. A common cause is assigning a dict, e.g. "
                 "my_dd_object.attrs = {...}. Do not assign to 'attrs'; use "
                 "my_dd_object.attrs.update(...) instead."
