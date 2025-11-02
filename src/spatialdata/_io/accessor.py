@@ -68,28 +68,17 @@ def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
     """
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-        old_accessor = getattr(self, "attrs")
-        if isinstance(old_accessor, dict):
+        if not isinstance(self.attrs, DfAttrsAccessor | SeriesAttrsAccessor):
             raise RuntimeError(
-                "Invalid type (.attrs is a `dict` and not a , likely due to an invalid assignment: my_dd_object.attrs was overwritten with a dict. "
-                "Do not assign to 'attrs'. Use my_dd_object.attrs.update(...) instead."
+                "Invalid .attrs: expected an accessor (DfAttrsAccessor or SeriesAttrsAccessor), "
+                f"got {type(self.attrs).__name__}. A common cause is assigning a dict, e.g. "
+                "my_dd_object.attrs = {...}. Do not assign to 'attrs'; use "
+                "my_dd_object.attrs.update(...) instead."
             )
-        if not hasattr(old_accessor._obj, "_attrs"):
-            old_attrs = {}
-        else:
-            old_attrs = old_accessor._obj._attrs.copy()
 
+        old_attrs = self.attrs.copy()
         result = method(self, *args, **kwargs)
-        # Check if result is a Dask object (has the attrs accessor) vs pandas (plain dict attrs)
-        if isinstance(result, (dd.DataFrame, dd.Series)):
-            # Dask DataFrame/Series: initialize _attrs if needed, then assign
-            result.attrs.update(old_attrs)
-            # if not hasattr(result, "_attrs"):
-            #     result._attrs = {}
-            # result._attrs = old_attrs
-        else:
-            # Pandas DataFrame/Series: assign to attrs (which is a plain dict attribute)
-            result.attrs = old_attrs
+        result.attrs.update(old_attrs)
         return result
 
     return wrapper
