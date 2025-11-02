@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import dask.array as da
 import dask_image.ndinterp
@@ -434,17 +434,14 @@ def _(
     # dummy transformation that will be replaced by _adjust_transformation()
     default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     transformed.attrs[TRANSFORM_KEY] = default_cs
-    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
-    #  this! Reported here: ...
-    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
-    assert isinstance(transformed, DaskDataFrame)
+
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
         transformed[ax] = new_ax.data.flatten()
 
-    old_transformations = get_transformation(data, get_all=True)
-    assert isinstance(old_transformations, dict)
+    old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
+
     _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,
