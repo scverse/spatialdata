@@ -67,7 +67,11 @@ def wrap_method_with_attrs(method_name: str, dask_class: type[dd.DataFrame] | ty
 
         old_attrs = self.attrs.copy()
         result = original_method(self, *args, **kwargs)
-        result.attrs.update(old_attrs)
+        # the pandas Index do not have attrs, but dd.Index, since they are a subclass of dd.Series, do have attrs
+        # thanks to our accessor. Here we ensure that we do not assign attrs to pd.Index objects.
+        if hasattr(result, "attrs"):
+            result.attrs.update(old_attrs)
+
         return result
 
     setattr(dask_class, method_name, wrapper)
@@ -119,13 +123,13 @@ for method_name in [
 ]:
     wrap_method_with_attrs(method_name=method_name, dask_class=dd.DataFrame)
 
-# for method_name in [
-#     "__getitem__",
-#     "compute",
-#     "copy",
-#     "map_partitions",
-# ]:
-#     wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
+for method_name in [
+    "__getitem__",
+    "compute",
+    "copy",
+    "map_partitions",
+]:
+    wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
 
 for indexer_name in ["loc", "iloc"]:
     wrap_indexer_with_attrs(cast(Literal["loc", "iloc"], indexer_name))
