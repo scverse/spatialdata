@@ -110,22 +110,22 @@ def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
 
 
 for method_name in [
-    "set_index",
-    "compute",
-    "drop",
     "__getitem__",
+    "compute",
     "copy",
+    "drop",
     "map_partitions",
+    "set_index",
 ]:
     wrap_method_with_attrs(method_name=method_name, dask_class=dd.DataFrame)
 
-for method_name in [
-    "compute",
-    "__getitem__",
-    "copy",
-    "map_partitions",
-]:
-    wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
+# for method_name in [
+#     "__getitem__",
+#     "compute",
+#     "copy",
+#     "map_partitions",
+# ]:
+#     wrap_method_with_attrs(method_name=method_name, dask_class=dd.Series)
 
 for indexer_name in ["loc", "iloc"]:
     wrap_indexer_with_attrs(cast(Literal["loc", "iloc"], indexer_name))
