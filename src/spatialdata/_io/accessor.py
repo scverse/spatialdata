@@ -2,7 +2,6 @@ from collections.abc import Iterator, MutableMapping
 from typing import Any, Literal
 
 import dask.dataframe as dd
-import pandas as pd
 from dask.dataframe.extensions import (
     register_dataframe_accessor,
     register_series_accessor,
@@ -70,8 +69,9 @@ def wrap_method_with_attrs(method_name: str, dask_class: type[dd.DataFrame] | ty
         result = original_method(self, *args, **kwargs)
         # the pandas Index do not have attrs, but dd.Index, since they are a subclass of dd.Series, do have attrs
         # thanks to our accessor. Here we ensure that we do not assign attrs to pd.Index objects.
-        if not isinstance(result, pd.Index):
+        if hasattr(result, "attrs"):
             result.attrs.update(old_attrs)
+
         return result
 
     setattr(dask_class, method_name, wrapper)
