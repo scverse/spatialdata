@@ -651,7 +651,6 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     attrs = p0.attrs.copy()
     ddf = dd.from_pandas(p0.compute(), npartitions=10)
     ddf.attrs.update(attrs)
-    # ddf._attrs = attrs
     p1 = PointsModel.parse(ddf)
 
     def _query(p: DaskDataFrame) -> DaskDataFrame:

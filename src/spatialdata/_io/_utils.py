@@ -327,17 +327,8 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
                     files.append(str(UPath(path).resolve()))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
-                    if hasattr(v, "creation_info"):
-                        # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L625
-                        t = v.creation_info["args"]
-                        if not isinstance(t, tuple) or len(t) != 1:
-                            raise ValueError(
-                                f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
-                                f"report this bug."
-                            )
-                        parquet_file = t[0]
-                        files.append(str(UPath(parquet_file).resolve()))
-                    elif "piece" in v.args[0]:
+                    # Here v is a read_parquet task with arguments.
+                    if "piece" in v.args[0]:
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
                         parquet_file, check0, check1 = v.args[0]["piece"]
                         if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
@@ -347,6 +338,9 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                             )
                         files.append(os.path.realpath(parquet_file))
                     else:
+                        # This occurs when for example points and images are mixed, the main task still starts with
+                        # read_parquet, but the execution happens through a subgraph which we iterate over to get the
+                        # actual read_parquet task.
                         for task in v.args[0].value:
                             if isinstance(task.args[0], dict) and "piece" in task.args[0]:
                                 parquet_file, check0, check1 = task.args[0]["piece"]
