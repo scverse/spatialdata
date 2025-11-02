@@ -1,5 +1,5 @@
-from collections.abc import Callable, Iterator, MutableMapping
-from typing import Any, Literal
+from collections.abc import Iterator, MutableMapping
+from typing import Any, Literal, cast
 
 import dask.dataframe as dd
 from dask.dataframe.extensions import (
@@ -60,12 +60,13 @@ class SeriesAttrsAccessor(_AttrsBase):
     pass
 
 
-def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
+def wrap_with_attrs(method_name: str) -> None:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
     Copies _attrs from self before calling method, then assigns to result.
     Safe for lazy operations like set_index, assign, map_partitions.
     """
+    original_method = getattr(dd.DataFrame, method_name)
 
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         if not isinstance(self.attrs, DfAttrsAccessor | SeriesAttrsAccessor):
@@ -77,11 +78,11 @@ def wrap_with_attrs(method: Callable[..., Any]) -> Callable[..., Any]:
             )
 
         old_attrs = self.attrs.copy()
-        result = method(self, *args, **kwargs)
+        result = original_method(self, *args, **kwargs)
         result.attrs.update(old_attrs)
         return result
 
-    return wrapper
+    setattr(dd.DataFrame, method_name, wrapper)
 
 
 def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
@@ -120,17 +121,16 @@ def wrap_indexer_with_attrs(indexer_name: Literal["loc", "iloc"]) -> None:
     setattr(dd.DataFrame, indexer_name, property(indexer_with_attrs))
 
 
-methods_to_wrap = [
+for method_name in [
     "set_index",
     "compute",
     "drop",
     "__getitem__",
     "copy",
-    "cat",
     "map_partitions",
-]
+]:
+    wrap_with_attrs(method_name)
 
-for method_name in methods_to_wrap:
-    if hasattr(dd.DataFrame, method_name):
-        original_method = getattr(dd.DataFrame, method_name)
-        setattr(dd.DataFrame, method_name, wrap_with_attrs(original_method))
+
+for indexer_name in ["loc", "iloc"]:
+    wrap_indexer_with_attrs(cast(Literal["loc", "iloc"], indexer_name))
