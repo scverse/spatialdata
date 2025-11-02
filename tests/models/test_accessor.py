@@ -191,3 +191,17 @@ def test_dataframe_iloc_preserves_attrs():
     df.attrs["key"] = "value"
     result = df.iloc[:, 0:1]
     assert result.attrs["key"] == "value"
+
+
+def test_series_loc_preserves_attrs():
+    """Test that Series.loc preserves attrs."""
+    s = dd.from_pandas(
+        pd.Series([1, 2, 3, 4, 5], index=[10, 20, 30, 40, 50], name="test"),
+        npartitions=2,
+    )
+    s.attrs["key"] = "value"
+    result = s.loc[10:30]
+    assert result.attrs["key"] == "value"
+
+
+# dd.Series do not have .iloc, hence there is no test_series_iloc_preserves_attrs() test
