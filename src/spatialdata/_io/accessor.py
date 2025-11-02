@@ -48,7 +48,7 @@ class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
         return self._obj._attrs
 
 
-def wrap_with_attrs(method_name: str) -> None:
+def wrap_method_with_attrs(method_name: str) -> None:
     """Wrap a Dask DataFrame method to preserve _attrs.
 
     Copies _attrs from self before calling method, then assigns to result.
@@ -117,7 +117,7 @@ for method_name in [
     "copy",
     "map_partitions",
 ]:
-    wrap_with_attrs(method_name)
+    wrap_method_with_attrs(method_name)
 
 
 for indexer_name in ["loc", "iloc"]:
