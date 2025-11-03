@@ -20,8 +20,28 @@ jobs:
             matrix:
                 python: ["3.11", "3.13"]
                 os: [ubuntu-latest]
-                dask-version: ["2025.1.0", "latest"]
+
                 include:
+                    - os: windows-latest
+                      python: "3.11"
+                      dask-version: "2025.1.0"
+                      name: "Dask 2025.1.0"
+                    - os: windows-latest
+                      python: "3.11"
+                      dask-version: "2025.10.0"
+                      name: "Dask 2025.10.0"
+                    - os: ubuntu-latest
+                      python: "3.11"
+                      dask-version: "2025.1.0"
+                      name: "Dask 2025.1.0"
+                    - os: macos-latest
+                      python: "3.11"
+                      dask-version: "2025.1.0"
+                      name: "Dask 2025.1.0"
+                    - os: macos-latest
+                      python: "3.11"
+                      dask-version: "2025.10.0"
+                      name: "Dask 2025.10.0"
                     - os: macos-latest
                       python: "3.12"
                       pip-flags: "--pre"
