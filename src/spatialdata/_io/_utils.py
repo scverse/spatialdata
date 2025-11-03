@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 import zarr
 from anndata import AnnData
+from dask._task_spec import Task
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -301,6 +302,19 @@ def _get_backing_files(element: DaskArray | DaskDataFrame) -> list[str]:
     return files
 
 
+def _find_piece_dict(obj: dict[str, tuple[str | None]] | Task) -> dict[str, tuple[str | None | None]] | None:
+    """Recursively search for dict containing the key 'piece' in Dask task specs containing the parquet file path."""
+    if isinstance(obj, dict):
+        if "piece" in obj:
+            return obj
+    elif hasattr(obj, "args"):  # Handles dask._task_spec.* objects like Task and List
+        for v in obj.args:
+            result = _find_piece_dict(v)
+            if result is not None:
+                return result
+    return None
+
+
 def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> None:
     # see the types allowed for the dask graph here: https://docs.dask.org/en/stable/spec.html
 
@@ -327,7 +341,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
                     files.append(str(UPath(path).resolve()))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
-                    # Here v is a read_parquet task with arguments.
+                    # Here v is a read_parquet task with arguments and the only value is a dictionary.
                     if "piece" in v.args[0]:
                         # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
                         parquet_file, check0, check1 = v.args[0]["piece"]
@@ -341,9 +355,11 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                         # This occurs when for example points and images are mixed, the main task still starts with
                         # read_parquet, but the execution happens through a subgraph which we iterate over to get the
                         # actual read_parquet task.
-                        for task in v.args[0].value:
-                            if isinstance(task.args[0], dict) and "piece" in task.args[0]:
-                                parquet_file, check0, check1 = task.args[0]["piece"]
+                        for task in v.args[0].values():
+                            # Recursively go through tasks, this is required because differences between dask versions.
+                            piece_dict = _find_piece_dict(task)
+                            if isinstance(piece_dict, dict) and "piece" in piece_dict:
+                                parquet_file, check0, check1 = piece_dict["piece"]  # type: ignore[misc]
                                 if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
                                     raise ValueError(
                                         f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
