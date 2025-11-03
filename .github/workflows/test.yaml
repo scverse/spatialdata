@@ -24,20 +24,20 @@ jobs:
                 include:
                     - os: windows-latest
                       python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
+                      dask-version: "2025.2.0"
+                      name: "Dask 2025.2.0"
                     - os: windows-latest
                       python: "3.11"
                       dask-version: "2025.10.0"
                       name: "Dask 2025.10.0"
                     - os: ubuntu-latest
                       python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
+                      dask-version: "2025.2.0"
+                      name: "Dask 2025.2.0"
                     - os: macos-latest
                       python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
+                      dask-version: "2025.2.0"
+                      name: "Dask 2025.2.0"
                     - os: macos-latest
                       python: "3.11"
                       dask-version: "2025.10.0"
