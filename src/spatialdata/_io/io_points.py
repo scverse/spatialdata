@@ -80,7 +80,9 @@ def write_points(
             c = c.cat.as_known()
             points[column_name] = c
 
-    points.to_parquet(path)
+    points_without_transform = points.copy()
+    del points_without_transform.attrs["transform"]
+    points_without_transform.to_parquet(path)
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version
