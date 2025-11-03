@@ -65,10 +65,11 @@ jobs:
             - name: Install dependencies
               run: |
                   uv sync --extra test
-                  if [[ "${{ matrix.dask-version }}" == "latest" ]]; then
+                  DASK_VERSION="${{ matrix.dask-version }}"
+                  if [[ "${DASK_VERSION}" == "latest" ]]; then
                     uv pip install --upgrade dask
-                  elif [[ -n "${{ matrix.dask-version }}" ]]; then
-                    uv pip install dask==${{ matrix.dask-version }}
+                  elif [[ -n "${DASK_VERSION}" ]]; then
+                    uv pip install "dask==${DASK_VERSION}"
                   fi
             - name: Test
               env:
