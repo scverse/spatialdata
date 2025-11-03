@@ -20,25 +20,17 @@ jobs:
             matrix:
                 python: ["3.11", "3.13"]
                 os: [ubuntu-latest]
+                dask-version: ["2025.1.0", "latest"]
                 include:
-                    - os: macos-latest
-                      python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "macOS Python 3.11 (Dask 2025.1.0)"
-                    - os: macos-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "macOS Python 3.11 (Dask latest)"
                     - os: macos-latest
                       python: "3.12"
                       pip-flags: "--pre"
                       name: "Python 3.12 (pre-release)"
-                    - os: windows-latest
-                      python: "3.11"
 
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
+            DASK_VERSION: ${{ matrix.dask-version }}
 
         steps:
             - uses: actions/checkout@v2
@@ -50,11 +42,11 @@ jobs:
             - name: Install dependencies
               run: |
                   uv sync --extra test
-                  if [[ "${{ matrix.os }}" == "macos-latest" && -n "${{ matrix.dask-version }}" ]]; then
-                    if [[ "${{ matrix.dask-version }}" == "latest" ]]; then
+                  if [[ -n "${DASK_VERSION}" ]]; then
+                    if [[ "${DASK_VERSION}" == "latest" ]]; then
                       uv pip install --upgrade dask
                     else
-                      uv pip install dask==${{ matrix.dask-version }}
+                      uv pip install dask==${DASK_VERSION}
                     fi
                   fi
             - name: Test
