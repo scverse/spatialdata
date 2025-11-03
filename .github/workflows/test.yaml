@@ -24,32 +24,17 @@ jobs:
                     - os: macos-latest
                       python: "3.11"
                       dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
+                      name: "macOS Python 3.11 (Dask 2025.1.0)"
                     - os: macos-latest
                       python: "3.11"
                       dask-version: "latest"
-                      name: "Dask latest"
-                    - os: ubuntu-latest
-                      python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
-                    - os: ubuntu-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "Dask latest"
-                    - os: windows-latest
-                      python: "3.11"
-                      dask-version: "2025.1.0"
-                      name: "Dask 2025.1.0"
-                    - os: windows-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "Dask latest"
+                      name: "macOS Python 3.11 (Dask latest)"
                     - os: macos-latest
                       python: "3.12"
                       pip-flags: "--pre"
-                      dask-version: "latest"
                       name: "Python 3.12 (pre-release)"
+                    - os: windows-latest
+                      python: "3.11"
 
         env:
             OS: ${{ matrix.os }}
@@ -65,11 +50,12 @@ jobs:
             - name: Install dependencies
               run: |
                   uv sync --extra test
-                  DASK_VERSION="${{ matrix.dask-version }}"
-                  if [[ "${DASK_VERSION}" == "latest" ]]; then
-                    uv pip install --upgrade dask
-                  elif [[ -n "${DASK_VERSION}" ]]; then
-                    uv pip install "dask==${DASK_VERSION}"
+                  if [[ "${{ matrix.os }}" == "macos-latest" && -n "${{ matrix.dask-version }}" ]]; then
+                    if [[ "${{ matrix.dask-version }}" == "latest" ]]; then
+                      uv pip install --upgrade dask
+                    else
+                      uv pip install dask==${{ matrix.dask-version }}
+                    fi
                   fi
             - name: Test
               env:
