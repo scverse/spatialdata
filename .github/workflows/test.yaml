@@ -67,7 +67,7 @@ jobs:
                   uv sync --extra test
                   if [[ "${{ matrix.dask-version }}" == "latest" ]]; then
                     uv pip install --upgrade dask
-                  else
+                  elif [[ -n "${{ matrix.dask-version }}" ]]; then
                     uv pip install dask==${{ matrix.dask-version }}
                   fi
             - name: Test
