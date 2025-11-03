@@ -679,7 +679,8 @@ def _(
         if mask.sum() == 0:
             points_in_intrinsic_bounding_box.append(None)
         else:
-            points_in_intrinsic_bounding_box.append(points.loc[mask])
+            # TODO there is a problem when mixing dask dataframe graph with dask array graph. Need to compute for now.
+            points_in_intrinsic_bounding_box.append(points.loc[mask.compute()])
     if len(points_in_intrinsic_bounding_box) == 0:
         return None
 
