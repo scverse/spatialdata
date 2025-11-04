@@ -4,7 +4,7 @@ on:
     push:
         branches: [main]
         tags:
-            - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+            - "v*"
     pull_request:
         branches: "*"
 
@@ -13,45 +13,20 @@ jobs:
         runs-on: ${{ matrix.os }}
         defaults:
             run:
-                shell: bash -e {0} # -e to fail on error
+                shell: bash -e {0}
 
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - os: windows-latest
-                      python: "3.11"
-                      dask-version: "2025.2.0"
-                      name: "Dask 2025.2.0"
-                    - os: windows-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "Dask latest"
-                    - os: ubuntu-latest
-                      python: "3.11"
-                      dask-version: "2025.2.0"
-                      name: "Dask 2025.2.0"
-                    - os: ubuntu-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "Dask latest"
-                    - os: ubuntu-latest
-                      python: "3.13"
-                      dask-version: "latest"
-                      name: "Dask latest"
-                    - os: macos-latest
-                      python: "3.11"
-                      dask-version: "2025.2.0"
-                      name: "Dask 2025.2.0"
-                    - os: macos-latest
-                      python: "3.11"
-                      dask-version: "latest"
-                      name: "Dask latest"
-                    - os: macos-latest
-                      python: "3.12"
-                      pip-flags: "--pre"
-                      name: "Python 3.12 (pre-release)"
-
+                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: windows-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: ubuntu-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
+                    - {os: macos-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: macos-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: macos-latest, python: "3.12", pip-flags: "--pre", name: "Python 3.12 (pre-release)"}
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
