@@ -585,7 +585,6 @@ def rasterize_images_labels(
         raise ValueError(f"Unsupported schema {schema}")
 
     # resample the image
-    # TODO results here are vastly different between dask 2025.1.0 and 2025.2.0, from the latter on tests fail.
     transformed_dask = dask_image.ndinterp.affine_transform(
         xdata.data,
         matrix=matrix,
