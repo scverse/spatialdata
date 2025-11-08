@@ -164,6 +164,8 @@ def _(e: GeoDataFrame) -> tuple[str, ...]:
     all_dims = (X, Y, Z)
     n = e.geometry.iloc[0]._ndim
     dims = all_dims[:n]
+    if Z not in dims and Z in e.columns:
+        dims += (Z,)
     _validate_dims(dims)
     return dims
 
