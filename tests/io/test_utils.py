@@ -107,6 +107,7 @@ def test_backing_files_combining_points_and_images(points, images):
         images1 = read_zarr(f1)
 
         p0 = points0.points["points_0"]
+
         im1 = images1.images["image2d"]
         v = p0["x"].loc[0].values
         v.compute_chunk_sizes()

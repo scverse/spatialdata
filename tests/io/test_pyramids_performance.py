@@ -83,5 +83,9 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
 
     actual_num_chunk_writes = zarr_chunk_write_spy.call_count
     actual_num_chunk_reads = zarr_chunk_read_spy.call_count
-    assert actual_num_chunk_writes == num_chunks_all_scales.item()
+    # https://github.com/dask/dask/pull/11736 introduces an extra write of the last chunk when finalizing.
+    assert actual_num_chunk_writes in {
+        num_chunks_all_scales.item(),
+        num_chunks_all_scales.item() + 1,
+    }
     assert actual_num_chunk_reads == num_chunks_scale0.item()

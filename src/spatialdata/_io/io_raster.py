@@ -347,7 +347,9 @@ def _write_raster_datatree(
         compute=False,
     )
     # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
-    da.compute(*dask_delayed)
+    # Optimize_graph is set to False for now as this causes permission denied errors when during atomic writes
+    # os.replace is called. These can also be alleviated by using 'single-threaded' scheduler.
+    da.compute(*dask_delayed, optimize_graph=False)
 
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(

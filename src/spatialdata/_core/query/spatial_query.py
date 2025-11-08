@@ -672,14 +672,24 @@ def _(
         max_coordinate=max_coordinate_intrinsic,
     )
 
-    # assert that the number of bounding boxes is correct
-    assert len(in_intrinsic_bounding_box) == len(min_coordinate)
+    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
+        raise ValueError(f"Number of dataframes `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
+    points_pd = points.compute()
+    attrs = points.attrs.copy()
     for mask in in_intrinsic_bounding_box:
         if mask.sum() == 0:
             points_in_intrinsic_bounding_box.append(None)
         else:
-            points_in_intrinsic_bounding_box.append(points.loc[mask])
+            # TODO there is a problem when mixing dask dataframe graph with dask array graph. Need to compute for now.
+            # we can't compute either mask or points as when we calculate either one of them
+            # test_query_points_multiple_partitions will fail as the mask will be used to index each partition.
+            # However, if we compute and then create the dask array again we get the mixed dask graph problem.
+            mask_np = mask.compute()
+            filtered_pd = points_pd[mask_np]
+            points_filtered = dd.from_pandas(filtered_pd, npartitions=points.npartitions)
+            points_filtered.attrs.update(attrs)
+            points_in_intrinsic_bounding_box.append(points_filtered)
     if len(points_in_intrinsic_bounding_box) == 0:
         return None
 
