@@ -155,7 +155,11 @@ def read_zarr(
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
     # the following is the SpatialDataContainerFormat version
-    sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
+    if "spatialdata_attrs" not in root_group.metadata.attributes:
+        # backward compatibility for pre-versioned SpatialData zarr stores
+        sdata_version = cast(Literal["0.1", "0.2"], "0.1")
+    else:
+        sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
     if sdata_version == "0.1":
         warnings.warn(
             "SpatialData is not stored in the most current format. If you want to use Zarr v3"
