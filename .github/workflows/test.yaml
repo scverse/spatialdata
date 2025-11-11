@@ -4,7 +4,7 @@ on:
     push:
         branches: [main]
         tags:
-            - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+            - "v*"
     pull_request:
         branches: "*"
 
@@ -13,26 +13,24 @@ jobs:
         runs-on: ${{ matrix.os }}
         defaults:
             run:
-                shell: bash -e {0} # -e to fail on error
+                shell: bash -e {0}
 
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.11", "3.13"]
-                os: [ubuntu-latest]
                 include:
-                    - os: macos-latest
-                      python: "3.11"
-                    - os: macos-latest
-                      python: "3.12"
-                      pip-flags: "--pre"
-                      name: "Python 3.12 (pre-release)"
-                    - os: windows-latest
-                      python: "3.11"
-
+                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: windows-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: ubuntu-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
+                    - {os: macos-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: macos-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+                    - {os: macos-latest, python: "3.12", pip-flags: "--pre", name: "Python 3.12 (pre-release)"}
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
+            DASK_VERSION: ${{ matrix.dask-version }}
 
         steps:
             - uses: actions/checkout@v2
@@ -42,7 +40,15 @@ jobs:
                   version: "latest"
                   python-version: ${{ matrix.python }}
             - name: Install dependencies
-              run: "uv sync --extra test"
+              run: |
+                  uv sync --extra test
+                  if [[ -n "${DASK_VERSION}" ]]; then
+                    if [[ "${DASK_VERSION}" == "latest" ]]; then
+                      uv pip install --upgrade dask
+                    else
+                      uv pip install dask==${DASK_VERSION}
+                    fi
+                  fi
             - name: Test
               env:
                   MPLBACKEND: agg

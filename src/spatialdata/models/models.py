@@ -808,9 +808,7 @@ class PointsModel:
                 sort=sort,
                 **kwargs,
             )
-            # we cannot compute the divisions whne the index is not monotonically increasing and npartitions > 1
-            if not table.known_divisions and (sort or table.npartitions == 1):
-                table.divisions = table.compute_current_divisions()
+            # TODO: dask does not allow for setting divisions directly anymore. We have to decide on forcing the user.
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
                     data[feature_key].astype(str).astype("category"),

@@ -52,10 +52,10 @@ def test_rasterize_raster(_get_raster):
 
     def _get_data_of_largest_scale(raster):
         if isinstance(raster, DataArray):
-            return raster.data.compute()
+            return raster.data
 
         xdata = get_pyramid_levels(raster, n=0)
-        return xdata.data.compute()
+        return xdata.data
 
     for element_name, raster in rasters.items():
         dims = get_axes_names(raster)
@@ -63,6 +63,9 @@ def test_rasterize_raster(_get_raster):
         slices = [all_slices[d] for d in dims]
 
         data = _get_data_of_largest_scale(raster)
+        # The line above before returned a numpy array. Setting the indices of the slice to 1 would previously update
+        # also raster, but since dask 2025.2.0 this does not happen anymore. However, we can just set the slice to 1
+        # on the dask array.
         data[tuple(slices)] = 1
 
         for kwargs in [
