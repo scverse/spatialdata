@@ -29,7 +29,7 @@ dependencies = [
     "datashader",
     "fsspec[s3,http]",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=2.0.3",
+    "multiscale_spatial_image==2.0.3",
     "networkx",
     "numba>=0.55.0",
     "numpy",
