@@ -777,8 +777,8 @@ class PointsModel:
                 coordinates = {X: X, Y: Y, Z: Z} if Z in data.columns else {X: X, Y: Y}
             else:
                 raise ValueError(
-                    f"Coordinates must be provided as a mapping of axes names (keys) to column names (values) in "
-                    f"dataframe. Example: `{'x': 'my_x_column', 'y': 'my_y_column'}`."
+                    "Coordinates must be provided as a mapping of axes names (keys) to column names (values) in "
+                    "dataframe. Example: `{'x': 'my_x_column', 'y': 'my_y_column'}`."
                 )
         ndim = len(coordinates)
         axes = [X, Y, Z][:ndim]
