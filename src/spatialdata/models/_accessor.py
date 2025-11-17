@@ -123,6 +123,8 @@ for method_name in [
     "drop",
     "map_partitions",
     "set_index",
+    "reset_index",
+    "assign",
 ]:
     wrap_method_with_attrs(method_name=method_name, dask_class=DaskDataFrame)
 

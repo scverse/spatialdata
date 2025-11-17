@@ -427,6 +427,13 @@ def _(
     )
     axes = get_axes_names(data)
     arrays = []
+
+    if data.npartitions != 1 and not data.known_divisions:
+        data = data.reset_index(drop=True)
+        new_index = da.arange(len(data), chunks=data.map_partitions(len).compute().values)
+        data = data.assign(new_index=new_index)
+        data = data.set_index('new_index', sorted=True, drop=True)
+
     for ax in axes:
         arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
     xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
