@@ -339,3 +339,12 @@ def _check_match_length_channels_c_dim(
             f" with length {c_length}."
         )
     return c_coords
+
+
+def _assign_monotonic_increasing_index(data):
+    if data.npartitions != 1 and not data.known_divisions:
+        data = data.reset_index(drop=True)
+        new_index = da.arange(len(data), chunks=data.map_partitions(len).compute().values)
+        data = data.assign(new_index=new_index)
+        return data.set_index("new_index", sorted=True, drop=True)
+    return data

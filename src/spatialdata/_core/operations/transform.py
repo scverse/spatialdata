@@ -17,6 +17,7 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
+from spatialdata._utils import _assign_monotonic_increasing_index
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
@@ -428,11 +429,12 @@ def _(
     axes = get_axes_names(data)
     arrays = []
 
-    if data.npartitions != 1 and not data.known_divisions:
-        data = data.reset_index(drop=True)
-        new_index = da.arange(len(data), chunks=data.map_partitions(len).compute().values)
-        data = data.assign(new_index=new_index)
-        data = data.set_index('new_index', sorted=True, drop=True)
+    data = _assign_monotonic_increasing_index(data)
+    # if data.npartitions != 1 and not data.known_divisions:
+    #     data = data.reset_index(drop=True)
+    #     new_index = da.arange(len(data), chunks=data.map_partitions(len).compute().values)
+    #     data = data.assign(new_index=new_index)
+    #     data = data.set_index('new_index', sorted=True, drop=True)
 
     for ax in axes:
         arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))

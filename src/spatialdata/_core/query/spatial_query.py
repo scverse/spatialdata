@@ -18,7 +18,7 @@ from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, g
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike
-from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata._utils import Number, _assign_monotonic_increasing_index, _parse_list_into_array
 from spatialdata.models import (
     PointsModel,
     ShapesModel,
@@ -427,6 +427,7 @@ def _bounding_box_mask_points(
                 continue
             min_value = min_coordinate[box, axis_index]
             max_value = max_coordinate[box, axis_index]
+            points = _assign_monotonic_increasing_index(points)
             box_masks.append(
                 points[axis_name].gt(min_value).to_dask_array(lengths=True)
                 & points[axis_name].lt(max_value).to_dask_array(lengths=True)
