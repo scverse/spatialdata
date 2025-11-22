@@ -13,8 +13,7 @@ import pandas as pd
 import zarr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from dask.dataframe import read_parquet
-from dask.delayed import Delayed
+from dask.dataframe import Scalar, read_parquet
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Polygon
 from xarray import DataArray, DataTree
@@ -1985,9 +1984,7 @@ class SpatialData:
                     else:
                         shape_str = (
                             "("
-                            + ", ".join(
-                                [(str(dim) if not isinstance(dim, Delayed) else "<Delayed>") for dim in v.shape]
-                            )
+                            + ", ".join([(str(dim) if not isinstance(dim, Scalar) else "<Delayed>") for dim in v.shape])
                             + ")"
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} with shape: {shape_str} {dim_string}"
