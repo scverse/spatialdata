@@ -240,9 +240,9 @@ class RasterSchema(DataArraySchema):
             )
             _parse_transformations(data, parsed_transform)
         else:
-            if chunks is None:
-                chunks = "auto"  # type: ignore[assignment]
-            data = data.chunk(chunks=chunks)
+            # Chunk single scale images
+            if chunks is not None:
+                data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
         return compute_coordinates(data)
