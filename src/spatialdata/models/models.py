@@ -185,7 +185,7 @@ class RasterSchema(DataArraySchema):
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
-                data = from_array(data)
+                data = from_array(data.data)
             if dims is None:
                 dims = cls.dims.dims
             else:
@@ -239,6 +239,10 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
+        else:
+            if chunks is None:
+                chunks = "auto"  # type: ignore[assignment]
+            data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
         return compute_coordinates(data)
@@ -1280,3 +1284,20 @@ def _get_region_metadata_from_region_key_column(table: AnnData) -> list[str]:
         annotated_regions = table.obs[region_key].cat.remove_unused_categories().cat.categories.unique().tolist()
     assert isinstance(annotated_regions, list)
     return annotated_regions
+
+
+# def _parse_chunk_for_dataarray(
+#     model: type[RasterSchema],
+#     chunks: int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, int | tuple[int, ...] | None] | None,
+# ) -> str | int | tuple[int, ...] | tuple[tuple[int, ...], ...]:
+#     if chunks is None:
+#         chunks_parsed = "auto"
+#     elif isinstance(chunks, dict):
+#         dims = np.array(model.dims.dims).tolist()
+#         assert set(dims) == set(chunks.keys())
+#         chunks_parsed = tuple([int(chunks[dim]) for dim in dims])
+#     else:
+#         # do nothing
+#         chunks_parsed = chunks
+
+#     return chunks_parsed

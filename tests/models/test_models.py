@@ -195,6 +195,45 @@ class TestModels:
             with pytest.raises(ValueError):
                 model.parse(image, **kwargs)
 
+    @pytest.mark.parametrize(
+        "model,chunks,expected",
+        [
+            (Labels2DModel, None, (10, 10)),
+            (Labels2DModel, 5, (5, 5)),
+            (Labels2DModel, (5, 5), (5, 5)),
+            (Labels2DModel, {"x": 5, "y": 5}, (5, 5)),
+            (Labels3DModel, None, (1, 10, 10)),
+            (Labels3DModel, 5, (1, 5, 5)),
+            (Labels3DModel, (1, 5, 5), (1, 5, 5)),
+            (Labels3DModel, {"z": 1, "x": 5, "y": 5}, (1, 5, 5)),
+            (Image2DModel, None, (1, 10, 10)),  # Image2D Models always have a c dimension
+            (Image2DModel, 5, (1, 5, 5)),
+            (Image2DModel, (1, 5, 5), (1, 5, 5)),
+            (Image2DModel, {"c": 1, "x": 5, "y": 5}, (1, 5, 5)),
+            (Image3DModel, None, (1, 1, 10, 10)),  # Image3D models have z in addition, so 4 total dimensions
+            (Image3DModel, 5, (1, 1, 5, 5)),
+            (Image3DModel, (1, 1, 5, 5), (1, 1, 5, 5)),
+            (
+                Image3DModel,
+                {"c": 1, "z": 1, "x": 5, "y": 5},
+                (1, 1, 5, 5),
+            ),
+        ],
+    )
+    def test_raster_models_parse_with_chunks_parameter(self, model, chunks, expected):
+        dims = np.array(model.dims.dims).tolist()
+        n_dims = len(dims)
+
+        image: ArrayLike = np.arange(100).reshape((10, 10))
+        if n_dims == 3:
+            image = np.expand_dims(image, axis=0)
+
+        if n_dims == 4:
+            image = np.expand_dims(image, axis=(0, 1))
+
+        x = model.parse(image, chunks=chunks)
+        assert x.data.chunksize == expected
+
     @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
     def test_labels_model_with_multiscales(self, model):
         # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
