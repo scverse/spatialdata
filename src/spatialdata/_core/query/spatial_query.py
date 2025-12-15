@@ -673,7 +673,7 @@ def _(
     )
 
     if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(f"Number of dataframes `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
+        raise ValueError(f"Lenght of dataframe `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
     points_pd = points.compute()
     attrs = points.attrs.copy()
