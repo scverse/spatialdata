@@ -89,8 +89,8 @@ extra  = [
 
 [dependency-groups]
 simulate-prerelease = [
-    "geopandas @ git+https://github.com/geopandas/geopandas.git@main",
-    "anndata @ git+https://github.com/scverse/anndata.git@main",
+    "geopandas @ git+https://github.com/geopandas/geopandas.git@main ; python_version >= '3.12'",
+    "anndata @ git+https://github.com/scverse/anndata.git@main ; python_version >= '3.12'",
 ]
 
 [tool.coverage.run]
