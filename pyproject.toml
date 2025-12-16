@@ -93,6 +93,9 @@ simulate-prerelease = [
     "anndata @ git+https://github.com/scverse/anndata.git@main ; python_version >= '3.12'",
 ]
 
+[tool.uv]
+default-groups = []
+
 [tool.coverage.run]
 source = ["spatialdata"]
 omit = [
