@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dynamic= [
   "version" # allow version to be set by git tags
 ]
@@ -89,12 +89,9 @@ extra  = [
 
 [dependency-groups]
 simulate-prerelease = [
-    "geopandas @ git+https://github.com/geopandas/geopandas.git@main ; python_version >= '3.12'",
-    "anndata @ git+https://github.com/scverse/anndata.git@main ; python_version >= '3.12'",
+    "geopandas @ git+https://github.com/geopandas/geopandas.git@main",
+    "anndata @ git+https://github.com/scverse/anndata.git@main",
 ]
-
-[tool.uv]
-default-groups = []
 
 [tool.coverage.run]
 source = ["spatialdata"]
