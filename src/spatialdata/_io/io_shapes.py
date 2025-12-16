@@ -121,7 +121,9 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     """
     import numcodecs
 
-    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    # np.array() creates a writable copy, needed for pandas 3.0 CoW compatibility
+    # https://github.com/geopandas/geopandas/issues/3697
+    geometry, coords, offsets = to_ragged_array(np.array(shapes.geometry))
     group.create_array(name="coords", data=coords)
     for i, o in enumerate(offsets):
         group.create_array(name=f"offset{i}", data=o)
