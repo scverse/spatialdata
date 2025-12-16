@@ -41,7 +41,7 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ -n "${PRERELEASE}" ]]; then
-                    uv sync --extra test --prerelease ${PRERELEASE}
+                    uv sync --extra test --extra simulate-prerelease --prerelease ${PRERELEASE}
                   else
                     uv sync --extra test
                   fi

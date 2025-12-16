@@ -149,9 +149,16 @@ def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_forma
     element_format
         The format of the shapes element used to store it.
     """
+    from spatialdata.models._utils import TRANSFORM_KEY
+
     store_root = group.store_path.store.root
     path = store_root / group.path / "shapes.parquet"
+
+    # Temporarily remove transformations from attrs to avoid serialization issues
+    transforms = shapes.attrs[TRANSFORM_KEY]
+    del shapes.attrs[TRANSFORM_KEY]
     shapes.to_parquet(path)
+    shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)
     attrs["version"] = element_format.spatialdata_format_version

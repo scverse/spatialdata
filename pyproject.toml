@@ -56,6 +56,10 @@ dev = [
     "bump2version",
     "sentry-prevent-cli",
 ]
+simulate-prerelease = [
+    "geopandas @ git+https://github.com/geopandas/geopandas.git@main",
+    "anndata @ git+https://github.com/scverse/anndata.git@main",
+]
 test = [
     "pytest",
     "pytest-cov",
