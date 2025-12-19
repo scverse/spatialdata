@@ -185,7 +185,7 @@ class RasterSchema(DataArraySchema):
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
-                data = from_array(data)
+                data = from_array(data.data)
             if dims is None:
                 dims = cls.dims.dims
             else:
@@ -239,6 +239,10 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
+        else:
+            # Chunk single scale images
+            if chunks is not None:
+                data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
         return compute_coordinates(data)
