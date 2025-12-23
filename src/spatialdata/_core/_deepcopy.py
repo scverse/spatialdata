@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from copy import deepcopy as _deepcopy
 from functools import singledispatch
 
@@ -48,7 +46,7 @@ def _(sdata: SpatialData) -> SpatialData:
     for _, element_name, element in sdata.gen_elements():
         elements_dict[element_name] = deepcopy(element)
     deepcopied_attrs = _deepcopy(sdata.attrs)
-    return SpatialData.from_elements_dict(elements_dict, attrs=deepcopied_attrs)
+    return SpatialData.init_from_elements(elements_dict, attrs=deepcopied_attrs)
 
 
 @deepcopy.register(DataArray)
@@ -96,9 +94,12 @@ def _(gdf: GeoDataFrame) -> GeoDataFrame:
 @deepcopy.register(DaskDataFrame)
 def _(df: DaskDataFrame) -> DaskDataFrame:
     # bug: the parser may change the order of the columns
-    new_ddf = PointsModel.parse(df.compute().copy(deep=True))
+    compute_df = df.compute().copy(deep=True)
+    new_ddf = PointsModel.parse(compute_df)
     # the problem is not .copy(deep=True), but the parser, which discards some metadata https://github.com/scverse/spatialdata/issues/503#issuecomment-2015275322
-    new_ddf.attrs = _deepcopy(df.attrs)
+    # We need to use the compute_df here as with deepcopy, df._attrs does not exist anymore.
+    # print(type(new_ddf.attrs))
+    new_ddf.attrs.update(_deepcopy(compute_df.attrs))
     return new_ddf
 
 

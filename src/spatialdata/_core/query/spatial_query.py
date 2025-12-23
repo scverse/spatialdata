@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from abc import abstractmethod
 from collections.abc import Callable, Mapping
@@ -16,10 +14,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
-from spatialdata._core.query._utils import (
-    _get_filtered_or_unfiltered_tables,
-    get_bounding_box_corners,
-)
+from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike
@@ -35,11 +30,7 @@ from spatialdata.models import (
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
-from spatialdata.transformations.transformations import (
-    Affine,
-    BaseTransformation,
-    _get_affine_for_element,
-)
+from spatialdata.transformations.transformations import Affine, BaseTransformation, _get_affine_for_element
 
 MIN_COORDINATE_DOCS = """\
     The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
@@ -681,14 +672,24 @@ def _(
         max_coordinate=max_coordinate_intrinsic,
     )
 
-    # assert that the number of bounding boxes is correct
-    assert len(in_intrinsic_bounding_box) == len(min_coordinate)
+    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
+        raise ValueError(f"Lenght of dataframe `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
+    points_pd = points.compute()
+    attrs = points.attrs.copy()
     for mask in in_intrinsic_bounding_box:
         if mask.sum() == 0:
             points_in_intrinsic_bounding_box.append(None)
         else:
-            points_in_intrinsic_bounding_box.append(points.loc[mask])
+            # TODO there is a problem when mixing dask dataframe graph with dask array graph. Need to compute for now.
+            # we can't compute either mask or points as when we calculate either one of them
+            # test_query_points_multiple_partitions will fail as the mask will be used to index each partition.
+            # However, if we compute and then create the dask array again we get the mixed dask graph problem.
+            mask_np = mask.compute()
+            filtered_pd = points_pd[mask_np]
+            points_filtered = dd.from_pandas(filtered_pd, npartitions=points.npartitions)
+            points_filtered.attrs.update(attrs)
+            points_in_intrinsic_bounding_box.append(points_filtered)
     if len(points_in_intrinsic_bounding_box) == 0:
         return None
 
@@ -806,19 +807,6 @@ def _(
     return queried_polygons
 
 
-# TODO: we can replace the manually triggered deprecation warning heres with the decorator from Wouter
-def _check_deprecated_kwargs(kwargs: dict[str, Any]) -> None:
-    deprecated_args = ["shapes", "points", "images", "labels"]
-    for arg in deprecated_args:
-        if arg in kwargs and kwargs[arg] is False:
-            warnings.warn(
-                f"The '{arg}' argument is deprecated and will be removed in one of the next following releases. Please "
-                f"filter the SpatialData object before calling this function.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-
 @singledispatch
 def polygon_query(
     element: SpatialElement | SpatialData,
@@ -826,10 +814,6 @@ def polygon_query(
     target_coordinate_system: str,
     filter_table: bool = True,
     clip: bool = False,
-    shapes: bool = True,
-    points: bool = True,
-    images: bool = True,
-    labels: bool = True,
 ) -> SpatialElement | SpatialData | None:
     """
     Query a SpatialData object or a SpatialElement by a polygon or multipolygon.
@@ -854,18 +838,6 @@ def polygon_query(
         Importantly, when clipping is enabled, the circles will be converted to polygons before the clipping. This may
         affect downstream operations that rely on the circle radius or on performance, so it is recommended to disable
         clipping when querying circles or when querying a `SpatialData` object that contains circles.
-    shapes [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    points [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    images [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
-    labels [Deprecated]
-        This argument is now ignored and will be removed. Please filter the SpatialData object before calling this
-        function.
 
     Returns
     -------
@@ -888,12 +860,7 @@ def _(
     target_coordinate_system: str,
     filter_table: bool = True,
     clip: bool = False,
-    shapes: bool = True,
-    points: bool = True,
-    images: bool = True,
-    labels: bool = True,
 ) -> SpatialData:
-    _check_deprecated_kwargs({"shapes": shapes, "points": points, "images": images, "labels": labels})
     new_elements = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
@@ -920,7 +887,6 @@ def _(
     return_request_only: bool = False,
     **kwargs: Any,
 ) -> DataArray | DataTree | None:
-    _check_deprecated_kwargs(kwargs)
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
     return bounding_box_query(
@@ -942,7 +908,6 @@ def _(
 ) -> DaskDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(points, target_coordinate_system, polygon)
 
     points_gdf = points_dask_dataframe_to_geopandas(points, suppress_z_warning=True)
@@ -975,7 +940,6 @@ def _(
 ) -> GeoDataFrame | None:
     from spatialdata.transformations import get_transformation, set_transformation
 
-    _check_deprecated_kwargs(kwargs)
     polygon_gdf = _get_polygon_in_intrinsic_coordinates(element, target_coordinate_system, polygon)
     polygon = polygon_gdf["geometry"].iloc[0]
 

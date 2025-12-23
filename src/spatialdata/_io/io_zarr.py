@@ -1,47 +1,126 @@
-import logging
 import os
 import warnings
+from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
-import zarr
+import zarr.storage
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
+from geopandas import GeoDataFrame
+from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
-from zarr.errors import ArrayNotFoundError, MetadataError
+from zarr.errors import ArrayNotFoundError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import BadFileHandleMethod, handle_read_errors, ome_zarr_logger
+from spatialdata._io._utils import (
+    BadFileHandleMethod,
+    _resolve_zarr_store,
+    handle_read_errors,
+)
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+from spatialdata._types import Raster_T
 
 
-def _open_zarr_store(store: str | Path | zarr.Group) -> tuple[zarr.Group, str]:
-    """
-    Open a zarr store (on-disk or remote) and return the zarr.Group object and the path to the store.
+def _read_zarr_group_spatialdata_element(
+    root_group: zarr.Group,
+    root_store_path: str,
+    sdata_version: Literal["0.1", "0.2"],
+    selector: set[str],
+    read_func: Callable[..., Any],
+    group_name: Literal["images", "labels", "shapes", "points", "tables"],
+    element_type: Literal["image", "labels", "shapes", "points", "tables"],
+    element_container: (dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData]),
+    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
+) -> None:
+    with handle_read_errors(
+        on_bad_files,
+        location=group_name,
+        exc_types=JSONDecodeError,
+    ):
+        if group_name in selector and group_name in root_group:
+            group = root_group[group_name]
+            count = 0
+            for subgroup_name in group:
+                if Path(subgroup_name).name.startswith("."):
+                    # skip hidden files like .zgroup or .zmetadata
+                    continue
+                elem_group = group[subgroup_name]
+                elem_group_path = os.path.join(root_store_path, elem_group.path)
+                with handle_read_errors(
+                    on_bad_files,
+                    location=f"{group.path}/{subgroup_name}",
+                    exc_types=(
+                        KeyError,
+                        ArrayNotFoundError,
+                        OSError,
+                        ArrowInvalid,
+                        JSONDecodeError,
+                        ValueError,
+                    ),
+                ):
+                    if element_type in ["image", "labels"]:
+                        reader_format = get_raster_format_for_read(elem_group, sdata_version)
+                        element = read_func(
+                            elem_group_path,
+                            cast(Literal["image", "labels"], element_type),
+                            reader_format,
+                        )
+                    elif element_type in ["shapes", "points", "tables"]:
+                        element = read_func(elem_group_path)
+                    else:
+                        raise ValueError(f"Unknown element type {element_type}")
+                    element_container[subgroup_name] = element
+                    count += 1
+            logger.debug(f"Found {count} elements in {group}")
+
+
+def get_raster_format_for_read(
+    group: zarr.Group,
+    sdata_version: Literal["0.1", "0.2"],
+    return_ome_zarr_format: bool = False,
+) -> Format:
+    """Get raster format of stored raster data.
+
+    This checks the image or label element zarr group metadata to retrieve the format that is used by
+    ome-zarr's ZarrLocation for reading the data.
 
     Parameters
     ----------
-    store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+    group
+        The zarr group of the raster element to be read.
+    sdata_version
+        The version of the SpatialData zarr store retrieved from the spatialdata attributes.
+    return_ome_zarr_format
+        Whether to return the ome-zarr Format or a SpatialData raster format class (which is a subclass of Format)
 
     Returns
     -------
-    A tuple of the zarr.Group object and the path to the store.
+    The ome-zarr format to use for reading the raster element.
     """
-    f = store if isinstance(store, zarr.Group) else zarr.open(store, mode="r")
-    # workaround: .zmetadata is being written as zmetadata (https://github.com/zarr-developers/zarr-python/issues/1121)
-    if isinstance(store, str | Path) and str(store).startswith("http") and len(f) == 0:
-        f = zarr.open_consolidated(store, mode="r", metadata_key="zmetadata")
-    f_store_path = f.store.store.path if isinstance(f.store, zarr.storage.ConsolidatedMetadataStore) else f.store.path
-    return f, f_store_path
+    from spatialdata._io.format import (
+        sdata_zarr_version_to_ome_zarr_format,
+        sdata_zarr_version_to_raster_format,
+    )
+
+    if sdata_version == "0.1":
+        group_version = group.metadata.attributes["multiscales"][0]["version"]
+    elif sdata_version == "0.2":
+        group_version = group.metadata.attributes["ome"]["version"]
+    else:
+        raise ValueError(f"Unknown SpatialData zarr version {sdata_version}")
+    if return_ome_zarr_format:
+        return sdata_zarr_version_to_ome_zarr_format[group_version]
+    return sdata_zarr_version_to_raster_format[group_version]
 
 
 def read_zarr(
-    store: str | Path | zarr.Group,
+    store: str | Path,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
@@ -51,7 +130,7 @@ def read_zarr(
     Parameters
     ----------
     store
-        Path to the zarr store (on-disk or remote) or a zarr.Group object.
+        Path to the zarr store (on-disk or remote).
 
     selection
         List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
@@ -71,154 +150,69 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    f, f_store_path = _open_zarr_store(store)
+    from spatialdata._io._utils import _resolve_zarr_store
 
-    images = {}
-    labels = {}
-    points = {}
-    tables: dict[str, AnnData] = {}
-    shapes = {}
-
-    # TODO: remove table once deprecated.
-    selector = {"images", "labels", "points", "shapes", "tables", "table"} if not selection else set(selection or [])
-    logger.debug(f"Reading selection {selector}")
-
-    # read multiscale images
-    if "images" in selector and "images" in f:
-        with handle_read_errors(
-            on_bad_files,
-            location="images",
-            exc_types=(JSONDecodeError, MetadataError),
-        ):
-            group = f["images"]
-            count = 0
-            for subgroup_name in group:
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
-                    continue
-                f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
-                with handle_read_errors(
-                    on_bad_files,
-                    location=f"{group.path}/{subgroup_name}",
-                    exc_types=(
-                        JSONDecodeError,  # JSON parse error
-                        ValueError,  # ome_zarr: Unable to read the NGFF file
-                        KeyError,  # Missing JSON key
-                        ArrayNotFoundError,  # Image chunks missing
-                        TypeError,  # instead of ArrayNotFoundError, with dask>=2024.10.0 zarr<=2.18.3
-                    ),
-                ):
-                    element = _read_multiscale(f_elem_store, raster_type="image")
-                    images[subgroup_name] = element
-                    count += 1
-            logger.debug(f"Found {count} elements in {group}")
-
-    # read multiscale labels
-    with ome_zarr_logger(logging.ERROR):
-        if "labels" in selector and "labels" in f:
-            with handle_read_errors(
-                on_bad_files,
-                location="labels",
-                exc_types=(JSONDecodeError, MetadataError),
-            ):
-                group = f["labels"]
-                count = 0
-                for subgroup_name in group:
-                    if Path(subgroup_name).name.startswith("."):
-                        # skip hidden files like .zgroup or .zmetadata
-                        continue
-                    f_elem = group[subgroup_name]
-                    f_elem_store = os.path.join(f_store_path, f_elem.path)
-                    with handle_read_errors(
-                        on_bad_files,
-                        location=f"{group.path}/{subgroup_name}",
-                        exc_types=(JSONDecodeError, KeyError, ValueError, ArrayNotFoundError, TypeError),
-                    ):
-                        labels[subgroup_name] = _read_multiscale(f_elem_store, raster_type="labels")
-                        count += 1
-                logger.debug(f"Found {count} elements in {group}")
-
-    # now read rest of the data
-    if "points" in selector and "points" in f:
-        with handle_read_errors(
-            on_bad_files,
-            location="points",
-            exc_types=(JSONDecodeError, MetadataError),
-        ):
-            group = f["points"]
-            count = 0
-            for subgroup_name in group:
-                f_elem = group[subgroup_name]
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
-                    continue
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
-                with handle_read_errors(
-                    on_bad_files,
-                    location=f"{group.path}/{subgroup_name}",
-                    exc_types=(JSONDecodeError, KeyError, ArrowInvalid),
-                ):
-                    points[subgroup_name] = _read_points(f_elem_store)
-                    count += 1
-            logger.debug(f"Found {count} elements in {group}")
-
-    if "shapes" in selector and "shapes" in f:
-        with handle_read_errors(
-            on_bad_files,
-            location="shapes",
-            exc_types=(JSONDecodeError, MetadataError),
-        ):
-            group = f["shapes"]
-            count = 0
-            for subgroup_name in group:
-                if Path(subgroup_name).name.startswith("."):
-                    # skip hidden files like .zgroup or .zmetadata
-                    continue
-                f_elem = group[subgroup_name]
-                f_elem_store = os.path.join(f_store_path, f_elem.path)
-                with handle_read_errors(
-                    on_bad_files,
-                    location=f"{group.path}/{subgroup_name}",
-                    exc_types=(
-                        JSONDecodeError,
-                        ValueError,
-                        KeyError,
-                        ArrayNotFoundError,
-                    ),
-                ):
-                    shapes[subgroup_name] = _read_shapes(f_elem_store)
-                    count += 1
-            logger.debug(f"Found {count} elements in {group}")
-    if "tables" in selector and "tables" in f:
-        with handle_read_errors(
-            on_bad_files,
-            location="tables",
-            exc_types=(JSONDecodeError, MetadataError),
-        ):
-            group = f["tables"]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
-
-    if "table" in selector and "table" in f:
+    resolved_store = _resolve_zarr_store(store)
+    root_group = zarr.open_group(resolved_store, mode="r")
+    # the following is the SpatialDataContainerFormat version
+    if "spatialdata_attrs" not in root_group.metadata.attributes:
+        # backward compatibility for pre-versioned SpatialData zarr stores
+        sdata_version = cast(Literal["0.1", "0.2"], "0.1")
+    else:
+        sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
+    if sdata_version == "0.1":
         warnings.warn(
-            f"Table group found in zarr store at location {f_store_path}. Please update the zarr store to use tables "
-            f"instead.",
-            DeprecationWarning,
+            "SpatialData is not stored in the most current format. If you want to use Zarr v3"
+            ", please write the store to a new location using `sdata.write()`.",
+            UserWarning,
             stacklevel=2,
         )
-        subgroup_name = "table"
-        with handle_read_errors(
-            on_bad_files,
-            location=subgroup_name,
-            exc_types=(JSONDecodeError, MetadataError),
-        ):
-            group = f[subgroup_name]
-            tables = _read_table(f_store_path, f, group, tables, on_bad_files=on_bad_files)
+    root_store_path = root_group.store.root
 
-            logger.debug(f"Found {count} elements in {group}")
+    images: dict[str, Raster_T] = {}
+    labels: dict[str, Raster_T] = {}
+    points: dict[str, DaskDataFrame] = {}
+    shapes: dict[str, GeoDataFrame] = {}
+    tables: dict[str, AnnData] = {}
+
+    selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
+    logger.debug(f"Reading selection {selector}")
+
+    # we could make this more readable. One can get lost when looking at this dict and iteration over the items
+    group_readers: dict[
+        Literal["images", "labels", "shapes", "points", "tables"],
+        tuple[
+            Callable[..., Any],
+            Literal["image", "labels", "shapes", "points", "tables"],
+            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
+        ],
+    ] = {
+        # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
+        "images": (_read_multiscale, "image", images),
+        "labels": (_read_multiscale, "labels", labels),
+        "points": (_read_points, "points", points),
+        "shapes": (_read_shapes, "shapes", shapes),
+        "tables": (_read_table, "tables", tables),
+    }
+    for group_name, (
+        read_func,
+        element_type,
+        element_container,
+    ) in group_readers.items():
+        _read_zarr_group_spatialdata_element(
+            root_group=root_group,
+            root_store_path=root_store_path,
+            sdata_version=sdata_version,
+            selector=selector,
+            read_func=read_func,
+            group_name=group_name,
+            element_type=element_type,
+            element_container=element_container,
+            on_bad_files=on_bad_files,
+        )
 
     # read attrs metadata
-    attrs = f.attrs.asdict()
+    attrs = root_group.attrs.asdict()
     if "spatialdata_attrs" in attrs:
         # when refactoring the read_zarr function into reading componenets separately (and according to the version),
         # we can move the code below (.pop()) into attrs_from_dict()
@@ -236,3 +230,100 @@ def read_zarr(
     )
     sdata.path = Path(store.path) if isinstance(store, zarr.Group) else Path(store)
     return sdata
+
+
+def _get_groups_for_element(
+    zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
+) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
+    """
+    Get the Zarr groups for the root, element_type and element for a specific element.
+
+    The store must exist, but creates the element type group and the element group if they don't exist. In all cases
+    the zarr group will also be opened. When writing data to disk this should always be done with 'use_consolidated'
+    being 'False'. If a user wrote the data previously with consolidation of the metadata and then they write new data
+    in the zarr store, it can give errors otherwise, due to partially written elements not yet being present in the
+    consolidated metadata store, e.g. when first writing the element and then opening the zarr group again for writing
+    transformations.
+
+    Parameters
+    ----------
+    zarr_path
+        The path to the Zarr storage.
+    element_type
+        type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+    element_name
+        name of the element
+    use_consolidated
+        whether to open zarr groups using consolidated metadata. This should be false when writing as we open
+        zarr groups multiple times when writing an element. If the consolidated metadata store is out of sync with
+        what is written on disk this leads to errors.
+
+    Returns
+    -------
+    The Zarr groups for the root, element_type and element for a specific element.
+    """
+    if not isinstance(zarr_path, Path):
+        raise ValueError("zarr_path should be a Path object")
+
+    if element_type not in [
+        "images",
+        "labels",
+        "points",
+        "polygons",
+        "shapes",
+        "tables",
+    ]:
+        raise ValueError(f"Unknown element type {element_type}")
+    resolved_store = _resolve_zarr_store(zarr_path)
+
+    # When writing, use_consolidated must be set to False. Otherwise, the metadata store
+    # can get out of sync with newly added elements (e.g., labels), leading to errors.
+    root_group = zarr.open_group(store=resolved_store, mode="r+", use_consolidated=use_consolidated)
+    element_type_group = root_group.require_group(element_type)
+    element_type_group = zarr.open_group(element_type_group.store_path, mode="a", use_consolidated=use_consolidated)
+
+    element_name_group = element_type_group.require_group(element_name)
+    return root_group, element_type_group, element_name_group
+
+
+def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
+    """
+    Check if the group for an element exists.
+
+    Parameters
+    ----------
+    element_type
+        type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
+    element_name
+        name of the element
+
+    Returns
+    -------
+    True if the group exists, False otherwise.
+    """
+    store = _resolve_zarr_store(zarr_path)
+    root = zarr.open_group(store=store, mode="r")
+    assert element_type in [
+        "images",
+        "labels",
+        "points",
+        "polygons",
+        "shapes",
+        "tables",
+    ]
+    exists = element_type in root and element_name in root[element_type]
+    store.close()
+    return exists
+
+
+def _write_consolidated_metadata(path: Path | str | None) -> None:
+    if path is not None:
+        f = zarr.open_group(path, mode="r+", use_consolidated=False)
+        # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
+        # and therefore we silence it for our users as they can't do anything about this.
+        # TODO check with remote PR whether we can prevent this warning at least for points data and whether with zarrv3
+        # that pr would still work.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=zarr.errors.ZarrUserWarning)
+            zarr.consolidate_metadata(f.store)
+        f.store.close()

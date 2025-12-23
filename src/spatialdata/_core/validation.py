@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Collection
 from types import TracebackType
 from typing import NamedTuple, cast
@@ -187,7 +185,10 @@ def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]
     """
     normalized_key = key.lower()
     if normalized_key in other_keys:
-        raise ValueError(f"Key `{key}` is not unique, or another case-variant of it exists.")
+        raise ValueError(
+            f"Key `{key}` is not unique as it exists with a different element type, or another "
+            f"case-variant of it exists."
+        )
 
 
 def check_valid_dataframe_column_name(name: str) -> None:
@@ -277,7 +278,7 @@ class _ErrorDetailsCollector:
         self,
         location: str | tuple[str, ...] = (),
         expected_exception: type[BaseException] | tuple[type[BaseException], ...] | None = None,
-    ) -> _ErrorDetailsCollector:
+    ) -> "_ErrorDetailsCollector":
         """
         Set or override error details in advance before an exception is raised.
 
