@@ -40,6 +40,7 @@ __all__ = [
     "deepcopy",
     "sanitize_table",
     "sanitize_name",
+    "subset_sdata_by_table_mask",
 ]
 
 from spatialdata import dataloader, datasets, models, transformations
@@ -63,6 +64,7 @@ from spatialdata._core.query.relational_query import (
     match_element_to_table,
     match_sdata_to_table,
     match_table_to_element,
+    subset_sdata_by_table_mask,
 )
 from spatialdata._core.query.spatial_query import bounding_box_query, polygon_query
 from spatialdata._core.spatialdata import SpatialData
