@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dynamic= [
   "version" # allow version to be set by git tags
 ]
@@ -85,6 +85,15 @@ extra  = [
     "napari-spatialdata[all]",
     "spatialdata-plot",
     "spatialdata-io",
+]
+
+[dependency-groups]
+simulate-prerelease = [
+    # also use --prerelease allow, this is the full call:
+    # uv sync --extra test --group simulate-prerelease --prerelease allow --upgrade
+    # uv run --no-sync python
+    "geopandas @ git+https://github.com/geopandas/geopandas.git@main",
+    "anndata @ git+https://github.com/scverse/anndata.git@main",
 ]
 
 [tool.coverage.run]

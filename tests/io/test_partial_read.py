@@ -11,9 +11,9 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import anndata
 import py
 import pytest
-import zarr
 from pyarrow import ArrowInvalid
 from zarr.errors import ArrayNotFoundError, ZarrUserWarning
 
@@ -397,21 +397,24 @@ def sdata_with_invalid_zarr_json_element_violating_spec(session_tmp_path: Path) 
     )
 
 
-@pytest.fixture(scope="module")
-def sdata_with_table_region_not_found_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
+def _create_sdata_with_table_region_not_found(session_tmp_path: Path, zarr_version: int) -> PartialReadTestCase:
+    """Helper for table region not found test cases (zarr v2 and v3)."""
     # table/table/.zarr referring to a region that is not found
     # This has been emitting just a warning, but does not fail reading the table element.
     sdata = blobs()
-    sdata_path = session_tmp_path / "sdata_with_invalid_table_region_not_found_zarrv3.zarr"
-    sdata.write(sdata_path)
+    sdata_path = session_tmp_path / f"sdata_with_table_region_not_found_zarrv{zarr_version}.zarr"
+    if zarr_version == 2:
+        sdata.write(sdata_path, sdata_formats=SpatialDataContainerFormatV01())
+    else:
+        sdata.write(sdata_path)
 
     corrupted = "blobs_labels"
     # The element data is missing
     sdata.delete_element_from_disk(corrupted)
     # But the labels element is referenced as a region in a table
-    regions = zarr.open_group(sdata_path / "tables" / "table" / "obs" / "region", mode="r")
-    arrs = dict(regions.arrays())
-    assert corrupted in arrs["categories"][arrs["codes"]]
+    adata = anndata.read_zarr(sdata_path / "tables" / "table")
+    assert corrupted in adata.obs["region"].values
+
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
     return PartialReadTestCase(
@@ -422,33 +425,16 @@ def sdata_with_table_region_not_found_zarrv3(session_tmp_path: Path) -> PartialR
             rf"The table is annotating '{re.escape(corrupted)}', which is not present in the SpatialData object"
         ],
     )
+
+
+@pytest.fixture(scope="module")
+def sdata_with_table_region_not_found_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
+    return _create_sdata_with_table_region_not_found(session_tmp_path, zarr_version=3)
 
 
 @pytest.fixture(scope="module")
 def sdata_with_table_region_not_found_zarrv2(session_tmp_path: Path) -> PartialReadTestCase:
-    # table/table/.zarr referring to a region that is not found
-    # This has been emitting just a warning, but does not fail reading the table element.
-    sdata = blobs()
-    sdata_path = session_tmp_path / "sdata_with_invalid_zattrs_table_region_not_found.zarr"
-    sdata.write(sdata_path, sdata_formats=SpatialDataContainerFormatV01())
-
-    corrupted = "blobs_labels"
-    # The element data is missing
-    sdata.delete_element_from_disk(corrupted)
-    # But the labels element is referenced as a region in a table
-    regions = zarr.open_group(sdata_path / "tables" / "table" / "obs" / "region", mode="r")
-    arrs = dict(regions.arrays())
-    assert corrupted in arrs["categories"][arrs["codes"]]
-    not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
-
-    return PartialReadTestCase(
-        path=sdata_path,
-        expected_elements=not_corrupted,
-        expected_exceptions=(),
-        warnings_patterns=[
-            rf"The table is annotating '{re.escape(corrupted)}', which is not present in the SpatialData object"
-        ],
-    )
+    return _create_sdata_with_table_region_not_found(session_tmp_path, zarr_version=2)
 
 
 @pytest.mark.parametrize(

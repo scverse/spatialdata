@@ -246,7 +246,7 @@ def _get_relabeled_column_name(column_name: str) -> str:
 def _relabel_labels(table: AnnData, instance_key: str) -> pd.Series:
     labels_values_count = len(table.obs[instance_key].unique())
 
-    is_not_numeric = not np.issubdtype(table.obs[instance_key].dtype, np.number)
+    is_not_numeric = not pd.api.types.is_numeric_dtype(table.obs[instance_key].dtype)
     zero_in_instance_key = 0 in table.obs[instance_key].values
     has_gaps = not is_not_numeric and labels_values_count != table.obs[instance_key].max() + int(zero_in_instance_key)
 
