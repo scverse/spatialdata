@@ -470,8 +470,8 @@ def _resolve_zarr_store(
     if isinstance(path, zarr.Group):
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, LocalStore):
-            # create a simple FSStore if the store is a LocalStore with just the path
-            return FsspecStore(os.path.join(path.store.path, path.path), **kwargs)
+            store_path = UPath(path.store.root) / path.path
+            return LocalStore(store_path.path)
         if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
