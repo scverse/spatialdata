@@ -185,7 +185,7 @@ class RasterSchema(DataArraySchema):
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
-                data = from_array(data.data)
+                data = from_array(data)
             if dims is None:
                 dims = cls.dims.dims
             else:

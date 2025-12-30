@@ -202,37 +202,57 @@ class TestModels:
             (Labels2DModel, 5, (5, 5)),
             (Labels2DModel, (5, 5), (5, 5)),
             (Labels2DModel, {"x": 5, "y": 5}, (5, 5)),
-            (Labels3DModel, None, (1, 10, 10)),
-            (Labels3DModel, 5, (1, 5, 5)),
-            (Labels3DModel, (1, 5, 5), (1, 5, 5)),
-            (Labels3DModel, {"z": 1, "x": 5, "y": 5}, (1, 5, 5)),
+            (Labels3DModel, None, (2, 10, 10)),
+            (Labels3DModel, 5, (2, 5, 5)),
+            (Labels3DModel, (2, 5, 5), (2, 5, 5)),
+            (Labels3DModel, {"z": 2, "x": 5, "y": 5}, (2, 5, 5)),
             (Image2DModel, None, (1, 10, 10)),  # Image2D Models always have a c dimension
             (Image2DModel, 5, (1, 5, 5)),
             (Image2DModel, (1, 5, 5), (1, 5, 5)),
             (Image2DModel, {"c": 1, "x": 5, "y": 5}, (1, 5, 5)),
-            (Image3DModel, None, (1, 1, 10, 10)),  # Image3D models have z in addition, so 4 total dimensions
-            (Image3DModel, 5, (1, 1, 5, 5)),
-            (Image3DModel, (1, 1, 5, 5), (1, 1, 5, 5)),
+            (Image3DModel, None, (1, 2, 10, 10)),  # Image3D models have z in addition, so 4 total dimensions
+            (Image3DModel, 5, (1, 2, 5, 5)),
+            (Image3DModel, (1, 2, 5, 5), (1, 2, 5, 5)),
             (
                 Image3DModel,
-                {"c": 1, "z": 1, "x": 5, "y": 5},
-                (1, 1, 5, 5),
+                {"c": 1, "z": 2, "x": 5, "y": 5},
+                (1, 2, 5, 5),
             ),
         ],
     )
     def test_raster_models_parse_with_chunks_parameter(self, model, chunks, expected):
-        dims = np.array(model.dims.dims).tolist()
-        n_dims = len(dims)
-
         image: ArrayLike = np.arange(100).reshape((10, 10))
-        if n_dims == 3:
+        if model in [Labels3DModel, Image3DModel]:
+            image = np.stack([image] * 2)
+
+        if model in [Image2DModel, Image3DModel]:
             image = np.expand_dims(image, axis=0)
 
-        if n_dims == 4:
-            image = np.expand_dims(image, axis=(0, 1))
+        # parse as numpy array
+        # single scale
+        x_ss = model.parse(image, chunks=chunks)
+        assert x_ss.data.chunksize == expected
+        # multi scale
+        x_ms = model.parse(image, chunks=chunks, scale_factors=(2,))
+        assert x_ms["scale0"]["image"].data.chunksize == expected
 
-        x = model.parse(image, chunks=chunks)
-        assert x.data.chunksize == expected
+        # parse as dask array
+        dask_image = from_array(image)
+        # single scale
+        y_ss = model.parse(dask_image, chunks=chunks)
+        assert y_ss.data.chunksize == expected
+        # multi scale
+        y_ms = model.parse(dask_image, chunks=chunks, scale_factors=(2,))
+        assert y_ms["scale0"]["image"].data.chunksize == expected
+
+        # parse as DataArray
+        data_array = DataArray(image, dims=model.dims.dims)
+        # single scale
+        z_ss = model.parse(data_array, chunks=chunks)
+        assert z_ss.data.chunksize == expected
+        # multi scale
+        z_ms = model.parse(data_array, chunks=chunks, scale_factors=(2,))
+        assert z_ms["scale0"]["image"].data.chunksize == expected
 
     @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
     def test_labels_model_with_multiscales(self, model):
