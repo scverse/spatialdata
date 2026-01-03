@@ -87,15 +87,6 @@ extra  = [
     "spatialdata-io",
 ]
 
-[dependency-groups]
-simulate-prerelease = [
-    # also use --prerelease allow, this is the full call:
-    # uv sync --extra test --group simulate-prerelease --prerelease allow --upgrade
-    # uv run --no-sync python
-    "geopandas @ git+https://github.com/geopandas/geopandas.git@main",
-    "anndata @ git+https://github.com/scverse/anndata.git@main",
-]
-
 [tool.coverage.run]
 source = ["spatialdata"]
 omit = [
