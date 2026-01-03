@@ -40,13 +40,10 @@ jobs:
                   python-version: ${{ matrix.python }}
             - name: Install dependencies
               run: |
-                  echo "PRERELEASE value: '${PRERELEASE}'"
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-                    echo "Running prerelease sync"
                     uv sync --extra test --group simulate-prerelease --prerelease ${PRERELEASE}
                   else
-                    echo "Running standard sync"
-                    uv sync --extra test
+                    uv sync --extra test --no-group simulate-prerelease
                   fi
                   if [[ -n "${DASK_VERSION}" ]]; then
                     if [[ "${DASK_VERSION}" == "latest" ]]; then
