@@ -16,6 +16,7 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import Scalar, read_parquet
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Polygon
+from upath import UPath
 from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
@@ -1810,7 +1811,9 @@ class SpatialData:
 
     @staticmethod
     def read(
-        file_path: Path | str, selection: tuple[str] | None = None, reconsolidate_metadata: bool = False
+        file_path: str | Path | UPath | zarr.Group,
+        selection: tuple[str] | None = None,
+        reconsolidate_metadata: bool = False,
     ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
@@ -1818,7 +1821,7 @@ class SpatialData:
         Parameters
         ----------
         file_path
-            The path or URL to the Zarr storage.
+            The path, URL, or zarr.Group to the Zarr storage.
         selection
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
         reconsolidate_metadata

@@ -121,7 +121,9 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     """
     import numcodecs
 
-    geometry, coords, offsets = to_ragged_array(shapes.geometry)
+    # np.array() creates a writable copy, needed for pandas 3.0 CoW compatibility
+    # https://github.com/geopandas/geopandas/issues/3697
+    geometry, coords, offsets = to_ragged_array(np.array(shapes.geometry))
     group.create_array(name="coords", data=coords)
     for i, o in enumerate(offsets):
         group.create_array(name=f"offset{i}", data=o)
@@ -149,9 +151,16 @@ def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_forma
     element_format
         The format of the shapes element used to store it.
     """
+    from spatialdata.models._utils import TRANSFORM_KEY
+
     store_root = group.store_path.store.root
     path = store_root / group.path / "shapes.parquet"
+
+    # Temporarily remove transformations from attrs to avoid serialization issues
+    transforms = shapes.attrs[TRANSFORM_KEY]
+    del shapes.attrs[TRANSFORM_KEY]
     shapes.to_parquet(path)
+    shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)
     attrs["version"] = element_format.spatialdata_format_version

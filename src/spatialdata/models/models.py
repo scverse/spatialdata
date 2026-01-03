@@ -239,6 +239,10 @@ class RasterSchema(DataArraySchema):
                 chunks=chunks,
             )
             _parse_transformations(data, parsed_transform)
+        else:
+            # Chunk single scale images
+            if chunks is not None:
+                data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
         return compute_coordinates(data)
@@ -668,7 +672,11 @@ class PointsModel:
         if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
             feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
             if feature_key not in data.columns:
-                warnings.warn(f"Column `{feature_key}` not found." + SUGGESTION, UserWarning, stacklevel=2)
+                warnings.warn(
+                    f"Column `{feature_key}` not found." + SUGGESTION,
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     @singledispatchmethod
     @classmethod
@@ -1028,16 +1036,21 @@ class TableModel:
             raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[self.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
-        if (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype) not in [
-            int,
-            np.int16,
-            np.uint16,
-            np.int32,
-            np.uint32,
-            np.int64,
-            np.uint64,
-            "O",
-        ] or (dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str):
+        if (
+            (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype)
+            not in [
+                int,
+                np.int16,
+                np.uint16,
+                np.int32,
+                np.uint32,
+                np.int64,
+                np.uint64,
+                "O",
+            ]
+            and not pd.api.types.is_string_dtype(data.obs[attr[self.INSTANCE_KEY]])
+            or (dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str)
+        ):
             dtype = dtype if dtype != "O" else val_dtype
             raise TypeError(
                 f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "

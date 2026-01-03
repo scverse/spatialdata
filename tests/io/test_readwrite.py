@@ -11,6 +11,7 @@ import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from upath import UPath
 from zarr.errors import GroupNotFoundError
 
 from spatialdata import SpatialData, deepcopy, read_zarr
@@ -963,3 +964,30 @@ def test_can_read_sdata_with_reconsolidation(full_sdata, sdata_container_format:
 
         new_sdata = SpatialData.read(path, reconsolidate_metadata=True)
         assert_spatial_data_objects_are_identical(full_sdata, new_sdata)
+
+
+def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
+    sdata_path = tmp_path / "sdata.zarr"
+    points.write(sdata_path)
+
+    # path as Path
+    sdata_from_path = SpatialData.read(sdata_path)
+    assert sdata_from_path.path == sdata_path
+
+    # path as str
+    sdata_from_str = SpatialData.read(str(sdata_path))
+    assert sdata_from_str.path == sdata_path
+
+    # path as UPath
+    sdata_from_upath = SpatialData.read(UPath(sdata_path))
+    assert sdata_from_upath.path == sdata_path
+
+    # path as zarr Group
+    zarr_group = zarr.open_group(sdata_path, mode="r")
+    sdata_from_zarr_group = SpatialData.read(zarr_group)
+    assert sdata_from_zarr_group.path == sdata_path
+
+    # Assert all read methods produce identical SpatialData objects
+    assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_str)
+    assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_upath)
+    assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
