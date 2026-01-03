@@ -19,10 +19,10 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
-                    - {os: windows-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
-                    - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
-                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
+#                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+#                    - {os: windows-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
+#                    - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
+#                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
                     - {os: macos-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
                     - {os: macos-latest, python: "3.13", prerelease: "allow", name: "Python 3.13 (pre-release)"}
         env:
@@ -41,9 +41,10 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-#                    uv sync --extra test --prerelease ${PRERELEASE}
+                    uv sync --extra test
+                    : # uv sync --extra test --prerelease ${PRERELEASE}
                     uv pip install git+https://github.com/scverse/anndata.git
-                    uv pip install pandas --pre
+                    uv pip install --prerelease allow pandas
                   else
                     uv sync --extra test
                   fi
