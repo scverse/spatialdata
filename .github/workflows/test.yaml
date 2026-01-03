@@ -41,8 +41,9 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-                    uv sync --extra test --prerelease ${PRERELEASE}
+#                    uv sync --extra test --prerelease ${PRERELEASE}
                     uv pip install git+https://github.com/scverse/anndata.git
+                    uv pip install pandas --pre
                   else
                     uv sync --extra test
                   fi
