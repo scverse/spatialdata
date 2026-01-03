@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top
@@ -75,8 +73,7 @@ def _concatenate_tables(
         TableModel.INSTANCE_KEY: instance_key,
     }
     merged_table.uns[TableModel.ATTRS_KEY] = attrs
-
-    return TableModel().validate(merged_table)
+    return TableModel().parse(merged_table)
 
 
 def concatenate(
@@ -279,6 +276,6 @@ def _fix_ensure_unique_element_names(
             tables[new_name] = table
 
         # Create new SpatialData object with suffixed elements and tables
-        sdata_fixed = SpatialData.init_from_elements(elements, tables=tables)
+        sdata_fixed = SpatialData.init_from_elements(elements | tables)
         sdatas_fixed.append(sdata_fixed)
     return sdatas_fixed

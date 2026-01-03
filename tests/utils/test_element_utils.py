@@ -1,7 +1,6 @@
 import itertools
 
 import dask_image.ndinterp
-import pytest
 import xarray
 from xarray import DataArray, DataTree
 
@@ -27,7 +26,6 @@ def _pad_raster(data: DataArray, axes: tuple[str, ...]) -> DataArray:
     return dask_image.ndinterp.affine_transform(data, matrix, output_shape=new_shape)
 
 
-@pytest.mark.ci_only
 def test_unpad_raster(images, labels) -> None:
     for raster in itertools.chain(images.images.values(), labels.labels.values()):
         schema = get_model(raster)

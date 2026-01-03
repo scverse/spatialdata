@@ -502,7 +502,7 @@ def test_query_filter_table(with_polygon_query: bool):
     circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
     circles1 = ShapesModel.parse(coords1, geometry=0, radius=1)
     table = AnnData(shape=(3, 0))
-    table.obs["region"] = ["circles0", "circles0", "circles1"]
+    table.obs["region"] = pd.Categorical(["circles0", "circles0", "circles1"])
     table.obs["instance"] = [0, 1, 0]
     table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
     sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, tables={"table": table})
@@ -545,7 +545,7 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        tables=sdata["table"],
+        tables={"table": sdata["table"]},
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -555,20 +555,18 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         values_sdata,
         polygon=polygon,
         target_coordinate_system="global",
-        shapes=True,
-        points=False,
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
     assert len(queried["table"]) == 8
 
-    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
     assert len(queried["table"]) == 16
 
-    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
@@ -650,7 +648,10 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name:
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     p0 = points["points_0"]
-    p1 = PointsModel.parse(dd.from_pandas(p0.compute(), npartitions=10))
+    attrs = p0.attrs.copy()
+    ddf = dd.from_pandas(p0.compute(), npartitions=10)
+    ddf.attrs.update(attrs)
+    p1 = PointsModel.parse(ddf)
 
     def _query(p: DaskDataFrame) -> DaskDataFrame:
         if with_polygon_query:
@@ -671,7 +672,6 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     q0 = _query(p0)
     q1 = _query(p1)
     assert np.array_equal(q0.index.compute(), q1.index.compute())
-    pass
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
