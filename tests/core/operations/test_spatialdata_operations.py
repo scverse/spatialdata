@@ -476,6 +476,13 @@ def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_o
     blob1 = blobs()
     blob2 = blobs()
 
+    if merge_coordinate_systems_on_name:
+        with pytest.raises(
+            ValueError,
+            match="`merge_coordinate_systems_on_name` can only be used if `sdatas` is a dictionary",
+        ):
+            concatenate((blob1, blob2))
+
     sdata_keys = ["blob1", "blob2"]
     sdata = concatenate(
         dict(zip(sdata_keys, [blob1, blob2], strict=True)),

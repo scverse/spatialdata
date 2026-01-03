@@ -151,6 +151,8 @@ def concatenate(
             modify_tables_inplace=modify_tables_inplace,
             merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
         )
+    elif merge_coordinate_systems_on_name:
+        raise ValueError("`merge_coordinate_systems_on_name` can only be used if `sdatas` is a dictionary")
 
     ERROR_STR = (
         " must have unique names across the SpatialData objects to concatenate. Please pass a `dict[str, SpatialData]`"
