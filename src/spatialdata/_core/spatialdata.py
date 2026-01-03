@@ -13,10 +13,10 @@ import pandas as pd
 import zarr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from dask.dataframe import read_parquet
-from dask.delayed import Delayed
+from dask.dataframe import Scalar, read_parquet
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Polygon
+from upath import UPath
 from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
@@ -702,7 +702,7 @@ class SpatialData:
 
                     assert element_names is not None
                     table = _filter_table_by_element_names(table, element_names)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
                     from spatialdata._core.query.relational_query import (
@@ -711,7 +711,7 @@ class SpatialData:
 
                     assert elements_dict is not None
                     table = _filter_table_by_elements(table, elements_dict=elements_dict)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
         else:
             tables = self.tables
@@ -1811,7 +1811,9 @@ class SpatialData:
 
     @staticmethod
     def read(
-        file_path: Path | str, selection: tuple[str] | None = None, reconsolidate_metadata: bool = False
+        file_path: str | Path | UPath | zarr.Group,
+        selection: tuple[str] | None = None,
+        reconsolidate_metadata: bool = False,
     ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
@@ -1819,7 +1821,7 @@ class SpatialData:
         Parameters
         ----------
         file_path
-            The path or URL to the Zarr storage.
+            The path, URL, or zarr.Group to the Zarr storage.
         selection
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
         reconsolidate_metadata
@@ -1985,9 +1987,7 @@ class SpatialData:
                     else:
                         shape_str = (
                             "("
-                            + ", ".join(
-                                [(str(dim) if not isinstance(dim, Delayed) else "<Delayed>") for dim in v.shape]
-                            )
+                            + ", ".join([(str(dim) if not isinstance(dim, Scalar) else "<Delayed>") for dim in v.shape])
                             + ")"
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} with shape: {shape_str} {dim_string}"

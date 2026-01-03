@@ -339,7 +339,9 @@ class NgffAffine(NgffBaseTransformation):
         self._validate_transform_points_shapes(len(input_axes), points.shape)
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
-        return q[: len(output_axes), :].T  # type: ignore[no-any-return]
+        res = q[: len(output_axes), :].T
+        assert isinstance(res, np.ndarray)
+        return res
 
     def to_affine(self) -> "NgffAffine":
         return NgffAffine(
@@ -743,7 +745,9 @@ class NgffRotation(NgffBaseTransformation):
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         input_axes, _ = self._get_and_validate_axes()
         self._validate_transform_points_shapes(len(input_axes), points.shape)
-        return (self.rotation @ points.T).T  # type: ignore[no-any-return]
+        res = (self.rotation @ points.T).T
+        assert isinstance(res, np.ndarray)
+        return res
 
     def to_affine(self) -> NgffAffine:
         m = np.eye(len(self.rotation) + 1)

@@ -365,7 +365,7 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
         instance_id = get_element_instances(sdata[name]).tolist()
     else:
         index = sdata[name].index
-        instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.core.Index) else index.tolist()
+        instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.Index) else index.tolist()
     n = len(instance_id)
     new_table = AnnData(shape=(n, 0), obs={"region": pd.Categorical([name] * n), "instance_id": instance_id})
     new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
