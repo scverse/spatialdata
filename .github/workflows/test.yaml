@@ -40,7 +40,7 @@ jobs:
                   python-version: ${{ matrix.python }}
             - name: Install dependencies
               run: |
-                  if [[ -n "${PRERELEASE}" ]]; then
+                  if [[ "${PRERELEASE}" == "allow" ]]; then
                     uv sync --extra test --group simulate-prerelease --prerelease ${PRERELEASE}
                   else
                     uv sync --extra test
