@@ -702,7 +702,7 @@ class SpatialData:
 
                     assert element_names is not None
                     table = _filter_table_by_element_names(table, element_names)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
                     from spatialdata._core.query.relational_query import (
@@ -711,7 +711,7 @@ class SpatialData:
 
                     assert elements_dict is not None
                     table = _filter_table_by_elements(table, elements_dict=elements_dict)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
         else:
             tables = self.tables

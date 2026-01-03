@@ -158,7 +158,7 @@ def read_zarr(
     # the following is the SpatialDataContainerFormat version
     if "spatialdata_attrs" not in root_group.metadata.attributes:
         # backward compatibility for pre-versioned SpatialData zarr stores
-        sdata_version = cast(Literal["0.1", "0.2"], "0.1")
+        sdata_version: Literal["0.1", "0.2"] = "0.1"
     else:
         sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
     if sdata_version == "0.1":
