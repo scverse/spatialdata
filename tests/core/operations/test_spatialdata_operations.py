@@ -457,7 +457,7 @@ def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_o
             ValueError,
             match="`merge_coordinate_systems_on_name` can only be used if `sdatas` is a dictionary",
         ):
-            concatenate((blob1, blob2))
+            concatenate((blob1, blob2), merge_coordinate_systems_on_name=merge_coordinate_systems_on_name)
 
     sdata_keys = ["blob1", "blob2"]
     sdata = concatenate(
