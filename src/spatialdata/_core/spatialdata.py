@@ -178,8 +178,6 @@ class SpatialData:
                         self.validate_table_in_spatialdata(v)
                         self.tables[k] = v
 
-        self._query = QueryManager(self)
-
     def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
         Validate the presence of the annotation target of a SpatialData table in the SpatialData object.
@@ -496,7 +494,7 @@ class SpatialData:
         spatialdata.bounding_box_query
         spatialdata.polygon_query
         """
-        return self._query
+        return QueryManager(self)
 
     def aggregate(
         self,
