@@ -11,7 +11,12 @@ from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
 
 from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata.models import SpatialElement, TableModel, get_table_keys
+from spatialdata.models import TableModel, get_table_keys
+from spatialdata.transformations import (
+    get_transformation,
+    remove_transformation,
+    set_transformation,
+)
 
 __all__ = [
     "concatenate",
@@ -68,8 +73,7 @@ def _concatenate_tables(
         TableModel.INSTANCE_KEY: instance_key,
     }
     merged_table.uns[TableModel.ATTRS_KEY] = attrs
-
-    return TableModel().validate(merged_table)
+    return TableModel().parse(merged_table)
 
 
 def concatenate(
@@ -79,7 +83,8 @@ def concatenate(
     concatenate_tables: bool = False,
     obs_names_make_unique: bool = True,
     modify_tables_inplace: bool = False,
-    attrs_merge: StrategiesLiteral | Callable[[list[dict[Any, Any]]], dict[Any, Any]] | None = None,
+    merge_coordinate_systems_on_name: bool = False,
+    attrs_merge: (StrategiesLiteral | Callable[[list[dict[Any, Any]]], dict[Any, Any]] | None) = None,
     **kwargs: Any,
 ) -> SpatialData:
     """
@@ -108,6 +113,8 @@ def concatenate(
     modify_tables_inplace
         Whether to modify the tables in place. If `True`, the tables will be modified in place. If `False`, the tables
         will be copied before modification. Copying is enabled by default but can be disabled for performance reasons.
+    merge_coordinate_systems_on_name
+        Whether to keep coordinate system names unchanged (True) or add suffixes (False).
     attrs_merge
         How the elements of `.attrs` are selected. Uses the same set of strategies as the `uns_merge` argument of [anndata.concat](https://anndata.readthedocs.io/en/latest/generated/anndata.concat.html)
     kwargs
@@ -139,7 +146,10 @@ def concatenate(
             rename_tables=not concatenate_tables,
             rename_obs_names=obs_names_make_unique and concatenate_tables,
             modify_tables_inplace=modify_tables_inplace,
+            merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
         )
+    elif merge_coordinate_systems_on_name:
+        raise ValueError("`merge_coordinate_systems_on_name` can only be used if `sdatas` is a dictionary")
 
     ERROR_STR = (
         " must have unique names across the SpatialData objects to concatenate. Please pass a `dict[str, SpatialData]`"
@@ -220,12 +230,27 @@ def _fix_ensure_unique_element_names(
     rename_tables: bool,
     rename_obs_names: bool,
     modify_tables_inplace: bool,
+    merge_coordinate_systems_on_name: bool,
 ) -> list[SpatialData]:
-    elements_by_sdata: list[dict[str, SpatialElement]] = []
-    tables_by_sdata: list[dict[str, AnnData]] = []
+    sdatas_fixed = []
     for suffix, sdata in sdatas.items():
-        elements = {f"{name}-{suffix}": el for _, name, el in sdata.gen_spatial_elements()}
-        elements_by_sdata.append(elements)
+        # Create new elements dictionary with suffixed names
+        elements = {}
+        for _, name, el in sdata.gen_spatial_elements():
+            new_element_name = f"{name}-{suffix}"
+            if not merge_coordinate_systems_on_name:
+                # Set new transformations with suffixed coordinate system names
+                transformations = get_transformation(el, get_all=True)
+                assert isinstance(transformations, dict)
+
+                remove_transformation(el, remove_all=True)
+                for cs, t in transformations.items():
+                    new_cs = f"{cs}-{suffix}"
+                    set_transformation(el, t, to_coordinate_system=new_cs)
+
+            elements[new_element_name] = el
+
+        # Handle tables with suffix
         tables = {}
         for name, table in sdata.tables.items():
             if not modify_tables_inplace:
@@ -249,9 +274,8 @@ def _fix_ensure_unique_element_names(
             # fix the table name
             new_name = f"{name}-{suffix}" if rename_tables else name
             tables[new_name] = table
-        tables_by_sdata.append(tables)
-    sdatas_fixed = []
-    for elements, tables in zip(elements_by_sdata, tables_by_sdata, strict=True):
-        sdata = SpatialData.init_from_elements(elements, tables=tables)
-        sdatas_fixed.append(sdata)
+
+        # Create new SpatialData object with suffixed elements and tables
+        sdata_fixed = SpatialData.init_from_elements(elements | tables)
+        sdatas_fixed.append(sdata_fixed)
     return sdatas_fixed

@@ -3,7 +3,6 @@
 from collections import UserDict
 from collections.abc import Iterable, KeysView, ValuesView
 from typing import TypeVar
-from warnings import warn
 
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -41,9 +40,7 @@ class Elements(UserDict[str, T]):
     @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
         check_valid_name(key)
-        if key in element_keys:
-            warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
-        else:
+        if key not in element_keys:
             try:
                 check_key_is_case_insensitively_unique(key, shared_keys)
             except ValueError as e:

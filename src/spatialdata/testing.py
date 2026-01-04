@@ -183,3 +183,6 @@ def assert_spatial_data_objects_are_identical(
             check_transformations=check_transformations,
             check_metadata=check_metadata,
         )
+    # compare attrs
+    if check_metadata:
+        assert sdata0.attrs == sdata1.attrs

@@ -750,7 +750,6 @@ def test_get_values_df_shapes(sdata_query_aggregation):
         var=pd.DataFrame(index=["numerical_in_var", "another_numerical_in_var"]),
         uns=adata.uns,
     )
-    del sdata_query_aggregation.tables["table"]
     sdata_query_aggregation["table"] = new_adata
     # test
     v = get_values(
@@ -816,7 +815,7 @@ def test_get_values_df_points(points):
     p = p.drop("instance_id", axis=1)
     p.index.compute()
     n = len(p)
-    obs = pd.DataFrame(index=p.index, data={"region": ["points_0"] * n, "instance_id": range(n)})
+    obs = pd.DataFrame(index=p.index.astype(str), data={"region": ["points_0"] * n, "instance_id": range(n)})
     obs["region"] = obs["region"].astype("category")
     table = TableModel.parse(
         AnnData(shape=(n, 0), obs=obs),
@@ -891,8 +890,10 @@ def test_get_values_labels_bug(sdata_blobs):
 
 def test_filter_table_categorical_bug(shapes):
     # one bug that was triggered by: https://github.com/scverse/anndata/issues/1210
-    adata = AnnData(obs={"categorical": pd.Categorical(["a", "a", "a", "b", "c"])})
-    adata.obs["region"] = "circles"
+    adata = AnnData(
+        obs=pd.DataFrame({"categorical": pd.Categorical(["a", "a", "a", "b", "c"])}, index=list(map(str, range(5))))
+    )
+    adata.obs["region"] = pd.Categorical(["circles"] * adata.n_obs)
     adata.obs["cell_id"] = np.arange(len(adata))
     adata = TableModel.parse(adata, region=["circles"], region_key="region", instance_key="cell_id")
     adata_subset = adata[adata.obs["categorical"] == "a"].copy()
@@ -901,7 +902,7 @@ def test_filter_table_categorical_bug(shapes):
 
 
 def test_filter_table_non_annotating(full_sdata):
-    obs = pd.DataFrame({"test": ["a", "b", "c"]})
+    obs = pd.DataFrame({"test": ["a", "b", "c"]}, index=list(map(str, range(3))))
     adata = AnnData(obs=obs)
     table = TableModel.parse(adata)
     full_sdata["table"] = table
