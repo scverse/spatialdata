@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 # Functions to compute the bounding box describing the extent of a SpatialElement or SpatialData object
 from collections import defaultdict
 from functools import singledispatch
-from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -107,9 +104,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: Union[  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
-        list[str], None
-    ] = None,
+    elements: list[str] | None = None,  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -178,9 +173,7 @@ def _(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    # python 3.9 tests fail if we don't use Union here, see
-    # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
-    elements: Union[list[str], None] = None,  # noqa: UP007
+    elements: list[str] | None = None,
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object.

@@ -13,13 +13,12 @@ import pandas as pd
 import zarr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
-from dask.dataframe import read_parquet
-from dask.delayed import Delayed
+from dask.dataframe import Scalar, read_parquet
 from geopandas import GeoDataFrame
-from ome_zarr.io import parse_url
-from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
+from upath import UPath
 from xarray import DataArray, DataTree
+from zarr.errors import GroupNotFoundError
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
 from spatialdata._core.validation import (
@@ -31,10 +30,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import (
-    _deprecation_alias,
-    _error_message_add_element,
-)
+from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -55,7 +51,10 @@ from spatialdata.models._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
-    from spatialdata._io.format import SpatialDataFormat
+    from spatialdata._io.format import (
+        SpatialDataContainerFormatType,
+        SpatialDataFormatType,
+    )
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -121,7 +120,6 @@ class SpatialData:
     annotation directly.
     """
 
-    @_deprecation_alias(table="tables", version="0.1.0")
     def __init__(
         self,
         images: dict[str, Raster_T] | None = None,
@@ -140,10 +138,6 @@ class SpatialData:
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
         self.attrs = attrs if attrs else {}  # type: ignore[assignment]
-
-        # Workaround to allow for backward compatibility
-        if isinstance(tables, AnnData):
-            tables = {"table": tables}
 
         element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
 
@@ -233,33 +227,6 @@ class SpatialData:
                         )
 
     @staticmethod
-    def from_elements_dict(
-        elements_dict: dict[str, SpatialElement | AnnData], attrs: Mapping[Any, Any] | None = None
-    ) -> SpatialData:
-        """
-        Create a SpatialData object from a dict of elements.
-
-        Parameters
-        ----------
-        elements_dict
-            Dict of elements. The keys are the names of the elements and the values are the elements.
-            A table can be present in the dict, but only at most one; its name is not used and can be anything.
-        attrs
-            Additional attributes to store in the SpatialData object.
-
-        Returns
-        -------
-        The SpatialData object.
-        """
-        warnings.warn(
-            'This method is deprecated and will be removed in a future release. Use "SpatialData.init_from_elements('
-            ')" instead. For the momment, such methods will be automatically called.',
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return SpatialData.init_from_elements(elements=elements_dict, attrs=attrs)
-
-    @staticmethod
     def get_annotated_regions(table: AnnData) -> list[str]:
         """
         Get the regions annotated by a table.
@@ -273,7 +240,9 @@ class SpatialData:
         -------
         The annotated regions.
         """
-        from spatialdata.models.models import _get_region_metadata_from_region_key_column
+        from spatialdata.models.models import (
+            _get_region_metadata_from_region_key_column,
+        )
 
         return _get_region_metadata_from_region_key_column(table)
 
@@ -326,11 +295,12 @@ class SpatialData:
         raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
 
     def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
-        """Set the channel names for a image `SpatialElement` in the `SpatialData` object.
+        """Set the channel names for an image `SpatialElement` in the `SpatialData` object.
 
-        This method assumes that the `SpatialData` object and the element are already stored on disk as it will
-        also overwrite the channel names metadata on disk. In case either the `SpatialData` object or the
-        element are not stored on disk, please use `SpatialData.set_image_channel_names` instead.
+        This method will overwrite the element in memory with the same element, but with new channel names.
+        If 'write` is 'True', this method assumes that the `SpatialData` object and the element are already stored on
+        disk as it will also overwrite the channel names metadata on disk. If you do not want to overwrite the element
+        on disk, or it is not stored, set `write` to False (default).
 
         Parameters
         ----------
@@ -339,7 +309,8 @@ class SpatialData:
         channel_names
             The channel names to be assigned to the c dimension of the image `SpatialElement`.
         write
-            Whether to overwrite the channel metadata on disk.
+            Whether to overwrite the channel metadata on disk (lightweight operation). This will not rewrite the pixel
+            data itself (heavy operation).
         """
         self.images[element_name] = set_channel_names(self.images[element_name], channel_names)
         if write:
@@ -591,66 +562,6 @@ class SpatialData:
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
 
-        if not self.is_self_contained():
-            logger.info(
-                "The SpatialData object is not self-contained (i.e. it contains some elements that are Dask-backed from"
-                f" locations outside {self.path}). Please see the documentation of `is_self_contained()` to understand"
-                f" the implications of working with SpatialData objects that are not self-contained."
-            )
-
-    def _get_groups_for_element(
-        self, zarr_path: Path, element_type: str, element_name: str
-    ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
-        """
-        Get the Zarr groups for the root, element_type and element for a specific element.
-
-        The store must exist, but creates the element type group and the element group if they don't exist.
-
-        Parameters
-        ----------
-        zarr_path
-            The path to the Zarr storage.
-        element_type
-            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
-        element_name
-            name of the element
-
-        Returns
-        -------
-        either the existing Zarr subgroup or a new one.
-        """
-        if not isinstance(zarr_path, Path):
-            raise ValueError("zarr_path should be a Path object")
-        store = parse_url(zarr_path, mode="r+").store
-        root = zarr.group(store=store)
-        if element_type not in ["images", "labels", "points", "polygons", "shapes", "tables"]:
-            raise ValueError(f"Unknown element type {element_type}")
-        element_type_group = root.require_group(element_type)
-        element_name_group = element_type_group.require_group(element_name)
-        return root, element_type_group, element_name_group
-
-    def _group_for_element_exists(self, zarr_path: Path, element_type: str, element_name: str) -> bool:
-        """
-        Check if the group for an element exists.
-
-        Parameters
-        ----------
-        element_type
-            type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
-        element_name
-            name of the element
-
-        Returns
-        -------
-        True if the group exists, False otherwise.
-        """
-        store = parse_url(zarr_path, mode="r").store
-        root = zarr.group(store=store)
-        assert element_type in ["images", "labels", "points", "polygons", "shapes", "tables"]
-        exists = element_type in root and element_name in root[element_type]
-        store.close()
-        return exists
-
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
         Locate a SpatialElement within the SpatialData object and returns its Zarr paths relative to the root.
@@ -680,9 +591,11 @@ class SpatialData:
             raise ValueError("Found an element name with a '/' character. This is not allowed.")
         return [f"{found_element_type[i]}/{found_element_name[i]}" for i in range(len(found))]
 
-    @_deprecation_alias(filter_table="filter_tables", version="0.1.0")
     def filter_by_coordinate_system(
-        self, coordinate_system: str | list[str], filter_tables: bool = True, include_orphan_tables: bool = False
+        self,
+        coordinate_system: str | list[str],
+        filter_tables: bool = True,
+        include_orphan_tables: bool = False,
     ) -> SpatialData:
         """
         Filter the SpatialData by one (or a list of) coordinate system.
@@ -724,7 +637,11 @@ class SpatialData:
                         elements[element_type][element_name] = element
                         element_names_in_coordinate_system.append(element_name)
         tables = self._filter_tables(
-            set(), filter_tables, "cs", include_orphan_tables, element_names=element_names_in_coordinate_system
+            set(),
+            filter_tables,
+            "cs",
+            include_orphan_tables,
+            element_names=element_names_in_coordinate_system,
         )
 
         return SpatialData(**elements, tables=tables, attrs=self.attrs)
@@ -777,18 +694,22 @@ class SpatialData:
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
                 if by == "cs":
-                    from spatialdata._core.query.relational_query import _filter_table_by_element_names
+                    from spatialdata._core.query.relational_query import (
+                        _filter_table_by_element_names,
+                    )
 
                     assert element_names is not None
                     table = _filter_table_by_element_names(table, element_names)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
-                    from spatialdata._core.query.relational_query import _filter_table_by_elements
+                    from spatialdata._core.query.relational_query import (
+                        _filter_table_by_elements,
+                    )
 
                     assert elements_dict is not None
                     table = _filter_table_by_elements(table, elements_dict=elements_dict)
-                    if len(table) != 0:
+                    if table is not None and len(table) != 0:
                         tables[table_name] = table
         else:
             tables = self.tables
@@ -809,7 +730,10 @@ class SpatialData:
         The method does not allow to rename a coordinate system into an existing one, unless the existing one is also
         renamed in the same call.
         """
-        from spatialdata.transformations.operations import get_transformation, set_transformation
+        from spatialdata.transformations.operations import (
+            get_transformation,
+            set_transformation,
+        )
 
         # check that the rename_dict is valid
         old_names = self.coordinate_systems
@@ -851,9 +775,11 @@ class SpatialData:
             # set the new transformations
             set_transformation(element=element, transformation=new_transformations, set_all=True)
 
-    @_deprecation_alias(element="element_name", version="0.3.0")
     def transform_element_to_coordinate_system(
-        self, element_name: str, target_coordinate_system: str, maintain_positioning: bool = False
+        self,
+        element_name: str,
+        target_coordinate_system: str,
+        maintain_positioning: bool = False,
     ) -> SpatialElement:
         """
         Transform an element to a given coordinate system.
@@ -882,18 +808,7 @@ class SpatialData:
             set_transformation,
         )
 
-        # TODO remove after deprecation
-        if not isinstance(element_name, str):
-            warnings.warn(
-                "Passing a SpatialElement is as element will be deprecated in SpatialData v0.3.0. Pass"
-                "element_name as string to silence this warning.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            element = element_name
-        else:
-            element = self.get(element_name)
-
+        element = self.get(element_name)
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:
             transformed = transform(element, transformation=t, maintain_positioning=maintain_positioning)
@@ -905,7 +820,9 @@ class SpatialData:
                 d[target_coordinate_system] = t
                 to_remove = True
             transformed = transform(
-                element, to_coordinate_system=target_coordinate_system, maintain_positioning=maintain_positioning
+                element,
+                to_coordinate_system=target_coordinate_system,
+                maintain_positioning=maintain_positioning,
             )
             if to_remove:
                 del d[target_coordinate_system]
@@ -961,10 +878,12 @@ class SpatialData:
         """
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_tables=False)
         elements: dict[str, dict[str, SpatialElement]] = {}
-        for element_type, element_name, element in sdata.gen_elements():
+        for element_type, element_name, _ in sdata.gen_elements():
             if element_type != "tables":
                 transformed = sdata.transform_element_to_coordinate_system(
-                    element, target_coordinate_system, maintain_positioning=maintain_positioning
+                    element_name,
+                    target_coordinate_system,
+                    maintain_positioning=maintain_positioning,
                 )
                 if element_type not in elements:
                     elements[element_type] = {}
@@ -1066,19 +985,27 @@ class SpatialData:
         -------
         A list of paths of the elements saved in the Zarr store.
         """
+        from spatialdata._io._utils import _resolve_zarr_store
+
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
-        store = parse_url(self.path, mode="r").store
-        root = zarr.group(store=store)
+
+        store = _resolve_zarr_store(self.path)
+        root = zarr.open_group(store=store, mode="r")
         elements_in_zarr = []
 
         def find_groups(obj: zarr.Group, path: str) -> None:
-            # with the current implementation, a path of a zarr group if the path for an element if and only if its
+            # with the current implementation, a path of a zarr group is the path for an element if and only if its
             # string representation contains exactly one "/"
             if isinstance(obj, zarr.Group) and path.count("/") == 1:
                 elements_in_zarr.append(path)
 
-        root.visit(lambda path: find_groups(root[path], path))
+        for element_type in root:
+            if element_type in ["images", "labels", "points", "shapes", "tables"]:
+                for element_name in root[element_type]:
+                    path = f"{element_type}/{element_name}"
+                    elements_in_zarr.append(path)
+        # root.visit(lambda path: find_groups(root[path], path))
         store.close()
         return elements_in_zarr
 
@@ -1112,7 +1039,7 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder
+        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder, _resolve_zarr_store
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1120,12 +1047,16 @@ class SpatialData:
         if not isinstance(file_path, Path):
             raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
 
+        # TODO: add test for this
         if os.path.exists(file_path):
-            if parse_url(file_path, mode="r") is None:
+            store = _resolve_zarr_store(file_path)
+            try:
+                zarr.open(store, mode="r")
+            except GroupNotFoundError as err:
                 raise ValueError(
                     "The target file path specified already exists, and it has been detected to not be a Zarr store. "
                     "Overwriting non-Zarr stores is not supported to prevent accidental data loss."
-                )
+                ) from err
             if not overwrite:
                 raise ValueError(
                     "The Zarr store already exists. Use `overwrite=True` to try overwriting the store. "
@@ -1171,12 +1102,14 @@ class SpatialData:
                     with collect_error(location=element_path):
                         validate_table_attr_keys(element, location=element_path)
 
+    @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
         file_path: str | Path,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        update_sdata_path: bool = True,
+        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1192,25 +1125,50 @@ class SpatialData:
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
             cloud stores (such as S3).
-        format
+        update_sdata_path
+            Whether to update the `path` attribute of the `SpatialData` object to `file_path` after a successful write
+            (default yes). Here are the implications.
+
+                - If `True`, and if the `SpatialData` object has dask-backed elements, the object will become "not
+                    self-contained" because the dask-backed element will have a path that is different from the new
+                    `sdata.path` attribute (now equal to `file_path`). By re-reading the object from disk, the object
+                    will become self-contained again.
+                - If `False`, the `SpatialData` object will keep its current `path` attribute, meaning that calling
+                    `sdata.write_element()`, `sdata.write_attrs()`, ... will write the data to the current `sdata.path`
+                    location, not to the `file_path` location.
+
+            Please consult :func:`spatialdata.SpatialData.is_self_contained` for more information on the implications of
+            working with self-contained and non-self-contained SpatialData objects.
+        sdata_formats
             The format to use for writing the elements of the `SpatialData` object. It is recommended to leave this
             parameter equal to `None` (default to latest format for all the elements). If not `None`, it must be
-            either a format for an element, or a list of formats.
-            For example it can be a subset of the following list `[RasterFormatVXX(), ShapesFormatVXX(),
-            PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the version number, and should be replaced with the
-            respective format; the version numbers can differ across elements).
-            By default, the latest format is used for all elements, i.e.
-            :class:`~spatialdata._io.format.CurrentRasterFormat`, :class:`~spatialdata._io.format.CurrentShapesFormat`,
-            :class:`~spatialdata._io.format.CurrentPointsFormat`, :class:`~spatialdata._io.format.CurrentTablesFormat`.
+            either a format for an element, or a list of formats. For example it can be a subset of the following
+            list `[RasterFormatVXX(), ShapesFormatVXX(), PointsFormatVXX(), TablesFormatVXX()]`. (XX denote the
+            version number, and should be replaced with the respective format; the version numbers can differ across
+            elements). By default, the latest format is used for all elements,
+            i.e. :class:`~spatialdata._io.format.CurrentRasterFormat`,
+            :class:`~spatialdata._io.format.CurrentShapesFormat`,
+            :class:`~spatialdata._io.format.CurrentPointsFormat`,
+            :class:`~spatialdata._io.format.CurrentTablesFormat`. Also, by default, if a format for the SpatialData
+            "container" object (i.e. SpatialDataContainerFormatVXX) is specified, but the format for some elements is
+            unspecified, the element formats will be set to the latest element format compatible with the specified
+            SpatialData container format. All the formats and relationships between them are defined in
+            `spatialdata._io.format.py`.
         """
+        from spatialdata._io._utils import _resolve_zarr_store
+        from spatialdata._io.format import _parse_formats
+
+        parsed = _parse_formats(sdata_formats)
+
         if isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        store = parse_url(file_path, mode="w").store
-        zarr_group = zarr.group(store=store, overwrite=overwrite)
-        self.write_attrs(zarr_group=zarr_group)
+        store = _resolve_zarr_store(file_path)
+        zarr_format = parsed["SpatialData"].zarr_format
+        zarr_group = zarr.create_group(store=store, overwrite=overwrite, zarr_format=zarr_format)
+        self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
@@ -1220,13 +1178,11 @@ class SpatialData:
                 element_type=element_type,
                 element_name=element_name,
                 overwrite=False,
-                format=format,
+                parsed_formats=parsed,
             )
 
-        if self.path != file_path:
-            old_path = self.path
+        if self.path != file_path and update_sdata_path:
             self.path = file_path
-            logger.info(f"The Zarr backing store has been changed from {old_path} the new file path: {file_path}")
 
         if consolidate_metadata:
             self.write_consolidated_metadata()
@@ -1238,8 +1194,10 @@ class SpatialData:
         element_type: str,
         element_name: str,
         overwrite: bool,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        parsed_formats: dict[str, SpatialDataFormatType] | None = None,
     ) -> None:
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if not isinstance(zarr_container_path, Path):
             raise ValueError(
                 f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
@@ -1249,24 +1207,54 @@ class SpatialData:
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
         )
 
-        root_group, element_type_group, _ = self._get_groups_for_element(
-            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name
+        root_group, element_type_group, element_group = _get_groups_for_element(
+            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name, use_consolidated=False
         )
-        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
+        from spatialdata._io import (
+            write_image,
+            write_labels,
+            write_points,
+            write_shapes,
+            write_table,
+        )
         from spatialdata._io.format import _parse_formats
 
-        parsed = _parse_formats(formats=format)
+        if parsed_formats is None:
+            parsed_formats = _parse_formats(formats=parsed_formats)
 
         if element_type == "images":
-            write_image(image=element, group=element_type_group, name=element_name, format=parsed["raster"])
+            write_image(
+                image=element,
+                group=element_group,
+                name=element_name,
+                element_format=parsed_formats["raster"],
+            )
         elif element_type == "labels":
-            write_labels(labels=element, group=root_group, name=element_name, format=parsed["raster"])
+            write_labels(
+                labels=element,
+                group=root_group,
+                name=element_name,
+                element_format=parsed_formats["raster"],
+            )
         elif element_type == "points":
-            write_points(points=element, group=element_type_group, name=element_name, format=parsed["points"])
+            write_points(
+                points=element,
+                group=element_group,
+                element_format=parsed_formats["points"],
+            )
         elif element_type == "shapes":
-            write_shapes(shapes=element, group=element_type_group, name=element_name, format=parsed["shapes"])
+            write_shapes(
+                shapes=element,
+                group=element_group,
+                element_format=parsed_formats["shapes"],
+            )
         elif element_type == "tables":
-            write_table(table=element, group=element_type_group, name=element_name, format=parsed["tables"])
+            write_table(
+                table=element,
+                group=element_type_group,
+                name=element_name,
+                element_format=parsed_formats["tables"],
+            )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
 
@@ -1274,7 +1262,7 @@ class SpatialData:
         self,
         element_name: str | list[str],
         overwrite: bool = False,
-        format: SpatialDataFormat | list[SpatialDataFormat] | None = None,
+        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1287,7 +1275,7 @@ class SpatialData:
             The name(s) of the element(s) to write.
         overwrite
             If True, overwrite the element if it already exists.
-        format
+        sdata_formats
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
 
@@ -1296,10 +1284,14 @@ class SpatialData:
         If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
         an element, the writing of the remaining elements will not be attempted.
         """
+        from spatialdata._io.format import _parse_formats
+
+        parsed_formats = _parse_formats(formats=sdata_formats)
+
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
-                self.write_element(name, overwrite=overwrite)
+                self.write_element(name, overwrite=overwrite, sdata_formats=sdata_formats)
             return
 
         check_valid_name(element_name)
@@ -1332,8 +1324,11 @@ class SpatialData:
             element_type=element_type,
             element_name=element_name,
             overwrite=overwrite,
-            format=format,
+            parsed_formats=parsed_formats,
         )
+        # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
+        if self.has_consolidated_metadata():
+            self.write_consolidated_metadata()
 
     def delete_element_from_disk(self, element_name: str | list[str]) -> None:
         """
@@ -1368,13 +1363,13 @@ class SpatialData:
         environment (e.g. operating system, local vs network storage, file permissions, ...) and call this function
         appropriately (or implement a tailored solution), to prevent data loss.
         """
+        from spatialdata._io._utils import _backed_elements_contained_in_path
+
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
                 self.delete_element_from_disk(name)
             return
-
-        from spatialdata._io._utils import _backed_elements_contained_in_path
 
         if self.path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
@@ -1414,10 +1409,12 @@ class SpatialData:
                 "more elements in the SpatialData object. Deleting the data would corrupt the SpatialData object."
             )
 
+        from spatialdata._io._utils import _resolve_zarr_store
+
         # delete the element
-        store = parse_url(self.path, mode="r+").store
-        root = zarr.group(store=store)
-        root[element_type].pop(element_name)
+        store = _resolve_zarr_store(self.path)
+        root = zarr.open_group(store=store, mode="r+", use_consolidated=False)
+        del root[element_type][element_name]
         store.close()
 
         if self.has_consolidated_metadata():
@@ -1436,16 +1433,17 @@ class SpatialData:
                 )
 
     def write_consolidated_metadata(self) -> None:
-        store = parse_url(self.path, mode="r+").store
-        # consolidate metadata to more easily support remote reading bug in zarr. In reality, 'zmetadata' is written
-        # instead of '.zmetadata' see discussion https://github.com/zarr-developers/zarr-python/issues/1121
-        zarr.consolidate_metadata(store, metadata_key=".zmetadata")
-        store.close()
+        from spatialdata._io.io_zarr import _write_consolidated_metadata
+
+        _write_consolidated_metadata(self.path)
 
     def has_consolidated_metadata(self) -> bool:
+        from spatialdata._io._utils import _resolve_zarr_store
+
         return_value = False
-        store = parse_url(self.path, mode="r").store
-        if "zmetadata" in store:
+        store = _resolve_zarr_store(self.path)
+        group = zarr.open_group(store, mode="r")
+        if getattr(group.metadata, "consolidated_metadata", None):
             return_value = True
         store.close()
         return return_value
@@ -1453,6 +1451,7 @@ class SpatialData:
     def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
         """Validate if metadata can be written on an element, returns None if it cannot be written."""
         from spatialdata._io._utils import _is_element_self_contained
+        from spatialdata._io.io_zarr import _group_for_element_exists
 
         # check the element exists in the SpatialData object
         element = self.get(element_name)
@@ -1475,8 +1474,10 @@ class SpatialData:
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
         # check if the element exists in the Zarr storage
-        if not self._group_for_element_exists(
-            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+        if not _group_for_element_exists(
+            zarr_path=Path(self.path),
+            element_type=element_type,
+            element_name=element_name,
         ):
             warnings.warn(
                 f"Not saving the metadata to element {element_type}/{element_name} as it is"
@@ -1507,6 +1508,8 @@ class SpatialData:
             The name of the element to write the channel names of. If None, write the channel names of all image
             elements.
         """
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if element_name is not None:
             check_valid_name(element_name)
             if element_name not in self:
@@ -1526,8 +1529,8 @@ class SpatialData:
 
         # Mypy does not understand that path is not None so we have the check in the conditional
         if element_type == "images" and self.path is not None:
-            _, _, element_group = self._get_groups_for_element(
-                zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+            _, _, element_group = _get_groups_for_element(
+                zarr_path=Path(self.path), element_type=element_type, element_name=element_name, use_consolidated=False
             )
 
             from spatialdata._io._utils import overwrite_channel_names
@@ -1545,6 +1548,8 @@ class SpatialData:
         element_name
             The name of the element to write. If None, write the transformations of all elements.
         """
+        from spatialdata._io.io_zarr import _get_groups_for_element
+
         if element_name is not None:
             check_valid_name(element_name)
             if element_name not in self:
@@ -1568,23 +1573,32 @@ class SpatialData:
 
         # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
-        _, _, element_group = self._get_groups_for_element(
-            zarr_path=Path(self.path), element_type=element_type, element_name=element_name
+        _, _, element_group = _get_groups_for_element(
+            zarr_path=Path(self.path),
+            element_type=element_type,
+            element_name=element_name,
+            use_consolidated=False,
         )
         axes = get_axes_names(element)
         if isinstance(element, DataArray | DataTree):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_raster,
             )
+            from spatialdata._io.format import RasterFormats
 
-            overwrite_coordinate_transformations_raster(group=element_group, axes=axes, transformations=transformations)
+            raster_format = RasterFormats[element_group.metadata.attributes["spatialdata_attrs"]["version"]]
+            overwrite_coordinate_transformations_raster(
+                group=element_group, axes=axes, transformations=transformations, raster_format=raster_format
+            )
         elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )
 
             overwrite_coordinate_transformations_non_raster(
-                group=element_group, axes=axes, transformations=transformations
+                group=element_group,
+                axes=axes,
+                transformations=transformations,
             )
         else:
             raise ValueError(f"Unknown element type {type(element)}")
@@ -1611,20 +1625,27 @@ class SpatialData:
         element_type, element_name = element_path.split("/")
         return element_type, element_name
 
-    def write_attrs(self, format: SpatialDataFormat | None = None, zarr_group: zarr.Group | None = None) -> None:
-        from spatialdata._io.format import _parse_formats
+    @_deprecation_alias(format="sdata_format", version="0.7.0")
+    def write_attrs(
+        self,
+        sdata_format: SpatialDataContainerFormatType | None = None,
+        zarr_group: zarr.Group | None = None,
+    ) -> None:
+        from spatialdata._io._utils import _resolve_zarr_store
+        from spatialdata._io.format import CurrentSpatialDataContainerFormat, SpatialDataContainerFormatType
 
-        parsed = _parse_formats(formats=format)
+        sdata_format = sdata_format if sdata_format is not None else CurrentSpatialDataContainerFormat()
+        assert isinstance(sdata_format, SpatialDataContainerFormatType)
 
         store = None
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            store = parse_url(self.path, mode="r+").store
-            zarr_group = zarr.group(store=store, overwrite=False)
+            store = _resolve_zarr_store(self.path)
+            zarr_group = zarr.open_group(store=store, mode="r+")
 
-        version = parsed["SpatialData"].spatialdata_format_version
-        version_specific_attrs = parsed["SpatialData"].attrs_to_dict()
+        version = sdata_format.spatialdata_format_version
+        version_specific_attrs = sdata_format.attrs_to_dict()
         attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
 
         try:
@@ -1640,6 +1661,7 @@ class SpatialData:
         element_name: str | None = None,
         consolidate_metadata: bool | None = None,
         write_attrs: bool = True,
+        sdata_format: SpatialDataContainerFormatType | None = None,
     ) -> None:
         """
         Write the metadata of a single element, or of all elements, to the Zarr store, without rewriting the data.
@@ -1660,6 +1682,11 @@ class SpatialData:
         consolidate_metadata
             If True, consolidate the metadata to more easily support remote reading. By default write the metadata
             only if the metadata was already consolidated.
+        write_attrs
+            If True, write the SpatialData.attrs metadata to the root of the Zarr store.
+        sdata_format
+            The format to use for writing the metadata of the `SpatialData` object. See more details in the
+            documentation of `SpatialData.write()`.
 
         Notes
         -----
@@ -1669,16 +1696,15 @@ class SpatialData:
             check_valid_name(element_name)
             if element_name not in self:
                 raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
+        if write_attrs:
+            self.write_attrs(sdata_format=sdata_format)
 
         self.write_transformations(element_name)
         self.write_channel_names(element_name)
         # TODO: write .uns['spatialdata_attrs'] metadata for AnnData.
         # TODO: write .attrs['spatialdata_attrs'] metadata for DaskDataFrame.
 
-        if write_attrs:
-            self.write_attrs()
-
-        if consolidate_metadata is None and self.has_consolidated_metadata():
+        if self.has_consolidated_metadata():
             consolidate_metadata = True
         if consolidate_metadata:
             self.write_consolidated_metadata()
@@ -1781,62 +1807,23 @@ class SpatialData:
             TableModel().validate(v)
             self._tables[k] = v
 
-    @property
-    def table(self) -> None | AnnData:
-        """
-        Return table with name table from tables if it exists.
-
-        Returns
-        -------
-        The table.
-        """
-        warnings.warn(
-            "Table accessor will be deprecated with SpatialData version 0.1, use sdata.tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # Isinstance will still return table if anndata has 0 rows.
-        if isinstance(self.tables.get("table"), AnnData):
-            return self.tables["table"]
-        return None
-
-    @table.setter
-    def table(self, table: AnnData) -> None:
-        warnings.warn(
-            "Table setter will be deprecated with SpatialData version 0.1, use tables instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        TableModel().validate(table)
-        if self.tables.get("table") is not None:
-            raise ValueError("The table already exists. Use del sdata.tables['table'] to remove it first.")
-        self.tables["table"] = table
-
-    @table.deleter
-    def table(self) -> None:
-        """Delete the table."""
-        warnings.warn(
-            "del sdata.table will be deprecated with SpatialData version 0.1, use del sdata.tables['table'] instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if self.tables.get("table"):
-            del self.tables["table"]
-        else:
-            # More informative than the error in the zarr library.
-            raise KeyError("table with name 'table' not present in the SpatialData object.")
-
     @staticmethod
-    def read(file_path: Path | str, selection: tuple[str] | None = None) -> SpatialData:
+    def read(
+        file_path: str | Path | UPath | zarr.Group,
+        selection: tuple[str] | None = None,
+        reconsolidate_metadata: bool = False,
+    ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
 
         Parameters
         ----------
         file_path
-            The path or URL to the Zarr storage.
+            The path, URL, or zarr.Group to the Zarr storage.
         selection
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
+        reconsolidate_metadata
+            If the consolidated metadata store got corrupted this can lead to errors when trying to read the data.
 
         Returns
         -------
@@ -1844,45 +1831,12 @@ class SpatialData:
         """
         from spatialdata import read_zarr
 
+        if reconsolidate_metadata:
+            from spatialdata._io.io_zarr import _write_consolidated_metadata
+
+            _write_consolidated_metadata(file_path)
+
         return read_zarr(file_path, selection=selection)
-
-    def add_image(
-        self,
-        name: str,
-        image: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = image` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_labels(
-        self,
-        name: str,
-        labels: DataArray | DataTree,
-        storage_options: JSONDict | list[JSONDict] | None = None,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = labels` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_points(
-        self,
-        name: str,
-        points: DaskDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = points` instead."""  # noqa: D401
-        _error_message_add_element()
-
-    def add_shapes(
-        self,
-        name: str,
-        shapes: GeoDataFrame,
-        overwrite: bool = False,
-    ) -> None:
-        """Deprecated. Use `sdata[name] = shapes` instead."""  # noqa: D401
-        _error_message_add_element()
 
     @property
     def images(self) -> Images:
@@ -2031,7 +1985,7 @@ class SpatialData:
                     else:
                         shape_str = (
                             "("
-                            + ", ".join([str(dim) if not isinstance(dim, Delayed) else "<Delayed>" for dim in v.shape])
+                            + ", ".join([(str(dim) if not isinstance(dim, Scalar) else "<Delayed>") for dim in v.shape])
                             + ")"
                         )
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} with shape: {shape_str} {dim_string}"
@@ -2141,14 +2095,14 @@ class SpatialData:
             yield from d.values()
 
     def _gen_elements(
-        self, include_table: bool = False
+        self, include_tables: bool = False
     ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         """
         Generate elements contained in the SpatialData instance.
 
         Parameters
         ----------
-        include_table
+        include_tables
             Whether to also generate table elements.
 
         Returns
@@ -2157,14 +2111,16 @@ class SpatialData:
         itself.
         """
         element_types = ["images", "labels", "points", "shapes"]
-        if include_table:
+        if include_tables:
             element_types.append("tables")
         for element_type in element_types:
             d = getattr(SpatialData, element_type).fget(self)
             for k, v in d.items():
                 yield element_type, k, v
 
-    def gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    def gen_spatial_elements(
+        self,
+    ) -> Generator[tuple[str, str, SpatialElement], None, None]:
         """
         Generate spatial elements within the SpatialData object.
 
@@ -2177,7 +2133,9 @@ class SpatialData:
         """
         return self._gen_elements()
 
-    def gen_elements(self) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    def gen_elements(
+        self,
+    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
         """
         Generate elements within the SpatialData object.
 
@@ -2187,7 +2145,7 @@ class SpatialData:
         -------
         A generator that yields tuples containing the name, description, and element objects themselves.
         """
-        return self._gen_elements(include_table=True)
+        return self._gen_elements(include_tables=True)
 
     def _validate_element_names_are_unique(self) -> None:
         """
@@ -2238,8 +2196,7 @@ class SpatialData:
     @classmethod
     def init_from_elements(
         cls,
-        elements: dict[str, SpatialElement],
-        tables: AnnData | dict[str, AnnData] | None = None,
+        elements: dict[str, SpatialElement | AnnData],
         attrs: Mapping[Any, Any] | None = None,
     ) -> SpatialData:
         """
@@ -2248,9 +2205,7 @@ class SpatialData:
         Parameters
         ----------
         elements
-            A dict of named elements.
-        tables
-            An optional table or dictionary of tables
+            A dict of named elements, e.g. SpatialElements like images and labels and AnnData tables.
         attrs
             Additional attributes to store in the SpatialData object.
 
@@ -2258,7 +2213,7 @@ class SpatialData:
         -------
         The SpatialData object.
         """
-        elements_dict: dict[str, SpatialElement] = {}
+        elements_dict: dict[str, SpatialElement | AnnData] = {}
         for name, element in elements.items():
             model = get_model(element)
             if model in [Image2DModel, Image3DModel]:
@@ -2273,30 +2228,13 @@ class SpatialData:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        # when the "tables" argument is removed, we can remove all this if block
-        if tables is not None:
-            warnings.warn(
-                'The "tables" argument is deprecated and will be removed in a future version. Please '
-                "specifies the tables in the `elements` argument. Until the removal occurs, the `elements` "
-                "variable will be automatically populated with the tables if the `tables` argument is not None.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if "tables" in elements_dict:
-                raise ValueError(
-                    "The tables key is already present in the elements dictionary. Please do not specify "
-                    "the `tables` argument."
-                )
-            elements_dict["tables"] = {}
-            if isinstance(tables, AnnData):
-                elements_dict["tables"]["table"] = tables
-            else:
-                for name, table in tables.items():
-                    elements_dict["tables"][name] = table
         return cls(**elements_dict, attrs=attrs)
 
     def subset(
-        self, element_names: list[str], filter_tables: bool = True, include_orphan_tables: bool = False
+        self,
+        element_names: list[str],
+        filter_tables: bool = True,
+        include_orphan_tables: bool = False,
     ) -> SpatialData:
         """
         Subset the SpatialData object.
@@ -2319,7 +2257,7 @@ class SpatialData:
         """
         elements_dict: dict[str, SpatialElement] = {}
         names_tables_to_keep: set[str] = set()
-        for element_type, element_name, element in self._gen_elements(include_table=True):
+        for element_type, element_name, element in self._gen_elements(include_tables=True):
             if element_name in element_names:
                 if element_type != "tables":
                     elements_dict.setdefault(element_type, {})[element_name] = element
@@ -2334,7 +2272,7 @@ class SpatialData:
         )
         return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
-    def __getitem__(self, item: str) -> SpatialElement:
+    def __getitem__(self, item: str) -> SpatialElement | AnnData:
         """
         Return the element with the given name.
 
@@ -2352,7 +2290,7 @@ class SpatialData:
 
     def __contains__(self, key: str) -> bool:
         element_dict = {
-            element_name: element_value for _, element_name, element_value in self._gen_elements(include_table=True)
+            element_name: element_value for _, element_name, element_value in self._gen_elements(include_tables=True)
         }
         return key in element_dict
 

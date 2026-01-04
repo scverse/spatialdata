@@ -9,17 +9,18 @@ ci:
     skip: []
 repos:
     - repo: https://github.com/rbubley/mirrors-prettier
-      rev: v3.5.1
+      rev: v3.7.4
       hooks:
           - id: prettier
+            exclude: ^.github/workflows/test.yaml
     - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.15.0
+      rev: v1.19.1
       hooks:
           - id: mypy
             additional_dependencies: [numpy, types-requests]
             exclude: tests/|docs/
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.9.6
+      rev: v0.14.10
       hooks:
           - id: ruff
             args: [--fix, --exit-non-zero-on-fix]
