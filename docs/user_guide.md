@@ -70,7 +70,6 @@ Please see [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/
 </details>
 </details>
 
-
 <details open>
 <summary><h2>How can I use SpatialData to analyze my data?</summary>
 
@@ -82,8 +81,7 @@ If you want to see how SpatialData and Squidpy can interact, please have a look 
 
 <details open>
 <summary><h2>How do I align my images?</summary>
-Sometimes, you have multiple images containing information, but they have different pixels size/are rotated/are moved. For instance, you may have a multi-omics dataset with two images, each representing a different modality, but you need to align them within a single object while preserving their respective molecular signals. Here, we explain how you can spatially align(=register) these images. NOTE: SpatialData only allows for affine(=linear) transformations to map images onto each other.  
-
+Sometimes, you have multiple images containing information, but they have different pixels size/are rotated/are moved. For instance, you may have a multi-omics dataset with two images, each representing a different modality, but you need to align them within a single object while preserving their respective molecular signals. Here, we explain how you can spatially align(=register) these images. NOTE: SpatialData only allows for affine(=linear) transformations to map images onto each other.
 
 Do you know how to align your images (i.e. Do you have a transformation matrix)?
 
@@ -100,8 +98,7 @@ Yes → Check out our [Transformation/coordinate system tutorial](https://spatia
 <details open>
 <summary> <h3> How can I spatially annotate regions in my data? </summary>
     
-This is possible within the SpatialData framework, making use of napari, like explained [in this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html). 
-
+This is possible within the SpatialData framework, making use of napari, like explained [in this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
 
 </details>
 <details open>
@@ -149,7 +146,6 @@ Please see the previous section ('How do I annotate my data?') and then specific
 You will need to perform a spatial query, which filters the data based on spatial coordinates. Please see [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/spatial_query.html).
     
 </details>
-
 
 </details>
     
