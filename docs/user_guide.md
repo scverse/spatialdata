@@ -119,7 +119,7 @@ For more details, including information on how to add annotations for these regi
 <summary> <h3> I have cells in my dataset, how do I annotate them? (usage of AnnData)</summary>
 
 One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).  
-If you want more technical details on how to create a table from scratch to annotate your shapes/labels/points, you can have a look [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables). A less technical tutorial is coming soon!
+If you want more technical details on how to create a table from scratch to annotate your shapes/labels/points, you can have a look [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
 
 </details>
     
@@ -200,16 +200,17 @@ You want to learn how to combine SpatialData and deep learning? We got you cover
 
 If you want to create a labels layer from your shapes (rasterize), a shapes layer from you labels (vectorize, or convert your spot-based data to a labels layer [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html) might help you out). This is mainly useful to unlock specific functionalities, or speed up calculations.
 
-Deep diving into these tutorials is at your own risk: [Some technical notes](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics) and [on translations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
+Finally here is a more [advanced technical tutorial on transformations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
 
 </details>
     
 <details open>
     
-<summary> <h2> I am sold, how can I contribute to SpatialData?
+<summary> <h2> I am sold, how can I get in touch and contribute to SpatialData?
 
 </summary>
 
-[Here](https://spatialdata.scverse.org/en/stable/contributing.html) is a guide that explains how to contribute to SpatialData as a developer.
+[Here](https://spatialdata.scverse.org/en/stable/contributing.html) is a guide that explains how to contribute to SpatialData as a developer. If you would like to contribute to satellite projects, such as `spatialdata-io`, `spatialdata-plot` etc, please consult the contribution guides also in those repositories.
+For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. [In the README](https://github.com/scverse/spatialdata/#contact) you can find multiple ways for reaching out.
 
 </details>
