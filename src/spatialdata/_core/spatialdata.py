@@ -1110,6 +1110,7 @@ class SpatialData:
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1154,11 +1155,17 @@ class SpatialData:
             unspecified, the element formats will be set to the latest element format compatible with the specified
             SpatialData container format. All the formats and relationships between them are defined in
             `spatialdata._io.format.py`.
+        compressor
+            A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
+            compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
+            supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
+            ordered for more efficient compression.
         """
-        from spatialdata._io._utils import _resolve_zarr_store
+        from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
 
         parsed = _parse_formats(sdata_formats)
+        _validate_compressor_args(compressor)
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1179,6 +1186,7 @@ class SpatialData:
                 element_name=element_name,
                 overwrite=False,
                 parsed_formats=parsed,
+                compressor=compressor,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1195,6 +1203,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1228,6 +1237,7 @@ class SpatialData:
                 group=element_group,
                 name=element_name,
                 element_format=parsed_formats["raster"],
+                compressor=compressor,
             )
         elif element_type == "labels":
             write_labels(
@@ -1235,6 +1245,7 @@ class SpatialData:
                 group=root_group,
                 name=element_name,
                 element_format=parsed_formats["raster"],
+                compressor=compressor,
             )
         elif element_type == "points":
             write_points(
@@ -1263,6 +1274,7 @@ class SpatialData:
         element_name: str | list[str],
         overwrite: bool = False,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1278,6 +1290,11 @@ class SpatialData:
         sdata_formats
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
+         compressor
+            A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
+            compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
+            supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
+            ordered for more efficient compression.
 
         Notes
         -----
@@ -1291,7 +1308,7 @@ class SpatialData:
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
-                self.write_element(name, overwrite=overwrite, sdata_formats=sdata_formats)
+                self.write_element(name, overwrite=overwrite, sdata_formats=sdata_formats, compressor=compressor)
             return
 
         check_valid_name(element_name)
@@ -1325,6 +1342,7 @@ class SpatialData:
             element_name=element_name,
             overwrite=overwrite,
             parsed_formats=parsed_formats,
+            compressor=compressor,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():

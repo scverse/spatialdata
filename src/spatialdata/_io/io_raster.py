@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import dask.array as da
 import numpy as np
@@ -153,6 +153,7 @@ def _write_raster(
     name: str,
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -172,6 +173,8 @@ def _write_raster(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
+    compressor
+        Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     label_metadata
         Label metadata which can only be defined when writing 'labels'.
     metadata
@@ -201,6 +204,7 @@ def _write_raster(
             raster_data,
             raster_format,
             storage_options,
+            compressor=compressor,
             **metadata,
         )
     elif isinstance(raster_data, DataTree):
@@ -211,6 +215,7 @@ def _write_raster(
             raster_data,
             raster_format,
             storage_options,
+            compressor=compressor,
             **metadata,
         )
     else:
@@ -225,13 +230,64 @@ def _write_raster(
     group.attrs[ATTRS_KEY] = attrs
 
 
+def _apply_compression(
+    storage_options: JSONDict | list[JSONDict],
+    compressor: dict[Literal["lz4", "zstd"], int] | None,
+    zarr_format: Literal[2, 3] = 3,
+) -> JSONDict | list[JSONDict]:
+    """Apply compression settings to storage options.
+
+    Parameters
+    ----------
+    storage_options
+        Storage options for zarr arrays
+    compressor
+        Compression settings as a dictionary with a single key-value pair
+    zarr_format
+        The zarr format version (2 or 3)
+
+    Returns
+    -------
+    Updated storage options with compression settings
+    """
+    # For zarr disk format v2, use numcodecs.Blosc
+    # For zarr disk format v3, use zarr.codecs.Blosc
+    from numcodecs import Blosc as BloscV2
+    from zarr.codecs import Blosc as BloscV3
+
+    if not compressor:
+        return storage_options
+
+    ((compression, compression_level),) = compressor.items()
+
+    assert BloscV2.SHUFFLE == 1
+    blosc_v2 = BloscV2(cname=compression, clevel=compression_level, shuffle=1)
+    blosc_v3 = BloscV3(cname=compression, clevel=compression_level, shuffle=1)
+
+    def _update_dict(d: dict[str, Any]) -> None:
+        if zarr_format == 2:
+            d["compressor"] = blosc_v2
+        elif zarr_format == 3:
+            d["zarr_array_kwargs"] = {"compressors": [blosc_v3]}
+
+    if isinstance(storage_options, dict):
+        _update_dict(d=storage_options)
+    else:
+        assert isinstance(storage_options, list)
+        for option in storage_options:
+            _update_dict(d=option)
+
+    return storage_options
+
+
 def _write_raster_dataarray(
     raster_type: Literal["image", "labels"],
     group: zarr.Group,
     element_name: str,
     raster_data: DataArray,
     raster_format: RasterFormatType,
-    storage_options: JSONDict | list[JSONDict] | None = None,
+    storage_options: JSONDict | list[JSONDict] | None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     """Write raster data of type DataArray to disk.
@@ -250,6 +306,8 @@ def _write_raster_dataarray(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
+    compressor
+        Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     metadata
         Additional metadata for the raster element
     """
@@ -262,11 +320,19 @@ def _write_raster_dataarray(
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     chunks = raster_data.chunks
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
+
+    # TODO: improve and test the behavior around storage option after merge <-------
     if storage_options is not None:
         if "chunks" not in storage_options and isinstance(storage_options, dict):
             storage_options["chunks"] = chunks
     else:
         storage_options = {"chunks": chunks}
+
+    # Apply compression if specified
+    storage_options = _apply_compression(
+        storage_options, compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
+    )
+
     # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
     # We need  this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
@@ -297,7 +363,8 @@ def _write_raster_datatree(
     element_name: str,
     raster_data: DataTree,
     raster_format: RasterFormatType,
-    storage_options: JSONDict | list[JSONDict] | None = None,
+    storage_options: JSONDict | list[JSONDict] | None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     """Write raster data of type DataTree to disk.
@@ -316,6 +383,8 @@ def _write_raster_datatree(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
+    compressor
+        Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     metadata
         Additional metadata for the raster element
     """
@@ -331,10 +400,17 @@ def _write_raster_datatree(
     transformations = _get_transformations_xarray(xdata)
     if transformations is None:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
+
     chunks = get_pyramid_levels(raster_data, "chunks")
+    # TODO: improve and test the behavior around storage option after merge <-------
+    if storage_options is None:
+        storage_options = [{"chunks": chunk} for chunk in chunks]
+    else:
+        storage_options = [{"chunks": chunk} for chunk in chunks]
+    # Apply compression if specified
+    storage_options = _apply_compression(storage_options, compressor, zarr_format=raster_format.zarr_format)
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    storage_options = [{"chunks": chunk} for chunk in chunks]
     ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
         pyramid=data,
@@ -366,6 +442,7 @@ def write_image(
     name: str,
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     _write_raster(
@@ -375,6 +452,7 @@ def write_image(
         name=name,
         raster_format=element_format,
         storage_options=storage_options,
+        compressor=compressor,
         **metadata,
     )
 
@@ -386,6 +464,7 @@ def write_labels(
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
+    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: JSONDict,
 ) -> None:
     _write_raster(
@@ -395,6 +474,7 @@ def write_labels(
         name=name,
         raster_format=element_format,
         storage_options=storage_options,
+        compressor=compressor,
         label_metadata=label_metadata,
         **metadata,
     )
