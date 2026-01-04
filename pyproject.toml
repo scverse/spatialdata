@@ -103,7 +103,7 @@ addopts = [
 ]
 # These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "slow: marks tests as slow to run",
     "gpu: run test on GPU using CuPY.",
     "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
 ]

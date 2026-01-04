@@ -64,6 +64,12 @@ pytest
 
 in the root of the repository. Continuous integration will automatically run the tests on all pull requests.
 
+Some tests are marked as `slow` and are skipped by default on the CI. To run only the fast tests, you can run:
+
+```bash
+pytest -m "not slow"
+```
+
 ### Continuous integration
 
 Continuous integration will automatically run the tests on all pull requests and test against the minimum and maximum supported Python version.
