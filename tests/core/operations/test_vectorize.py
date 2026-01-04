@@ -21,6 +21,7 @@ sdata = blobs()
 
 
 # conversion from labels
+@pytest.mark.slow
 @pytest.mark.parametrize("is_multiscale", [False, True])
 def test_labels_2d_to_circles(is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"

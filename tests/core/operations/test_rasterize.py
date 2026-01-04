@@ -157,6 +157,7 @@ def test_rasterize_labels_value_key_specified():
     assert values == {True, False}, values
 
 
+@pytest.mark.slow
 def test_rasterize_points_shapes_with_string_index(points, shapes):
     sdata = SpatialData.init_from_elements({"points_0": points["points_0"], "circles": shapes["circles"]})
 
@@ -213,6 +214,7 @@ def _rasterize_shapes_prepare_data() -> tuple[SpatialData, GeoDataFrame, str]:
     return SpatialData.init_from_elements({element_name: gdf[["geometry"]], "table": adata}), gdf, element_name
 
 
+@pytest.mark.slow
 def test_rasterize_shapes():
     sdata, gdf, element_name = _rasterize_shapes_prepare_data()
 
@@ -322,6 +324,7 @@ def test_rasterize_shapes():
     assert res[10, 37] == 2
 
 
+@pytest.mark.slow
 def test_rasterize_points():
     data = {
         "x": [0, 1, 0, 1, 2, 3, 3, 5.1],

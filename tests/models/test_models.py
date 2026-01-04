@@ -832,6 +832,7 @@ def test_warning_on_large_chunks():
         assert "Detected chunks larger than:" in str(w[-1].message)
 
 
+@pytest.mark.slow
 def test_categories_on_partitioned_dataframe(sdata_blobs: SpatialData):
     df = sdata_blobs["blobs_points"].compute()
     df["genes"] = RNG.choice([f"gene_{i}" for i in range(200)], len(df))

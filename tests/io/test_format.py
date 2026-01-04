@@ -217,6 +217,7 @@ class TestFormatConversions:
             table_read_v2 = read_zarr(f2)
             assert_spatial_data_objects_are_identical(table_multiple_annotations, table_read_v2)
 
+    @pytest.mark.slow
     def test_container_v1_to_v2(self, full_sdata):
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"

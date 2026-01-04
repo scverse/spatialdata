@@ -230,6 +230,7 @@ class TestReadWrite:
         del sdata[new_name]
         sdata.delete_element_from_disk(new_name)
 
+    @pytest.mark.slow
     @pytest.mark.parametrize("dask_backed", [True, False])
     @pytest.mark.parametrize("workaround", [1, 2])
     def test_incremental_io_on_disk(
@@ -546,6 +547,7 @@ def test_bug_rechunking_after_queried_raster():
         queried.write(f)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained

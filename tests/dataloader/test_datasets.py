@@ -6,6 +6,7 @@ from spatialdata.datasets import blobs_annotating_element
 
 
 class TestImageTilesDataset:
+    @pytest.mark.slow
     @pytest.mark.parametrize("image_element", ["blobs_image", "blobs_multiscale_image"])
     @pytest.mark.parametrize(
         "regions_element",
@@ -26,6 +27,7 @@ class TestImageTilesDataset:
             return_annotations="instance_id" if table else None,
         )
 
+    @pytest.mark.slow
     @pytest.mark.parametrize(
         "regions_element",
         ["blobs_circles", "blobs_polygons", "blobs_multipolygons", "blobs_labels", "blobs_multiscale_labels"],
