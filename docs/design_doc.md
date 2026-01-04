@@ -307,10 +307,10 @@ Since elements are allowed to have only (a subset of the) c, x, y, z axes and mu
 
 In details:
 
-- we don't need to specify the intrinsic coordinate systems, these are inferred from the element schema (e.g., for an `axes` array with two axes named "y" and "x", the intrinsic coordinate system would be named "yx")
+- we don't need to specify the intrinsic coordinate systems, these are inferred from the element schema 
 - each element MAY have a transformation mapping them to one or more extrinsic coordinate systems
 
-Each coordinate system
+Each extrinsic coordinate system
 
 - MUST have a name
 - MAY specify its axes
