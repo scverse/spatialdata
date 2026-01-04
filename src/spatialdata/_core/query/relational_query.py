@@ -968,6 +968,7 @@ def get_values(
             assert obs[region_key].nunique() == 1
             assert obs[instance_key].nunique() == len(matched_table)
         else:
+            assert isinstance(element, AnnData)
             matched_table = element
             instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
             region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
