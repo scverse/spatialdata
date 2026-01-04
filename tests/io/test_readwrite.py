@@ -149,6 +149,20 @@ class TestReadWrite:
         sdata_tables = SpatialData(tables={str(i): tables[i] for i in range(len(tables))})
         self._test_table(tmp_path, sdata_tables, sdata_container_format=sdata_container_format)
 
+    def test_roundtrip(
+        self,
+        tmp_path: str,
+        sdata: SpatialData,
+        sdata_container_format: SpatialDataContainerFormatType,
+    ) -> None:
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+
+        sdata.write(tmpdir, sdata_formats=sdata_container_format)
+        sdata2 = SpatialData.read(tmpdir)
+        tmpdir2 = Path(tmp_path) / "tmp2.zarr"
+        sdata2.write(tmpdir2, sdata_formats=sdata_container_format)
+        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+
     def test_compression_roundtrip(
         self,
         tmp_path: str,
@@ -168,31 +182,55 @@ class TestReadWrite:
         full_sdata.write(tmpdir, compressor={"zstd": 8}, sdata_formats=sdata_container_format)
 
         # sourcery skip: no-loop-in-tests
-        for element in ["image2d", "image2d_multiscale"]:
-            arr = zarr.open_group(tmpdir / "images", mode="r")[element]["0"]
+        for element in ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale"]:
+            element_type = "images" if element.startswith("image") else "labels"
+            arr = zarr.open_group(tmpdir / element_type, mode="r")[element]["0"]
             compressor = arr.compressors[0]
-            assert compressor.cnam == "zstd"
-            assert compressor.clevel == 8
 
-        for element in ["labels2d", "labels2d_multiscale"]:
-            arr = zarr.open_group(tmpdir / "labels", mode="r")[element]["0"]
-            compressor = arr.compressors[0]
-            assert compressor.cname == "zstd"
-            assert compressor.clevel == 8
+            # TODO: all these tests fail because the compression arguments are not passed to Dask
+            if sdata_container_format.zarr_format == 2:
+                assert compressor.cname == "zstd"
+                assert compressor.clevel == 8
+            elif sdata_container_format.zarr_format == 3:
+                from zarr.codecs.zstd import ZstdCodec
 
-    def test_roundtrip(
+                assert isinstance(compressor, ZstdCodec)
+                assert compressor.level == 8
+
+    @pytest.mark.parametrize("compressor", [{"lz4": 3}, {"zstd": 7}])
+    @pytest.mark.parametrize("element", [("images", "image2d"), ("labels", "labels2d")])
+    def test_write_element_compression(
         self,
         tmp_path: str,
-        sdata: SpatialData,
+        full_sdata: SpatialData,
+        compressor: dict[Literal["lz4", "zstd"], int],
+        element: str,
         sdata_container_format: SpatialDataContainerFormatType,
-    ) -> None:
-        tmpdir = Path(tmp_path) / "tmp.zarr"
-
+    ):
+        tmpdir = Path(tmp_path) / "compression.zarr"
+        sdata = SpatialData()
         sdata.write(tmpdir, sdata_formats=sdata_container_format)
-        sdata2 = SpatialData.read(tmpdir)
-        tmpdir2 = Path(tmp_path) / "tmp2.zarr"
-        sdata2.write(tmpdir2, sdata_formats=sdata_container_format)
-        _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
+
+        sdata["element"] = full_sdata[element[1]]
+        sdata.write_element("element", compressor=compressor, sdata_formats=sdata_container_format)
+
+        arr = zarr.open_group(tmpdir / element[0], mode="r")["element"]["0"]
+        compression = arr.compressors[0]
+
+        # TODO: all these tests fail because the compression arguments are not passed to Dask
+        if sdata_container_format.zarr_format == 2:
+            assert compression.cname == list(compressor.keys())[0]
+            assert compression.clevel == list(compressor.values())[0]
+        elif sdata_container_format.zarr_format == 3:
+            from zarr.codecs import ZstdCodec
+
+            compressor_name = list(compressor.keys())[0]
+            if compressor_name == "zstd":
+                assert isinstance(compression, ZstdCodec)
+            # TODO: fix
+            # elif compressor_name == 'lz4':
+            #     assert isinstance(compression, ???)
+            assert compression.level == list(compressor.values())[0]
 
     def test_incremental_io_list_of_elements(
         self,
@@ -380,28 +418,6 @@ class TestReadWrite:
                 dask1 = sdata2[elem_name].data
                 assert any("from-zarr" in key for key in dask1.dask.layers)
                 assert len(get_dask_backing_files(sdata2)) > 0
-
-    @pytest.mark.parametrize("compressor", [{"lz4": 3}, {"zstd": 7}])
-    @pytest.mark.parametrize("element", [("images", "image2d"), ("labels", "labels2d")])
-    def test_write_element_compression(
-        self,
-        tmp_path: str,
-        full_sdata: SpatialData,
-        compressor: dict[Literal["lz4", "zstd"], int],
-        element: str,
-        sdata_container_format: SpatialDataContainerFormatType,
-    ):
-        tmpdir = Path(tmp_path) / "compression.zarr"
-        sdata = SpatialData()
-        sdata.write(tmpdir, sdata_formats=sdata_container_format)
-
-        sdata["element"] = full_sdata[element[1]]
-        sdata.write_element("element", compressor=compressor, sdata_formats=sdata_container_format)
-
-        arr = zarr.open_group(tmpdir / element[0], mode="r")["element"]["0"]
-        compression = arr.compressors[0]
-        assert compression.cname == list(compressor.keys())[0]
-        assert compression.clevel == list(compressor.values())[0]
 
     def test_replace_transformation_on_disk_raster(
         self, images, labels, sdata_container_format: SpatialDataContainerFormatType

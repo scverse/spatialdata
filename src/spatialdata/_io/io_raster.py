@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import dask.array as da
 import numpy as np
@@ -231,7 +231,9 @@ def _write_raster(
 
 
 def _apply_compression(
-    storage_options: JSONDict | list[JSONDict], compressor: dict[Literal["lz4", "zstd"], int] | None
+    storage_options: JSONDict | list[JSONDict],
+    compressor: dict[Literal["lz4", "zstd"], int] | None,
+    zarr_format: Literal[2, 3] = 3,
 ) -> JSONDict | list[JSONDict]:
     """Apply compression settings to storage options.
 
@@ -241,23 +243,39 @@ def _apply_compression(
         Storage options for zarr arrays
     compressor
         Compression settings as a dictionary with a single key-value pair
+    zarr_format
+        The zarr format version (2 or 3)
 
     Returns
     -------
     Updated storage options with compression settings
     """
-    from zarr.codecs import Blosc
+    # For zarr disk format v2, use numcodecs.Blosc
+    # For zarr disk format v3, use zarr.codecs.Blosc
+    from numcodecs import Blosc as BloscV2
+    from zarr.codecs import Blosc as BloscV3
 
     if not compressor:
         return storage_options
 
     ((compression, compression_level),) = compressor.items()
 
+    assert BloscV2.SHUFFLE == 1
+    blosc_v2 = BloscV2(cname=compression, clevel=compression_level, shuffle=1)
+    blosc_v3 = BloscV3(cname=compression, clevel=compression_level, shuffle=1)
+
+    def _update_dict(d: dict[str, Any]) -> None:
+        if zarr_format == 2:
+            d["compressor"] = blosc_v2
+        elif zarr_format == 3:
+            d["zarr_array_kwargs"] = {"compressors": [blosc_v3]}
+
     if isinstance(storage_options, dict):
-        storage_options["compressor"] = Blosc(cname=compression, clevel=compression_level, shuffle=1)
-    elif isinstance(storage_options, list):
+        _update_dict(d=storage_options)
+    else:
+        assert isinstance(storage_options, list)
         for option in storage_options:
-            option["compressor"] = Blosc(cname=compression, clevel=compression_level, shuffle=1)
+            _update_dict(d=option)
 
     return storage_options
 
@@ -311,7 +329,9 @@ def _write_raster_dataarray(
         storage_options = {"chunks": chunks}
 
     # Apply compression if specified
-    storage_options = _apply_compression(storage_options, compressor)
+    storage_options = _apply_compression(
+        storage_options, compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
+    )
 
     # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
     # We need  this because the argument of write_image_ngff is called image while the argument of
@@ -388,7 +408,7 @@ def _write_raster_datatree(
     else:
         storage_options = [{"chunks": chunk} for chunk in chunks]
     # Apply compression if specified
-    storage_options = _apply_compression(storage_options, compressor)
+    storage_options = _apply_compression(storage_options, compressor, zarr_format=raster_format.zarr_format)
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     ome_zarr_format = get_ome_zarr_format(raster_format)
