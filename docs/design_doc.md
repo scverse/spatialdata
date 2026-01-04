@@ -310,7 +310,7 @@ In details:
 - we don't need to specify the intrinsic coordinate systems, these are inferred from the element schema
 - each element MAY have a transformation mapping them to one or more extrinsic coordinate systems
 
-Each coordinate system
+Each extrinsic coordinate system
 
 - MUST have a name
 - MAY specify its axes
