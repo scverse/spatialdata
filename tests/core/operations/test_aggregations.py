@@ -287,7 +287,6 @@ def test_aggregate_shapes_by_shapes(
             new_var = pd.concat((sdata.tables["table"].var, pd.DataFrame(index=["another_numerical_in_var"])))
             new_x = np.concatenate((sdata.tables["table"].X, np.ones_like(sdata.tables["table"].X[:, :1])), axis=1)
             new_table = AnnData(X=new_x, obs=sdata.tables["table"].obs, var=new_var, uns=sdata.tables["table"].uns)
-            del sdata.tables["table"]
             sdata.tables["table"] = new_table
 
         result_adata = aggregate(
@@ -500,7 +499,6 @@ def test_aggregate_considering_fractions_multiple_values(
     new_var = pd.concat((sdata.tables["table"].var, pd.DataFrame(index=["another_numerical_in_var"])))
     new_x = np.concatenate((sdata.tables["table"].X, np.ones_like(sdata.tables["table"].X[:, :1])), axis=1)
     new_table = AnnData(X=new_x, obs=sdata.tables["table"].obs, var=new_var, uns=sdata.tables["table"].uns)
-    del sdata.tables["table"]
     sdata.tables["table"] = new_table
     out = aggregate(
         values_sdata=sdata,

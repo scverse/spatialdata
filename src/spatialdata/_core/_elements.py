@@ -1,15 +1,13 @@
 """SpatialData elements."""
 
-from __future__ import annotations
-
 from collections import UserDict
 from collections.abc import Iterable, KeysView, ValuesView
-from typing import Any
-from warnings import warn
+from typing import TypeVar
 
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from xarray import DataArray, DataTree
 
 from spatialdata._core.validation import check_key_is_case_insensitively_unique, check_valid_name
 from spatialdata._types import Raster_T
@@ -25,8 +23,10 @@ from spatialdata.models import (
     get_model,
 )
 
+T = TypeVar("T")
 
-class Elements(UserDict[str, Any]):
+
+class Elements(UserDict[str, T]):
     def __init__(self, shared_keys: set[str | None]) -> None:
         self._shared_keys = shared_keys
         super().__init__()
@@ -40,16 +40,14 @@ class Elements(UserDict[str, Any]):
     @staticmethod
     def _check_key(key: str, element_keys: Iterable[str], shared_keys: set[str | None]) -> None:
         check_valid_name(key)
-        if key in element_keys:
-            warn(f"Key `{key}` already exists. Overwriting it in-memory.", UserWarning, stacklevel=2)
-        else:
+        if key not in element_keys:
             try:
                 check_key_is_case_insensitively_unique(key, shared_keys)
             except ValueError as e:
                 # Validation raises ValueError, but inappropriate mapping key must raise KeyError.
                 raise KeyError(*e.args) from e
 
-    def __setitem__(self, key: str, value: Any) -> None:
+    def __setitem__(self, key: str, value: T) -> None:
         self._add_shared_key(key)
         super().__setitem__(key, value)
 
@@ -61,12 +59,12 @@ class Elements(UserDict[str, Any]):
         """Return the keys of the Elements."""
         return self.data.keys()
 
-    def values(self) -> ValuesView[Any]:
+    def values(self) -> ValuesView[T]:
         """Return the values of the Elements."""
         return self.data.values()
 
 
-class Images(Elements):
+class Images(Elements[DataArray | DataTree]):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
@@ -83,7 +81,7 @@ class Images(Elements):
             NotImplementedError("TODO: implement for ndim > 4.")
 
 
-class Labels(Elements):
+class Labels(Elements[DataArray | DataTree]):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
@@ -100,7 +98,7 @@ class Labels(Elements):
             NotImplementedError("TODO: implement for ndim > 3.")
 
 
-class Shapes(Elements):
+class Shapes(Elements[GeoDataFrame]):
     def __setitem__(self, key: str, value: GeoDataFrame) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
@@ -110,7 +108,7 @@ class Shapes(Elements):
         super().__setitem__(key, value)
 
 
-class Points(Elements):
+class Points(Elements[DaskDataFrame]):
     def __setitem__(self, key: str, value: DaskDataFrame) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
@@ -120,7 +118,7 @@ class Points(Elements):
         super().__setitem__(key, value)
 
 
-class Tables(Elements):
+class Tables(Elements[AnnData]):
     def __setitem__(self, key: str, value: AnnData) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)

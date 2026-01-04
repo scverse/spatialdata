@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 from xarray import DataArray, DataTree
@@ -10,5 +10,5 @@ from numpy.typing import DTypeLike, NDArray
 ArrayLike = NDArray[np.floating[Any]]
 IntArrayLike = NDArray[np.integer[Any]]
 
-Raster_T = DataArray | DataTree
+Raster_T: TypeAlias = DataArray | DataTree
 ColorLike = tuple[float, ...] | str

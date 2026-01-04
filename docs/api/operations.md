@@ -29,4 +29,6 @@ Operations on `SpatialData` objects.
 .. autofunction:: are_extents_equal
 .. autofunction:: deepcopy
 .. autofunction:: get_pyramid_levels
+.. autofunction:: sanitize_name
+.. autofunction:: sanitize_table
 ```

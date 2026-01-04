@@ -9,6 +9,11 @@
 [![DOI](https://zenodo.org/badge/487366481.svg)](https://zenodo.org/badge/latestdoi/487366481)
 [![Downloads](https://static.pepy.tech/badge/spatialdata)](https://pepy.tech/project/spatialdata)
 [![Release](https://github.com/scverse/spatialdata/actions/workflows/release.yaml/badge.svg?event=release)](https://github.com/scverse/spatialdata/actions/workflows/release.yaml)
+[![Documentation][badge-pypi]][link-pypi]
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/spatialdata/badges/version.svg)](https://anaconda.org/conda-forge/spatialdata)
+
+[badge-pypi]: https://badge.fury.io/py/spatialdata.svg
+[link-pypi]: https://pypi.org/project/spatialdata/
 
 SpatialData is a data framework that comprises a FAIR storage format and a collection of python libraries for performant access, alignment, and processing of uni- and multi-modal spatial omics datasets. This repository contains the core spatialdata library. See the links below to learn more about other packages in the SpatialData ecosystem.
 
@@ -25,8 +30,8 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
-    <img height="60px" 
-         src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png" 
+    <img height="60px"
+         src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
          align="center">
   </a>
 </div>
@@ -73,7 +78,7 @@ To get involved in the discussion, or if you need help to get started, you are w
 - <ins>Chat</ins> via [`scverse` Zulip](https://scverse.zulipchat.com/#narrow/stream/315824-spatial) (public or 1 to 1).
 - <ins>Forum post</ins> in the [scverse discourse forum](https://discourse.scverse.org/).
 - <ins>Bug report/feature request</ins> via the [GitHub issue tracker][issue-tracker].
-- <ins>Zoom call</ins> as part of the SpatialData Community Meetings, held every 2 weeks on Thursday, [schedule here](https://hackmd.io/enWU826vRai-JYaL7TZaSw).
+- <ins>Zoom call</ins> as part of the SpatialData Community Meetings, held every 2 weeks on Thursday, [schedule here](https://scverse.zulipchat.com/#narrow/channel/315824-spatial/topic/spatialdata.20meetings/near/540899686) **<--- new link!**.
 
 Finally, especially relevant for for developers that are building a library upon `spatialdata`, please follow this channel for:
 
@@ -87,11 +92,10 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 
 [scverse-discourse]: https://discourse.scverse.org/
 [issue-tracker]: https://github.com/scverse/spatialdata/issues
-[changelog]: https://spatialdata.readthedocs.io/latest/changelog.html
-[design doc]: https://scverse-spatialdata.readthedocs.io/en/latest/design_doc.html
-[link-docs]: https://spatialdata.scverse.org/en/latest/
-[link-api]: https://spatialdata.scverse.org/en/latest/api.html
-[link-design-doc]: https://spatialdata.scverse.org/en/latest/design_doc.html
-[link-notebooks]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
+[design doc]: https://scverse-spatialdata.readthedocs.io/en/stable/design_doc.html
+[link-docs]: https://spatialdata.scverse.org/en/stable/
+[link-api]: https://spatialdata.scverse.org/en/stable/api.html
+[link-design-doc]: https://spatialdata.scverse.org/en/stable/design_doc.html
+[link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml

@@ -15,7 +15,7 @@ maintainers = [
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Source = "https://github.com/scverse/spatialdata.git"
 urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.10, <3.13" # include 3.13 once multiscale-spatial-image conflicts are resolved
+requires-python = ">=3.11"
 dynamic= [
   "version" # allow version to be set by git tags
 ]
@@ -25,33 +25,36 @@ dependencies = [
     "anndata>=0.9.1",
     "click",
     "dask-image",
-    "dask>=2024.4.1,<=2024.11.2",
-    "fsspec",
+    "dask>=2025.2.0",
+    "datashader",
+    "fsspec[s3,http]",
     "geopandas>=0.14",
-    "multiscale_spatial_image>=2.0.2",
+    "multiscale_spatial_image==2.0.3",
     "networkx",
     "numba>=0.55.0",
     "numpy",
-    "ome_zarr>=0.8.4",
+    "ome_zarr>=0.12.2",
     "pandas",
     "pooch",
     "pyarrow",
     "rich",
     "setuptools",
     "shapely>=2.0.1",
-    "spatial_image>=1.1.0",
+    "spatial_image>=1.2.3",
     "scikit-image",
     "scipy",
     "typing_extensions>=4.8.0",
+    "universal_pathlib>=0.2.6",
     "xarray>=2024.10.0",
     "xarray-schema",
     "xarray-spatial>=0.3.5",
-    "zarr<3",
+    "zarr>=3.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "bump2version",
+    "sentry-prevent-cli",
 ]
 test = [
     "pytest",
@@ -96,7 +99,13 @@ xfail_strict = true
 addopts = [
 #    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name
-    "-s"  # print output from tests
+    "-s",  # print output from tests
+]
+# These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu: run test on GPU using CuPY.",
+    "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
 ]
 # info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest
 filterwarnings = [
@@ -130,7 +139,7 @@ exclude = [
 
 ]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 ignore = [
