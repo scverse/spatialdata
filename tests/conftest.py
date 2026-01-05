@@ -1,8 +1,3 @@
-from __future__ import annotations
-
-import dask
-
-dask.config.set({"dataframe.query-planning": False})
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -66,12 +61,16 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region="labels2d")})
+    return SpatialData(tables={"table": _get_table(region="labels2d")}, labels=_get_labels())
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
+    return SpatialData(
+        tables={"table": _get_table(region=["labels2d", "poly"])},
+        labels=_get_labels(),
+        shapes=_get_shapes(),
+    )
 
 
 @pytest.fixture()
@@ -93,31 +92,20 @@ def full_sdata() -> SpatialData:
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        tables=_get_tables(region="labels2d"),
+        tables=_get_tables(region="labels2d", region_key="region", instance_key="instance_id"),
     )
-
-
-# @pytest.fixture()
-# def empty_points() -> SpatialData:
-#     geo_df = GeoDataFrame(
-#         geometry=[],
-#     )
-#     from spatialdata import NgffIdentity
-#     _set_transformations(geo_df, NgffIdentity())
-#
-#     return SpatialData(points={"empty": geo_df})
-
-
-# @pytest.fixture()
-# def empty_table() -> SpatialData:
-#     adata = AnnData(shape=(0, 0), obs=pd.DataFrame(columns="region"), var=pd.DataFrame())
-#     adata = TableModel.parse(adata=adata)
-#     return SpatialData(table=adata)
 
 
 @pytest.fixture(
     # params=["labels"]
-    params=["full", "empty"] + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
+    params=["full", "empty"]
+    + [
+        "images",
+        "labels",
+        "points",
+        "table_single_annotation",
+        "table_multiple_annotations",
+    ]
     # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
 def sdata(request) -> SpatialData:
@@ -278,7 +266,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_tables(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> dict[str, AnnData]:
@@ -286,11 +274,18 @@ def _get_tables(
 
 
 def _get_table(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> AnnData:
-    adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    adata = AnnData(
+        RNG.normal(size=(100, 10)),
+        obs=pd.DataFrame(
+            RNG.normal(size=(100, 3)),
+            columns=["a", "b", "c"],
+            index=[f"{i}" for i in range(100)],
+        ),
+    )
     if not all(var for var in (region, region_key, instance_key)):
         return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
@@ -298,6 +293,7 @@ def _get_table(
         adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
+    adata.obs[region_key] = adata.obs[region_key].astype("category")
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
 
 
@@ -408,7 +404,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     s_num = pd.Series(RNG.random(20))
     # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
     values_points = PointsModel.parse(
-        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+        dd.from_pandas(
+            values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num),
+            npartitions=1,
+        )
     )
 
     sdata = SpatialData(
@@ -423,10 +422,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 
     # generate table
     x = RNG.random((21, 1))
-    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    region = pd.Categorical(np.array(["values_circles"] * 9 + ["values_polygons"] * 12))
     instance_id = np.array(list(range(9)) + list(range(12)))
-    categorical_obs = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3))
-    numerical_obs = pd.Series(RNG.random(21))
+    categorical_obs = pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3)
+    numerical_obs = RNG.random(21)
     table = AnnData(
         x,
         obs=pd.DataFrame(
@@ -435,14 +434,18 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
                 "instance_id": instance_id,
                 "categorical_in_obs": categorical_obs,
                 "numerical_in_obs": numerical_obs,
-            }
+            },
+            index=list(map(str, range(21))),
         ),
         var=pd.DataFrame(index=["numerical_in_var"]),
     )
     table = TableModel.parse(
-        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+        table,
+        region=["values_circles", "values_polygons"],
+        region_key="region",
+        instance_key="instance_id",
     )
-    sdata.table = table
+    sdata["table"] = table
     return sdata
 
 
@@ -453,12 +456,13 @@ def sdata_query_aggregation() -> SpatialData:
 
 def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
     rng = np.random.default_rng(SEED)
-    return AnnData(
+    adata = AnnData(
         rng.normal(size=(obs.shape[0], n_var)).astype(np.float64),
         obs=obs,
         obsm=obsm,
         uns=uns,
     )
+    return TableModel().parse(adata)
 
 
 def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
@@ -482,12 +486,16 @@ def adata_labels() -> AnnData:
             "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
             "cell_id": pd.Categorical(seg),
             "instance_id": range(n_obs_labels),
-            "region": ["test"] * n_obs_labels,
+            "region": pd.Categorical(["test"] * n_obs_labels),
         },
-        index=np.arange(n_obs_labels),
+        index=np.arange(n_obs_labels).astype(str),
     )
     uns_labels = {
-        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+        "spatialdata_attrs": {
+            "region": "test",
+            "region_key": "region",
+            "instance_key": "instance_id",
+        },
     }
     obsm_labels = {
         "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),

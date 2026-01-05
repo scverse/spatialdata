@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 import warnings
 from collections import defaultdict
@@ -682,7 +680,7 @@ def join_spatialelement_table(
     if sdata is not None:
         elements_dict = _create_sdata_elements_dict_for_join(sdata, spatial_element_names)
     else:
-        derived_sdata = SpatialData.from_elements_dict(dict(zip(spatial_element_names, spatial_elements, strict=True)))
+        derived_sdata = SpatialData.init_from_elements(dict(zip(spatial_element_names, spatial_elements, strict=True)))
         element_types = ["labels", "shapes", "points"]
         elements_dict = defaultdict(lambda: defaultdict(dict))
         for element_type in element_types:
@@ -741,14 +739,6 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     match_element_to_table : Function to match a spatial element to a table.
     join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
-    if table_name is None:
-        warnings.warn(
-            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-            "Please provide the name of the table as argument to table_name.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        table_name = "table"
     _, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
     )
@@ -1040,6 +1030,7 @@ def get_values(
             assert obs[region_key].nunique() == 1
             assert obs[instance_key].nunique() == len(matched_table)
         else:
+            assert isinstance(element, AnnData)
             matched_table = element
             instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
             region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]

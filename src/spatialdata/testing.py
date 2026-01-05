@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -185,3 +183,6 @@ def assert_spatial_data_objects_are_identical(
             check_transformations=check_transformations,
             check_metadata=check_metadata,
         )
+    # compare attrs
+    if check_metadata:
+        assert sdata0.attrs == sdata1.attrs

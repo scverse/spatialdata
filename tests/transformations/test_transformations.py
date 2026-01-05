@@ -1001,6 +1001,7 @@ def test_keep_numerical_coordinates_c(image_name):
 def test_keep_string_coordinates_c(image_name):
     c_coords = ["a", "b", "c"]
     # n_channels will be ignored, testing also that this works
-    sdata = blobs(c_coords=c_coords, n_channels=4)
+    with pytest.warns(UserWarning, match="Number of channels "):
+        sdata = blobs(c_coords=c_coords, n_channels=4)
     t_blobs = transform(sdata.images[image_name], to_coordinate_system=DEFAULT_COORDINATE_SYSTEM)
     assert np.array_equal(get_channel_names(t_blobs), c_coords)
