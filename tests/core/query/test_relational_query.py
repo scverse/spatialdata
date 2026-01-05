@@ -1114,6 +1114,8 @@ def test_filter_by_table_query(complex_sdata):
     assert "poly" in result.shapes
     assert "circles" in result.shapes
     assert "labels2d" not in result.labels
+    assert len(result["poly"]) == 2
+    assert len(result["circles"]) == 2
 
     # Test with left join
     result = filter_by_table_query(
@@ -1123,7 +1125,9 @@ def test_filter_by_table_query(complex_sdata):
     # Elements should be preserved but table should be filtered
     assert "poly" in result.shapes
     assert "circles" in result.shapes
-    assert "labels2d" in result.labels
+    assert "labels2d" not in result.labels
+    assert len(result["poly"]) == 5
+    assert len(result["circles"]) == 5
     assert all(result["shapes_table"].obs["category"] == "A")
 
     # Test 7: Filtering with specific element_names
@@ -1233,14 +1237,14 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
     # Combine multiple filtering criteria
     result = sdata.filter_by_table_query(
         table_name="shapes_table",
-        obs_expr=(an.col("category") == "A", an.col("value") > 0),
+        obs_expr=(an.col("category") == "A", an.col("value") > -1),
         var_expr=an.col("feature_type") == "feature_type1",
         how="inner",
     )
 
     # Validate the combined filtering results
     assert all(result["shapes_table"].obs["category"] == "A")
-    assert all(result["shapes_table"].obs["value"] > 0)
+    assert all(result["shapes_table"].obs["value"] > -1)
     assert all(result["shapes_table"].var["feature_type"] == "feature_type1")
 
     # Both elements should be present but filtered
