@@ -40,6 +40,7 @@ __all__ = [
     "deepcopy",
     "sanitize_table",
     "sanitize_name",
+    "settings",
 ]
 
 from spatialdata import dataloader, datasets, models, transformations
@@ -70,3 +71,4 @@ from spatialdata._io._utils import get_dask_backing_files
 from spatialdata._io.format import SpatialDataFormatType
 from spatialdata._io.io_zarr import read_zarr
 from spatialdata._utils import get_pyramid_levels, unpad_raster
+from spatialdata.config import settings

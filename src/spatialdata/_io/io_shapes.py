@@ -70,7 +70,7 @@ def write_shapes(
     group: zarr.Group,
     group_type: str = "ngff:shapes",
     element_format: Format = CurrentShapesFormat(),
-    geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
+    geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
 ) -> None:
     """Write shapes to spatialdata zarr store.
 
@@ -89,8 +89,13 @@ def write_shapes(
         The format of the shapes element used to store it.
     geometry_encoding
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
-        details.
+        details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
     """
+    from spatialdata.config import settings
+
+    if geometry_encoding is None:
+        geometry_encoding = settings.shapes_geometry_encoding
+
     axes = get_axes_names(shapes)
     transformations = _get_transformations(shapes)
     if transformations is None:

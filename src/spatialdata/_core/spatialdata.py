@@ -1110,7 +1110,7 @@ class SpatialData:
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
-        shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1157,7 +1157,7 @@ class SpatialData:
             `spatialdata._io.format.py`.
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
-            for details.
+            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
         """
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats
@@ -1200,7 +1200,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
-        shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1270,7 +1270,7 @@ class SpatialData:
         element_name: str | list[str],
         overwrite: bool = False,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
-        shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB",
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1288,7 +1288,7 @@ class SpatialData:
              `SpatialData.write()`.
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
-            for details.
+            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
 
         Notes
         -----

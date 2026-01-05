@@ -3,17 +3,21 @@ import os
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import dask.dataframe as dd
 import numpy as np
+import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from shapely import MultiPolygon, Polygon
 from upath import UPath
 from zarr.errors import GroupNotFoundError
 
+import spatialdata.config
 from spatialdata import SpatialData, deepcopy, read_zarr
 from spatialdata._core.validation import ValidationError
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
@@ -74,20 +78,90 @@ class TestReadWrite:
         sdata = SpatialData.read(tmpdir)
         assert_spatial_data_objects_are_identical(labels, sdata)
 
+    @pytest.mark.parametrize("geometry_encoding", ["WKB", "geoarrow"])
     def test_shapes(
         self,
         tmp_path: str,
         shapes: SpatialData,
         sdata_container_format: SpatialDataContainerFormatType,
+        geometry_encoding: Literal["WKB", "geoarrow"],
     ) -> None:
         tmpdir = Path(tmp_path) / "tmp.zarr"
 
         # check the index is correctly written and then read
         shapes["circles"].index = np.arange(1, len(shapes["circles"]) + 1)
 
-        shapes.write(tmpdir, sdata_formats=sdata_container_format)
+        # add a mixed Polygon + MultiPolygon element
+        shapes["mixed"] = pd.concat([shapes["poly"], shapes["multipoly"]])
+
+        shapes.write(tmpdir, sdata_formats=sdata_container_format, shapes_geometry_encoding=geometry_encoding)
         sdata = SpatialData.read(tmpdir)
-        assert_spatial_data_objects_are_identical(shapes, sdata)
+
+        if geometry_encoding == "WKB":
+            assert_spatial_data_objects_are_identical(shapes, sdata)
+        else:
+            # convert each Polygon to a MultiPolygon
+            mixed_multipolygon = shapes["mixed"].assign(
+                geometry=lambda df: df.geometry.apply(lambda g: MultiPolygon([g]) if isinstance(g, Polygon) else g)
+            )
+            assert sdata["mixed"].equals(mixed_multipolygon)
+            assert not sdata["mixed"].equals(shapes["mixed"])
+
+            del shapes["mixed"]
+            del sdata["mixed"]
+            assert_spatial_data_objects_are_identical(shapes, sdata)
+
+    @pytest.mark.parametrize("geometry_encoding", ["WKB", "geoarrow"])
+    def test_shapes_geometry_encoding_write_element(
+        self,
+        tmp_path: str,
+        shapes: SpatialData,
+        sdata_container_format: SpatialDataContainerFormatType,
+        geometry_encoding: Literal["WKB", "geoarrow"],
+    ) -> None:
+        """Test shapes geometry encoding with write_element() and global settings."""
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+
+        # First write an empty SpatialData to create the zarr store
+        empty_sdata = SpatialData()
+        empty_sdata.write(tmpdir, sdata_formats=sdata_container_format)
+
+        shapes["mixed"] = pd.concat([shapes["poly"], shapes["multipoly"]])
+
+        # Add shapes to the empty sdata
+        for shape_name in shapes.shapes:
+            empty_sdata[shape_name] = shapes[shape_name]
+
+        # Store original setting and set global encoding
+        original_encoding = spatialdata.config.settings.shapes_geometry_encoding
+        try:
+            spatialdata.config.settings.shapes_geometry_encoding = geometry_encoding
+
+            # Write each shape element - should use global setting
+            for shape_name in shapes.shapes:
+                empty_sdata.write_element(shape_name, sdata_formats=sdata_container_format)
+
+                # Verify the encoding metadata in the parquet file
+                parquet_file = tmpdir / "shapes" / shape_name / "shapes.parquet"
+                with pq.ParquetFile(parquet_file) as pf:
+                    md = pf.metadata
+                    d = json.loads(md.metadata[b"geo"].decode("utf-8"))
+                    found_encoding = d["columns"]["geometry"]["encoding"]
+                    if geometry_encoding == "WKB":
+                        expected_encoding = "WKB"
+                    elif shape_name == "circles":
+                        expected_encoding = "point"
+                    elif shape_name == "poly":
+                        expected_encoding = "polygon"
+                    elif shape_name in ["multipoly", "mixed"]:
+                        expected_encoding = "multipolygon"
+                    else:
+                        raise ValueError(
+                            f"Uncovered case for shape_name: {shape_name}, found encoding: {found_encoding}."
+                        )
+                    assert found_encoding == expected_encoding
+        finally:
+            spatialdata.config.settings.shapes_geometry_encoding = original_encoding
 
     def test_points(
         self,

@@ -35,7 +35,7 @@ from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
-from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
+from spatialdata.config import settings
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
     DEFAULT_COORDINATE_SYSTEM,
@@ -315,9 +315,9 @@ class RasterSchema(DataArraySchema):
                 return
             n_elems = np.array(list(max_per_dimension.values())).prod().item()
             usage = n_elems * data.dtype.itemsize
-            if usage > LARGE_CHUNK_THRESHOLD_BYTES:
+            if usage > settings.large_chunk_threshold_bytes:
                 warnings.warn(
-                    f"Detected chunks larger than: {usage} > {LARGE_CHUNK_THRESHOLD_BYTES} bytes. "
+                    f"Detected chunks larger than: {usage} > {settings.large_chunk_threshold_bytes} bytes. "
                     "This can lead to low "
                     "performance and memory issues downstream, and sometimes cause compression errors when writing "
                     "(https://github.com/scverse/spatialdata/issues/812#issuecomment-2575983527). Please consider using"
@@ -327,7 +327,7 @@ class RasterSchema(DataArraySchema):
                     "2) Multiscale representations can be achieved by using the `scale_factors` argument in the "
                     "`parse()` function.\n"
                     "You can suppress this warning by increasing the value of "
-                    "`spatialdata.config.LARGE_CHUNK_THRESHOLD_BYTES`.",
+                    "`spatialdata.settings.large_chunk_threshold_bytes`.",
                     UserWarning,
                     stacklevel=2,
                 )
