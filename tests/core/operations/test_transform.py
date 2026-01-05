@@ -252,7 +252,10 @@ def test_transform_datatree_scale_handling():
 
     # check that a ValueError is raised when no resolution level
     # is left after the transformation
-    with pytest.raises(ValueError, match="The transformation leads to zero shaped data."):
+    with pytest.raises(
+        ValueError,
+        match="The transformation leads to zero shaped data even at the highest resolution level",
+    ):
         transform(test_image, to_coordinate_system="cs2")
 
 
