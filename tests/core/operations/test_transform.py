@@ -231,7 +231,7 @@ def test_transform_shapes(shapes: SpatialData):
 
 def test_transform_datatree_scale_handling():
     """
-    Test the case in which the highest scales of the result of a
+    Test the cases in which the lowest and highest scale of the result of a
     transformed multi-scale image would be zero shape.
     """
 
@@ -248,7 +248,8 @@ def test_transform_datatree_scale_handling():
     # check that the transform doesn't raise an error and that it
     # discards the lowest resolution level
     test_image_t = transform(test_image, to_coordinate_system="cs1")
-    assert len(test_image.items()) != len(test_image_t.items())
+    assert list(test_image.keys()) == ["scale0", "scale1", "scale2"]
+    assert list(test_image_t.keys()) == ["scale0", "scale1"]
 
     # check that a ValueError is raised when no resolution level
     # is left after the transformation

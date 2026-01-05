@@ -389,6 +389,8 @@ def _(
                     "The transformation leads to zero shaped data even at the highest resolution level. "
                     "Check the scaling component of the transformation."
                 )
+            # no risk of skipping a scale (e.g. scale1) but not the next ones (e.g. scale2), because once a scale
+            # is skipped, all the lower scales are also skipped
             continue
 
         if raster_translation is None:
