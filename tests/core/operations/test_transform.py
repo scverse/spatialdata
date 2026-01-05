@@ -11,7 +11,7 @@ from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import unpad_raster
-from spatialdata.models import PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
@@ -227,6 +227,37 @@ def test_transform_shapes(shapes: SpatialData):
         p0 = shapes.shapes[k]
         p1 = new_shapes.shapes[k]
         assert geom_almost_equals(p0["geometry"], p1["geometry"])
+
+
+def test_transform_datatree_scale_handling():
+    """
+    Test the cases in which the lowest and highest scale of the result of a
+    transformed multi-scale image would be zero shape.
+    """
+
+    test_image = Image2DModel.parse(
+        np.ones((1, 10, 10)),
+        dims=("c", "y", "x"),
+        scale_factors=[2, 4],
+        transformations={
+            "cs1": Scale([0.5] * 2, axes=["y", "x"]),
+            "cs2": Scale([0.01] * 2, axes=["y", "x"]),
+        },
+    )
+
+    # check that the transform doesn't raise an error and that it
+    # discards the lowest resolution level
+    test_image_t = transform(test_image, to_coordinate_system="cs1")
+    assert list(test_image.keys()) == ["scale0", "scale1", "scale2"]
+    assert list(test_image_t.keys()) == ["scale0", "scale1"]
+
+    # check that a ValueError is raised when no resolution level
+    # is left after the transformation
+    with pytest.raises(
+        ValueError,
+        match="The transformation leads to zero shaped data even at the highest resolution level",
+    ):
+        transform(test_image, to_coordinate_system="cs2")
 
 
 def test_map_coordinate_systems_single_path(full_sdata: SpatialData):

@@ -381,6 +381,18 @@ def _(
         transformed_dask, raster_translation_single_scale = _transform_raster(
             data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
         )
+
+        # if a scale in the transformed data has zero shape, we skip it
+        if 0 in transformed_dask.shape:
+            if k == "scale0":
+                raise ValueError(
+                    "The transformation leads to zero shaped data even at the highest resolution level. "
+                    "Check the scaling component of the transformation."
+                )
+            # no risk of skipping a scale (e.g. scale1) but not the next ones (e.g. scale2), because once a scale
+            # is skipped, all the lower scales are also skipped
+            continue
+
         if raster_translation is None:
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
