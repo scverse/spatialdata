@@ -2422,54 +2422,26 @@ class SpatialData:
         layer: str | None = None,
         how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
     ) -> SpatialData:
-        """Filter the SpatialData object based on a set of table queries. (:class:`anndata.AnnData`.
+        """
+        Filter the SpatialData object based on a set of table queries.
 
-        Parameters
-        ----------
-        table_name
-            The name of the table to filter the SpatialData object by.
-        filter_tables
-            If True (default), the table is filtered to only contain rows that are annotating regions
-            contained within the element_names.
-        element_names
-            The names of the elements to filter the SpatialData object by.
-        obs_expr
-            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs` by.
-        var_expr
-            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var` by.
-        x_expr
-            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.X` by.
-        obs_names_expr
-            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs_names` by.
-        var_names_expr
-            A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var_names` by.
-        layer
-            The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
-        how
-            The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
-
-        Returns
-        -------
-            The filtered SpatialData object.
-
-        Notes
-        -----
-        You can also use :func:`query.relational_query.filter_by_table_query`.
+        Please see
+        :func:`query.relational_query.filter_by_table_query` for the complete docstring.
         """
         from spatialdata._core.query.relational_query import filter_by_table_query
 
         return filter_by_table_query(
             self,
-            table_name,
-            filter_tables,
-            element_names,
-            obs_expr,
-            var_expr,
-            x_expr,
-            obs_names_expr,
-            var_names_expr,
-            layer,
-            how,
+            table_name=table_name,
+            filter_tables=filter_tables,
+            element_names=element_names,
+            obs_expr=obs_expr,
+            var_expr=var_expr,
+            x_expr=x_expr,
+            obs_names_expr=obs_names_expr,
+            var_names_expr=var_names_expr,
+            layer=layer,
+            how=how,
         )
 
 

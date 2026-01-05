@@ -1113,6 +1113,7 @@ def test_filter_by_table_query(complex_sdata):
     # The elements should be filtered to only include instances in the table
     assert "poly" in result.shapes
     assert "circles" in result.shapes
+    assert "labels2d" not in result.labels
 
     # Test with left join
     result = filter_by_table_query(
@@ -1122,6 +1123,7 @@ def test_filter_by_table_query(complex_sdata):
     # Elements should be preserved but table should be filtered
     assert "poly" in result.shapes
     assert "circles" in result.shapes
+    assert "labels2d" in result.labels
     assert all(result["shapes_table"].obs["category"] == "A")
 
     # Test 7: Filtering with specific element_names
@@ -1243,11 +1245,14 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
 
     # Both elements should be present but filtered
     assert "circles" in result.shapes
+    assert "poly" in result.shapes
 
     # The filtered shapes should only contain the instances from the filtered table
     table_instance_ids = set(
         zip(result["shapes_table"].obs["region"], result["shapes_table"].obs["instance_id"], strict=True)
     )
-    if "circles" in result.shapes:
-        for idx in result["circles"].index:
-            assert ("circles", idx) in table_instance_ids
+    # if "circles" in result.shapes:
+    for idx in result["circles"].index:
+        assert ("circles", idx) in table_instance_ids
+    for idx in result["poly"].index:
+        assert ("poly", idx) in table_instance_ids

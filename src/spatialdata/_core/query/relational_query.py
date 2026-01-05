@@ -827,11 +827,11 @@ def filter_by_table_query(
     layer: str | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
 ) -> SpatialData:
-    """Filter the SpatialData object based on a set of table queries. (:class:`anndata.AnnData`.
+    """Filter the SpatialData object based on a set of table queries.
 
     Parameters
     ----------
-    sdata:
+    sdata
         The SpatialData object to filter.
     table_name
         The name of the table to filter the SpatialData object by.
@@ -841,15 +841,15 @@ def filter_by_table_query(
     element_names
         The names of the elements to filter the SpatialData object by.
     obs_expr
-        A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs` by.
     var_expr
-        A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var` by.
     x_expr
-        A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.X` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.X` by.
     obs_names_expr
-        A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.obs_names` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs_names` by.
     var_names_expr
-        A Predicate or an iterable of Predicates to filter :attr:`anndata.AnnData.var_names` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var_names` by.
     layer
         The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
     how
@@ -862,7 +862,7 @@ def filter_by_table_query(
     Notes
     -----
     You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is the
-    current SpatialData object.
+    current `SpatialData` object.
     """
     sdata_subset: SpatialData = (
         sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
