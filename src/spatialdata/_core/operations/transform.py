@@ -383,7 +383,7 @@ def _(
         )
 
         # if a scale in the transformed data has zero shape, we skip it
-        if not np.min(transformed_dask.shape):
+        if 0 in transformed_dask.shape:
             if k == "scale0":
                 raise ValueError(
                     "The transformation leads to zero shaped data even at the highest resolution level. "
