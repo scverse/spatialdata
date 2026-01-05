@@ -605,16 +605,16 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
         if "global" in d:
             remove_transformation(element, "global")
 
-    for element in full_sdata._gen_spatial_element_values():
+    for _, name, element in full_sdata._gen_elements(include_tables=False):
         transformed_element = full_sdata.transform_element_to_coordinate_system(
-            element, "multi_hop_space", maintain_positioning=maintain_positioning
+            name, "multi_hop_space", maintain_positioning=maintain_positioning
         )
         temp = SpatialData(
             images=dict(full_sdata.images),
             labels=dict(full_sdata.labels),
             points=dict(full_sdata.points),
             shapes=dict(full_sdata.shapes),
-            table=full_sdata["table"],
+            tables={"table": full_sdata["table"]},
         )
         temp["transformed_element"] = transformed_element
         transformation = get_transformation_between_coordinate_systems(

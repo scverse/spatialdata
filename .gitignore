@@ -49,3 +49,7 @@ _version.py
 node_modules/
 
 .asv/
+
+.mypy_cache
+.ruff_cache
+uv.lock

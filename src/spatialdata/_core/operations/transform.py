@@ -3,11 +3,12 @@ from __future__ import annotations
 import itertools
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import dask.array as da
 import dask_image.ndinterp
 import numpy as np
+import pandas as pd
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -21,10 +22,7 @@ from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_nam
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
-    from spatialdata.transformations.transformations import (
-        BaseTransformation,
-        Translation,
-    )
+    from spatialdata.transformations.transformations import BaseTransformation, Translation
 
 DEBUG_WITH_PLOTS = False
 ERROR_MSG_AFTER_0_0_15 = """\
@@ -350,12 +348,7 @@ def _(
         data, transformation, maintain_positioning, to_coordinate_system
     )
     schema = get_model(data)
-    from spatialdata.models import (
-        Image2DModel,
-        Image3DModel,
-        Labels2DModel,
-        Labels3DModel,
-    )
+    from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
@@ -450,18 +443,20 @@ def _(
     xtransformed = transformation._transform_coordinates(xdata)
     transformed = data.drop(columns=list(axes)).copy()
     # dummy transformation that will be replaced by _adjust_transformation()
-    transformed.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
-    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
-    #  this! Reported here: ...
-    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
-    assert isinstance(transformed, DaskDataFrame)
+    default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    transformed.attrs[TRANSFORM_KEY] = default_cs
+
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
-        transformed[ax] = new_ax.data.flatten()
+        # TODO: discuss with dask team
+        # This is not nice, but otherwise there is a problem with the joint graph of new_ax and transformed, causing
+        # a getattr missing dependency of dependent from_dask_array.
+        new_col = pd.Series(new_ax.data.flatten().compute(), index=transformed.index)
+        transformed[ax] = new_col
 
-    old_transformations = get_transformation(data, get_all=True)
-    assert isinstance(old_transformations, dict)
+    old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
+
     _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,

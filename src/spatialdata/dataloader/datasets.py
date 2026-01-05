@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from collections.abc import Callable, Mapping
 from functools import partial
@@ -260,9 +258,7 @@ class ImageTilesDataset(Dataset):
 
             if table_name is not None:
                 table_subset = filtered_table[filtered_table.obs[region_key] == region_name]
-                circles_sdata = SpatialData.init_from_elements(
-                    {region_name: circles}, tables={"table": table_subset.copy()}
-                )
+                circles_sdata = SpatialData.init_from_elements({region_name: circles, "table": table_subset.copy()})
                 _, table = join_spatialelement_table(
                     sdata=circles_sdata,
                     spatial_element_names=region_name,
