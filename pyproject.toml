@@ -24,6 +24,7 @@ readme = "README.md"
 dependencies = [
     "anndata>=0.9.1",
     "annsel>=0.1.1",
+    "narwhals<2.2.0",  # remove once https://github.com/srivarra/annsel/pull/65 is merged (then bump annsel minimum)
     "click",
     "dask-image",
     "dask>=2025.2.0",
