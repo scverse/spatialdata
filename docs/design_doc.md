@@ -231,16 +231,16 @@ Coordinates of points for single molecule data. Each observation is a point, and
 Current implementation represent points as a Parquet file and a [`dask.dataframe.DataFrame`](https://docs.dask.org/en/stable/dataframe.html) in memory.
 The requirements are the following:
 
-- The table MUST contains axis name to represent the axes.
+- The dataframe MUST contains axis name to represent the axes.
     - If it's 2D, the axes should be `["x","y"]`.
     - If it's 3D, the axes should be `["x","y","z"]`.
-- It MUST also contains coordinates transformations in `dask.dataframe.DataFrame().attrs["transform"]`.
+- It MUST also contain coordinate transformations in `dask.dataframe.DataFrame().attrs["transform"]`. This information will be saved on-disk in JSON under a `"coordinateTransformations"` key in a `.zattrs` file (Zarr v2), or `zarr.json` file (Zarr v3), in a Zarr Group containing the Element. The specific way this information is stored in disk is described by the NGFF specification (the implementaiton of the latest version of the specs is ongoing). Precisely, the NGFF specification dscribes coordinate transformations for images, but we will reuse it also for Points and Shapes.
 
-Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`
+Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]` (or on-disk in `.attrs["spatialdata_attrs"]` for the Zarr Group containing the Element).
 
-- It MAY also contains `"feature_key"`, that is, the column name of the table that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
+- It MAY also contains `"feature_key"`, that is, the column name of the dataframe that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
 - It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
-    - `"instance_key"`: the column name of the table where unique instance ids that this point refers to are stored, if available.
+    - `"instance_key"`: the column name of the dataframe where unique instance ids that this point refers to are stored, if available.
 
 #### Table (table of annotations for regions)
 
@@ -310,7 +310,7 @@ In details:
 - we don't need to specify the intrinsic coordinate systems, these are inferred from the element schema
 - each element MAY have a transformation mapping them to one or more extrinsic coordinate systems
 
-Each coordinate system
+Each extrinsic coordinate system
 
 - MUST have a name
 - MAY specify its axes

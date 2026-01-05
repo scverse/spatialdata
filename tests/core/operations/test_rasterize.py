@@ -52,10 +52,10 @@ def test_rasterize_raster(_get_raster):
 
     def _get_data_of_largest_scale(raster):
         if isinstance(raster, DataArray):
-            return raster.data.compute()
+            return raster.data
 
         xdata = get_pyramid_levels(raster, n=0)
-        return xdata.data.compute()
+        return xdata.data
 
     for element_name, raster in rasters.items():
         dims = get_axes_names(raster)
@@ -63,6 +63,9 @@ def test_rasterize_raster(_get_raster):
         slices = [all_slices[d] for d in dims]
 
         data = _get_data_of_largest_scale(raster)
+        # The line above before returned a numpy array. Setting the indices of the slice to 1 would previously update
+        # also raster, but since dask 2025.2.0 this does not happen anymore. However, we can just set the slice to 1
+        # on the dask array.
         data[tuple(slices)] = 1
 
         for kwargs in [
@@ -123,10 +126,11 @@ def test_rasterize_labels_value_key_specified():
     labels_indices = get_element_instances(raster)
     obs = pd.DataFrame(
         {
-            "region": [element_name] * len(labels_indices),
+            "region": pd.Categorical([element_name] * len(labels_indices)),
             "instance_id": labels_indices,
             value_key: [True] * 10 + [False] * (len(labels_indices) - 10),
-        }
+        },
+        index=[f"{i}" for i in range(len(labels_indices))],
     )
     table = TableModel.parse(
         AnnData(shape=(len(labels_indices), 0), obs=obs),
@@ -134,7 +138,7 @@ def test_rasterize_labels_value_key_specified():
         region_key="region",
         instance_key="instance_id",
     )
-    sdata = SpatialData.init_from_elements({element_name: raster}, tables={table_name: table})
+    sdata = SpatialData.init_from_elements({element_name: raster, table_name: table})
     result = rasterize(
         data=element_name,
         sdata=sdata,
@@ -157,8 +161,10 @@ def test_rasterize_points_shapes_with_string_index(points, shapes):
     sdata = SpatialData.init_from_elements({"points_0": points["points_0"], "circles": shapes["circles"]})
 
     # make the indices of the points_0 and circles dataframes strings
-    sdata["points_0"]["str_index"] = dd.from_pandas(pd.Series([str(i) for i in sdata["points_0"].index]), npartitions=1)
-    sdata["points_0"] = sdata["points_0"].set_index("str_index")
+    points = sdata["points_0"]
+    points["str_index"] = dd.from_pandas(pd.Series([str(i) for i in sdata["points_0"].index]), npartitions=1)
+    points = points.set_index("str_index")
+    sdata["points_0"] = points
     sdata["circles"].index = [str(i) for i in sdata["circles"].index]
 
     data_extent = get_extent(sdata)
@@ -194,11 +200,12 @@ def _rasterize_shapes_prepare_data() -> tuple[SpatialData, GeoDataFrame, str]:
         X=np.arange(len(gdf)).reshape(-1, 1),
         obs=pd.DataFrame(
             {
-                "region": [element_name] * len(gdf),
+                "region": pd.Categorical([element_name] * len(gdf)),
                 "instance_id": gdf.index,
-                "values": gdf["values"],
-                "cat_values": gdf["cat_values"],
-            }
+                "values": gdf["values"].to_numpy(),
+                "cat_values": gdf["cat_values"].to_numpy(),
+            },
+            index=[str(i) for i in range(len(gdf))],
         ),
     )
     adata.obs["cat_values"] = adata.obs["cat_values"].astype("category")
@@ -333,11 +340,12 @@ def test_rasterize_points():
         X=np.arange(len(ddf)).reshape(-1, 1),
         obs=pd.DataFrame(
             {
-                "region": [element_name] * len(ddf),
+                "region": pd.Categorical([element_name] * len(ddf)),
                 "instance_id": ddf.index,
                 "gene": data["gene"],
                 "value": data["value"],
-            }
+            },
+            index=[f"{i}" for i in range(len(ddf))],
         ),
     )
     adata.obs["gene"] = adata.obs["gene"].astype("category")
