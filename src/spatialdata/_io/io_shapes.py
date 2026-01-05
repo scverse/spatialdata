@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import zarr
@@ -70,6 +70,7 @@ def write_shapes(
     group: zarr.Group,
     group_type: str = "ngff:shapes",
     element_format: Format = CurrentShapesFormat(),
+    geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
 ) -> None:
     """Write shapes to spatialdata zarr store.
 
@@ -86,7 +87,15 @@ def write_shapes(
         The type of the element.
     element_format
         The format of the shapes element used to store it.
+    geometry_encoding
+        Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
+        details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
     """
+    from spatialdata.config import settings
+
+    if geometry_encoding is None:
+        geometry_encoding = settings.shapes_geometry_encoding
+
     axes = get_axes_names(shapes)
     transformations = _get_transformations(shapes)
     if transformations is None:
@@ -94,7 +103,7 @@ def write_shapes(
     if isinstance(element_format, ShapesFormatV01):
         attrs = _write_shapes_v01(shapes, group, element_format)
     elif isinstance(element_format, ShapesFormatV02 | ShapesFormatV03):
-        attrs = _write_shapes_v02_v03(shapes, group, element_format)
+        attrs = _write_shapes_v02_v03(shapes, group, element_format, geometry_encoding=geometry_encoding)
     else:
         raise ValueError(f"Unsupported format version {element_format.version}. Please update the spatialdata library.")
 
@@ -139,7 +148,9 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     return attrs
 
 
-def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
+def _write_shapes_v02_v03(
+    shapes: GeoDataFrame, group: zarr.Group, element_format: Format, geometry_encoding: Literal["WKB", "geoarrow"]
+) -> Any:
     """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV03.
 
     Parameters
@@ -150,6 +161,9 @@ def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_forma
         The zarr group in the 'shapes' zarr group to write the shapes element to.
     element_format
         The format of the shapes element used to store it.
+    geometry_encoding
+        Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
+        details.
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
@@ -159,7 +173,7 @@ def _write_shapes_v02_v03(shapes: GeoDataFrame, group: zarr.Group, element_forma
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    shapes.to_parquet(path)
+    shapes.to_parquet(path, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)

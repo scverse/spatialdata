@@ -1110,6 +1110,7 @@ class SpatialData:
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1154,6 +1155,9 @@ class SpatialData:
             unspecified, the element formats will be set to the latest element format compatible with the specified
             SpatialData container format. All the formats and relationships between them are defined in
             `spatialdata._io.format.py`.
+        shapes_geometry_encoding
+            Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
+            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
         """
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats
@@ -1179,6 +1183,7 @@ class SpatialData:
                 element_name=element_name,
                 overwrite=False,
                 parsed_formats=parsed,
+                shapes_geometry_encoding=shapes_geometry_encoding,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1195,6 +1200,7 @@ class SpatialData:
         element_name: str,
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1247,6 +1253,7 @@ class SpatialData:
                 shapes=element,
                 group=element_group,
                 element_format=parsed_formats["shapes"],
+                geometry_encoding=shapes_geometry_encoding,
             )
         elif element_type == "tables":
             write_table(
@@ -1263,6 +1270,7 @@ class SpatialData:
         element_name: str | list[str],
         overwrite: bool = False,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1278,6 +1286,9 @@ class SpatialData:
         sdata_formats
             It is recommended to leave this parameter equal to `None`. See more details in the documentation of
              `SpatialData.write()`.
+        shapes_geometry_encoding
+            Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
+            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
 
         Notes
         -----
@@ -1291,7 +1302,12 @@ class SpatialData:
         if isinstance(element_name, list):
             for name in element_name:
                 assert isinstance(name, str)
-                self.write_element(name, overwrite=overwrite, sdata_formats=sdata_formats)
+                self.write_element(
+                    name,
+                    overwrite=overwrite,
+                    sdata_formats=sdata_formats,
+                    shapes_geometry_encoding=shapes_geometry_encoding,
+                )
             return
 
         check_valid_name(element_name)
@@ -1325,6 +1341,7 @@ class SpatialData:
             element_name=element_name,
             overwrite=overwrite,
             parsed_formats=parsed_formats,
+            shapes_geometry_encoding=shapes_geometry_encoding,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():
