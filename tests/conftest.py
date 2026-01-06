@@ -522,6 +522,8 @@ def complex_sdata() -> SpatialData:
     SpatialData
         A complex SpatialData object for testing.
     """
+    RNG = np.random.default_rng(seed=SEED)
+
     # Get basic components using existing functions
     images = _get_images()
     labels = _get_labels()

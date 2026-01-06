@@ -1114,7 +1114,7 @@ def test_filter_by_table_query(complex_sdata):
     assert "poly" in result.shapes
     assert "circles" in result.shapes
     assert "labels2d" not in result.labels
-    assert len(result["poly"]) == 2
+    assert len(result["poly"]) == 1
     assert len(result["circles"]) == 2
 
     # Test with left join
