@@ -23,6 +23,7 @@ license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
     "anndata>=0.9.1",
+    "annsel>=0.1.2",
     "click",
     "dask-image",
     "dask>=2025.2.0",
