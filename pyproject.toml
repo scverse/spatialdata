@@ -78,6 +78,7 @@ docs = [
 ]
 benchmark = [
     "asv",
+    "dask_geopandas<=0.4.2",
 ]
 torch = [
     "torch"
