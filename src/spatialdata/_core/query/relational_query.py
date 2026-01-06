@@ -651,6 +651,11 @@ def join_spatialelement_table(
     ValueError
         If an incorrect value is given for `match_rows`.
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_element_to_table : Function to match elements to a table.
@@ -734,6 +739,11 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     -------
     Table with the rows matching the instances of the element
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_element_to_table : Function to match a spatial element to a table.
@@ -763,6 +773,11 @@ def match_element_to_table(
     Returns
     -------
     A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
 
     See Also
     --------
@@ -796,6 +811,10 @@ def match_sdata_to_table(
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
     """
     if table is None:
         table = sdata[table_name]
@@ -863,6 +882,12 @@ def filter_by_table_query(
     -----
     You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is the
     current `SpatialData` object.
+
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
+    For more examples on table queries, see the
+    `Table queries tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/table_queries.html>`_.
     """
     sdata_subset: SpatialData = (
         sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
