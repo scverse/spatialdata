@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import zarr
 from anndata import AnnData
+from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import Scalar, read_parquet
 from geopandas import GeoDataFrame
@@ -2407,6 +2408,41 @@ class SpatialData:
             self._attrs = value
         else:
             self._attrs = dict(value)
+
+    def filter_by_table_query(
+        self,
+        table_name: str,
+        filter_tables: bool = True,
+        element_names: list[str] | None = None,
+        obs_expr: Predicates | None = None,
+        var_expr: Predicates | None = None,
+        x_expr: Predicates | None = None,
+        obs_names_expr: Predicates | None = None,
+        var_names_expr: Predicates | None = None,
+        layer: str | None = None,
+        how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    ) -> SpatialData:
+        """
+        Filter the SpatialData object based on a set of table queries.
+
+        Please see
+        :func:`query.relational_query.filter_by_table_query` for the complete docstring.
+        """
+        from spatialdata._core.query.relational_query import filter_by_table_query
+
+        return filter_by_table_query(
+            self,
+            table_name=table_name,
+            filter_tables=filter_tables,
+            element_names=element_names,
+            obs_expr=obs_expr,
+            var_expr=var_expr,
+            x_expr=x_expr,
+            obs_names_expr=obs_names_expr,
+            var_names_expr=var_names_expr,
+            layer=layer,
+            how=how,
+        )
 
 
 class QueryManager:

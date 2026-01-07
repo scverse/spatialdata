@@ -10,6 +10,7 @@ import dask.array as da
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
@@ -650,6 +651,11 @@ def join_spatialelement_table(
     ValueError
         If an incorrect value is given for `match_rows`.
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_element_to_table : Function to match elements to a table.
@@ -733,6 +739,11 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     -------
     Table with the rows matching the instances of the element
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_element_to_table : Function to match a spatial element to a table.
@@ -762,6 +773,11 @@ def match_element_to_table(
     Returns
     -------
     A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
 
     See Also
     --------
@@ -795,6 +811,10 @@ def match_sdata_to_table(
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
     """
     if table is None:
         table = sdata[table_name]
@@ -811,6 +831,73 @@ def match_sdata_to_table(
         overwrite_metadata=True,
     )
     return SpatialData.init_from_elements(filtered_elements | {table_name: filtered_table})
+
+
+def filter_by_table_query(
+    sdata: SpatialData,
+    table_name: str,
+    filter_tables: bool = True,
+    element_names: list[str] | None = None,
+    obs_expr: Predicates | None = None,
+    var_expr: Predicates | None = None,
+    x_expr: Predicates | None = None,
+    obs_names_expr: Predicates | None = None,
+    var_names_expr: Predicates | None = None,
+    layer: str | None = None,
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+) -> SpatialData:
+    """Filter the SpatialData object based on a set of table queries.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to filter.
+    table_name
+        The name of the table to filter the SpatialData object by.
+    filter_tables
+        If True (default), the table is filtered to only contain rows that are annotating regions
+        contained within the element_names.
+    element_names
+        The names of the elements to filter the SpatialData object by.
+    obs_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs` by.
+    var_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var` by.
+    x_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.X` by.
+    obs_names_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs_names` by.
+    var_names_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var_names` by.
+    layer
+        The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
+    how
+        The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+
+    Returns
+    -------
+        The filtered SpatialData object.
+
+    Notes
+    -----
+    You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is the
+    current `SpatialData` object.
+
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
+    For more examples on table queries, see the
+    `Table queries tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/table_queries.html>`_.
+    """
+    sdata_subset: SpatialData = (
+        sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
+    )
+
+    filtered_table: AnnData = sdata_subset.tables[table_name].an.filter(
+        obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
+    )
+
+    return match_sdata_to_table(sdata=sdata_subset, table_name=table_name, table=filtered_table, how=how)
 
 
 @dataclass
