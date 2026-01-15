@@ -1061,6 +1061,21 @@ class TableModel:
         if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
             raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
 
+        # Warning for object/string columns with NaN in region_key or instance_key
+        instance_key = attr[self.INSTANCE_KEY]
+        region_key = attr[self.REGION_KEY_KEY]
+        for key_name, key_value in [("region_key", region_key), ("instance_key", instance_key)]:
+            if key_value in data.obs:
+                col = data.obs[key_value]
+                col_dtype = col.dtype
+                if (col_dtype == "object" or pd.api.types.is_string_dtype(col_dtype)) and col.isna().any():
+                    logger.warning(
+                        f"The {key_name} column '{key_value}' is of {col_dtype} type and contains NaN values. "
+                        "After writing and reading with AnnData, NaN values may (depending on the AnnData version) "
+                        "be converted to strings. This may cause issues when matching instances across read/write "
+                        "cycles."
+                    )
+
     def validate(
         self,
         data: AnnData,
