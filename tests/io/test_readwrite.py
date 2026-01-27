@@ -1124,9 +1124,12 @@ class TestLazyTableLoading:
     @pytest.fixture
     def sdata_with_table(self) -> SpatialData:
         """Create a SpatialData object with a simple table for testing."""
+        from spatialdata.models import TableModel
+
+        rng = default_rng(42)
         table = TableModel.parse(
             AnnData(
-                X=np.random.rand(100, 50),
+                X=rng.random((100, 50)),
                 obs=pd.DataFrame(
                     {
                         "region": pd.Categorical(["region1"] * 100),

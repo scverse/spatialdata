@@ -67,9 +67,7 @@ def _is_lazy_anndata(adata: AnnData) -> bool:
     True if the AnnData is lazily loaded, False otherwise.
     """
     # Check if obs is not a pandas DataFrame (lazy AnnData uses xarray Dataset2D)
-    if not isinstance(adata.obs, pd.DataFrame):
-        return True
-    return False
+    return not isinstance(adata.obs, pd.DataFrame)
 
 
 def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:
