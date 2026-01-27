@@ -23,12 +23,7 @@ from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import to_spatial_image
 from xarray import DataArray, DataTree
-from xarray_schema.components import (
-    ArrayTypeSchema,
-    AttrSchema,
-    AttrsSchema,
-    DimsSchema,
-)
+from xarray_schema.components import ArrayTypeSchema, AttrSchema, AttrsSchema, DimsSchema
 from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._core.validation import validate_table_attr_keys
@@ -37,30 +32,49 @@ from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.config import settings
 from spatialdata.models import C, X, Y, Z, get_axes_names
-from spatialdata.models._utils import (
-    DEFAULT_COORDINATE_SYSTEM,
-    TRANSFORM_KEY,
-    MappingToCoordinateSystem_t,
-    SpatialElement,
-    _validate_mapping_to_coordinate_system_type,
-    convert_region_column_to_categorical,
-)
-from spatialdata.transformations._utils import (
-    _get_transformations,
-    _set_transformations,
-    compute_coordinates,
-)
+from spatialdata.models._utils import (DEFAULT_COORDINATE_SYSTEM, TRANSFORM_KEY, MappingToCoordinateSystem_t,
+                                       SpatialElement, _validate_mapping_to_coordinate_system_type,
+                                       convert_region_column_to_categorical)
+from spatialdata.transformations._utils import _get_transformations, _set_transformations, compute_coordinates
 from spatialdata.transformations.transformations import BaseTransformation, Identity
 
 # Types
-Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
+Chunks_t: TypeAlias = (
+    int
+    | tuple[int, ...]
+    | tuple[tuple[int, ...], ...]
+    | Mapping[Any, None | int | tuple[int, ...]]
+)
 ScaleFactors_t = Sequence[dict[str, int] | int]
 
 Transform_s = AttrSchema(BaseTransformation, None)
 ATTRS_KEY = "spatialdata_attrs"
 
 
-def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:
+def _is_lazy_anndata(adata: AnnData) -> bool:
+    """Check if an AnnData object is lazily loaded.
+
+    Lazy AnnData objects (from anndata.experimental.read_lazy) have obs/var
+    stored as xarray Dataset2D instead of pandas DataFrame.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object to check.
+
+    Returns
+    -------
+    True if the AnnData is lazily loaded, False otherwise.
+    """
+    # Check if obs is not a pandas DataFrame (lazy AnnData uses xarray Dataset2D)
+    if not isinstance(adata.obs, pd.DataFrame):
+        return True
+    return False
+
+
+def _parse_transformations(
+    element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None
+) -> None:
     _validate_mapping_to_coordinate_system_type(transformations)
     transformations_in_element = _get_transformations(element)
     if (
@@ -166,7 +180,9 @@ class RasterSchema(DataArraySchema):
         if transformations:
             transformations = transformations.copy()
         if "name" in kwargs:
-            raise ValueError("The `name` argument is not (yet) supported for raster data.")
+            raise ValueError(
+                "The `name` argument is not (yet) supported for raster data."
+            )
         # if dims is specified inside the data, get the value of dims from the data
         if isinstance(data, DataArray):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
@@ -214,13 +230,18 @@ class RasterSchema(DataArraySchema):
         if c_coords is not None:
             c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
 
-        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+        if (
+            c_coords is not None
+            and len(c_coords) != data.shape[cls.dims.dims.index("c")]
+        ):
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
                 f" with length {data.shape[cls.dims.dims.index('c')]}."
             )
 
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
+        data = to_spatial_image(
+            array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs
+        )
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -275,12 +296,18 @@ class RasterSchema(DataArraySchema):
 
     @validate.register(DataTree)
     def _(self, data: DataTree) -> None:
-        for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))], strict=True):
+        for j, k in zip(
+            data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))], strict=True
+        ):
             if j != k:
-                raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
+                raise ValueError(
+                    f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`."
+                )
         name = {list(data[i].data_vars.keys())[0] for i in data}
         if len(name) != 1:
-            raise ValueError(f"Expected exactly one data variable for the datatree: found `{name}`.")
+            raise ValueError(
+                f"Expected exactly one data variable for the datatree: found `{name}`."
+            )
         name = list(name)[0]
         for d in data:
             super().validate(data[d][name])
@@ -448,9 +475,14 @@ class ShapesModel:
         """
         SUGGESTION = " Please use ShapesModel.parse() to construct data that is guaranteed to be valid."
         if cls.GEOMETRY_KEY not in data:
-            raise KeyError(f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`." + SUGGESTION)
+            raise KeyError(
+                f"GeoDataFrame must have a column named `{cls.GEOMETRY_KEY}`."
+                + SUGGESTION
+            )
         if not isinstance(data[cls.GEOMETRY_KEY], GeoSeries):
-            raise ValueError(f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries." + SUGGESTION)
+            raise ValueError(
+                f"Column `{cls.GEOMETRY_KEY}` must be a GeoSeries." + SUGGESTION
+            )
         if len(data[cls.GEOMETRY_KEY]) == 0:
             raise ValueError(f"Column `{cls.GEOMETRY_KEY}` is empty." + SUGGESTION)
         geom_ = data[cls.GEOMETRY_KEY].values[0]
@@ -475,7 +507,10 @@ class ShapesModel:
                     "please correct the radii of the circles before calling the parser function.",
                 )
         if cls.TRANSFORM_KEY not in data.attrs:
-            raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
+            raise ValueError(
+                f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`."
+                + SUGGESTION
+            )
         if len(data) > 0:
             n = data.geometry.iloc[0]._ndim
             if n != 2:
@@ -572,7 +607,9 @@ class ShapesModel:
     def _(
         cls,
         data: np.ndarray,  # type: ignore[type-arg]
-        geometry: Literal[0, 3, 6],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
+        geometry: Literal[
+            0, 3, 6
+        ],  # [GeometryType.POINT, GeometryType.POLYGON, GeometryType.MULTIPOLYGON]
         offsets: tuple[ArrayLike, ...] | None = None,
         radius: float | ArrayLike | None = None,
         index: ArrayLike | None = None,
@@ -583,7 +620,9 @@ class ShapesModel:
         geo_df = GeoDataFrame({"geometry": data})
         if GeometryType(geometry).name == "POINT":
             if radius is None:
-                raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
+                raise ValueError(
+                    "If `geometry` is `Circles`, `radius` must be provided."
+                )
             geo_df[cls.RADIUS_KEY] = radius
         if index is not None:
             geo_df.index = index
@@ -610,7 +649,9 @@ class ShapesModel:
         geo_df = GeoDataFrame({"geometry": gc.geoms})
         if isinstance(geo_df["geometry"].iloc[0], Point):
             if radius is None:
-                raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
+                raise ValueError(
+                    "If `geometry` is `Circles`, `radius` must be provided."
+                )
             geo_df[cls.RADIUS_KEY] = radius
         if index is not None:
             geo_df.index = index
@@ -627,7 +668,10 @@ class ShapesModel:
     ) -> GeoDataFrame:
         if "geometry" not in data.columns:
             raise ValueError("`geometry` column not found in `GeoDataFrame`.")
-        if isinstance(data["geometry"].iloc[0], Point) and cls.RADIUS_KEY not in data.columns:
+        if (
+            isinstance(data["geometry"].iloc[0], Point)
+            and cls.RADIUS_KEY not in data.columns
+        ):
             raise ValueError(f"Column `{cls.RADIUS_KEY}` not found.")
         _parse_transformations(data, transformations)
         cls.validate(data)
@@ -667,7 +711,8 @@ class PointsModel:
                 raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(
-                f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
+                f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`."
+                + SUGGESTION
             )
         if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
             feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
@@ -750,11 +795,15 @@ class PointsModel:
 
         if annotation is not None:
             if feature_key is not None:
-                df_dict[feature_key] = annotation[feature_key].astype(str).astype("category")
+                df_dict[feature_key] = (
+                    annotation[feature_key].astype(str).astype("category")
+                )
             if instance_key is not None:
                 df_dict[instance_key] = annotation[instance_key]
             if Z not in axes and Z in annotation.columns:
-                logger.info(f"Column `{Z}` in `annotation` will be ignored since the data is 2D.")
+                logger.info(
+                    f"Column `{Z}` in `annotation` will be ignored since the data is 2D."
+                )
             for c in set(annotation.columns) - {feature_key, instance_key, X, Y, Z}:
                 df_dict[c] = annotation[c]
 
@@ -793,7 +842,9 @@ class PointsModel:
         if "sort" not in kwargs:
             index_monotonically_increasing = data.index.is_monotonic_increasing
             if not isinstance(index_monotonically_increasing, bool):
-                index_monotonically_increasing = index_monotonically_increasing.compute()
+                index_monotonically_increasing = (
+                    index_monotonically_increasing.compute()
+                )
             sort = index_monotonically_increasing
         else:
             sort = kwargs["sort"]
@@ -831,7 +882,9 @@ class PointsModel:
                 if data[feature_key].dtype.name == "category":
                     table[feature_key] = data[feature_key]
                 else:
-                    table[feature_key] = data[feature_key].astype(str).astype("category")
+                    table[feature_key] = (
+                        data[feature_key].astype(str).astype("category")
+                    )
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -891,9 +944,13 @@ class PointsModel:
             # It also just changes the state of the series, so it is not a big deal.
             if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
                 try:
-                    data[c] = data[c].cat.set_categories(data[c].compute().cat.categories)
+                    data[c] = data[c].cat.set_categories(
+                        data[c].compute().cat.categories
+                    )
                 except ValueError:
-                    logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+                    logger.info(
+                        f"Column `{c}` contains unknown categories. Consider casting it."
+                    )
 
         _parse_transformations(data, transformations)
         cls.validate(data)
@@ -907,7 +964,9 @@ class TableModel:
     INSTANCE_KEY = "instance_key"
     ATTRS_KEY = ATTRS_KEY
 
-    def _validate_set_region_key(self, data: AnnData, region_key: str | None = None) -> None:
+    def _validate_set_region_key(
+        self, data: AnnData, region_key: str | None = None
+    ) -> None:
         """
         Validate the region key in table.uns or set a new region key as the region key column.
 
@@ -947,7 +1006,9 @@ class TableModel:
                 raise ValueError(f"'{region_key}' column not present in table.obs")
             attrs[self.REGION_KEY_KEY] = region_key
 
-    def _validate_set_instance_key(self, data: AnnData, instance_key: str | None = None) -> None:
+    def _validate_set_instance_key(
+        self, data: AnnData, instance_key: str | None = None
+    ) -> None:
         """
         Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
 
@@ -991,7 +1052,9 @@ class TableModel:
             if instance_key in data.obs:
                 attrs[self.INSTANCE_KEY] = instance_key
             else:
-                raise ValueError(f"Instance key column '{instance_key}' not found in table.obs.")
+                raise ValueError(
+                    f"Instance key column '{instance_key}' not found in table.obs."
+                )
 
     def _validate_table_annotation_metadata(self, data: AnnData) -> None:
         """
@@ -1026,16 +1089,33 @@ class TableModel:
         attr = data.uns[ATTRS_KEY]
 
         if "region" not in attr:
-            raise ValueError(f"`region` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(
+                f"`region` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION
+            )
         if "region_key" not in attr:
-            raise ValueError(f"`region_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(
+                f"`region_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION
+            )
         if "instance_key" not in attr:
-            raise ValueError(f"`instance_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
+            raise ValueError(
+                f"`instance_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION
+            )
 
         if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
+            raise ValueError(
+                f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column."
+            )
         if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
+            raise ValueError(
+                f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column."
+            )
+
+        # Skip detailed dtype/value validation for lazy-loaded AnnData
+        # These checks would trigger data loading, defeating the purpose of lazy loading
+        # Validation will occur when data is actually computed/accessed
+        if _is_lazy_anndata(data):
+            return
+
         if (
             (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype)
             not in [
@@ -1049,26 +1129,41 @@ class TableModel:
                 "O",
             ]
             and not pd.api.types.is_string_dtype(data.obs[attr[self.INSTANCE_KEY]])
-            or (dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str)
+            or (
+                dtype == "O"
+                and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0]))
+                is not str
+            )
         ):
             dtype = dtype if dtype != "O" else val_dtype
             raise TypeError(
                 f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
                 f"instance_key column in obs. Dtype found to be {dtype}"
             )
-        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
+        expected_regions = (
+            attr[self.REGION_KEY]
+            if isinstance(attr[self.REGION_KEY], list)
+            else [attr[self.REGION_KEY]]
+        )
         found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
         if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
-            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+            raise ValueError(
+                f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match."
+            )
 
         # Warning for object/string columns with NaN in region_key or instance_key
         instance_key = attr[self.INSTANCE_KEY]
         region_key = attr[self.REGION_KEY_KEY]
-        for key_name, key_value in [("region_key", region_key), ("instance_key", instance_key)]:
+        for key_name, key_value in [
+            ("region_key", region_key),
+            ("instance_key", instance_key),
+        ]:
             if key_value in data.obs:
                 col = data.obs[key_value]
                 col_dtype = col.dtype
-                if (col_dtype == "object" or pd.api.types.is_string_dtype(col_dtype)) and col.isna().any():
+                if (
+                    col_dtype == "object" or pd.api.types.is_string_dtype(col_dtype)
+                ) and col.isna().any():
                     logger.warning(
                         f"The {key_name} column '{key_value}' is of {col_dtype} type and contains NaN values. "
                         "After writing and reading with AnnData, NaN values may (depending on the AnnData version) "
@@ -1099,6 +1194,10 @@ class TableModel:
         if ATTRS_KEY not in data.uns:
             return data
 
+        # Check if this is a lazy-loaded AnnData (from anndata.experimental.read_lazy)
+        # Lazy AnnData has xarray-based obs/var, which requires different validation
+        is_lazy = _is_lazy_anndata(data)
+
         _, region_key, instance_key = get_table_keys(data)
         if region_key is not None:
             if region_key not in data.obs:
@@ -1106,7 +1205,10 @@ class TableModel:
                     f"Region key `{region_key}` not in `adata.obs`. Please create the column and parse "
                     f"using TableModel.parse(adata)."
                 )
-            if not isinstance(data.obs[region_key].dtype, CategoricalDtype):
+            # Skip dtype validation for lazy tables (would require loading data)
+            if not is_lazy and not isinstance(
+                data.obs[region_key].dtype, CategoricalDtype
+            ):
                 raise ValueError(
                     f"`table.obs[{region_key}]` must be of type `categorical`, not `{type(data.obs[region_key])}`."
                 )
@@ -1116,8 +1218,11 @@ class TableModel:
                     f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
                     f" using TableModel.parse(adata)."
                 )
-            if data.obs[instance_key].isnull().values.any():
-                raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
+            # Skip null check for lazy tables (would require loading data)
+            if not is_lazy and data.obs[instance_key].isnull().values.any():
+                raise ValueError(
+                    "`table.obs[instance_key]` must not contain null values, but it does."
+                )
 
         self._validate_table_annotation_metadata(data)
 
@@ -1154,7 +1259,9 @@ class TableModel:
         """
         validate_table_attr_keys(adata)
         # either all live in adata.uns or all be passed in as argument
-        n_args = sum([region is not None, region_key is not None, instance_key is not None])
+        n_args = sum(
+            [region is not None, region_key is not None, instance_key is not None]
+        )
         if n_args == 0:
             if cls.ATTRS_KEY not in adata.uns:
                 # table not annotating any element
@@ -1183,7 +1290,9 @@ class TableModel:
             region = region.tolist()
         region_: list[str] = region if isinstance(region, list) else [region]
         if not adata.obs[region_key].isin(region_).all():
-            raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
+            raise ValueError(
+                f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values."
+            )
 
         adata.uns[cls.ATTRS_KEY][cls.REGION_KEY] = region
         adata.uns[cls.ATTRS_KEY][cls.REGION_KEY_KEY] = region_key
@@ -1194,7 +1303,9 @@ class TableModel:
         grouped = adata.obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
-        not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
+        not_unique = grouped_size[
+            grouped_size != grouped_nunique[instance_key]
+        ].index.tolist()
         if not_unique:
             raise ValueError(
                 f"Instance key column for region(s) `{', '.join(not_unique)}` does not contain only unique values"
@@ -1305,6 +1416,11 @@ def _get_region_metadata_from_region_key_column(table: AnnData) -> list[str]:
         )
         annotated_regions = region_key_column.unique().tolist()
     else:
-        annotated_regions = table.obs[region_key].cat.remove_unused_categories().cat.categories.unique().tolist()
+        annotated_regions = (
+            table.obs[region_key]
+            .cat.remove_unused_categories()
+            .cat.categories.unique()
+            .tolist()
+        )
     assert isinstance(annotated_regions, list)
     return annotated_regions

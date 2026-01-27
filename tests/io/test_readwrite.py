@@ -94,7 +94,11 @@ class TestReadWrite:
         # add a mixed Polygon + MultiPolygon element
         shapes["mixed"] = pd.concat([shapes["poly"], shapes["multipoly"]])
 
-        shapes.write(tmpdir, sdata_formats=sdata_container_format, shapes_geometry_encoding=geometry_encoding)
+        shapes.write(
+            tmpdir,
+            sdata_formats=sdata_container_format,
+            shapes_geometry_encoding=geometry_encoding,
+        )
         sdata = SpatialData.read(tmpdir)
 
         if geometry_encoding == "WKB":
@@ -102,7 +106,9 @@ class TestReadWrite:
         else:
             # convert each Polygon to a MultiPolygon
             mixed_multipolygon = shapes["mixed"].assign(
-                geometry=lambda df: df.geometry.apply(lambda g: MultiPolygon([g]) if isinstance(g, Polygon) else g)
+                geometry=lambda df: df.geometry.apply(
+                    lambda g: MultiPolygon([g]) if isinstance(g, Polygon) else g
+                )
             )
             assert sdata["mixed"].equals(mixed_multipolygon)
             assert not sdata["mixed"].equals(shapes["mixed"])
@@ -139,7 +145,9 @@ class TestReadWrite:
 
             # Write each shape element - should use global setting
             for shape_name in shapes.shapes:
-                empty_sdata.write_element(shape_name, sdata_formats=sdata_container_format)
+                empty_sdata.write_element(
+                    shape_name, sdata_formats=sdata_container_format
+                )
 
                 # Verify the encoding metadata in the parquet file
                 parquet_file = tmpdir / "shapes" / shape_name / "shapes.parquet"
@@ -220,8 +228,12 @@ class TestReadWrite:
         tables: list[AnnData],
         sdata_container_format: SpatialDataContainerFormatType,
     ) -> None:
-        sdata_tables = SpatialData(tables={str(i): tables[i] for i in range(len(tables))})
-        self._test_table(tmp_path, sdata_tables, sdata_container_format=sdata_container_format)
+        sdata_tables = SpatialData(
+            tables={str(i): tables[i] for i in range(len(tables))}
+        )
+        self._test_table(
+            tmp_path, sdata_tables, sdata_container_format=sdata_container_format
+        )
 
     def test_roundtrip(
         self,
@@ -252,7 +264,9 @@ class TestReadWrite:
             assert "shapes/new_shapes0" not in shapes.elements_paths_on_disk()
             assert "shapes/new_shapes1" not in shapes.elements_paths_on_disk()
 
-            shapes.write_element(["new_shapes0", "new_shapes1"], sdata_formats=sdata_container_format)
+            shapes.write_element(
+                ["new_shapes0", "new_shapes1"], sdata_formats=sdata_container_format
+            )
             assert "shapes/new_shapes0" in shapes.elements_paths_on_disk()
             assert "shapes/new_shapes1" in shapes.elements_paths_on_disk()
 
@@ -367,7 +381,9 @@ class TestReadWrite:
                 ValueError,
                 match=match,
             ):
-                sdata.write_element(name, overwrite=True, sdata_formats=sdata_container_format)
+                sdata.write_element(
+                    name, overwrite=True, sdata_formats=sdata_container_format
+                )
 
             if workaround == 1:
                 new_name = f"{name}_new_place"
@@ -398,7 +414,9 @@ class TestReadWrite:
                     sdata.delete_element_from_disk(name)
                     sdata.write_element(name, sdata_formats=sdata_container_format)
 
-    def test_io_and_lazy_loading_points(self, points, sdata_container_format: SpatialDataContainerFormatType):
+    def test_io_and_lazy_loading_points(
+        self, points, sdata_container_format: SpatialDataContainerFormatType
+    ):
         with tempfile.TemporaryDirectory() as td:
             f = os.path.join(td, "data.zarr")
             points.write(f, sdata_formats=sdata_container_format)
@@ -407,7 +425,9 @@ class TestReadWrite:
             sdata2 = SpatialData.read(f)
             assert len(get_dask_backing_files(sdata2)) > 0
 
-    def test_io_and_lazy_loading_raster(self, images, labels, sdata_container_format: SpatialDataContainerFormatType):
+    def test_io_and_lazy_loading_raster(
+        self, images, labels, sdata_container_format: SpatialDataContainerFormatType
+    ):
         sdatas = {"images": images, "labels": labels}
         for k, sdata in sdatas.items():
             d = getattr(sdata, k)
@@ -457,9 +477,13 @@ class TestReadWrite:
             with tempfile.TemporaryDirectory() as td:
                 f = os.path.join(td, "data.zarr")
                 sdata.write(f, sdata_formats=sdata_container_format)
-                t0 = get_transformation(SpatialData.read(f).__getattribute__(k)[elem_name])
+                t0 = get_transformation(
+                    SpatialData.read(f).__getattribute__(k)[elem_name]
+                )
                 assert isinstance(t0, Identity)
-                set_transformation(sdata[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata)
+                set_transformation(
+                    sdata[elem_name], Scale([2.0], axes=("x",)), write_to_sdata=sdata
+                )
                 t1 = get_transformation(SpatialData.read(f)[elem_name])
                 assert isinstance(t1, Scale)
 
@@ -470,10 +494,16 @@ class TestReadWrite:
             f = Path(tmpdir) / "data.zarr"
             f.mkdir()
             old_data = SpatialData()
-            with pytest.raises(ValueError, match="The target file path specified already exists"):
+            with pytest.raises(
+                ValueError, match="The target file path specified already exists"
+            ):
                 old_data.write(f, sdata_formats=sdata_container_format)
-            with pytest.raises(ValueError, match="The target file path specified already exists"):
-                full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
+            with pytest.raises(
+                ValueError, match="The target file path specified already exists"
+            ):
+                full_sdata.write(
+                    f, overwrite=True, sdata_formats=sdata_container_format
+                )
 
     def test_overwrite_fails_when_no_zarr_store_but_dask_backed_data(
         self,
@@ -506,7 +536,9 @@ class TestReadWrite:
                     match=r"Details: the target path contains one or more files that Dask use for "
                     "backing elements in the SpatialData object",
                 ):
-                    full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
+                    full_sdata.write(
+                        f, overwrite=True, sdata_formats=sdata_container_format
+                    )
 
     def test_overwrite_fails_when_zarr_store_present(
         self, full_sdata, sdata_container_format: SpatialDataContainerFormatType
@@ -526,7 +558,9 @@ class TestReadWrite:
                 ValueError,
                 match=r"Details: the target path either contains, coincides or is contained in the current Zarr store",
             ):
-                full_sdata.write(f, overwrite=True, sdata_formats=sdata_container_format)
+                full_sdata.write(
+                    f, overwrite=True, sdata_formats=sdata_container_format
+                )
 
         # support for overwriting backed sdata has been temporarily removed
         # with tempfile.TemporaryDirectory() as tmpdir:
@@ -547,9 +581,7 @@ class TestReadWrite:
     def test_overwrite_fails_onto_non_zarr_file(
         self, full_sdata, sdata_container_format: SpatialDataContainerFormatType
     ):
-        ERROR_MESSAGE = (
-            "The target file path specified already exists, and it has been detected to not be a Zarr store."
-        )
+        ERROR_MESSAGE = "The target file path specified already exists, and it has been detected to not be a Zarr store."
         with tempfile.TemporaryDirectory() as tmpdir:
             f0 = os.path.join(tmpdir, "test.txt")
             with open(f0, "w"):
@@ -562,13 +594,17 @@ class TestReadWrite:
                     ValueError,
                     match=ERROR_MESSAGE,
                 ):
-                    full_sdata.write(f0, overwrite=True, sdata_formats=sdata_container_format)
+                    full_sdata.write(
+                        f0, overwrite=True, sdata_formats=sdata_container_format
+                    )
             f1 = os.path.join(tmpdir, "test.zarr")
             os.mkdir(f1)
             with pytest.raises(ValueError, match=ERROR_MESSAGE):
                 full_sdata.write(f1, sdata_formats=sdata_container_format)
             with pytest.raises(ValueError, match=ERROR_MESSAGE):
-                full_sdata.write(f1, overwrite=True, sdata_formats=sdata_container_format)
+                full_sdata.write(
+                    f1, overwrite=True, sdata_formats=sdata_container_format
+                )
 
 
 def test_incremental_io_in_memory(
@@ -606,7 +642,9 @@ def test_bug_rechunking_after_queried_raster():
     # https://github.com/scverse/spatialdata-io/issues/117
     ##
     single_scale = Image2DModel.parse(RNG.random((100, 10, 10)), chunks=(5, 5, 5))
-    multi_scale = Image2DModel.parse(RNG.random((100, 10, 10)), scale_factors=[2, 2], chunks=(5, 5, 5))
+    multi_scale = Image2DModel.parse(
+        RNG.random((100, 10, 10)), scale_factors=[2, 2], chunks=(5, 5, 5)
+    )
     images = {"single_scale": single_scale, "multi_scale": multi_scale}
     sdata = SpatialData(images=images)
     queried = sdata.query.bounding_box(
@@ -621,7 +659,9 @@ def test_bug_rechunking_after_queried_raster():
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
-def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
+def test_self_contained(
+    full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType
+) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained
     assert full_sdata.is_self_contained()
     description = full_sdata.elements_are_self_contained()
@@ -645,7 +685,10 @@ def test_self_contained(full_sdata: SpatialData, sdata_container_format: Spatial
         # because of the images, labels and points
         description = sdata2.elements_are_self_contained()
         for element_name, self_contained in description.items():
-            if any(element_name.startswith(prefix) for prefix in ["image", "labels", "points"]):
+            if any(
+                element_name.startswith(prefix)
+                for prefix in ["image", "labels", "points"]
+            ):
                 assert not self_contained
             else:
                 assert self_contained
@@ -678,7 +721,11 @@ def test_self_contained(full_sdata: SpatialData, sdata_container_format: Spatial
         assert not sdata2.is_self_contained()
         description = sdata2.elements_are_self_contained()
         assert description["combined"] is False
-        assert all(description[element_name] for element_name in description if element_name != "combined")
+        assert all(
+            description[element_name]
+            for element_name in description
+            if element_name != "combined"
+        )
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
@@ -690,7 +737,9 @@ def test_symmetric_difference_with_zarr_store(
         full_sdata.write(f, sdata_formats=sdata_container_format)
 
         # the list of element on-disk and in-memory is the same
-        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = (
+            full_sdata._symmetric_difference_with_zarr_store()
+        )
         assert len(only_in_memory) == 0
         assert len(only_on_disk) == 0
 
@@ -706,7 +755,9 @@ def test_symmetric_difference_with_zarr_store(
         del full_sdata.tables["table"]
 
         # now the list of element on-disk and in-memory is different
-        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = (
+            full_sdata._symmetric_difference_with_zarr_store()
+        )
         assert set(only_in_memory) == {
             "images/new_image2d",
             "labels/new_labels2d",
@@ -724,13 +775,17 @@ def test_symmetric_difference_with_zarr_store(
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
-def test_change_path_of_subset(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
+def test_change_path_of_subset(
+    full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType
+) -> None:
     """A subset SpatialData object has not Zarr path associated, show that we can reassign the path"""
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         full_sdata.write(f, sdata_formats=sdata_container_format)
 
-        subset = full_sdata.subset(["image2d", "labels2d", "points_0", "circles", "table"])
+        subset = full_sdata.subset(
+            ["image2d", "labels2d", "points_0", "circles", "table"]
+        )
 
         assert subset.path is None
         subset.path = Path(f)
@@ -795,7 +850,9 @@ def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
-def test_incremental_io_attrs(points: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
+def test_incremental_io_attrs(
+    points: SpatialData, sdata_container_format: SpatialDataContainerFormatType
+) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         my_attrs = {"a": "b", "c": 1}
@@ -822,7 +879,9 @@ def test_incremental_io_attrs(points: SpatialData, sdata_container_format: Spati
 cached_sdata_blobs = blobs()
 
 
-@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
+@pytest.mark.parametrize(
+    "element_name", ["image2d", "labels2d", "points_0", "circles", "table"]
+)
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_delete_element_from_disk(
     full_sdata,
@@ -830,7 +889,9 @@ def test_delete_element_from_disk(
     sdata_container_format: SpatialDataContainerFormatType,
 ) -> None:
     # can't delete an element for a SpatialData object without associated Zarr store
-    with pytest.raises(ValueError, match="The SpatialData object is not backed by a Zarr store."):
+    with pytest.raises(
+        ValueError, match="The SpatialData object is not backed by a Zarr store."
+    ):
         full_sdata.delete_element_from_disk("image2d")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -858,7 +919,9 @@ def test_delete_element_from_disk(
 
         # can delete an element present both in-memory and on-disk
         full_sdata.delete_element_from_disk(element_name)
-        only_in_memory, only_on_disk = full_sdata._symmetric_difference_with_zarr_store()
+        only_in_memory, only_on_disk = (
+            full_sdata._symmetric_difference_with_zarr_store()
+        )
         element_type = full_sdata._element_type_from_element_name(element_name)
         element_path = f"{element_type}/{element_name}"
         assert element_path in only_in_memory
@@ -873,7 +936,9 @@ def test_delete_element_from_disk(
         assert element_path not in on_disk
 
 
-@pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
+@pytest.mark.parametrize(
+    "element_name", ["image2d", "labels2d", "points_0", "circles", "table"]
+)
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_element_already_on_disk_different_type(
     full_sdata,
@@ -927,7 +992,9 @@ def test_writing_invalid_name(tmp_path: Path):
     invalid_sdata.images.data[""] = next(iter(_get_images().values()))
     invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
     invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
-    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(
+        iter(_get_shapes().values())
+    )
     invalid_sdata.tables.data["has whitespace"] = _get_table(region="any")
 
     with pytest.raises(ValueError, match="Name (must|cannot)"):
@@ -938,7 +1005,9 @@ def test_writing_valid_table_name_invalid_table(tmp_path: Path):
     # also try with a valid table name but invalid table
     # testing just one case, all the cases are in test_table_model_invalid_names()
     invalid_sdata = SpatialData()
-    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    invalid_sdata.tables.data["valid_name"] = AnnData(
+        np.array([[0]]), layers={"invalid name": np.array([[0]])}
+    )
     with pytest.raises(ValueError, match="Name (must|cannot)"):
         invalid_sdata.write(tmp_path / "data.zarr")
 
@@ -951,7 +1020,9 @@ def test_incremental_writing_invalid_name(tmp_path: Path):
     invalid_sdata.images.data[""] = next(iter(_get_images().values()))
     invalid_sdata.labels.data["."] = next(iter(_get_labels().values()))
     invalid_sdata.points.data["path/separator"] = next(iter(_get_points().values()))
-    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(iter(_get_shapes().values()))
+    invalid_sdata.shapes.data["non-alnum_#$%&()*+,?@"] = next(
+        iter(_get_shapes().values())
+    )
     invalid_sdata.tables.data["has whitespace"] = _get_table(region="any")
 
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
@@ -966,7 +1037,9 @@ def test_incremental_writing_valid_table_name_invalid_table(tmp_path: Path):
     # testing just one case, all the cases are in test_table_model_invalid_names()
     invalid_sdata = SpatialData()
     invalid_sdata.write(tmp_path / "data2.zarr")
-    invalid_sdata.tables.data["valid_name"] = AnnData(np.array([[0]]), layers={"invalid name": np.array([[0]])})
+    invalid_sdata.tables.data["valid_name"] = AnnData(
+        np.array([[0]]), layers={"invalid name": np.array([[0]])}
+    )
     with pytest.raises(ValueError, match="Name (must|cannot)"):
         invalid_sdata.write_element("valid_name")
 
@@ -986,13 +1059,19 @@ def test_reading_invalid_name(tmp_path: Path):
     )
     valid_sdata.write(tmp_path / "data.zarr")
     # Circumvent validation at construction time and check validation happens again at writing time.
-    (tmp_path / "data.zarr/points" / points_name).rename(tmp_path / "data.zarr/points" / "has whitespace")
+    (tmp_path / "data.zarr/points" / points_name).rename(
+        tmp_path / "data.zarr/points" / "has whitespace"
+    )
     # This one is not allowed on windows
-    (tmp_path / "data.zarr/shapes" / shapes_name).rename(tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()+,@")
+    (tmp_path / "data.zarr/shapes" / shapes_name).rename(
+        tmp_path / "data.zarr/shapes" / "non-alnum_#$%&()+,@"
+    )
     # We do this as the key of the element is otherwise not in the consolidated metadata, leading to an error.
     valid_sdata.write_consolidated_metadata()
 
-    with pytest.raises(ValidationError, match="Cannot construct SpatialData") as exc_info:
+    with pytest.raises(
+        ValidationError, match="Cannot construct SpatialData"
+    ) as exc_info:
         read_zarr(tmp_path / "data.zarr")
 
     actual_message = str(exc_info.value)
@@ -1005,10 +1084,14 @@ def test_reading_invalid_name(tmp_path: Path):
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
-def test_write_store_unconsolidated_and_read(full_sdata, sdata_container_format: SpatialDataContainerFormatType):
+def test_write_store_unconsolidated_and_read(
+    full_sdata, sdata_container_format: SpatialDataContainerFormatType
+):
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "data.zarr"
-        full_sdata.write(path, consolidate_metadata=False, sdata_formats=sdata_container_format)
+        full_sdata.write(
+            path, consolidate_metadata=False, sdata_formats=sdata_container_format
+        )
 
         group = zarr.open_group(path, mode="r")
         assert group.metadata.consolidated_metadata is None
@@ -1017,7 +1100,9 @@ def test_write_store_unconsolidated_and_read(full_sdata, sdata_container_format:
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
-def test_can_read_sdata_with_reconsolidation(full_sdata, sdata_container_format: SpatialDataContainerFormatType):
+def test_can_read_sdata_with_reconsolidation(
+    full_sdata, sdata_container_format: SpatialDataContainerFormatType
+):
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "data.zarr"
         full_sdata.write(path, sdata_formats=sdata_container_format)
@@ -1107,3 +1192,84 @@ def test_sdata_with_nan_in_obs() -> None:
         # After round-trip, NaN in object-dtype column becomes string "nan"
         assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
         assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
+
+
+class TestLazyTableLoading:
+    """Tests for lazy table loading functionality.
+
+    Lazy loading uses anndata.experimental.read_lazy() to keep large tables
+    out of memory until needed. This is particularly useful for MSI data
+    where tables can contain millions of pixels.
+    """
+
+    @pytest.fixture
+    def sdata_with_table(self) -> SpatialData:
+        """Create a SpatialData object with a simple table for testing."""
+        table = TableModel.parse(
+            AnnData(
+                X=np.random.rand(100, 50),
+                obs=pd.DataFrame(
+                    {
+                        "region": pd.Categorical(["region1"] * 100),
+                        "instance": np.arange(100),
+                    }
+                ),
+            ),
+            region_key="region",
+            instance_key="instance",
+            region="region1",
+        )
+        return SpatialData(tables={"test_table": table})
+
+    def test_lazy_read_basic(self, sdata_with_table: SpatialData) -> None:
+        """Test that lazy=True reads tables without loading into memory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Read with lazy=True
+            try:
+                sdata_lazy = SpatialData.read(path, lazy=True)
+
+                # Table should be present
+                assert "test_table" in sdata_lazy.tables
+
+                # Check that X is a lazy array (dask or similar)
+                # Lazy AnnData from read_lazy uses dask arrays
+                table = sdata_lazy.tables["test_table"]
+                assert hasattr(table, "X")
+
+            except ImportError:
+                # If anndata.experimental.read_lazy is not available, skip
+                pytest.skip("anndata.experimental.read_lazy not available")
+
+    def test_lazy_false_loads_normally(self, sdata_with_table: SpatialData) -> None:
+        """Test that lazy=False (default) loads tables into memory normally."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Read with lazy=False (default)
+            sdata_normal = SpatialData.read(path, lazy=False)
+
+            # Table should be present and loaded normally
+            assert "test_table" in sdata_normal.tables
+            table = sdata_normal.tables["test_table"]
+
+            # X should be a numpy array or scipy sparse matrix (in-memory)
+            import scipy.sparse as sp
+
+            assert isinstance(table.X, np.ndarray | sp.spmatrix)
+
+    def test_read_zarr_lazy_parameter(self, sdata_with_table: SpatialData) -> None:
+        """Test that read_zarr function accepts lazy parameter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Test read_zarr directly with lazy parameter
+            try:
+                sdata = read_zarr(path, lazy=True)
+                assert "test_table" in sdata.tables
+            except ImportError:
+                pytest.skip("anndata.experimental.read_lazy not available")

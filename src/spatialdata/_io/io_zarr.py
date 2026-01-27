@@ -1,6 +1,7 @@
 import os
 import warnings
 from collections.abc import Callable
+from functools import partial
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -15,11 +16,7 @@ from upath import UPath
 from zarr.errors import ArrayNotFoundError
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._io._utils import (
-    BadFileHandleMethod,
-    _resolve_zarr_store,
-    handle_read_errors,
-)
+from spatialdata._io._utils import BadFileHandleMethod, _resolve_zarr_store, handle_read_errors
 from spatialdata._io.io_points import _read_points
 from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
@@ -36,7 +33,12 @@ def _read_zarr_group_spatialdata_element(
     read_func: Callable[..., Any],
     group_name: Literal["images", "labels", "shapes", "points", "tables"],
     element_type: Literal["image", "labels", "shapes", "points", "tables"],
-    element_container: (dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData]),
+    element_container: (
+        dict[str, Raster_T]
+        | dict[str, DaskDataFrame]
+        | dict[str, GeoDataFrame]
+        | dict[str, AnnData]
+    ),
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
 ) -> None:
     with handle_read_errors(
@@ -66,7 +68,9 @@ def _read_zarr_group_spatialdata_element(
                     ),
                 ):
                     if element_type in ["image", "labels"]:
-                        reader_format = get_raster_format_for_read(elem_group, sdata_version)
+                        reader_format = get_raster_format_for_read(
+                            elem_group, sdata_version
+                        )
                         element = read_func(
                             elem_group_path,
                             cast(Literal["image", "labels"], element_type),
@@ -104,10 +108,7 @@ def get_raster_format_for_read(
     -------
     The ome-zarr format to use for reading the raster element.
     """
-    from spatialdata._io.format import (
-        sdata_zarr_version_to_ome_zarr_format,
-        sdata_zarr_version_to_raster_format,
-    )
+    from spatialdata._io.format import sdata_zarr_version_to_ome_zarr_format, sdata_zarr_version_to_raster_format
 
     if sdata_version == "0.1":
         group_version = group.metadata.attributes["multiscales"][0]["version"]
@@ -123,7 +124,10 @@ def get_raster_format_for_read(
 def read_zarr(
     store: str | Path | UPath | zarr.Group,
     selection: None | tuple[str] = None,
-    on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
+    on_bad_files: Literal[
+        BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN
+    ] = BadFileHandleMethod.ERROR,
+    lazy: bool = False,
 ) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
@@ -146,6 +150,12 @@ def read_zarr(
         - 'warn', raise a warning when a bad file is encountered and skip that file. A SpatialData
           object is returned containing only elements that could be read. Failures can only be
           determined from the warnings.
+
+    lazy
+        If True, read tables lazily using anndata.experimental.read_lazy.
+        This keeps large tables out of memory until needed. Requires anndata >= 0.12.
+        Note: Images, labels, and points are always read lazily (using Dask).
+        This parameter only affects tables, which are normally loaded into memory.
 
     Returns
     -------
@@ -176,7 +186,11 @@ def read_zarr(
     shapes: dict[str, GeoDataFrame] = {}
     tables: dict[str, AnnData] = {}
 
-    selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
+    selector = (
+        {"images", "labels", "points", "shapes", "tables"}
+        if not selection
+        else set(selection or [])
+    )
     logger.debug(f"Reading selection {selector}")
 
     # we could make this more readable. One can get lost when looking at this dict and iteration over the items
@@ -185,7 +199,10 @@ def read_zarr(
         tuple[
             Callable[..., Any],
             Literal["image", "labels", "shapes", "points", "tables"],
-            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
+            dict[str, Raster_T]
+            | dict[str, DaskDataFrame]
+            | dict[str, GeoDataFrame]
+            | dict[str, AnnData],
         ],
     ] = {
         # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
@@ -193,7 +210,7 @@ def read_zarr(
         "labels": (_read_multiscale, "labels", labels),
         "points": (_read_points, "points", points),
         "shapes": (_read_shapes, "shapes", shapes),
-        "tables": (_read_table, "tables", tables),
+        "tables": (partial(_read_table, lazy=lazy), "tables", tables),
     }
     for group_name, (
         read_func,
@@ -279,15 +296,21 @@ def _get_groups_for_element(
 
     # When writing, use_consolidated must be set to False. Otherwise, the metadata store
     # can get out of sync with newly added elements (e.g., labels), leading to errors.
-    root_group = zarr.open_group(store=resolved_store, mode="r+", use_consolidated=use_consolidated)
+    root_group = zarr.open_group(
+        store=resolved_store, mode="r+", use_consolidated=use_consolidated
+    )
     element_type_group = root_group.require_group(element_type)
-    element_type_group = zarr.open_group(element_type_group.store_path, mode="a", use_consolidated=use_consolidated)
+    element_type_group = zarr.open_group(
+        element_type_group.store_path, mode="a", use_consolidated=use_consolidated
+    )
 
     element_name_group = element_type_group.require_group(element_name)
     return root_group, element_type_group, element_name_group
 
 
-def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
+def _group_for_element_exists(
+    zarr_path: Path, element_type: str, element_name: str
+) -> bool:
     """
     Check if the group for an element exists.
 
