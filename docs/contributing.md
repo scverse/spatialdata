@@ -74,6 +74,10 @@ Additionally, there's a CI job that tests against pre-releases of all dependenci
 
 By including this additional information, the document now provides a more comprehensive overview of the continuous integration process related to testing.
 
+### Integration testing
+
+Cross-repo integration testing is available in the [spatialdata-integration-testing](https://github.com/scverse/spatialdata-integration-testing/) repo. Please follow the instructions in the Readme. For questions ask Luca.
+
 ## Publishing a release
 
 ### Updating the version number
@@ -87,6 +91,7 @@ Before making a release, you need to update the version number. Please adhere to
 > 3.  PATCH version when you make backwards compatible bug fixes.
 >
 > Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
+> For pre-release please use the aX suffix, such as v0.7.0a0, v0.7.0a1. Do not use the devX suffix since it doesn't support multiple incremental versions.
 
 You can find the [labels for pre-release in this page](https://packaging.python.org/en/latest/discussions/versioning/#valid-version-numbers).
 
@@ -97,8 +102,6 @@ If you use `bump2version`, you can run one of the following commands in the root
 bump2version patch
 bump2version minor
 bump2version major
-# if you want to create a pre-release
-bump2version --new-version 1.2.0rc1
 ```
 
 Once you are done, run
