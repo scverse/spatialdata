@@ -123,6 +123,7 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/developers_resources/storage_format/Readme.md",
     "tutorials/notebooks/notebooks/examples/technology_stereoseq.ipynb",
     "tutorials/notebooks/notebooks/examples/technology_curio.ipynb",
+    "tutorials/notebooks/notebooks/examples/technology_cosmx.ipynb",
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 # Ignore warnings.
