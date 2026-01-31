@@ -26,7 +26,7 @@ dependencies = [
     "annsel>=0.1.2",
     "click",
     "dask-image",
-    "dask>=2025.2.0",
+    "dask>=2025.2.0,<2026.1.2",
     "datashader",
     "fsspec[s3,http]",
     "geopandas>=0.14",
