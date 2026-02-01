@@ -20,6 +20,7 @@ __pycache__/
 docs/_build
 !docs/api/.md
 docs/**/generated
+docs/_static/datasets_data.js
 
 # IDEs
 /.idea/

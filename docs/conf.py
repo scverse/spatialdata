@@ -12,6 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
+sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
 
 
 # -- Project information -----------------------------------------------------
@@ -57,6 +58,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
+    *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
 
 autodoc_default_options = {
