@@ -210,11 +210,16 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     """
     if not hasattr(subset_adata, "obs") or not hasattr(original_adata, "obs"):
         return
-    obs = pd.DataFrame(subset_adata.obs)
+    # Handle lazy tables (Dataset2D vs DataFrame). Lazy AnnData uses Dataset2D which needs to_memory()
+    obs = pd.DataFrame(subset_adata.obs) if isinstance(subset_adata.obs, pd.DataFrame) else subset_adata.obs.to_memory()
+    original_obs = (
+        original_adata.obs if isinstance(original_adata.obs, pd.DataFrame) else original_adata.obs.to_memory()
+    )
+
     for column in obs.columns:
         is_categorical = isinstance(obs[column].dtype, pd.CategoricalDtype)
         if is_categorical:
-            c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
+            c = obs[column].cat.set_categories(original_obs[column].cat.categories)
             obs[column] = c
     subset_adata.obs = obs
 

@@ -75,8 +75,14 @@ def _filter_table_by_element_names(table: AnnData | None, element_names: str | l
         return None
     table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
     region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
-    table.obs = pd.DataFrame(table.obs)
+    # Filter first, then materialize obs to avoid shape mismatch with lazy tables
     table = table[table.obs[region_key].isin(element_names)].copy()
+    # Handle lazy tables (Dataset2D) vs eager tables (DataFrame)
+    if isinstance(table.obs, pd.DataFrame):
+        table.obs = pd.DataFrame(table.obs)
+    else:
+        # Lazy AnnData uses Dataset2D which needs to_memory() to convert properly
+        table.obs = table.obs.to_memory()
     table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
     return table
 
@@ -196,8 +202,14 @@ def _filter_table_by_elements(
             indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
             to_keep = to_keep | indices
     original_table = table
-    table.obs = pd.DataFrame(table.obs)
+    # Subset first, then materialize obs to avoid shape mismatch with lazy tables
     table = table[to_keep, :]
+    # Handle lazy tables (Dataset2D) vs eager tables (DataFrame)
+    if isinstance(table.obs, pd.DataFrame):
+        table.obs = pd.DataFrame(table.obs)
+    else:
+        # Lazy AnnData uses Dataset2D which needs to_memory() to convert properly
+        table.obs = table.obs.to_memory()
     if match_rows:
         assert instances is not None
         assert isinstance(instances, np.ndarray)
@@ -1066,7 +1078,12 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            matched_table.obs = pd.DataFrame(obs)
+            # Handle lazy tables (Dataset2D) vs eager tables (DataFrame)
+            if isinstance(obs, pd.DataFrame):
+                matched_table.obs = pd.DataFrame(obs)
+            else:
+                # Lazy AnnData uses Dataset2D which needs to_memory() to convert properly
+                matched_table.obs = obs.to_memory()
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
             else:

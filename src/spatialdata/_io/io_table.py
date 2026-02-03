@@ -7,18 +7,45 @@ from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 
-from spatialdata._io.format import (
-    CurrentTablesFormat,
-    TablesFormats,
-    TablesFormatV01,
-    TablesFormatV02,
-    _parse_version,
-)
+from spatialdata._io.format import CurrentTablesFormat, TablesFormats, TablesFormatV01, TablesFormatV02, _parse_version
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path) -> AnnData:
-    table = read_anndata_zarr(str(store))
+def _read_table(store: str | Path, lazy: bool = False) -> AnnData:
+    """
+    Read a table from a zarr store.
+
+    Parameters
+    ----------
+    store
+        Path to the zarr store containing the table.
+    lazy
+        If True, read the table lazily using anndata.experimental.read_lazy.
+        This requires anndata >= 0.12. If the installed version does not support
+        lazy reading, a warning is raised and the table is read eagerly.
+
+    Returns
+    -------
+    The AnnData table, either lazily loaded or in-memory.
+    """
+    if lazy:
+        try:
+            from anndata.experimental import read_lazy
+
+            table = read_lazy(str(store))
+        except ImportError:
+            import warnings
+
+            warnings.warn(
+                "Lazy reading of tables requires anndata >= 0.12. "
+                "Falling back to eager reading. To enable lazy reading, "
+                "upgrade anndata with: pip install 'anndata>=0.12'",
+                UserWarning,
+                stacklevel=2,
+            )
+            table = read_anndata_zarr(str(store))
+    else:
+        table = read_anndata_zarr(str(store))
 
     f = zarr.open(store, mode="r")
     version = _parse_version(f, expect_attrs_key=False)

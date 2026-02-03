@@ -52,10 +52,7 @@ from spatialdata.models._utils import (
 
 if TYPE_CHECKING:
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
-    from spatialdata._io.format import (
-        SpatialDataContainerFormatType,
-        SpatialDataFormatType,
-    )
+    from spatialdata._io.format import SpatialDataContainerFormatType, SpatialDataFormatType
 
 # schema for elements
 Label2D_s = Labels2DModel()
@@ -241,9 +238,7 @@ class SpatialData:
         -------
         The annotated regions.
         """
-        from spatialdata.models.models import (
-            _get_region_metadata_from_region_key_column,
-        )
+        from spatialdata.models.models import _get_region_metadata_from_region_key_column
 
         return _get_region_metadata_from_region_key_column(table)
 
@@ -695,18 +690,14 @@ class SpatialData:
                     continue
                 # each mode here requires paths or elements, using assert here to avoid mypy errors.
                 if by == "cs":
-                    from spatialdata._core.query.relational_query import (
-                        _filter_table_by_element_names,
-                    )
+                    from spatialdata._core.query.relational_query import _filter_table_by_element_names
 
                     assert element_names is not None
                     table = _filter_table_by_element_names(table, element_names)
                     if table is not None and len(table) != 0:
                         tables[table_name] = table
                 elif by == "elements":
-                    from spatialdata._core.query.relational_query import (
-                        _filter_table_by_elements,
-                    )
+                    from spatialdata._core.query.relational_query import _filter_table_by_elements
 
                     assert elements_dict is not None
                     table = _filter_table_by_elements(table, elements_dict=elements_dict)
@@ -731,10 +722,7 @@ class SpatialData:
         The method does not allow to rename a coordinate system into an existing one, unless the existing one is also
         renamed in the same call.
         """
-        from spatialdata.transformations.operations import (
-            get_transformation,
-            set_transformation,
-        )
+        from spatialdata.transformations.operations import get_transformation, set_transformation
 
         # check that the rename_dict is valid
         old_names = self.coordinate_systems
@@ -1110,7 +1098,7 @@ class SpatialData:
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
-        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        sdata_formats: (SpatialDataFormatType | list[SpatialDataFormatType] | None) = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
@@ -1215,15 +1203,12 @@ class SpatialData:
         )
 
         root_group, element_type_group, element_group = _get_groups_for_element(
-            zarr_path=zarr_container_path, element_type=element_type, element_name=element_name, use_consolidated=False
+            zarr_path=zarr_container_path,
+            element_type=element_type,
+            element_name=element_name,
+            use_consolidated=False,
         )
-        from spatialdata._io import (
-            write_image,
-            write_labels,
-            write_points,
-            write_shapes,
-            write_table,
-        )
+        from spatialdata._io import write_image, write_labels, write_points, write_shapes, write_table
         from spatialdata._io.format import _parse_formats
 
         if parsed_formats is None:
@@ -1270,7 +1255,7 @@ class SpatialData:
         self,
         element_name: str | list[str],
         overwrite: bool = False,
-        sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
+        sdata_formats: (SpatialDataFormatType | list[SpatialDataFormatType] | None) = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
     ) -> None:
         """
@@ -1548,7 +1533,10 @@ class SpatialData:
         # Mypy does not understand that path is not None so we have the check in the conditional
         if element_type == "images" and self.path is not None:
             _, _, element_group = _get_groups_for_element(
-                zarr_path=Path(self.path), element_type=element_type, element_name=element_name, use_consolidated=False
+                zarr_path=Path(self.path),
+                element_type=element_type,
+                element_name=element_name,
+                use_consolidated=False,
             )
 
             from spatialdata._io._utils import overwrite_channel_names
@@ -1599,19 +1587,18 @@ class SpatialData:
         )
         axes = get_axes_names(element)
         if isinstance(element, DataArray | DataTree):
-            from spatialdata._io._utils import (
-                overwrite_coordinate_transformations_raster,
-            )
+            from spatialdata._io._utils import overwrite_coordinate_transformations_raster
             from spatialdata._io.format import RasterFormats
 
             raster_format = RasterFormats[element_group.metadata.attributes["spatialdata_attrs"]["version"]]
             overwrite_coordinate_transformations_raster(
-                group=element_group, axes=axes, transformations=transformations, raster_format=raster_format
+                group=element_group,
+                axes=axes,
+                transformations=transformations,
+                raster_format=raster_format,
             )
         elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
-            from spatialdata._io._utils import (
-                overwrite_coordinate_transformations_non_raster,
-            )
+            from spatialdata._io._utils import overwrite_coordinate_transformations_non_raster
 
             overwrite_coordinate_transformations_non_raster(
                 group=element_group,
@@ -1830,6 +1817,7 @@ class SpatialData:
         file_path: str | Path | UPath | zarr.Group,
         selection: tuple[str] | None = None,
         reconsolidate_metadata: bool = False,
+        lazy: bool = False,
     ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
@@ -1842,6 +1830,11 @@ class SpatialData:
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
         reconsolidate_metadata
             If the consolidated metadata store got corrupted this can lead to errors when trying to read the data.
+        lazy
+            If True, read tables lazily using anndata.experimental.read_lazy.
+            This keeps large tables out of memory until needed. Requires anndata >= 0.12.
+            Note: Images, labels, and points are always read lazily (using Dask).
+            This parameter only affects tables, which are normally loaded into memory.
 
         Returns
         -------
@@ -1854,7 +1847,7 @@ class SpatialData:
 
             _write_consolidated_metadata(file_path)
 
-        return read_zarr(file_path, selection=selection)
+        return read_zarr(file_path, selection=selection, lazy=lazy)
 
     @property
     def images(self) -> Images:

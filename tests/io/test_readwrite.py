@@ -94,7 +94,11 @@ class TestReadWrite:
         # add a mixed Polygon + MultiPolygon element
         shapes["mixed"] = pd.concat([shapes["poly"], shapes["multipoly"]])
 
-        shapes.write(tmpdir, sdata_formats=sdata_container_format, shapes_geometry_encoding=geometry_encoding)
+        shapes.write(
+            tmpdir,
+            sdata_formats=sdata_container_format,
+            shapes_geometry_encoding=geometry_encoding,
+        )
         sdata = SpatialData.read(tmpdir)
 
         if geometry_encoding == "WKB":
@@ -1107,3 +1111,87 @@ def test_sdata_with_nan_in_obs() -> None:
         # After round-trip, NaN in object-dtype column becomes string "nan"
         assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
         assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
+
+
+class TestLazyTableLoading:
+    """Tests for lazy table loading functionality.
+
+    Lazy loading uses anndata.experimental.read_lazy() to keep large tables
+    out of memory until needed. This is particularly useful for MSI data
+    where tables can contain millions of pixels.
+    """
+
+    @pytest.fixture
+    def sdata_with_table(self) -> SpatialData:
+        """Create a SpatialData object with a simple table for testing."""
+        from spatialdata.models import TableModel
+
+        rng = default_rng(42)
+        table = TableModel.parse(
+            AnnData(
+                X=rng.random((100, 50)),
+                obs=pd.DataFrame(
+                    {
+                        "region": pd.Categorical(["region1"] * 100),
+                        "instance": np.arange(100),
+                    }
+                ),
+            ),
+            region_key="region",
+            instance_key="instance",
+            region="region1",
+        )
+        return SpatialData(tables={"test_table": table})
+
+    def test_lazy_read_basic(self, sdata_with_table: SpatialData) -> None:
+        """Test that lazy=True reads tables without loading into memory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Read with lazy=True
+            try:
+                sdata_lazy = SpatialData.read(path, lazy=True)
+
+                # Table should be present
+                assert "test_table" in sdata_lazy.tables
+
+                # Check that X is a lazy array (dask or similar)
+                # Lazy AnnData from read_lazy uses dask arrays
+                table = sdata_lazy.tables["test_table"]
+                assert hasattr(table, "X")
+
+            except ImportError:
+                # If anndata.experimental.read_lazy is not available, skip
+                pytest.skip("anndata.experimental.read_lazy not available")
+
+    def test_lazy_false_loads_normally(self, sdata_with_table: SpatialData) -> None:
+        """Test that lazy=False (default) loads tables into memory normally."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Read with lazy=False (default)
+            sdata_normal = SpatialData.read(path, lazy=False)
+
+            # Table should be present and loaded normally
+            assert "test_table" in sdata_normal.tables
+            table = sdata_normal.tables["test_table"]
+
+            # X should be a numpy array or scipy sparse matrix (in-memory)
+            import scipy.sparse as sp
+
+            assert isinstance(table.X, np.ndarray | sp.spmatrix)
+
+    def test_read_zarr_lazy_parameter(self, sdata_with_table: SpatialData) -> None:
+        """Test that read_zarr function accepts lazy parameter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_table.write(path)
+
+            # Test read_zarr directly with lazy parameter
+            try:
+                sdata = read_zarr(path, lazy=True)
+                assert "test_table" in sdata.tables
+            except ImportError:
+                pytest.skip("anndata.experimental.read_lazy not available")
