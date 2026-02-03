@@ -242,6 +242,8 @@ class RasterSchema(DataArraySchema):
         else:
             # Chunk single scale images
             if chunks is not None:
+                if isinstance(chunks, tuple):
+                    chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
                 data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
@@ -819,7 +821,7 @@ class PointsModel:
             # TODO: dask does not allow for setting divisions directly anymore. We have to decide on forcing the user.
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
-                    data[feature_key].astype(str).astype("category"),
+                    data[feature_key],
                     sort=sort,
                     **kwargs,
                 )
@@ -827,11 +829,15 @@ class PointsModel:
         elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None:
-                if data[feature_key].dtype.name == "category":
-                    table[feature_key] = data[feature_key]
-                else:
-                    table[feature_key] = data[feature_key].astype(str).astype("category")
+
+        if feature_key is not None:
+            if data[feature_key].dtype.name == "category":
+                table[feature_key] = data[feature_key]
+            else:
+                # this will cause the categories to be unknown and trigger the warning (and performance slowdown) in
+                # _add_metadata_and_validate()
+                table[feature_key] = data[feature_key].astype(str).astype("category")
+
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -885,15 +891,20 @@ class PointsModel:
             assert instance_key in data.columns
             data.attrs[ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
-        for c in data.columns:
-            #  Here we are explicitly importing the categories
-            #  but it is a convenient way to ensure that the categories are known.
-            # It also just changes the state of the series, so it is not a big deal.
-            if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
-                try:
-                    data[c] = data[c].cat.set_categories(data[c].compute().cat.categories)
-                except ValueError:
-                    logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+        if (
+            feature_key is not None
+            and isinstance(data[feature_key].dtype, CategoricalDtype)
+            and not data[feature_key].cat.known
+        ):
+            logger.warning(
+                f"The `feature_key` column {feature_key} is categorical with unknown categories. "
+                "Please ensure the categories are known before calling `PointsModel.parse()` to "
+                "avoid significant performance implications due to the need for dask to compute "
+                "the categories. If you did not use PointsModel.parse() explicitly in your code ("
+                "e.g. this message is coming from a reader in `spatialdata_io`), please report "
+                "this finding."
+            )
+            data[feature_key] = data[feature_key].cat.set_categories(data[feature_key].compute().cat.categories)
 
         _parse_transformations(data, transformations)
         cls.validate(data)
@@ -1153,6 +1164,9 @@ class TableModel:
         The parsed data.
         """
         validate_table_attr_keys(adata)
+        # Convert view to actual copy to avoid ImplicitModificationWarning when modifying .uns
+        if adata.is_view:
+            adata = adata.copy()
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
