@@ -27,6 +27,7 @@ dependencies = [
     "click",
     "dask-image",
     "dask>=2025.2.0,<2026.1.2",
+    "distributed<2026.1.2",
     "datashader",
     "fsspec[s3,http]",
     "geopandas>=0.14",
