@@ -819,7 +819,7 @@ class PointsModel:
             # TODO: dask does not allow for setting divisions directly anymore. We have to decide on forcing the user.
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
-                    data[feature_key].astype(str).astype("category"),
+                    data[feature_key],
                     sort=sort,
                     **kwargs,
                 )
@@ -827,11 +827,21 @@ class PointsModel:
         elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None:
-                if data[feature_key].dtype.name == "category":
-                    table[feature_key] = data[feature_key]
-                else:
-                    table[feature_key] = data[feature_key].astype(str).astype("category")
+
+        if feature_key is not None:
+            if data[feature_key].dtype.name == "category":
+                table[feature_key] = data[feature_key]
+            else:
+                logger.warning(
+                    f"The `feature_key` column {feature_key} is not categorical, converting it now. "
+                    "Please convert the column to categorical before calling `PointsModel.parse()` to "
+                    "avoid significant performance implications due to the need for dask of computing "
+                    "the categories. If you did not use PointsModel.parse() explicitly in your code ("
+                    "e.g. this message is coming from a reader in `spatialdata_io`, please report "
+                    "this finding."
+                )
+                table[feature_key] = data[feature_key].astype(str).astype("category")
+
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
