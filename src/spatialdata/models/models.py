@@ -1053,14 +1053,15 @@ class TableModel:
         is_valid_dtype = False
 
         # Check for integer types
-        if dtype in [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]:
-            is_valid_dtype = True
-        # Check for pandas StringDtype
-        elif isinstance(dtype, pd.StringDtype):
+        if dtype in [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64] or isinstance(
+            dtype, pd.StringDtype
+        ):
             is_valid_dtype = True
         # Check for CategoricalDtype with string categories
         elif isinstance(dtype, pd.CategoricalDtype):
-            if pd.api.types.is_string_dtype(dtype.categories.dtype) or isinstance(dtype.categories.dtype, pd.StringDtype):
+            if pd.api.types.is_string_dtype(dtype.categories.dtype) or isinstance(
+                dtype.categories.dtype, pd.StringDtype
+            ):
                 is_valid_dtype = True
         # Check for object dtype with string values
         elif dtype == "O":
