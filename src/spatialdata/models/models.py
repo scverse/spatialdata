@@ -268,17 +268,15 @@ class RasterSchema:
         """
         if isinstance(data, DataArray):
             cls._validate_dataarray(data)
-            cls._check_chunk_size_not_too_large(data)
-            cls._check_transforms_present(data)
         elif isinstance(data, DataTree):
             cls._validate_datatree(data)
-            cls._check_chunk_size_not_too_large(data)
-            cls._check_transforms_present(data)
         else:
             raise ValueError(
                 f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, "
                 "Labels2DModel or Labels3DModel to construct data that is guaranteed to be valid."
             )
+        cls._check_chunk_size_not_too_large(data)
+        cls._check_transforms_present(data)
 
     @classmethod
     def _validate_datatree(cls, data: DataTree) -> None:
