@@ -82,14 +82,6 @@ class RasterSchema:
     ATTRS_KEY = ATTRS_KEY
     dims: tuple[str, ...]
 
-    def __init__(self) -> None:
-        warnings.warn(
-            "Instantiating model classes is deprecated. "
-            "Use e.g. `Image2DModel.validate(data)` instead of `Image2DModel().validate(data)`.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
     @classmethod
     def parse(
         cls,
@@ -902,14 +894,6 @@ class TableModel:
     REGION_KEY_KEY = "region_key"
     INSTANCE_KEY = "instance_key"
     ATTRS_KEY = ATTRS_KEY
-
-    def __init__(self) -> None:
-        warnings.warn(
-            "Instantiating TableModel is deprecated. "
-            "Use e.g. `TableModel.validate(data)` instead of `TableModel().validate(data)`.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
 
     @classmethod
     def _validate_set_region_key(cls, data: AnnData, region_key: str | None = None) -> None:
