@@ -308,7 +308,7 @@ def _error_message_add_element() -> None:
 
 
 def _check_match_length_channels_c_dim(
-    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str]
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str, ...]
 ) -> list[str]:
     """
     Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.

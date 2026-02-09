@@ -333,7 +333,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -419,7 +419,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 

@@ -72,10 +72,10 @@ class Images(Elements[DataArray | DataTree]):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         ndim = len(get_axes_names(value))
         if ndim == 3:
-            Image2DModel().validate(value)
+            Image2DModel.validate(value)
             super().__setitem__(key, value)
         elif ndim == 4:
-            Image3DModel().validate(value)
+            Image3DModel.validate(value)
             super().__setitem__(key, value)
         else:
             NotImplementedError("TODO: implement for ndim > 4.")
@@ -89,10 +89,10 @@ class Labels(Elements[DataArray | DataTree]):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         ndim = len(get_axes_names(value))
         if ndim == 2:
-            Labels2DModel().validate(value)
+            Labels2DModel.validate(value)
             super().__setitem__(key, value)
         elif ndim == 3:
-            Labels3DModel().validate(value)
+            Labels3DModel.validate(value)
             super().__setitem__(key, value)
         else:
             NotImplementedError("TODO: implement for ndim > 3.")
@@ -104,7 +104,7 @@ class Shapes(Elements[GeoDataFrame]):
         schema = get_model(value)
         if schema != ShapesModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        ShapesModel().validate(value)
+        ShapesModel.validate(value)
         super().__setitem__(key, value)
 
 
@@ -114,7 +114,7 @@ class Points(Elements[DaskDataFrame]):
         schema = get_model(value)
         if schema != PointsModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        PointsModel().validate(value)
+        PointsModel.validate(value)
         super().__setitem__(key, value)
 
 
@@ -124,5 +124,5 @@ class Tables(Elements[AnnData]):
         schema = get_model(value)
         if schema != TableModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        TableModel().validate(value)
+        TableModel.validate(value)
         super().__setitem__(key, value)

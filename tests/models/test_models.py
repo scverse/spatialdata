@@ -141,7 +141,7 @@ class TestModels:
             # TODO: raster models have validate as a method (for non-raster it's a class method),
             #  probably because they call the xarray schema validation in the superclass. Can we make it consistent?
             if element_type == "image" or element_type == "labels":
-                model().validate(element_read)
+                model.validate(element_read)
             else:
                 model.validate(element_read)
 
@@ -156,7 +156,7 @@ class TestModels:
         permute: bool,
         kwargs: dict[str, str] | None,
     ) -> None:
-        dims = np.array(model.dims.dims).tolist()
+        dims = np.array(model.dims).tolist()
         if permute:
             RNG.shuffle(dims)
         n_dims = len(dims)
@@ -164,7 +164,7 @@ class TestModels:
         if converter is DataArray:
             converter = partial(converter, dims=dims)
         elif converter is to_spatial_image:
-            converter = partial(converter, dims=model.dims.dims)
+            converter = partial(converter, dims=model.dims)
         if n_dims == 2:
             image: ArrayLike = RNG.uniform(size=(10, 10))
         elif n_dims == 3:
@@ -246,7 +246,7 @@ class TestModels:
         assert y_ms["scale0"]["image"].data.chunksize == expected
 
         # parse as DataArray
-        data_array = DataArray(image, dims=model.dims.dims)
+        data_array = DataArray(image, dims=model.dims)
         # single scale
         z_ss = model.parse(data_array, chunks=chunks)
         assert z_ss.data.chunksize == expected
@@ -257,7 +257,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
     def test_labels_model_with_multiscales(self, model):
         # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
-        dims = np.array(model.dims.dims).tolist()
+        dims = np.array(model.dims).tolist()
         n_dims = len(dims)
 
         # A labels image with one label value 4, that partially covers 2×2 blocks.
@@ -545,7 +545,7 @@ class TestModels:
                 if parse:
                     TableModel.parse(adata)
                 else:
-                    TableModel().validate(adata)
+                    TableModel.validate(adata)
         elif key != "_index":  # "_index" is only disallowed in obs/var
             if attr in ("obsm", "varm", "obsp", "varp", "layers"):
                 array = np.array([[0]])
@@ -557,7 +557,7 @@ class TestModels:
                     if parse:
                         TableModel.parse(adata)
                     else:
-                        TableModel().validate(adata)
+                        TableModel.validate(adata)
             elif attr == "uns":
                 adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
                 with pytest.raises(
@@ -567,7 +567,7 @@ class TestModels:
                     if parse:
                         TableModel.parse(adata)
                     else:
-                        TableModel().validate(adata)
+                        TableModel.validate(adata)
 
     @pytest.mark.parametrize(
         "keys",
@@ -586,7 +586,7 @@ class TestModels:
             if parse:
                 TableModel.parse(adata)
             else:
-                TableModel().validate(adata)
+                TableModel.validate(adata)
 
 
 def test_get_schema():
@@ -826,7 +826,7 @@ def test_warning_on_large_chunks():
         warnings.simplefilter("always")
         multiscale = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
         multiscale = multiscale.chunk({"x": 50000, "y": 50000})
-        Labels2DModel().validate(multiscale)
+        Labels2DModel.validate(multiscale)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
         assert "Detected chunks larger than:" in str(w[-1].message)

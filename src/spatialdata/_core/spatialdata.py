@@ -199,7 +199,7 @@ class SpatialData:
         UserWarning
             The dtypes of the instance key column in the table and the annotation target do not match.
         """
-        TableModel().validate(table)
+        TableModel.validate(table)
         if TableModel.ATTRS_KEY in table.uns:
             region, _, instance_key = get_table_keys(table)
             region = region if isinstance(region, list) else [region]
@@ -349,8 +349,8 @@ class SpatialData:
         ValueError
             If `instance_key` is not present in the `table.obs` columns.
         """
-        TableModel()._validate_set_region_key(table, region_key)
-        TableModel()._validate_set_instance_key(table, instance_key)
+        TableModel._validate_set_region_key(table, region_key)
+        TableModel._validate_set_instance_key(table, instance_key)
         attrs = {
             TableModel.REGION_KEY: region,
             TableModel.REGION_KEY_KEY: region_key,
@@ -393,8 +393,8 @@ class SpatialData:
         attrs = table.uns[TableModel.ATTRS_KEY]
         table_region_key = region_key if region_key else attrs.get(TableModel.REGION_KEY_KEY)
 
-        TableModel()._validate_set_region_key(table, region_key)
-        TableModel()._validate_set_instance_key(table, instance_key)
+        TableModel._validate_set_region_key(table, region_key)
+        TableModel._validate_set_instance_key(table, instance_key)
         check_target_region_column_symmetry(table, table_region_key, region)
         attrs[TableModel.REGION_KEY] = region
 
@@ -1822,7 +1822,7 @@ class SpatialData:
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
         for k, v in tables.items():
-            TableModel().validate(v)
+            TableModel.validate(v)
             self._tables[k] = v
 
     @staticmethod
