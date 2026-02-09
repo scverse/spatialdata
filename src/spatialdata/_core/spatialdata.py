@@ -340,6 +340,11 @@ class SpatialData:
         ValueError
             If `instance_key` is not present in the `table.obs` columns.
         """
+        old_attrs = table.uns.get(TableModel.ATTRS_KEY)
+        # _validate_set_region_key and _validate_set_instance_key will raise an error if table.uns[ATTRS_KEY] is None,
+        # so let's initialize it here. Below it will be replaced with the actual metadata.
+        if old_attrs is None:
+            table.uns[TableModel.ATTRS_KEY] = {}
         TableModel._validate_set_region_key(table, region_key)
         TableModel._validate_set_instance_key(table, instance_key)
         attrs = {
