@@ -79,7 +79,7 @@ def _(element: DataTree) -> DataTree:
         msi[key][variable].data = from_array(msi[key][variable].data)
         element[key][variable].data = from_array(element[key][variable].data)
     assert model in [Image2DModel, Image3DModel, Labels2DModel, Labels3DModel]
-    model().validate(msi)
+    model.validate(msi)
     return msi
 
 
