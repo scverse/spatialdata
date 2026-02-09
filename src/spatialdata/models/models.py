@@ -935,9 +935,11 @@ class TableModel:
         """
         attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[ATTRS_KEY] = attrs = {}
-        table_region_key = attrs.get(cls.REGION_KEY_KEY)
+            raise ValueError(
+                f"No '{ATTRS_KEY}' found in `adata.uns`. Please use TableModel.parse() to initialize the table."
+            )
         if not region_key:
+            table_region_key = attrs.get(cls.REGION_KEY_KEY)
             if not table_region_key:
                 raise ValueError(
                     "No region_key in table.uns and no region_key provided as argument. Please specify 'region_key'."
@@ -980,8 +982,9 @@ class TableModel:
         """
         attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[ATTRS_KEY] = {}
-
+            raise ValueError(
+                f"No '{ATTRS_KEY}' found in `adata.uns`. Please use TableModel.parse() to initialize the table."
+            )
         if not instance_key:
             if not attrs.get(cls.INSTANCE_KEY):
                 raise ValueError(
@@ -993,11 +996,10 @@ class TableModel:
                     f"Specified instance_key in table.uns '{attrs.get(cls.INSTANCE_KEY)}' is not present"
                     f" as column in table.obs. Please specify instance_key."
                 )
-        if instance_key:
-            if instance_key in data.obs:
-                attrs[cls.INSTANCE_KEY] = instance_key
-            else:
+        else:
+            if instance_key not in data.obs:
                 raise ValueError(f"Instance key column '{instance_key}' not found in table.obs.")
+            attrs[cls.INSTANCE_KEY] = instance_key
 
     @classmethod
     def _validate_table_annotation_metadata(cls, data: AnnData) -> None:

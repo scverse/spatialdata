@@ -584,6 +584,42 @@ class TestModels:
                 TableModel.validate(adata)
 
 
+def test_validate_set_instance_key_missing_attrs():
+    """Test _validate_set_instance_key behavior when ATTRS_KEY is missing from uns."""
+    # When instance_key arg is provided and column exists, but attrs is missing, it should fail
+    adata = AnnData(np.array([[0]]), obs=pd.DataFrame({"instance_id": [1]}, index=["1"]))
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_instance_key(adata, instance_key="instance_id")
+
+    # When instance_key arg is provided but column doesn't exist, should raise about the column
+    adata2 = AnnData(np.array([[0]]))
+    adata2.uns[TableModel.ATTRS_KEY] = {}
+    with pytest.raises(ValueError, match="Instance key column 'missing' not found"):
+        TableModel._validate_set_instance_key(adata2, instance_key="missing")
+
+    # When no instance_key arg and no attrs, should raise about missing attrs
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_instance_key(adata)
+
+
+def test_validate_set_region_key_missing_attrs():
+    """Test _validate_set_region_key behavior when ATTRS_KEY is missing from uns."""
+    # When region_key arg is provided and column exists, but attrs is missing, it should fail
+    adata = AnnData(np.array([[0]]), obs=pd.DataFrame({"region": ["r1"]}, index=["1"]))
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_region_key(adata, region_key="region")
+
+    # When region_key arg is provided but column doesn't exist, should raise about the column
+    adata2 = AnnData(np.array([[0]]))
+    adata2.uns[TableModel.ATTRS_KEY] = {}
+    with pytest.raises(ValueError, match="column not present in table.obs"):
+        TableModel._validate_set_region_key(adata2, region_key="missing")
+
+    # When no region_key arg and no attrs, should raise about missing attrs
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_region_key(adata)
+
+
 def test_get_schema():
     images = _get_images()
     labels = _get_labels()

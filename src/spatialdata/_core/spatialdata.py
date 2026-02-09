@@ -57,15 +57,6 @@ if TYPE_CHECKING:
         SpatialDataFormatType,
     )
 
-# schema for elements
-Label2D_s = Labels2DModel()
-Label3D_s = Labels3DModel()
-Image2D_s = Image2DModel()
-Image3D_s = Image3DModel()
-Shape_s = ShapesModel()
-Point_s = PointsModel()
-Table_s = TableModel()
-
 
 class SpatialData:
     """
