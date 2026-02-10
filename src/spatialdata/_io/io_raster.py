@@ -13,7 +13,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from xarray import DataArray, Dataset, DataTree
+from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -27,6 +27,7 @@ from spatialdata._io.format import (
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
+from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
@@ -91,20 +92,8 @@ def _read_multiscale(
             channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
-        multiscale_image = {}
-        for i, d in enumerate(datasets):
-            data = node.load(Multiscales).array(resolution=d)
-            multiscale_image[f"scale{i}"] = Dataset(
-                {
-                    "image": DataArray(
-                        data,
-                        name="image",
-                        dims=axes,
-                        coords={"c": channels} if channels is not None else {},
-                    )
-                }
-            )
-        msi = DataTree.from_dict(multiscale_image)
+        arrays = [node.load(Multiscales).array(resolution=d) for d in datasets]
+        msi = dask_arrays_to_datatree(arrays, dims=axes, channels=channels)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
 

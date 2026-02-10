@@ -14,7 +14,7 @@ from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame, GeoSeries
-from multiscale_spatial_image import to_multiscale
+from multiscale_spatial_image import to_multiscale as to_multiscale_msi
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
@@ -38,16 +38,14 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
     convert_region_column_to_categorical,
 )
+from spatialdata.models.pyramids_utils import Chunks_t, ScaleFactors_t
+from spatialdata.models.pyramids_utils import to_multiscale as to_multiscale_ozp  # ozp -> ome-zarr-py
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
     compute_coordinates,
 )
 from spatialdata.transformations.transformations import Identity
-
-# Types
-Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
-ScaleFactors_t = Sequence[dict[str, int] | int]
 
 ATTRS_KEY = "spatialdata_attrs"
 
@@ -225,12 +223,19 @@ class RasterSchema:
                 chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
             if isinstance(chunks, float):
                 chunks = {dim: chunks for index, dim in data.dims}
-            data = to_multiscale(
-                data,
-                scale_factors=scale_factors,
-                method=method,
-                chunks=chunks,
-            )
+            if method is not None:
+                data = to_multiscale_msi(
+                    data,
+                    scale_factors=scale_factors,
+                    method=method,
+                    chunks=chunks,
+                )
+            else:
+                data = to_multiscale_ozp(
+                    data,
+                    scale_factors=scale_factors,
+                    chunks=chunks,
+                )
             _parse_transformations(data, parsed_transform)
         else:
             # Chunk single scale images
@@ -375,9 +380,6 @@ class Labels2DModel(RasterSchema):
     ) -> DataArray | DataTree:
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
-            # Override default scaling method to preserve labels
-            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
         return super().parse(*args, **kwargs)
 
 
@@ -388,9 +390,6 @@ class Labels3DModel(RasterSchema):
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
-            # Override default scaling method to preserve labels
-            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
         return super().parse(*args, **kwargs)
 
 
