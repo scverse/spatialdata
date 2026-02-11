@@ -1,11 +1,12 @@
-from collections.abc import Mapping, Sequence
-from typing import Any, TypeAlias
+from collections.abc import Sequence
+from typing import Any
 
 import dask.array as da
 from ome_zarr.dask_utils import resize
 from xarray import DataArray, Dataset, DataTree
 
-Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
+from spatialdata.models.chunks_utils import Chunks_t, normalize_chunks
+
 ScaleFactors_t = Sequence[dict[str, int] | int]
 
 
@@ -30,6 +31,8 @@ def dask_arrays_to_datatree(
     -------
     DataTree with one child per scale level.
     """
+    if "c" in dims and channels is None:
+        raise ValueError("channels must be provided if the image has a channel dimension")
     coords = {"c": channels} if channels is not None else {}
     d = {}
     for i, arr in enumerate(arrays):
@@ -59,9 +62,13 @@ def to_multiscale(
 
     Makes uses of internal ome-zarr-py APIs for dask downscaling.
 
-    TODO: ome-zarr-py will support 3D downscaling once https://github.com/ome/ome-zarr-py/pull/516 is merged, and this
-     function could make use of it. Also the PR will introduce new downscaling methods such as "nearest". Nevertheless,
-     this function supports different scaling factors per axis, which is not supported by ome-zarr-py yet.
+    ome-zarr-py will support 3D downscaling once https://github.com/ome/ome-zarr-py/pull/516 is merged, and this
+    function could make use of it. Also the PR will introduce new downscaling methods such as "nearest". Nevertheless,
+    this function supports different scaling factors per axis, a feature that could be also added to ome-zarr-py.
+
+    TODO: once the PR above is merged, use the new APIs for 3D downscaling and additional downscaling methods
+    TODO: once the PR above is merged, consider adding support for per-axis scale factors to ome-zarr-py so that this
+     function can be simplified even further.
 
     Parameters
     ----------
@@ -109,7 +116,7 @@ def to_multiscale(
         )
         pyramid.append(resized.astype(prev.dtype))
     if chunks is not None:
-        if isinstance(chunks, Mapping):
-            chunks = {dims.index(k) if isinstance(k, str) else k: v for k, v in chunks.items()}
-        pyramid = [arr.rechunk(chunks) for arr in pyramid]
+        chunks_dict = normalize_chunks(chunks, axes=dims)
+        chunks_tuple = tuple(chunks_dict[d] for d in dims)
+        pyramid = [arr.rechunk(chunks_tuple) for arr in pyramid]
     return dask_arrays_to_datatree(pyramid, dims=dims, channels=channels)

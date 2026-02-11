@@ -151,10 +151,10 @@ class BlobsDataset:
         """Blobs dataset."""
         image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
         multiscale_image = self._image_blobs(
-            self.transformations, self.length, self.n_channels, self.c_coords, multiscale=True
+            self.transformations, self.length, self.n_channels, self.c_coords, scale_factors=[2, 2]
         )
         labels = self._labels_blobs(self.transformations, self.length)
-        multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
+        multiscale_labels = self._labels_blobs(self.transformations, self.length, scale_factors=[2, 2])
         points = self._points_blobs(self.transformations, self.length, self.n_points)
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
@@ -179,7 +179,7 @@ class BlobsDataset:
         length: int = 512,
         n_channels: int = 3,
         c_coords: str | list[str] | None = None,
-        multiscale: bool = False,
+        scale_factors: list[int] | None = None,
         ndim: int = 2,
     ) -> DataArray | DataTree:
         masks = []
@@ -196,15 +196,17 @@ class BlobsDataset:
         else:
             dims = ["c", "z", "y", "x"]
             model = Image3DModel
-        if not multiscale:
+        if scale_factors is None:
             return model.parse(x, transformations=transformations, dims=dims, c_coords=c_coords)
-        return model.parse(x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=[2, 2])
+        return model.parse(
+            x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=scale_factors
+        )
 
     def _labels_blobs(
         self,
         transformations: dict[str, Any] | None = None,
         length: int = 512,
-        multiscale: bool = False,
+        scale_factors: list[int] | None = None,
         ndim: int = 2,
     ) -> DataArray | DataTree:
         """Create labels in 2D or 3D."""
@@ -237,9 +239,9 @@ class BlobsDataset:
         else:
             dims = ["z", "y", "x"]
             model = Labels3DModel
-        if not multiscale:
+        if scale_factors is None:
             return model.parse(out, transformations=transformations, dims=dims)
-        return model.parse(out, transformations=transformations, dims=dims, scale_factors=[2, 2])
+        return model.parse(out, transformations=transformations, dims=dims, scale_factors=scale_factors)
 
     def _generate_blobs(self, length: int = 512, seed: int | None = None, ndim: int = 2) -> ArrayLike:
         from scipy.ndimage import gaussian_filter

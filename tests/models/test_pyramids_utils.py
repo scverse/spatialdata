@@ -1,4 +1,3 @@
-import dask
 import numpy as np
 import pytest
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
@@ -12,31 +11,22 @@ CHUNK_SIZE = 32
 @pytest.mark.parametrize(
     ("model", "length", "ndim", "n_channels", "scale_factors", "method"),
     [
-        (Image2DModel, 128, 2, 3, (2, 2), Methods.XARRAY_COARSEN),
-        (Image3DModel, 32, 3, 3, (2, 2), Methods.XARRAY_COARSEN),
-        (Labels2DModel, 128, 2, 0, (2, 2), Methods.DASK_IMAGE_NEAREST),
-        (Labels3DModel, 32, 3, 0, (2, 2), Methods.DASK_IMAGE_NEAREST),
+        (Image2DModel, 128, 2, 3, [2, 2], Methods.XARRAY_COARSEN),
+        (Image3DModel, 32, 3, 3, [2, 2], Methods.XARRAY_COARSEN),
+        (Labels2DModel, 128, 2, 0, [2, 2], Methods.DASK_IMAGE_NEAREST),
+        (Labels3DModel, 32, 3, 0, [2, 2], Methods.DASK_IMAGE_NEAREST),
     ],
 )
 def test_to_multiscale_via_ome_zarr_scaler(model, length, ndim, n_channels, scale_factors, method):
     blob_gen = BlobsDataset()
 
-    if n_channels > 0:
-        # Image: stack multiple blob channels
-        masks = []
-        for i in range(n_channels):
-            mask = blob_gen._generate_blobs(length=length, seed=i, ndim=ndim)
-            mask = (mask - mask.min()) / np.ptp(mask)
-            masks.append(mask)
-        array = np.stack(masks, axis=0)
+    if model in [Image2DModel, Image3DModel]:
+        array = blob_gen._image_blobs(length=length, n_channels=n_channels, ndim=ndim).data
     else:
-        # Labels: threshold blob pattern to get integer labels
-        mask = blob_gen._generate_blobs(length=length, ndim=ndim)
-        threshold = np.percentile(mask, 70)
-        array = (mask >= threshold).astype(np.int64)
+        array = blob_gen._labels_blobs(length=length, ndim=ndim).data
 
     dims = model.dims
-    dask_data = dask.array.from_array(array).rechunk(CHUNK_SIZE)
+    dask_data = array.rechunk(CHUNK_SIZE)
 
     # multiscale-spatial-image path (explicit method)
     result_msi = model.parse(dask_data, dims=dims, scale_factors=scale_factors, chunks=CHUNK_SIZE, method=method)

@@ -38,14 +38,17 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
     convert_region_column_to_categorical,
 )
-from spatialdata.models.pyramids_utils import Chunks_t, ScaleFactors_t
-from spatialdata.models.pyramids_utils import to_multiscale as to_multiscale_ozp  # ozp -> ome-zarr-py
+from spatialdata.models.chunks_utils import Chunks_t
+from spatialdata.models.pyramids_utils import ScaleFactors_t  # ozp -> ome-zarr-py
+from spatialdata.models.pyramids_utils import to_multiscale as to_multiscale_ozp
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
     compute_coordinates,
 )
 from spatialdata.transformations.transformations import Identity
+
+__all__ = ["Chunks_t", "ScaleFactors_t"]
 
 ATTRS_KEY = "spatialdata_attrs"
 
