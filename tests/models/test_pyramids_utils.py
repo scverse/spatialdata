@@ -34,15 +34,6 @@ def test_to_multiscale_via_ome_zarr_scaler(model, length, ndim, n_channels, scal
     # ome-zarr-py scaler (method=None triggers the ome-zarr-py scaler)
     result_ozp = model.parse(dask_data, dims=dims, scale_factors=scale_factors, chunks=CHUNK_SIZE)
 
-    # Compare data values and plot each scale level
-    import matplotlib.pyplot as plt
-
-    n_scales = len(result_msi.children)
-    fig, axes = plt.subplots(n_scales, 2, figsize=(8, 4 * n_scales), squeeze=False)
-    fig.suptitle(f"{model.__name__}  scale_factors={scale_factors}", fontsize=12)
-    axes[0, 0].set_title("multiscale-spatial-image")
-    axes[0, 1].set_title("ome-zarr-py")
-
     for i, scale_name in enumerate(result_msi.children):
         msi_arr = result_msi[scale_name].ds["image"]
         ozp_arr = result_ozp[scale_name].ds["image"]
@@ -64,21 +55,3 @@ def test_to_multiscale_via_ome_zarr_scaler(model, length, ndim, n_channels, scal
                 msi_vals, ozp_vals = msi_arr.values, ozp_arr.values
                 np.testing.assert_allclose(msi_vals.mean(), ozp_vals.mean(), rtol=0.5)
                 np.testing.assert_allclose(msi_vals.std(), ozp_vals.std(), rtol=0.5)
-
-        # Select a 2D slice for plotting
-        msi_plot = msi_arr
-        ozp_plot = ozp_arr
-        if msi_plot.ndim == 4:
-            msi_plot = msi_plot[0, 0]
-            ozp_plot = ozp_plot[0, 0]
-        elif msi_plot.ndim == 3:
-            msi_plot = msi_plot[0]
-            ozp_plot = ozp_plot[0]
-
-        shape_str = "x".join(str(s) for s in msi_arr.shape)
-        axes[i, 0].imshow(msi_plot.values)
-        axes[i, 0].set_ylabel(f"{scale_name}\n{shape_str}", rotation=0, ha="right", va="center")
-        axes[i, 1].imshow(ozp_plot.values)
-
-    plt.tight_layout()
-    plt.show()
