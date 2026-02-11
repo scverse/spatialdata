@@ -189,6 +189,7 @@ class BlobsDataset:
             masks.append(mask)
 
         x = np.stack(masks, axis=0)
+        model: type[Image2DModel] | type[Image3DModel]
         if ndim == 2:
             dims = ["c", "y", "x"]
             model = Image2DModel
@@ -229,6 +230,7 @@ class BlobsDataset:
                 out[out == val[idx]] = 0
             else:
                 out[out == val[idx]] = i
+        model: type[Labels2DModel] | type[Labels3DModel]
         if ndim == 2:
             dims = ["y", "x"]
             model = Labels2DModel

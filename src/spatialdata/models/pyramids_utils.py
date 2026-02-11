@@ -51,6 +51,36 @@ def to_multiscale(
     scale_factors: ScaleFactors_t,
     chunks: Chunks_t | None = None,
 ) -> DataTree:
+    """Build a multiscale pyramid DataTree from a single-scale image.
+
+    Iteratively downscales the image by the given scale factors using
+    interpolation (order 1 for images with a channel dimension, order 0
+    for labels) and assembles all levels into a DataTree.
+
+    Makes uses of internal ome-zarr-py APIs for dask downscaling.
+
+    TODO: ome-zarr-py will support 3D downscaling once https://github.com/ome/ome-zarr-py/pull/516 is merged, and this
+     function could make use of it. Also the PR will introduce new downscaling methods such as "nearest". Nevertheless,
+     this function supports different scaling factors per axis, which is not supported by ome-zarr-py yet.
+
+    Parameters
+    ----------
+    image
+        Input image/labels as an xarray DataArray (e.g. with dims ``("c", "y", "x")``
+        or ``("y", "x")``). Supports both 2D/3D images and 2D/3D labels.
+    scale_factors
+        Sequence of per-level scale factors. Each element is either an int
+        (applied to all spatial axes) or a dict mapping dimension names to
+        per-axis factors (e.g. ``{"y": 2, "x": 2}``).
+    chunks
+        Optional chunk specification passed to :meth:`dask.array.Array.rechunk`
+        after building the pyramid.
+
+    Returns
+    -------
+    DataTree
+        Multiscale DataTree with children ``scale0``, ``scale1``, etc.
+    """
     dims = [str(dim) for dim in image.dims]
     spatial_dims = [d for d in dims if d != "c"]
     order = 1 if "c" in dims else 0
