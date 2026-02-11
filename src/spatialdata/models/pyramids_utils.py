@@ -54,6 +54,7 @@ def to_multiscale(
     dims = [str(dim) for dim in image.dims]
     spatial_dims = [d for d in dims if d != "c"]
     order = 1 if "c" in dims else 0
+    channels = None if "c" not in dims else image.coords["c"].values
     pyramid = [image.data]
     for sf in scale_factors:
         prev = pyramid[-1]
@@ -63,7 +64,7 @@ def to_multiscale(
             sf_by_axis.update(dict.fromkeys(spatial_dims, sf))
         else:
             sf_by_axis.update(sf)
-        # Clamp: skip axes where the scale factor exceeds the axis size.
+        # skip axes where the scale factor exceeds the axis size.
         for ax, factor in sf_by_axis.items():
             ax_size = prev.shape[dims.index(ax)]
             if factor > ax_size:
@@ -81,4 +82,4 @@ def to_multiscale(
         if isinstance(chunks, Mapping):
             chunks = {dims.index(k) if isinstance(k, str) else k: v for k, v in chunks.items()}
         pyramid = [arr.rechunk(chunks) for arr in pyramid]
-    return dask_arrays_to_datatree(pyramid, dims=dims)
+    return dask_arrays_to_datatree(pyramid, dims=dims, channels=channels)
