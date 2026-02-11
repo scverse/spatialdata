@@ -122,13 +122,16 @@ class RasterSchema:
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling (default is `'nearest'`). Please refer to
-            :class:`multiscale_spatial_image.to_multiscale` for details.\n
-            Note (advanced): the default choice (`'nearest'`) will keep the original scale lazy and compute each
-            downscaled version. On the other hand `'xarray_coarsen'` will compute each scale lazily (this implies that
-            each scale will be recomputed each time it is accessed unless `.persist()` is manually called to cache the
-            intermediate results). Please refer direclty to the source code of `to_multiscale()` in the
-            `multiscale-spatial-image` for precise information on how this is handled.
+            Method to use for multiscale downsampling. If ``None`` (the default), a lazy implementation is used
+            (based on ``ome-zarr-py``'s ``resize()``). This computes all scales lazily, using linear interpolation
+            (``order=1``) for images and nearest-neighbor interpolation (``order=0``) for labels.
+
+            If a :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value is passed, the
+            ``multiscale_spatial_image.to_multiscale()`` implementation is used instead. For example, the previous
+            default behavior (spatialdata <= 0.7.2) can be replicated by passing ``method=Methods.XARRAY_COARSEN`` for
+            images or ``method=Methods.DASK_IMAGE_NEAREST`` for labels. As of multiscale-spatial-image==2.0.3,
+            ``method=Method.DASK_IMAGE_NEAREST`` is not lazy (leading to high memory usage), therefore the new defaults
+            are preferred.
         chunks
             Chunks to use for dask array.
         kwargs
