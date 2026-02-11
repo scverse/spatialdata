@@ -28,10 +28,10 @@ def test_to_multiscale_via_ome_zarr_scaler(model, length, ndim, n_channels, scal
     dims = model.dims
     dask_data = array.rechunk(CHUNK_SIZE)
 
-    # multiscale-spatial-image path (explicit method)
+    # multiscale-spatial-image (method is not None)
     result_msi = model.parse(dask_data, dims=dims, scale_factors=scale_factors, chunks=CHUNK_SIZE, method=method)
 
-    # ome-zarr-py scaler path (method=None triggers the ome-zarr-py scaler)
+    # ome-zarr-py scaler (method=None triggers the ome-zarr-py scaler)
     result_ozp = model.parse(dask_data, dims=dims, scale_factors=scale_factors, chunks=CHUNK_SIZE)
 
     # Compare data values at each scale level

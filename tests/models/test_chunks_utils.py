@@ -17,7 +17,7 @@ from spatialdata.models.chunks_utils import Chunks_t, normalize_chunks
         # 3D (z, y, x)
         ((10, 100, 200), ("z", "y", "x"), {"z": 10, "y": 100, "x": 200}),
         ({"z": 10, "y": 300, "x": 400}, ("z", "y", "x"), {"z": 10, "y": 300, "x": 400}),
-        # Mapping with None values (passed through with dask semantics: keep existing / full dimension)
+        # Mapping with None values (passed through)
         ({"y": None, "x": 400}, ("y", "x"), {"y": None, "x": 400}),
         ({"c": None, "y": None, "x": None}, ("c", "y", "x"), {"c": None, "y": None, "x": None}),
         # Mapping with tuple[int, ...] values (explicit per-block chunk sizes)

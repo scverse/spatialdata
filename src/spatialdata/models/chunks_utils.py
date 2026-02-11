@@ -24,7 +24,7 @@ def normalize_chunks(
         - dict: Mapping of axis names to chunk sizes. Values can be:
             - int: uniform chunk size for that axis
             - tuple[int, ...]: explicit per-block chunk sizes
-            - None: keep existing chunks / use full dimension (dask semantics)
+            - None: keep existing chunks (or use full dimension when no chunks were available)
     axes
         Tuple of axis names that defines the expected dimensions (e.g., ('c', 'y', 'x')).
 
@@ -32,8 +32,8 @@ def normalize_chunks(
     -------
     dict[str, None | int | tuple[int, ...]]
         Dict mapping axis names to chunk sizes. ``None`` values are preserved
-        with dask semantics (keep existing chunks in ``rechunk``, or use full
-        dimension size in array creation).
+        with dask semantics (keep existing chunks, or use full dimension size if chunks
+        where not available and are being created).
 
     Raises
     ------
