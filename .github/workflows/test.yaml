@@ -41,6 +41,7 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
+                    sed -i 's/requires-python.*//'
                     uv add git+https://github.com/scverse/anndata.git
                     uv add pandas>=3.dev0
                   fi
