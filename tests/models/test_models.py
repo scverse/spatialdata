@@ -18,6 +18,7 @@ from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from packaging.version import Version
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
@@ -311,7 +312,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
-    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
+    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame], ids=["numpy", "pandas", "dask"])
     @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
     @pytest.mark.parametrize("coordinates", [None, {"x": "A", "y": "B", "z": "C"}])
@@ -937,12 +938,12 @@ def test_categories_on_partitioned_dataframe(sdata_blobs: SpatialData):
     assert np.array_equal(df["genes"].to_numpy(), ddf_parsed["genes"].compute().to_numpy())
     assert set(df["genes"].cat.categories.tolist()) == set(ddf_parsed["genes"].compute().cat.categories.tolist())
 
-    # two behavior to investigate later/report to dask (they originate in dask)
-    # TODO: df['genes'].cat.categories has dtype 'object', while ddf_parsed['genes'].compute().cat.categories has dtype
-    #  'string'
-    # this problem should disappear after pandas 3.0 is released
-    assert df["genes"].cat.categories.dtype == "object"
+    if Version(pd.__version__) >= Version("3"):
+        assert df["genes"].cat.categories.dtype == "string"
+    else:
+        assert df["genes"].cat.categories.dtype == "object"
     assert ddf_parsed["genes"].compute().cat.categories.dtype == "string"
 
+    # behavior to investigate later/report to dask
     # TODO: the list of categories are not preserving the order
     assert df["genes"].cat.categories.tolist() != ddf_parsed["genes"].compute().cat.categories.tolist()
