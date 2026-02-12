@@ -13,6 +13,7 @@ import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from packaging.version import Version
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from zarr.errors import GroupNotFoundError
@@ -1101,8 +1102,13 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
 
     sdata2 = SpatialData.read(path)
     assert "column_only_region1" in sdata2["table"].obs.columns
-    assert sdata2["table"].obs["column_only_region1"].iloc[0] == "string"
-    assert sdata2["table"].obs["column_only_region2"].iloc[1] == 3
-    # After round-trip, NaN in object-dtype column becomes string "nan"
-    assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
-    assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
+    r1 = sdata2["table"].obs["column_only_region1"]
+    r2 = sdata2["table"].obs["column_only_region2"]
+
+    assert r1.iloc[0] == "string"
+    assert r2.iloc[1] == 3
+    if Version(pd.__version__) >= Version("3"):
+        assert pd.isna(r1.iloc[1])
+    else:  # After round-trip, NaN in object-dtype column becomes string "nan" on pandas 2
+        assert r1.iloc[1] == "nan"
+    assert np.isnan(r2.iloc[0])
