@@ -14,7 +14,7 @@ build:
             - asdf global uv latest
         build:
             html:
-                - uv sync --group=docs --group=torch
+                - uv sync --group=docs --extra=torch
                 - make --directory=docs build
                 - mv docs/_build $READTHEDOCS_OUTPUT
 submodules:
