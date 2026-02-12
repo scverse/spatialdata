@@ -311,7 +311,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
-    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
+    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame], ids=["numpy", "pandas", "dask"])
     @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
     @pytest.mark.parametrize("coordinates", [None, {"x": "A", "y": "B", "z": "C"}])
