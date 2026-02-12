@@ -41,7 +41,7 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-                    sed -i 's/requires-python.*//'
+                    sed -i 's/requires-python.*//' pyproject.toml # otherwise uv complains that anndata requires python>=3.12 and we only do >=3.11 😱
                     uv add git+https://github.com/scverse/anndata.git
                     uv add pandas>=3.dev0
                   fi
