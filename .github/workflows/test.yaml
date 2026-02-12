@@ -11,6 +11,9 @@ on:
 jobs:
     test:
         runs-on: ${{ matrix.os }}
+        defaults:
+            run:
+                shell: bash  # bash also on windows
 
         strategy:
             fail-fast: false
