@@ -41,19 +41,17 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-                    uv sync --group=test  # --prerelease=${PRERELEASE}
-                    uv pip install git+https://github.com/scverse/anndata.git
-                    uv pip install --prerelease=allow pandas>=3
-                  else
-                    uv sync --group=test
+                    uv add git+https://github.com/scverse/anndata.git
+                    uv add pandas>=3.dev0
                   fi
                   if [[ -n "${DASK_VERSION}" ]]; then
                     if [[ "${DASK_VERSION}" == "latest" ]]; then
-                      uv pip install --upgrade dask
+                      uv add dask
                     else
-                      uv pip install dask==${DASK_VERSION}
+                      uv add dask==${DASK_VERSION}
                     fi
                   fi
+                  uv sync --group=test
             - name: Test
               env:
                   MPLBACKEND: agg
