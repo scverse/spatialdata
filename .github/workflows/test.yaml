@@ -42,7 +42,7 @@ jobs:
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
                     uv sync --group=test  # --prerelease=${PRERELEASE}
-                    uv pip install git+https://github.com/scverse/anndata.git pandas>=3.dev0
+                    uv pip install --prerelease=allow git+https://github.com/scverse/anndata.git pandas>=3
                   else
                     uv sync --group=test
                   fi
