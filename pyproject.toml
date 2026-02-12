@@ -51,8 +51,17 @@ dependencies = [
     "xarray-spatial>=0.3.5",
     "zarr>=3.0.0",
 ]
-
 [project.optional-dependencies]
+torch = [
+    "torch"
+]
+extra  = [
+    "napari-spatialdata[all]",
+    "spatialdata-plot",
+    "spatialdata-io",
+]
+
+[dependency-groups]
 dev = [
     "bump2version",
     "sentry-prevent-cli",
@@ -80,14 +89,6 @@ benchmark = [
     "asv",
     "memray",
 ]
-torch = [
-    "torch"
-]
-extra  = [
-    "napari-spatialdata[all]",
-    "spatialdata-plot",
-    "spatialdata-io",
-]
 
 [tool.coverage.run]
 source = ["spatialdata"]
@@ -95,9 +96,9 @@ omit = [
     "**/test_*.py",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
 testpaths = ["tests"]
-xfail_strict = true
+strict = true
 addopts = [
 #    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name

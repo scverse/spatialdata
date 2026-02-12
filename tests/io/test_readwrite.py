@@ -1067,7 +1067,7 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
 
 
-def test_sdata_with_nan_in_obs() -> None:
+def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
     """Test writing SpatialData with mixed string/NaN values in obs works correctly.
 
     Regression test for https://github.com/scverse/spatialdata/issues/399
@@ -1096,14 +1096,13 @@ def test_sdata_with_nan_in_obs() -> None:
     assert sdata["table"].obs["column_only_region1"].iloc[1] is np.nan
     assert np.isnan(sdata["table"].obs["column_only_region2"].iloc[0])
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        path = os.path.join(tmpdir, "data.zarr")
-        sdata.write(path)
+    path = tmp_path / "data.zarr"
+    sdata.write(path)
 
-        sdata2 = SpatialData.read(path)
-        assert "column_only_region1" in sdata2["table"].obs.columns
-        assert sdata2["table"].obs["column_only_region1"].iloc[0] == "string"
-        assert sdata2["table"].obs["column_only_region2"].iloc[1] == 3
-        # After round-trip, NaN in object-dtype column becomes string "nan"
-        assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
-        assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
+    sdata2 = SpatialData.read(path)
+    assert "column_only_region1" in sdata2["table"].obs.columns
+    assert sdata2["table"].obs["column_only_region1"].iloc[0] == "string"
+    assert sdata2["table"].obs["column_only_region2"].iloc[1] == 3
+    # After round-trip, NaN in object-dtype column becomes string "nan"
+    assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
+    assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
