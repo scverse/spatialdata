@@ -417,6 +417,14 @@ class TestModels:
         adata = AnnData(RNG.normal(size=(10, 2)), obs=obs)
         table = model.parse(adata, region=region, region_key=region_key, instance_key="A")
         assert region_key in table.obs
+
+        # categorical instance_key should be accepted
+        obs_cat = obs.copy()
+        obs_cat["A"] = pd.Categorical(obs_cat["A"])
+        adata_cat = AnnData(RNG.normal(size=(10, 2)), obs=obs_cat)
+        table_cat = model.parse(adata_cat, region=region, region_key=region_key, instance_key="A")
+        assert isinstance(table_cat.obs["A"].dtype, pd.CategoricalDtype)
+
         assert isinstance(table.obs[region_key].dtype, pd.CategoricalDtype)
         assert table.obs[region_key].cat.categories.tolist() == np.unique(region).tolist()
         assert table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY] == region_key

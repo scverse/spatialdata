@@ -1045,13 +1045,14 @@ class TableModel:
                 np.int64,
                 np.uint64,
                 "O",
+                "category",
             ]
             and not pd.api.types.is_string_dtype(data.obs[attr[cls.INSTANCE_KEY]])
             or (dtype == "O" and (val_dtype := type(data.obs[attr[cls.INSTANCE_KEY]].iloc[0])) is not str)
         ):
             dtype = dtype if dtype != "O" else val_dtype
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
+                f"Only int, np.int16, np.int32, np.int64, uint equivalents, categorical or string allowed as dtype for "
                 f"instance_key column in obs. Dtype found to be {dtype}"
             )
         expected_regions = attr[cls.REGION_KEY] if isinstance(attr[cls.REGION_KEY], list) else [attr[cls.REGION_KEY]]
