@@ -1042,9 +1042,13 @@ class TableModel:
         def _is_int_or_str_dtype(d: np.dtype) -> bool:
             return d in _INT_TYPES or isinstance(d, pd.StringDtype)
 
-        is_valid = _is_int_or_str_dtype(dtype) or (
-            isinstance(dtype, pd.CategoricalDtype) and _is_int_or_str_dtype(dtype.categories.dtype)
-        )
+        # First, check the top-level dtype (covers plain int and StringDtype cases)
+        is_valid = _is_int_or_str_dtype(dtype)
+        # Explicitly handle categorical dtypes by inspecting the categories' dtype, including
+        # object-backed string categories via is_string_dtype on the categories' dtype.
+        if isinstance(dtype, pd.CategoricalDtype):
+            cat_dtype = dtype.categories.dtype
+            is_valid = is_valid or _is_int_or_str_dtype(cat_dtype) or pd.api.types.is_string_dtype(cat_dtype)
         # the string case is already covered above, the check below covers the case of dtype("O") with string dtype
         is_valid = is_valid or pd.api.types.is_string_dtype(instance_col)
 
