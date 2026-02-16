@@ -508,7 +508,7 @@ class TestModels:
     def test_table_instance_key_dtype_validation(self, instance_key_values, instance_key_dtype, should_pass):
         """Test that _validate_table_annotation_metadata accepts/rejects the correct dtypes for instance_key."""
         n = 5
-        region = ["sample"] * n
+        region = "sample"
         region_key = "region"
         obs = pd.DataFrame(index=list(map(str, range(n))))
         obs[region_key] = pd.Categorical(region)
