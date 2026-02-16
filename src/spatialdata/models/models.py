@@ -1047,39 +1047,26 @@ class TableModel:
             raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[self.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
-        dtype = data.obs[attr[self.INSTANCE_KEY]].dtype
+        instance_col = data.obs[attr[self.INSTANCE_KEY]]
+        dtype = instance_col.dtype
 
-        # Check if dtype is valid for instance_key column
-        is_valid_dtype = False
+        _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
 
-        # Check for integer types
-        if dtype in [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64] or isinstance(
-            dtype, pd.StringDtype
-        ):
-            is_valid_dtype = True
-        # Check for CategoricalDtype with string categories
-        elif isinstance(dtype, pd.CategoricalDtype):
-            if pd.api.types.is_string_dtype(dtype.categories.dtype) or isinstance(
-                dtype.categories.dtype, pd.StringDtype
-            ):
-                is_valid_dtype = True
-        # Check for object dtype with string values
-        elif dtype == "O":
-            if len(data.obs[attr[self.INSTANCE_KEY]]) > 0:
-                val_dtype = type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])
-                if val_dtype is str:
-                    is_valid_dtype = True
-            else:
-                # Empty column with object dtype is acceptable
-                is_valid_dtype = True
-        # Fallback check using pandas is_string_dtype
-        elif pd.api.types.is_string_dtype(dtype):
-            is_valid_dtype = True
+        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+            return d in _INT_TYPES or isinstance(d, pd.StringDtype)
 
-        if not is_valid_dtype:
+        is_valid = _is_int_or_str_dtype(dtype) or (
+            isinstance(dtype, pd.CategoricalDtype) and _is_int_or_str_dtype(dtype.categories.dtype)
+        )
+        # the string case is already covered above, the check below covers the case of dtype("O") with string dtype
+        is_valid = is_valid or pd.api.types.is_string_dtype(instance_col)
+
+        if not is_valid:
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64, uint equivalents, pandas StringDtype, or string "
-                f"allowed as dtype for instance_key column in obs. Dtype found to be {dtype}"
+                f"Only integer (int, np.int16, np.int32, np.int64, and uint equivalents), string "
+                f"(including pandas StringDtype and object dtype with string values), or categorical "
+                f"with integer/string categories allowed as dtype for instance_key column in obs. "
+                f"Dtype found to be {dtype}"
             )
         expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
         found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
