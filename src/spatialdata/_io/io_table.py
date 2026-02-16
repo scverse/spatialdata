@@ -56,7 +56,7 @@ def write_table(
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
         region, region_key, instance_key = get_table_keys(table)
-        TableModel().validate(table)
+        TableModel.validate(table)
     else:
         region, region_key, instance_key = (None, None, None)
 
