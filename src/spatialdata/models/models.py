@@ -1034,25 +1034,30 @@ class TableModel:
             raise ValueError(f"`{attr[cls.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[cls.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[cls.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
-        if (
-            (dtype := data.obs[attr[cls.INSTANCE_KEY]].dtype)
-            not in [
-                int,
-                np.int16,
-                np.uint16,
-                np.int32,
-                np.uint32,
-                np.int64,
-                np.uint64,
-                "O",
-            ]
-            and not pd.api.types.is_string_dtype(data.obs[attr[cls.INSTANCE_KEY]])
-            or (dtype == "O" and (val_dtype := type(data.obs[attr[cls.INSTANCE_KEY]].iloc[0])) is not str)
-        ):
-            dtype = dtype if dtype != "O" else val_dtype
+        instance_col = data.obs[attr[cls.INSTANCE_KEY]]
+        dtype = instance_col.dtype
+
+        _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
+
+        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+            return d in _INT_TYPES or isinstance(d, pd.StringDtype)
+
+        # First, check the top-level dtype (covers plain int and StringDtype cases)
+        is_valid = _is_int_or_str_dtype(dtype)
+        # Explicitly handle categorical dtypes by inspecting the categories' dtype, including
+        # object-backed string categories via is_string_dtype on the categories' dtype.
+        if isinstance(dtype, pd.CategoricalDtype):
+            cat_dtype = dtype.categories.dtype
+            is_valid = is_valid or _is_int_or_str_dtype(cat_dtype) or pd.api.types.is_string_dtype(cat_dtype)
+        # the string case is already covered above, the check below covers the case of dtype("O") with string dtype
+        is_valid = is_valid or pd.api.types.is_string_dtype(instance_col)
+
+        if not is_valid:
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
-                f"instance_key column in obs. Dtype found to be {dtype}"
+                f"Only integer (int, np.int16, np.int32, np.int64, and uint equivalents), string "
+                f"(including pandas StringDtype and object dtype with string values), or categorical "
+                f"with integer/string categories allowed as dtype for instance_key column in obs. "
+                f"Dtype found to be {dtype}"
             )
         expected_regions = attr[cls.REGION_KEY] if isinstance(attr[cls.REGION_KEY], list) else [attr[cls.REGION_KEY]]
         found_regions = data.obs[attr[cls.REGION_KEY_KEY]].unique().tolist()
