@@ -511,7 +511,7 @@ class TestModels:
         region = "sample"
         region_key = "region"
         obs = pd.DataFrame(index=list(map(str, range(n))))
-        obs[region_key] = pd.Categorical(region)
+        obs[region_key] = pd.Categorical([region] * n)
         if instance_key_dtype is not None:
             obs["instance_id"] = pd.array(instance_key_values, dtype=instance_key_dtype)
         else:
