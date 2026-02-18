@@ -79,6 +79,7 @@ docs = [
 benchmark = [
     "asv",
     "memray",
+    "profimp",
 ]
 torch = [
     "torch"
