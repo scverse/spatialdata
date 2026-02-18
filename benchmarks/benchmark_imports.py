@@ -1,4 +1,3 @@
-# type: ignore
 """Benchmarks for import times of the spatialdata package and its submodules.
 
 Each ``timeraw_*`` function returns a snippet of Python code that asv runs in
@@ -7,9 +6,10 @@ module cache.
 """
 
 from collections.abc import Callable
+from typing import Any
 
 
-def _timeraw(func: Callable) -> Callable:
+def _timeraw(func: Any) -> Any:
     """Set asv benchmark attributes for a cold-import timeraw function."""
     func.repeat = 5  # number of independent subprocess measurements
     func.number = 1  # must be 1: second import in same process hits module cache
@@ -17,7 +17,7 @@ def _timeraw(func: Callable) -> Callable:
 
 
 @_timeraw
-def timeraw_import_spatialdata():
+def timeraw_import_spatialdata() -> str:
     """Time a bare ``import spatialdata``."""
     return """
     import spatialdata
@@ -25,7 +25,7 @@ def timeraw_import_spatialdata():
 
 
 @_timeraw
-def timeraw_import_SpatialData():
+def timeraw_import_SpatialData() -> str:
     """Time importing the top-level ``SpatialData`` class."""
     return """
     from spatialdata import SpatialData
@@ -33,7 +33,7 @@ def timeraw_import_SpatialData():
 
 
 @_timeraw
-def timeraw_import_read_zarr():
+def timeraw_import_read_zarr() -> str:
     """Time importing ``read_zarr`` from the top-level namespace."""
     return """
     from spatialdata import read_zarr
@@ -41,7 +41,7 @@ def timeraw_import_read_zarr():
 
 
 @_timeraw
-def timeraw_import_models_elements():
+def timeraw_import_models_elements() -> str:
     """Time importing the main element model classes."""
     return """
     from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
@@ -49,7 +49,7 @@ def timeraw_import_models_elements():
 
 
 @_timeraw
-def timeraw_import_transformations():
+def timeraw_import_transformations() -> str:
     """Time importing the ``spatialdata.transformations`` submodule."""
     return """
     from spatialdata.transformations import Affine, Scale, Translation, Sequence

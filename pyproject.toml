@@ -55,7 +55,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "bump2version",
-    "profimp",
 ]
 test = [
     "pytest",
