@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from collections.abc import Collection
 from types import TracebackType
-from typing import NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
-import pandas as pd
-from anndata import AnnData
+if TYPE_CHECKING:
+    import pandas as pd
+    from anndata import AnnData
 
 
 class ErrorDetails(NamedTuple):
@@ -278,7 +281,7 @@ class _ErrorDetailsCollector:
         self,
         location: str | tuple[str, ...] = (),
         expected_exception: type[BaseException] | tuple[type[BaseException], ...] | None = None,
-    ) -> "_ErrorDetailsCollector":
+    ) -> _ErrorDetailsCollector:
         """
         Set or override error details in advance before an exception is raised.
 

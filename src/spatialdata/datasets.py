@@ -6,14 +6,12 @@ from typing import Any, Literal
 import dask.dataframe.core
 import numpy as np
 import pandas as pd
-import scipy
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.affinity import translate
 from shapely.geometry import MultiPolygon, Point, Polygon
-from skimage.segmentation import slic
 from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.aggregate import aggregate
@@ -89,6 +87,9 @@ class RaccoonDataset:
         self,
     ) -> SpatialData:
         """Raccoon dataset."""
+        import scipy.datasets
+        from skimage.segmentation import slic
+
         im_data = scipy.datasets.face()
         im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)

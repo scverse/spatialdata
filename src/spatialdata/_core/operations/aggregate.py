@@ -9,10 +9,8 @@ import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-from scipy import sparse
 from shapely import Point
 from xarray import DataArray, DataTree
-from xrspatial import zonal_stats
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
@@ -270,6 +268,9 @@ def _aggregate_image_by_labels(
     -------
     AnnData of shape `(by.shape[0], len(agg_func)]`.
     """
+    from scipy import sparse
+    from xrspatial import zonal_stats
+
     if isinstance(by, DataTree):
         assert len(by["scale0"]) == 1
         by = next(iter(by["scale0"].values()))
@@ -467,6 +468,8 @@ def _aggregate_shapes(
         columns_nodes = pd.Categorical(
             columns_categories * (numel // len(columns_categories)), categories=columns_categories
         )
+
+    from scipy import sparse
 
     X = sparse.coo_matrix(
         (
