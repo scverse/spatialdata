@@ -6,7 +6,17 @@ a fresh interpreter, so the measured time reflects a cold import with an empty
 module cache.
 """
 
+from collections.abc import Callable
 
+
+def _timeraw(func: Callable) -> Callable:
+    """Set asv benchmark attributes for a cold-import timeraw function."""
+    func.repeat = 5  # number of independent subprocess measurements
+    func.number = 1  # must be 1: second import in same process hits module cache
+    return func
+
+
+@_timeraw
 def timeraw_import_spatialdata():
     """Time a bare ``import spatialdata``."""
     return """
@@ -14,6 +24,7 @@ def timeraw_import_spatialdata():
     """
 
 
+@_timeraw
 def timeraw_import_SpatialData():
     """Time importing the top-level ``SpatialData`` class."""
     return """
@@ -21,6 +32,7 @@ def timeraw_import_SpatialData():
     """
 
 
+@_timeraw
 def timeraw_import_read_zarr():
     """Time importing ``read_zarr`` from the top-level namespace."""
     return """
@@ -28,6 +40,7 @@ def timeraw_import_read_zarr():
     """
 
 
+@_timeraw
 def timeraw_import_models_elements():
     """Time importing the main element model classes."""
     return """
@@ -35,6 +48,7 @@ def timeraw_import_models_elements():
     """
 
 
+@_timeraw
 def timeraw_import_transformations():
     """Time importing the ``spatialdata.transformations`` submodule."""
     return """
