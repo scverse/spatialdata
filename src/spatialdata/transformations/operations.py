@@ -3,16 +3,16 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING
 
-import networkx as nx
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-from skimage.transform import estimate_transform
 
 from spatialdata._logging import logger
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 if TYPE_CHECKING:
+    import networkx as nx
+
     from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models._utils import SpatialElement
     from spatialdata.transformations.transformations import Affine, BaseTransformation
@@ -194,6 +194,8 @@ def remove_transformation(
 
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
+    import networkx as nx
+
     g = nx.DiGraph()
     gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
@@ -236,6 +238,8 @@ def get_transformation_between_coordinate_systems(
     -------
     The transformation to map the source coordinate system to the target coordinate system.
     """
+    import networkx as nx
+
     from spatialdata.models._utils import has_type_spatial_element
     from spatialdata.transformations import Identity, Sequence
 
@@ -373,6 +377,8 @@ def get_transformation_between_landmarks(
     >>> references_coords = PointsModel(points_reference)
     >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
     """
+    from skimage.transform import estimate_transform
+
     from spatialdata import transform
     from spatialdata.models import get_axes_names
     from spatialdata.transformations.transformations import Affine, Sequence

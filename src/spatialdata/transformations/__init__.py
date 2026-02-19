@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,

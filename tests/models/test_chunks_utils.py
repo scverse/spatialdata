@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from spatialdata.models.chunks_utils import Chunks_t, normalize_chunks

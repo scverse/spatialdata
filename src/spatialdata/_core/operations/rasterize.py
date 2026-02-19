@@ -1,11 +1,16 @@
-import dask_image.ndinterp
-import datashader as ds
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import Point
 from xarray import DataArray, DataTree
+
+if TYPE_CHECKING:
+    import datashader as ds
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
@@ -505,6 +510,8 @@ def rasterize_images_labels(
     target_height: float | None = None,
     target_depth: float | None = None,
 ) -> DataArray:
+    import dask_image.ndinterp
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     # get dimensions of the target image
@@ -624,6 +631,8 @@ def rasterize_shapes_points(
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
 ) -> DataArray:
+    import datashader as ds
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
@@ -737,6 +746,8 @@ def rasterize_shapes_points(
 def _default_agg_func(
     data: DaskDataFrame | GeoDataFrame, value_key: str | None, return_single_channel: bool
 ) -> ds.reductions.Reduction:
+    import datashader as ds
+
     if value_key is None:
         return ds.count()
 

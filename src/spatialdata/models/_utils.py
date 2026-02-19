@@ -8,7 +8,6 @@ import dask.dataframe as dd
 import geopandas
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
@@ -29,6 +28,8 @@ Y = "y"
 X = "x"
 
 if TYPE_CHECKING:
+    from anndata import AnnData
+
     from spatialdata.models.models import RasterSchema
 
 

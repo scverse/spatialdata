@@ -6,6 +6,8 @@ various operations through a terminal. Currently, it implements the "peek" funct
 the contents of a SpatialData .zarr dataset. Additional CLI functionalities will be implemented in the future.
 """
 
+from __future__ import annotations
+
 from typing import Literal
 
 import click
