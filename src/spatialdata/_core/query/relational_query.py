@@ -2,7 +2,7 @@ import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, member
 from functools import partial, singledispatch
 from typing import Any, Literal
 
@@ -528,11 +528,11 @@ def _match_rows(
 class JoinTypes(Enum):
     """Available join types for matching elements to tables and vice versa."""
 
-    left = partial(_left_join_spatialelement_table)
-    left_exclusive = partial(_left_exclusive_join_spatialelement_table)
-    inner = partial(_inner_join_spatialelement_table)
-    right = partial(_right_join_spatialelement_table)
-    right_exclusive = partial(_right_exclusive_join_spatialelement_table)
+    left = member(partial(_left_join_spatialelement_table))
+    left_exclusive = member(partial(_left_exclusive_join_spatialelement_table))
+    inner = member(partial(_inner_join_spatialelement_table))
+    right = member(partial(_right_join_spatialelement_table))
+    right_exclusive = member(partial(_right_exclusive_join_spatialelement_table))
 
     def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
         return self.value(*args)
