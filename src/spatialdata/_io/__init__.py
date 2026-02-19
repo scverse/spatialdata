@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from spatialdata._io._utils import get_dask_backing_files
 from spatialdata._io.format import SpatialDataFormatType
 from spatialdata._io.io_points import write_points

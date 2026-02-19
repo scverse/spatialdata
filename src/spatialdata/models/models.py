@@ -1,5 +1,7 @@
 """Models and schema for SpatialData."""
 
+from __future__ import annotations
+
 import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod

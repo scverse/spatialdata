@@ -183,6 +183,9 @@ select = [
 ]
 unfixable = ["B", "C4", "UP", "BLE", "T20", "RET"]
 
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 

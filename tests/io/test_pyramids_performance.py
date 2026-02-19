@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def sdata_with_image(request: "_pytest.fixtures.SubRequest", tmp_path: Path) -> SpatialData:
+def sdata_with_image(request: _pytest.fixtures.SubRequest, tmp_path: Path) -> SpatialData:
     params = request.param if request.param is not None else {}
     width = params.get("width", 2048)
     chunksize = params.get("chunk_size", 1024)

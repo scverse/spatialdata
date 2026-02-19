@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 from abc import ABC, abstractmethod
 from numbers import Number
@@ -71,11 +73,11 @@ class NgffBaseTransformation(ABC):
 
     @classmethod
     @abstractmethod
-    def _from_dict(cls, d: Transformation_t) -> "NgffBaseTransformation":
+    def _from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
         pass
 
     @classmethod
-    def from_dict(cls, d: Transformation_t) -> "NgffBaseTransformation":
+    def from_dict(cls, d: Transformation_t) -> NgffBaseTransformation:
         """
         Initialize a transformation from the Python dict of its json representation.
 
@@ -134,7 +136,7 @@ class NgffBaseTransformation(ABC):
                 d["output"] = d["output"].to_dict()
 
     @abstractmethod
-    def inverse(self) -> "NgffBaseTransformation":
+    def inverse(self) -> NgffBaseTransformation:
         """Return the inverse of the transformation."""
 
     @abstractmethod
@@ -156,7 +158,7 @@ class NgffBaseTransformation(ABC):
         """
 
     @abstractmethod
-    def to_affine(self) -> "NgffAffine":
+    def to_affine(self) -> NgffAffine:
         """Convert the transformation to an affine transformation, whenever the conversion can be made."""
 
     def _validate_transform_points_shapes(self, input_size: int, points_shape: tuple[int, ...]) -> None:
@@ -177,7 +179,7 @@ class NgffBaseTransformation(ABC):
             )
 
     # order of the composition: self is applied first, then the transformation passed as argument
-    def compose_with(self, transformation: "NgffBaseTransformation") -> "NgffBaseTransformation":
+    def compose_with(self, transformation: NgffBaseTransformation) -> NgffBaseTransformation:
         """
         Compose the transfomation object with another transformation
 
@@ -343,7 +345,7 @@ class NgffAffine(NgffBaseTransformation):
         assert isinstance(res, np.ndarray)
         return res
 
-    def to_affine(self) -> "NgffAffine":
+    def to_affine(self) -> NgffAffine:
         return NgffAffine(
             self.affine,
             input_coordinate_system=self.input_coordinate_system,
@@ -381,7 +383,7 @@ class NgffAffine(NgffBaseTransformation):
         cls,
         input_coordinate_system: NgffCoordinateSystem,
         output_coordinate_system: NgffCoordinateSystem,
-    ) -> "NgffAffine":
+    ) -> NgffAffine:
         input_axes = input_coordinate_system.axes_names
         output_axes = output_coordinate_system.axes_names
         m = cls._affine_matrix_from_input_and_output_axes(input_axes, output_axes)

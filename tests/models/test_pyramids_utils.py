@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
