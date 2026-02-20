@@ -14,6 +14,22 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 
 Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for citation and to learn more.
 
+:::{note}
+With dask >= 2025.2.0, users can get an error as described in [#1077](https://github.com/scverse/spatialdata/issues/1064). While we tried implementing fixes in SpatialData, it can be that
+users perform operations on the `Points` data themselves and get this error. In order to prevent it, users can use a context manager we created.
+
+```python
+from spatialdata import disable_dask_tune_optimization
+import contextlib
+...
+
+with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
+    <your operation on points dask dataframe>
+```
+
+This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled.
+:::
+
 [//]: # "numfocus-fiscal-sponsor-attribution"
 
 spatialdata is part of the scverse® project ([website](https://scverse.org), [governance](https://scverse.org/about/roles)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
