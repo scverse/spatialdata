@@ -19,7 +19,7 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: windows-latest, python: "3.11", dask-version: "2025.12.0", name: "Dask 2025.12.0"}
                     - {os: windows-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
                     - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
                     - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
