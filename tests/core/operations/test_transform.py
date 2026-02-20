@@ -586,6 +586,21 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     _ = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
 
 
+def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_path: str):
+    tmpdir = Path(tmp_path) / "tmp.zarr"
+    full_sdata["points_0"] = PointsModel.parse(
+        full_sdata["points_0"].repartition(npartitions=4),
+        transformations={"global": get_transformation(full_sdata["points_0"])},
+    )
+
+    full_sdata.write(tmpdir)
+
+    full_sdata = SpatialData.read(tmpdir)
+
+    # This just needs to run without error
+    transform(full_sdata["points_0"], to_coordinate_system="global")
+
+
 @pytest.mark.parametrize("maintain_positioning", [True, False])
 def test_transform_elements_and_entire_spatial_data_object_multi_hop(
     full_sdata: SpatialData, maintain_positioning: bool
