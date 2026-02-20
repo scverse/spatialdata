@@ -1,16 +1,18 @@
+import contextlib
 import math
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
+from dask import config
 from geopandas.testing import geom_almost_equals
 from xarray import DataArray, DataTree
 
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import unpad_raster
+from spatialdata._utils import disable_dask_tune_optimization, unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
@@ -599,6 +601,24 @@ def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_
 
     # This just needs to run without error
     transform(full_sdata["points_0"], to_coordinate_system="global")
+
+
+@pytest.mark.parametrize(
+    "tune,partition",
+    [
+        (True, None),
+        (False, 4),
+    ],
+)
+def test_dask_tune_contextmanager(full_sdata: SpatialData, partition: int | None, tune: bool):
+    if partition:
+        full_sdata["points_0"] = PointsModel.parse(
+            full_sdata["points_0"].repartition(npartitions=4),
+            transformations={"global": get_transformation(full_sdata["points_0"])},
+        )
+
+    with disable_dask_tune_optimization() if full_sdata["points_0"].npartitions > 1 else contextlib.nullcontext():
+        assert config.config["optimization"]["tune"]["active"] is tune
 
 
 @pytest.mark.parametrize("maintain_positioning", [True, False])
