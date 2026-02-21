@@ -590,17 +590,22 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
 
 def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_path: str):
     tmpdir = Path(tmp_path) / "tmp.zarr"
+    points_memory = full_sdata["points_0"].compute()
     full_sdata["points_0"] = PointsModel.parse(
         full_sdata["points_0"].repartition(npartitions=4),
         transformations={"global": get_transformation(full_sdata["points_0"])},
     )
+    assert points_memory.equals(full_sdata["points_0"].compute())
 
     full_sdata.write(tmpdir)
 
     full_sdata = SpatialData.read(tmpdir)
 
     # This just needs to run without error
-    transform(full_sdata["points_0"], to_coordinate_system="global")
+    data = transform(full_sdata["points_0"], to_coordinate_system="global")
+
+    # test that data still can be computed
+    data.compute()
 
 
 @pytest.mark.parametrize(
