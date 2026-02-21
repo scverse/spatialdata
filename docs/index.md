@@ -27,7 +27,8 @@ with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nu
     <your operation on points dask dataframe>
 ```
 
-This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled.
+This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled. This solves
+the problem discussed in this [dask issue](https://github.com/dask/dask/issues/12193). We are looking into an upstream fix.
 :::
 
 [//]: # "numfocus-fiscal-sponsor-attribution"
