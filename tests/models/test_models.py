@@ -20,6 +20,7 @@ from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from packaging.version import Version
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
@@ -313,7 +314,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
-    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
+    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame], ids=["numpy", "pandas", "dask"])
     @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
     @pytest.mark.parametrize("coordinates", [None, {"x": "A", "y": "B", "z": "C"}])
@@ -467,6 +468,63 @@ class TestModels:
         # we can parse a table when no metadata is present (i.e. the table does not annotate any element)
         del table.uns[TableModel.ATTRS_KEY]
         _ = TableModel.parse(table)
+
+    @pytest.mark.parametrize(
+        "instance_key_values,instance_key_dtype,should_pass",
+        [
+            # pd.StringDtype: accepted (issue #1062)
+            (["id_0", "id_1", "id_2", "id_3", "id_4"], pd.StringDtype(), True),
+            # object dtype with string values: accepted
+            (["id_0", "id_1", "id_2", "id_3", "id_4"], object, True),
+            # CategoricalDtype with object (string) categories: accepted (issue #1062)
+            (
+                pd.Categorical(["id_0", "id_1", "id_2", "id_3", "id_4"]),
+                None,
+                True,
+            ),
+            # CategoricalDtype with StringDtype categories: accepted (issue #1062)
+            (
+                pd.Categorical(pd.array(["id_0", "id_1", "id_2", "id_3", "id_4"], dtype="string")),
+                None,
+                True,
+            ),
+            # CategoricalDtype with integer categories: accepted
+            (
+                pd.Categorical([0, 1, 2, 3, 4]),
+                None,
+                True,
+            ),
+            # CategoricalDtype with float categories: rejected
+            (
+                pd.Categorical([0.0, 1.0, 2.0, 3.0, 4.0]),
+                None,
+                False,
+            ),
+            # integer dtype: accepted
+            ([0, 1, 2, 3, 4], np.int64, True),
+            # float dtype: rejected
+            ([0.0, 1.0, 2.0, 3.0, 4.0], np.float64, False),
+            # object dtype with non-string values: rejected
+            ([0, 1, 2, 3, 4], object, False),
+        ],
+    )
+    def test_table_instance_key_dtype_validation(self, instance_key_values, instance_key_dtype, should_pass):
+        """Test that _validate_table_annotation_metadata accepts/rejects the correct dtypes for instance_key."""
+        n = 5
+        region = "sample"
+        region_key = "region"
+        obs = pd.DataFrame(index=list(map(str, range(n))))
+        obs[region_key] = pd.Categorical([region] * n)
+        if instance_key_dtype is not None:
+            obs["instance_id"] = pd.array(instance_key_values, dtype=instance_key_dtype)
+        else:
+            obs["instance_id"] = instance_key_values
+        adata = AnnData(RNG.normal(size=(n, 2)), obs=obs)
+        if should_pass:
+            _ = TableModel.parse(adata, region=region, region_key=region_key, instance_key="instance_id")
+        else:
+            with pytest.raises(TypeError, match="allowed as dtype for instance_key column"):
+                TableModel.parse(adata, region=region, region_key=region_key, instance_key="instance_id")
 
     @pytest.mark.parametrize(
         "name",
@@ -882,12 +940,12 @@ def test_categories_on_partitioned_dataframe(sdata_blobs: SpatialData):
     assert np.array_equal(df["genes"].to_numpy(), ddf_parsed["genes"].compute().to_numpy())
     assert set(df["genes"].cat.categories.tolist()) == set(ddf_parsed["genes"].compute().cat.categories.tolist())
 
-    # two behavior to investigate later/report to dask (they originate in dask)
-    # TODO: df['genes'].cat.categories has dtype 'object', while ddf_parsed['genes'].compute().cat.categories has dtype
-    #  'string'
-    # this problem should disappear after pandas 3.0 is released
-    assert df["genes"].cat.categories.dtype == "object"
+    if Version(pd.__version__) >= Version("3"):
+        assert df["genes"].cat.categories.dtype == "string"
+    else:
+        assert df["genes"].cat.categories.dtype == "object"
     assert ddf_parsed["genes"].compute().cat.categories.dtype == "string"
 
+    # behavior to investigate later/report to dask
     # TODO: the list of categories are not preserving the order
     assert df["genes"].cat.categories.tolist() != ddf_parsed["genes"].compute().cat.categories.tolist()

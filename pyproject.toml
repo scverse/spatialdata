@@ -26,7 +26,7 @@ dependencies = [
     "annsel>=0.1.2",
     "click",
     "dask-image",
-    "dask>=2025.2.0,<2026.1.2",
+    "dask>=2025.12.0,<2026.1.2",
     "distributed<2026.1.2",
     "datashader",
     "fsspec[s3,http]",
@@ -51,8 +51,17 @@ dependencies = [
     "xarray-spatial>=0.3.5",
     "zarr>=3.0.0",
 ]
-
 [project.optional-dependencies]
+torch = [
+    "torch"
+]
+extra  = [
+    "napari-spatialdata[all]",
+    "spatialdata-plot",
+    "spatialdata-io",
+]
+
+[dependency-groups]
 dev = [
     "bump2version",
 ]
@@ -80,14 +89,6 @@ benchmark = [
     "memray",
     "profimp",
 ]
-torch = [
-    "torch"
-]
-extra  = [
-    "napari-spatialdata[all]",
-    "spatialdata-plot",
-    "spatialdata-io",
-]
 
 [tool.coverage.run]
 source = ["spatialdata"]
@@ -95,11 +96,10 @@ omit = [
     "**/test_*.py",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
 testpaths = ["tests"]
-xfail_strict = true
+strict = true
 addopts = [
-#    "-Werror",  # if 3rd party libs raise DeprecationWarnings, just use filterwarnings below
     "--import-mode=importlib",  # allow using test files with same name
     "-s",  # print output from tests
 ]
@@ -107,11 +107,13 @@ addopts = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "gpu: run test on GPU using CuPY.",
+    "array_api: used by anndata.tests.helpers, not us",
     "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
 ]
 # info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest
 filterwarnings = [
-    #     "ignore:.*U.*mode is deprecated:DeprecationWarning",
+    # "error",  # if 3rd party libs raise DeprecationWarnings, TODO: filter them individually below
+    # "ignore:.*U.*mode is deprecated:DeprecationWarning",
 ]
 
 [tool.jupytext]

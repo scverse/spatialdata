@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import contextlib
 import math
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
+from dask import config
 from geopandas.testing import geom_almost_equals
 from xarray import DataArray, DataTree
 
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import unpad_raster
+from spatialdata._utils import disable_dask_tune_optimization, unpad_raster
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
@@ -586,6 +588,44 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
 
     # this calls transform_element_to_coordinate_system() internally()
     _ = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
+
+
+def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_path: str):
+    tmpdir = Path(tmp_path) / "tmp.zarr"
+    points_memory = full_sdata["points_0"].compute()
+    full_sdata["points_0"] = PointsModel.parse(
+        full_sdata["points_0"].repartition(npartitions=4),
+        transformations={"global": get_transformation(full_sdata["points_0"])},
+    )
+    assert points_memory.equals(full_sdata["points_0"].compute())
+
+    full_sdata.write(tmpdir)
+
+    full_sdata = SpatialData.read(tmpdir)
+
+    # This just needs to run without error
+    data = transform(full_sdata["points_0"], to_coordinate_system="global")
+
+    # test that data still can be computed
+    data.compute()
+
+
+@pytest.mark.parametrize(
+    "tune,partition",
+    [
+        (True, None),
+        (False, 4),
+    ],
+)
+def test_dask_tune_contextmanager(full_sdata: SpatialData, partition: int | None, tune: bool):
+    if partition:
+        full_sdata["points_0"] = PointsModel.parse(
+            full_sdata["points_0"].repartition(npartitions=4),
+            transformations={"global": get_transformation(full_sdata["points_0"])},
+        )
+
+    with disable_dask_tune_optimization() if full_sdata["points_0"].npartitions > 1 else contextlib.nullcontext():
+        assert config.config["optimization"]["tune"]["active"] is tune
 
 
 @pytest.mark.parametrize("maintain_positioning", [True, False])

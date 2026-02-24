@@ -64,6 +64,7 @@ _LAZY_IMPORTS: dict[str, str] = {
     # _io.io_zarr
     "read_zarr": "spatialdata._io.io_zarr",
     # _utils
+    "disable_dask_tune_optimization": "spatialdata._utils",
     "get_pyramid_levels": "spatialdata._utils",
     "unpad_raster": "spatialdata._utils",
     # config
@@ -121,6 +122,7 @@ __all__ = [
     # _io.io_zarr
     "read_zarr",
     # _utils
+    "disable_dask_tune_optimization",
     "get_pyramid_levels",
     "unpad_raster",
     # config
@@ -221,7 +223,7 @@ if TYPE_CHECKING:
     from spatialdata._io.io_zarr import read_zarr
 
     # _utils
-    from spatialdata._utils import get_pyramid_levels, unpad_raster
+    from spatialdata._utils import disable_dask_tune_optimization, get_pyramid_levels, unpad_raster
 
     # config
     from spatialdata.config import settings

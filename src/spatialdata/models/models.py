@@ -124,16 +124,24 @@ class RasterSchema:
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling. If ``None`` (the default), a lazy implementation is used
-            (based on ``ome-zarr-py``'s ``resize()``). This computes all scales lazily, using linear interpolation
-            (``order=1``) for images and nearest-neighbor interpolation (``order=0``) for labels.
+            Method to use for multiscale downsampling. The default (``None``) differs between images and labels:
 
-            If a :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value is passed, the
-            ``multiscale_spatial_image.to_multiscale()`` implementation is used instead. For example, the previous
-            default behavior (spatialdata <= 0.7.2) can be replicated by passing ``method=Methods.XARRAY_COARSEN`` for
-            images or ``method=Methods.DASK_IMAGE_NEAREST`` for labels. As of multiscale-spatial-image==2.0.3,
-            ``method=Method.DASK_IMAGE_NEAREST`` is not lazy (leading to high memory usage), therefore the new defaults
-            are preferred.
+            - **Images** (:class:`Image2DModel`, :class:`Image3DModel`): uses
+              ``multiscale_spatial_image.to_multiscale()`` with ``method=Methods.XARRAY_COARSEN``.  This is the
+              same default as in spatialdata <= 0.7.2 and is fast.
+            - **Labels** (:class:`Labels2DModel`, :class:`Labels3DModel`): uses a lazy implementation based on
+              ``ome-zarr-py``'s ``resize()`` (``order=0``, nearest-neighbour). This has lower peak memory usage
+              than the ``multiscale_spatial_image`` implementation.  Note: for images this ome-zarr-py path
+              shows a significant performance regression (both time and memory); see
+              `GitHub issue #1079 <https://github.com/scverse/spatialdata/issues/1079>`_.
+
+            To override the default, pass any
+            :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value, which will force the
+            ``multiscale_spatial_image.to_multiscale()`` code path for all element types.  For example:
+
+            - ``method=Methods.XARRAY_COARSEN`` — coarsening via xarray (fast, default for images).
+            - ``method=Methods.DASK_IMAGE_NEAREST`` — nearest-neighbour via dask-image (not lazy as of
+              multiscale-spatial-image==2.0.3, so it leads to higher memory usage).
         chunks
             Chunks to use for dask array.
         kwargs
@@ -238,7 +246,16 @@ class RasterSchema:
                     method=method,
                     chunks=chunks,
                 )
+            elif C in cls.dims:
+                # Images: multiscale-spatial-image is faster (see https://github.com/scverse/spatialdata/issues/1079)
+                data = to_multiscale_msi(
+                    data,
+                    scale_factors=scale_factors,
+                    method=Methods.XARRAY_COARSEN,
+                    chunks=chunks,
+                )
             else:
+                # Labels: ome-zarr-py based implementation uses less memory
                 data = to_multiscale_ozp(
                     data,
                     scale_factors=scale_factors,
@@ -1036,25 +1053,30 @@ class TableModel:
             raise ValueError(f"`{attr[cls.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[cls.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[cls.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
-        if (
-            (dtype := data.obs[attr[cls.INSTANCE_KEY]].dtype)
-            not in [
-                int,
-                np.int16,
-                np.uint16,
-                np.int32,
-                np.uint32,
-                np.int64,
-                np.uint64,
-                "O",
-            ]
-            and not pd.api.types.is_string_dtype(data.obs[attr[cls.INSTANCE_KEY]])
-            or (dtype == "O" and (val_dtype := type(data.obs[attr[cls.INSTANCE_KEY]].iloc[0])) is not str)
-        ):
-            dtype = dtype if dtype != "O" else val_dtype
+        instance_col = data.obs[attr[cls.INSTANCE_KEY]]
+        dtype = instance_col.dtype
+
+        _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
+
+        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+            return d in _INT_TYPES or isinstance(d, pd.StringDtype)
+
+        # First, check the top-level dtype (covers plain int and StringDtype cases)
+        is_valid = _is_int_or_str_dtype(dtype)
+        # Explicitly handle categorical dtypes by inspecting the categories' dtype, including
+        # object-backed string categories via is_string_dtype on the categories' dtype.
+        if isinstance(dtype, pd.CategoricalDtype):
+            cat_dtype = dtype.categories.dtype
+            is_valid = is_valid or _is_int_or_str_dtype(cat_dtype) or pd.api.types.is_string_dtype(cat_dtype)
+        # the string case is already covered above, the check below covers the case of dtype("O") with string dtype
+        is_valid = is_valid or pd.api.types.is_string_dtype(instance_col)
+
+        if not is_valid:
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
-                f"instance_key column in obs. Dtype found to be {dtype}"
+                f"Only integer (int, np.int16, np.int32, np.int64, and uint equivalents), string "
+                f"(including pandas StringDtype and object dtype with string values), or categorical "
+                f"with integer/string categories allowed as dtype for instance_key column in obs. "
+                f"Dtype found to be {dtype}"
             )
         expected_regions = attr[cls.REGION_KEY] if isinstance(attr[cls.REGION_KEY], list) else [attr[cls.REGION_KEY]]
         found_regions = data.obs[attr[cls.REGION_KEY_KEY]].unique().tolist()

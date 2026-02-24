@@ -185,7 +185,7 @@ def test_get_centroids_invalid_element(images):
         region_key="region",
         instance_key="instance_id",
     )
-    with pytest.raises(ValueError, match="The object type <class 'anndata._core.anndata.AnnData'> is not supported."):
+    with pytest.raises(ValueError, match=r"The object type <class 'anndata.*AnnData'> is not supported"):
         get_centroids(adata)
 
 
