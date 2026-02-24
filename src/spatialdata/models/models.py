@@ -122,16 +122,24 @@ class RasterSchema:
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling. If ``None`` (the default), a lazy implementation is used
-            (based on ``ome-zarr-py``'s ``resize()``). This computes all scales lazily, using linear interpolation
-            (``order=1``) for images and nearest-neighbor interpolation (``order=0``) for labels.
+            Method to use for multiscale downsampling. The default (``None``) differs between images and labels:
 
-            If a :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value is passed, the
-            ``multiscale_spatial_image.to_multiscale()`` implementation is used instead. For example, the previous
-            default behavior (spatialdata <= 0.7.2) can be replicated by passing ``method=Methods.XARRAY_COARSEN`` for
-            images or ``method=Methods.DASK_IMAGE_NEAREST`` for labels. As of multiscale-spatial-image==2.0.3,
-            ``method=Method.DASK_IMAGE_NEAREST`` is not lazy (leading to high memory usage), therefore the new defaults
-            are preferred.
+            - **Images** (:class:`Image2DModel`, :class:`Image3DModel`): uses
+              ``multiscale_spatial_image.to_multiscale()`` with ``method=Methods.XARRAY_COARSEN``.  This is the
+              same default as in spatialdata <= 0.7.2 and is fast.
+            - **Labels** (:class:`Labels2DModel`, :class:`Labels3DModel`): uses a lazy implementation based on
+              ``ome-zarr-py``'s ``resize()`` (``order=0``, nearest-neighbour). This has lower peak memory usage
+              than the ``multiscale_spatial_image`` implementation.  Note: for images this ome-zarr-py path
+              shows a significant performance regression (both time and memory); see
+              `GitHub issue #1079 <https://github.com/scverse/spatialdata/issues/1079>`_.
+
+            To override the default, pass any
+            :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value, which will force the
+            ``multiscale_spatial_image.to_multiscale()`` code path for all element types.  For example:
+
+            - ``method=Methods.XARRAY_COARSEN`` — coarsening via xarray (fast, default for images).
+            - ``method=Methods.DASK_IMAGE_NEAREST`` — nearest-neighbour via dask-image (not lazy as of
+              multiscale-spatial-image==2.0.3, so it leads to higher memory usage).
         chunks
             Chunks to use for dask array.
         kwargs
@@ -236,7 +244,16 @@ class RasterSchema:
                     method=method,
                     chunks=chunks,
                 )
+            elif C in cls.dims:
+                # Images: multiscale-spatial-image is faster (see https://github.com/scverse/spatialdata/issues/1079)
+                data = to_multiscale_msi(
+                    data,
+                    scale_factors=scale_factors,
+                    method=Methods.XARRAY_COARSEN,
+                    chunks=chunks,
+                )
             else:
+                # Labels: ome-zarr-py based implementation uses less memory
                 data = to_multiscale_ozp(
                     data,
                     scale_factors=scale_factors,
