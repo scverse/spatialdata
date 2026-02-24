@@ -14,25 +14,63 @@ pip install -e '.[docs,test,benchmark]'
 
 ## Usage
 
-Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method e.g. the option `-b timeraw_import_inspect` selects the function `timeraw_import_inspect` in `benchmarks/spatialdata_benchmark.py`. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
+Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
 
-Importing the SpatialData library can take around 4 seconds:
+### Import time benchmarks
+
+Import benchmarks live in `benchmarks/benchmark_imports.py`. Each `timeraw_*` function returns a Python code snippet that asv runs in a fresh interpreter (cold import, empty module cache):
+
+Run all import benchmarks in your current environment:
 
 ```
-PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b timeraw_import_inspect
-Couldn't load asv.plugins._mamba_helpers because
-No module named 'conda'
-· Discovering benchmarks
-· Running 1 total benchmarks (1 commits * 1 environments * 1 benchmarks)
-[ 0.00%] ·· Benchmarking existing-py_opt_homebrew_Caskroom_mambaforge_base_envs_spatialdata2_bin_python3.12
-[50.00%] ··· Running (spatialdata_benchmark.timeraw_import_inspect--).
-[100.00%] ··· spatialdata_benchmark.timeraw_import_inspect                                                                            3.65±0.2s
+asv run --python=same --show-stderr -b timeraw
 ```
+
+Or a single one:
+
+```
+asv run --python=same --show-stderr -b timeraw_import_spatialdata
+```
+
+### Comparing the current branch against `main`
+
+The simplest way is `asv continuous`, which builds both commits, runs the benchmarks, and prints the comparison in one shot:
+
+```bash
+asv continuous --show-stderr -v -b timeraw main faster-import
+```
+
+Replace `faster-import` with any branch name or commit hash. The `-v` flag prints per-sample timings; drop it for a shorter summary.
+
+Alternatively, collect results separately and compare afterwards:
+
+```bash
+# 1. Collect results for the tip of main and the tip of your branch
+asv run --show-stderr -b timeraw main
+asv run --show-stderr -b timeraw HEAD
+
+# 2. Print a side-by-side comparison
+asv compare main HEAD
+```
+
+Both approaches build isolated environments from scratch. If you prefer to skip the rebuild and reuse your current environment (faster, less accurate):
+
+```bash
+asv run --python=same --show-stderr -b timeraw HEAD
+
+git stash && git checkout main
+asv run --python=same --show-stderr -b timeraw HEAD
+git checkout - && git stash pop
+
+asv compare main HEAD
+```
+
+### Querying benchmarks
 
 Querying using a bounding box without a spatial index is highly impacted by large amounts of points (transcripts), more than table rows (cells).
 
 ```
-$ PYTHONWARNINGS="ignore" asv run --python=same --show-stderr -b time_query_bounding_box
+$ asv run --python=same --show-stderr -b time_query_bounding_box
 
 [100.00%] ··· ======== ============ ============= ============= ==============
               --                filter_table / n_transcripts_per_cell

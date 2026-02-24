@@ -64,7 +64,6 @@ extra  = [
 [dependency-groups]
 dev = [
     "bump2version",
-    "sentry-prevent-cli",
 ]
 test = [
     "pytest",
@@ -88,6 +87,7 @@ docs = [
 benchmark = [
     "asv",
     "memray",
+    "profimp",
 ]
 
 [tool.coverage.run]
@@ -184,6 +184,9 @@ select = [
     "PGH", # pygrep-hooks
 ]
 unfixable = ["B", "C4", "UP", "BLE", "T20", "RET"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

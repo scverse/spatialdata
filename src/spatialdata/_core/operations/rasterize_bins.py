@@ -9,9 +9,7 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
-from scipy.sparse import csc_matrix
 from shapely import MultiPolygon, Point, Polygon
-from skimage.transform import estimate_transform
 from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
@@ -126,6 +124,8 @@ def rasterize_bins(
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
     else:
+        from skimage.transform import estimate_transform
+
         # get the transformation
         if table.n_obs < 6:
             raise ValueError("At least 6 bins are needed to estimate the transformation.")
@@ -176,6 +176,8 @@ def rasterize_bins(
         return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
 
     keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
+
+    from scipy.sparse import csc_matrix
 
     if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
         table.X, csc_matrix | np.ndarray

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from spatialdata.transformations._utils import convert_transformations_to_affine
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Affine, Scale, Sequence, Translation
