@@ -89,11 +89,11 @@ def get_bounding_box_corners(
     return output.squeeze().drop_vars("box")
 
 
-@nb.jit(parallel=False, nopython=True)
+@nb.njit(parallel=False, nopython=True)
 def _create_slices_and_translation(
-    min_values: nb.types.Array,
-    max_values: nb.types.Array,
-) -> tuple[nb.types.Array, nb.types.Array]:
+    min_values: nb.types.Array[nb.float64, nb.float64],
+    max_values: nb.types.Array[nb.float64, nb.float64],
+) -> tuple[nb.types.Array[nb.float64, nb.float64], nb.types.Array[nb.float64, nb.float64]]:
     n_boxes, n_dims = min_values.shape
     slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
     translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
