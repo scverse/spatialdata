@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+import pytest
+from upath import UPath
+
+from spatialdata import SpatialData
+from spatialdata.testing import assert_spatial_data_objects_are_identical
+
+# Azure emulator connection string (Azurite default)
+# Source: https://learn.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string
+AZURE_CONNECTION_STRING = (
+    "DefaultEndpointsProtocol=http;"
+    "AccountName=devstoreaccount1;"
+    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
+    "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+)
+
+
+def _get_azure_upath(container: str = "test-container", path: str = "test.zarr") -> UPath:
+    """Create Azure UPath for testing with Azurite (local emulator)."""
+    return UPath(f"az://{container}/{path}", connection_string=AZURE_CONNECTION_STRING)
+
+
+def _get_s3_upath(container: str = "bucket", path: str = "test.zarr") -> UPath:
+    """Create S3 UPath for testing.
+
+    Uses anon=True for public buckets. For private buckets with moto (local S3 emulator),
+    would use: endpoint_url="http://127.0.0.1:5555/", AWS_ACCESS_KEY_ID="testing", etc.
+    """
+    return UPath(f"s3://{container}/{path}", anon=True)
+
+
+def _get_gcs_upath(container: str = "bucket", path: str = "test.zarr") -> UPath:
+    """Create GCS UPath for testing with fake-gcs-server (local GCS emulator)."""
+    return UPath(f"gs://{container}/{path}", endpoint_url="http://localhost:4443")
+
+
+# Shared parametrization for remote storage backends (azure, s3, gcs).
+GET_UPATH_PARAMS = pytest.mark.parametrize(
+    "get_upath", [_get_azure_upath, _get_s3_upath, _get_gcs_upath], ids=["azure", "s3", "gcs"]
+)
+REMOTE_STORAGE_PARAMS = pytest.mark.parametrize(
+    "get_upath,storage_name",
+    [(_get_azure_upath, "azure"), (_get_s3_upath, "s3"), (_get_gcs_upath, "gcs")],
+    ids=["azure", "s3", "gcs"],
+)
+
+
+def _assert_read_identical(expected: SpatialData, upath: UPath, *, check_path: bool = True) -> None:
+    """Read SpatialData from upath and assert it equals expected; optionally assert path."""
+    sdata_read = SpatialData.read(upath)
+    if check_path:
+        assert isinstance(sdata_read.path, UPath)
+        assert sdata_read.path == upath
+    assert_spatial_data_objects_are_identical(expected, sdata_read)
+
+
+class TestPathSetter:
+    """Test SpatialData.path setter with UPath objects."""
+
+    @GET_UPATH_PARAMS
+    def test_path_setter_accepts_upath(self, get_upath) -> None:
+        """Test that SpatialData.path setter accepts UPath for remote storage.
+
+        This test fails, reproducing issue #441: SpatialData.path setter only accepts
+        None | str | Path, not UPath, preventing the use of remote storage.
+        """
+        sdata = SpatialData()
+        upath = get_upath()
+        sdata.path = upath
+        assert sdata.path == upath
+
+    @GET_UPATH_PARAMS
+    def test_write_with_upath_sets_path(self, get_upath) -> None:
+        """Test that writing to UPath sets SpatialData.path correctly.
+
+        This test fails because SpatialData.write() rejects UPath in
+        _validate_can_safely_write_to_path() before it can set sdata.path.
+        """
+        sdata = SpatialData()
+        upath = get_upath()
+        sdata.write(upath)
+        assert isinstance(sdata.path, UPath)
+
+    def test_path_setter_rejects_other_types(self) -> None:
+        """Test that SpatialData.path setter rejects other types."""
+        sdata = SpatialData()
+
+        with pytest.raises(TypeError, match="Path must be.*str.*Path"):
+            sdata.path = 123
+
+        with pytest.raises(TypeError, match="Path must be.*str.*Path"):
+            sdata.path = {"not": "a path"}
+
+
+class TestRemoteStorage:
+    """Test end-to-end remote storage workflows with UPath.
+
+    Note: These tests require appropriate emulators running (Azurite for Azure,
+    moto for S3, fake-gcs-server for GCS). Tests will fail if emulators are not available.
+    """
+
+    @REMOTE_STORAGE_PARAMS
+    def test_write_read_roundtrip_remote(
+        self, full_sdata: SpatialData, get_upath, storage_name: str
+    ) -> None:
+        """Test writing and reading SpatialData to/from remote storage.
+
+        This test verifies the full workflow:
+        1. Write SpatialData to remote storage using UPath
+        2. Read SpatialData from remote storage using UPath
+        3. Verify data integrity (round-trip)
+        """
+        upath = get_upath(container=f"test-{storage_name}", path=f"roundtrip-{id(full_sdata)}.zarr")
+
+        full_sdata.write(upath, overwrite=True)
+        assert isinstance(full_sdata.path, UPath)
+        assert full_sdata.path == upath
+
+        _assert_read_identical(full_sdata, upath)
+
+    @REMOTE_STORAGE_PARAMS
+    def test_path_setter_with_remote_then_operations(
+        self, full_sdata: SpatialData, get_upath, storage_name: str
+    ) -> None:
+        """Test setting remote path, then performing operations.
+
+        This test verifies that after setting a remote path:
+        1. Path is correctly stored
+        2. Write operations work
+        3. Read operations work
+        """
+        upath = get_upath(container=f"test-{storage_name}", path=f"operations-{id(full_sdata)}.zarr")
+
+        full_sdata.path = upath
+        assert full_sdata.path == upath
+        assert full_sdata.is_backed() is True
+
+        full_sdata.write(overwrite=True)
+        assert full_sdata.path == upath
+
+        _assert_read_identical(full_sdata, upath)
+
+    @REMOTE_STORAGE_PARAMS
+    def test_overwrite_existing_remote_data(
+        self, full_sdata: SpatialData, get_upath, storage_name: str
+    ) -> None:
+        """Test overwriting existing data in remote storage.
+
+        Verifies that overwriting existing remote data works (path-exists handling)
+        and data integrity after overwrite. Round-trip is covered by
+        test_write_read_roundtrip_remote.
+        """
+        upath = get_upath(container=f"test-{storage_name}", path=f"overwrite-{id(full_sdata)}.zarr")
+
+        full_sdata.write(upath, overwrite=True)
+        full_sdata.write(upath, overwrite=True)
+        _assert_read_identical(full_sdata, upath, check_path=False)
+
+    @REMOTE_STORAGE_PARAMS
+    def test_write_element_to_remote_storage(
+        self, full_sdata: SpatialData, get_upath, storage_name: str
+    ) -> None:
+        """Test writing individual elements to remote storage using write_element().
+
+        This test verifies that:
+        1. Setting path to remote UPath works
+        2. write_element() works with remote storage
+        3. Written elements can be read back correctly
+        """
+        upath = get_upath(container=f"test-{storage_name}", path=f"write-element-{id(full_sdata)}.zarr")
+
+        # Create empty SpatialData and write to remote storage
+        empty_sdata = SpatialData()
+        empty_sdata.write(upath, overwrite=True)
+
+        # Set path and write individual elements
+        full_sdata.path = upath
+        assert full_sdata.path == upath
+
+        # Write each element type individually
+        for element_type, element_name, _ in full_sdata.gen_elements():
+            full_sdata.write_element(element_name, overwrite=True)
+
+        _assert_read_identical(full_sdata, upath, check_path=False)
