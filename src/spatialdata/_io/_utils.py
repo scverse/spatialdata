@@ -15,6 +15,7 @@ from functools import singledispatch
 from pathlib import Path
 from typing import Any, Literal
 
+import fsspec.asyn as _asyn_mod
 import zarr
 from anndata import AnnData
 from dask._task_spec import Task
@@ -670,3 +671,20 @@ def handle_read_errors(
     else:  # on_bad_files == BadFileHandleMethod.ERROR
         # Let it raise exceptions
         yield
+
+
+# Avoid RuntimeError "Loop is not running" when fsspec closes async sessions at process exit
+# (remote storage: Azure, S3, GCS). _utils is used for all store resolution.
+_orig_sync = _asyn_mod.sync
+
+
+def _fsspec_sync_wrapped(loop, func, *args, timeout=None, **kwargs):
+    try:
+        return _orig_sync(loop, func, *args, timeout=timeout, **kwargs)
+    except RuntimeError as e:
+        if "Loop is not running" in str(e) or "different loop" in str(e):
+            return None
+        raise
+
+
+_asyn_mod.sync = _fsspec_sync_wrapped
