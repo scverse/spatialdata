@@ -1,8 +1,8 @@
-# Storage emulators for tests/io/remote_storage/ (S3, Azure, GCS).
+# Storage emulators for tests in this directory (S3, Azure, GCS).
 # Emulator URLs: S3 127.0.0.1:5000 | Azure 127.0.0.1:10000 | GCS 127.0.0.1:4443
 #
 # Build (from project root):
-#   docker build -f Dockerfile.emulators -t spatialdata-emulators .
+#   docker build -f tests/io/remote_storage/Dockerfile.emulators -t spatialdata-emulators .
 #
 # Run in background (detached):
 #   docker run --rm -d --name spatialdata-emulators -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators
