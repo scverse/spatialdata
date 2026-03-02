@@ -113,6 +113,10 @@ class TestMultiTable:
     def test_set_table_annotates_spatialelement(self, full_sdata, tmp_path):
         tmpdir = Path(tmp_path) / "tmp.zarr"
         del full_sdata["table"].uns[TableModel.ATTRS_KEY]
+        # full_sdata table has region labels2d+poly; set to labels2d only so set_table_annotates_spatialelement succeeds
+        full_sdata["table"].obs["region"] = pd.Categorical(
+            ["labels2d"] * full_sdata["table"].n_obs
+        )
         with pytest.raises(
             TypeError, match="No current annotation metadata found. Please specify both region_key and instance_key."
         ):

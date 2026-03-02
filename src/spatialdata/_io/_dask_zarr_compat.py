@@ -13,7 +13,8 @@ import dask.array as _da
 _orig_to_zarr = _da.to_zarr
 
 # Keys from ome_zarr/dask **kwargs that must not be passed to zarr.Group.create_array()
-_DASK_INTERNAL_KEYS = frozenset({"zarr_format"})
+# dimension_separator: not accepted by all zarr versions in the create_array() path.
+_DASK_INTERNAL_KEYS = frozenset({"zarr_format", "dimension_separator"})
 
 
 def _to_zarr(
