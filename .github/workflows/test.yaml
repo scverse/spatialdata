@@ -53,13 +53,43 @@ jobs:
                     fi
                   fi
                   uv sync --group=test
+            # Start storage emulators (S3, Azure, GCS) only on Linux; service containers are not available on Windows/macOS
+            - name: Build and start storage emulators
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  docker build -f tests/io/remote_storage/Dockerfile.emulators -t spatialdata-emulators .
+                  docker run --rm -d --name spatialdata-emulators \
+                    -p 5000:5000 -p 10000:10000 -p 4443:4443 \
+                    spatialdata-emulators
+            - name: Wait for emulator ports
+              if: matrix.os == 'ubuntu-latest'
+              run: |
+                  echo "Waiting for S3 (5000), Azure (10000), GCS (4443)..."
+                  python3 -c "
+                  import socket, time
+                  for _ in range(45):
+                      try:
+                          for p in (5000, 10000, 4443):
+                              socket.create_connection(('127.0.0.1', p), timeout=2)
+                          print('Emulators ready.')
+                          break
+                      except (socket.error, OSError):
+                          time.sleep(2)
+                  else:
+                      raise SystemExit('Emulators did not become ready.')
+                  "
+            # On Linux, emulators run above so full suite (incl. tests/io/remote_storage/) runs. On Windows/macOS, skip remote_storage.
             - name: Test
               env:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  uv run pytest --cov --color=yes --cov-report=xml
+                  if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+                    uv run pytest --cov --color=yes --cov-report=xml
+                  else
+                    uv run pytest --cov --color=yes --cov-report=xml --ignore=tests/io/remote_storage/
+                  fi
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v5
               with:
