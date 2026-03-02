@@ -8,7 +8,11 @@ from dask.dataframe import read_parquet
 from ome_zarr.format import Format
 
 from spatialdata._io._utils import (
+    _FsspecStoreRoot,
+    _get_store_root,
     _get_transformations_from_ngff_dict,
+    _resolve_zarr_store,
+    _storage_options_from_fs,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
@@ -24,17 +28,21 @@ def _read_points(
     store: str | Path,
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    f = zarr.open(store, mode="r")
+    resolved_store = _resolve_zarr_store(store)
+    f = zarr.open(resolved_store, mode="r")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = f.store_path.store.root
+    store_root = _get_store_root(f.store_path.store)
     path = store_root / f.path / "points.parquet"
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
-    points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
+    if isinstance(path, _FsspecStoreRoot):
+        points = read_parquet(str(path), storage_options=_storage_options_from_fs(path._store.fs))
+    else:
+        points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
     assert isinstance(points, DaskDataFrame)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
@@ -68,7 +76,7 @@ def write_points(
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
 
-    store_root = group.store_path.store.root
+    store_root = _get_store_root(group.store_path.store)
     path = store_root / group.path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
@@ -84,7 +92,10 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    points_without_transform.to_parquet(path)
+    storage_options: dict = {}
+    if isinstance(path, _FsspecStoreRoot):
+        storage_options = _storage_options_from_fs(path._store.fs)
+    points_without_transform.to_parquet(str(path), storage_options=storage_options or None)
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version
