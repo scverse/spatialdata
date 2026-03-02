@@ -1,4 +1,16 @@
+"""Integration tests for remote storage (Azure, S3, GCS) using real emulators.
+
+Emulators must be running (e.g. Docker: docker run -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators).
+Ports: S3/moto 5000, Azure/Azurite 10000, GCS/fake-gcs-server 4443.
+tests/io/conftest.py creates the required buckets/containers when emulators are up.
+
+All remote paths use uuid.uuid4().hex so each test run writes to a unique location.
+"""
+
 from __future__ import annotations
+
+import os
+import uuid
 
 import pytest
 from upath import UPath
@@ -6,8 +18,8 @@ from upath import UPath
 from spatialdata import SpatialData
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 
-# Azure emulator connection string (Azurite default)
-# Source: https://learn.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string
+# Azure emulator connection string (Azurite default).
+# https://learn.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string
 AZURE_CONNECTION_STRING = (
     "DefaultEndpointsProtocol=http;"
     "AccountName=devstoreaccount1;"
@@ -22,20 +34,29 @@ def _get_azure_upath(container: str = "test-container", path: str = "test.zarr")
 
 
 def _get_s3_upath(container: str = "bucket", path: str = "test.zarr") -> UPath:
-    """Create S3 UPath for testing.
-
-    Uses anon=True for public buckets. For private buckets with moto (local S3 emulator),
-    would use: endpoint_url="http://127.0.0.1:5555/", AWS_ACCESS_KEY_ID="testing", etc.
-    """
+    """Create S3 UPath for testing (moto emulator at 5000)."""
+    endpoint = os.environ.get("AWS_ENDPOINT_URL", "http://127.0.0.1:5000")
+    if endpoint:
+        return UPath(
+            f"s3://{container}/{path}",
+            endpoint_url=endpoint,
+            key=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            secret=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
     return UPath(f"s3://{container}/{path}", anon=True)
 
 
 def _get_gcs_upath(container: str = "bucket", path: str = "test.zarr") -> UPath:
-    """Create GCS UPath for testing with fake-gcs-server (local GCS emulator)."""
-    return UPath(f"gs://{container}/{path}", endpoint_url="http://localhost:4443")
+    """Create GCS UPath for testing with fake-gcs-server (port 4443)."""
+    os.environ.setdefault("STORAGE_EMULATOR_HOST", "http://127.0.0.1:4443")
+    return UPath(
+        f"gs://{container}/{path}",
+        endpoint_url=os.environ["STORAGE_EMULATOR_HOST"],
+        token="anon",
+        project="test",
+    )
 
 
-# Shared parametrization for remote storage backends (azure, s3, gcs).
 GET_UPATH_PARAMS = pytest.mark.parametrize(
     "get_upath", [_get_azure_upath, _get_s3_upath, _get_gcs_upath], ids=["azure", "s3", "gcs"]
 )
@@ -44,6 +65,9 @@ REMOTE_STORAGE_PARAMS = pytest.mark.parametrize(
     [(_get_azure_upath, "azure"), (_get_s3_upath, "s3"), (_get_gcs_upath, "gcs")],
     ids=["azure", "s3", "gcs"],
 )
+
+# Ensure buckets/containers exist on emulators before any test (see tests/io/conftest.py)
+pytestmark = pytest.mark.usefixtures("_remote_storage_buckets_containers")
 
 
 def _assert_read_identical(expected: SpatialData, upath: UPath, *, check_path: bool = True) -> None:
@@ -66,7 +90,7 @@ class TestPathSetter:
         None | str | Path, not UPath, preventing the use of remote storage.
         """
         sdata = SpatialData()
-        upath = get_upath()
+        upath = get_upath(path=f"test-accept-{uuid.uuid4().hex}.zarr")
         sdata.path = upath
         assert sdata.path == upath
 
@@ -78,17 +102,15 @@ class TestPathSetter:
         _validate_can_safely_write_to_path() before it can set sdata.path.
         """
         sdata = SpatialData()
-        upath = get_upath()
+        upath = get_upath(path=f"test-write-path-{uuid.uuid4().hex}.zarr")
         sdata.write(upath)
         assert isinstance(sdata.path, UPath)
 
     def test_path_setter_rejects_other_types(self) -> None:
         """Test that SpatialData.path setter rejects other types."""
         sdata = SpatialData()
-
         with pytest.raises(TypeError, match="Path must be.*str.*Path"):
             sdata.path = 123
-
         with pytest.raises(TypeError, match="Path must be.*str.*Path"):
             sdata.path = {"not": "a path"}
 
@@ -101,9 +123,7 @@ class TestRemoteStorage:
     """
 
     @REMOTE_STORAGE_PARAMS
-    def test_write_read_roundtrip_remote(
-        self, full_sdata: SpatialData, get_upath, storage_name: str
-    ) -> None:
+    def test_write_read_roundtrip_remote(self, full_sdata: SpatialData, get_upath, storage_name: str) -> None:
         """Test writing and reading SpatialData to/from remote storage.
 
         This test verifies the full workflow:
@@ -111,12 +131,10 @@ class TestRemoteStorage:
         2. Read SpatialData from remote storage using UPath
         3. Verify data integrity (round-trip)
         """
-        upath = get_upath(container=f"test-{storage_name}", path=f"roundtrip-{id(full_sdata)}.zarr")
-
+        upath = get_upath(container=f"test-{storage_name}", path=f"roundtrip-{uuid.uuid4().hex}.zarr")
         full_sdata.write(upath, overwrite=True)
         assert isinstance(full_sdata.path, UPath)
         assert full_sdata.path == upath
-
         _assert_read_identical(full_sdata, upath)
 
     @REMOTE_STORAGE_PARAMS
@@ -130,37 +148,29 @@ class TestRemoteStorage:
         2. Write operations work
         3. Read operations work
         """
-        upath = get_upath(container=f"test-{storage_name}", path=f"operations-{id(full_sdata)}.zarr")
-
+        upath = get_upath(container=f"test-{storage_name}", path=f"operations-{uuid.uuid4().hex}.zarr")
         full_sdata.path = upath
         assert full_sdata.path == upath
         assert full_sdata.is_backed() is True
-
         full_sdata.write(overwrite=True)
         assert full_sdata.path == upath
-
         _assert_read_identical(full_sdata, upath)
 
     @REMOTE_STORAGE_PARAMS
-    def test_overwrite_existing_remote_data(
-        self, full_sdata: SpatialData, get_upath, storage_name: str
-    ) -> None:
+    def test_overwrite_existing_remote_data(self, full_sdata: SpatialData, get_upath, storage_name: str) -> None:
         """Test overwriting existing data in remote storage.
 
         Verifies that overwriting existing remote data works (path-exists handling)
         and data integrity after overwrite. Round-trip is covered by
         test_write_read_roundtrip_remote.
         """
-        upath = get_upath(container=f"test-{storage_name}", path=f"overwrite-{id(full_sdata)}.zarr")
-
+        upath = get_upath(container=f"test-{storage_name}", path=f"overwrite-{uuid.uuid4().hex}.zarr")
         full_sdata.write(upath, overwrite=True)
         full_sdata.write(upath, overwrite=True)
         _assert_read_identical(full_sdata, upath, check_path=False)
 
     @REMOTE_STORAGE_PARAMS
-    def test_write_element_to_remote_storage(
-        self, full_sdata: SpatialData, get_upath, storage_name: str
-    ) -> None:
+    def test_write_element_to_remote_storage(self, full_sdata: SpatialData, get_upath, storage_name: str) -> None:
         """Test writing individual elements to remote storage using write_element().
 
         This test verifies that:
@@ -168,18 +178,13 @@ class TestRemoteStorage:
         2. write_element() works with remote storage
         3. Written elements can be read back correctly
         """
-        upath = get_upath(container=f"test-{storage_name}", path=f"write-element-{id(full_sdata)}.zarr")
-
+        upath = get_upath(container=f"test-{storage_name}", path=f"write-element-{uuid.uuid4().hex}.zarr")
         # Create empty SpatialData and write to remote storage
         empty_sdata = SpatialData()
         empty_sdata.write(upath, overwrite=True)
-
-        # Set path and write individual elements
         full_sdata.path = upath
         assert full_sdata.path == upath
-
         # Write each element type individually
-        for element_type, element_name, _ in full_sdata.gen_elements():
+        for _element_type, element_name, _ in full_sdata.gen_elements():
             full_sdata.write_element(element_name, overwrite=True)
-
         _assert_read_identical(full_sdata, upath, check_path=False)
