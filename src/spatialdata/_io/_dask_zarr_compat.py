@@ -8,6 +8,8 @@ zarr.Group.create_array() does not accept), avoiding the FutureWarning and keepi
 
 from __future__ import annotations
 
+from typing import Any
+
 import dask.array as _da
 
 _orig_to_zarr = _da.to_zarr
@@ -18,17 +20,17 @@ _DASK_INTERNAL_KEYS = frozenset({"zarr_format", "dimension_separator"})
 
 
 def _to_zarr(
-    arr,
-    url,
-    component=None,
-    storage_options=None,
-    region=None,
-    compute=True,
-    return_stored=False,
-    zarr_array_kwargs=None,
-    zarr_read_kwargs=None,
-    **kwargs,
-):
+    arr: Any,
+    url: Any,
+    component: Any = None,
+    storage_options: Any = None,
+    region: Any = None,
+    compute: bool = True,
+    return_stored: bool = False,
+    zarr_array_kwargs: Any = None,
+    zarr_read_kwargs: Any = None,
+    **kwargs: Any,
+) -> Any:
     """Forward deprecated **kwargs into zarr_array_kwargs, excluding _DASK_INTERNAL_KEYS."""
     if kwargs:
         zarr_array_kwargs = dict(zarr_array_kwargs) if zarr_array_kwargs else {}

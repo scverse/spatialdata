@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -92,7 +93,7 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    storage_options: dict = {}
+    storage_options: dict[str, Any] = {}
     if isinstance(path, _FsspecStoreRoot):
         storage_options = _storage_options_from_fs(path._store.fs)
     points_without_transform.to_parquet(str(path), storage_options=storage_options or None)

@@ -678,7 +678,7 @@ def handle_read_errors(
 _orig_sync = _asyn_mod.sync
 
 
-def _fsspec_sync_wrapped(loop, func, *args, timeout=None, **kwargs):
+def _fsspec_sync_wrapped(loop: Any, func: Any, *args: Any, timeout: Any = None, **kwargs: Any) -> Any:
     try:
         return _orig_sync(loop, func, *args, timeout=timeout, **kwargs)
     except RuntimeError as e:
