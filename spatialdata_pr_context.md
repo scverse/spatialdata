@@ -1,6 +1,7 @@
 # Context for SpatialData PR #1055: Lazy Table Loading
 
 ## PR Link
+
 https://github.com/scverse/spatialdata/pull/1055
 
 ## Background
@@ -8,6 +9,7 @@ https://github.com/scverse/spatialdata/pull/1055
 This PR adds `lazy: bool = False` to `SpatialData.read()` and `read_zarr()` so that AnnData tables are loaded lazily via dask, keeping large matrices out of memory. This matters for Mass Spectrometry Imaging (MSI) datasets where tables can have millions of pixels and hundreds of thousands of m/z bins (e.g. 179,389 x 460,517 = ~40GB dense, though stored as sparse CSC).
 
 ### What the PR already does (6 commits):
+
 - `io_table.py`: Added lazy parameter, uses `anndata.experimental.read_lazy()` when `lazy=True`
 - `io_zarr.py`: Passes `lazy` through to `_read_table()`
 - `spatialdata.py`: Passes `lazy` through to `read_zarr()`; skips eager validation for lazy tables
@@ -17,7 +19,9 @@ This PR adds `lazy: bool = False` to `SpatialData.read()` and `read_zarr()` so t
 - `tests/io/test_readwrite.py`: Added lazy loading tests
 
 ### Benchmark (from PR):
+
 100,000 pixels x 100,000 m/z bins, 3,000 peaks/pixel (~296M non-zeros):
+
 - Memory: 15.4 MB vs 2,270.7 MB (99% savings)
 - Load time: 0.13s vs 1.57s (12x faster)
 
@@ -32,6 +36,7 @@ We tested the PR against real-world MSI datasets and found three important thing
 The original concern was that `read_lazy()` wraps the entire sparse matrix as a single dask chunk, defeating lazy loading. **This is NOT true** with anndata 0.13.
 
 `read_lazy()` internally calls `read_elem_lazy(elem)` without passing `chunks`, which triggers these defaults in `read_elem_lazy`:
+
 - CSC sparse: `(n_rows, 1000)` -- 1000-column chunks
 - CSR sparse: `(1000, n_cols)` -- 1000-row chunks
 - Dense: uses on-disk zarr chunk layout
@@ -63,10 +68,10 @@ Error raised while reading key 'y' of <class 'zarr.core.array.Array'> from /obs
 
 **Root cause**: anndata has two separate IO registries:
 
-| Registry | Readers for zarr.Array | Purpose |
-|---|---|---|
-| **Eager** (`_REGISTRY`) | 8 readers | Used by `read_elem()`, `read_zarr()` |
-| **Lazy** (`_LAZY_REGISTRY`) | 2 readers | Used by `read_elem_lazy()`, `read_lazy()` |
+| Registry                    | Readers for zarr.Array | Purpose                                   |
+| --------------------------- | ---------------------- | ----------------------------------------- |
+| **Eager** (`_REGISTRY`)     | 8 readers              | Used by `read_elem()`, `read_zarr()`      |
+| **Lazy** (`_LAZY_REGISTRY`) | 2 readers              | Used by `read_elem_lazy()`, `read_lazy()` |
 
 The eager registry has a catch-all reader for `IOSpec('', '')` (plain arrays with no encoding metadata). The lazy registry does NOT. So when obs columns are stored without `encoding-type` attributes, eager reading works but lazy reading crashes.
 
@@ -87,13 +92,13 @@ We tested what anndata itself writes:
 
 Then we checked all real datasets:
 
-| Dataset | obs encoding metadata | Created by |
-|---|---|---|
-| Hippocampus.zarr | **MISSING** on all non-categorical columns | Thyra streaming COO converter |
-| mouse_brain.zarr | **MISSING** on all non-categorical columns | Thyra streaming COO converter |
-| sample_A.zarr | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
-| sample_B.zarr | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
-| xenium.zarr | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
+| Dataset          | obs encoding metadata                       | Created by                      |
+| ---------------- | ------------------------------------------- | ------------------------------- |
+| Hippocampus.zarr | **MISSING** on all non-categorical columns  | Thyra streaming COO converter   |
+| mouse_brain.zarr | **MISSING** on all non-categorical columns  | Thyra streaming COO converter   |
+| sample_A.zarr    | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
+| sample_B.zarr    | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
+| xenium.zarr      | `'array'` / `'string-array'` on all columns | Standard anndata `write_zarr()` |
 
 **Conclusion**: The datasets created through anndata's standard `write_zarr()` have proper encoding metadata and `read_lazy()` would work on them. The datasets created by Thyra's streaming COO converter write raw zarr arrays without the encoding attributes. The fix belongs in the writer.
 
@@ -120,18 +125,19 @@ This is not a bug -- it's how `read_lazy()` works. But it's a gotcha for downstr
 Fix Thyra's streaming COO converter to write proper anndata encoding attributes on obs columns. When writing a zarr array for an obs column, add:
 
 - For numeric arrays (int32, float64, etc.):
-  ```python
-  arr = zarr.open_array(path, ...)
-  arr.attrs['encoding-type'] = 'array'
-  arr.attrs['encoding-version'] = '0.2.0'
-  ```
+
+    ```python
+    arr = zarr.open_array(path, ...)
+    arr.attrs['encoding-type'] = 'array'
+    arr.attrs['encoding-version'] = '0.2.0'
+    ```
 
 - For string arrays:
-  ```python
-  arr = zarr.open_array(path, ...)
-  arr.attrs['encoding-type'] = 'string-array'
-  arr.attrs['encoding-version'] = '0.2.0'
-  ```
+    ```python
+    arr = zarr.open_array(path, ...)
+    arr.attrs['encoding-type'] = 'string-array'
+    arr.attrs['encoding-version'] = '0.2.0'
+    ```
 
 With this fix, `read_lazy()` works on all datasets, the PR's current implementation using `read_lazy()` is correct, and the chunking is already optimal for sparse data.
 
@@ -151,6 +157,7 @@ This sidesteps the crash AND the uns dask-wrapping issue, but it's working aroun
 ### The PR as-is
 
 If Option A is done, the PR's current approach (`read_lazy()` on the whole table) is already correct:
+
 - Chunking works for sparse data
 - Query API fixes are in place
 - Validation skipping is correct
@@ -179,11 +186,11 @@ data = table.X[:, feature_indices].compute()
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/spatialdata/_io/io_table.py` | Core lazy loading logic |
-| `src/spatialdata/_io/io_zarr.py` | Passes lazy parameter through |
-| `src/spatialdata/_core/spatialdata.py` | Entry point for `SpatialData.read()` |
-| `src/spatialdata/_core/query/relational_query.py` | Query API fixes for Dataset2D obs |
-| `src/spatialdata/_utils.py` | Helper for lazy AnnData detection |
-| `src/spatialdata/models/models.py` | Validation skip for lazy tables |
+| File                                              | Purpose                              |
+| ------------------------------------------------- | ------------------------------------ |
+| `src/spatialdata/_io/io_table.py`                 | Core lazy loading logic              |
+| `src/spatialdata/_io/io_zarr.py`                  | Passes lazy parameter through        |
+| `src/spatialdata/_core/spatialdata.py`            | Entry point for `SpatialData.read()` |
+| `src/spatialdata/_core/query/relational_query.py` | Query API fixes for Dataset2D obs    |
+| `src/spatialdata/_utils.py`                       | Helper for lazy AnnData detection    |
+| `src/spatialdata/models/models.py`                | Validation skip for lazy tables      |
