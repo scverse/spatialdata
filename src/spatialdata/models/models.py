@@ -1,5 +1,7 @@
 """Models and schema for SpatialData."""
 
+from __future__ import annotations
+
 import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
@@ -14,7 +16,7 @@ from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame, GeoSeries
-from multiscale_spatial_image import to_multiscale
+from multiscale_spatial_image import to_multiscale as to_multiscale_msi
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
 from shapely._geometry import GeometryType
@@ -23,8 +25,6 @@ from shapely.geometry.collection import GeometryCollection
 from shapely.io import from_geojson, from_ragged_array
 from spatial_image import to_spatial_image
 from xarray import DataArray, DataTree
-from xarray_schema.components import ArrayTypeSchema, AttrSchema, AttrsSchema, DimsSchema
-from xarray_schema.dataarray import DataArraySchema
 
 from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
@@ -40,14 +40,18 @@ from spatialdata.models._utils import (
     _validate_mapping_to_coordinate_system_type,
     convert_region_column_to_categorical,
 )
-from spatialdata.transformations._utils import _get_transformations, _set_transformations, compute_coordinates
-from spatialdata.transformations.transformations import BaseTransformation, Identity
+from spatialdata.models.chunks_utils import Chunks_t
+from spatialdata.models.pyramids_utils import ScaleFactors_t  # ozp -> ome-zarr-py
+from spatialdata.models.pyramids_utils import to_multiscale as to_multiscale_ozp
+from spatialdata.transformations._utils import (
+    _get_transformations,
+    _set_transformations,
+    compute_coordinates,
+)
+from spatialdata.transformations.transformations import Identity
 
-# Types
-Chunks_t: TypeAlias = int | tuple[int, ...] | tuple[tuple[int, ...], ...] | Mapping[Any, None | int | tuple[int, ...]]
-ScaleFactors_t = Sequence[dict[str, int] | int]
+__all__ = ["Chunks_t", "ScaleFactors_t"]
 
-Transform_s = AttrSchema(BaseTransformation, None)
 ATTRS_KEY = "spatialdata_attrs"
 
 
@@ -93,11 +97,12 @@ def _parse_transformations(element: SpatialElement, transformations: MappingToCo
     _set_transformations(element, parsed_transformations)
 
 
-class RasterSchema(DataArraySchema):
+class RasterSchema:
     """Base schema for raster data."""
 
     # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     ATTRS_KEY = ATTRS_KEY
+    dims: tuple[str, ...]
 
     @classmethod
     def parse(
@@ -138,13 +143,24 @@ class RasterSchema(DataArraySchema):
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
             and 8x downsampled images.
         method
-            Method to use for multiscale downsampling (default is `'nearest'`). Please refer to
-            :class:`multiscale_spatial_image.to_multiscale` for details.\n
-            Note (advanced): the default choice (`'nearest'`) will keep the original scale lazy and compute each
-            downscaled version. On the other hand `'xarray_coarsen'` will compute each scale lazily (this implies that
-            each scale will be recomputed each time it is accessed unless `.persist()` is manually called to cache the
-            intermediate results). Please refer direclty to the source code of `to_multiscale()` in the
-            `multiscale-spatial-image` for precise information on how this is handled.
+            Method to use for multiscale downsampling. The default (``None``) differs between images and labels:
+
+            - **Images** (:class:`Image2DModel`, :class:`Image3DModel`): uses
+              ``multiscale_spatial_image.to_multiscale()`` with ``method=Methods.XARRAY_COARSEN``.  This is the
+              same default as in spatialdata <= 0.7.2 and is fast.
+            - **Labels** (:class:`Labels2DModel`, :class:`Labels3DModel`): uses a lazy implementation based on
+              ``ome-zarr-py``'s ``resize()`` (``order=0``, nearest-neighbour). This has lower peak memory usage
+              than the ``multiscale_spatial_image`` implementation.  Note: for images this ome-zarr-py path
+              shows a significant performance regression (both time and memory); see
+              `GitHub issue #1079 <https://github.com/scverse/spatialdata/issues/1079>`_.
+
+            To override the default, pass any
+            :class:`~multiscale_spatial_image.to_multiscale.to_multiscale.Methods` value, which will force the
+            ``multiscale_spatial_image.to_multiscale()`` code path for all element types.  For example:
+
+            - ``method=Methods.XARRAY_COARSEN`` — coarsening via xarray (fast, default for images).
+            - ``method=Methods.DASK_IMAGE_NEAREST`` — nearest-neighbour via dask-image (not lazy as of
+              multiscale-spatial-image==2.0.3, so it leads to higher memory usage).
         chunks
             Chunks to use for dask array.
         kwargs
@@ -189,29 +205,29 @@ class RasterSchema(DataArraySchema):
             else:
                 dims = data.dims
             # but if dims don't match the model's dims, throw error
-            if set(dims).symmetric_difference(cls.dims.dims):
-                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
+            if set(dims).symmetric_difference(cls.dims):
+                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
             _reindex = lambda d: d
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
             if not isinstance(data, DaskArray):  # numpy -> dask
                 data = from_array(data)
             if dims is None:
-                dims = cls.dims.dims
+                dims = cls.dims
             else:
-                if len(set(dims).symmetric_difference(cls.dims.dims)) > 0:
-                    raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims.dims}.")
+                if len(set(dims).symmetric_difference(cls.dims)) > 0:
+                    raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
             _reindex = lambda d: dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
-        if tuple(dims) != cls.dims.dims:
+        if tuple(dims) != cls.dims:
             try:
                 if isinstance(data, DataArray):
-                    data = data.transpose(*list(cls.dims.dims))
+                    data = data.transpose(*list(cls.dims))
                 elif isinstance(data, DaskArray):
-                    data = data.transpose(*[_reindex(d) for d in cls.dims.dims])
+                    data = data.transpose(*[_reindex(d) for d in cls.dims])
                 else:
                     raise ValueError(f"Unsupported data type: {type(data)}.")
             except ValueError as e:
@@ -222,15 +238,15 @@ class RasterSchema(DataArraySchema):
 
         # finally convert to spatial image
         if c_coords is not None:
-            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims.dims)
+            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims)
 
-        if c_coords is not None and len(c_coords) != data.shape[cls.dims.dims.index("c")]:
+        if c_coords is not None and len(c_coords) != data.shape[cls.dims.index("c")]:
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
-                f" with length {data.shape[cls.dims.dims.index('c')]}."
+                f" with length {data.shape[cls.dims.index('c')]}."
             )
 
-        data = to_spatial_image(array_like=data, dims=cls.dims.dims, c_coords=c_coords, **kwargs)
+        data = to_spatial_image(array_like=data, dims=cls.dims, c_coords=c_coords, **kwargs)
         # parse transformations
         _parse_transformations(data, transformations)
         # convert to multiscale if needed
@@ -242,23 +258,42 @@ class RasterSchema(DataArraySchema):
                 chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
             if isinstance(chunks, float):
                 chunks = {dim: chunks for index, dim in data.dims}
-            data = to_multiscale(
-                data,
-                scale_factors=scale_factors,
-                method=method,
-                chunks=chunks,
-            )
+            if method is not None:
+                data = to_multiscale_msi(
+                    data,
+                    scale_factors=scale_factors,
+                    method=method,
+                    chunks=chunks,
+                )
+            elif C in cls.dims:
+                # Images: multiscale-spatial-image is faster (see https://github.com/scverse/spatialdata/issues/1079)
+                data = to_multiscale_msi(
+                    data,
+                    scale_factors=scale_factors,
+                    method=Methods.XARRAY_COARSEN,
+                    chunks=chunks,
+                )
+            else:
+                # Labels: ome-zarr-py based implementation uses less memory
+                data = to_multiscale_ozp(
+                    data,
+                    scale_factors=scale_factors,
+                    chunks=chunks,
+                )
             _parse_transformations(data, parsed_transform)
         else:
             # Chunk single scale images
             if chunks is not None:
+                if isinstance(chunks, tuple):
+                    chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
                 data = data.chunk(chunks=chunks)
-        cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
-        return compute_coordinates(data)
+        data = compute_coordinates(data)
+        cls.validate(data)
+        return data
 
-    @singledispatchmethod
-    def validate(self, data: Any) -> None:
+    @classmethod
+    def validate(cls, data: Any) -> None:
         """
         Validate data.
 
@@ -272,19 +307,20 @@ class RasterSchema(DataArraySchema):
         ValueError
             If data is not valid.
         """
-        raise ValueError(
-            f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, Labels2DModel "
-            "or Labels3DModel to construct data that is guaranteed to be valid."
-        )
+        if isinstance(data, DataArray):
+            cls._validate_dataarray(data)
+        elif isinstance(data, DataTree):
+            cls._validate_datatree(data)
+        else:
+            raise ValueError(
+                f"Unsupported data type: {type(data)}. Please use .parse() from Image2DModel, Image3DModel, "
+                "Labels2DModel or Labels3DModel to construct data that is guaranteed to be valid."
+            )
+        cls._check_chunk_size_not_too_large(data)
+        cls._check_transforms_present(data)
 
-    @validate.register(DataArray)
-    def _(self, data: DataArray) -> None:
-        super().validate(data)
-        self._check_chunk_size_not_too_large(data)
-        self._check_transforms_present(data)
-
-    @validate.register(DataTree)
-    def _(self, data: DataTree) -> None:
+    @classmethod
+    def _validate_datatree(cls, data: DataTree) -> None:
         for j, k in zip(data.keys(), [f"scale{i}" for i in np.arange(len(data.keys()))], strict=True):
             if j != k:
                 raise ValueError(f"Wrong key for multiscale data, found: `{j}`, expected: `{k}`.")
@@ -293,11 +329,37 @@ class RasterSchema(DataArraySchema):
             raise ValueError(f"Expected exactly one data variable for the datatree: found `{name}`.")
         name = list(name)[0]
         for d in data:
-            super().validate(data[d][name])
-        self._check_chunk_size_not_too_large(data)
-        self._check_transforms_present(data)
+            cls._validate_dataarray(data[d][name])
 
-    def _check_transforms_present(self, data: DataArray | DataTree) -> None:
+    @classmethod
+    def _validate_dataarray(cls, data: DataArray) -> None:
+        """Validate a single DataArray against this schema's dims, array type, and attrs."""
+        if not isinstance(data, DataArray):
+            raise ValueError(f"Expected DataArray, got {type(data)}")
+        cls._validate_dims(data)
+        cls._validate_array_type(data)
+        cls._validate_attrs(data)
+
+    @classmethod
+    def _validate_dims(cls, data: DataArray) -> None:
+        if len(data.dims) != len(cls.dims):
+            raise ValueError(f"Expected {len(cls.dims)} dimensions, got {len(data.dims)}: {data.dims}")
+        for expected, actual in zip(cls.dims, data.dims, strict=True):
+            if expected != actual:
+                raise ValueError(f"Expected dimension '{expected}', got '{actual}'")
+
+    @classmethod
+    def _validate_array_type(cls, data: DataArray) -> None:
+        if not isinstance(data.data, DaskArray):
+            raise ValueError(f"Expected array type {DaskArray}, got {type(data.data)}")
+
+    @classmethod
+    def _validate_attrs(cls, data: DataArray) -> None:
+        if "transform" not in data.attrs:
+            raise ValueError("Missing required attribute 'transform'")
+
+    @classmethod
+    def _check_transforms_present(cls, data: DataArray | DataTree) -> None:
         parsed_transform = _get_transformations(data)
         if parsed_transform is None:
             raise ValueError(
@@ -305,7 +367,8 @@ class RasterSchema(DataArraySchema):
                 f"raster elements, e.g. images, labels."
             )
 
-    def _check_chunk_size_not_too_large(self, data: DataArray | DataTree) -> None:
+    @classmethod
+    def _check_chunk_size_not_too_large(cls, data: DataArray | DataTree) -> None:
         if isinstance(data, DataArray):
             try:
                 max_per_dimension: dict[int, int] = {}
@@ -347,23 +410,11 @@ class RasterSchema(DataArraySchema):
             assert len(name) == 1
             name = list(name)[0]
             for d in data:
-                super().validate(data[d][name])
-            self._check_chunk_size_not_too_large(data[d][name])
+                cls._check_chunk_size_not_too_large(data[d][name])
 
 
 class Labels2DModel(RasterSchema):
-    dims = DimsSchema((Y, X))
-    array_type = ArrayTypeSchema(DaskArray)
-    attrs = AttrsSchema({"transform": Transform_s})
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(
-            dims=self.dims,
-            array_type=self.array_type,
-            attrs=self.attrs,
-            *args,
-            **kwargs,
-        )
+    dims = (Y, X)
 
     @classmethod
     def parse(  # noqa: D102
@@ -373,64 +424,25 @@ class Labels2DModel(RasterSchema):
     ) -> DataArray | DataTree:
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
-            # Override default scaling method to preserve labels
-            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
         return super().parse(*args, **kwargs)
 
 
 class Labels3DModel(RasterSchema):
-    dims = DimsSchema((Z, Y, X))
-    array_type = ArrayTypeSchema(DaskArray)
-    attrs = AttrsSchema({"transform": Transform_s})
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(
-            dims=self.dims,
-            array_type=self.array_type,
-            attrs=self.attrs,
-            *args,
-            **kwargs,
-        )
+    dims = (Z, Y, X)
 
     @classmethod
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        if kwargs.get("scale_factors") is not None and kwargs.get("method") is None:
-            # Override default scaling method to preserve labels
-            kwargs["method"] = Methods.DASK_IMAGE_NEAREST
         return super().parse(*args, **kwargs)
 
 
 class Image2DModel(RasterSchema):
-    dims = DimsSchema((C, Y, X))
-    array_type = ArrayTypeSchema(DaskArray)
-    attrs = AttrsSchema({"transform": Transform_s})
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(
-            dims=self.dims,
-            array_type=self.array_type,
-            attrs=self.attrs,
-            *args,
-            **kwargs,
-        )
+    dims = (C, Y, X)
 
 
 class Image3DModel(RasterSchema):
-    dims = DimsSchema((C, Z, Y, X))
-    array_type = ArrayTypeSchema(DaskArray)
-    attrs = AttrsSchema({"transform": Transform_s})
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(
-            dims=self.dims,
-            array_type=self.array_type,
-            attrs=self.attrs,
-            *args,
-            **kwargs,
-        )
+    dims = (C, Z, Y, X)
 
 
 class ShapesModel:
@@ -829,7 +841,7 @@ class PointsModel:
             # TODO: dask does not allow for setting divisions directly anymore. We have to decide on forcing the user.
             if feature_key is not None:
                 feature_categ = dd.from_pandas(
-                    data[feature_key].astype(str).astype("category"),
+                    data[feature_key],
                     sort=sort,
                     **kwargs,
                 )
@@ -837,11 +849,15 @@ class PointsModel:
         elif isinstance(data, dd.DataFrame):
             table = data[[coordinates[ax] for ax in axes]]
             table.columns = axes
-            if feature_key is not None:
-                if data[feature_key].dtype.name == "category":
-                    table[feature_key] = data[feature_key]
-                else:
-                    table[feature_key] = data[feature_key].astype(str).astype("category")
+
+        if feature_key is not None:
+            if data[feature_key].dtype.name == "category":
+                table[feature_key] = data[feature_key]
+            else:
+                # this will cause the categories to be unknown and trigger the warning (and performance slowdown) in
+                # _add_metadata_and_validate()
+                table[feature_key] = data[feature_key].astype(str).astype("category")
+
         if instance_key is not None:
             table[instance_key] = data[instance_key]
         for c in [X, Y, Z]:
@@ -895,15 +911,20 @@ class PointsModel:
             assert instance_key in data.columns
             data.attrs[ATTRS_KEY][cls.INSTANCE_KEY] = instance_key
 
-        for c in data.columns:
-            #  Here we are explicitly importing the categories
-            #  but it is a convenient way to ensure that the categories are known.
-            # It also just changes the state of the series, so it is not a big deal.
-            if isinstance(data[c].dtype, CategoricalDtype) and not data[c].cat.known:
-                try:
-                    data[c] = data[c].cat.set_categories(data[c].compute().cat.categories)
-                except ValueError:
-                    logger.info(f"Column `{c}` contains unknown categories. Consider casting it.")
+        if (
+            feature_key is not None
+            and isinstance(data[feature_key].dtype, CategoricalDtype)
+            and not data[feature_key].cat.known
+        ):
+            logger.warning(
+                f"The `feature_key` column {feature_key} is categorical with unknown categories. "
+                "Please ensure the categories are known before calling `PointsModel.parse()` to "
+                "avoid significant performance implications due to the need for dask to compute "
+                "the categories. If you did not use PointsModel.parse() explicitly in your code ("
+                "e.g. this message is coming from a reader in `spatialdata_io`), please report "
+                "this finding."
+            )
+            data[feature_key] = data[feature_key].cat.set_categories(data[feature_key].compute().cat.categories)
 
         _parse_transformations(data, transformations)
         cls.validate(data)
@@ -917,7 +938,8 @@ class TableModel:
     INSTANCE_KEY = "instance_key"
     ATTRS_KEY = ATTRS_KEY
 
-    def _validate_set_region_key(self, data: AnnData, region_key: str | None = None) -> None:
+    @classmethod
+    def _validate_set_region_key(cls, data: AnnData, region_key: str | None = None) -> None:
         """
         Validate the region key in table.uns or set a new region key as the region key column.
 
@@ -940,14 +962,16 @@ class TableModel:
         """
         attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[ATTRS_KEY] = attrs = {}
-        table_region_key = attrs.get(self.REGION_KEY_KEY)
+            raise ValueError(
+                f"No '{ATTRS_KEY}' found in `adata.uns`. Please use TableModel.parse() to initialize the table."
+            )
         if not region_key:
+            table_region_key = attrs.get(cls.REGION_KEY_KEY)
             if not table_region_key:
                 raise ValueError(
                     "No region_key in table.uns and no region_key provided as argument. Please specify 'region_key'."
                 )
-            if data.obs.get(attrs[TableModel.REGION_KEY_KEY]) is None:
+            if data.obs.get(attrs[cls.REGION_KEY_KEY]) is None:
                 raise ValueError(
                     f"Specified region_key in table.uns '{table_region_key}' is not "
                     f"present as column in table.obs. Please specify region_key."
@@ -955,9 +979,10 @@ class TableModel:
         else:
             if region_key not in data.obs:
                 raise ValueError(f"'{region_key}' column not present in table.obs")
-            attrs[self.REGION_KEY_KEY] = region_key
+            attrs[cls.REGION_KEY_KEY] = region_key
 
-    def _validate_set_instance_key(self, data: AnnData, instance_key: str | None = None) -> None:
+    @classmethod
+    def _validate_set_instance_key(cls, data: AnnData, instance_key: str | None = None) -> None:
         """
         Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
 
@@ -984,26 +1009,27 @@ class TableModel:
         """
         attrs = data.uns.get(ATTRS_KEY)
         if attrs is None:
-            data.uns[ATTRS_KEY] = {}
-
+            raise ValueError(
+                f"No '{ATTRS_KEY}' found in `adata.uns`. Please use TableModel.parse() to initialize the table."
+            )
         if not instance_key:
-            if not attrs.get(TableModel.INSTANCE_KEY):
+            if not attrs.get(cls.INSTANCE_KEY):
                 raise ValueError(
                     "No instance_key in table.uns and no instance_key provided as argument. Please "
                     "specify instance_key."
                 )
-            if data.obs.get(attrs[self.INSTANCE_KEY]) is None:
+            if data.obs.get(attrs[cls.INSTANCE_KEY]) is None:
                 raise ValueError(
-                    f"Specified instance_key in table.uns '{attrs.get(self.INSTANCE_KEY)}' is not present"
+                    f"Specified instance_key in table.uns '{attrs.get(cls.INSTANCE_KEY)}' is not present"
                     f" as column in table.obs. Please specify instance_key."
                 )
-        if instance_key:
-            if instance_key in data.obs:
-                attrs[self.INSTANCE_KEY] = instance_key
-            else:
+        else:
+            if instance_key not in data.obs:
                 raise ValueError(f"Instance key column '{instance_key}' not found in table.obs.")
+            attrs[cls.INSTANCE_KEY] = instance_key
 
-    def _validate_table_annotation_metadata(self, data: AnnData) -> None:
+    @classmethod
+    def _validate_table_annotation_metadata(cls, data: AnnData) -> None:
         """
         Validate annotation metadata.
 
@@ -1042,10 +1068,10 @@ class TableModel:
         if "instance_key" not in attr:
             raise ValueError(f"`instance_key` not found in `adata.uns['{ATTRS_KEY}']`." + SUGGESTION)
 
-        if attr[self.REGION_KEY_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
-        if attr[self.INSTANCE_KEY] not in data.obs:
-            raise ValueError(f"`{attr[self.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
+        if attr[cls.REGION_KEY_KEY] not in data.obs:
+            raise ValueError(f"`{attr[cls.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
+        if attr[cls.INSTANCE_KEY] not in data.obs:
+            raise ValueError(f"`{attr[cls.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
 
         # Skip detailed dtype/value validation for lazy-loaded AnnData
         # These checks would trigger data loading, defeating the purpose of lazy loading
@@ -1053,38 +1079,40 @@ class TableModel:
         if _is_lazy_anndata(data):
             return
 
-        if (
-            (dtype := data.obs[attr[self.INSTANCE_KEY]].dtype)
-            not in [
-                int,
-                np.int16,
-                np.uint16,
-                np.int32,
-                np.uint32,
-                np.int64,
-                np.uint64,
-                "O",
-            ]
-            and not pd.api.types.is_string_dtype(data.obs[attr[self.INSTANCE_KEY]])
-            or (dtype == "O" and (val_dtype := type(data.obs[attr[self.INSTANCE_KEY]].iloc[0])) is not str)
-        ):
-            dtype = dtype if dtype != "O" else val_dtype
+        instance_col = data.obs[attr[cls.INSTANCE_KEY]]
+        dtype = instance_col.dtype
+
+        _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
+
+        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+            return d in _INT_TYPES or isinstance(d, pd.StringDtype)
+
+        # First, check the top-level dtype (covers plain int and StringDtype cases)
+        is_valid = _is_int_or_str_dtype(dtype)
+        # Explicitly handle categorical dtypes by inspecting the categories' dtype, including
+        # object-backed string categories via is_string_dtype on the categories' dtype.
+        if isinstance(dtype, pd.CategoricalDtype):
+            cat_dtype = dtype.categories.dtype
+            is_valid = is_valid or _is_int_or_str_dtype(cat_dtype) or pd.api.types.is_string_dtype(cat_dtype)
+        # the string case is already covered above, the check below covers the case of dtype("O") with string dtype
+        is_valid = is_valid or pd.api.types.is_string_dtype(instance_col)
+
+        if not is_valid:
             raise TypeError(
-                f"Only int, np.int16, np.int32, np.int64, uint equivalents or string allowed as dtype for "
-                f"instance_key column in obs. Dtype found to be {dtype}"
+                f"Only integer (int, np.int16, np.int32, np.int64, and uint equivalents), string "
+                f"(including pandas StringDtype and object dtype with string values), or categorical "
+                f"with integer/string categories allowed as dtype for instance_key column in obs. "
+                f"Dtype found to be {dtype}"
             )
-        expected_regions = attr[self.REGION_KEY] if isinstance(attr[self.REGION_KEY], list) else [attr[self.REGION_KEY]]
-        found_regions = data.obs[attr[self.REGION_KEY_KEY]].unique().tolist()
+        expected_regions = attr[cls.REGION_KEY] if isinstance(attr[cls.REGION_KEY], list) else [attr[cls.REGION_KEY]]
+        found_regions = data.obs[attr[cls.REGION_KEY_KEY]].unique().tolist()
         if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
-            raise ValueError(f"Regions in the AnnData object and `{attr[self.REGION_KEY_KEY]}` do not match.")
+            raise ValueError(f"Regions in the AnnData object and `{attr[cls.REGION_KEY_KEY]}` do not match.")
 
         # Warning for object/string columns with NaN in region_key or instance_key
-        instance_key = attr[self.INSTANCE_KEY]
-        region_key = attr[self.REGION_KEY_KEY]
-        for key_name, key_value in [
-            ("region_key", region_key),
-            ("instance_key", instance_key),
-        ]:
+        instance_key = attr[cls.INSTANCE_KEY]
+        region_key = attr[cls.REGION_KEY_KEY]
+        for key_name, key_value in [("region_key", region_key), ("instance_key", instance_key)]:
             if key_value in data.obs:
                 col = data.obs[key_value]
                 col_dtype = col.dtype
@@ -1096,8 +1124,9 @@ class TableModel:
                         "cycles."
                     )
 
+    @classmethod
     def validate(
-        self,
+        cls,
         data: AnnData,
     ) -> AnnData:
         """
@@ -1145,7 +1174,7 @@ class TableModel:
             if not is_lazy and data.obs[instance_key].isnull().values.any():
                 raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
-        self._validate_table_annotation_metadata(data)
+        cls._validate_table_annotation_metadata(data)
 
         return data
 
@@ -1179,6 +1208,9 @@ class TableModel:
         The parsed data.
         """
         validate_table_attr_keys(adata)
+        # Convert view to actual copy to avoid ImplicitModificationWarning when modifying .uns
+        if adata.is_view:
+            adata = adata.copy()
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
@@ -1233,7 +1265,7 @@ class TableModel:
         }
         adata.uns[cls.ATTRS_KEY] = attr
         convert_region_column_to_categorical(adata)
-        cls().validate(adata)
+        cls.validate(adata)
         return adata
 
 
@@ -1268,7 +1300,7 @@ def get_model(
         schema: Schema_t,
         e: SpatialElement,
     ) -> Schema_t:
-        schema().validate(e)
+        schema.validate(e)
         return schema
 
     if isinstance(e, DataArray | DataTree):

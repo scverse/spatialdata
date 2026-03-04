@@ -76,7 +76,7 @@ By including this additional information, the document now provides a more compr
 
 ### Integration testing
 
-Cross-repo integration testing is available in the [spatialdata-integration-testing](https://github.com/scverse/spatialdata-integration-testing/) repo. Please follow the instructions in the Readme. For questions ask Luca.
+Cross-repo integration testing is available in the [spatialdata-integration-testing](https://github.com/scverse/spatialdata-integration-testing/) repo. Please follow the instructions in the Readme (which also includes a video overview).
 
 ## Publishing a release
 
@@ -118,13 +118,24 @@ It's important that the tag for a pre-release follows this naming convention as 
 
 ### Making a release on GitHub and publishing to PyPI
 
-If you already tagged and pushed a commit as explained above and you want to create a release from that tag, you can go to the [Tags page on GitHub](https://github.com/scverse/spatialdata/tags), select the (latest) tag and press the "Create release from tag" button. Please name the release with the same string used for the tag (including the `v` prefix).
+#### Recommended: Create the release via GitHub
 
-Alternatively you can go to the [Releases page on GitHub](https://github.com/scverse/spatialdata/releases) and press the "Draft a new release button". Now press "Choose a tag" and create a new tag.
+- Go to the [Releases page on GitHub](https://github.com/scverse/spatialdata/releases) and press the “Draft a new release” button.
+    - Press “Choose a tag” and create a new tag.
+    - Please name the tag with the same string you intend for the release, including the `v` prefix.
+- Alternatively, go to the [Tags page on GitHub](https://github.com/scverse/spatialdata/tags), select the latest tag, and press “Create release from tag”.
+    - Please name the release with the same string used for the tag (including the `v` prefix).
+- Both approaches lead to the same page and view. From there:
+    - Specify whether the release is a pre-release and whether it should be set as the latest release (use the checkboxes accordingly).
+    - Fill in the release notes (explained in the next section).
+    - Press “Publish release” to make the release available on GitHub.
+- A [GitHub Action](https://github.com/scverse/spatialdata/blob/main/.github/workflows/release.yaml) will automatically build the package and [upload it to PyPI](https://pypi.org/project/spatialdata/#history).
+    - The action may fail; check the [workflow status badge in the README](https://github.com/scverse/spatialdata/actions/workflows/release.yaml).
 
-Both approaches lead to the same page and view. From this, you need to specify if the release is a pre-release or if it should be set as the latest release (please use the checkboxes accordingly).
+#### Not recommended: Manual tag-first workflow
 
-The last step is to fill the releases notes (explained in the next session), after this, you can press the "Publish release" button and the release will be available on GitHub. A [GitHub action](https://github.com/scverse/spatialdata/blob/main/.github/workflows/release.yaml) will automatically build the package and [upload it to PyPI](https://pypi.org/project/spatialdata/#history). The action may fail, so please check the [status badge of the action from the Readme](https://github.com/scverse/spatialdata/actions/workflows/release.yaml).
+- If you already tagged and pushed a commit as explained above and want to create a release from that tag, you can go to the [Tags page on GitHub](https://github.com/scverse/spatialdata/tags), select the latest tag, and press “Create release from tag”.
+    - Please name the release with the same string used for the tag (including the `v` prefix).
 
 #### Writing release notes
 

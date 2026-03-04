@@ -20,13 +20,6 @@ class MemorySpatialData:
         return sdata
 
 
-def timeraw_import_inspect():
-    """Time the import of the spatialdata module."""
-    return """
-    import spatialdata
-    """
-
-
 class TimeMapRaster:
     """Time the."""
 

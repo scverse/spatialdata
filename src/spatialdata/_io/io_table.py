@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -20,9 +23,12 @@ def _read_table(store: str | Path, lazy: bool = False) -> AnnData:
     store
         Path to the zarr store containing the table.
     lazy
-        If True, read the table lazily using anndata.experimental.read_lazy.
-        This requires anndata >= 0.12. If the installed version does not support
-        lazy reading, a warning is raised and the table is read eagerly.
+        If True, read the table lazily using ``anndata.experimental.read_lazy``.
+        This keeps large matrices (X, layers) as dask arrays backed by zarr,
+        so they are only loaded into memory on demand. Requires anndata >= 0.12.
+        If the installed version does not support lazy reading, or if lazy
+        reading fails (e.g. due to missing encoding metadata on disk), a
+        warning is raised and the table is read eagerly.
 
     Returns
     -------
@@ -34,12 +40,20 @@ def _read_table(store: str | Path, lazy: bool = False) -> AnnData:
 
             table = read_lazy(str(store))
         except ImportError:
-            import warnings
-
             warnings.warn(
                 "Lazy reading of tables requires anndata >= 0.12. "
                 "Falling back to eager reading. To enable lazy reading, "
                 "upgrade anndata with: pip install 'anndata>=0.12'",
+                UserWarning,
+                stacklevel=2,
+            )
+            table = read_anndata_zarr(str(store))
+        except Exception as e:
+            warnings.warn(
+                f"Lazy reading failed: {e}. "
+                "This can happen when the zarr store was written without "
+                "anndata encoding metadata on obs/var columns. "
+                "Falling back to eager reading.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -83,7 +97,7 @@ def write_table(
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
         region, region_key, instance_key = get_table_keys(table)
-        TableModel().validate(table)
+        TableModel.validate(table)
     else:
         region, region_key, instance_key = (None, None, None)
 

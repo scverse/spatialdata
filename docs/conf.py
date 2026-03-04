@@ -4,6 +4,8 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+from __future__ import annotations
+
 # -- Path setup --------------------------------------------------------------
 import sys
 from datetime import datetime
@@ -12,6 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
+sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
 
 
 # -- Project information -----------------------------------------------------
@@ -57,6 +60,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
+    *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
 
 autodoc_default_options = {
@@ -123,6 +127,7 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/developers_resources/storage_format/Readme.md",
     "tutorials/notebooks/notebooks/examples/technology_stereoseq.ipynb",
     "tutorials/notebooks/notebooks/examples/technology_curio.ipynb",
+    "tutorials/notebooks/notebooks/examples/technology_cosmx.ipynb",
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 # Ignore warnings.

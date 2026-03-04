@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view 1055 --repo scverse/spatialdata --json title,state,url,headRefName,body)",
+      "Bash(python -c \":*)",
+      "Bash(python -m pytest tests/io/test_readwrite.py -x -v --tb=short)",
+      "Bash(python -m pytest tests/io/test_readwrite.py -x -v --tb=short -k \"lazy\")",
+      "Bash(python -m pytest tests/io/test_readwrite.py::TestReadWrite::test_io_and_lazy_loading_raster -v --tb=long -k \"sdata_container_format1\")",
+      "Bash(python -m pytest tests/io/test_readwrite.py -v --tb=short -k \"TestLazyTableLoading\")",
+      "Bash(python -m pytest tests/core/query/ -v --tb=short)",
+      "Bash(python -W all -c \":*)"
+    ]
+  }
+}

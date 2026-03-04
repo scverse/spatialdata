@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
@@ -192,7 +194,7 @@ class TestMultiTable:
         table = _get_table(region=["poly", "multipoly"])
         subset = table[table.obs.region == "multipoly"]
         with pytest.raises(ValueError, match="Regions in"):
-            TableModel().validate(subset)
+            TableModel.validate(subset)
 
         test_sdata = SpatialData(
             shapes={

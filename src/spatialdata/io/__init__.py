@@ -1,5 +1,7 @@
 """Experimental bridge to the spatialdata_io package."""
 
+from __future__ import annotations
+
 try:
     from spatialdata_io import *  # noqa: F403
 except ImportError as e:

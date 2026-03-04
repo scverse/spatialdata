@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dask.dataframe as dd
 import pandas as pd
 import pytest
