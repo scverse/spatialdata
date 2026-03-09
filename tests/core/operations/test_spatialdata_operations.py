@@ -703,30 +703,18 @@ def test_deconcatenate(full_sdata):
     assert len(regions) == len(table_names)
 
     # MULTIPLE REGIONS ===
-    sdatas = deconcatenate(
-        full_sdata,
-        by=regions,
-        target_coordinate_system="global",
-        sdatas_table_names=table_names
-    )
+    sdatas = deconcatenate(full_sdata, by=regions, target_coordinate_system="global", sdatas_table_names=table_names)
 
     assert isinstance(sdatas, list)
     assert len(sdatas) == len(regions)
 
     for sdata, region, table_name in zip(sdatas, regions, table_names):
-
         assert table_name in sdata.tables
         table = sdata.tables[table_name]
         assert (table.obs["region"] == region).all()
 
-
-
     # SINGLE REGION ===
-    single = deconcatenate(
-        full_sdata,
-        by=regions[0],
-        target_coordinate_system="global"
-    )
+    single = deconcatenate(full_sdata, by=regions[0], target_coordinate_system="global")
 
     assert not isinstance(single, list)
     assert "table" in single.tables
