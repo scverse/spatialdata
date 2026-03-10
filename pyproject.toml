@@ -22,7 +22,7 @@ dynamic= [
 license = {file = "LICENSE"}
 readme = "README.md"
 dependencies = [
-    "anndata>=0.9.1",
+    "anndata>=0.12.10",
     "annsel>=0.1.2",
     "click",
     "dask-image",
