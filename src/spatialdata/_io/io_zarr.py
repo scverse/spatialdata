@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
@@ -19,6 +18,8 @@ from zarr.errors import ArrayNotFoundError
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
     BadFileHandleMethod,
+    _FsspecStoreRoot,
+    _get_store_root,
     _resolve_zarr_store,
     handle_read_errors,
 )
@@ -32,7 +33,7 @@ from spatialdata._types import Raster_T
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store_path: str,
+    root_store_path: Path | _FsspecStoreRoot,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -54,7 +55,7 @@ def _read_zarr_group_spatialdata_element(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
-                elem_group_path = os.path.join(root_store_path, elem_group.path)
+                elem_group_path = root_store_path / elem_group.path
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -170,7 +171,7 @@ def read_zarr(
             UserWarning,
             stacklevel=2,
         )
-    root_store_path = root_group.store.root
+    root_store_path = _get_store_root(root_group.store)
 
     images: dict[str, Raster_T] = {}
     labels: dict[str, Raster_T] = {}
@@ -231,12 +232,12 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = resolved_store.root
+    sdata.path = store if isinstance(store, UPath) else resolved_store.root
     return sdata
 
 
 def _get_groups_for_element(
-    zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
+    zarr_path: Path | UPath, element_type: str, element_name: str, use_consolidated: bool = True
 ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
     """
     Get the Zarr groups for the root, element_type and element for a specific element.
@@ -265,8 +266,8 @@ def _get_groups_for_element(
     -------
     The Zarr groups for the root, element_type and element for a specific element.
     """
-    if not isinstance(zarr_path, Path):
-        raise ValueError("zarr_path should be a Path object")
+    if not isinstance(zarr_path, (Path, UPath)):
+        raise ValueError("zarr_path should be a Path or UPath object")
 
     if element_type not in [
         "images",
@@ -289,7 +290,7 @@ def _get_groups_for_element(
     return root_group, element_type_group, element_name_group
 
 
-def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
+def _group_for_element_exists(zarr_path: Path | UPath, element_type: str, element_name: str) -> bool:
     """
     Check if the group for an element exists.
 
@@ -319,9 +320,13 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
     return exists
 
 
-def _write_consolidated_metadata(path: Path | str | None) -> None:
+def _write_consolidated_metadata(path: Path | UPath | str | None) -> None:
     if path is not None:
-        f = zarr.open_group(path, mode="r+", use_consolidated=False)
+        if isinstance(path, UPath):
+            store = _resolve_zarr_store(path)
+            f = zarr.open_group(store, mode="r+", use_consolidated=False)
+        else:
+            f = zarr.open_group(path, mode="r+", use_consolidated=False)
         # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
         # and therefore we silence it for our users as they can't do anything about this.
         # TODO check with remote PR whether we can prevent this warning at least for points data and whether with zarrv3

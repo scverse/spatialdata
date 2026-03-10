@@ -89,12 +89,18 @@ def tables() -> list[AnnData]:
 
 @pytest.fixture()
 def full_sdata() -> SpatialData:
+    # Use two regions so the table categorical has two categories; otherwise anndata does not
+    # write the obs/region/codes/c/0 chunk (only codes/zarr.json), causing 404 on remote read.
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
-        tables=_get_tables(region="labels2d", region_key="region", instance_key="instance_id"),
+        tables=_get_tables(
+            region=["labels2d", "poly"],
+            region_key="region",
+            instance_key="instance_id",
+        ),
     )
 
 
