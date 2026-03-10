@@ -10,6 +10,7 @@ from geopandas import GeoDataFrame
 
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
+from spatialdata._core.deconcatenate import deconcatenate
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -693,3 +694,27 @@ def test_validate_table_in_spatialdata(full_sdata):
     del full_sdata.points["points_0"]
     with pytest.warns(UserWarning, match="in the SpatialData object"):
         full_sdata.validate_table_in_spatialdata(table)
+
+
+def test_deconcatenate(full_sdata):
+
+    regions = ["region1", "region2"]
+    table_names = ["table1", "table2"]
+    assert len(regions) == len(table_names)
+
+    # MULTIPLE REGIONS ===
+    sdatas = deconcatenate(full_sdata, by=regions, target_coordinate_system="global", sdatas_table_names=table_names)
+
+    assert isinstance(sdatas, list)
+    assert len(sdatas) == len(regions)
+
+    for sdata, region, table_name in zip(sdatas, regions, table_names):
+        assert table_name in sdata.tables
+        table = sdata.tables[table_name]
+        assert (table.obs["region"] == region).all()
+
+    # SINGLE REGION ===
+    single = deconcatenate(full_sdata, by=regions[0], target_coordinate_system="global")
+
+    assert not isinstance(single, list)
+    assert "table" in single.tables
