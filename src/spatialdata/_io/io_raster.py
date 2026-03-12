@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -36,6 +37,88 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
+
+
+def _is_flat_int_sequence(value: object) -> bool:
+    if isinstance(value, str | bytes):
+        return False
+    if not isinstance(value, Sequence):
+        return False
+    return all(isinstance(v, int) for v in value)
+
+
+def _is_dask_chunk_grid(value: object) -> bool:
+    if isinstance(value, str | bytes):
+        return False
+    if not isinstance(value, Sequence):
+        return False
+    return len(value) > 0 and all(_is_flat_int_sequence(axis_chunks) for axis_chunks in value)
+
+
+def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
+    # Match Dask's private _check_regular_chunks() logic without depending on its internal API.
+    for axis_chunks in chunk_grid:
+        if len(axis_chunks) <= 1:
+            continue
+        if len(set(axis_chunks[:-1])) > 1:
+            return False
+        if axis_chunks[-1] > axis_chunks[0]:
+            return False
+    return True
+
+
+def _chunks_to_zarr_chunks(chunks: object) -> tuple[int, ...] | int | None:
+    if isinstance(chunks, int):
+        return chunks
+    if _is_flat_int_sequence(chunks):
+        return tuple(chunks)
+    if _is_dask_chunk_grid(chunks):
+        chunk_grid = tuple(tuple(axis_chunks) for axis_chunks in chunks)
+        if _is_regular_dask_chunk_grid(chunk_grid):
+            return tuple(axis_chunks[0] for axis_chunks in chunk_grid)
+        return None
+    return None
+
+
+def _normalize_explicit_chunks(chunks: object) -> tuple[int, ...] | int:
+    normalized = _chunks_to_zarr_chunks(chunks)
+    if normalized is None:
+        raise ValueError(
+            "storage_options['chunks'] must be a Zarr chunk shape or a regular Dask chunk grid. "
+            "Irregular Dask chunk grids must be rechunked before writing or omitted."
+        )
+    return normalized
+
+
+def _prepare_single_scale_storage_options(
+    storage_options: JSONDict | list[JSONDict] | None,
+) -> JSONDict | list[JSONDict] | None:
+    if storage_options is None:
+        return None
+    if isinstance(storage_options, dict):
+        prepared = dict(storage_options)
+        if "chunks" in prepared:
+            prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
+        return prepared
+    return [dict(options) for options in storage_options]
+
+
+def _prepare_multiscale_storage_options(
+    storage_options: JSONDict | list[JSONDict] | None,
+) -> JSONDict | list[JSONDict] | None:
+    if storage_options is None:
+        return None
+    if isinstance(storage_options, dict):
+        prepared = dict(storage_options)
+        if "chunks" in prepared:
+            prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
+        return prepared
+
+    prepared_options = [dict(options) for options in storage_options]
+    for options in prepared_options:
+        if "chunks" in options:
+            options["chunks"] = _normalize_explicit_chunks(options["chunks"])
+    return prepared_options
 
 
 def _read_multiscale(
@@ -251,13 +334,8 @@ def _write_raster_dataarray(
     if transformations is None:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
-    chunks = raster_data.chunks
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    if storage_options is not None:
-        if "chunks" not in storage_options and isinstance(storage_options, dict):
-            storage_options["chunks"] = chunks
-    else:
-        storage_options = {"chunks": chunks}
+    storage_options = _prepare_single_scale_storage_options(storage_options)
     # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
     # We need  this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
@@ -322,10 +400,9 @@ def _write_raster_datatree(
     transformations = _get_transformations_xarray(xdata)
     if transformations is None:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
-    chunks = get_pyramid_levels(raster_data, "chunks")
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    storage_options = [{"chunks": chunk} for chunk in chunks]
+    storage_options = _prepare_multiscale_storage_options(storage_options)
     ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
         pyramid=data,
