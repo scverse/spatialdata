@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard
 
 import dask.array as da
 import numpy as np
@@ -39,7 +39,7 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _is_flat_int_sequence(value: object) -> bool:
+def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
     if isinstance(value, str | bytes):
         return False
     if not isinstance(value, Sequence):
@@ -47,7 +47,7 @@ def _is_flat_int_sequence(value: object) -> bool:
     return all(isinstance(v, int) for v in value)
 
 
-def _is_dask_chunk_grid(value: object) -> bool:
+def _is_dask_chunk_grid(value: object) -> TypeGuard[Sequence[Sequence[int]]]:
     if isinstance(value, str | bytes):
         return False
     if not isinstance(value, Sequence):
