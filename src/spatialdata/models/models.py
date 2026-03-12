@@ -55,6 +55,25 @@ __all__ = ["Chunks_t", "ScaleFactors_t"]
 ATTRS_KEY = "spatialdata_attrs"
 
 
+def _is_lazy_anndata(adata: AnnData) -> bool:
+    """Check if an AnnData object is lazily loaded.
+
+    Lazy AnnData objects (from anndata.experimental.read_lazy) have obs/var
+    stored as xarray Dataset2D instead of pandas DataFrame.
+
+    Parameters
+    ----------
+    adata
+        The AnnData object to check.
+
+    Returns
+    -------
+    True if the AnnData is lazily loaded, False otherwise.
+    """
+    # Check if obs is not a pandas DataFrame (lazy AnnData uses xarray Dataset2D)
+    return not isinstance(adata.obs, pd.DataFrame)
+
+
 def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:
     _validate_mapping_to_coordinate_system_type(transformations)
     transformations_in_element = _get_transformations(element)
@@ -1053,6 +1072,13 @@ class TableModel:
             raise ValueError(f"`{attr[cls.REGION_KEY_KEY]}` not found in `adata.obs`. Please create the column.")
         if attr[cls.INSTANCE_KEY] not in data.obs:
             raise ValueError(f"`{attr[cls.INSTANCE_KEY]}` not found in `adata.obs`. Please create the column.")
+
+        # Skip detailed dtype/value validation for lazy-loaded AnnData
+        # These checks would trigger data loading, defeating the purpose of lazy loading
+        # Validation will occur when data is actually computed/accessed
+        if _is_lazy_anndata(data):
+            return
+
         instance_col = data.obs[attr[cls.INSTANCE_KEY]]
         dtype = instance_col.dtype
 
@@ -1122,6 +1148,10 @@ class TableModel:
         if ATTRS_KEY not in data.uns:
             return data
 
+        # Check if this is a lazy-loaded AnnData (from anndata.experimental.read_lazy)
+        # Lazy AnnData has xarray-based obs/var, which requires different validation
+        is_lazy = _is_lazy_anndata(data)
+
         _, region_key, instance_key = get_table_keys(data)
         if region_key is not None:
             if region_key not in data.obs:
@@ -1129,7 +1159,8 @@ class TableModel:
                     f"Region key `{region_key}` not in `adata.obs`. Please create the column and parse "
                     f"using TableModel.parse(adata)."
                 )
-            if not isinstance(data.obs[region_key].dtype, CategoricalDtype):
+            # Skip dtype validation for lazy tables (would require loading data)
+            if not is_lazy and not isinstance(data.obs[region_key].dtype, CategoricalDtype):
                 raise ValueError(
                     f"`table.obs[{region_key}]` must be of type `categorical`, not `{type(data.obs[region_key])}`."
                 )
@@ -1139,7 +1170,8 @@ class TableModel:
                     f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
                     f" using TableModel.parse(adata)."
                 )
-            if data.obs[instance_key].isnull().values.any():
+            # Skip null check for lazy tables (would require loading data)
+            if not is_lazy and data.obs[instance_key].isnull().values.any():
                 raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
         cls._validate_table_annotation_metadata(data)
