@@ -19,6 +19,7 @@ from numpy.random import default_rng
 from packaging.version import Version
 from shapely import MultiPolygon, Polygon
 from upath import UPath
+from xarray import DataArray
 from zarr.errors import GroupNotFoundError
 
 import spatialdata.config
@@ -653,6 +654,19 @@ def test_write_image_rejects_explicit_irregular_dask_chunk_grid(tmp_path: Path) 
         match="storage_options\\['chunks'\\] must be a Zarr chunk shape or a regular Dask chunk grid",
     ):
         write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+
+def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
+    image = Image2DModel.parse(RNG.random((3, 64, 64)), dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path)
+    sdata_back = read_zarr(path)
+
+    assert isinstance(sdata_back["image"], DataArray)
+    image_group = zarr.open_group(path / "images" / "image", mode="r")
+    assert list(image_group.keys()) == ["s0"]
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)

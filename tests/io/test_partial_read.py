@@ -184,9 +184,9 @@ def sdata_with_corrupted_image_chunks_zarrv3(session_tmp_path: Path) -> PartialR
     sdata.write(sdata_path)
 
     corrupted = "blobs_image"
-    os.unlink(sdata_path / "images" / corrupted / "0" / "zarr.json")  # it will hide the "0" array from the Zarr reader
-    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
-    (sdata_path / "images" / corrupted / "0").touch()
+    os.unlink(sdata_path / "images" / corrupted / "S0" / "zarr.json")  # it will hide the "0" array from the Zarr reader
+    os.rename(sdata_path / "images" / corrupted / "S0", sdata_path / "images" / corrupted / "S0_corrupted")
+    (sdata_path / "images" / corrupted / "S0").touch()
 
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
@@ -206,9 +206,9 @@ def sdata_with_corrupted_image_chunks_zarrv2(session_tmp_path: Path) -> PartialR
     sdata.write(sdata_path, sdata_formats=SpatialDataContainerFormatV01())
 
     corrupted = "blobs_image"
-    os.unlink(sdata_path / "images" / corrupted / "0" / ".zarray")  # it will hide the "0" array from the Zarr reader
-    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
-    (sdata_path / "images" / corrupted / "0").touch()
+    os.unlink(sdata_path / "images" / corrupted / "S0" / ".zarray")  # it will hide the "0" array from the Zarr reader
+    os.rename(sdata_path / "images" / corrupted / "S0", sdata_path / "images" / corrupted / "S0_corrupted")
+    (sdata_path / "images" / corrupted / "S0").touch()
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
     return PartialReadTestCase(
@@ -315,8 +315,8 @@ def sdata_with_missing_image_chunks_zarrv3(
     sdata.write(sdata_path)
 
     corrupted = "blobs_image"
-    os.unlink(sdata_path / "images" / corrupted / "0" / "zarr.json")
-    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
+    os.unlink(sdata_path / "images" / corrupted / "S0" / "zarr.json")
+    os.rename(sdata_path / "images" / corrupted / "S0", sdata_path / "images" / corrupted / "S0_corrupted")
 
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 
@@ -339,8 +339,8 @@ def sdata_with_missing_image_chunks_zarrv2(
     sdata.write(sdata_path, sdata_formats=SpatialDataContainerFormatV01())
 
     corrupted = "blobs_image"
-    os.unlink(sdata_path / "images" / corrupted / "0" / ".zarray")
-    os.rename(sdata_path / "images" / corrupted / "0", sdata_path / "images" / corrupted / "0_corrupted")
+    os.unlink(sdata_path / "images" / corrupted / "S0" / ".zarray")
+    os.rename(sdata_path / "images" / corrupted / "S0", sdata_path / "images" / corrupted / "S0_corrupted")
 
     not_corrupted = [name for _, name, _ in sdata.gen_elements() if name != corrupted]
 

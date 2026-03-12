@@ -336,13 +336,16 @@ def _write_raster_dataarray(
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_single_scale_storage_options(storage_options)
-    # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
-    # We need  this because the argument of write_image_ngff is called image while the argument of
+    # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
+    # write_image()/write_labels() to scale_factors=(2, 4, 8, 16), which would otherwise write s0, s1, ...
+    # even when the input is a plain DataArray.
+    # We need this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
     metadata[raster_type] = data
     ome_zarr_format = get_ome_zarr_format(raster_format)
     write_single_scale_ngff(
         group=group,
+        scale_factors=[],
         scaler=None,
         fmt=ome_zarr_format,
         axes=parsed_axes,
