@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
+import dask.array as da
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -18,6 +19,7 @@ from numpy.random import default_rng
 from packaging.version import Version
 from shapely import MultiPolygon, Polygon
 from upath import UPath
+from xarray import DataArray
 from zarr.errors import GroupNotFoundError
 
 import spatialdata.config
@@ -30,6 +32,7 @@ from spatialdata._io.format import (
     SpatialDataContainerFormatType,
     SpatialDataContainerFormatV01,
 )
+from spatialdata._io.io_raster import write_image
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
 from spatialdata.models._utils import get_channel_names
@@ -621,6 +624,49 @@ def test_bug_rechunking_after_queried_raster():
     with tempfile.TemporaryDirectory() as tmpdir:
         f = os.path.join(tmpdir, "data.zarr")
         queried.write(f)
+
+
+def test_write_irregular_dask_chunks_without_explicit_storage_options(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+
+    sdata.write(tmp_path / "data.zarr")
+
+
+def test_write_image_normalizes_explicit_regular_dask_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+    assert group["s0"].chunks == (3, 300, 512)
+
+
+def test_write_image_rejects_explicit_irregular_dask_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match="storage_options\\['chunks'\\] must be a Zarr chunk shape or a regular Dask chunk grid",
+    ):
+        write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+
+def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
+    image = Image2DModel.parse(RNG.random((3, 64, 64)), dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path)
+    sdata_back = read_zarr(path)
+
+    assert isinstance(sdata_back["image"], DataArray)
+    image_group = zarr.open_group(path / "images" / "image", mode="r")
+    assert list(image_group.keys()) == ["s0"]
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
