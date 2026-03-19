@@ -626,6 +626,29 @@ def test_bug_rechunking_after_queried_raster():
         queried.write(f)
 
 
+def test_is_regular_dask_chunk_grid() -> None:
+    from spatialdata._io.io_raster import _is_regular_dask_chunk_grid
+
+    # Single chunk per axis → continue branch, overall True
+    assert _is_regular_dask_chunk_grid([(4,)]) is True
+    # Empty axis → continue branch, overall True
+    assert _is_regular_dask_chunk_grid([()]) is True
+    # Non-uniform interior chunks → first return False
+    assert _is_regular_dask_chunk_grid([(4, 4, 3, 4)]) is False
+    # Last chunk larger than first → second return False
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 5)]) is False
+    # All chunks equal → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 4)]) is True
+    # Last chunk smaller than first → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1)]) is True
+    # Empty grid (no axes) → True
+    assert _is_regular_dask_chunk_grid([]) is True
+    # Multi-axis: all axes regular → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1), (3, 3, 2)]) is True
+    # Multi-axis: one axis irregular → False
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1), (4, 4, 3, 4)]) is False
+
+
 def test_write_irregular_dask_chunks_without_explicit_storage_options(tmp_path: Path) -> None:
     data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
     image = Image2DModel.parse(data, dims=("c", "y", "x"))

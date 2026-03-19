@@ -40,22 +40,66 @@ from spatialdata.transformations._utils import (
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
-    if isinstance(value, str | bytes):
-        return False
     if not isinstance(value, Sequence):
         return False
     return all(isinstance(v, int) for v in value)
 
 
 def _is_dask_chunk_grid(value: object) -> TypeGuard[Sequence[Sequence[int]]]:
-    if isinstance(value, str | bytes):
-        return False
     if not isinstance(value, Sequence):
         return False
     return len(value) > 0 and all(_is_flat_int_sequence(axis_chunks) for axis_chunks in value)
 
 
 def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
+    """Check whether a Dask chunk grid is regular (zarr-compatible).
+
+    A grid is regular when every axis has at most one unique chunk size among all but the last
+    chunk, and the last chunk is not larger than the first.
+
+    Parameters
+    ----------
+    chunk_grid
+        Per-axis tuple of chunk sizes, for instance as returned by ``dask_array.chunks``.
+
+    Examples
+    --------
+    Triggers ``continue`` on the first ``if`` (single or empty axis):
+
+    >>> _is_regular_dask_chunk_grid([(4,)])   # single chunk → True
+    True
+    >>> _is_regular_dask_chunk_grid([()])     # empty axis → True
+    True
+
+    Triggers the first ``return False`` (non-uniform interior chunks):
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])   # interior sizes differ → False
+    False
+
+    Triggers the second ``return False`` (last chunk larger than the first):
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])   # last > first → False
+    False
+
+    Exits with ``return True``:
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])   # all equal → True
+    True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])   # last < first → True
+    True
+
+    Empty grid (loop never executes) → True:
+
+    >>> _is_regular_dask_chunk_grid([])
+    True
+
+    Multi-axis: all axes regular → True; one axis irregular → False:
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1), (3, 3, 2)])
+    True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1), (4, 4, 3, 4)])
+    False
+    """
     # Match Dask's private _check_regular_chunks() logic without depending on its internal API.
     for axis_chunks in chunk_grid:
         if len(axis_chunks) <= 1:
