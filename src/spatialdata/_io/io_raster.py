@@ -137,6 +137,15 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
+def _flatten_chunks(chunks: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
+    if not all(len(c) == 1 for c in chunks):
+        raise ValueError(
+            f"Expected all chunk tuples to be singletons, got: {chunks}. "
+            "This indicates the dask array has non-uniform chunks, which is not supported here."
+        )
+    return tuple(c[0] for c in chunks)
+
+
 def _write_raster(
     raster_type: Literal["image", "labels"],
     raster_data: DataArray | DataTree,
@@ -251,7 +260,7 @@ def _write_raster_dataarray(
     if transformations is None:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
-    chunks = raster_data.chunks
+    chunks = _flatten_chunks(raster_data.chunks)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     if storage_options is not None:
         if "chunks" not in storage_options and isinstance(storage_options, dict):
@@ -322,7 +331,7 @@ def _write_raster_datatree(
     transformations = _get_transformations_xarray(xdata)
     if transformations is None:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
-    chunks = get_pyramid_levels(raster_data, "chunks")
+    chunks = [_flatten_chunks(level_chunks) for level_chunks in get_pyramid_levels(raster_data, "chunks")]
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = [{"chunks": chunk} for chunk in chunks]

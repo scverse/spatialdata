@@ -10,6 +10,7 @@ from upath import UPath
 
 from spatialdata import read_zarr
 from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
+from spatialdata._io.io_raster import _flatten_chunks
 
 
 def test_backing_files_points(points):
@@ -141,3 +142,12 @@ def test_handle_read_errors(on_bad_files: str, actual_error: Exception, expectat
         with handle_read_errors(on_bad_files=on_bad_files, location="location", exc_types=KeyError):
             if actual_error is not None:
                 raise actual_error
+
+
+def test_flatten_chunks_valid():
+    assert _flatten_chunks(((3,), (512,), (512,))) == (3, 512, 512)
+
+
+def test_flatten_chunks_raises_on_non_singleton():
+    with pytest.raises(ValueError, match="Expected all chunk tuples to be singletons"):
+        _flatten_chunks(((3,), (256, 256), (512,)))

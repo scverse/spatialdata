@@ -129,15 +129,10 @@ __all__ = [
     "settings",
 ]
 
-_accessor_loaded = False
+import spatialdata.models._accessor  # noqa: F401
 
 
 def __getattr__(name: str) -> Any:
-    global _accessor_loaded
-    if not _accessor_loaded:
-        _accessor_loaded = True
-        import spatialdata.models._accessor  # noqa: F401
-
     if name in _submodules:
         return importlib.import_module(f"spatialdata.{name}")
     if name in _LAZY_IMPORTS:
