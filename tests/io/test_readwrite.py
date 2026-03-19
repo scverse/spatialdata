@@ -631,7 +631,11 @@ def test_write_irregular_dask_chunks_without_explicit_storage_options(tmp_path: 
     image = Image2DModel.parse(data, dims=("c", "y", "x"))
     sdata = SpatialData(images={"image": image})
 
-    sdata.write(tmp_path / "data.zarr")
+    with pytest.raises(
+        ValueError,
+        match="storage_options\\['chunks'\\] must be a Zarr chunk shape or a regular Dask chunk grid",
+    ):
+        sdata.write(tmp_path / "data.zarr")
 
 
 def test_write_image_normalizes_explicit_regular_dask_chunk_grid(tmp_path: Path) -> None:
