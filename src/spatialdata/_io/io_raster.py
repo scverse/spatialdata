@@ -40,6 +40,7 @@ from spatialdata.transformations._utils import (
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
+    # e.g. "", "auto" or b"auto"
     if isinstance(value, str | bytes):
         return False
     if not isinstance(value, Sequence):
@@ -142,25 +143,19 @@ def _normalize_explicit_chunks(chunks: object) -> tuple[int, ...] | int:
 
 def _prepare_storage_options(
     storage_options: JSONDict | list[JSONDict] | None,
-    data: list[da.Array],
-) -> list[JSONDict]:
+) -> JSONDict | list[JSONDict] | None:
     if storage_options is None:
-        return [{"chunks": _normalize_explicit_chunks(arr.chunks)} for arr in data]
+        return None
     if isinstance(storage_options, dict):
-        if "chunks" not in storage_options:
-            return [{**storage_options, "chunks": _normalize_explicit_chunks(arr.chunks)} for arr in data]
         prepared = dict(storage_options)
-        prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
-        return prepared  # type: ignore[return-value]
+        if "chunks" in prepared:
+            prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
+        return prepared
 
-    prepared_options = []
-    for i, options in enumerate(storage_options):
-        opts = dict(options)
-        if "chunks" not in opts:
-            opts["chunks"] = _normalize_explicit_chunks(data[i].chunks)
-        else:
-            opts["chunks"] = _normalize_explicit_chunks(opts["chunks"])
-        prepared_options.append(opts)
+    prepared_options = [dict(options) for options in storage_options]
+    for options in prepared_options:
+        if "chunks" in options:
+            options["chunks"] = _normalize_explicit_chunks(options["chunks"])
     return prepared_options
 
 
@@ -378,7 +373,7 @@ def _write_raster_dataarray(
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    storage_options = _prepare_storage_options(storage_options, [data])
+    storage_options = _prepare_storage_options(storage_options)
     # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
     # write_image()/write_labels() to scale_factors=(2, 4, 8, 16), which would otherwise write s0, s1, ...
     # even when the input is a plain DataArray.
@@ -448,7 +443,7 @@ def _write_raster_datatree(
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    storage_options = _prepare_storage_options(storage_options, data)
+    storage_options = _prepare_storage_options(storage_options)
     ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
         pyramid=data,
