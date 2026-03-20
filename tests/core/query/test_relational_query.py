@@ -914,6 +914,9 @@ def test_filter_table_non_annotating(full_sdata):
 
 
 def test_labels_table_joins(full_sdata):
+    # Restrict table to labels2d only so the join returns one row per label (full_sdata default has two regions)
+    full_sdata["table"].obs["region"] = pd.Categorical(["labels2d"] * full_sdata["table"].n_obs)
+    full_sdata["table"].uns["spatialdata_attrs"]["region"] = "labels2d"
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata,
         spatial_element_names="labels2d",
