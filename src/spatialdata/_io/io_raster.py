@@ -40,12 +40,16 @@ from spatialdata.transformations._utils import (
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
+    if isinstance(value, str | bytes):
+        return False
     if not isinstance(value, Sequence):
         return False
     return all(isinstance(v, int) for v in value)
 
 
 def _is_dask_chunk_grid(value: object) -> TypeGuard[Sequence[Sequence[int]]]:
+    if isinstance(value, str | bytes):
+        return False
     if not isinstance(value, Sequence):
         return False
     return len(value) > 0 and all(_is_flat_int_sequence(axis_chunks) for axis_chunks in value)
@@ -128,8 +132,10 @@ def _normalize_explicit_chunks(chunks: object) -> tuple[int, ...] | int:
     normalized = _chunks_to_zarr_chunks(chunks)
     if normalized is None:
         raise ValueError(
-            "storage_options['chunks'] must be a Zarr chunk shape or a regular Dask chunk grid. "
-            "Irregular Dask chunk grids must be rechunked before writing or omitted."
+            'storage_options["chunks"] must resolve to a Zarr chunk shape or a regular Dask chunk grid. '
+            "The current raster has irregular Dask chunks, which cannot be written to Zarr. "
+            "To fix this, rechunk before writing, for example by passing regular chunks=... "
+            "to Image2DModel.parse(...) / Labels2DModel.parse(...)."
         )
     return normalized
 

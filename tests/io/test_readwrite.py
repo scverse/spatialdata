@@ -656,7 +656,7 @@ def test_write_irregular_dask_chunks_without_explicit_storage_options(tmp_path: 
 
     with pytest.raises(
         ValueError,
-        match="storage_options\\['chunks'\\] must be a Zarr chunk shape or a regular Dask chunk grid",
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
     ):
         sdata.write(tmp_path / "data.zarr")
 
@@ -678,9 +678,56 @@ def test_write_image_rejects_explicit_irregular_dask_chunk_grid(tmp_path: Path) 
 
     with pytest.raises(
         ValueError,
-        match="storage_options\\['chunks'\\] must be a Zarr chunk shape or a regular Dask chunk grid",
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
     ):
         write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+
+def test_write_image_normalizes_explicit_zarr_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    zarr_chunks = (3, 100, 512)  # ome zarr rechunks when writing
+    write_image(image, group, "image", storage_options={"chunks": zarr_chunks})
+
+    assert group["s0"].chunks == (3, 100, 512)
+
+
+def test_write_image_rejects_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": "auto"})
+
+
+def test_write_image_rejects_empty_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": ""})
+
+
+def test_write_image_rejects_byte_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": b"auto"})
 
 
 def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
