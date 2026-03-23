@@ -208,3 +208,16 @@ convention = "numpy"
 
 # pyupgrade typing rewrite TODO: remove at some point from per-file ignore
 # "UP006", "UP007"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+proj = "*"
+
+[tool.pixi.tasks]
+test = "pytest"
+test-parallel = "pytest -n auto --dist worksteal"
+pre-commit = "pre-commit run"
+pre-commit-all = "pre-commit run --all-files"
