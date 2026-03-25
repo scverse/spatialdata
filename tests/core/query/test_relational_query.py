@@ -1282,7 +1282,7 @@ def test_join_spatialelement_table_obs_index_name_collision(how):
     sdata = SpatialData(shapes={"shapes": shapes}, tables={"table": table})
 
     # Introduce the conflicting state: index name == existing column name
-    sdata["table"].obs.index = pd.Index(np.arange(n), name="EntityID")
+    sdata["table"].obs.index = pd.Index([str(i) for i in range(n)], name="EntityID")
 
     element_dict, joined_table = join_spatialelement_table(
         sdata=sdata, spatial_element_names="shapes", table_name="table", how=how
