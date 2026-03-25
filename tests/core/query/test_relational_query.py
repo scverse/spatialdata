@@ -1276,9 +1276,7 @@ def test_join_spatialelement_table_obs_index_name_collision(how):
     shapes = ShapesModel.parse(
         gpd.GeoDataFrame({"geometry": [shapely.Point(i, i) for i in range(n)], "radius": np.ones(n)})
     )
-    obs = pd.DataFrame(
-        {"region": pd.Categorical(["shapes"] * n), "EntityID": np.arange(n), "cell_type": list("AABBC")}
-    )
+    obs = pd.DataFrame({"region": pd.Categorical(["shapes"] * n), "EntityID": np.arange(n), "cell_type": list("AABBC")})
     table = AnnData(obs=obs)
     table = TableModel.parse(table, region="shapes", region_key="region", instance_key="EntityID")
     sdata = SpatialData(shapes={"shapes": shapes}, tables={"table": table})
