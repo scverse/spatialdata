@@ -34,6 +34,17 @@ from spatialdata.models import (
 )
 
 
+def _reset_index_preserving_existing_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Reset the index of a DataFrame, dropping the index if its name already exists as a column.
+
+    Avoids ``ValueError: cannot insert <name>, already exists`` when the index
+    name collides with an existing column (e.g. "EntityID" in Merfish data).
+    """
+    if df.index.name is not None and df.index.name in df.columns:
+        return df.reset_index(drop=True)
+    return df.reset_index()
+
+
 def get_element_annotators(sdata: SpatialData, element_name: str) -> set[str]:
     """
     Retrieve names of tables that annotate a SpatialElement in a SpatialData object.
@@ -388,7 +399,7 @@ def _inner_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = _reset_index_preserving_existing_columns(table.obs)
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -469,7 +480,7 @@ def _left_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = _reset_index_preserving_existing_columns(table.obs)
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import annsel as an
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
+import shapely
 from anndata import AnnData
 
 from spatialdata import SpatialData, get_values, match_table_to_element
@@ -14,7 +16,7 @@ from spatialdata._core.query.relational_query import (
     get_element_annotators,
     join_spatialelement_table,
 )
-from spatialdata.models.models import TableModel
+from spatialdata.models.models import ShapesModel, TableModel
 from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
@@ -1262,3 +1264,28 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
         assert ("circles", idx) in table_instance_ids
     for idx in result["poly"].index:
         assert ("poly", idx) in table_instance_ids
+
+
+@pytest.mark.parametrize("how", ["inner", "left"])
+def test_join_spatialelement_table_obs_index_name_collision(how):
+    """join_spatialelement_table must not crash when obs index name matches an existing column.
+
+    Regression test for https://github.com/scverse/spatialdata/issues/1099.
+    """
+    n = 5
+    shapes = ShapesModel.parse(
+        gpd.GeoDataFrame({"geometry": [shapely.Point(i, i) for i in range(n)], "radius": np.ones(n)})
+    )
+    obs = pd.DataFrame({"region": pd.Categorical(["shapes"] * n), "EntityID": np.arange(n), "cell_type": list("AABBC")})
+    table = AnnData(obs=obs)
+    table = TableModel.parse(table, region="shapes", region_key="region", instance_key="EntityID")
+    sdata = SpatialData(shapes={"shapes": shapes}, tables={"table": table})
+
+    # Introduce the conflicting state: index name == existing column name
+    sdata["table"].obs.index = pd.Index([str(i) for i in range(n)], name="EntityID")
+
+    element_dict, joined_table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="shapes", table_name="table", how=how
+    )
+    assert joined_table.n_obs == n
+    assert "shapes" in element_dict
