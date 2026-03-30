@@ -265,7 +265,7 @@ def _adjust_bounding_box_to_real_axes(
     return axes_bb, min_coordinate, max_coordinate
 
 
-def _get_case_ofmaskquery(
+def _get_case_of_bounding_box_query(
     m_without_c_linear: ArrayLike,
     input_axes_without_c: tuple[str, ...],
     output_axes_without_c: tuple[str, ...],
