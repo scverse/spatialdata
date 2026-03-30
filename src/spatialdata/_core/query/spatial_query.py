@@ -725,8 +725,8 @@ def _(
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,
-                max_coordinate=max_c,
+                min_coordinate=min_c,  # type: ignore[arg-type]
+                max_coordinate=max_c,  # type: ignore[arg-type]
                 points_df=transformed_pd,
             )
             if len(bounding_box_mask) != 1:
