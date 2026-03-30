@@ -265,7 +265,7 @@ def _adjust_bounding_box_to_real_axes(
     return axes_bb, min_coordinate, max_coordinate
 
 
-def _get_case_of_bounding_box_query(
+def _get_case_ofmaskquery(
     m_without_c_linear: ArrayLike,
     input_axes_without_c: tuple[str, ...],
     output_axes_without_c: tuple[str, ...],
@@ -386,9 +386,33 @@ def _bounding_box_mask_points(
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
-    points_df: pd.DataFrame | None = None,  # <-- new parameter
+    points_df: pd.DataFrame | None = None,
 ) -> list[ArrayLike]:
-    # TODO: add docstring back
+    """Compute a mask that is true for the points inside axis-aligned bounding boxes.
+
+    Parameters
+    ----------
+    points
+        The points element to perform the query on.
+    axes
+        The axes that min_coordinate and max_coordinate refer to.
+    min_coordinate
+        PLACEHOLDER
+        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {min_coordinate_docs}
+    max_coordinate
+        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
+    {max_coordinate_docs}
+    points_df
+        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the methods simply 
+        calls .compute() on the dask data frame
+
+    Returns
+    -------
+    The masks for the points inside the bounding boxes.
+    """
     element_axes = get_axes_names(points)
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -408,7 +432,7 @@ def _bounding_box_mask_points(
                 continue
             min_value = min_coordinate[box, axis_index]
             max_value = max_coordinate[box, axis_index]
-            col = points_df[axis_name].values  # <-- numpy array, no Dask
+            col = points_df[axis_name].values
             box_masks.append((col > min_value) & (col < max_value))
         bounding_box_mask = np.stack(box_masks, axis=-1)
         in_bounding_box_masks.append(np.all(bounding_box_mask, axis=1))
@@ -644,17 +668,17 @@ def _(
     max_coordinate_intrinsic = max_coordinate_intrinsic.data
 
     # get the points in the intrinsic coordinate bounding box
-    points_pd = points.compute()  # <-- moved up, single materialization
+    points_pd = points.compute()
     in_intrinsic_bounding_box = _bounding_box_mask_points(
         points=points,
         axes=intrinsic_axes,
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
-        points_df=points_pd,  # <-- pass it in
+        points_df=points_pd,
     )
 
     if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(...)
+        raise ValueError(f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`.")
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
 
     attrs = points.attrs.copy()
@@ -703,7 +727,7 @@ def _(
                 axes=axes,
                 min_coordinate=min_c,
                 max_coordinate=max_c,
-                points_df=transformed_pd,  # <-- pass it in
+                points_df=transformed_pd,
             )
             if len(bounding_box_mask) != 1:
                 raise ValueError(f"Expected a single mask, got {len(bounding_box_mask)} masks. Please report this bug.")
@@ -713,7 +737,7 @@ def _(
             else:
                 # Use the already-materialized intrinsic-space frame for the final result,
                 # not the transformed one (we want to return data in intrinsic coordinates)
-                points_df = points_pd[mask_np].iloc[bounding_box_indices]  # no .compute()
+                points_df = points_pd[mask_np].iloc[bounding_box_indices]
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
                 feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
