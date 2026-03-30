@@ -386,41 +386,21 @@ def _bounding_box_mask_points(
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
+    points_df: pd.DataFrame | None = None,  # <-- new parameter
 ) -> list[ArrayLike]:
-    """Compute a mask that is true for the points inside axis-aligned bounding boxes.
-
-    Parameters
-    ----------
-    points
-        The points element to perform the query on.
-    axes
-        The axes that min_coordinate and max_coordinate refer to.
-    min_coordinate
-        PLACEHOLDER
-        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {min_coordinate_docs}
-    max_coordinate
-        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {max_coordinate_docs}
-
-    Returns
-    -------
-    The masks for the points inside the bounding boxes.
-    """
+    # TODO: add docstring back
     element_axes = get_axes_names(points)
-
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
-
-    # Ensure min_coordinate and max_coordinate are 2D arrays
     min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
     max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
 
+    # Compute once here only if the caller hasn't already done so
+    if points_df is None:
+        points_df = points.compute()
+
     n_boxes = min_coordinate.shape[0]
     in_bounding_box_masks = []
-
     for box in range(n_boxes):
         box_masks = []
         for axis_index, axis_name in enumerate(axes):
@@ -428,7 +408,8 @@ def _bounding_box_mask_points(
                 continue
             min_value = min_coordinate[box, axis_index]
             max_value = max_coordinate[box, axis_index]
-            box_masks.append(points[axis_name].gt(min_value).compute() & points[axis_name].lt(max_value).compute())
+            col = points_df[axis_name].values  # <-- numpy array, no Dask
+            box_masks.append((col > min_value) & (col < max_value))
         bounding_box_mask = np.stack(box_masks, axis=-1)
         in_bounding_box_masks.append(np.all(bounding_box_mask, axis=1))
     return in_bounding_box_masks
@@ -663,19 +644,19 @@ def _(
     max_coordinate_intrinsic = max_coordinate_intrinsic.data
 
     # get the points in the intrinsic coordinate bounding box
+    points_pd = points.compute()  # <-- moved up, single materialization
     in_intrinsic_bounding_box = _bounding_box_mask_points(
         points=points,
         axes=intrinsic_axes,
         min_coordinate=min_coordinate_intrinsic,
         max_coordinate=max_coordinate_intrinsic,
+        points_df=points_pd,  # <-- pass it in
     )
 
     if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(
-            f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
-        )
+        raise ValueError(...)
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
-    points_pd = points.compute()
+
     attrs = points.attrs.copy()
     for mask_np in in_intrinsic_bounding_box:
         if mask_np.sum() == 0:
@@ -715,22 +696,24 @@ def _(
             points_query_coordinate_system = transform(
                 p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
             )
-
-            # get a mask for the points in the bounding box
+            # Materialize once; reuse for both the mask and the final slice
+            transformed_pd = points_query_coordinate_system.compute()
             bounding_box_mask = _bounding_box_mask_points(
                 points=points_query_coordinate_system,
                 axes=axes,
-                min_coordinate=min_c,  # type: ignore[arg-type]
-                max_coordinate=max_c,  # type: ignore[arg-type]
+                min_coordinate=min_c,
+                max_coordinate=max_c,
+                points_df=transformed_pd,  # <-- pass it in
             )
             if len(bounding_box_mask) != 1:
                 raise ValueError(f"Expected a single mask, got {len(bounding_box_mask)} masks. Please report this bug.")
             bounding_box_indices = np.where(bounding_box_mask[0])[0]
-
             if len(bounding_box_indices) == 0:
                 output.append(None)
             else:
-                points_df = p.compute().iloc[bounding_box_indices]
+                # Use the already-materialized intrinsic-space frame for the final result,
+                # not the transformed one (we want to return data in intrinsic coordinates)
+                points_df = points_pd[mask_np].iloc[bounding_box_indices]  # no .compute()
                 old_transformations = get_transformation(p, get_all=True)
                 assert isinstance(old_transformations, dict)
                 feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
