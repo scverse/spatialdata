@@ -774,8 +774,8 @@ def _(
     )
     for box_corners in intrinsic_bounding_box_corners:
         bounding_box_non_axes_aligned = Polygon(box_corners.data)
-        indices = polygons.geometry.intersects(bounding_box_non_axes_aligned)
-        queried = polygons[indices]
+        candidate_idx = polygons.sindex.query(bounding_box_non_axes_aligned, predicate="intersects")
+        queried = polygons.iloc[candidate_idx]
         if len(queried) == 0:
             queried_polygon = None
         else:
