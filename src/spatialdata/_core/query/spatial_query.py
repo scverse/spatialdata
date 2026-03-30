@@ -406,7 +406,7 @@ def _bounding_box_mask_points(
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     {max_coordinate_docs}
     points_df
-        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the methods simply 
+        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the methods simply
         calls .compute() on the dask data frame
 
     Returns
@@ -678,7 +678,9 @@ def _(
     )
 
     if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`.")
+        raise ValueError(
+            f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
+        )
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
 
     attrs = points.attrs.copy()
