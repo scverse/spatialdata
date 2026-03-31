@@ -671,10 +671,12 @@ def _(
     if axes_adjusted != output_axes_without_c:
         raise RuntimeError("This should not happen")
 
+    # materialize the points in the intrinsic coordinate system once
     points_pd = points.compute()
     is_identity_transform = input_axes_without_c == output_axes_without_c and np.allclose(
         m_without_c, np.eye(m_without_c.shape[0])
     )
+    # if the transform is identity, we can save extra for the affine transformation
     if is_identity_transform:
         bounding_box_masks = _bounding_box_mask_points(
             points=points,
