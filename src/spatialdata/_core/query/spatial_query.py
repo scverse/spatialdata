@@ -929,17 +929,22 @@ def _(
         assert np.all(element[OLD_INDEX] == buffered.index)
     else:
         buffered[OLD_INDEX] = buffered.index
-    indices = buffered.geometry.apply(lambda x: x.intersects(polygon))
-    if np.sum(indices) == 0:
+
+    # Use sindex for fast candidate pre-filtering, then exact intersection check
+    # only on the (typically small) candidate set — same pattern as bounding_box_query.
+    candidate_idx = buffered.sindex.query(polygon, predicate="intersects")
+    if len(candidate_idx) == 0:
+        del buffered[OLD_INDEX]
         return None
-    queried_shapes = element[indices]
-    queried_shapes.index = buffered[indices][OLD_INDEX]
+
+    queried_shapes = element.iloc[candidate_idx].copy()
+    queried_shapes.index = buffered.iloc[candidate_idx][OLD_INDEX]
     queried_shapes.index.name = None
 
     if clip:
         if isinstance(element.geometry.iloc[0], Point):
-            queried_shapes = buffered[indices]
-            queried_shapes.index = buffered[indices][OLD_INDEX]
+            queried_shapes = buffered.iloc[candidate_idx].copy()
+            queried_shapes.index = buffered.iloc[candidate_idx][OLD_INDEX]
             queried_shapes.index.name = None
         queried_shapes = queried_shapes.clip(polygon_gdf, keep_geom_type=True)
 
