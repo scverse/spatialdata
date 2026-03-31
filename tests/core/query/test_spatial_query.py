@@ -676,6 +676,35 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     assert np.array_equal(q0.index.compute(), q1.index.compute())
 
 
+def test_query_points_multiple_boxes_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    points_element = _make_points(np.array([[10, 10], [20, 30], [20, 30], [40, 50]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[1, 0, 100], [0, 1, -50], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    points_result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([[118, -22], [138, -2], [200, 200]]),
+        max_coordinate=np.array([[122, -18], [142, 2], [210, 210]]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+    np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+    np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+    np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+    assert points_result[2] is None
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",
