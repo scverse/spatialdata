@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import dask.dataframe as dd
 import numpy as np
+import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
@@ -635,7 +636,6 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> DaskDataFrame | list[DaskDataFrame] | None:
-    from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -653,104 +653,73 @@ def _(
         max_coordinate=max_coordinate,
     )
 
-    # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
-    (intrinsic_bounding_box_corners, intrinsic_axes) = _get_bounding_box_corners_in_intrinsic_coordinates(
-        element=points,
-        axes=axes,
-        min_coordinate=min_coordinate,
-        max_coordinate=max_coordinate,
-        target_coordinate_system=target_coordinate_system,
+    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
+        points, target_coordinate_system
     )
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
+    m_without_c_linear = m_without_c[:-1, :-1]
+    _ = _get_case_of_bounding_box_query(
+        m_without_c_linear,
+        input_axes_without_c,
+        output_axes_without_c,
+    )
+    axes_adjusted, min_coordinate_adjusted, max_coordinate_adjusted = _adjust_bounding_box_to_real_axes(
+        axes,
+        min_coordinate,
+        max_coordinate,
+        output_axes_without_c,
+    )
+    if axes_adjusted != output_axes_without_c:
+        raise RuntimeError("This should not happen")
 
-    min_coordinate_intrinsic = min_coordinate_intrinsic.data
-    max_coordinate_intrinsic = max_coordinate_intrinsic.data
-
-    # get the points in the intrinsic coordinate bounding box
     points_pd = points.compute()
-    in_intrinsic_bounding_box = _bounding_box_mask_points(
-        points=points,
-        axes=intrinsic_axes,
-        min_coordinate=min_coordinate_intrinsic,
-        max_coordinate=max_coordinate_intrinsic,
-        points_df=points_pd,
+    is_identity_transform = input_axes_without_c == output_axes_without_c and np.allclose(
+        m_without_c, np.eye(m_without_c.shape[0])
     )
-
-    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(
-            f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
+    if is_identity_transform:
+        bounding_box_masks = _bounding_box_mask_points(
+            points=points,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            points_df=points_pd,
         )
-    points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
+    else:
+        query_coordinates = points_pd.loc[:, list(input_axes_without_c)].to_numpy(copy=False)
+        query_coordinates = query_coordinates @ m_without_c[:-1, :-1].T + m_without_c[:-1, -1]
 
-    attrs = points.attrs.copy()
-    for mask_np in in_intrinsic_bounding_box:
-        if mask_np.sum() == 0:
-            points_in_intrinsic_bounding_box.append(None)
-        else:
-            # TODO there is a problem when mixing dask dataframe graph with dask array graph. Need to compute for now.
-            # we can't compute either mask or points as when we calculate either one of them
-            # test_query_points_multiple_partitions will fail as the mask will be used to index each partition.
-            # However, if we compute and then create the dask array again we get the mixed dask graph problem.
-            filtered_pd = points_pd[mask_np]
-            points_filtered = dd.from_pandas(filtered_pd, npartitions=points.npartitions)
-            points_filtered.attrs.update(attrs)
-            points_in_intrinsic_bounding_box.append(points_filtered)
-    if len(points_in_intrinsic_bounding_box) == 0:
-        return None
+        bounding_box_masks = []
+        for box_index in range(min_coordinate_adjusted.shape[0]):
+            bounding_box_mask = np.ones(len(points_pd), dtype=bool)
+            for axis_index in range(len(output_axes_without_c)):
+                min_value = min_coordinate_adjusted[box_index, axis_index]
+                max_value = max_coordinate_adjusted[box_index, axis_index]
+                column = query_coordinates[:, axis_index]
+                bounding_box_mask &= (column > min_value) & (column < max_value)
+            bounding_box_masks.append(bounding_box_mask)
 
-    # assert that the number of queried points is correct
-    assert len(points_in_intrinsic_bounding_box) == len(min_coordinate)
+    if not (len_df := len(bounding_box_masks)) == (len_bb := len(min_coordinate)):
+        raise ValueError(f"Length of list of masks `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
 
-    # # we have to reset the index since we have subset
-    # # https://stackoverflow.com/questions/61395351/how-to-reset-index-on-concatenated-dataframe-in-dask
-    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.assign(idx=1)
-    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.set_index(
-    #     points_in_intrinsic_bounding_box.idx.cumsum() - 1
-    # )
-    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.map_partitions(
-    #     lambda df: df.rename(index={"idx": None})
-    # )
-    # points_in_intrinsic_bounding_box = points_in_intrinsic_bounding_box.drop(columns=["idx"])
+    old_transformations = get_transformation(points, get_all=True)
+    assert isinstance(old_transformations, dict)
+    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
 
-    # transform the element to the query coordinate system
     output: list[DaskDataFrame | None] = []
-    for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
-        if p is None:
+    for mask_np in bounding_box_masks:
+        bounding_box_indices = np.flatnonzero(mask_np)
+        if len(bounding_box_indices) == 0:
             output.append(None)
-        else:
-            points_query_coordinate_system = transform(
-                p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
-            )
-            # Materialize once; reuse for both the mask and the final slice
-            transformed_pd = points_query_coordinate_system.compute()
-            bounding_box_mask = _bounding_box_mask_points(
-                points=points_query_coordinate_system,
-                axes=axes,
-                min_coordinate=min_c,  # type: ignore[arg-type]
-                max_coordinate=max_c,  # type: ignore[arg-type]
-                points_df=transformed_pd,
-            )
-            if len(bounding_box_mask) != 1:
-                raise ValueError(f"Expected a single mask, got {len(bounding_box_mask)} masks. Please report this bug.")
-            bounding_box_indices = np.where(bounding_box_mask[0])[0]
-            if len(bounding_box_indices) == 0:
-                output.append(None)
-            else:
-                # Use the already-materialized intrinsic-space frame for the final result,
-                # not the transformed one (we want to return data in intrinsic coordinates)
-                points_df = points_pd[mask_np].iloc[bounding_box_indices]
-                old_transformations = get_transformation(p, get_all=True)
-                assert isinstance(old_transformations, dict)
-                feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+            continue
 
-                output.append(
-                    PointsModel.parse(
-                        dd.from_pandas(points_df, npartitions=1),
-                        transformations=old_transformations.copy(),
-                        feature_key=feature_key,
-                    )
-                )
+        # The exact mask is computed in the query coordinate system, but the returned points must stay intrinsic.
+        queried_points = points_pd.iloc[bounding_box_indices]
+        output.append(
+            PointsModel.parse(
+                dd.from_pandas(queried_points, npartitions=1),
+                transformations=old_transformations.copy(),
+                feature_key=feature_key,
+            )
+        )
     if len(output) == 0:
         return None
     if len(output) == 1:
