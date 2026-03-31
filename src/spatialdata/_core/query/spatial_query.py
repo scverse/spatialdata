@@ -8,10 +8,10 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 import dask.dataframe as dd
-from matplotlib.path import Path
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from matplotlib.path import Path
 from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
@@ -419,11 +419,15 @@ def _bounding_box_mask_points(
             maxs = max_coordinate[box, axis_indices]
             x_min, y_min = mins
             x_max, y_max = maxs
-            box_path = Path([
-                (x_min, y_min), (x_max, y_min),
-                (x_max, y_max), (x_min, y_max),
-                (x_min, y_min),
-            ])
+            box_path = Path(
+                [
+                    (x_min, y_min),
+                    (x_max, y_min),
+                    (x_max, y_max),
+                    (x_min, y_max),
+                    (x_min, y_min),
+                ]
+            )
             mask = box_path.contains_points(point_coords)
         else:
             # Fallback for 1D or >2D
@@ -431,13 +435,15 @@ def _bounding_box_mask_points(
             box_masks = []
             for i, axis_name in enumerate(relevant_axes):
                 col = points_df[axis_name].values
-                box_masks.append((col > min_coordinate[box, axis_indices[i]]) & 
-                                (col < max_coordinate[box, axis_indices[i]]))
+                box_masks.append(
+                    (col > min_coordinate[box, axis_indices[i]]) & (col < max_coordinate[box, axis_indices[i]])
+                )
             mask = np.all(np.stack(box_masks, axis=-1), axis=1)
 
         in_bounding_box_masks.append(mask)
 
     return in_bounding_box_masks
+
 
 def _dict_query_dispatcher(
     elements: dict[str, SpatialElement], query_function: Callable[[SpatialElement], SpatialElement], **kwargs: Any
@@ -635,7 +641,6 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> DaskDataFrame | list[DaskDataFrame] | None:
-    from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
