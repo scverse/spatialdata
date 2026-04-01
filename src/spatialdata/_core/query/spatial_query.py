@@ -79,7 +79,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     # compute the output axes of the transformation, remove c from input and output axes, return the matrix without c
     # and then build an affine transformation from that
-    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
+    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_transformation(
         element, target_coordinate_system
     )
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
@@ -143,7 +143,7 @@ def _get_polygon_in_intrinsic_coordinates(
 
     polygon_gdf = ShapesModel.parse(GeoDataFrame(geometry=[polygon]))
 
-    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
+    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_transformation(
         element, target_coordinate_system
     )
     spatial_transform = Affine(m_without_c, input_axes=input_axes_without_c, output_axes=output_axes_without_c)
@@ -187,7 +187,7 @@ def _get_polygon_in_intrinsic_coordinates(
     return transform(polygon_gdf, to_coordinate_system="inverse")
 
 
-def _get_axes_of_tranformation(
+def _get_axes_of_transformation(
     element: SpatialElement, target_coordinate_system: str
 ) -> tuple[ArrayLike, tuple[str, ...], tuple[str, ...]]:
     """
@@ -320,6 +320,11 @@ def _get_case_of_bounding_box_query(
         )
         raise ValueError(error_message)
     return case
+
+
+def _is_scaling_transform(m_linear: np.ndarray) -> bool:
+    """True when the linear part is a diagonal (pure scaling) matrix."""
+    return np.allclose(m_linear, np.diag(np.diagonal(m_linear)))
 
 
 @dataclass(frozen=True)
@@ -520,16 +525,6 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     new_elements = {}
-    if sdata.points:
-        warnings.warn(
-            (
-                "The object has `points` element. Depending on the number of points, querying MAY suffer from "
-                "performance issues. Please consider filtering the object before calling this function by calling the "
-                "`subset()` method of `SpatialData`."
-            ),
-            UserWarning,
-            stacklevel=2,
-        )
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
@@ -653,7 +648,7 @@ def _(
         max_coordinate=max_coordinate,
     )
 
-    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_tranformation(
+    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_transformation(
         points, target_coordinate_system
     )
     m_without_c_linear = m_without_c[:-1, :-1]
@@ -673,9 +668,18 @@ def _(
 
     # materialize the points in the intrinsic coordinate system once
     points_pd = points.compute()
+    
+    # checking the type of the transformation
+    # in the case of an identity or scaling transform, we can skip the whole
+    # projection into intrinsic space and reprojection into the global coordinate system
     is_identity_transform = input_axes_without_c == output_axes_without_c and np.allclose(
         m_without_c, np.eye(m_without_c.shape[0])
     )
+    is_scaling_transform = (
+        input_axes_without_c == output_axes_without_c
+        and _is_scaling_transform(m_without_c_linear)
+    )    
+    
     # if the transform is identity, we can save extra for the affine transformation
     if is_identity_transform:
         bounding_box_masks = _bounding_box_mask_points(
@@ -683,6 +687,28 @@ def _(
             axes=axes,
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
+            points_df=points_pd,
+        )
+    elif is_scaling_transform:
+        # Pull scale factors from the diagonal and the translation from the last column
+        scales = np.diagonal(m_without_c_linear)          # shape: (n_axes,)
+        translation = m_without_c[:-1, -1]                # shape: (n_axes,)
+
+        # Invert the affine: x_intrinsic = (x_output - translation) / scale
+        min_intrinsic = (min_coordinate_adjusted - translation) / scales
+        max_intrinsic = (max_coordinate_adjusted - translation) / scales
+
+        # Ensure min < max after inversion (negative scale flips the interval)
+        min_intrinsic, max_intrinsic = (
+            np.minimum(min_intrinsic, max_intrinsic),
+            np.maximum(min_intrinsic, max_intrinsic),
+        )
+
+        bounding_box_masks = _bounding_box_mask_points(
+            points=points,
+            axes=tuple(input_axes_without_c),
+            min_coordinate=min_intrinsic,
+            max_coordinate=max_intrinsic,
             points_df=points_pd,
         )
     else:
