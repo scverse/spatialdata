@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from abc import abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -668,18 +667,15 @@ def _(
 
     # materialize the points in the intrinsic coordinate system once
     points_pd = points.compute()
-    
+
     # checking the type of the transformation
     # in the case of an identity or scaling transform, we can skip the whole
     # projection into intrinsic space and reprojection into the global coordinate system
     is_identity_transform = input_axes_without_c == output_axes_without_c and np.allclose(
         m_without_c, np.eye(m_without_c.shape[0])
     )
-    is_scaling_transform = (
-        input_axes_without_c == output_axes_without_c
-        and _is_scaling_transform(m_without_c_linear)
-    )    
-    
+    is_scaling_transform = input_axes_without_c == output_axes_without_c and _is_scaling_transform(m_without_c_linear)
+
     # if the transform is identity, we can save extra for the affine transformation
     if is_identity_transform:
         bounding_box_masks = _bounding_box_mask_points(
@@ -691,8 +687,8 @@ def _(
         )
     elif is_scaling_transform:
         # Pull scale factors from the diagonal and the translation from the last column
-        scales = np.diagonal(m_without_c_linear)          # shape: (n_axes,)
-        translation = m_without_c[:-1, -1]                # shape: (n_axes,)
+        scales = np.diagonal(m_without_c_linear)  # shape: (n_axes,)
+        translation = m_without_c[:-1, -1]  # shape: (n_axes,)
 
         # Invert the affine: x_intrinsic = (x_output - translation) / scale
         min_intrinsic = (min_coordinate_adjusted - translation) / scales
