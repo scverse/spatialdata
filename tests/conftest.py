@@ -642,3 +642,14 @@ def complex_sdata() -> SpatialData:
     sdata.tables["labels_table"].layers["log"] = np.log1p(np.abs(sdata.tables["labels_table"].X))
 
     return sdata
+
+
+@pytest.fixture()
+def settings_cls(tmp_path, monkeypatch):
+    """
+    Provide setting class with default path redirected.
+    """
+    from spatialdata.config import Settings
+
+    monkeypatch.setattr("spatialdata.config._config_path", lambda: tmp_path / "default_settings.json")
+    return Settings
