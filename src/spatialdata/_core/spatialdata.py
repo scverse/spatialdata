@@ -1108,6 +1108,7 @@ class SpatialData:
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
+        raster_write_kwargs: dict[str, dict[str, Any], Any] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1173,6 +1174,13 @@ class SpatialData:
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
+            element_raster_write_kwargs = None
+            if element_type in ("images", "labels") and raster_write_kwargs:
+                if kwargs := raster_write_kwargs.get(element_name):
+                    element_raster_write_kwargs = kwargs
+                elif not any(isinstance(x, dict) for x in raster_write_kwargs.values()):
+                    element_raster_write_kwargs = raster_write_kwargs
+
             self._write_element(
                 element=element,
                 zarr_container_path=file_path,
@@ -1181,6 +1189,7 @@ class SpatialData:
                 overwrite=False,
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
+                element_raster_write_kwargs=element_raster_write_kwargs,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1198,6 +1207,7 @@ class SpatialData:
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
+        element_raster_write_kwargs: dict[str, Any] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1231,6 +1241,7 @@ class SpatialData:
                 group=element_group,
                 name=element_name,
                 element_format=parsed_formats["raster"],
+                storage_options=element_raster_write_kwargs,
             )
         elif element_type == "labels":
             write_labels(
@@ -1238,6 +1249,7 @@ class SpatialData:
                 group=root_group,
                 name=element_name,
                 element_format=parsed_formats["raster"],
+                storage_options=element_raster_write_kwargs,
             )
         elif element_type == "points":
             write_points(

@@ -148,13 +148,13 @@ def _prepare_storage_options(
         return None
     if isinstance(storage_options, dict):
         prepared = dict(storage_options)
-        if "chunks" in prepared:
+        if "chunks" in prepared and prepared["chunks"] is not None:
             prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
         return prepared
 
     prepared_options = [dict(options) for options in storage_options]
     for options in prepared_options:
-        if "chunks" in options:
+        if "chunks" in options and options["chunks"] is not None:
             options["chunks"] = _normalize_explicit_chunks(options["chunks"])
     return prepared_options
 
@@ -289,6 +289,10 @@ def _write_raster(
     metadata
         Additional metadata for the raster element
     """
+    from dataclasses import asdict
+
+    from spatialdata import settings
+
     if raster_type not in ["image", "labels"]:
         raise ValueError(f"{raster_type} is not a valid raster type. Must be 'image' or 'labels'.")
     # "name" and "label_metadata" are only used for labels. "name" is written in write_multiscale_ngff() but ignored in
@@ -304,6 +308,18 @@ def _write_raster(
         channels = get_channel_names(raster_data)
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
+
+    if isinstance(storage_options, dict):
+        storage_options = {
+            **{k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")},
+            **storage_options,
+        }
+    elif isinstance(storage_options, list):
+        storage_options = [
+            {**{k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")}, **x} for x in storage_options
+        ]
+    elif not storage_options:
+        storage_options = {k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")}
 
     if isinstance(raster_data, DataArray):
         _write_raster_dataarray(
