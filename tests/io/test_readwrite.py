@@ -744,6 +744,103 @@ def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
+def test_write_image_sharding(tmp_path: Path, sdata_container_format: SpatialDataContainerFormatType) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=(1, 100, 200))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+    path = tmp_path / "data.zarr"
+
+    if sdata_container_format.zarr_format == 2:
+        with pytest.raises(ValueError, match="Zarr format 2 arrays can only"):
+            sdata.write(
+                path,
+                sdata_formats=sdata_container_format,
+                raster_write_kwargs={"chunks": (1, 50, 100), "shards": (1, 100, 200)},
+            )
+    else:
+        sdata.write(
+            path,
+            sdata_formats=sdata_container_format,
+            raster_write_kwargs={"chunks": (1, 50, 100), "shards": (1, 100, 200)},
+        )
+
+        image_group = zarr.open_group(path / "images" / "image", mode="r")
+        arr = image_group["s0"]
+
+        assert arr.chunks == (1, 50, 100)
+        assert arr.shards == (1, 100, 200)
+
+
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
+def test_write_multiscale_image_sharding(
+    tmp_path: Path, sdata_container_format: SpatialDataContainerFormatType
+) -> None:
+    data = da.from_array(RNG.random((3, 1600, 2000)), chunks=(1, 100, 200))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"), scale_factors=[2])
+    sdata = SpatialData(images={"image": image})
+    path = tmp_path / "data.zarr"
+
+    if sdata_container_format.zarr_format == 2:
+        with pytest.raises(ValueError, match="Zarr format 2 arrays can only"):
+            sdata.write(
+                path,
+                sdata_formats=sdata_container_format,
+                raster_write_kwargs={"chunks": (1, 50, 100), "shards": (1, 100, 200)},
+            )
+    else:
+        sdata.write(
+            path,
+            sdata_formats=sdata_container_format,
+            raster_write_kwargs={"chunks": (1, 50, 100), "shards": (1, 100, 200)},
+        )
+
+        image_group = zarr.open_group(path / "images" / "image", mode="r")
+        arr1 = image_group["s0"]
+
+        assert arr1.chunks == (1, 50, 100)
+        assert arr1.shards == (1, 100, 200)
+
+        arr2 = image_group["s0"]
+
+        assert arr2.chunks == (1, 50, 100)
+        assert arr2.shards == (1, 100, 200)
+
+
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
+def test_write_image_sharding_keyword(tmp_path: Path, sdata_container_format: SpatialDataContainerFormatType) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=(1, 100, 200))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    image2 = Image2DModel.parse(data.copy(), dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image, "other_image": image2})
+    path = tmp_path / "data.zarr"
+
+    if sdata_container_format.zarr_format == 2:
+        with pytest.raises(ValueError, match="Zarr format 2 arrays can only"):
+            sdata.write(
+                path,
+                sdata_formats=sdata_container_format,
+                raster_write_kwargs={"image": {"chunks": (1, 50, 100), "shards": (1, 100, 200)}},
+            )
+    else:
+        sdata.write(
+            path,
+            sdata_formats=sdata_container_format,
+            raster_write_kwargs={"image": {"chunks": (1, 50, 100), "shards": (1, 100, 200)}},
+        )
+
+        image_group = zarr.open_group(path / "images" / "image", mode="r")
+        arr = image_group["s0"]
+
+        assert arr.chunks == (1, 50, 100)
+        assert arr.shards == (1, 100, 200)
+
+        other_group = zarr.open_group(path / "images" / "other_image", mode="r")
+        arr = other_group["s0"]
+
+        assert arr.chunks == (1, 100, 200)
+
+
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained
     assert full_sdata.is_self_contained()
