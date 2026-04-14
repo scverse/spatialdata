@@ -130,6 +130,15 @@ def test_dataframe_set_index_preserves_attrs():
     assert isinstance(result.attrs, AttrsAccessor)
 
 
+def test_dataframe_sample_preserves_attrs():
+    """Test that DataFrame.sample preserves attrs."""
+    df = dd.from_pandas(pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}), npartitions=2)
+    df.attrs["key"] = "value"
+    result = df.sample(frac=0.5)
+    assert result.attrs["key"] == "value"
+    assert isinstance(result.attrs, AttrsAccessor)
+
+
 # ============================================================================
 # Series wrapped methods tests
 # ============================================================================
