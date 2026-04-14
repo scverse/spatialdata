@@ -1108,7 +1108,7 @@ class SpatialData:
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        raster_write_kwargs: dict[str, dict[str, Any], Any] | None = None,
+        raster_write_kwargs: dict[str, dict[str, Any] | Any] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1156,6 +1156,7 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+
         """
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats
