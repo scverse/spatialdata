@@ -63,7 +63,7 @@ extra  = [
 
 [dependency-groups]
 sharding = [
-    "zarrs-python",
+    "zarrs",
 ]
 dev = [
     "bump2version",
