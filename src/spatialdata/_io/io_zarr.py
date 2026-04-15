@@ -6,7 +6,7 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import zarr.storage
+import zarr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -14,6 +14,7 @@ from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
 from upath import UPath
 from zarr.errors import ArrayNotFoundError
+from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
@@ -232,7 +233,21 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = store if isinstance(store, UPath) else resolved_store.root
+    if isinstance(store, UPath):
+        sdata.path = store
+    elif isinstance(store, str):
+        sdata.path = UPath(store) if "://" in store else Path(store)
+    elif isinstance(store, Path):
+        sdata.path = store
+    elif isinstance(store, zarr.Group):
+        if isinstance(resolved_store, LocalStore):
+            sdata.path = Path(resolved_store.root)
+        elif isinstance(resolved_store, FsspecStore):
+            sdata.path = UPath(str(_FsspecStoreRoot(resolved_store)))
+        else:
+            sdata.path = None
+    else:
+        sdata.path = None
     return sdata
 
 

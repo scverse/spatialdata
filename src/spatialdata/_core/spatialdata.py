@@ -1043,7 +1043,11 @@ class SpatialData:
             _resolve_zarr_store,
         )
 
-        if isinstance(file_path, str):
+        # Hierarchical URIs (``scheme://…``) must become UPath: plain ``Path(str)`` breaks cloud URLs
+        # (S3-compatible stores, Azure ``abfs://`` / ``az://``, GCS ``gs://``, ``https://``, fsspec chains, etc.).
+        if isinstance(file_path, str) and "://" in file_path:
+            file_path = UPath(file_path)
+        elif isinstance(file_path, str):
             file_path = Path(file_path)
 
         if not isinstance(file_path, (Path, UPath)):
@@ -1186,9 +1190,12 @@ class SpatialData:
             if self.path is None:
                 raise ValueError("file_path must be provided when SpatialData.path is not set.")
             file_path = self.path
-        if isinstance(file_path, str):
+        # Hierarchical URIs (``scheme://…``) must become UPath: plain ``Path(str)`` breaks cloud URLs
+        # (S3-compatible stores, Azure ``abfs://`` / ``az://``, GCS ``gs://``, ``https://``, fsspec chains, etc.).
+        if isinstance(file_path, str) and "://" in file_path:
+            file_path = UPath(file_path)
+        elif isinstance(file_path, str):
             file_path = Path(file_path)
-        # Keep UPath as-is; do not convert to Path
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 

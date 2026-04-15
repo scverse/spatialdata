@@ -136,6 +136,13 @@ class TestRemoteStorage:
         assert isinstance(full_sdata.path, UPath)
         assert full_sdata.path == upath
         _assert_read_identical(full_sdata, upath)
+        # ``str(upath)`` drops storage options on the UPath; S3 against moto still works via
+        # ``AWS_*`` / ``AWS_ENDPOINT_URL`` from conftest. Azure/GCS strings would omit credentials
+        # or emulator endpoints, so we only assert the string-URL read path for S3 here.
+        if storage_name == "s3":
+            sdata_str_url = SpatialData.read(str(upath))
+            assert isinstance(sdata_str_url.path, UPath)
+            assert_spatial_data_objects_are_identical(full_sdata, sdata_str_url)
 
     @REMOTE_STORAGE_PARAMS
     def test_path_setter_with_remote_then_operations(

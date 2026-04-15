@@ -638,7 +638,6 @@ def _resolve_zarr_store(
     """
     # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
-        # if the input is str or Path, map it to UPath
         path = UPath(path)
 
     if isinstance(path, PosixUPath | WindowsUPath):
