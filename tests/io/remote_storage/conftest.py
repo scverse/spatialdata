@@ -28,7 +28,11 @@ _LOOP_GONE_ERRORS = ("different loop", "Loop is not running")
 
 
 def _patch_fsspec_sync_for_shutdown() -> None:
-    """If fsspec.asyn.sync() runs at exit when the loop is gone, return None instead of raising."""
+    """If fsspec.asyn.sync() runs at exit when the loop is gone, return None instead of raising.
+
+    SpatialData does not patch ``fsspec.asyn.sync`` at import time (too broad for a library); this
+    hook runs only for pytest sessions that load this conftest (remote emulator tests).
+    """
     import fsspec.asyn as asyn_mod
 
     _orig = asyn_mod.sync
