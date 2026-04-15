@@ -2,7 +2,7 @@
 
 Emulators must be running (e.g. Docker: docker run -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators).
 Ports: S3/moto 5000, Azure/Azurite 10000, GCS/fake-gcs-server 4443.
-tests/io/conftest.py creates the required buckets/containers when emulators are up.
+tests/io/remote_storage/conftest.py creates buckets/containers when emulators are up.
 
 All remote paths use uuid.uuid4().hex so each test run writes to a unique location.
 """
@@ -66,7 +66,7 @@ REMOTE_STORAGE_PARAMS = pytest.mark.parametrize(
     ids=["azure", "s3", "gcs"],
 )
 
-# Ensure buckets/containers exist on emulators before any test (see tests/io/conftest.py)
+# Ensure buckets/containers exist on emulators before any test (see tests/io/remote_storage/conftest.py).
 pytestmark = pytest.mark.usefixtures("_remote_storage_buckets_containers")
 
 

@@ -41,7 +41,8 @@ def _read_points(
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
     if isinstance(path, _FsspecStoreRoot):
-        points = read_parquet(str(path), storage_options=_storage_options_from_fs(path._store.fs))
+        opts = _storage_options_from_fs(path._store.fs)
+        points = read_parquet(str(path), storage_options=opts if opts else {})
     else:
         points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
     assert isinstance(points, DaskDataFrame)

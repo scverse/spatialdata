@@ -41,6 +41,15 @@ from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransf
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
 
 
+def _join_fsspec_store_path(store_path: str, relative_path: str) -> str:
+    """Combine FsspecStore root with a zarr group path using POSIX ``/`` (fsspec keys; safe on Windows)."""
+    base = str(store_path).replace("\\", "/").rstrip("/")
+    rel = str(relative_path).replace("\\", "/").lstrip("/")
+    if not base:
+        return f"/{rel}" if rel else "/"
+    return f"{base}/{rel}" if rel else base
+
+
 class _FsspecStoreRoot:
     """Path-like root for FsspecStore (no .root attribute); supports __truediv__ and str() as full URL."""
 
@@ -48,10 +57,11 @@ class _FsspecStoreRoot:
 
     def __init__(self, store: FsspecStore, path: str | None = None) -> None:
         self._store = store
-        self._path = (path or store.path).rstrip("/")
+        raw = path or store.path
+        self._path = str(raw).replace("\\", "/").rstrip("/")
 
     def __truediv__(self, other: str | Path) -> _FsspecStoreRoot:
-        return _FsspecStoreRoot(self._store, self._path + "/" + str(other).lstrip("/"))
+        return _FsspecStoreRoot(self._store, _join_fsspec_store_path(self._path, str(other)))
 
     def __str__(self) -> str:
         protocol = getattr(self._store.fs, "protocol", None)
@@ -597,8 +607,8 @@ def _resolve_zarr_store(
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
             return FsspecStore(
-                path.store.path + "/" + path.path,
                 fs=_ensure_async_fs(path.store.fs),
+                path=_join_fsspec_store_path(path.store.path, path.path),
                 **kwargs,
             )
         if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
