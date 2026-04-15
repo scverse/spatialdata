@@ -7,9 +7,19 @@ Covers only code paths used when reading/writing from remote backends (Azure, S3
 
 from __future__ import annotations
 
-from zarr.storage import FsspecStore
+import tempfile
+
+from zarr.storage import FsspecStore, LocalStore, MemoryStore
 
 from spatialdata._io._utils import _FsspecStoreRoot, _resolve_zarr_store, _storage_options_from_fs
+
+
+def test_resolve_zarr_store_returns_existing_zarr_stores_unchanged() -> None:
+    """StoreLike inputs must not be wrapped as FsspecStore(fs=store) — that is only for async filesystems."""
+    mem = MemoryStore()
+    assert _resolve_zarr_store(mem) is mem
+    loc = LocalStore(tempfile.mkdtemp())
+    assert _resolve_zarr_store(loc) is loc
 
 
 def test_resolve_zarr_store_fsspec_store_root() -> None:

@@ -671,8 +671,9 @@ def _resolve_zarr_store(
         _check_fsspec_at_remote_store_open(path.fs)
         return FsspecStore(_ensure_async_fs(path.fs), path=path.path, **kwargs)
     if isinstance(path, zarr.storage.StoreLike):
-        # if the input already a store, wrap it in an FSStore
-        return FsspecStore(path, **kwargs)
+        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, …). Do not pass it as ``fs=`` to
+        # FsspecStore — that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
+        return path
     raise TypeError(f"Unsupported type: {type(path)}")
 
 
