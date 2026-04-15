@@ -20,7 +20,6 @@ import time
 import pytest
 
 
-
 def _ensure_gcs_emulator_env() -> None:
     """Point google-cloud-storage / gcsfs defaults at fake-gcs-server (not production)."""
     raw = os.environ.get("STORAGE_EMULATOR_HOST", "").strip()
