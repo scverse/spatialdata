@@ -1044,6 +1044,13 @@ class SpatialData:
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
+        """
+        Guard against unsafe writes for **local** paths (zarr check, Dask backing, subfolders).
+
+        For :class:`upath.UPath`, only "store exists vs ``overwrite``" is checked. Local Dask-backing
+        and subfolder checks are omitted because backing paths are filesystem-local and are not
+        compared to object-store keys; ``overwrite=True`` on remote URLs must be chosen carefully.
+        """
         from spatialdata._io._utils import (
             _backed_elements_contained_in_path,
             _is_subfolder,
@@ -1151,7 +1158,9 @@ class SpatialData:
             The path to the Zarr store to write to. If ``None``, uses :attr:`path` (must be set).
         overwrite
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
-            already exists.
+            already exists. For remote paths (:class:`upath.UPath`), the extra safeguards used for local paths (that
+            Dask-backed files are not inside the write target) are not applied; use ``overwrite=True`` only when you
+            are sure the destination store may be replaced.
         consolidate_metadata
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain

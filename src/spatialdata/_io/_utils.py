@@ -516,9 +516,14 @@ def _backed_elements_contained_in_path(
     -----
     If an object does not have a Dask computational graph, it will return an empty list.
     It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
+
+    For a remote ``path`` (:class:`upath.UPath`), this always returns an empty list: Dask backing paths
+    are resolved as local filesystem paths, so they cannot be compared to object-store locations.
+    :meth:`spatialdata.SpatialData.write` therefore skips the local "backing files in target" guard
+    for remote targets; ``overwrite=True`` on a remote URL must be used only when overwriting is safe.
     """
     if isinstance(path, UPath):
-        return []  # no local backing files are "contained" in a remote path
+        return []
     if not isinstance(path, Path):
         raise TypeError(f"Expected a Path or UPath object, got {type(path)}")
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
@@ -552,8 +557,10 @@ def _is_element_self_contained(
     element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData,
     element_path: Path | UPath,
 ) -> bool:
+    """Whether element Dask graphs only reference files under ``element_path`` (local) or N/A (remote)."""
     if isinstance(element_path, UPath):
-        return True  # treat remote-backed as self-contained for this check
+        # Backing-file paths are local; cannot relate them to remote keys—assume OK for this heuristic.
+        return True
     if isinstance(element, DaskDataFrame):
         pass
     # TODO when running test_save_transformations it seems that for the same element this is called multiple times
