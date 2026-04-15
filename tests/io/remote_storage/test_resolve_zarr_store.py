@@ -45,6 +45,7 @@ def test_storage_options_from_fs_azure_account_key() -> None:
         account_key = "key123"
         connection_string = None
         anon = None
+
     out = _storage_options_from_fs(AzureBlobFileSystemMock())
     assert out["account_name"] == "dev"
     assert out["account_key"] == "key123"
@@ -58,6 +59,7 @@ def test_storage_options_from_fs_gcs_endpoint() -> None:
         token = "anon"
         _endpoint = "http://localhost:4443"
         project = "test"
+
     out = _storage_options_from_fs(GCSFileSystemMock())
     assert out["token"] == "anon"
     assert out["endpoint_url"] == "http://localhost:4443"
