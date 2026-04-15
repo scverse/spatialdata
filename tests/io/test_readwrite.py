@@ -1190,6 +1190,17 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
 
 
+def test_path_setter_coerces_str_to_path_or_upath(tmp_path: Path) -> None:
+    """``SpatialData.path`` is stored as Path | UPath | None; strings are normalized like ``write()``."""
+    sdata = SpatialData()
+    p = tmp_path / "store.zarr"
+    sdata.path = str(p)
+    assert isinstance(sdata.path, Path)
+    assert sdata.path == p
+    sdata.path = "s3://bucket/key.zarr"
+    assert isinstance(sdata.path, UPath)
+
+
 def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
     """Test writing SpatialData with mixed string/NaN values in obs works correctly.
 

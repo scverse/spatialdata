@@ -549,13 +549,21 @@ class SpatialData:
 
     @property
     def path(self) -> Path | UPath | None:
-        """Path to the Zarr storage."""
+        """Path to the Zarr storage (always :class:`pathlib.Path` or :class:`upath.UPath` when set)."""
         return self._path
 
     @path.setter
-    def path(self, value: Path | UPath | None) -> None:
-        if value is None or isinstance(value, (str, Path, UPath)):
+    def path(self, value: str | Path | UPath | None) -> None:
+        if value is None:
+            self._path = None
+        elif isinstance(value, (Path, UPath)):
             self._path = value
+        elif isinstance(value, str):
+            # Match ``write()`` / ``_validate_can_safely_write_to_path``: keep ``self._path`` as Path | UPath only.
+            if "://" in value:
+                self._path = UPath(value)
+            else:
+                self._path = Path(value)
         else:
             raise TypeError("Path must be `None`, a `str`, a `Path` or a `UPath` object.")
 
