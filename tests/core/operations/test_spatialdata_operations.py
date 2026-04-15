@@ -559,15 +559,14 @@ def test_init_from_elements(full_sdata: SpatialData) -> None:
 
 
 def test_subset(full_sdata: SpatialData) -> None:
-    # Exclude labels and poly so the default table (annotating labels2d and poly) is not included
-    element_names = ["image2d", "points_0", "circles"]
+    element_names = ["image2d", "points_0", "circles", "poly"]
     subset0 = full_sdata.subset(element_names)
     unique_names = set()
     for _, k, _ in subset0.gen_spatial_elements():
         unique_names.add(k)
     assert "image3d_xarray" in full_sdata.images
     assert unique_names == set(element_names)
-    # no table since neither labels2d nor poly are in the subset
+    # no table since the labels are not present in the subset
     assert "table" not in subset0.tables
 
     adata = AnnData(
@@ -676,9 +675,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
 def test_validate_table_in_spatialdata(full_sdata):
     table = full_sdata["table"]
     region, region_key, _ = get_table_keys(table)
-    # full_sdata uses two regions (labels2d, poly) so the table annotates both
-    expected = {"labels2d", "poly"}
-    assert set(region if isinstance(region, list) else [region]) == expected
+    assert region == "labels2d"
 
     full_sdata.validate_table_in_spatialdata(table)
 
