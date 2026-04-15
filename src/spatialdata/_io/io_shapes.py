@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -65,7 +66,8 @@ def _read_shapes(
         store_root = _get_store_root(f.store_path.store)
         path = store_root / f.path / "shapes.parquet"
         if isinstance(path, _FsspecStoreRoot):
-            geo_df = read_parquet(str(path), storage_options=_storage_options_from_fs(path._store.fs))
+            opts = _storage_options_from_fs(path._store.fs)
+            geo_df = read_parquet(str(path), storage_options=opts if opts else {})
         else:
             geo_df = read_parquet(path)
     else:
@@ -195,18 +197,6 @@ def _upload_parquet_to_s3(tmp_path: str, bucket: str, key: str, fs: Any) -> None
     s3.upload_file(tmp_path, bucket, key)
 
 
-def _upload_parquet_to_gcs(tmp_path: str, bucket: str, key: str, fs: Any) -> None:
-    from google.auth.credentials import AnonymousCredentials
-    from google.cloud import storage
-
-    client = storage.Client(
-        credentials=AnonymousCredentials(),
-        project=getattr(fs, "project", None) or "test",
-    )
-    blob = client.bucket(bucket).blob(key)
-    blob.upload_from_filename(tmp_path)
-
-
 def _upload_parquet_to_fsspec(path: _FsspecStoreRoot, tmp_path: str) -> None:
     """Upload local parquet file to remote fsspec store using sync APIs to avoid event-loop issues."""
     fs = path._store.fs
@@ -217,7 +207,12 @@ def _upload_parquet_to_fsspec(path: _FsspecStoreRoot, tmp_path: str) -> None:
     elif fs_name in ("S3FileSystem", "MotoS3FS"):
         _upload_parquet_to_s3(tmp_path, bucket, key, fs)
     elif fs_name == "GCSFileSystem":
-        _upload_parquet_to_gcs(tmp_path, bucket, key, fs)
+        import fsspec
+
+        fs_dict = json.loads(fs.to_json())
+        fs_dict["asynchronous"] = False
+        sync_fs = fsspec.AbstractFileSystem.from_json(json.dumps(fs_dict))
+        sync_fs.put_file(tmp_path, path._path)
     else:
         fs.put(tmp_path, str(path))
 

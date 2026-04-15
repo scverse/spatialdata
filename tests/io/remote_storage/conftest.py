@@ -13,6 +13,16 @@ import time
 
 import pytest
 
+
+def _ensure_gcs_emulator_env() -> None:
+    """Point google-cloud-storage / gcsfs defaults at fake-gcs-server (not production)."""
+    raw = os.environ.get("STORAGE_EMULATOR_HOST", "").strip()
+    if raw in ("", "default"):
+        os.environ["STORAGE_EMULATOR_HOST"] = "http://127.0.0.1:4443"
+    elif not raw.startswith(("http://", "https://")):
+        os.environ["STORAGE_EMULATOR_HOST"] = f"http://{raw}"
+
+
 # Error messages from asyncio when closing sessions after the event loop is gone (e.g. at process exit)
 _LOOP_GONE_ERRORS = ("different loop", "Loop is not running")
 
@@ -155,7 +165,7 @@ def _ensure_gcs_buckets(host: str) -> None:
             client.create_bucket(name)
 
 
-def _wait_for_emulator_ports(host: str = "127.0.0.1", timeout: float = 60.0, check_interval: float = 2.0) -> None:
+def _wait_for_emulator_ports(host: str = "127.0.0.1", timeout: float = 10.0, check_interval: float = 2.0) -> None:
     """Wait until all three emulator ports accept connections (e.g. after docker run)."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -187,6 +197,8 @@ def _remote_storage_buckets_containers():
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list) -> None:
     """Inject bucket/container creation for test_remote_storage.py."""
+    if any("remote_storage" in str(getattr(item, "path", None) or getattr(item, "fspath", "")) for item in items):
+        _ensure_gcs_emulator_env()
     for item in items:
         path = getattr(item, "path", None) or getattr(item, "fspath", None)
         if path and "test_remote_storage" in str(path):

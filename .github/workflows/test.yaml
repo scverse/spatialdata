@@ -84,6 +84,8 @@ jobs:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
+                  # gcsfs otherwise defaults to ExtendedGcsFileSystem (prod Storage Control gRPC; breaks fake-gcs-server).
+                  GCSFS_EXPERIMENTAL_ZB_HNS_SUPPORT: "false"
               run: |
                   if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
                     uv run pytest --cov --color=yes --cov-report=xml
