@@ -11,10 +11,14 @@ only; the library package itself does not apply those patches globally.
 from __future__ import annotations
 
 import os
+
+os.environ.setdefault("GCSFS_EXPERIMENTAL_ZB_HNS_SUPPORT", "false")
+
 import socket
 import time
 
 import pytest
+
 
 
 def _ensure_gcs_emulator_env() -> None:
