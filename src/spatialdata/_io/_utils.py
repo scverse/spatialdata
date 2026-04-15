@@ -74,9 +74,6 @@ class _FsspecStoreRoot:
         return str(self)
 
 
-_PARQUET_FSSPEC_NAMES: frozenset[str] = frozenset(
-    {"AzureBlobFileSystem", "ExtendedGcsFileSystem", "GCSFileSystem", "MotoS3FS", "S3FileSystem"}
-)
 _CLOUD_OBJECT_STORE_PROTOCOLS: frozenset[str] = frozenset({"abfs", "adl", "az", "gcs", "gs", "s3", "s3a"})
 
 
@@ -96,35 +93,54 @@ def _fsspec_protocols(core: Any) -> set[str]:
     return set()
 
 
-def _require_known_parquet_fsspec(core: Any) -> None:
-    if type(core).__name__ in _PARQUET_FSSPEC_NAMES:
-        return
-    supported = ", ".join(sorted(_PARQUET_FSSPEC_NAMES))
-    label = f"{type(core).__module__}.{type(core).__qualname__}"
-    raise ValueError(
-        f"Cannot derive parquet storage_options from filesystem {label!r}. Supported filesystem classes: {supported}."
-    )
+def _cloud_parquet_protocol_family(core: Any) -> Literal["azure", "gcs", "s3"] | None:
+    """Map fsspec filesystem protocol(s) to how we extract parquet ``storage_options`` (not by class name)."""
+    protos = _fsspec_protocols(core) & _CLOUD_OBJECT_STORE_PROTOCOLS
+    if not protos:
+        return None
+    if protos & {"s3", "s3a"}:
+        return "s3"
+    if protos & {"abfs", "adl", "az"}:
+        return "azure"
+    if protos & {"gcs", "gs"}:
+        return "gcs"
+    return None
 
 
 def _check_fsspec_at_remote_store_open(fs: Any) -> None:
     """If ``fs`` looks like S3/GCS/Azure, ensure we can build parquet ``storage_options`` for it."""
     core = _unwrap_fsspec_sync_fs(fs)
-    if not (_fsspec_protocols(core) & _CLOUD_OBJECT_STORE_PROTOCOLS):
+    protos = _fsspec_protocols(core) & _CLOUD_OBJECT_STORE_PROTOCOLS
+    if not protos:
         return
-    _require_known_parquet_fsspec(core)
+    if _cloud_parquet_protocol_family(core) is None:
+        label = f"{type(core).__module__}.{type(core).__qualname__}"
+        raise ValueError(
+            f"Cannot derive parquet storage_options for filesystem {label!r} with protocol(s) {protos!r}. "
+            "Supported protocol families: S3 (s3, s3a), Azure (abfs, adl, az), GCS (gcs, gs). "
+            "Custom implementations should expose a matching ``protocol`` (see fsspec)."
+        )
 
 
 def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
     """Build storage_options dict from an fsspec filesystem for use with to_parquet/read_parquet.
 
-    Unwraps ``sync_fs`` chains (e.g. async wrappers). Raises if the implementation is not one we
-    support for adlfs / s3fs / gcsfs-style credentials.
+    Unwraps ``sync_fs`` chains (e.g. async wrappers). Dispatches by **reported fsspec protocol** (``fs.protocol``),
+    not by concrete class name, so subclasses and thin wrappers that speak ``s3``/``gs``/``az`` still work as long as
+    they expose the credential attributes we copy (same shape as s3fs, gcsfs, adlfs).
     """
     core = _unwrap_fsspec_sync_fs(fs)
-    _require_known_parquet_fsspec(core)
+    family = _cloud_parquet_protocol_family(core)
+    if family is None:
+        label = f"{type(core).__module__}.{type(core).__qualname__}"
+        protos = _fsspec_protocols(core)
+        raise ValueError(
+            f"Cannot derive parquet storage_options from filesystem {label!r} (protocols {protos!r}). "
+            "Expected an object-store protocol among "
+            f"{sorted(_CLOUD_OBJECT_STORE_PROTOCOLS)}."
+        )
     out: dict[str, Any] = {}
-    name = type(core).__name__
-    if name == "AzureBlobFileSystem":
+    if family == "azure":
         if getattr(core, "connection_string", None):
             out["connection_string"] = core.connection_string
         elif getattr(core, "account_name", None) and getattr(core, "account_key", None):
@@ -132,7 +148,7 @@ def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
             out["account_key"] = core.account_key
         if getattr(core, "anon", None) is not None:
             out["anon"] = core.anon
-    elif name in ("S3FileSystem", "MotoS3FS"):
+    elif family == "s3":
         if getattr(core, "endpoint_url", None):
             out["endpoint_url"] = core.endpoint_url
         if getattr(core, "key", None):
@@ -141,7 +157,7 @@ def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
             out["secret"] = core.secret
         if getattr(core, "anon", None) is not None:
             out["anon"] = core.anon
-    elif name in ("GCSFileSystem", "ExtendedGcsFileSystem"):
+    elif family == "gcs":
         if getattr(core, "token", None) is not None:
             out["token"] = core.token
         if getattr(core, "_endpoint", None):
@@ -149,7 +165,7 @@ def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
         if getattr(core, "project", None):
             out["project"] = core.project
     else:
-        raise AssertionError(f"Unhandled fsspec class {name!r} (out of sync with _PARQUET_FSSPEC_NAMES)")
+        raise AssertionError(f"Unhandled protocol family {family!r}")
 
     return out
 
@@ -651,6 +667,7 @@ def _resolve_zarr_store(
         return LocalStore(path.path)
 
     if isinstance(path, zarr.Group):
+        _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
@@ -664,9 +681,20 @@ def _resolve_zarr_store(
                 path=_join_fsspec_store_path(path.store.path, path.path),
                 **kwargs,
             )
-        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
-            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
-            return path.store.store
+        if _cms is not None and isinstance(path.store, _cms):
+            # Unwrap and apply the same async-fs + parquet guards as a direct FsspecStore on the group.
+            inner = path.store.store
+            if isinstance(inner, FsspecStore):
+                _check_fsspec_at_remote_store_open(inner.fs)
+                return FsspecStore(
+                    fs=_ensure_async_fs(inner.fs),
+                    path=_join_fsspec_store_path(inner.path, path.path),
+                    **kwargs,
+                )
+            if isinstance(inner, LocalStore):
+                store_path = UPath(inner.root) / path.path
+                return LocalStore(store_path.path)
+            return inner
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, _FsspecStoreRoot):
         # path-like from read_zarr that carries the same fs (preserves Azure/GCS credentials)

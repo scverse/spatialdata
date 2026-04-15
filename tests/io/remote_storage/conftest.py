@@ -1,8 +1,11 @@
-"""Minimal pytest config for IO tests. Creates buckets/containers when remote emulators are running.
+"""Pytest hooks for ``tests/io/remote_storage/`` only (not loaded from repo-root ``tests/conftest.py``).
 
-Assumes emulators are already running (e.g. Docker:
-    docker run -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators).
+Creates buckets/containers when remote emulators are running. Assumes emulators are already up
+(e.g. Docker: ``docker run -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators``).
 Ports: S3/moto 5000, Azure/Azurite 10000, GCS/fake-gcs-server 4443.
+
+``pytest_configure`` here patches ``fsspec.asyn.sync`` and ``gcsfs`` session teardown for this subtree
+only; the library package itself does not apply those patches globally.
 """
 
 from __future__ import annotations

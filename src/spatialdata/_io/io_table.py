@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
+from upath import UPath
 
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.format import (
@@ -20,7 +21,7 @@ from spatialdata._io.format import (
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path) -> AnnData:
+def _read_table(store: str | Path | UPath) -> AnnData:
     resolved_store = _resolve_zarr_store(store)
     table = read_anndata_zarr(resolved_store)
 

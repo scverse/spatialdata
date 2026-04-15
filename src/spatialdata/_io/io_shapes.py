@@ -13,6 +13,7 @@ from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
+from upath import UPath
 
 from spatialdata._io._utils import (
     _FsspecStoreRoot,
@@ -39,9 +40,9 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path,
+    store: str | Path | UPath,
 ) -> GeoDataFrame:
-    """Read shapes from a zarr store."""
+    """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
     resolved_store = _resolve_zarr_store(store)
     f = zarr.open(resolved_store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)

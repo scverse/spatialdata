@@ -53,7 +53,9 @@ jobs:
                     fi
                   fi
                   uv sync --group=test
-            # Start storage emulators (S3, Azure, GCS) only on Linux; service containers are not available on Windows/macOS
+            # Start storage emulators (S3, Azure, GCS) only on Linux; Docker service containers are not available on
+            # Windows/macOS runners, so tests/io/remote_storage/ is skipped there (see Test step). Remote I/O is still
+            # exercised on every PR via the Ubuntu matrix jobs.
             - name: Build and start storage emulators
               if: matrix.os == 'ubuntu-latest'
               run: |
