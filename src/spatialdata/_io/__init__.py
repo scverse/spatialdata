@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# Patch da.to_zarr so ome_zarr's **kwargs are passed as zarr_array_kwargs (avoids FutureWarning)
-import spatialdata._io._dask_zarr_compat  # noqa: F401
 from spatialdata._io._utils import get_dask_backing_files
 from spatialdata._io.format import SpatialDataFormatType
 from spatialdata._io.io_points import write_points
