@@ -283,7 +283,8 @@ def _write_raster(
     raster_format
         The format used to write the raster data.
     storage_options
-        These options are passed to the storage backend and can be provided in several formats:
+        Storage options for raster elements.These options are passed to the zarr storage backend for writing and
+        can be provided in several formats:
 
             1. Single dictionary
                 A dictionary containing all storage options applied to the raster, either single or multiscale.
