@@ -42,8 +42,8 @@ class Settings:
     shapes_geometry_encoding: Literal["WKB", "geoarrow"] = "WKB"
     large_chunk_threshold_bytes: int = 2147483647
 
-    chunks: tuple[int, ...] | None = None
-    shards: tuple[int, ...] | None = None
+    raster_chunks: tuple[int, ...] | None = None
+    raster_shards: tuple[int, ...] | None = None
 
     def save(self, path: Path | str | None = None) -> None:
         """Store current settings on disk.
@@ -158,14 +158,14 @@ class Settings:
             "SPATIALDATA_CUSTOM_CONFIG_PATH": ("custom_config_path", Path),
             "SPATIALDATA_SHAPES_GEOMETRY_ENCODING": ("shapes_geometry_encoding", str),
             "SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES": ("large_chunk_threshold_bytes", int),
-            "SPATIALDATA_CHUNKS": ("chunks", str),
-            "SPATIALDATA_SHARDS": ("shards", str),  # handled specially below
+            "SPATIALDATA_CHUNKS": ("raster_chunks", str),
+            "SPATIALDATA_SHARDS": ("raster_shards", str),  # handled specially below
         }
         for env_key, (field_name, cast) in _ENV.items():
             raw = os.environ.get(env_key)
             if raw is None:
                 continue
-            if field_name == "shards":
+            if field_name == "raster_shards":
                 setattr(self, field_name, None if raw.lower() in ("none", "") else int(raw))
             else:
                 setattr(self, field_name, cast(raw))

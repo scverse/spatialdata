@@ -13,22 +13,22 @@ class TestDefaults:
         s = settings_cls()
         assert s.shapes_geometry_encoding == "WKB"
         assert s.large_chunk_threshold_bytes == 2_147_483_647
-        assert s.chunks is None
-        assert s.shards is None
+        assert s.raster_chunks is None
+        assert s.raster_shards is None
         assert s.custom_config_path is None
 
     def test_change_settings_default_path(self, settings_cls):
         s = settings_cls()
         s.shapes_geometry_encoding = "geoarrow"
         s.large_chunk_threshold_bytes = 1_000_000_000
-        s.chunks = (512, 512)
-        s.shards = (1024, 1024)
+        s.raster_chunks = (512, 512)
+        s.raster_shards = (1024, 1024)
         s.save()
         s = settings_cls().load()
         assert s.shapes_geometry_encoding == "geoarrow"
         assert s.large_chunk_threshold_bytes == 1_000_000_000
-        assert s.chunks == [512, 512]
-        assert s.shards == [1024, 1024]
+        assert s.raster_chunks == [512, 512]
+        assert s.raster_shards == [1024, 1024]
         assert s.custom_config_path is None
 
     def test_change_settings_custom_path(self, settings_cls, tmp_path):
@@ -41,14 +41,14 @@ class TestDefaults:
         s.large_chunk_threshold_bytes = 1_000_000_000
         os.environ["SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES"] = "1_111_111_111"
 
-        s.chunks = (512, 512)
-        s.shards = (1024, 1024)
+        s.raster_chunks = (512, 512)
+        s.raster_shards = (1024, 1024)
         s.save(path=target_path)
         s = settings_cls().load()
         assert s.shapes_geometry_encoding == "geoarrow"
         assert s.large_chunk_threshold_bytes == 1_111_111_111
-        assert s.chunks is None
-        assert s.shards is None
+        assert s.raster_chunks is None
+        assert s.raster_shards is None
         assert s.custom_config_path == str(target_path)
 
         s.reset()
