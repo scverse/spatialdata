@@ -1108,7 +1108,7 @@ class SpatialData:
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        raster_write_kwargs: dict[str, dict[str, Any] | Any] | None = None,
+        raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1156,6 +1156,12 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+        raster_write_kwargs
+            Options to be passed on to the storage backend. Can be a dictionary containing all storage options or a
+            dictionary with as keys the names of the raster elements and as value a dictionary containing all storage
+            options. Regarding the key, value pairs in the option dictionar(y)(ies), these depend both on the
+            zarr_format used for writing. Please refer to
+            https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array for the available storage options.
 
         """
         from spatialdata._io._utils import _resolve_zarr_store
@@ -1208,7 +1214,7 @@ class SpatialData:
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        element_raster_write_kwargs: dict[str, Any] | None = None,
+        element_raster_write_kwargs: dict[str, Any] | list[dict[str, Any]] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 

@@ -283,7 +283,9 @@ def _write_raster(
     raster_format
         The format used to write the raster data.
     storage_options
-        Additional options for writing the raster data, like chunks and compression.
+        Options to be passed on to the storage backend. Regarding the key, value pairs in the option dictionar(y)(ies),
+        these depend both on the zarr_format used for writing. Please refer to
+        https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array for the available storage options.
     label_metadata
         Label metadata which can only be defined when writing 'labels'.
     metadata
