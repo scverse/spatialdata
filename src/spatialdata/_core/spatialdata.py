@@ -1108,7 +1108,7 @@ class SpatialData:
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | None = None,
+        raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | list[dict[str, Any]] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1183,9 +1183,18 @@ class SpatialData:
         for element_type, element_name, element in self.gen_elements():
             element_raster_write_kwargs = None
             if element_type in ("images", "labels") and raster_write_kwargs:
-                if kwargs := raster_write_kwargs.get(element_name):
+                if isinstance(raster_write_kwargs, dict) and (kwargs := raster_write_kwargs.get(element_name)):
                     element_raster_write_kwargs = kwargs
-                elif not any(isinstance(x, dict) for x in raster_write_kwargs.values()):
+                elif isinstance(raster_write_kwargs, dict) and not all(
+                    isinstance(x, (dict, list)) for x in raster_write_kwargs.values()
+                ):
+                    element_raster_write_kwargs = raster_write_kwargs
+                elif isinstance(raster_write_kwargs, list):
+                    if not all(isinstance(x, dict) for x in raster_write_kwargs):
+                        raise ValueError(
+                            "If passing raster_write_kwargs as list, it is assumed to be the storage "
+                            "options for each scale of a multiscale raster as a dictionary."
+                        )
                     element_raster_write_kwargs = raster_write_kwargs
 
             self._write_element(
