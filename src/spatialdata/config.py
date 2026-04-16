@@ -30,10 +30,10 @@ class Settings:
         Chunk sizes bigger than this value (bytes) can trigger a compression error.
         See https://github.com/scverse/spatialdata/issues/812#issuecomment-2559380276
         If detected during parsing/validation, a warning is raised.
-    chunks
+    raster_chunks
         The chunksize to use for chunking an array. Length of the tuple must match
         the number of dimensions.
-    shards
+    raster_shards
         The default shard size (zarr v3) to use when storing arrays. Length of the tuple
         must match the number of dimensions.
     """
