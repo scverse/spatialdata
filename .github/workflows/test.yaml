@@ -53,18 +53,52 @@ jobs:
                     fi
                   fi
                   uv sync --group=test
-            # Start storage emulators (S3, Azure, GCS) only on Linux; Docker service containers are not available on
-            # Windows/macOS runners, so tests/io/remote_storage/ is skipped there (see Test step). Remote I/O is still
-            # exercised on every PR via the Ubuntu matrix jobs.
+            - name: Test
+              env:
+                  MPLBACKEND: agg
+                  PLATFORM: ${{ matrix.os }}
+                  DISPLAY: :42
+              run: |
+                  uv run pytest --cov --color=yes --cov-report=xml --ignore=tests/io/remote_storage/
+            - name: Upload coverage to Codecov
+              uses: codecov/codecov-action@v5
+              with:
+                  name: coverage
+                  verbose: true
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+    test-remote-storage:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                shell: bash
+        strategy:
+            fail-fast: false
+            matrix:
+                python: ["3.11", "3.13"]
+        env:
+            MPLBACKEND: agg
+            PLATFORM: ubuntu-latest
+            DISPLAY: :42
+            GCSFS_EXPERIMENTAL_ZB_HNS_SUPPORT: "false"
+        steps:
+            - uses: actions/checkout@v6
+            - uses: astral-sh/setup-uv@v7
+              with:
+                  version: "latest"
+                  python-version: ${{ matrix.python }}
+            - name: Install dependencies
+              run: |
+                  uv add dask
+                  uv sync --group=test
             - name: Build and start storage emulators
-              if: matrix.os == 'ubuntu-latest'
               run: |
                   docker build -f tests/io/remote_storage/Dockerfile.emulators -t spatialdata-emulators .
                   docker run --rm -d --name spatialdata-emulators \
                     -p 5000:5000 -p 10000:10000 -p 4443:4443 \
                     spatialdata-emulators
             - name: Wait for emulator ports
-              if: matrix.os == 'ubuntu-latest'
               run: |
                   echo "Waiting for S3 (5000), Azure (10000), GCS (4443)..."
                   python3 -c "
@@ -80,24 +114,13 @@ jobs:
                   else:
                       raise SystemExit('Emulators did not become ready.')
                   "
-            # On Linux, emulators run above so full suite (incl. tests/io/remote_storage/) runs. On Windows/macOS, skip remote_storage.
-            - name: Test
-              env:
-                  MPLBACKEND: agg
-                  PLATFORM: ${{ matrix.os }}
-                  DISPLAY: :42
-                  # gcsfs otherwise defaults to ExtendedGcsFileSystem (prod Storage Control gRPC; breaks fake-gcs-server).
-                  GCSFS_EXPERIMENTAL_ZB_HNS_SUPPORT: "false"
+            - name: Test remote storage
               run: |
-                  if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-                    uv run pytest --cov --color=yes --cov-report=xml
-                  else
-                    uv run pytest --cov --color=yes --cov-report=xml --ignore=tests/io/remote_storage/
-                  fi
+                  uv run pytest tests/io/remote_storage/ --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v5
               with:
-                  name: coverage
+                  name: coverage-remote-storage-${{ matrix.python }}
                   verbose: true
               env:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
