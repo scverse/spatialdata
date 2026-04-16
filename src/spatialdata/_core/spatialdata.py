@@ -1056,12 +1056,12 @@ class SpatialData:
 
         For :class:`upath.UPath`, only "store exists vs ``overwrite``" is checked. Local Dask-backing
         and subfolder checks are omitted because backing paths are filesystem-local and are not
-        compared to object-store keys; ``overwrite=True`` on remote URLs must be chosen carefully.
+        compared to object-store keys. Conflicts for remote targets are deferred to the backend/Zarr
+        write path; ``overwrite=True`` on remote URLs must be chosen carefully.
         """
         from spatialdata._io._utils import (
             _backed_elements_contained_in_path,
             _is_subfolder,
-            _remote_zarr_store_exists,
             _resolve_zarr_store,
         )
 
@@ -1076,13 +1076,6 @@ class SpatialData:
             raise ValueError(f"file_path must be a string, Path or UPath object, type(file_path) = {type(file_path)}.")
 
         if isinstance(file_path, UPath):
-            store = _resolve_zarr_store(file_path)
-            if _remote_zarr_store_exists(store) and not overwrite:
-                raise ValueError(
-                    "The Zarr store already exists. Use `overwrite=True` to try overwriting the store. "
-                    "Please note that only Zarr stores not currently in use by the current SpatialData object can be "
-                    "overwritten."
-                )
             return
 
         # Local Path: existing logic

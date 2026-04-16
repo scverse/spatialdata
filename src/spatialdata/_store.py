@@ -50,9 +50,8 @@ def make_zarr_store(
 
 def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
     from spatialdata._io._utils import (
-        _check_fsspec_at_remote_store_open,
         _join_fsspec_store_path,
-        _storage_options_from_fs,
+        _unwrap_fsspec_sync_fs,
     )
 
     store = group.store
@@ -63,19 +62,13 @@ def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
     if isinstance(store, LocalStore):
         return make_zarr_store(Path(store.root) / group.path)
     if isinstance(store, FsspecStore):
-        _check_fsspec_at_remote_store_open(store.fs)
         protocol = getattr(store.fs, "protocol", None)
         if isinstance(protocol, (list, tuple)):
             protocol = protocol[0] if protocol else "file"
         elif protocol is None:
             protocol = "file"
-        storage_options: dict[str, Any]
-        try:
-            storage_options = _storage_options_from_fs(store.fs)
-        except ValueError:
-            storage_options = {}
         path = _join_fsspec_store_path(store.path, group.path)
-        return make_zarr_store(f"{protocol}://{path}", storage_options=storage_options)
+        return make_zarr_store(UPath(f"{protocol}://{path}", fs=_unwrap_fsspec_sync_fs(store.fs)))
     raise ValueError(f"Unsupported store type or zarr.Group: {type(group.store)}")
 
 

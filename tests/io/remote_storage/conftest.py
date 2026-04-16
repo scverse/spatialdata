@@ -1,6 +1,6 @@
 """Pytest hooks for ``tests/io/remote_storage/`` only (not loaded from repo-root ``tests/conftest.py``).
 
-Creates buckets/containers when remote emulators are running. Assumes emulators are already up
+Creates backend fixtures when remote emulators are running. Assumes emulators are already up
 (e.g. Docker: ``docker run -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators``).
 Ports: S3/moto 5000, Azure/Azurite 10000, GCS/fake-gcs-server 4443.
 
@@ -99,7 +99,7 @@ def _apply_resilient_async_close_patches() -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Apply patches for remote storage tests (resilient async close at shutdown)."""
+    """Apply remote-test-only patches for resilient async close at shutdown."""
     _apply_resilient_async_close_patches()
 
 
@@ -191,7 +191,7 @@ def _wait_for_emulator_ports(host: str = "127.0.0.1", timeout: float = 10.0, che
 
 @pytest.fixture(scope="session")
 def _remote_storage_buckets_containers():
-    """Create buckets/containers on running emulators so remote storage tests can run.
+    """Create backend fixtures on running emulators so remote storage tests can run.
 
     Run with emulators up, e.g.:
       docker run --rm -d -p 5000:5000 -p 10000:10000 -p 4443:4443 spatialdata-emulators
