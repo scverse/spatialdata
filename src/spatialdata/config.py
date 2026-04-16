@@ -151,15 +151,15 @@ class Settings:
         SPATIALDATA_CUSTOM_CONFIG_PATH -> custom_config_path
         SPATIALDATA_SHAPES_GEOMETRY_ENCODING   → shapes_geometry_encoding
         SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES → large_chunk_threshold_bytes
-        SPATIALDATA_CHUNKS                     → chunks
-        SPATIALDATA_SHARDS                     → shards (integer or "none")
+        SPATIALDATA_RASTER_CHUNKS                     → chunks
+        SPATIALDATA_RASTER_SHARDS                     → shards (integer or "none")
         """
         _ENV: dict[str, tuple[str, type]] = {
             "SPATIALDATA_CUSTOM_CONFIG_PATH": ("custom_config_path", Path),
             "SPATIALDATA_SHAPES_GEOMETRY_ENCODING": ("shapes_geometry_encoding", str),
             "SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES": ("large_chunk_threshold_bytes", int),
-            "SPATIALDATA_CHUNKS": ("raster_chunks", str),
-            "SPATIALDATA_SHARDS": ("raster_shards", str),  # handled specially below
+            "SPATIALDATA_RASTER_CHUNKS": ("raster_chunks", str),
+            "SPATIALDATA_RASTER_SHARDS": ("raster_shards", str),  # handled specially below
         }
         for env_key, (field_name, cast) in _ENV.items():
             raw = os.environ.get(env_key)

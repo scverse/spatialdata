@@ -33,9 +33,12 @@ class TestDefaults:
 
     def test_change_settings_custom_path(self, settings_cls, tmp_path):
         os.environ["SPATIALDATA_SHAPES_GEOMETRY_ENCODING"] = "geoarrow"
+        os.environ["SPATIALDATA_RASTER_CHUNKS"] = "40,40,40"
+
         target_path = tmp_path / "custom_settings.json"
         s = settings_cls().load()
         assert s.shapes_geometry_encoding == "geoarrow"
+        assert s.raster_chunks == (40, 40, 40)
 
         # We set the value also using environment variables to test whether these properly overwrite
         s.large_chunk_threshold_bytes = 1_000_000_000
@@ -47,7 +50,7 @@ class TestDefaults:
         s = settings_cls().load()
         assert s.shapes_geometry_encoding == "geoarrow"
         assert s.large_chunk_threshold_bytes == 1_111_111_111
-        assert s.raster_chunks is None
+        assert s.raster_chunks == (40, 40, 40)
         assert s.raster_shards is None
         assert s.custom_config_path == str(target_path)
 
