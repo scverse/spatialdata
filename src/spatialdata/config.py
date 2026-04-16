@@ -165,8 +165,12 @@ class Settings:
             raw = os.environ.get(env_key)
             if raw is None:
                 continue
-            if field_name == "raster_shards":
-                setattr(self, field_name, None if raw.lower() in ("none", "") else int(raw))
+            if field_name in ("raster_chunks", "raster_shards"):
+                setattr(
+                    self,
+                    field_name,
+                    None if raw.lower() in ("none", "") else tuple(int(v) for v in raw.split(",")),
+                )
             else:
                 setattr(self, field_name, cast(raw))
 
