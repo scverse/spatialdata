@@ -924,6 +924,32 @@ def test_write_raster_sharding_keyword(tmp_path: Path, raster_case: dict) -> Non
     assert other_arr.chunks == base_chunks
 
 
+def test_write_raster_elements_sharding_chunking(tmp_path: Path) -> None:
+    write_chunks = (1, 50, 100)
+    write_shards = (1, 100, 200)
+
+    data = da.from_array(RNG.random((1, 500, 600)))
+    element = Image2DModel.parse(data, dims=("c", "y", "x"))
+
+    sdata = SpatialData()
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path)
+    sdata["image"] = element
+    sdata["other_image"] = element
+
+    sdata.write_element(
+        element_name=["image", "other_image"], raster_write_kwargs={"chunks": write_chunks, "shards": write_shards}
+    )
+
+    arr = zarr.open_group(path / "images" / "image", mode="r")["s0"]
+    assert arr.chunks == write_chunks
+    assert arr.shards == write_shards
+    arr = zarr.open_group(path / "images" / "other_image", mode="r")["s0"]
+    assert arr.chunks == write_chunks
+    assert arr.shards == write_shards
+
+
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained

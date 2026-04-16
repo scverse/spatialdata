@@ -1297,7 +1297,9 @@ class SpatialData:
         overwrite: bool = False,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | list[dict[str, Any]] | None = None,
+        raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]] | Any]
+        | list[dict[str, Any]]
+        | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
