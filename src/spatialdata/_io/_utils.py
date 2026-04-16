@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import filecmp
+import json
 import os.path
 import re
 import sys
@@ -23,6 +24,7 @@ from geopandas import GeoDataFrame
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.errors import GroupNotFoundError
 from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
@@ -36,6 +38,145 @@ from spatialdata.models._utils import (
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
+
+
+def _join_fsspec_store_path(store_path: str, relative_path: str) -> str:
+    """Combine FsspecStore root with a zarr group path using POSIX ``/`` (fsspec keys; safe on Windows)."""
+    base = str(store_path).replace("\\", "/").rstrip("/")
+    rel = str(relative_path).replace("\\", "/").lstrip("/")
+    if not base:
+        return f"/{rel}" if rel else "/"
+    return f"{base}/{rel}" if rel else base
+
+
+class _FsspecStoreRoot:
+    """Path-like root for FsspecStore (no .root attribute); supports __truediv__ and str() as full URL."""
+
+    __slots__ = ("_store", "_path")
+
+    def __init__(self, store: FsspecStore, path: str | None = None) -> None:
+        self._store = store
+        raw = path or store.path
+        self._path = str(raw).replace("\\", "/").rstrip("/")
+
+    def __truediv__(self, other: str | Path) -> _FsspecStoreRoot:
+        return _FsspecStoreRoot(self._store, _join_fsspec_store_path(self._path, str(other)))
+
+    def __str__(self) -> str:
+        protocol = getattr(self._store.fs, "protocol", None)
+        if isinstance(protocol, (list, tuple)):
+            protocol = protocol[0] if protocol else "file"
+        elif protocol is None:
+            protocol = "file"
+        return f"{protocol}://{self._path}"
+
+    def __fspath__(self) -> str:
+        return str(self)
+
+
+_CLOUD_OBJECT_STORE_PROTOCOLS: frozenset[str] = frozenset({"abfs", "adl", "az", "gcs", "gs", "s3", "s3a"})
+
+
+def _unwrap_fsspec_sync_fs(fs: Any) -> Any:
+    inner = getattr(fs, "sync_fs", None)
+    if inner is not None and inner is not fs:
+        return _unwrap_fsspec_sync_fs(inner)
+    return fs
+
+
+def _fsspec_protocols(core: Any) -> set[str]:
+    raw = getattr(core, "protocol", None)
+    if isinstance(raw, str):
+        return {raw}
+    if isinstance(raw, (list, tuple)):
+        return set(raw)
+    return set()
+
+
+def _cloud_parquet_protocol_family(core: Any) -> Literal["azure", "gcs", "s3"] | None:
+    """Map fsspec filesystem protocol(s) to how we extract parquet ``storage_options`` (not by class name)."""
+    protos = _fsspec_protocols(core) & _CLOUD_OBJECT_STORE_PROTOCOLS
+    if not protos:
+        return None
+    if protos & {"s3", "s3a"}:
+        return "s3"
+    if protos & {"abfs", "adl", "az"}:
+        return "azure"
+    if protos & {"gcs", "gs"}:
+        return "gcs"
+    return None
+
+
+def _check_fsspec_at_remote_store_open(fs: Any) -> None:
+    """If ``fs`` looks like S3/GCS/Azure, ensure we can build parquet ``storage_options`` for it."""
+    core = _unwrap_fsspec_sync_fs(fs)
+    protos = _fsspec_protocols(core) & _CLOUD_OBJECT_STORE_PROTOCOLS
+    if not protos:
+        return
+    if _cloud_parquet_protocol_family(core) is None:
+        label = f"{type(core).__module__}.{type(core).__qualname__}"
+        raise ValueError(
+            f"Cannot derive parquet storage_options for filesystem {label!r} with protocol(s) {protos!r}. "
+            "Supported protocol families: S3 (s3, s3a), Azure (abfs, adl, az), GCS (gcs, gs). "
+            "Custom implementations should expose a matching ``protocol`` (see fsspec)."
+        )
+
+
+def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
+    """Build storage_options dict from an fsspec filesystem for use with to_parquet/read_parquet.
+
+    Unwraps ``sync_fs`` chains (e.g. async wrappers). Dispatches by **reported fsspec protocol** (``fs.protocol``),
+    not by concrete class name, so subclasses and thin wrappers that speak ``s3``/``gs``/``az`` still work as long as
+    they expose the credential attributes we copy (same shape as s3fs, gcsfs, adlfs).
+    """
+    core = _unwrap_fsspec_sync_fs(fs)
+    family = _cloud_parquet_protocol_family(core)
+    if family is None:
+        label = f"{type(core).__module__}.{type(core).__qualname__}"
+        protos = _fsspec_protocols(core)
+        raise ValueError(
+            f"Cannot derive parquet storage_options from filesystem {label!r} (protocols {protos!r}). "
+            "Expected an object-store protocol among "
+            f"{sorted(_CLOUD_OBJECT_STORE_PROTOCOLS)}."
+        )
+    out: dict[str, Any] = {}
+    if family == "azure":
+        if getattr(core, "connection_string", None):
+            out["connection_string"] = core.connection_string
+        elif getattr(core, "account_name", None) and getattr(core, "account_key", None):
+            out["account_name"] = core.account_name
+            out["account_key"] = core.account_key
+        if getattr(core, "anon", None) is not None:
+            out["anon"] = core.anon
+    elif family == "s3":
+        if getattr(core, "endpoint_url", None):
+            out["endpoint_url"] = core.endpoint_url
+        if getattr(core, "key", None):
+            out["key"] = core.key
+        if getattr(core, "secret", None):
+            out["secret"] = core.secret
+        if getattr(core, "anon", None) is not None:
+            out["anon"] = core.anon
+    elif family == "gcs":
+        if getattr(core, "token", None) is not None:
+            out["token"] = core.token
+        if getattr(core, "_endpoint", None):
+            out["endpoint_url"] = core._endpoint
+        if getattr(core, "project", None):
+            out["project"] = core.project
+    else:
+        raise AssertionError(f"Unhandled protocol family {family!r}")
+
+    return out
+
+
+def _get_store_root(store: LocalStore | FsspecStore) -> Path | _FsspecStoreRoot:
+    """Return a path-like root for the store (supports / and str()). Use for building paths to parquet etc."""
+    if isinstance(store, LocalStore):
+        return Path(store.root)
+    if isinstance(store, FsspecStore):
+        return _FsspecStoreRoot(store)
+    raise TypeError(f"Unsupported store type: {type(store)}")
 
 
 def _get_transformations_from_ngff_dict(
@@ -370,7 +511,9 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                                 files.append(os.path.realpath(parquet_file))
 
 
-def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
+def _backed_elements_contained_in_path(
+    path: Path | UPath, object: SpatialData | SpatialElement | AnnData
+) -> list[bool]:
     """
     Return the list of boolean values indicating if backing files for an object are child directory of a path.
 
@@ -389,9 +532,16 @@ def _backed_elements_contained_in_path(path: Path, object: SpatialData | Spatial
     -----
     If an object does not have a Dask computational graph, it will return an empty list.
     It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
+
+    For a remote ``path`` (:class:`upath.UPath`), this always returns an empty list: Dask backing paths
+    are resolved as local filesystem paths, so they cannot be compared to object-store locations.
+    :meth:`spatialdata.SpatialData.write` therefore skips the local "backing files in target" guard
+    for remote targets; ``overwrite=True`` on a remote URL must be used only when overwriting is safe.
     """
+    if isinstance(path, UPath):
+        return []
     if not isinstance(path, Path):
-        raise TypeError(f"Expected a Path object, got {type(path)}")
+        raise TypeError(f"Expected a Path or UPath object, got {type(path)}")
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
@@ -420,12 +570,58 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData,
+    element_path: Path | UPath,
 ) -> bool:
+    """Whether element Dask graphs only reference files under ``element_path`` (local) or N/A (remote)."""
+    if isinstance(element_path, UPath):
+        # Backing-file paths are local; cannot relate them to remote keys—assume OK for this heuristic.
+        return True
     if isinstance(element, DaskDataFrame):
         pass
     # TODO when running test_save_transformations it seems that for the same element this is called multiple times
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
+
+
+def _is_azure_http_response_error(exc: BaseException) -> bool:
+    """Return True if exc is an Azure SDK HttpResponseError (e.g. emulator API mismatch)."""
+    t = type(exc)
+    return t.__name__ == "HttpResponseError" and (getattr(t, "__module__", "") or "").startswith("azure.")
+
+
+def _remote_zarr_store_exists(store: zarr.storage.StoreLike) -> bool:
+    """Return True if the store contains a zarr group. Closes the store. Handles Azure emulator errors."""
+    try:
+        zarr.open_group(store, mode="r")
+        return True
+    except (GroupNotFoundError, OSError, FileNotFoundError):
+        return False
+    except Exception as e:
+        if _is_azure_http_response_error(e):
+            return False
+        raise
+    finally:
+        store.close()
+
+
+def _ensure_async_fs(fs: Any) -> Any:
+    """Return an async fsspec filesystem for use with zarr's FsspecStore.
+
+    Zarr's FsspecStore expects an async filesystem. If the given fs is synchronous,
+    it is converted using fsspec's public API (async instance or AsyncFileSystemWrapper)
+    so that ZarrUserWarning is not raised.
+    """
+    if getattr(fs, "asynchronous", False):
+        return fs
+    import fsspec
+
+    if getattr(fs, "async_impl", False):
+        fs_dict = json.loads(fs.to_json())
+        fs_dict["asynchronous"] = True
+        return fsspec.AbstractFileSystem.from_json(json.dumps(fs_dict))
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+
+    return AsyncFileSystemWrapper(fs, asynchronous=True)
 
 
 def _resolve_zarr_store(
@@ -458,11 +654,12 @@ def _resolve_zarr_store(
     TypeError
         If the input type is unsupported.
     ValueError
-        If a `zarr.Group` has an unsupported store type.
+        If a `zarr.Group` has an unsupported store type, or if the fsspec filesystem uses a cloud
+        object-store protocol (S3, GCS, Azure, …) but is not a supported implementation for parquet
+        ``storage_options`` (see :func:`_check_fsspec_at_remote_store_open`).
     """
     # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
-        # if the input is str or Path, map it to UPath
         path = UPath(path)
 
     if isinstance(path, PosixUPath | WindowsUPath):
@@ -470,6 +667,7 @@ def _resolve_zarr_store(
         return LocalStore(path.path)
 
     if isinstance(path, zarr.Group):
+        _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
@@ -477,17 +675,39 @@ def _resolve_zarr_store(
         if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
-            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
-        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
-            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
-            return path.store.store
+            _check_fsspec_at_remote_store_open(path.store.fs)
+            return FsspecStore(
+                fs=_ensure_async_fs(path.store.fs),
+                path=_join_fsspec_store_path(path.store.path, path.path),
+                **kwargs,
+            )
+        if _cms is not None and isinstance(path.store, _cms):
+            # Unwrap and apply the same async-fs + parquet guards as a direct FsspecStore on the group.
+            inner = path.store.store
+            if isinstance(inner, FsspecStore):
+                _check_fsspec_at_remote_store_open(inner.fs)
+                return FsspecStore(
+                    fs=_ensure_async_fs(inner.fs),
+                    path=_join_fsspec_store_path(inner.path, path.path),
+                    **kwargs,
+                )
+            if isinstance(inner, LocalStore):
+                store_path = UPath(inner.root) / path.path
+                return LocalStore(store_path.path)
+            return inner
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
-    if isinstance(path, zarr.storage.StoreLike):
-        # if the input already a store, wrap it in an FSStore
-        return FsspecStore(path, **kwargs)
+    if isinstance(path, _FsspecStoreRoot):
+        # path-like from read_zarr that carries the same fs (preserves Azure/GCS credentials)
+        _check_fsspec_at_remote_store_open(path._store.fs)
+        return FsspecStore(_ensure_async_fs(path._store.fs), path=path._path, **kwargs)
     if isinstance(path, UPath):
-        # if input is a remote UPath, map it to an FSStore
-        return FsspecStore(path.path, fs=path.fs, **kwargs)
+        # if input is a remote UPath, map it to an FSStore (check before StoreLike to avoid UnionType isinstance)
+        _check_fsspec_at_remote_store_open(path.fs)
+        return FsspecStore(_ensure_async_fs(path.fs), path=path.path, **kwargs)
+    if isinstance(path, zarr.storage.StoreLike):
+        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, …). Do not pass it as ``fs=`` to
+        # FsspecStore — that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
+        return path
     raise TypeError(f"Unsupported type: {type(path)}")
 
 

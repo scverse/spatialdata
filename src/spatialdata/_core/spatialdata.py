@@ -121,7 +121,7 @@ class SpatialData:
         tables: dict[str, AnnData] | Tables | None = None,
         attrs: Mapping[Any, Any] | None = None,
     ) -> None:
-        self._path: Path | None = None
+        self._path: Path | UPath | None = None
 
         self._shared_keys: set[str | None] = set()
         self._images: Images = Images(shared_keys=self._shared_keys)
@@ -548,16 +548,24 @@ class SpatialData:
         return self.path is not None
 
     @property
-    def path(self) -> Path | None:
-        """Path to the Zarr storage."""
+    def path(self) -> Path | UPath | None:
+        """Path to the Zarr storage (always :class:`pathlib.Path` or :class:`upath.UPath` when set)."""
         return self._path
 
     @path.setter
-    def path(self, value: Path | None) -> None:
-        if value is None or isinstance(value, str | Path):
+    def path(self, value: str | Path | UPath | None) -> None:
+        if value is None:
+            self._path = None
+        elif isinstance(value, (Path, UPath)):
             self._path = value
+        elif isinstance(value, str):
+            # Match ``write()`` / ``_validate_can_safely_write_to_path``: keep ``self._path`` as Path | UPath only.
+            if "://" in value:
+                self._path = UPath(value)
+            else:
+                self._path = Path(value)
         else:
-            raise TypeError("Path must be `None`, a `str` or a `Path` object.")
+            raise TypeError("Path must be `None`, a `str`, a `Path` or a `UPath` object.")
 
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
@@ -1032,18 +1040,45 @@ class SpatialData:
 
     def _validate_can_safely_write_to_path(
         self,
-        file_path: str | Path,
+        file_path: str | Path | UPath,
         overwrite: bool = False,
         saving_an_element: bool = False,
     ) -> None:
-        from spatialdata._io._utils import _backed_elements_contained_in_path, _is_subfolder, _resolve_zarr_store
+        """
+        Guard against unsafe writes for **local** paths (zarr check, Dask backing, subfolders).
 
-        if isinstance(file_path, str):
+        For :class:`upath.UPath`, only "store exists vs ``overwrite``" is checked. Local Dask-backing
+        and subfolder checks are omitted because backing paths are filesystem-local and are not
+        compared to object-store keys; ``overwrite=True`` on remote URLs must be chosen carefully.
+        """
+        from spatialdata._io._utils import (
+            _backed_elements_contained_in_path,
+            _is_subfolder,
+            _remote_zarr_store_exists,
+            _resolve_zarr_store,
+        )
+
+        # Hierarchical URIs (``scheme://…``) must become UPath: plain ``Path(str)`` breaks cloud URLs
+        # (S3-compatible stores, Azure ``abfs://`` / ``az://``, GCS ``gs://``, ``https://``, fsspec chains, etc.).
+        if isinstance(file_path, str) and "://" in file_path:
+            file_path = UPath(file_path)
+        elif isinstance(file_path, str):
             file_path = Path(file_path)
 
-        if not isinstance(file_path, Path):
-            raise ValueError(f"file_path must be a string or a Path object, type(file_path) = {type(file_path)}.")
+        if not isinstance(file_path, (Path, UPath)):
+            raise ValueError(f"file_path must be a string, Path or UPath object, type(file_path) = {type(file_path)}.")
 
+        if isinstance(file_path, UPath):
+            store = _resolve_zarr_store(file_path)
+            if _remote_zarr_store_exists(store) and not overwrite:
+                raise ValueError(
+                    "The Zarr store already exists. Use `overwrite=True` to try overwriting the store. "
+                    "Please note that only Zarr stores not currently in use by the current SpatialData object can be "
+                    "overwritten."
+                )
+            return
+
+        # Local Path: existing logic
         # TODO: add test for this
         if os.path.exists(file_path):
             store = _resolve_zarr_store(file_path)
@@ -1072,8 +1107,13 @@ class SpatialData:
                     ERROR_MSG + "\nDetails: the target path contains one or more files that Dask use for "
                     "backing elements in the SpatialData object." + WORKAROUND
                 )
-            if self.path is not None and (
-                _is_subfolder(parent=self.path, child=file_path) or _is_subfolder(parent=file_path, child=self.path)
+            # Subfolder checks only for local paths (Path); skip when self.path is UPath
+            if (
+                self.path is not None
+                and isinstance(self.path, Path)
+                and (
+                    _is_subfolder(parent=self.path, child=file_path) or _is_subfolder(parent=file_path, child=self.path)
+                )
             ):
                 if saving_an_element and _is_subfolder(parent=self.path, child=file_path):
                     raise ValueError(
@@ -1102,7 +1142,7 @@ class SpatialData:
     @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
-        file_path: str | Path,
+        file_path: str | Path | UPath | None = None,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
@@ -1115,10 +1155,12 @@ class SpatialData:
         Parameters
         ----------
         file_path
-            The path to the Zarr store to write to.
+            The path to the Zarr store to write to. If ``None``, uses :attr:`path` (must be set).
         overwrite
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
-            already exists.
+            already exists. For remote paths (:class:`upath.UPath`), the extra safeguards used for local paths (that
+            Dask-backed files are not inside the write target) are not applied; use ``overwrite=True`` only when you
+            are sure the destination store may be replaced.
         consolidate_metadata
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
@@ -1161,7 +1203,15 @@ class SpatialData:
 
         parsed = _parse_formats(sdata_formats)
 
-        if isinstance(file_path, str):
+        if file_path is None:
+            if self.path is None:
+                raise ValueError("file_path must be provided when SpatialData.path is not set.")
+            file_path = self.path
+        # Hierarchical URIs (``scheme://…``) must become UPath: plain ``Path(str)`` breaks cloud URLs
+        # (S3-compatible stores, Azure ``abfs://`` / ``az://``, GCS ``gs://``, ``https://``, fsspec chains, etc.).
+        if isinstance(file_path, str) and "://" in file_path:
+            file_path = UPath(file_path)
+        elif isinstance(file_path, str):
             file_path = Path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
@@ -1192,7 +1242,7 @@ class SpatialData:
     def _write_element(
         self,
         element: SpatialElement | AnnData,
-        zarr_container_path: Path,
+        zarr_container_path: Path | UPath,
         element_type: str,
         element_name: str,
         overwrite: bool,
@@ -1201,10 +1251,8 @@ class SpatialData:
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
-        if not isinstance(zarr_container_path, Path):
-            raise ValueError(
-                f"zarr_container_path must be a Path object, type(zarr_container_path) = {type(zarr_container_path)}."
-            )
+        if not isinstance(zarr_container_path, (Path, UPath)):
+            raise ValueError(f"zarr_container_path must be a Path or UPath, got {type(zarr_container_path).__name__}.")
         file_path_of_element = zarr_container_path / element_type / element_name
         self._validate_can_safely_write_to_path(
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
@@ -1489,7 +1537,7 @@ class SpatialData:
 
         # check if the element exists in the Zarr storage
         if not _group_for_element_exists(
-            zarr_path=Path(self.path),
+            zarr_path=self.path,
             element_type=element_type,
             element_name=element_name,
         ):
@@ -1503,7 +1551,7 @@ class SpatialData:
 
         # warn the users if the element is not self-contained, that is, it is Dask-backed by files outside the Zarr
         # group for the element
-        element_zarr_path = Path(self.path) / element_type / element_name
+        element_zarr_path = self.path / element_type / element_name
         if not _is_element_self_contained(element=element, element_path=element_zarr_path):
             logger.info(
                 f"Element {element_type}/{element_name} is not self-contained. The metadata will be"
@@ -1544,7 +1592,7 @@ class SpatialData:
         # Mypy does not understand that path is not None so we have the check in the conditional
         if element_type == "images" and self.path is not None:
             _, _, element_group = _get_groups_for_element(
-                zarr_path=Path(self.path), element_type=element_type, element_name=element_name, use_consolidated=False
+                zarr_path=self.path, element_type=element_type, element_name=element_name, use_consolidated=False
             )
 
             from spatialdata._io._utils import overwrite_channel_names
@@ -1588,7 +1636,7 @@ class SpatialData:
         # Mypy does not understand that path is not None so we have a conditional
         assert self.path is not None
         _, _, element_group = _get_groups_for_element(
-            zarr_path=Path(self.path),
+            zarr_path=self.path,
             element_type=element_type,
             element_name=element_name,
             use_consolidated=False,
@@ -1956,7 +2004,8 @@ class SpatialData:
 
         descr = "SpatialData object"
         if self.path is not None:
-            descr += f", with associated Zarr store: {self.path.resolve()}"
+            path_descr = str(self.path) if isinstance(self.path, UPath) else self.path.resolve()
+            descr += f", with associated Zarr store: {path_descr}"
 
         non_empty_elements = self._non_empty_elements()
         last_element_index = len(non_empty_elements) - 1

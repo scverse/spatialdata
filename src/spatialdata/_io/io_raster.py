@@ -20,6 +20,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
+    _resolve_zarr_store,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
@@ -162,11 +163,11 @@ def _prepare_storage_options(
 def _read_multiscale(
     store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
-    assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
+    resolved_store = _resolve_zarr_store(store)
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store, fmt=reader_format)
+    image_loc = ZarrLocation(resolved_store, fmt=reader_format)
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
