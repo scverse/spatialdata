@@ -805,6 +805,31 @@ def test_write_raster_sharding(
         assert arr.shards == write_shards
 
 
+def test_write_raster_sharding_with_settings(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from spatialdata import settings
+
+    old_settings = replace(settings)
+    settings.raster_chunks = (1, 100, 100)
+    settings.save()
+
+    data = da.from_array(RNG.random((1, 1000, 1000)), chunks=(1, 200, 200))
+    element = Image2DModel.parse(data, dims=("c", "y", "x"))
+    name = "element"
+    sdata = SpatialData(images={name: element})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(
+        path,
+    )
+    arr = zarr.open_group(path / "images" / name, mode="r")["s0"]
+    assert arr.chunks == (1, 100, 100)
+    old_settings.save()
+    s = settings.load()
+    assert s.raster_chunks == old_settings.raster_chunks
+
+
 @pytest.mark.parametrize("raster_case", RASTER_CASES_MULTISCALE)
 def test_write_multiscale_raster_sharding(tmp_path: Path, raster_case: dict) -> None:
     model, dims, data_shape, zarr_subpath = (
