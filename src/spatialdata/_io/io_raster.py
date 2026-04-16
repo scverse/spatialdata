@@ -311,15 +311,21 @@ def _write_raster(
 
     if isinstance(storage_options, dict):
         storage_options = {
-            **{k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")},
+            **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
             **storage_options,
         }
     elif isinstance(storage_options, list):
         storage_options = [
-            {**{k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")}, **x} for x in storage_options
+            {
+                **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
+                **x,
+            }
+            for x in storage_options
         ]
     elif not storage_options:
-        storage_options = {k: v for k, v in asdict(settings).items() if k in ("chunks", "shards")}
+        storage_options = {
+            k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")
+        }
 
     if isinstance(raster_data, DataArray):
         _write_raster_dataarray(
