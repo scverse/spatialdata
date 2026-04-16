@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -10,15 +9,13 @@ from ome_zarr.format import Format
 from upath import UPath
 
 from spatialdata._io._utils import (
-    _FsspecStoreRoot,
-    _get_store_root,
     _get_transformations_from_ngff_dict,
     _resolve_zarr_store,
-    _storage_options_from_fs,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -27,26 +24,27 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: str | Path | UPath,
+    store: str | Path | UPath | ZarrStore,
 ) -> DaskDataFrame:
     """Read points from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    resolved_store = _resolve_zarr_store(store)
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
     f = zarr.open(resolved_store, mode="r")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = _get_store_root(f.store_path.store)
-    path = store_root / f.path / "points.parquet"
+    parquet_store = zarr_store.child("points.parquet")
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
-    if isinstance(path, _FsspecStoreRoot):
-        opts = _storage_options_from_fs(path._store.fs)
-        points = read_parquet(str(path), storage_options=opts if opts else {})
-    else:
-        points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
+    points = read_parquet(
+        parquet_store.arrow_path(),
+        filesystem=parquet_store.arrow_filesystem(),
+    )
     assert isinstance(points, DaskDataFrame)
+    if points.index.name == "__null_dask_index__":
+        points = points.rename_axis(None)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(points, transformations)
@@ -79,8 +77,7 @@ def write_points(
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
 
-    store_root = _get_store_root(group.store_path.store)
-    path = store_root / group.path / "points.parquet"
+    parquet_store = make_zarr_store_from_group(group).child("points.parquet")
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -95,10 +92,10 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    storage_options: dict[str, Any] = {}
-    if isinstance(path, _FsspecStoreRoot):
-        storage_options = _storage_options_from_fs(path._store.fs)
-    points_without_transform.to_parquet(str(path), storage_options=storage_options or None)
+    points_without_transform.to_parquet(
+        parquet_store.arrow_path(),
+        filesystem=parquet_store.arrow_filesystem(),
+    )
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version

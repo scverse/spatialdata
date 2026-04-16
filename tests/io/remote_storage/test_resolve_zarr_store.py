@@ -1,7 +1,7 @@
 """Unit tests for remote-storage-specific store resolution and credential handling.
 
 Covers only code paths used when reading/writing from remote backends (Azure, S3, GCS):
-- _FsspecStoreRoot resolution (used when reading elements from a remote zarr store).
+- zarr.Group to ZarrStore normalization for remote-backed groups.
 - _storage_options_from_fs for Azure and GCS (used when writing parquet to remote).
 """
 
@@ -10,9 +10,11 @@ from __future__ import annotations
 import tempfile
 
 import pytest
+import zarr
 from zarr.storage import FsspecStore, LocalStore, MemoryStore
 
-from spatialdata._io._utils import _FsspecStoreRoot, _resolve_zarr_store, _storage_options_from_fs
+from spatialdata._io._utils import _resolve_zarr_store, _storage_options_from_fs
+from spatialdata._store import make_zarr_store_from_group, open_read_store
 
 
 def test_resolve_zarr_store_returns_existing_zarr_stores_unchanged() -> None:
@@ -23,17 +25,21 @@ def test_resolve_zarr_store_returns_existing_zarr_stores_unchanged() -> None:
     assert _resolve_zarr_store(loc) is loc
 
 
-def test_resolve_zarr_store_fsspec_store_root() -> None:
-    """_FsspecStoreRoot is resolved to FsspecStore when reading from remote (e.g. points/shapes paths)."""
+def test_make_zarr_store_from_remote_group() -> None:
+    """Remote zarr.Group inputs keep a usable UPath plus storage options for follow-up reads."""
     import fsspec
     from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 
     fs = fsspec.filesystem("memory")
     async_fs = AsyncFileSystemWrapper(fs, asynchronous=True)
     base = FsspecStore(async_fs, path="/")
-    root = _FsspecStoreRoot(base, "/")
-    store = _resolve_zarr_store(root)
-    assert isinstance(store, FsspecStore)
+    root = zarr.open_group(store=base, mode="a")
+    group = root.require_group("points").require_group("points")
+
+    zarr_store = make_zarr_store_from_group(group)
+
+    with open_read_store(zarr_store) as store:
+        assert isinstance(store, FsspecStore)
 
 
 def test_storage_options_from_fs_azure_account_key() -> None:

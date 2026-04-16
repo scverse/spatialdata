@@ -16,6 +16,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
+from upath import UPath
 from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
@@ -28,6 +29,7 @@ from spatialdata._io.format import (
     RasterFormatType,
     get_ome_zarr_format,
 )
+from spatialdata._store import ZarrStore, make_zarr_store
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
@@ -161,10 +163,11 @@ def _prepare_storage_options(
 
 
 def _read_multiscale(
-    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    store: str | Path | UPath | ZarrStore, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
-    resolved_store = _resolve_zarr_store(store)
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
 
     nodes: list[Node] = []
     image_loc = ZarrLocation(resolved_store, fmt=reader_format)

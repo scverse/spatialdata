@@ -7,6 +7,7 @@ from upath import UPath
 
 from spatialdata._store import (
     make_zarr_store,
+    make_zarr_store_from_group,
     open_read_store,
     open_write_store,
 )
@@ -22,6 +23,12 @@ def test_make_zarr_store_normalizes_local_and_remote_paths(
     assert isinstance(remote_store.path, UPath)
 
 
+def test_make_zarr_store_applies_storage_options_to_remote_strings() -> None:
+    zarr_store = make_zarr_store("s3://bucket/store.zarr", storage_options={"anon": True})
+    assert isinstance(zarr_store.path, UPath)
+    assert getattr(zarr_store.path.fs, "anon", None) is True
+
+
 def test_open_read_and_write_store_roundtrip(tmp_path: Path) -> None:
     zarr_store = make_zarr_store(tmp_path / "store.zarr")
 
@@ -32,3 +39,14 @@ def test_open_read_and_write_store_roundtrip(tmp_path: Path) -> None:
     with open_read_store(zarr_store) as store:
         group = zarr.open_group(store=store, mode="r")
         assert group.attrs["answer"] == 42
+
+
+def test_make_zarr_store_from_local_group(tmp_path: Path) -> None:
+    zarr_store = make_zarr_store(tmp_path / "store.zarr")
+
+    with open_write_store(zarr_store) as store:
+        root = zarr.create_group(store=store, overwrite=True)
+        group = root.require_group("images").require_group("image")
+
+    child_store = make_zarr_store_from_group(group)
+    assert child_store.path == tmp_path / "store.zarr" / "images" / "image"

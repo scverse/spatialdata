@@ -49,31 +49,6 @@ def _join_fsspec_store_path(store_path: str, relative_path: str) -> str:
     return f"{base}/{rel}" if rel else base
 
 
-class _FsspecStoreRoot:
-    """Path-like root for FsspecStore (no .root attribute); supports __truediv__ and str() as full URL."""
-
-    __slots__ = ("_store", "_path")
-
-    def __init__(self, store: FsspecStore, path: str | None = None) -> None:
-        self._store = store
-        raw = path or store.path
-        self._path = str(raw).replace("\\", "/").rstrip("/")
-
-    def __truediv__(self, other: str | Path) -> _FsspecStoreRoot:
-        return _FsspecStoreRoot(self._store, _join_fsspec_store_path(self._path, str(other)))
-
-    def __str__(self) -> str:
-        protocol = getattr(self._store.fs, "protocol", None)
-        if isinstance(protocol, (list, tuple)):
-            protocol = protocol[0] if protocol else "file"
-        elif protocol is None:
-            protocol = "file"
-        return f"{protocol}://{self._path}"
-
-    def __fspath__(self) -> str:
-        return str(self)
-
-
 _CLOUD_OBJECT_STORE_PROTOCOLS: frozenset[str] = frozenset({"abfs", "adl", "az", "gcs", "gs", "s3", "s3a"})
 
 
@@ -168,15 +143,6 @@ def _storage_options_from_fs(fs: Any) -> dict[str, Any]:
         raise AssertionError(f"Unhandled protocol family {family!r}")
 
     return out
-
-
-def _get_store_root(store: LocalStore | FsspecStore) -> Path | _FsspecStoreRoot:
-    """Return a path-like root for the store (supports / and str()). Use for building paths to parquet etc."""
-    if isinstance(store, LocalStore):
-        return Path(store.root)
-    if isinstance(store, FsspecStore):
-        return _FsspecStoreRoot(store)
-    raise TypeError(f"Unsupported store type: {type(store)}")
 
 
 def _get_transformations_from_ngff_dict(
@@ -696,10 +662,6 @@ def _resolve_zarr_store(
                 return LocalStore(store_path.path)
             return inner
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
-    if isinstance(path, _FsspecStoreRoot):
-        # path-like from read_zarr that carries the same fs (preserves Azure/GCS credentials)
-        _check_fsspec_at_remote_store_open(path._store.fs)
-        return FsspecStore(_ensure_async_fs(path._store.fs), path=path._path, **kwargs)
     if isinstance(path, UPath):
         # if input is a remote UPath, map it to an FSStore (check before StoreLike to avoid UnionType isinstance)
         _check_fsspec_at_remote_store_open(path.fs)

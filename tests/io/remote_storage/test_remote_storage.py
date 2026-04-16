@@ -13,9 +13,11 @@ import os
 import uuid
 
 import pytest
+import zarr
 from upath import UPath
 
 from spatialdata import SpatialData
+from spatialdata._store import make_zarr_store, open_read_store
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 
 # Azure emulator connection string (Azurite default).
@@ -194,4 +196,19 @@ class TestRemoteStorage:
         # Write each element type individually
         for _element_type, element_name, _ in full_sdata.gen_elements():
             full_sdata.write_element(element_name, overwrite=True)
+        _assert_read_identical(full_sdata, upath, check_path=False)
+
+    @REMOTE_STORAGE_PARAMS
+    def test_read_from_remote_zarr_group_keeps_backing_for_followup_write(
+        self, full_sdata: SpatialData, get_upath, storage_name: str
+    ) -> None:
+        upath = get_upath(container=f"test-{storage_name}", path=f"read-group-{uuid.uuid4().hex}.zarr")
+        full_sdata.write(upath, overwrite=True)
+
+        with open_read_store(make_zarr_store(upath)) as store:
+            group = zarr.open_group(store=store, mode="r")
+            sdata_from_group = SpatialData.read(group)
+
+        assert isinstance(sdata_from_group.path, UPath)
+        sdata_from_group.write(overwrite=True)
         _assert_read_identical(full_sdata, upath, check_path=False)

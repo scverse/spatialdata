@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,11 +12,8 @@ from shapely import from_ragged_array, to_ragged_array
 from upath import UPath
 
 from spatialdata._io._utils import (
-    _FsspecStoreRoot,
-    _get_store_root,
     _get_transformations_from_ngff_dict,
     _resolve_zarr_store,
-    _storage_options_from_fs,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
@@ -32,6 +25,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
+from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -40,10 +34,11 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path | UPath,
+    store: str | Path | UPath | ZarrStore,
 ) -> GeoDataFrame:
     """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    resolved_store = _resolve_zarr_store(store)
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
     f = zarr.open(resolved_store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
@@ -64,13 +59,9 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = _get_store_root(f.store_path.store)
-        path = store_root / f.path / "shapes.parquet"
-        if isinstance(path, _FsspecStoreRoot):
-            opts = _storage_options_from_fs(path._store.fs)
-            geo_df = read_parquet(str(path), storage_options=opts if opts else {})
-        else:
-            geo_df = read_parquet(path)
+        parquet_store = zarr_store.child("shapes.parquet")
+        with parquet_store.arrow_filesystem().open_input_file(parquet_store.arrow_path()) as src:
+            geo_df = read_parquet(src)
     else:
         raise ValueError(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
@@ -163,61 +154,6 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     attrs["version"] = element_format.spatialdata_format_version
     return attrs
 
-
-def _parse_fsspec_remote_path(path: _FsspecStoreRoot) -> tuple[str, str]:
-    """Return (bucket_or_container, blob_key) from an fsspec store path."""
-    remote = str(path)
-    if "://" in remote:
-        remote = remote.split("://", 1)[1]
-    parts = remote.split("/", 1)
-    bucket_or_container = parts[0]
-    blob_key = parts[1] if len(parts) > 1 else ""
-    return bucket_or_container, blob_key
-
-
-def _upload_parquet_to_azure(tmp_path: str, bucket: str, key: str, fs: Any) -> None:
-    from azure.storage.blob import BlobServiceClient
-
-    client = BlobServiceClient.from_connection_string(fs.connection_string)
-    blob_client = client.get_blob_client(container=bucket, blob=key)
-    with open(tmp_path, "rb") as f:
-        blob_client.upload_blob(f, overwrite=True)
-
-
-def _upload_parquet_to_s3(tmp_path: str, bucket: str, key: str, fs: Any) -> None:
-    import boto3
-
-    endpoint = getattr(fs, "endpoint_url", None) or os.environ.get("AWS_ENDPOINT_URL")
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=endpoint,
-        aws_access_key_id=getattr(fs, "key", None) or os.environ.get("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=getattr(fs, "secret", None) or os.environ.get("AWS_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-    )
-    s3.upload_file(tmp_path, bucket, key)
-
-
-def _upload_parquet_to_fsspec(path: _FsspecStoreRoot, tmp_path: str) -> None:
-    """Upload local parquet file to remote fsspec store using sync APIs to avoid event-loop issues."""
-    fs = path._store.fs
-    bucket, key = _parse_fsspec_remote_path(path)
-    fs_name = type(fs).__name__
-    if fs_name == "AzureBlobFileSystem" and getattr(fs, "connection_string", None):
-        _upload_parquet_to_azure(tmp_path, bucket, key, fs)
-    elif fs_name in ("S3FileSystem", "MotoS3FS"):
-        _upload_parquet_to_s3(tmp_path, bucket, key, fs)
-    elif fs_name == "GCSFileSystem":
-        import fsspec
-
-        fs_dict = json.loads(fs.to_json())
-        fs_dict["asynchronous"] = False
-        sync_fs = fsspec.AbstractFileSystem.from_json(json.dumps(fs_dict))
-        sync_fs.put_file(tmp_path, path._path)
-    else:
-        fs.put(tmp_path, str(path))
-
-
 def _write_shapes_v02_v03(
     shapes: GeoDataFrame, group: zarr.Group, element_format: Format, geometry_encoding: Literal["WKB", "geoarrow"]
 ) -> Any:
@@ -237,23 +173,13 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    store_root = _get_store_root(group.store_path.store)
-    path = store_root / group.path / "shapes.parquet"
+    parquet_store = make_zarr_store_from_group(group).child("shapes.parquet")
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    if isinstance(path, _FsspecStoreRoot):
-        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
-            tmp_path = tmp.name
-        try:
-            shapes.to_parquet(tmp_path, geometry_encoding=geometry_encoding)
-            _upload_parquet_to_fsspec(path, tmp_path)
-        finally:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp_path)
-    else:
-        shapes.to_parquet(path, geometry_encoding=geometry_encoding)
+    with parquet_store.arrow_filesystem().open_output_stream(parquet_store.arrow_path()) as sink:
+        shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)

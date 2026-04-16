@@ -18,11 +18,13 @@ from spatialdata._io.format import (
     TablesFormatV02,
     _parse_version,
 )
+from spatialdata._store import ZarrStore, make_zarr_store
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path | UPath) -> AnnData:
-    resolved_store = _resolve_zarr_store(store)
+def _read_table(store: str | Path | UPath | ZarrStore) -> AnnData:
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
     table = read_anndata_zarr(resolved_store)
 
     f = zarr.open(resolved_store, mode="r")
