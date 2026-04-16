@@ -1157,12 +1157,23 @@ class SpatialData:
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
         raster_write_kwargs
-            Options to be passed on to the storage backend. Can be a dictionary containing all storage options or a
-            dictionary with as keys the names of the raster elements and as value a dictionary containing all storage
-            options. Regarding the key, value pairs in the option dictionar(y)(ies), these depend both on the
-            zarr_format used for writing. Please refer to
-            https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array for the available storage options.
+            These options are passed to the storage backend and can be provided in several formats:
 
+            1. Single dictionary
+                A dictionary containing all storage options applied globally.
+            2. Dictionary per raster element
+                A dictionary where:
+                - Keys = names of raster elements
+                - Values = storage options for each element
+                    - For single-scale data: a dictionary
+                    - For multiscale data: a list of dictionaries (one per scale)
+            3. List of dictionaries (multiscale only)
+                A list where each dictionary defines the storage options for one scale of a multiscale raster element.
+
+            Important Notes
+            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+            - For a full list of supported storage options, refer to:
+                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
         """
         from spatialdata._io._utils import _resolve_zarr_store
         from spatialdata._io.format import _parse_formats

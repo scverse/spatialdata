@@ -283,9 +283,17 @@ def _write_raster(
     raster_format
         The format used to write the raster data.
     storage_options
-        Options to be passed on to the storage backend. Regarding the key, value pairs in the option dictionar(y)(ies),
-        these depend both on the zarr_format used for writing. Please refer to
-        https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array for the available storage options.
+        These options are passed to the storage backend and can be provided in several formats:
+
+            1. Single dictionary
+                A dictionary containing all storage options applied to the raster, either single or multiscale.
+            2. List of dictionaries (multiscale only)
+                A list where each dictionary defines the storage options for one scale of the multiscale raster element.
+
+            Important Notes
+            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+            - For a full list of supported storage options, refer to:
+                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
     label_metadata
         Label metadata which can only be defined when writing 'labels'.
     metadata
