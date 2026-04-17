@@ -3,14 +3,14 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import pyarrow.fs as pafs
 import zarr
 from upath import UPath
 from zarr.storage import FsspecStore, LocalStore
 
-PathLike = Path | UPath
+PathLike: TypeAlias = Path | UPath
 
 
 def _normalize_path(path: str | PathLike, storage_options: dict[str, Any] | None = None) -> PathLike:
