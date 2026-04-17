@@ -66,9 +66,6 @@ dev = [
     "bump2version",
 ]
 test = [
-    "adlfs",
-    "gcsfs",
-    "moto[server]",
     "pytest",
     "pytest-cov",
     "pytest-mock",

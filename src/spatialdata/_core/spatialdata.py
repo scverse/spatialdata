@@ -1054,10 +1054,11 @@ class SpatialData:
         """
         Guard against unsafe writes for **local** paths (zarr check, Dask backing, subfolders).
 
-        For :class:`upath.UPath`, only "store exists vs ``overwrite``" is checked. Local Dask-backing
-        and subfolder checks are omitted because backing paths are filesystem-local and are not
-        compared to object-store keys. Conflicts for remote targets are deferred to the backend/Zarr
-        write path; ``overwrite=True`` on remote URLs must be chosen carefully.
+        For :class:`upath.UPath`, ``overwrite=False`` is rejected: we cannot reliably check
+        whether a remote store already exists (fsspec existence semantics vary by backend and
+        object stores have no directory concept), so the "fail if exists" contract cannot be
+        honored. Callers must pass ``overwrite=True`` to explicitly acknowledge that the write
+        may clobber pre-existing data at the target.
         """
         from spatialdata._io._utils import (
             _backed_elements_contained_in_path,
@@ -1065,8 +1066,8 @@ class SpatialData:
             _resolve_zarr_store,
         )
 
-        # Hierarchical URIs (``scheme://…``) must become UPath: plain ``Path(str)`` breaks cloud URLs
-        # (S3-compatible stores, Azure ``abfs://`` / ``az://``, GCS ``gs://``, ``https://``, fsspec chains, etc.).
+        # Hierarchical URIs ("scheme://...") must become UPath: plain Path(str) breaks cloud URLs
+        # (S3-compatible stores, Azure abfs:// / az://, GCS gs://, https://, fsspec chains, etc.).
         if isinstance(file_path, str) and "://" in file_path:
             file_path = UPath(file_path)
         elif isinstance(file_path, str):
@@ -1076,6 +1077,12 @@ class SpatialData:
             raise ValueError(f"file_path must be a string, Path or UPath object, type(file_path) = {type(file_path)}.")
 
         if isinstance(file_path, UPath):
+            if not overwrite:
+                raise NotImplementedError(
+                    "Writing to a remote (UPath) target requires overwrite=True. "
+                    "We cannot reliably check whether the remote store already exists, so the write "
+                    "may clobber existing data; pass overwrite=True to acknowledge this."
+                )
             return
 
         # Local Path: existing logic
@@ -1158,9 +1165,9 @@ class SpatialData:
             The path to the Zarr store to write to. If ``None``, uses :attr:`path` (must be set).
         overwrite
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
-            already exists. For remote paths (:class:`upath.UPath`), the extra safeguards used for local paths (that
-            Dask-backed files are not inside the write target) are not applied; use ``overwrite=True`` only when you
-            are sure the destination store may be replaced.
+            already exists. For remote paths (:class:`upath.UPath`), ``overwrite=True`` is required because we cannot
+            reliably check whether the remote target exists; passing ``overwrite=False`` raises ``NotImplementedError``.
+            Pass ``overwrite=True`` to explicitly acknowledge that the write may clobber pre-existing data.
         consolidate_metadata
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
