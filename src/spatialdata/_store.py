@@ -64,9 +64,13 @@ def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
             protocol = protocol[0] if protocol else "file"
         elif protocol is None:
             protocol = "file"
-        # zarr's FsspecStore wraps sync filesystems via ``AsyncFileSystemWrapper`` (exposed on
-        # ``.sync_fs``). Walk that chain to recover the original sync fs so we can hand it back
-        # to UPath, which expects a sync filesystem.
+        # Recover the original SYNC filesystem from ``store.fs``. zarr v3's FsspecStore requires
+        # an async fs, so when callers pass a sync fs (e.g. ``MemoryFileSystem``) we wrap it via
+        # ``AsyncFileSystemWrapper``, which preserves the original on ``.sync_fs``. We must
+        # unwrap here because the resulting UPath flows into ``ZarrStore.arrow_filesystem()``,
+        # i.e. ``pafs.FSSpecHandler(fs)`` -- and pyarrow's handler is strictly sync. Feeding it
+        # an async-wrapped fs raises ``RuntimeError: Loop is not running`` at read/write time.
+        # The ``while`` loop tolerates (hypothetical) multi-layer wrapping across zarr versions.
         fs = store.fs
         while True:
             inner = getattr(fs, "sync_fs", None)
