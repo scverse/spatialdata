@@ -13,7 +13,7 @@ from zarr.storage import FsspecStore, LocalStore
 PathLike: TypeAlias = Path | UPath
 
 
-def _normalize_path(path: str | PathLike, storage_options: dict[str, Any] | None = None) -> PathLike:
+def normalize_path(path: str | PathLike, storage_options: dict[str, Any] | None = None) -> PathLike:
     if isinstance(path, str):
         return UPath(path, **(storage_options or {})) if "://" in path else Path(path)
     if isinstance(path, (Path, UPath)):
@@ -26,7 +26,7 @@ class ZarrStore:
     path: PathLike
 
     def with_path(self, path: str | PathLike) -> ZarrStore:
-        return replace(self, path=_normalize_path(path))
+        return replace(self, path=normalize_path(path))
 
     def child(self, path: str | PathLike) -> ZarrStore:
         return self.with_path(self.path / path)
@@ -45,19 +45,16 @@ def make_zarr_store(
     *,
     storage_options: dict[str, Any] | None = None,
 ) -> ZarrStore:
-    return ZarrStore(path=_normalize_path(path, storage_options))
+    return ZarrStore(path=normalize_path(path, storage_options))
 
 
 def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
-    from spatialdata._io._utils import (
-        _join_fsspec_store_path,
-        _unwrap_fsspec_sync_fs,
-    )
+    from spatialdata._io._utils import join_fsspec_store_path
 
+    # zarr v3 does not wrap stores with a ``ConsolidatedMetadataStore`` (that was a v2-only
+    # concept); consolidated metadata is now a field on ``GroupMetadata``. So the group's
+    # ``.store`` is already the concrete backend store -- no unwrapping required.
     store = group.store
-    _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
-    if _cms is not None and isinstance(store, _cms):
-        store = store.store
 
     if isinstance(store, LocalStore):
         return make_zarr_store(Path(store.root) / group.path)
@@ -67,8 +64,17 @@ def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
             protocol = protocol[0] if protocol else "file"
         elif protocol is None:
             protocol = "file"
-        path = _join_fsspec_store_path(store.path, group.path)
-        return make_zarr_store(UPath(f"{protocol}://{path}", fs=_unwrap_fsspec_sync_fs(store.fs)))
+        # zarr's FsspecStore wraps sync filesystems via ``AsyncFileSystemWrapper`` (exposed on
+        # ``.sync_fs``). Walk that chain to recover the original sync fs so we can hand it back
+        # to UPath, which expects a sync filesystem.
+        fs = store.fs
+        while True:
+            inner = getattr(fs, "sync_fs", None)
+            if inner is None or inner is fs:
+                break
+            fs = inner
+        path = join_fsspec_store_path(store.path, group.path)
+        return make_zarr_store(UPath(f"{protocol}://{path}", fs=fs))
     raise ValueError(f"Unsupported store type or zarr.Group: {type(group.store)}")
 
 

@@ -12,7 +12,7 @@ from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import Enum
 from functools import singledispatch
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import zarr
@@ -39,20 +39,10 @@ from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransf
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
 
 
-def _join_fsspec_store_path(store_path: str, relative_path: str) -> str:
-    """Combine FsspecStore root with a zarr group path using POSIX ``/`` (fsspec keys; safe on Windows)."""
-    base = str(store_path).replace("\\", "/").rstrip("/")
-    rel = str(relative_path).replace("\\", "/").lstrip("/")
-    if not base:
-        return f"/{rel}" if rel else "/"
-    return f"{base}/{rel}" if rel else base
-
-
-def _unwrap_fsspec_sync_fs(fs: Any) -> Any:
-    inner = getattr(fs, "sync_fs", None)
-    if inner is not None and inner is not fs:
-        return _unwrap_fsspec_sync_fs(inner)
-    return fs
+def join_fsspec_store_path(store_path: str, relative_path: str) -> str:
+    """Append a relative zarr-group path to an FsspecStore root, yielding a fsspec key."""
+    rel = relative_path.lstrip("/")
+    return str(PurePosixPath(store_path) / rel) if rel else store_path
 
 
 def _get_transformations_from_ngff_dict(
@@ -527,34 +517,20 @@ def _resolve_zarr_store(
         return LocalStore(path.path, read_only=read_only)
 
     if isinstance(path, zarr.Group):
-        _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
-        # if the input is a zarr.Group, wrap it with a store
+        # Re-wrap the group's store at the group's subpath. Note: zarr v3 no longer ships
+        # ``ConsolidatedMetadataStore`` (v2 wrapped the backend in a store; v3 surfaces
+        # consolidated metadata as a field on ``GroupMetadata`` instead), so we only need to
+        # handle the two concrete backends below.
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
             return LocalStore(store_path.path, read_only=read_only)
         if isinstance(path.store, FsspecStore):
-            # if the store within the zarr.Group is an FSStore, return it
-            # but extend the path of the store with that of the zarr.Group
             return FsspecStore(
                 fs=_ensure_async_fs(path.store.fs),
-                path=_join_fsspec_store_path(path.store.path, path.path),
+                path=join_fsspec_store_path(path.store.path, path.path),
                 read_only=read_only,
                 **kwargs,
             )
-        if _cms is not None and isinstance(path.store, _cms):
-            # Unwrap and apply the same async-fs guards as a direct FsspecStore on the group.
-            inner = path.store.store
-            if isinstance(inner, FsspecStore):
-                return FsspecStore(
-                    fs=_ensure_async_fs(inner.fs),
-                    path=_join_fsspec_store_path(inner.path, path.path),
-                    read_only=read_only,
-                    **kwargs,
-                )
-            if isinstance(inner, LocalStore):
-                store_path = UPath(inner.root) / path.path
-                return LocalStore(store_path.path, read_only=read_only)
-            return inner
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, UPath):
         # Check before StoreLike to avoid UnionType isinstance.
