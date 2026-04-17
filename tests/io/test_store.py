@@ -66,5 +66,3 @@ def test_resolve_zarr_store_forwards_read_only_remote() -> None:
     store = _resolve_zarr_store(upath, read_only=True)
     assert isinstance(store, FsspecStore)
     assert store.read_only is True
-
-
