@@ -327,8 +327,10 @@ def _find_piece_dict(obj: dict[str, tuple[str | None]] | Task) -> dict[str, tupl
 def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
     """Recursively extract parquet file paths from a dask ``read_parquet`` task.
 
-    Dask's task-graph shape changed between the version pinned before PR #1006 ("unpinning
-    dask", commit 53b9438a) and the current one; we tolerate both:
+    Dask's task-graph shape changed between the version pinned before scverse/spatialdata
+    PR #1006 (https://github.com/scverse/spatialdata/pull/1006 "unpinning dask", commit
+    53b9438a https://github.com/scverse/spatialdata/commit/53b9438a328c5fc2a451d2c8afab439b945ba2b8)
+    and the current one; we tolerate both.
 
     - Legacy shape: a dict ``{"piece": (parquet_file, None, None)}`` somewhere in the args
       (possibly wrapped in other dicts for mixed points+images element graphs). The trailing
@@ -414,7 +416,8 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                     files.append(str(UPath(path).resolve()))
                 elif "parquet" in name.lower():
                     # Matches every dask task-key that wraps a parquet read across versions:
-                    #   - legacy ``read-parquet-<hash>`` / ``read_parquet-<hash>`` (pre PR #1006),
+                    #   - legacy ``read-parquet-<hash>`` / ``read_parquet-<hash>`` (pre scverse/
+                    #     spatialdata PR #1006, https://github.com/scverse/spatialdata/pull/1006),
                     #   - current ``read_parquet-<hash>`` plus fused-expression forms such as
                     #     ``readparquetpyarrowfs-fused-values-<hash>`` produced by
                     #     ``dask_expr.io.parquet.ReadParquetPyarrowFS`` when a parquet column is
