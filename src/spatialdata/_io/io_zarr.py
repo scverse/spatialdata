@@ -216,7 +216,7 @@ def read_zarr(
         # read attrs metadata
         attrs = root_group.attrs.asdict()
         if "spatialdata_attrs" in attrs:
-            # when refactoring the read_zarr function into reading componenets separately (and according to the version),
+            # when refactoring the read_zarr function into reading componenets separately (and according to the version)
             # we can move the code below (.pop()) into attrs_from_dict()
             attrs.pop("spatialdata_attrs")
         else:
