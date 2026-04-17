@@ -8,9 +8,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
-from upath import UPath
 
-from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.format import (
     CurrentTablesFormat,
     TablesFormats,
@@ -18,16 +16,13 @@ from spatialdata._io.format import (
     TablesFormatV02,
     _parse_version,
 )
-from spatialdata._store import ZarrStore, make_zarr_store
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path | UPath | ZarrStore) -> AnnData:
-    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
-    resolved_store = _resolve_zarr_store(zarr_store.path)
-    table = read_anndata_zarr(resolved_store)
+def _read_table(store: str | Path) -> AnnData:
+    table = read_anndata_zarr(str(store))
 
-    f = zarr.open(resolved_store, mode="r")
+    f = zarr.open(store, mode="r")
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]

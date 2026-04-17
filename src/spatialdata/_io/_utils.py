@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import filecmp
-import json
 import os.path
 import re
 import sys
@@ -37,22 +36,6 @@ from spatialdata.models._utils import (
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
-
-
-def _join_fsspec_store_path(store_path: str, relative_path: str) -> str:
-    """Combine FsspecStore root with a zarr group path using POSIX ``/`` (fsspec keys; safe on Windows)."""
-    base = str(store_path).replace("\\", "/").rstrip("/")
-    rel = str(relative_path).replace("\\", "/").lstrip("/")
-    if not base:
-        return f"/{rel}" if rel else "/"
-    return f"{base}/{rel}" if rel else base
-
-
-def _unwrap_fsspec_sync_fs(fs: Any) -> Any:
-    inner = getattr(fs, "sync_fs", None)
-    if inner is not None and inner is not fs:
-        return _unwrap_fsspec_sync_fs(inner)
-    return fs
 
 
 def _get_transformations_from_ngff_dict(
@@ -387,9 +370,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                                 files.append(os.path.realpath(parquet_file))
 
 
-def _backed_elements_contained_in_path(
-    path: Path | UPath, object: SpatialData | SpatialElement | AnnData
-) -> list[bool]:
+def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
     """
     Return the list of boolean values indicating if backing files for an object are child directory of a path.
 
@@ -408,16 +389,9 @@ def _backed_elements_contained_in_path(
     -----
     If an object does not have a Dask computational graph, it will return an empty list.
     It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
-
-    For a remote ``path`` (:class:`upath.UPath`), this always returns an empty list: Dask backing paths
-    are resolved as local filesystem paths, so they cannot be compared to object-store locations.
-    :meth:`spatialdata.SpatialData.write` therefore skips the local "backing files in target" guard
-    for remote targets; ``overwrite=True`` on a remote URL must be used only when overwriting is safe.
     """
-    if isinstance(path, UPath):
-        return []
     if not isinstance(path, Path):
-        raise TypeError(f"Expected a Path or UPath object, got {type(path)}")
+        raise TypeError(f"Expected a Path object, got {type(path)}")
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
@@ -446,44 +420,16 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData,
-    element_path: Path | UPath,
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
 ) -> bool:
-    """Whether element Dask graphs only reference files under ``element_path`` (local) or N/A (remote)."""
-    if isinstance(element_path, UPath):
-        # Backing-file paths are local; cannot relate them to remote keys—assume OK for this heuristic.
-        return True
     if isinstance(element, DaskDataFrame):
         pass
     # TODO when running test_save_transformations it seems that for the same element this is called multiple times
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def _ensure_async_fs(fs: Any) -> Any:
-    """Return an async fsspec filesystem for use with zarr's FsspecStore.
-
-    Zarr's FsspecStore expects an async filesystem. If the given fs is synchronous,
-    it is converted using fsspec's public API (async instance or AsyncFileSystemWrapper)
-    so that ZarrUserWarning is not raised.
-    """
-    if getattr(fs, "asynchronous", False):
-        return fs
-    import fsspec
-
-    if getattr(fs, "async_impl", False):
-        fs_dict = json.loads(fs.to_json())
-        fs_dict["asynchronous"] = True
-        return fsspec.AbstractFileSystem.from_json(json.dumps(fs_dict))
-    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
-
-    return AsyncFileSystemWrapper(fs, asynchronous=True)
-
-
 def _resolve_zarr_store(
-    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group,
-    *,
-    read_only: bool = False,
-    **kwargs: Any,
+    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
 ) -> zarr.storage.StoreLike:
     """
     Normalize different Zarr store inputs into a usable store instance.
@@ -499,14 +445,9 @@ def _resolve_zarr_store(
     path
         The input representing a Zarr store or group. Can be a filesystem
         path, remote path, existing store, or Zarr group.
-    read_only
-        If ``True``, constructed ``LocalStore`` / ``FsspecStore`` instances are built with
-        ``read_only=True``. Stores that already exist (when ``path`` is a ``StoreLike`` or
-        a ``zarr.Group`` whose wrapped store is not reconstructable) are returned as-is;
-        the caller is responsible for opening them at the right mode.
     **kwargs
         Additional keyword arguments forwarded to the underlying store
-        constructor.
+        constructor (e.g. `mode`, `storage_options`).
 
     Returns
     -------
@@ -516,53 +457,37 @@ def _resolve_zarr_store(
     ------
     TypeError
         If the input type is unsupported.
-        ValueError
+    ValueError
         If a `zarr.Group` has an unsupported store type.
     """
+    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
+        # if the input is str or Path, map it to UPath
         path = UPath(path)
 
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use LocalStore
-        return LocalStore(path.path, read_only=read_only)
+        return LocalStore(path.path)
 
     if isinstance(path, zarr.Group):
-        _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
-            return LocalStore(store_path.path, read_only=read_only)
+            return LocalStore(store_path.path)
         if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
-            return FsspecStore(
-                fs=_ensure_async_fs(path.store.fs),
-                path=_join_fsspec_store_path(path.store.path, path.path),
-                read_only=read_only,
-                **kwargs,
-            )
-        if _cms is not None and isinstance(path.store, _cms):
-            # Unwrap and apply the same async-fs guards as a direct FsspecStore on the group.
-            inner = path.store.store
-            if isinstance(inner, FsspecStore):
-                return FsspecStore(
-                    fs=_ensure_async_fs(inner.fs),
-                    path=_join_fsspec_store_path(inner.path, path.path),
-                    read_only=read_only,
-                    **kwargs,
-                )
-            if isinstance(inner, LocalStore):
-                store_path = UPath(inner.root) / path.path
-                return LocalStore(store_path.path, read_only=read_only)
-            return inner
+            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
+        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
+            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
+            return path.store.store
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
-    if isinstance(path, UPath):
-        # Check before StoreLike to avoid UnionType isinstance.
-        return FsspecStore(_ensure_async_fs(path.fs), path=path.path, read_only=read_only, **kwargs)
     if isinstance(path, zarr.storage.StoreLike):
-        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, ...). Do not pass it as ``fs=`` to
-        # FsspecStore -- that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
-        return path
+        # if the input already a store, wrap it in an FSStore
+        return FsspecStore(path, **kwargs)
+    if isinstance(path, UPath):
+        # if input is a remote UPath, map it to an FSStore
+        return FsspecStore(path.path, fs=path.fs, **kwargs)
     raise TypeError(f"Unsupported type: {type(path)}")
 
 
