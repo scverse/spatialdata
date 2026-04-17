@@ -324,6 +324,69 @@ def _find_piece_dict(obj: dict[str, tuple[str | None]] | Task) -> dict[str, tupl
     return None
 
 
+def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
+    """Recursively extract parquet file paths from a dask ``read_parquet`` task.
+
+    Dask's task-graph shape changed between the version pinned before PR #1006 ("unpinning
+    dask", commit 53b9438a) and the current one; we tolerate both:
+
+    - Legacy shape: a dict ``{"piece": (parquet_file, None, None)}`` somewhere in the args
+      (possibly wrapped in other dicts for mixed points+images element graphs). The trailing
+      elements of the ``piece`` tuple encode row-group / filter constraints; we only support
+      unfiltered reads (hence the validation on ``check0`` / ``check1``).
+    - Current shape: a ``dask.dataframe.dask_expr.io.parquet.FragmentWrapper`` whose
+      ``.fragment.path`` is the parquet file (from ``dask_expr.io.parquet.ReadParquetPyarrowFS``).
+      The wrapper may live in Task ``kwargs["fragment_wrapper"]`` for simple reads, but in fused
+      expressions (``readparquetpyarrowfs-fused-*``) it is nested inside lists and tuples
+      inside a subgraph dict, so we walk every container uniformly rather than targeting named
+      kwargs.
+
+    ``FragmentWrapper`` is detected via the ``.fragment.path`` attribute chain instead of an
+    isinstance check to avoid importing private dask_expr internals; the ``endswith(".parquet")``
+    guard keeps false positives from random objects out of the result.
+    """
+    found: list[str] = []
+
+    frag = getattr(obj, "fragment", None)
+    if frag is not None:
+        path = getattr(frag, "path", None)
+        if isinstance(path, str) and path.endswith(".parquet"):
+            found.append(path)
+
+    if isinstance(obj, Mapping):
+        if "piece" in obj:
+            piece = obj["piece"]
+            if isinstance(piece, tuple) and len(piece) >= 1 and isinstance(piece[0], str):
+                parquet_file = piece[0]
+                check0 = piece[1] if len(piece) > 1 else None
+                check1 = piece[2] if len(piece) > 2 else None
+                if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
+                    raise ValueError(
+                        f"Unable to parse the parquet file from the dask task {obj!r}. Please report this bug."
+                    )
+                found.append(parquet_file)
+        for v in obj.values():
+            found.extend(_extract_parquet_paths_from_task(v))
+        return found
+
+    if isinstance(obj, (list, tuple)):
+        for item in obj:
+            found.extend(_extract_parquet_paths_from_task(item))
+        return found
+
+    kwargs = getattr(obj, "kwargs", None)
+    if isinstance(kwargs, Mapping):
+        for v in kwargs.values():
+            found.extend(_extract_parquet_paths_from_task(v))
+
+    args = getattr(obj, "args", None)
+    if isinstance(args, (list, tuple)):
+        for a in args:
+            found.extend(_extract_parquet_paths_from_task(a))
+
+    return found
+
+
 def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> None:
     # see the types allowed for the dask graph here: https://docs.dask.org/en/stable/spec.html
 
@@ -349,32 +412,17 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                     # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
                     files.append(str(UPath(path).resolve()))
-                elif name.startswith("read-parquet") or name.startswith("read_parquet"):
-                    # Here v is a read_parquet task with arguments and the only value is a dictionary.
-                    if "piece" in v.args[0]:
-                        # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
-                        parquet_file, check0, check1 = v.args[0]["piece"]
-                        if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
-                            raise ValueError(
-                                f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
-                                f"report this bug."
-                            )
+                elif "parquet" in name.lower():
+                    # Matches every dask task-key that wraps a parquet read across versions:
+                    #   - legacy ``read-parquet-<hash>`` / ``read_parquet-<hash>`` (pre PR #1006),
+                    #   - current ``read_parquet-<hash>`` plus fused-expression forms such as
+                    #     ``readparquetpyarrowfs-fused-values-<hash>`` produced by
+                    #     ``dask_expr.io.parquet.ReadParquetPyarrowFS`` when a parquet column is
+                    #     combined with other arrays (see ``test_self_contained``).
+                    # Any false-positive key that matches but carries no parquet payload is filtered
+                    # inside ``_extract_parquet_paths_from_task`` (paths must ``endswith(".parquet")``).
+                    for parquet_file in _extract_parquet_paths_from_task(v):
                         files.append(os.path.realpath(parquet_file))
-                    else:
-                        # This occurs when for example points and images are mixed, the main task still starts with
-                        # read_parquet, but the execution happens through a subgraph which we iterate over to get the
-                        # actual read_parquet task.
-                        for task in v.args[0].values():
-                            # Recursively go through tasks, this is required because differences between dask versions.
-                            piece_dict = _find_piece_dict(task)
-                            if isinstance(piece_dict, dict) and "piece" in piece_dict:
-                                parquet_file, check0, check1 = piece_dict["piece"]  # type: ignore[misc]
-                                if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
-                                    raise ValueError(
-                                        f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
-                                        f"report this bug."
-                                    )
-                                files.append(os.path.realpath(parquet_file))
 
 
 def _backed_elements_contained_in_path(
