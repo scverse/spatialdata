@@ -26,7 +26,13 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group, open_read_store
+from spatialdata._store import (
+    ZarrStore,
+    make_zarr_store,
+    make_zarr_store_from_group,
+    open_read_store,
+    open_zarr_for_read,
+)
 from spatialdata._types import Raster_T
 
 
@@ -162,7 +168,10 @@ def read_zarr(
     tables: dict[str, AnnData] = {}
 
     with open_read_store(zarr_store) as resolved_store:
-        root_group = zarr.open_group(resolved_store, mode="r")
+        # Use the consolidated + zarr-v3-pinned fast path. See ``open_zarr_for_read`` for why
+        # pinning ``zarr_format=3`` matters over remote backends (avoids five small v2-metadata
+        # probes per open) and how the fallback keeps legacy / non-consolidated stores working.
+        root_group = open_zarr_for_read(resolved_store, as_group=True)
         # the following is the SpatialDataContainerFormat version
         if "spatialdata_attrs" not in root_group.metadata.attributes:
             # backward compatibility for pre-versioned SpatialData zarr stores
@@ -331,5 +340,22 @@ def _write_consolidated_metadata(path: Path | UPath | str | None) -> None:
         # that pr would still work.
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=zarr.errors.ZarrUserWarning)
+            # Consolidate at the root, then at every element group
+            # (``<group>/<name>``). The per-element consolidation is what lets our readers
+            # -- which re-open each element via a child-rooted ``FsspecStore`` -- actually
+            # consume consolidated metadata at element open time. A root-only consolidation
+            # only benefits the first ``zarr.open_group`` call in ``read_zarr``; every
+            # subsequent ``zarr.open(elem_store, ...)`` rooted at the element path would
+            # still walk its own subtree one ``zarr.json`` at a time because the
+            # consolidated-metadata field lives on the *root* ``zarr.json``, not the
+            # child's. Consolidating per-element writes the field on every element's own
+            # ``zarr.json`` so a child-rooted open is a single GET regardless of depth.
             zarr.consolidate_metadata(f.store)
+            for group_name in ("images", "labels", "points", "shapes", "tables"):
+                if group_name not in f:
+                    continue
+                for element_name in f[group_name]:
+                    if element_name.startswith("."):
+                        continue
+                    zarr.consolidate_metadata(f.store, path=f"{group_name}/{element_name}")
         f.store.close()

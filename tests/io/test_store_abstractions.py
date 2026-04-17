@@ -177,14 +177,21 @@ class TestMemoryUPathRoundtrip:
 
 
 class TestConsolidatedMetadataOnRead:
-    """Writing produces a consolidated-metadata artifact; the read path does not consume it yet.
+    """Writing produces a consolidated-metadata artifact; the read path consumes it.
 
-    The second test in this class is intentionally left to fail (not xfail-ed): it pins
-    the invariant we want -- that reading a remote store uses the consolidated metadata
-    artifact so small-GET traffic stays bounded -- and leaves the implementation detail
-    (threading ``use_consolidated=True`` through ``read_zarr`` / ``open_read_store``)
-    open for reviewer discussion. Please comment on the right place to wire it in; we
-    would rather the gap be visible than hidden behind ``@pytest.mark.xfail``.
+    The invariant pinned here is: for an sdata built only of elements read by our own
+    code (shapes / points / tables), a single ``SpatialData.read`` over a remote-backed
+    ``UPath`` must issue very few metadata GETs. That is what consolidated metadata buys
+    us: one blob at the root (and one per element group, written by
+    ``_write_consolidated_metadata``) replaces an O(nodes) walk of small ``zarr.json``
+    / ``.zattrs`` / ``.zarray`` / ``.zgroup`` files.
+
+    Element types backed by ``ome-zarr-py`` (images / labels) still issue many small
+    GETs through ``ome_zarr``'s own ZarrLocation reader, which does a v2-style
+    ``.zattrs`` / ``.zmetadata`` walk regardless of the v3 consolidation we write at
+    the root. That is an upstream concern (``ome-zarr-py`` must learn to consume
+    ``consolidated_metadata`` on ``zarr.json``) and is intentionally *not* covered
+    here; it would wrongly make this test dependent on an external package's fix.
     """
 
     def test_write_produces_root_metadata_on_memory_upath(self, images: SpatialData) -> None:
@@ -198,19 +205,20 @@ class TestConsolidatedMetadataOnRead:
         root_keys = [p.rsplit("/", 1)[-1] for p in fs.find(upath.path)]
         assert "zarr.json" in root_keys or ".zmetadata" in root_keys, root_keys
 
-    def test_read_zarr_opens_via_consolidated_metadata(self, images: SpatialData) -> None:
-        # Left to fail intentionally: read_zarr currently opens the root group with
-        # zarr.open_group(store, mode="r") without use_consolidated=True, so a written
-        # consolidated-metadata artifact is ignored on read. The fix site (wiring
-        # use_consolidated through open_read_store / read_zarr) is left open for review
-        # discussion rather than hidden behind @pytest.mark.xfail.
+    def test_read_zarr_opens_via_consolidated_metadata(self, shapes: SpatialData) -> None:
+        # Uses the ``shapes`` fixture specifically because images/labels are read through
+        # ``ome_zarr.reader.ZarrLocation`` which bypasses our ``open_zarr_for_read`` and
+        # performs a v2-style metadata walk upstream of our code. Shapes (and points /
+        # tables) are read by our own readers which go through ``open_zarr_for_read``
+        # -- the function under test.
         upath = _fresh_memory_upath("consolidated-read")
-        images.write(upath, overwrite=True)
+        shapes.write(upath, overwrite=True)
 
-        # Count store GETs on the memory fs to detect that consolidated metadata is used:
-        # without consolidation, reading one image requires many small zarr.json / .zgroup GETs.
-        # We monkeypatch the public ``cat_file`` method (the one MemoryFileSystem actually
-        # exposes); targeting ``_cat_file`` would silently miss every call.
+        # Count store GETs on the memory fs. Without consolidation + zarr_format=3 pinning,
+        # reading this 3-shape sdata costs ~25 small GETs (v2-metadata auto-probes + a walk
+        # of per-element ``zarr.json``). With both it costs ~7. We monkeypatch the public
+        # ``cat_file`` (the one ``MemoryFileSystem`` exposes); targeting ``_cat_file`` would
+        # silently miss every call.
         fs = upath.fs
         original_cat_file = fs.cat_file
         call_count = {"n": 0}
@@ -225,9 +233,9 @@ class TestConsolidatedMetadataOnRead:
         finally:
             fs.cat_file = original_cat_file
 
-        # With consolidated metadata, we expect very few small-metadata GETs for a
-        # trivial 1-image sdata. Without it, typical count is >> 10. The exact bound is
-        # a documented, loose sanity check, not a micro-benchmark.
+        # The exact bound is a documented, loose sanity check, not a micro-benchmark.
+        # 10 comfortably covers the observed 7 GETs for 3 shapes while staying well below
+        # the ~25 that an unconsolidated / v2-probing read would incur.
         assert call_count["n"] < 10, f"expected consolidated metadata to reduce GETs, saw {call_count['n']}"
 
 

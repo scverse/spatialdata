@@ -71,6 +71,12 @@ def make_zarr_store_from_group(group: zarr.Group) -> ZarrStore:
         # i.e. ``pafs.FSSpecHandler(fs)`` -- and pyarrow's handler is strictly sync. Feeding it
         # an async-wrapped fs raises ``RuntimeError: Loop is not running`` at read/write time.
         # The ``while`` loop tolerates (hypothetical) multi-layer wrapping across zarr versions.
+        #
+        # TODO(async-pyarrow-fs): drop this unwrap once either (a) pyarrow's FSSpecHandler learns
+        # to run an async fs under its own event loop, or (b) zarr exposes the original sync fs
+        # on FsspecStore without the AsyncFileSystemWrapper indirection (tracked at
+        # https://github.com/zarr-developers/zarr-python/issues/2073). At that point ``fs`` can be
+        # assigned directly from ``store.fs`` and the getattr probe can go.
         fs = store.fs
         while True:
             inner = getattr(fs, "sync_fs", None)
@@ -98,6 +104,31 @@ def open_read_store(store: ZarrStore) -> Any:
         yield resolved_store
     finally:
         resolved_store.close()
+
+
+def open_zarr_for_read(store: Any, *, as_group: bool = True) -> Any:
+    """Open a zarr group or node for reading with remote-friendly defaults.
+
+    Prefers the fast path: pinned ``zarr_format=3`` (we only ever write v3 stores, so skipping
+    v2-metadata auto-probes saves up to five small GETs per open on remote backends) and
+    ``use_consolidated=True`` (requires the root / element ``zarr.json`` to carry the
+    ``consolidated_metadata`` field produced by ``_write_consolidated_metadata``). Falls back
+    to ``zarr.open*`` with no format/consolidation hints for legacy or third-party stores that
+    predate either convention.
+
+    Parameters
+    ----------
+    store
+        A ``zarr.storage.StoreLike`` -- typically the value yielded by ``open_read_store``.
+    as_group
+        If ``True`` (default) use ``zarr.open_group``; if ``False`` use ``zarr.open`` which
+        returns either a ``Group`` or an ``Array`` based on the metadata at the store root.
+    """
+    fn = zarr.open_group if as_group else zarr.open
+    try:
+        return fn(store, mode="r", zarr_format=3, use_consolidated=True)
+    except (ValueError, FileNotFoundError):
+        return fn(store, mode="r")
 
 
 @contextmanager

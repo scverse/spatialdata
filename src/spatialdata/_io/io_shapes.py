@@ -25,7 +25,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group
+from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group, open_zarr_for_read
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -39,7 +39,7 @@ def _read_shapes(
     """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
     zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
     resolved_store = _resolve_zarr_store(zarr_store.path)
-    f = zarr.open(resolved_store, mode="r")
+    f = open_zarr_for_read(resolved_store, as_group=False)
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]

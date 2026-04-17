@@ -18,7 +18,7 @@ from spatialdata._io.format import (
     TablesFormatV02,
     _parse_version,
 )
-from spatialdata._store import ZarrStore, make_zarr_store
+from spatialdata._store import ZarrStore, make_zarr_store, open_zarr_for_read
 from spatialdata.models import TableModel, get_table_keys
 
 
@@ -27,7 +27,7 @@ def _read_table(store: str | Path | UPath | ZarrStore) -> AnnData:
     resolved_store = _resolve_zarr_store(zarr_store.path)
     table = read_anndata_zarr(resolved_store)
 
-    f = zarr.open(resolved_store, mode="r")
+    f = open_zarr_for_read(resolved_store, as_group=False)
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]

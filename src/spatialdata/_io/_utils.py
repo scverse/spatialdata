@@ -356,6 +356,11 @@ def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
             found.append(path)
 
     if isinstance(obj, Mapping):
+        # TODO(legacy-dask): the ``"piece"`` branch targets the pre-PR-#1006 dask graph shape
+        # (``dask/dataframe/io/parquet/core.py`` produced ``{"piece": (file, rg, filters)}``). The
+        # current dask pin (``dask>=2025.12.0``) no longer emits this shape at runtime; the branch
+        # is kept only as a safety net for users forcing an older dask via pip. Remove once the
+        # lower pin is bumped past the PR-#1006 cut-off and CI covers only the new shape.
         if "piece" in obj:
             piece = obj["piece"]
             if isinstance(piece, tuple) and len(piece) >= 1 and isinstance(piece[0], str):
@@ -376,6 +381,12 @@ def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
             found.extend(_extract_parquet_paths_from_task(item))
         return found
 
+    # TODO(dask-task-api): the ``kwargs`` / ``args`` getattr probes here rely on the Task wrapper
+    # object introduced alongside PR #1006. The attribute contract is not documented as public
+    # (``dask.dataframe.dask_expr``), so we access it defensively via getattr and traverse every
+    # container uniformly. If dask stabilises a public accessor (e.g. ``task.iter_leaves()`` or an
+    # expr-level ``file_paths`` property) or if ``FragmentWrapper`` becomes importable from a
+    # stable namespace, replace the attribute-chain walk with a typed call and drop the getattrs.
     kwargs = getattr(obj, "kwargs", None)
     if isinstance(kwargs, Mapping):
         for v in kwargs.values():
@@ -411,7 +422,13 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                 name = k
             if name is not None:
                 if name.startswith("original-from-zarr"):
-                    # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
+                    # TODO(zarr-v3-store-path): the ``getattr(..., "path", None)`` fallback dates
+                    # back to zarr v2, where ``DirectoryStore`` exposed ``.path`` and the v3
+                    # ``LocalStore`` exposes ``.root`` instead. With the current pin
+                    # (``zarr>=3.0.0``) the getattr branch is never taken for local backends -- it
+                    # only covers exotic third-party stores that still mimic the v2 attribute.
+                    # Once we are confident no such shim stores are in use, collapse this to just
+                    # ``v.store.root`` and drop the getattr probe.
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
                     files.append(str(UPath(path).resolve()))
                 elif "parquet" in name.lower():
