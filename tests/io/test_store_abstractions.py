@@ -15,9 +15,10 @@ Coverage goals (generic, not provider-specific):
   labels, shapes, points, and a full sdata. The write-read-write cycle specifically pins
   the categorical-schema invariant that the arrow-filesystem migration (this PR) had to
   re-establish in ``_read_points``.
-- Writing to a ``UPath`` lands the root metadata artifact in the backend. The read-time
-  consumption of consolidated metadata is an xfail placeholder for the cloud-native
-  follow-up.
+- Writing to a ``UPath`` lands the root metadata artifact in the backend. Reading via
+  consolidated metadata is left as a failing test on purpose: the invariant is stated,
+  but the fix (threading ``use_consolidated=True`` through ``read_zarr`` / the store
+  opener) is intentionally open for review discussion rather than silently suppressed.
 - A ``MemoryFileSystem`` subclass that refuses listing proves that ``SpatialData.read``
   does not depend on directory listing for basic elements (the precondition for serving
   public HTTPS zarrs).
@@ -181,9 +182,12 @@ class TestMemoryUPathRoundtrip:
 class TestConsolidatedMetadataOnRead:
     """Writing produces a consolidated-metadata artifact; the read path does not consume it yet.
 
-    The follow-up cloud-native PR will thread ``use_consolidated=True`` through
-    ``open_read_store`` / ``read_zarr``. When that lands, the xfail here flips to a pass
-    and the assertion becomes strict.
+    The second test in this class is intentionally left to fail (not xfail-ed): it pins
+    the invariant we want -- that reading a remote store uses the consolidated metadata
+    artifact so small-GET traffic stays bounded -- and leaves the implementation detail
+    (threading ``use_consolidated=True`` through ``read_zarr`` / ``open_read_store``)
+    open for reviewer discussion. Please comment on the right place to wire it in; we
+    would rather the gap be visible than hidden behind ``@pytest.mark.xfail``.
     """
 
     def test_write_produces_root_metadata_on_memory_upath(self, images: SpatialData) -> None:
@@ -197,33 +201,32 @@ class TestConsolidatedMetadataOnRead:
         root_keys = [p.rsplit("/", 1)[-1] for p in fs.find(upath.path)]
         assert "zarr.json" in root_keys or ".zmetadata" in root_keys, root_keys
 
-    @pytest.mark.xfail(
-        reason=(
-            "read_zarr opens the root group with zarr.open_group(store, mode='r') without "
-            "use_consolidated=True, so a consolidated metadata artifact is ignored on remote "
-            "reads. The cloud-native follow-up will thread use_consolidated through open_read_store."
-        ),
-        strict=True,
-    )
     def test_read_zarr_opens_via_consolidated_metadata(self, images: SpatialData) -> None:
+        # Left to fail intentionally: read_zarr currently opens the root group with
+        # zarr.open_group(store, mode="r") without use_consolidated=True, so a written
+        # consolidated-metadata artifact is ignored on read. The fix site (wiring
+        # use_consolidated through open_read_store / read_zarr) is left open for review
+        # discussion rather than hidden behind @pytest.mark.xfail.
         upath = _fresh_memory_upath("consolidated-read")
         images.write(upath, overwrite=True)
 
         # Count store GETs on the memory fs to detect that consolidated metadata is used:
         # without consolidation, reading one image requires many small zarr.json / .zgroup GETs.
+        # We monkeypatch the public ``cat_file`` method (the one MemoryFileSystem actually
+        # exposes); targeting ``_cat_file`` would silently miss every call.
         fs = upath.fs
-        original_cat_file = fs._cat_file
+        original_cat_file = fs.cat_file
         call_count = {"n": 0}
 
         def counting_cat_file(path, *args, **kwargs):
             call_count["n"] += 1
             return original_cat_file(path, *args, **kwargs)
 
-        fs._cat_file = counting_cat_file
+        fs.cat_file = counting_cat_file
         try:
             SpatialData.read(upath)
         finally:
-            fs._cat_file = original_cat_file
+            fs.cat_file = original_cat_file
 
         # With consolidated metadata, we expect very few small-metadata GETs for a
         # trivial 1-image sdata. Without it, typical count is >> 10. The exact bound is
