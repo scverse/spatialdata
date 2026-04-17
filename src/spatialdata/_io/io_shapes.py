@@ -9,9 +9,11 @@ from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
+from upath import UPath
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
+    _resolve_zarr_store,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
@@ -23,6 +25,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
+from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -31,10 +34,12 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path,
+    store: str | Path | UPath | ZarrStore,
 ) -> GeoDataFrame:
-    """Read shapes from a zarr store."""
-    f = zarr.open(store, mode="r")
+    """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
+    f = zarr.open(resolved_store, mode="r")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
@@ -54,9 +59,9 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = f.store_path.store.root
-        path = Path(store_root) / f.path / "shapes.parquet"
-        geo_df = read_parquet(path)
+        parquet_store = zarr_store.child("shapes.parquet")
+        with parquet_store.arrow_filesystem().open_input_file(parquet_store.arrow_path()) as src:
+            geo_df = read_parquet(src)
     else:
         raise ValueError(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
@@ -169,13 +174,13 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    store_root = group.store_path.store.root
-    path = store_root / group.path / "shapes.parquet"
+    parquet_store = make_zarr_store_from_group(group).child("shapes.parquet")
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    shapes.to_parquet(path, geometry_encoding=geometry_encoding)
+    with parquet_store.arrow_filesystem().open_output_stream(parquet_store.arrow_path()) as sink:
+        shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)

@@ -6,13 +6,16 @@ import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
+from upath import UPath
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
+    _resolve_zarr_store,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -21,21 +24,38 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: str | Path,
+    store: str | Path | UPath | ZarrStore,
 ) -> DaskDataFrame:
-    """Read points from a zarr store."""
-    f = zarr.open(store, mode="r")
+    """Read points from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
+    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
+    resolved_store = _resolve_zarr_store(zarr_store.path)
+    f = zarr.open(resolved_store, mode="r")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = f.store_path.store.root
-    path = store_root / f.path / "points.parquet"
-    # cache on remote file needed for parquet reader to work
-    # TODO: allow reading in the metadata without caching all the data
-    points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
+    parquet_store = zarr_store.child("points.parquet")
+    # Passing filesystem= to read_parquet makes pyarrow convert dictionary columns into pandas
+    # categoricals eagerly per partition and marks them known=True with an empty category list.
+    # This happens for ANY pyarrow filesystem (both LocalFileSystem and PyFileSystem(FSSpecHandler(.))
+    # return the same broken categorical), so it is a property of the filesystem= handoff itself,
+    # not of local-vs-remote. Left as is, it would make write_points' cat.as_known() a no-op and
+    # the next to_parquet(filesystem=.) would fail with a per-partition schema mismatch
+    # (dictionary<values=null> vs dictionary<values=string>). We demote the categoricals back to
+    # "unknown" right here so that write_points recomputes categories consistently across partitions.
+    # TODO: allow reading in the metadata without materializing the data.
+    points = read_parquet(
+        parquet_store.arrow_path(),
+        filesystem=parquet_store.arrow_filesystem(),
+    )
     assert isinstance(points, DaskDataFrame)
+    for column_name in points.columns:
+        c = points[column_name]
+        if c.dtype == "category" and c.cat.known:
+            points[column_name] = c.cat.as_unknown()
+    if points.index.name == "__null_dask_index__":
+        points = points.rename_axis(None)
 
     transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
     _set_transformations(points, transformations)
@@ -68,8 +88,7 @@ def write_points(
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
 
-    store_root = group.store_path.store.root
-    path = store_root / group.path / "points.parquet"
+    parquet_store = make_zarr_store_from_group(group).child("points.parquet")
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -84,7 +103,10 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    points_without_transform.to_parquet(path)
+    points_without_transform.to_parquet(
+        parquet_store.arrow_path(),
+        filesystem=parquet_store.arrow_filesystem(),
+    )
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version
