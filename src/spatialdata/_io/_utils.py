@@ -480,7 +480,10 @@ def _ensure_async_fs(fs: Any) -> Any:
 
 
 def _resolve_zarr_store(
-    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
+    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group,
+    *,
+    read_only: bool = False,
+    **kwargs: Any,
 ) -> zarr.storage.StoreLike:
     """
     Normalize different Zarr store inputs into a usable store instance.
@@ -496,9 +499,14 @@ def _resolve_zarr_store(
     path
         The input representing a Zarr store or group. Can be a filesystem
         path, remote path, existing store, or Zarr group.
+    read_only
+        If ``True``, constructed ``LocalStore`` / ``FsspecStore`` instances are built with
+        ``read_only=True``. Stores that already exist (when ``path`` is a ``StoreLike`` or
+        a ``zarr.Group`` whose wrapped store is not reconstructable) are returned as-is;
+        the caller is responsible for opening them at the right mode.
     **kwargs
         Additional keyword arguments forwarded to the underlying store
-        constructor (e.g. `mode`, `storage_options`).
+        constructor.
 
     Returns
     -------
@@ -511,7 +519,6 @@ def _resolve_zarr_store(
         ValueError
         If a `zarr.Group` has an unsupported store type.
     """
-    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
         path = UPath(path)
 
@@ -531,28 +538,30 @@ def _resolve_zarr_store(
             return FsspecStore(
                 fs=_ensure_async_fs(path.store.fs),
                 path=_join_fsspec_store_path(path.store.path, path.path),
+                read_only=read_only,
                 **kwargs,
             )
         if _cms is not None and isinstance(path.store, _cms):
-            # Unwrap and apply the same async-fs + parquet guards as a direct FsspecStore on the group.
+            # Unwrap and apply the same async-fs guards as a direct FsspecStore on the group.
             inner = path.store.store
             if isinstance(inner, FsspecStore):
                 return FsspecStore(
                     fs=_ensure_async_fs(inner.fs),
                     path=_join_fsspec_store_path(inner.path, path.path),
+                    read_only=read_only,
                     **kwargs,
                 )
             if isinstance(inner, LocalStore):
                 store_path = UPath(inner.root) / path.path
-                return LocalStore(store_path.path)
+                return LocalStore(store_path.path, read_only=read_only)
             return inner
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, UPath):
-        # if input is a remote UPath, map it to an FSStore (check before StoreLike to avoid UnionType isinstance)
-        return FsspecStore(_ensure_async_fs(path.fs), path=path.path, **kwargs)
+        # Check before StoreLike to avoid UnionType isinstance.
+        return FsspecStore(_ensure_async_fs(path.fs), path=path.path, read_only=read_only, **kwargs)
     if isinstance(path, zarr.storage.StoreLike):
-        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, …). Do not pass it as ``fs=`` to
-        # FsspecStore — that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
+        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, ...). Do not pass it as ``fs=`` to
+        # FsspecStore -- that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
         return path
     raise TypeError(f"Unsupported type: {type(path)}")
 

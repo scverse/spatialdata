@@ -63,6 +63,23 @@ def test_resolve_zarr_store_returns_existing_zarr_stores_unchanged() -> None:
     assert _resolve_zarr_store(loc) is loc
 
 
+def test_resolve_zarr_store_forwards_read_only_local(tmp_path: Path) -> None:
+    """``_resolve_zarr_store(..., read_only=True)`` must reach the LocalStore constructor."""
+    store = _resolve_zarr_store(tmp_path / "store.zarr", read_only=True)
+    assert isinstance(store, LocalStore)
+    assert store.read_only is True
+
+
+def test_resolve_zarr_store_forwards_read_only_remote() -> None:
+    """``_resolve_zarr_store(..., read_only=True)`` must reach the FsspecStore constructor."""
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    upath = UPath("memory://ro-remote.zarr", fs=MemoryFileSystem(skip_instance_cache=True))
+    store = _resolve_zarr_store(upath, read_only=True)
+    assert isinstance(store, FsspecStore)
+    assert store.read_only is True
+
+
 def test_make_zarr_store_from_remote_group() -> None:
     """Remote zarr.Group inputs keep a usable UPath and reopen through the same protocol."""
     import fsspec

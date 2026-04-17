@@ -36,13 +36,24 @@ def _read_points(
     points_format = PointsFormats[version]
 
     parquet_store = zarr_store.child("points.parquet")
-    # cache on remote file needed for parquet reader to work
-    # TODO: allow reading in the metadata without caching all the data
+    # Passing filesystem= to read_parquet makes pyarrow convert dictionary columns into pandas
+    # categoricals eagerly per partition and marks them known=True with an empty category list.
+    # This happens for ANY pyarrow filesystem (both LocalFileSystem and PyFileSystem(FSSpecHandler(.))
+    # return the same broken categorical), so it is a property of the filesystem= handoff itself,
+    # not of local-vs-remote. Left as is, it would make write_points' cat.as_known() a no-op and
+    # the next to_parquet(filesystem=.) would fail with a per-partition schema mismatch
+    # (dictionary<values=null> vs dictionary<values=string>). We demote the categoricals back to
+    # "unknown" right here so that write_points recomputes categories consistently across partitions.
+    # TODO: allow reading in the metadata without materializing the data.
     points = read_parquet(
         parquet_store.arrow_path(),
         filesystem=parquet_store.arrow_filesystem(),
     )
     assert isinstance(points, DaskDataFrame)
+    for column_name in points.columns:
+        c = points[column_name]
+        if c.dtype == "category" and c.cat.known:
+            points[column_name] = c.cat.as_unknown()
     if points.index.name == "__null_dask_index__":
         points = points.rename_axis(None)
 

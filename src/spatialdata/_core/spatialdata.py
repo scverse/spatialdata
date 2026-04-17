@@ -1060,6 +1060,8 @@ class SpatialData:
         honored. Callers must pass ``overwrite=True`` to explicitly acknowledge that the write
         may clobber pre-existing data at the target.
         """
+        from upath.implementations.local import PosixUPath, WindowsUPath
+
         from spatialdata._io._utils import (
             _backed_elements_contained_in_path,
             _is_subfolder,
@@ -1076,8 +1078,17 @@ class SpatialData:
         if not isinstance(file_path, (Path, UPath)):
             raise ValueError(f"file_path must be a string, Path or UPath object, type(file_path) = {type(file_path)}.")
 
-        if isinstance(file_path, UPath):
-            if not overwrite:
+        # Local UPath variants (PosixUPath / WindowsUPath) wrap a plain filesystem path; they
+        # have reliable existence semantics and must go through the same local validation as
+        # Path. Only *remote* UPath (cloud / http / memory / etc.) falls through the remote guard.
+        is_remote_upath = isinstance(file_path, UPath) and not isinstance(file_path, (PosixUPath, WindowsUPath))
+
+        if is_remote_upath:
+            # The overwrite opt-in only applies at the top-level store entry. Per-element writes
+            # issued internally by ``write()`` (and incremental ``write_element`` calls into an
+            # existing store) must not re-trigger the guard on every sub-key, or writing to a
+            # remote target would be impossible.
+            if not overwrite and not saving_an_element:
                 raise NotImplementedError(
                     "Writing to a remote (UPath) target requires overwrite=True. "
                     "We cannot reliably check whether the remote store already exists, so the write "
