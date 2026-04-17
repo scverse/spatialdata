@@ -524,14 +524,14 @@ def _resolve_zarr_store(
 
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use LocalStore
-        return LocalStore(path.path)
+        return LocalStore(path.path, read_only=read_only)
 
     if isinstance(path, zarr.Group):
         _cms = getattr(zarr.storage, "ConsolidatedMetadataStore", None)
         # if the input is a zarr.Group, wrap it with a store
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
-            return LocalStore(store_path.path)
+            return LocalStore(store_path.path, read_only=read_only)
         if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
