@@ -154,6 +154,7 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     attrs["version"] = element_format.spatialdata_format_version
     return attrs
 
+
 def _write_shapes_v02_v03(
     shapes: GeoDataFrame, group: zarr.Group, element_format: Format, geometry_encoding: Literal["WKB", "geoarrow"]
 ) -> Any:

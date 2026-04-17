@@ -30,7 +30,6 @@ cloud-native follow-up must not regress.
 
 from __future__ import annotations
 
-import pytest
 from fsspec.implementations.memory import MemoryFileSystem
 from upath import UPath
 
@@ -130,9 +129,7 @@ class TestMemoryUPathRoundtrip:
         read = SpatialData.read(upath)
         assert_spatial_data_objects_are_identical(points, read)
 
-    def test_write_read_write_points_preserves_categorical_schema(
-        self, points: SpatialData
-    ) -> None:
+    def test_write_read_write_points_preserves_categorical_schema(self, points: SpatialData) -> None:
         """Regression guard for the arrow-filesystem categorical round-trip.
 
         This PR migrated points io to ``to_parquet`` / ``read_parquet`` with
@@ -231,9 +228,7 @@ class TestConsolidatedMetadataOnRead:
         # With consolidated metadata, we expect very few small-metadata GETs for a
         # trivial 1-image sdata. Without it, typical count is >> 10. The exact bound is
         # a documented, loose sanity check, not a micro-benchmark.
-        assert call_count["n"] < 10, (
-            f"expected consolidated metadata to reduce GETs, saw {call_count['n']}"
-        )
+        assert call_count["n"] < 10, f"expected consolidated metadata to reduce GETs, saw {call_count['n']}"
 
 
 # ---------------------------------------------------------------------------
