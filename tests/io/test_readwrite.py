@@ -34,7 +34,7 @@ from spatialdata._io.format import (
 )
 from spatialdata._io.io_raster import write_image
 from spatialdata.datasets import blobs
-from spatialdata.models import Image2DModel
+from spatialdata.models import Image2DModel, Labels2DModel
 from spatialdata.models._utils import get_channel_names
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
@@ -49,10 +49,32 @@ from tests.conftest import (
     _get_shapes,
     _get_table,
     _get_tables,
+    temporary_settings,
 )
 
 RNG = default_rng(0)
 SDATA_FORMATS = list(SpatialDataContainerFormats.values())
+RASTER_CASES = [
+    pytest.param(
+        {"model": Image2DModel, "dims": ("c", "y", "x"), "data_shape": (3, 800, 1000), "zarr_subpath": "images"},
+        id="image",
+    ),
+    pytest.param(
+        {"model": Labels2DModel, "dims": ("y", "x"), "data_shape": (800, 1000), "zarr_subpath": "labels"},
+        id="label",
+    ),
+]
+
+RASTER_CASES_MULTISCALE = [
+    pytest.param(
+        {"model": Image2DModel, "dims": ("c", "y", "x"), "data_shape": (3, 1600, 2000), "zarr_subpath": "images"},
+        id="image",
+    ),
+    pytest.param(
+        {"model": Labels2DModel, "dims": ("y", "x"), "data_shape": (1600, 2000), "zarr_subpath": "labels"},
+        id="label",
+    ),
+]
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
@@ -741,6 +763,181 @@ def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
     assert isinstance(sdata_back["image"], DataArray)
     image_group = zarr.open_group(path / "images" / "image", mode="r")
     assert list(image_group.keys()) == ["s0"]
+
+
+@pytest.mark.parametrize("raster_case", RASTER_CASES)
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
+def test_write_raster_sharding(
+    tmp_path: Path,
+    raster_case: dict,
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    model, dims, data_shape, zarr_subpath = (
+        raster_case["model"],
+        raster_case["dims"],
+        raster_case["data_shape"],
+        raster_case["zarr_subpath"],
+    )
+    chunks = (1, 100, 200) if len(dims) == 3 else (100, 200)
+    write_chunks = (1, 50, 100) if len(dims) == 3 else (50, 100)
+    write_shards = (1, 100, 200) if len(dims) == 3 else (100, 200)
+
+    data = da.from_array(RNG.random(data_shape), chunks=chunks)
+    element = model.parse(data, dims=dims)
+    name = "element"
+    sdata = SpatialData(**{zarr_subpath: {name: element}})
+    path = tmp_path / "data.zarr"
+
+    if sdata_container_format.zarr_format == 2:
+        with pytest.raises(ValueError, match="Zarr format 2 arrays can only"):
+            sdata.write(
+                path,
+                sdata_formats=sdata_container_format,
+                raster_write_kwargs={"chunks": write_chunks, "shards": write_shards},
+            )
+    else:
+        sdata.write(
+            path,
+            sdata_formats=sdata_container_format,
+            raster_write_kwargs={"chunks": write_chunks, "shards": write_shards},
+        )
+        arr = zarr.open_group(path / zarr_subpath / name, mode="r")["s0"]
+        assert arr.chunks == write_chunks
+        assert arr.shards == write_shards
+
+
+def test_write_raster_sharding_with_settings(tmp_path: Path) -> None:
+    with temporary_settings(raster_chunks=(1, 100, 100)):
+        data = da.from_array(RNG.random((1, 1000, 1000)), chunks=(1, 200, 200))
+        element = Image2DModel.parse(data, dims=("c", "y", "x"))
+        name = "element"
+        sdata = SpatialData(images={name: element})
+        path = tmp_path / "data.zarr"
+
+        sdata.write(path)
+
+        arr = zarr.open_group(path / "images" / name, mode="r")["s0"]
+        assert arr.chunks == (1, 100, 100)
+
+
+@pytest.mark.parametrize("raster_case", RASTER_CASES_MULTISCALE)
+def test_write_multiscale_raster_sharding(tmp_path: Path, raster_case: dict) -> None:
+    model, dims, data_shape, zarr_subpath = (
+        raster_case["model"],
+        raster_case["dims"],
+        raster_case["data_shape"],
+        raster_case["zarr_subpath"],
+    )
+    chunks = (1, 100, 200) if len(dims) == 3 else (100, 200)
+    write_chunks = (1, 50, 100) if len(dims) == 3 else (50, 100)
+    write_shards = (1, 100, 200) if len(dims) == 3 else (100, 200)
+
+    data = da.from_array(RNG.random(data_shape), chunks=chunks)
+    element = model.parse(data, dims=dims, scale_factors=[2])
+    name = "element"
+    sdata = SpatialData(**{zarr_subpath: {name: element}})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path, raster_write_kwargs={"chunks": write_chunks, "shards": write_shards})
+
+    group = zarr.open_group(path / zarr_subpath / name, mode="r")
+    for scale in ("s0", "s1"):
+        arr = group[scale]
+        assert arr.chunks == write_chunks
+        assert arr.shards == write_shards
+
+
+@pytest.mark.parametrize("raster_case", RASTER_CASES_MULTISCALE)
+def test_write_multiscale_raster_scale_sharding(tmp_path: Path, raster_case: dict) -> None:
+    model, dims, data_shape, zarr_subpath = (
+        raster_case["model"],
+        raster_case["dims"],
+        raster_case["data_shape"],
+        raster_case["zarr_subpath"],
+    )
+    chunks_s0 = (1, 50, 100) if len(dims) == 3 else (50, 100)
+    shards_s0 = (1, 100, 200) if len(dims) == 3 else (100, 200)
+    chunks_s1 = (1, 25, 50) if len(dims) == 3 else (25, 50)
+    shards_s1 = (1, 50, 100) if len(dims) == 3 else (50, 100)
+    base_chunks = (1, 100, 200) if len(dims) == 3 else (100, 200)
+
+    data = da.from_array(RNG.random(data_shape), chunks=base_chunks)
+    element = model.parse(data, dims=dims, scale_factors=[2])
+    name = "element"
+    sdata = SpatialData(**{zarr_subpath: {name: element}})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(
+        path,
+        raster_write_kwargs=[
+            {"chunks": chunks_s0, "shards": shards_s0},
+            {"chunks": chunks_s1, "shards": shards_s1},
+        ],
+    )
+
+    group = zarr.open_group(path / zarr_subpath / name, mode="r")
+    assert group["s0"].chunks == chunks_s0
+    assert group["s0"].shards == shards_s0
+    assert group["s1"].chunks == chunks_s1
+    assert group["s1"].shards == shards_s1
+
+
+@pytest.mark.parametrize("raster_case", RASTER_CASES)
+def test_write_raster_sharding_keyword(tmp_path: Path, raster_case: dict) -> None:
+    model, dims, data_shape, zarr_subpath = (
+        raster_case["model"],
+        raster_case["dims"],
+        raster_case["data_shape"],
+        raster_case["zarr_subpath"],
+    )
+    base_chunks = (1, 100, 200) if len(dims) == 3 else (100, 200)
+    write_chunks = (1, 50, 100) if len(dims) == 3 else (50, 100)
+    write_shards = (1, 100, 200) if len(dims) == 3 else (100, 200)
+
+    data = da.from_array(RNG.random(data_shape), chunks=base_chunks)
+    element = model.parse(data, dims=dims)
+    other = model.parse(data.copy(), dims=dims)
+    name, other_name = "element", "other_element"
+    sdata = SpatialData(**{zarr_subpath: {name: element, other_name: other}})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(
+        path,
+        raster_write_kwargs={name: {"chunks": write_chunks, "shards": write_shards}},
+    )
+
+    arr = zarr.open_group(path / zarr_subpath / name, mode="r")["s0"]
+    assert arr.chunks == write_chunks
+    assert arr.shards == write_shards
+
+    other_arr = zarr.open_group(path / zarr_subpath / other_name, mode="r")["s0"]
+    assert other_arr.chunks == base_chunks
+
+
+def test_write_raster_elements_sharding_chunking(tmp_path: Path) -> None:
+    write_chunks = (1, 50, 100)
+    write_shards = (1, 100, 200)
+
+    data = da.from_array(RNG.random((1, 500, 600)))
+    element = Image2DModel.parse(data, dims=("c", "y", "x"))
+
+    sdata = SpatialData()
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path)
+    sdata["image"] = element
+    sdata["other_image"] = element
+
+    sdata.write_element(
+        element_name=["image", "other_image"], raster_write_kwargs={"chunks": write_chunks, "shards": write_shards}
+    )
+
+    arr = zarr.open_group(path / "images" / "image", mode="r")["s0"]
+    assert arr.chunks == write_chunks
+    assert arr.shards == write_shards
+    arr = zarr.open_group(path / "images" / "other_image", mode="r")["s0"]
+    assert arr.chunks == write_chunks
+    assert arr.shards == write_shards
 
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)

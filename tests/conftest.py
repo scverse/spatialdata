@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from skimage import data
 from xarray import DataArray, DataTree
 
+from spatialdata import settings
 from spatialdata._core._deepcopy import deepcopy
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -642,3 +645,27 @@ def complex_sdata() -> SpatialData:
     sdata.tables["labels_table"].layers["log"] = np.log1p(np.abs(sdata.tables["labels_table"].X))
 
     return sdata
+
+
+@pytest.fixture()
+def settings_cls(tmp_path, monkeypatch):
+    """
+    Provide setting class with default path redirected.
+    """
+    from spatialdata.config import Settings
+
+    monkeypatch.setattr("spatialdata.config._config_path", lambda: tmp_path / "default_settings.json")
+    return Settings
+
+
+@contextmanager
+def temporary_settings(**kwargs):
+    old = replace(settings)
+    try:
+        for k, v in kwargs.items():
+            setattr(settings, k, v)
+        settings.save()
+        yield
+    finally:
+        settings.__dict__.update(old.__dict__)
+        settings.save()
