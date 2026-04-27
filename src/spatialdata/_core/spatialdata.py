@@ -1359,6 +1359,7 @@ class SpatialData:
                     overwrite=overwrite,
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
+                    raster_write_kwargs=raster_write_kwargs,
                 )
             return
 
