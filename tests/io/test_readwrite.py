@@ -1085,7 +1085,8 @@ def test_sdata_with_nan_in_obs() -> None:
                     "instance": [0, 0],
                     "column_only_region1": ["string", np.nan],
                     "column_only_region2": [np.nan, 3],
-                }
+                },
+                index=["0", "1"],
             )
         ),
         region_key="region",

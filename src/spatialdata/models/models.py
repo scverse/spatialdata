@@ -242,6 +242,8 @@ class RasterSchema(DataArraySchema):
         else:
             # Chunk single scale images
             if chunks is not None:
+                if isinstance(chunks, tuple):
+                    chunks = {dim: chunk for dim, chunk in zip(data.dims, chunks, strict=True)}
                 data = data.chunk(chunks=chunks)
         cls()._check_chunk_size_not_too_large(data)
         # recompute coordinates for (multiscale) spatial image
@@ -1153,6 +1155,9 @@ class TableModel:
         The parsed data.
         """
         validate_table_attr_keys(adata)
+        # Convert view to actual copy to avoid ImplicitModificationWarning when modifying .uns
+        if adata.is_view:
+            adata = adata.copy()
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:

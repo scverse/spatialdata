@@ -401,8 +401,8 @@ def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
 
 def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
     sdata = sdata_query_aggregation
-    table = sdata["table"][3:]
-    original_instance_id = table.obs["instance_id"]
+    table = sdata["table"][3:].copy()
+    original_instance_id = table.obs["instance_id"].copy()
     reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
     table.obs["instance_id"] = reversed_instance_id
     sdata["table"] = table
