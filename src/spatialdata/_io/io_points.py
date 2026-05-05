@@ -24,7 +24,7 @@ def _read_points(
     store: str | Path,
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    f = zarr.open(store, mode="r")
+    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
