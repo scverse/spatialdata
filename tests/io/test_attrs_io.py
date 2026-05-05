@@ -9,7 +9,6 @@ import pytest
 
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io.format import (
-    CurrentSpatialDataContainerFormat,
     SpatialDataContainerFormats,
     SpatialDataContainerFormatType,
 )
