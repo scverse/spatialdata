@@ -21,7 +21,7 @@ from upath import UPath
 from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
-from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
+from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables, skip_element_validation
 from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
@@ -641,7 +641,8 @@ class SpatialData:
             element_names=element_names_in_coordinate_system,
         )
 
-        return SpatialData(**elements, tables=tables, attrs=self.attrs)
+        with skip_element_validation():
+            return SpatialData(**elements, tables=tables, attrs=self.attrs)
 
     # TODO: move to relational query with refactor
     def _filter_tables(
@@ -885,7 +886,8 @@ class SpatialData:
                 if element_type not in elements:
                     elements[element_type] = {}
                 elements[element_type][element_name] = transformed
-        return SpatialData(**elements, tables=sdata.tables, attrs=self.attrs)
+        with skip_element_validation():
+            return SpatialData(**elements, tables=sdata.tables, attrs=self.attrs)
 
     def elements_are_self_contained(self) -> dict[str, bool]:
         """
@@ -2242,7 +2244,8 @@ class SpatialData:
                 assert model == ShapesModel
                 element_type = "shapes"
             elements_dict.setdefault(element_type, {})[name] = element
-        return cls(**elements_dict, attrs=attrs)
+        with skip_element_validation():
+            return cls(**elements_dict, attrs=attrs)
 
     def subset(
         self,
@@ -2284,7 +2287,8 @@ class SpatialData:
             include_orphan_tables,
             elements_dict=elements_dict,
         )
-        return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
+        with skip_element_validation():
+            return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
 
     def __getitem__(self, item: str) -> SpatialElement | AnnData:
         """

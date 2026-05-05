@@ -15,6 +15,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata import to_polygons
+from spatialdata._core._elements import skip_element_validation
 from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
@@ -538,7 +539,8 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
+    with skip_element_validation():
+        return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -874,7 +876,8 @@ def _(
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
+    with skip_element_validation():
+        return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
