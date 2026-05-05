@@ -1,9 +1,0 @@
-metric,value,notes
-total_wallclock_before_s,186.39,"1332 passed, 7 skip, 1 xfail"
-total_wallclock_after_s,180.59,"1332 passed, 7 skip, 1 xfail — all tests still pass"
-wallclock_saved_s,5.8,measured end-to-end
-setup_phase_before_s,44.8,from --durations=0
-setup_phase_after_s,35.0,from --durations=0
-setup_saved_s,9.8,fixture setup improvement
-call_phase_before_s,136.5,
-call_phase_after_s,140.7,"small increase is noise, not regression"
