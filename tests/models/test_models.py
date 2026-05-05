@@ -333,10 +333,10 @@ class TestModels:
             return
         if coordinates is not None:
             coordinates = coordinates.copy()
-        coords = ["A", "B", "C", "x", "y", "z"]
         n = 10
-        data = pd.DataFrame(RNG.integers(0, 101, size=(n, 6)), columns=coords)
-        data["target"] = pd.Series(RNG.integers(0, 2, size=(n,))).astype(str)
+        coord_cols = ["A", "B", "C"] if coordinates is not None else ["x", "y", "z"]
+        data = pd.DataFrame(RNG.integers(0, 101, size=(n, len(coord_cols))), columns=coord_cols)
+        data["target"] = pd.Categorical(pd.Series(RNG.integers(0, 2, size=(n,))).astype(str))
         data["cell_id"] = pd.Series(RNG.integers(0, 5, size=(n,))).astype(np.int_)
         data["anno"] = pd.Series(RNG.integers(0, 1, size=(n,))).astype(np.int_)
         # to test for non-contiguous indices

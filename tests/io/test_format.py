@@ -122,6 +122,7 @@ class TestFormat:
     # TODO: add tests for TablesFormatV01 and TablesFormatV02
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 class TestFormatConversions:
     """Test format conversions between older formats and newer."""
 

@@ -542,7 +542,8 @@ def complex_sdata() -> SpatialData:
             "instance_id": range(1, 51),  # Skip background (0)
             "cell_type": pd.Categorical(RNG.choice(["T cell", "B cell", "Macrophage"], size=50)),
             "size": RNG.uniform(10, 100, size=50),
-        }
+        },
+        index=[str(i) for i in range(50)],
     )
 
     var1 = pd.DataFrame(
@@ -577,7 +578,8 @@ def complex_sdata() -> SpatialData:
             "category": pd.Categorical(RNG.choice(["A", "B", "C"], size=total_items)),
             "value": RNG.normal(size=total_items),
             "count": RNG.poisson(10, size=total_items),
-        }
+        },
+        index=[str(i) for i in range(total_items)],
     )
 
     var2 = pd.DataFrame(
@@ -608,7 +610,8 @@ def complex_sdata() -> SpatialData:
             "cluster": pd.Categorical(RNG.choice(["cluster_1", "cluster_2", "cluster_3"], size=40)),
             "sample": pd.Categorical(["sample_A"] * 20 + ["sample_B"] * 20),
             "qc_pass": RNG.choice([True, False], p=[0.8, 0.2], size=40),
-        }
+        },
+        index=[str(i) for i in range(40)],
     )
 
     var3 = pd.DataFrame(

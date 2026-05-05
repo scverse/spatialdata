@@ -4,9 +4,10 @@ import json
 import os
 import re
 import tempfile
+import warnings
 from collections.abc import Generator, Iterable
-from contextlib import contextmanager
-from dataclasses import dataclass
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -69,6 +70,7 @@ class PartialReadTestCase:
     expected_elements: list[str]
     expected_exceptions: type[Exception] | tuple[type[Exception] | IOError, ...]
     warnings_patterns: list[str]
+    zarr_version: int = field(default=3)
 
 
 @pytest.fixture(scope="session")
@@ -103,6 +105,7 @@ def sdata_with_corrupted_elem_types_zgroup(session_tmp_path: Path) -> PartialRea
         expected_elements=not_corrupted,
         expected_exceptions=(JSONDecodeError, ZarrUserWarning),
         warnings_patterns=["labels: JSONDecodeError", "Object at"],
+        zarr_version=2,
     )
 
 
@@ -173,6 +176,7 @@ def sdata_with_corrupted_zattrs_elements(session_tmp_path: Path) -> PartialReadT
         expected_elements=not_corrupted,
         expected_exceptions=(OSError, JSONDecodeError),
         warnings_patterns=warnings_patterns,
+        zarr_version=2,
     )
 
 
@@ -216,6 +220,7 @@ def sdata_with_corrupted_image_chunks_zarrv2(session_tmp_path: Path) -> PartialR
         expected_elements=not_corrupted,
         expected_exceptions=(ArrayNotFoundError,),
         warnings_patterns=[rf"images/{corrupted}: ArrayNotFoundError"],
+        zarr_version=2,
     )
 
 
@@ -264,6 +269,7 @@ def sdata_with_corrupted_parquet_zarrv2(session_tmp_path: Path) -> PartialReadTe
         expected_elements=not_corrupted,
         expected_exceptions=ArrowInvalid,
         warnings_patterns=[rf"points/{corrupted}: ArrowInvalid"],
+        zarr_version=2,
     )
 
 
@@ -303,6 +309,7 @@ def sdata_with_missing_zattrs_element(session_tmp_path: Path) -> PartialReadTest
         expected_elements=not_corrupted,
         expected_exceptions=OSError,
         warnings_patterns=["OSError: Image location"],
+        zarr_version=2,
     )
 
 
@@ -349,6 +356,7 @@ def sdata_with_missing_image_chunks_zarrv2(
         expected_elements=not_corrupted,
         expected_exceptions=(ArrayNotFoundError,),
         warnings_patterns=[rf"images/{corrupted}: (ArrayNotFoundError|TypeError)"],
+        zarr_version=2,
     )
 
 
@@ -372,6 +380,7 @@ def sdata_with_invalid_zattrs_element_violating_spec(session_tmp_path: Path) -> 
         expected_elements=not_corrupted,
         expected_exceptions=KeyError,
         warnings_patterns=[rf"images/{corrupted}: KeyError: coordinateTransformations"],
+        zarr_version=2,
     )
 
 
@@ -424,6 +433,7 @@ def _create_sdata_with_table_region_not_found(session_tmp_path: Path, zarr_versi
         warnings_patterns=[
             rf"The table is annotating '{re.escape(corrupted)}', which is not present in the SpatialData object"
         ],
+        zarr_version=zarr_version,
     )
 
 
@@ -460,11 +470,17 @@ def sdata_with_table_region_not_found_zarrv2(session_tmp_path: Path) -> PartialR
     indirect=True,
 )
 def test_read_zarr_with_error(test_case: PartialReadTestCase):
-    if test_case.expected_exceptions:
-        with pytest.raises(test_case.expected_exceptions):
+    ctx = warnings.catch_warnings() if test_case.zarr_version < 3 else nullcontext()
+    with ctx:
+        if test_case.zarr_version < 3:
+            warnings.filterwarnings(
+                "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+            )
+        if test_case.expected_exceptions:
+            with pytest.raises(test_case.expected_exceptions):
+                read_zarr(test_case.path, on_bad_files="error")
+        else:
             read_zarr(test_case.path, on_bad_files="error")
-    else:
-        read_zarr(test_case.path, on_bad_files="error")
 
 
 @pytest.mark.parametrize(
@@ -490,8 +506,14 @@ def test_read_zarr_with_error(test_case: PartialReadTestCase):
     indirect=True,
 )
 def test_read_zarr_with_warnings(test_case: PartialReadTestCase):
-    with pytest_warns_multiple(UserWarning, matches=test_case.warnings_patterns):
-        actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
+    ctx = warnings.catch_warnings() if test_case.zarr_version < 3 else nullcontext()
+    with ctx:
+        if test_case.zarr_version < 3:
+            warnings.filterwarnings(
+                "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+            )
+        with pytest_warns_multiple(UserWarning, matches=test_case.warnings_patterns):
+            actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
 
     actual_elements = {name for _, name, _ in actual.gen_elements()}
     assert set(test_case.expected_elements) == actual_elements
