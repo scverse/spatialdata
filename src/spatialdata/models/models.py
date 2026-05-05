@@ -266,7 +266,7 @@ class RasterSchema:
             # Chunk single scale images
             if chunks is not None:
                 if isinstance(chunks, tuple):
-                    chunks = {dim: chunk for dim, chunk in zip(data.dims, chunks, strict=True)}
+                    chunks = dict(zip(data.dims, chunks, strict=True))
                 data = data.chunk(chunks=chunks)
         # recompute coordinates for (multiscale) spatial image
         data = compute_coordinates(data)
