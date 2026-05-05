@@ -49,6 +49,7 @@ class Elements(UserDict[str, T]):
                 raise KeyError(*e.args) from e
 
     def __setitem__(self, key: str, value: T) -> None:
+        # note that each __setitem__ in the subclasses calls get_model(), which performs data validation
         self._add_shared_key(key)
         super().__setitem__(key, value)
 

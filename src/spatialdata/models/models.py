@@ -1250,14 +1250,17 @@ Schema_t: TypeAlias = (
 
 def get_model(
     e: SpatialElement,
+    validate: bool = True,
 ) -> Schema_t:
     """
-    Get the model for the given element.
+    Get the model for the given element. Validate using the model if `validate` is `True`.
 
     Parameters
     ----------
     e
         The element.
+    validate
+        Whether to validate the element using the model.
 
     Returns
     -------
@@ -1268,7 +1271,8 @@ def get_model(
         schema: Schema_t,
         e: SpatialElement,
     ) -> Schema_t:
-        schema.validate(e)
+        if validate:
+            schema.validate(e)
         return schema
 
     if isinstance(e, DataArray | DataTree):
