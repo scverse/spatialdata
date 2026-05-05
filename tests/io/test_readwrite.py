@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -56,19 +55,9 @@ RNG = default_rng(0)
 SDATA_FORMATS = list(SpatialDataContainerFormats.values())
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 class TestReadWrite:
-    @pytest.fixture(autouse=True)
-    def _suppress_old_format_warning(self, sdata_container_format: SpatialDataContainerFormatType):
-        if isinstance(sdata_container_format, CurrentSpatialDataContainerFormat):
-            yield
-        else:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
-                )
-                yield
-
     def test_images(
         self,
         tmp_path: str,
