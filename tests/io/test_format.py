@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +125,14 @@ class TestFormat:
 
 class TestFormatConversions:
     """Test format conversions between older formats and newer."""
+
+    @pytest.fixture(autouse=True)
+    def _suppress_old_format_warning(self):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+            )
+            yield
 
     def test_shapes_v1_to_v2_to_v3(self, shapes):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -57,6 +58,17 @@ SDATA_FORMATS = list(SpatialDataContainerFormats.values())
 
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 class TestReadWrite:
+    @pytest.fixture(autouse=True)
+    def _suppress_old_format_warning(self, sdata_container_format: SpatialDataContainerFormatType):
+        if isinstance(sdata_container_format, CurrentSpatialDataContainerFormat):
+            yield
+        else:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+                )
+                yield
+
     def test_images(
         self,
         tmp_path: str,
@@ -743,6 +755,7 @@ def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
     assert list(image_group.keys()) == ["s0"]
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained
@@ -804,6 +817,7 @@ def test_self_contained(full_sdata: SpatialData, sdata_container_format: Spatial
         assert all(description[element_name] for element_name in description if element_name != "combined")
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_symmetric_difference_with_zarr_store(
     full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType
@@ -846,6 +860,7 @@ def test_symmetric_difference_with_zarr_store(
         }
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_change_path_of_subset(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     """A subset SpatialData object has not Zarr path associated, show that we can reassign the path"""
@@ -917,6 +932,7 @@ def test_incremental_io_valid_name(full_sdata: SpatialData) -> None:
     _check_valid_name(full_sdata.write_transformations)
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_incremental_io_attrs(points: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -945,6 +961,7 @@ def test_incremental_io_attrs(points: SpatialData, sdata_container_format: Spati
 cached_sdata_blobs = blobs()
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_delete_element_from_disk(
@@ -996,6 +1013,7 @@ def test_delete_element_from_disk(
         assert element_path not in on_disk
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_element_already_on_disk_different_type(
@@ -1127,6 +1145,7 @@ def test_reading_invalid_name(tmp_path: Path):
     )
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_write_store_unconsolidated_and_read(full_sdata, sdata_container_format: SpatialDataContainerFormatType):
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1139,6 +1158,7 @@ def test_write_store_unconsolidated_and_read(full_sdata, sdata_container_format:
         assert_spatial_data_objects_are_identical(full_sdata, second_read)
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_can_read_sdata_with_reconsolidation(full_sdata, sdata_container_format: SpatialDataContainerFormatType):
     with tempfile.TemporaryDirectory() as tmpdir:
