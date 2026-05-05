@@ -304,18 +304,28 @@ def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: Non
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
-@pytest.fixture()
-def labels_blobs() -> ArrayLike:
-    """Create a 2D labels."""
+@pytest.fixture(scope="session")
+def _labels_blobs_session() -> ArrayLike:
     return BlobsDataset()._labels_blobs()
 
 
 @pytest.fixture()
-def sdata_blobs() -> SpatialData:
+def labels_blobs(_labels_blobs_session: ArrayLike) -> ArrayLike:
     """Create a 2D labels."""
+    return deepcopy(_labels_blobs_session)
+
+
+@pytest.fixture(scope="session")
+def _sdata_blobs_session() -> SpatialData:
     from spatialdata.datasets import blobs
 
-    return deepcopy(blobs(256, 300, 3))
+    return blobs(256, 300, 3)
+
+
+@pytest.fixture()
+def sdata_blobs(_sdata_blobs_session: SpatialData) -> SpatialData:
+    """Create a 2D labels."""
+    return deepcopy(_sdata_blobs_session)
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
