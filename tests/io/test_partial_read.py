@@ -473,7 +473,9 @@ def test_read_zarr_with_error(test_case: PartialReadTestCase):
     ctx = warnings.catch_warnings() if test_case.zarr_version < 3 else nullcontext()
     with ctx:
         if test_case.zarr_version < 3:
-            warnings.filterwarnings("ignore", message="SpatialData is not stored in the most current format", category=UserWarning)
+            warnings.filterwarnings(
+                "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+            )
         if test_case.expected_exceptions:
             with pytest.raises(test_case.expected_exceptions):
                 read_zarr(test_case.path, on_bad_files="error")
@@ -507,7 +509,9 @@ def test_read_zarr_with_warnings(test_case: PartialReadTestCase):
     ctx = warnings.catch_warnings() if test_case.zarr_version < 3 else nullcontext()
     with ctx:
         if test_case.zarr_version < 3:
-            warnings.filterwarnings("ignore", message="SpatialData is not stored in the most current format", category=UserWarning)
+            warnings.filterwarnings(
+                "ignore", message="SpatialData is not stored in the most current format", category=UserWarning
+            )
         with pytest_warns_multiple(UserWarning, matches=test_case.warnings_patterns):
             actual: SpatialData = read_zarr(test_case.path, on_bad_files="warn")
 
