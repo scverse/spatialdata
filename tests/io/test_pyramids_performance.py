@@ -10,10 +10,11 @@ import pytest
 import xarray as xr
 import zarr
 
-from spatialdata import SpatialData
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io import write_image
 from spatialdata._io.format import CurrentRasterFormat
 from spatialdata.models import Image2DModel
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 
 if TYPE_CHECKING:
     import _pytest.fixtures
@@ -95,3 +96,23 @@ def test_write_image_multiscale_performance(sdata_with_image: SpatialData, tmp_p
     # In addition, we could do use a mock side effect to check that the entry points from within spatialdata are within
     # the expected range.
     assert actual_num_chunk_reads in range(0, num_chunks_scale0.item() * 2 + 1)
+
+
+@pytest.mark.parametrize("scheduler", ["threads", "processes"])
+def test_write_multiscale_image_dask_scheduler(tmp_path: Path, scheduler: str) -> None:
+    # Regression test for https://github.com/scverse/spatialdata/issues/1024.
+    # Writing a multiscale image with the 'processes' Dask scheduler previously raised
+    # KeyError: 'ome' because ome-zarr-py runs write_multiscales_metadata() as a
+    # dask.delayed task (https://github.com/ome/ome-zarr-py/issues/580): the metadata
+    # write occurs in a subprocess and the zarr.Group in the main process is never
+    # refreshed, so subsequent metadata reads fail.
+    rng = np.random.default_rng(0)
+    arr = dask.array.from_array(rng.random((3, 64, 64)).astype("float32"), chunks=(3, 32, 32))
+    image = Image2DModel.parse(arr, dims=["c", "y", "x"], scale_factors=[2])
+    sdata = SpatialData(images={"img": image})
+
+    store_path = tmp_path / "test.zarr"
+    with dask.config.set(scheduler=scheduler):
+        sdata.write(store_path)
+
+    assert_spatial_data_objects_are_identical(sdata, read_zarr(store_path))
