@@ -467,7 +467,7 @@ def _write_raster_datatree(
     # correctly, but the zarr.Group held in this process keeps its original in-memory GroupMetadata
     # and never sees the update. Re-opening the group forces a fresh read from the store.
     # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
-    group = zarr.open_group(store=group.store, path=group.path, mode="r+")
+    group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
 
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(
