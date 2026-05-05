@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Iterator, MutableMapping
 from typing import Any, Literal
 
@@ -122,6 +124,7 @@ for method_name in [
     "copy",
     "drop",
     "map_partitions",
+    "sample",
     "set_index",
 ]:
     wrap_method_with_attrs(method_name=method_name, dask_class=DaskDataFrame)

@@ -8,7 +8,6 @@ import dask.dataframe as dd
 import geopandas
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
@@ -29,6 +28,8 @@ Y = "y"
 X = "x"
 
 if TYPE_CHECKING:
+    from anndata import AnnData
+
     from spatialdata.models.models import RasterSchema
 
 
@@ -401,7 +402,7 @@ def set_channel_names(element: DataArray | DataTree, channel_names: str | list[s
 
     # get_model cannot be used due to circular import so get_axes_names is used instead
     if model in [Image2DModel, Image3DModel]:
-        channel_names = _check_match_length_channels_c_dim(element, channel_names, model.dims.dims)  # type: ignore[union-attr]
+        channel_names = _check_match_length_channels_c_dim(element, channel_names, model.dims)  # type: ignore[union-attr]
         if isinstance(element, DataArray):
             element = element.assign_coords(c=channel_names)
         else:

@@ -1,5 +1,7 @@
 """Test attrs read/write for all SpatialData container formats."""
 
+from __future__ import annotations
+
 import tempfile
 from pathlib import Path
 

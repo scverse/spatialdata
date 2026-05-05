@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame

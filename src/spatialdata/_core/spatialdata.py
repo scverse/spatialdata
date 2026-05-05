@@ -57,15 +57,6 @@ if TYPE_CHECKING:
         SpatialDataFormatType,
     )
 
-# schema for elements
-Label2D_s = Labels2DModel()
-Label3D_s = Labels3DModel()
-Image2D_s = Image2DModel()
-Image3D_s = Image3DModel()
-Shape_s = ShapesModel()
-Point_s = PointsModel()
-Table_s = TableModel()
-
 
 class SpatialData:
     """
@@ -199,7 +190,7 @@ class SpatialData:
         UserWarning
             The dtypes of the instance key column in the table and the annotation target do not match.
         """
-        TableModel().validate(table)
+        TableModel.validate(table)
         if TableModel.ATTRS_KEY in table.uns:
             region, _, instance_key = get_table_keys(table)
             region = region if isinstance(region, list) else [region]
@@ -349,8 +340,13 @@ class SpatialData:
         ValueError
             If `instance_key` is not present in the `table.obs` columns.
         """
-        TableModel()._validate_set_region_key(table, region_key)
-        TableModel()._validate_set_instance_key(table, instance_key)
+        old_attrs = table.uns.get(TableModel.ATTRS_KEY)
+        # _validate_set_region_key and _validate_set_instance_key will raise an error if table.uns[ATTRS_KEY] is None,
+        # so let's initialize it here. Below it will be replaced with the actual metadata.
+        if old_attrs is None:
+            table.uns[TableModel.ATTRS_KEY] = {}
+        TableModel._validate_set_region_key(table, region_key)
+        TableModel._validate_set_instance_key(table, instance_key)
         attrs = {
             TableModel.REGION_KEY: region,
             TableModel.REGION_KEY_KEY: region_key,
@@ -393,8 +389,8 @@ class SpatialData:
         attrs = table.uns[TableModel.ATTRS_KEY]
         table_region_key = region_key if region_key else attrs.get(TableModel.REGION_KEY_KEY)
 
-        TableModel()._validate_set_region_key(table, region_key)
-        TableModel()._validate_set_instance_key(table, instance_key)
+        TableModel._validate_set_region_key(table, region_key)
+        TableModel._validate_set_instance_key(table, instance_key)
         check_target_region_column_symmetry(table, table_region_key, region)
         attrs[TableModel.REGION_KEY] = region
 
@@ -1822,7 +1818,7 @@ class SpatialData:
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
         for k, v in tables.items():
-            TableModel().validate(v)
+            TableModel.validate(v)
             self._tables[k] = v
 
     @staticmethod

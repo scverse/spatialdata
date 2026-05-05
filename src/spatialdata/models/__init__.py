@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
     C,

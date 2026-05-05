@@ -13,13 +13,13 @@ jobs:
         runs-on: ${{ matrix.os }}
         defaults:
             run:
-                shell: bash -e {0}
+                shell: bash  # bash also on windows
 
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - {os: windows-latest, python: "3.11", dask-version: "2025.2.0", name: "Dask 2025.2.0"}
+                    - {os: windows-latest, python: "3.11", dask-version: "2025.12.0", name: "Dask 2025.12.0"}
                     - {os: windows-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
                     - {os: ubuntu-latest, python: "3.11", dask-version: "latest", name: "Dask latest"}
                     - {os: ubuntu-latest, python: "3.13", dask-version: "latest", name: "Dask latest"}
@@ -32,8 +32,8 @@ jobs:
             PRERELEASE: ${{ matrix.prerelease }}
 
         steps:
-            - uses: actions/checkout@v2
-            - uses: astral-sh/setup-uv@v5
+            - uses: actions/checkout@v6
+            - uses: astral-sh/setup-uv@v7
               id: setup-uv
               with:
                   version: "latest"
@@ -41,20 +41,18 @@ jobs:
             - name: Install dependencies
               run: |
                   if [[ "${PRERELEASE}" == "allow" ]]; then
-                    uv sync --extra test
-                    : # uv sync --extra test --prerelease ${PRERELEASE}
-                    uv pip install git+https://github.com/scverse/anndata.git
-                    uv pip install --prerelease allow pandas
-                  else
-                    uv sync --extra test
+                    sed -i '' 's/requires-python.*//' pyproject.toml # otherwise uv complains that anndata requires python>=3.12 and we only do >=3.11 😱
+                    uv add git+https://github.com/scverse/anndata.git
+                    uv add pandas>=3.dev0
                   fi
                   if [[ -n "${DASK_VERSION}" ]]; then
                     if [[ "${DASK_VERSION}" == "latest" ]]; then
-                      uv pip install --upgrade dask
+                      uv add dask
                     else
-                      uv pip install dask==${DASK_VERSION}
+                      uv add dask==${DASK_VERSION}
                     fi
                   fi
+                  uv sync --group=test
             - name: Test
               env:
                   MPLBACKEND: agg
@@ -63,7 +61,7 @@ jobs:
               run: |
                   uv run pytest --cov --color=yes --cov-report=xml
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v4
+              uses: codecov/codecov-action@v5
               with:
                   name: coverage
                   verbose: true

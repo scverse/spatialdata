@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 import tempfile
@@ -18,6 +20,7 @@ from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from packaging.version import Version
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
@@ -138,12 +141,7 @@ class TestModels:
             sdata_read = SpatialData.read(path)
             group_name = element_type if element_type != "image" else "images"
             element_read = sdata_read.__getattribute__(group_name)["element"]
-            # TODO: raster models have validate as a method (for non-raster it's a class method),
-            #  probably because they call the xarray schema validation in the superclass. Can we make it consistent?
-            if element_type == "image" or element_type == "labels":
-                model().validate(element_read)
-            else:
-                model.validate(element_read)
+            model.validate(element_read)
 
     @pytest.mark.parametrize("converter", [lambda _: _, from_array, DataArray, to_spatial_image])
     @pytest.mark.parametrize("model", [Image2DModel, Labels2DModel, Labels3DModel, Image3DModel])
@@ -156,7 +154,7 @@ class TestModels:
         permute: bool,
         kwargs: dict[str, str] | None,
     ) -> None:
-        dims = np.array(model.dims.dims).tolist()
+        dims = np.array(model.dims).tolist()
         if permute:
             RNG.shuffle(dims)
         n_dims = len(dims)
@@ -164,7 +162,7 @@ class TestModels:
         if converter is DataArray:
             converter = partial(converter, dims=dims)
         elif converter is to_spatial_image:
-            converter = partial(converter, dims=model.dims.dims)
+            converter = partial(converter, dims=model.dims)
         if n_dims == 2:
             image: ArrayLike = RNG.uniform(size=(10, 10))
         elif n_dims == 3:
@@ -246,7 +244,7 @@ class TestModels:
         assert y_ms["scale0"]["image"].data.chunksize == expected
 
         # parse as DataArray
-        data_array = DataArray(image, dims=model.dims.dims)
+        data_array = DataArray(image, dims=model.dims)
         # single scale
         z_ss = model.parse(data_array, chunks=chunks)
         assert z_ss.data.chunksize == expected
@@ -257,7 +255,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
     def test_labels_model_with_multiscales(self, model):
         # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
-        dims = np.array(model.dims.dims).tolist()
+        dims = np.array(model.dims).tolist()
         n_dims = len(dims)
 
         # A labels image with one label value 4, that partially covers 2×2 blocks.
@@ -316,7 +314,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [PointsModel])
     @pytest.mark.parametrize("instance_key", [None, "cell_id"])
     @pytest.mark.parametrize("feature_key", [None, "target"])
-    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame])
+    @pytest.mark.parametrize("typ", [np.ndarray, pd.DataFrame, dd.DataFrame], ids=["numpy", "pandas", "dask"])
     @pytest.mark.parametrize("is_annotation", [True, False])
     @pytest.mark.parametrize("is_3d", [True, False])
     @pytest.mark.parametrize("coordinates", [None, {"x": "A", "y": "B", "z": "C"}])
@@ -472,6 +470,63 @@ class TestModels:
         _ = TableModel.parse(table)
 
     @pytest.mark.parametrize(
+        "instance_key_values,instance_key_dtype,should_pass",
+        [
+            # pd.StringDtype: accepted (issue #1062)
+            (["id_0", "id_1", "id_2", "id_3", "id_4"], pd.StringDtype(), True),
+            # object dtype with string values: accepted
+            (["id_0", "id_1", "id_2", "id_3", "id_4"], object, True),
+            # CategoricalDtype with object (string) categories: accepted (issue #1062)
+            (
+                pd.Categorical(["id_0", "id_1", "id_2", "id_3", "id_4"]),
+                None,
+                True,
+            ),
+            # CategoricalDtype with StringDtype categories: accepted (issue #1062)
+            (
+                pd.Categorical(pd.array(["id_0", "id_1", "id_2", "id_3", "id_4"], dtype="string")),
+                None,
+                True,
+            ),
+            # CategoricalDtype with integer categories: accepted
+            (
+                pd.Categorical([0, 1, 2, 3, 4]),
+                None,
+                True,
+            ),
+            # CategoricalDtype with float categories: rejected
+            (
+                pd.Categorical([0.0, 1.0, 2.0, 3.0, 4.0]),
+                None,
+                False,
+            ),
+            # integer dtype: accepted
+            ([0, 1, 2, 3, 4], np.int64, True),
+            # float dtype: rejected
+            ([0.0, 1.0, 2.0, 3.0, 4.0], np.float64, False),
+            # object dtype with non-string values: rejected
+            ([0, 1, 2, 3, 4], object, False),
+        ],
+    )
+    def test_table_instance_key_dtype_validation(self, instance_key_values, instance_key_dtype, should_pass):
+        """Test that _validate_table_annotation_metadata accepts/rejects the correct dtypes for instance_key."""
+        n = 5
+        region = "sample"
+        region_key = "region"
+        obs = pd.DataFrame(index=list(map(str, range(n))))
+        obs[region_key] = pd.Categorical([region] * n)
+        if instance_key_dtype is not None:
+            obs["instance_id"] = pd.array(instance_key_values, dtype=instance_key_dtype)
+        else:
+            obs["instance_id"] = instance_key_values
+        adata = AnnData(RNG.normal(size=(n, 2)), obs=obs)
+        if should_pass:
+            _ = TableModel.parse(adata, region=region, region_key=region_key, instance_key="instance_id")
+        else:
+            with pytest.raises(TypeError, match="allowed as dtype for instance_key column"):
+                TableModel.parse(adata, region=region, region_key=region_key, instance_key="instance_id")
+
+    @pytest.mark.parametrize(
         "name",
         [
             "",
@@ -545,7 +600,7 @@ class TestModels:
                 if parse:
                     TableModel.parse(adata)
                 else:
-                    TableModel().validate(adata)
+                    TableModel.validate(adata)
         elif key != "_index":  # "_index" is only disallowed in obs/var
             if attr in ("obsm", "varm", "obsp", "varp", "layers"):
                 array = np.array([[0]])
@@ -557,7 +612,7 @@ class TestModels:
                     if parse:
                         TableModel.parse(adata)
                     else:
-                        TableModel().validate(adata)
+                        TableModel.validate(adata)
             elif attr == "uns":
                 adata = AnnData(np.array([[0]]), **{attr: {key: {}}})
                 with pytest.raises(
@@ -567,7 +622,7 @@ class TestModels:
                     if parse:
                         TableModel.parse(adata)
                     else:
-                        TableModel().validate(adata)
+                        TableModel.validate(adata)
 
     @pytest.mark.parametrize(
         "keys",
@@ -586,7 +641,43 @@ class TestModels:
             if parse:
                 TableModel.parse(adata)
             else:
-                TableModel().validate(adata)
+                TableModel.validate(adata)
+
+
+def test_validate_set_instance_key_missing_attrs():
+    """Test _validate_set_instance_key behavior when ATTRS_KEY is missing from uns."""
+    # When instance_key arg is provided and column exists, but attrs is missing, it should fail
+    adata = AnnData(np.array([[0]]), obs=pd.DataFrame({"instance_id": [1]}, index=["1"]))
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_instance_key(adata, instance_key="instance_id")
+
+    # When instance_key arg is provided but column doesn't exist, should raise about the column
+    adata2 = AnnData(np.array([[0]]))
+    adata2.uns[TableModel.ATTRS_KEY] = {}
+    with pytest.raises(ValueError, match="Instance key column 'missing' not found"):
+        TableModel._validate_set_instance_key(adata2, instance_key="missing")
+
+    # When no instance_key arg and no attrs, should raise about missing attrs
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_instance_key(adata)
+
+
+def test_validate_set_region_key_missing_attrs():
+    """Test _validate_set_region_key behavior when ATTRS_KEY is missing from uns."""
+    # When region_key arg is provided and column exists, but attrs is missing, it should fail
+    adata = AnnData(np.array([[0]]), obs=pd.DataFrame({"region": ["r1"]}, index=["1"]))
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_region_key(adata, region_key="region")
+
+    # When region_key arg is provided but column doesn't exist, should raise about the column
+    adata2 = AnnData(np.array([[0]]))
+    adata2.uns[TableModel.ATTRS_KEY] = {}
+    with pytest.raises(ValueError, match="column not present in table.obs"):
+        TableModel._validate_set_region_key(adata2, region_key="missing")
+
+    # When no region_key arg and no attrs, should raise about missing attrs
+    with pytest.raises(ValueError, match="No 'spatialdata_attrs' found"):
+        TableModel._validate_set_region_key(adata)
 
 
 def test_get_schema():
@@ -826,7 +917,7 @@ def test_warning_on_large_chunks():
         warnings.simplefilter("always")
         multiscale = Labels2DModel.parse(data_large, scale_factors=[2, 2], method="xarray_coarsen")
         multiscale = multiscale.chunk({"x": 50000, "y": 50000})
-        Labels2DModel().validate(multiscale)
+        Labels2DModel.validate(multiscale)
         assert len(w) == 1, "Warning should be raised for large chunk size"
         assert issubclass(w[-1].category, UserWarning)
         assert "Detected chunks larger than:" in str(w[-1].message)
@@ -849,12 +940,12 @@ def test_categories_on_partitioned_dataframe(sdata_blobs: SpatialData):
     assert np.array_equal(df["genes"].to_numpy(), ddf_parsed["genes"].compute().to_numpy())
     assert set(df["genes"].cat.categories.tolist()) == set(ddf_parsed["genes"].compute().cat.categories.tolist())
 
-    # two behavior to investigate later/report to dask (they originate in dask)
-    # TODO: df['genes'].cat.categories has dtype 'object', while ddf_parsed['genes'].compute().cat.categories has dtype
-    #  'string'
-    # this problem should disappear after pandas 3.0 is released
-    assert df["genes"].cat.categories.dtype == "object"
+    if Version(pd.__version__) >= Version("3"):
+        assert df["genes"].cat.categories.dtype == "string"
+    else:
+        assert df["genes"].cat.categories.dtype == "object"
     assert ddf_parsed["genes"].compute().cat.categories.dtype == "string"
 
+    # behavior to investigate later/report to dask
     # TODO: the list of categories are not preserving the order
     assert df["genes"].cat.categories.tolist() != ddf_parsed["genes"].compute().cat.categories.tolist()

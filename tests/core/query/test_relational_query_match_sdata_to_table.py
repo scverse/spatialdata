@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from spatialdata import SpatialData, concatenate, match_sdata_to_table

@@ -1,4 +1,6 @@
 # from https://stackoverflow.com/questions/10307696/how-to-put-a-variable-into-python-docstring
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any, TypeVar
 

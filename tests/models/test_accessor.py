@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dask.dataframe as dd
 import pandas as pd
 import pytest
@@ -124,6 +126,15 @@ def test_dataframe_set_index_preserves_attrs():
     df = dd.from_pandas(pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}), npartitions=2)
     df.attrs["key"] = "value"
     result = df.set_index("a")
+    assert result.attrs["key"] == "value"
+    assert isinstance(result.attrs, AttrsAccessor)
+
+
+def test_dataframe_sample_preserves_attrs():
+    """Test that DataFrame.sample preserves attrs."""
+    df = dd.from_pandas(pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}), npartitions=2)
+    df.attrs["key"] = "value"
+    result = df.sample(frac=0.5)
     assert result.attrs["key"] == "value"
     assert isinstance(result.attrs, AttrsAccessor)
 

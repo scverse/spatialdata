@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from spatialdata.transformations.ngff.ngff_coordinate_system import (
     NgffAxis,
     NgffCoordinateSystem,

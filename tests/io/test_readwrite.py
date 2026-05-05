@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import tempfile
@@ -5,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
+import dask.array as da
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
@@ -13,8 +16,10 @@ import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from packaging.version import Version
 from shapely import MultiPolygon, Polygon
 from upath import UPath
+from xarray import DataArray
 from zarr.errors import GroupNotFoundError
 
 import spatialdata.config
@@ -27,6 +32,7 @@ from spatialdata._io.format import (
     SpatialDataContainerFormatType,
     SpatialDataContainerFormatV01,
 )
+from spatialdata._io.io_raster import write_image
 from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel
 from spatialdata.models._utils import get_channel_names
@@ -620,6 +626,123 @@ def test_bug_rechunking_after_queried_raster():
         queried.write(f)
 
 
+def test_is_regular_dask_chunk_grid() -> None:
+    from spatialdata._io.io_raster import _is_regular_dask_chunk_grid
+
+    # Single chunk per axis → continue branch, overall True
+    assert _is_regular_dask_chunk_grid([(4,)]) is True
+    # Empty axis → continue branch, overall True
+    assert _is_regular_dask_chunk_grid([()]) is True
+    # Non-uniform interior chunks → first return False
+    assert _is_regular_dask_chunk_grid([(4, 4, 3, 4)]) is False
+    # Last chunk larger than first → second return False
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 5)]) is False
+    # All chunks equal → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 4)]) is True
+    # Last chunk smaller than first → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1)]) is True
+    # Empty grid (no axes) → True
+    assert _is_regular_dask_chunk_grid([]) is True
+    # Multi-axis: all axes regular → True
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1), (3, 3, 2)]) is True
+    # Multi-axis: one axis irregular → False
+    assert _is_regular_dask_chunk_grid([(4, 4, 4, 1), (4, 4, 3, 4)]) is False
+
+
+def test_write_irregular_dask_chunks_without_explicit_storage_options(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+
+    path = tmp_path / "data.zarr"
+    with pytest.warns(UserWarning, match="irregular chunk sizes"):
+        sdata.write(path)
+    sdata_back = read_zarr(path)
+    assert sdata_back["image"].chunks == ((3,), (300, 300, 200), (512, 488))
+
+
+def test_write_image_normalizes_explicit_regular_dask_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+    assert group["s0"].chunks == (3, 300, 512)
+
+
+def test_write_image_rejects_explicit_irregular_dask_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": image.data.chunks})
+
+
+def test_write_image_normalizes_explicit_zarr_chunk_grid(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 200, 300), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    zarr_chunks = (3, 100, 512)  # ome zarr rechunks when writing
+    write_image(image, group, "image", storage_options={"chunks": zarr_chunks})
+
+    assert group["s0"].chunks == (3, 100, 512)
+
+
+def test_write_image_rejects_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": "auto"})
+
+
+def test_write_image_rejects_empty_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": ""})
+
+
+def test_write_image_rejects_byte_string(tmp_path: Path) -> None:
+    data = da.from_array(RNG.random((3, 800, 1000)), chunks=((3,), (300, 300, 200), (512, 488)))
+    image = Image2DModel.parse(data, dims=("c", "y", "x"))
+    group = zarr.open_group(tmp_path / "image.zarr", mode="w")
+
+    with pytest.raises(
+        ValueError,
+        match='storage_options\\["chunks"\\] must resolve to a Zarr chunk shape or a regular Dask chunk grid',
+    ):
+        write_image(image, group, "image", storage_options={"chunks": b"auto"})
+
+
+def test_single_scale_image_roundtrip_stays_dataarray(tmp_path: Path) -> None:
+    image = Image2DModel.parse(RNG.random((3, 64, 64)), dims=("c", "y", "x"))
+    sdata = SpatialData(images={"image": image})
+    path = tmp_path / "data.zarr"
+
+    sdata.write(path)
+    sdata_back = read_zarr(path)
+
+    assert isinstance(sdata_back["image"], DataArray)
+    image_group = zarr.open_group(path / "images" / "image", mode="r")
+    assert list(image_group.keys()) == ["s0"]
+
+
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_self_contained(full_sdata: SpatialData, sdata_container_format: SpatialDataContainerFormatType) -> None:
     # data only in-memory, so the SpatialData object and all its elements are self-contained
@@ -1067,7 +1190,7 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
 
 
-def test_sdata_with_nan_in_obs() -> None:
+def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
     """Test writing SpatialData with mixed string/NaN values in obs works correctly.
 
     Regression test for https://github.com/scverse/spatialdata/issues/399
@@ -1097,14 +1220,18 @@ def test_sdata_with_nan_in_obs() -> None:
     assert sdata["table"].obs["column_only_region1"].iloc[1] is np.nan
     assert np.isnan(sdata["table"].obs["column_only_region2"].iloc[0])
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        path = os.path.join(tmpdir, "data.zarr")
-        sdata.write(path)
+    path = tmp_path / "data.zarr"
+    sdata.write(path)
 
-        sdata2 = SpatialData.read(path)
-        assert "column_only_region1" in sdata2["table"].obs.columns
-        assert sdata2["table"].obs["column_only_region1"].iloc[0] == "string"
-        assert sdata2["table"].obs["column_only_region2"].iloc[1] == 3
-        # After round-trip, NaN in object-dtype column becomes string "nan"
-        assert sdata2["table"].obs["column_only_region1"].iloc[1] == "nan"
-        assert np.isnan(sdata2["table"].obs["column_only_region2"].iloc[0])
+    sdata2 = SpatialData.read(path)
+    assert "column_only_region1" in sdata2["table"].obs.columns
+    r1 = sdata2["table"].obs["column_only_region1"]
+    r2 = sdata2["table"].obs["column_only_region2"]
+
+    assert r1.iloc[0] == "string"
+    assert r2.iloc[1] == 3
+    if Version(pd.__version__) >= Version("3"):
+        assert pd.isna(r1.iloc[1])
+    else:  # After round-trip, NaN in object-dtype column becomes string "nan" on pandas 2
+        assert r1.iloc[1] == "nan"
+    assert np.isnan(r2.iloc[0])
