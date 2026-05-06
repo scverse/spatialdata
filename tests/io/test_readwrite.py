@@ -952,7 +952,9 @@ def test_incremental_io_attrs(points: SpatialData, sdata_container_format: Spati
         assert sdata2.attrs["c"] == 3
 
 
-cached_sdata_blobs = blobs()
+@pytest.fixture(scope="module")
+def _cached_sdata_blobs():
+    return blobs()
 
 
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles", "table"])
@@ -1013,6 +1015,7 @@ def test_delete_element_from_disk(
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
 def test_element_already_on_disk_different_type(
     full_sdata,
+    _cached_sdata_blobs,
     element_name: str,
     sdata_container_format: SpatialDataContainerFormatType,
 ) -> None:
@@ -1030,7 +1033,7 @@ def test_element_already_on_disk_different_type(
         wrong_group = "images" if element_type == "tables" else "tables"
         del getattr(full_sdata, element_type)[element_name]
         getattr(full_sdata, wrong_group)[element_name] = (
-            getattr(cached_sdata_blobs, wrong_group).values().__iter__().__next__()
+            getattr(_cached_sdata_blobs, wrong_group).values().__iter__().__next__()
         )
         ERROR_MSG = "The in-memory object should have a different name."
 
