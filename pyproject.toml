@@ -103,6 +103,7 @@ strict = true
 addopts = [
     "--import-mode=importlib",  # allow using test files with same name
     "-s",  # print output from tests
+    "-p no:napari",  # napari registers a pytest plugin via its entry point; disable it here since spatialdata tests don't need it
 ]
 # These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
 markers = [

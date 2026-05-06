@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 
-# Disable numba JIT compilation for the test suite. Datashader (used by rasterize) triggers
-# numba JIT on first call, costing ~1.4s per worker. Python-mode gives identical results for
-# the small test data here.
+# Disable numba JIT for the test suite. datashader's @jit(cache=True) fails with
+# "no locator available" on this environment (Python 3.13 + numba), and xrspatial's
+# zonal stats uses numba too. With the napari plugin blocked (see pyproject.toml
+# addopts), no plugin imports numba before this runs, so all @jit decorators see
+# the flag and consistently become plain Python functions — no mixed JIT/non-JIT state.
 os.environ.setdefault("NUMBA_DISABLE_JIT", "1")
 
 import copy as _copy
