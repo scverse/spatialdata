@@ -952,6 +952,9 @@ def test_delete_element_from_disk(
     element_name: str,
     sdata_container_format: SpatialDataContainerFormatType,
 ) -> None:
+    # Reduce to only the element under test plus one extra to keep writes fast.
+    full_sdata = full_sdata.subset([element_name, "points_0_1"])
+
     # can't delete an element for a SpatialData object without associated Zarr store
     with pytest.raises(ValueError, match="The SpatialData object is not backed by a Zarr store."):
         full_sdata.delete_element_from_disk("image2d")

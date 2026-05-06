@@ -625,7 +625,7 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
     sdata = transform_to_data_extent(
         full_sdata,
         "global",
-        target_width=1000,
+        target_width=100,
         maintain_positioning=maintain_positioning,
     )
 
