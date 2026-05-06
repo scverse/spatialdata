@@ -618,7 +618,9 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         "poly",
     ]
     full_sdata = full_sdata.subset(elements)
-    points = full_sdata["points_0"].compute()
+    points = (
+        full_sdata["points_0"].compute().copy()
+    )  # .copy() avoids SettingWithCopyWarning when adding column below (pandas CoW)
     points["z"] = points["x"]
     points = PointsModel.parse(points)
     full_sdata["points_0_3d"] = points
