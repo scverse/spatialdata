@@ -67,12 +67,12 @@ def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     # Map label values to a contiguous range for bincount efficiency.
     label_ids, inverse = np.unique(arr, return_inverse=True)
     flat_inverse = inverse.ravel()
+    counts = np.bincount(flat_inverse)  # per-label pixel counts
 
     # indexing="ij" (matrix convention) ensures the i-th grid varies along the i-th
     # dimension of the output, correctly aligning with xdata.dims for any number of axes.
     coord_grids = np.meshgrid(*[xdata[ax].values for ax in axes], indexing="ij")
     data: dict[str, np.ndarray] = {}
-    counts = np.bincount(flat_inverse)  # per-label pixel counts
     for ax, grid in zip(axes, coord_grids, strict=True):
         coord_sums = np.bincount(flat_inverse, weights=grid.ravel().astype(float))
         data[ax] = coord_sums / counts  # counts > 0 by construction (unique guarantees this)
