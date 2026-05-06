@@ -52,7 +52,7 @@ def pytest_warns_multiple(
             yield
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def test_case(request: _pytest.fixtures.SubRequest):
     """
     Fixture that helps to use fixtures as arguments in parametrize.
@@ -86,7 +86,7 @@ def session_tmp_path(request: _pytest.fixtures.SubRequest) -> Path:
     return Path(directory)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_elem_types_zgroup(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarr v2
     sdata = blobs()
@@ -109,7 +109,7 @@ def sdata_with_corrupted_elem_types_zgroup(session_tmp_path: Path) -> PartialRea
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_elem_types_zarr_json(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarr v3
     sdata = blobs()
@@ -131,7 +131,7 @@ def sdata_with_corrupted_elem_types_zarr_json(session_tmp_path: Path) -> Partial
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_zarr_json_elements(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarr v3
     # zarr.json is a zero-byte file, aborted during write, or contains invalid JSON syntax
@@ -155,7 +155,7 @@ def sdata_with_corrupted_zarr_json_elements(session_tmp_path: Path) -> PartialRe
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_zattrs_elements(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarr v2
     # .zattrs is a zero-byte file, aborted during write, or contains invalid JSON syntax
@@ -180,7 +180,7 @@ def sdata_with_corrupted_zattrs_elements(session_tmp_path: Path) -> PartialReadT
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_image_chunks_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
     # images/blobs_image/0 is a zero-byte file or aborted during write
     sdata = blobs()
@@ -202,7 +202,7 @@ def sdata_with_corrupted_image_chunks_zarrv3(session_tmp_path: Path) -> PartialR
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_image_chunks_zarrv2(session_tmp_path: Path) -> PartialReadTestCase:
     # images/blobs_image/0 is a zero-byte file or aborted during write
     sdata = blobs()
@@ -224,7 +224,7 @@ def sdata_with_corrupted_image_chunks_zarrv2(session_tmp_path: Path) -> PartialR
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_parquet_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
     # points/blobs_points/0 is a zero-byte file or aborted during write
     sdata = blobs()
@@ -248,7 +248,7 @@ def sdata_with_corrupted_parquet_zarrv3(session_tmp_path: Path) -> PartialReadTe
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_corrupted_parquet_zarrv2(session_tmp_path: Path) -> PartialReadTestCase:
     # points/blobs_points/0 is a zero-byte file or aborted during write
     sdata = blobs()
@@ -273,7 +273,7 @@ def sdata_with_corrupted_parquet_zarrv2(session_tmp_path: Path) -> PartialReadTe
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_missing_zarr_json_element(session_tmp_path: Path) -> PartialReadTestCase:
     # zarr.json is missing
     sdata = blobs()
@@ -292,7 +292,7 @@ def sdata_with_missing_zarr_json_element(session_tmp_path: Path) -> PartialReadT
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_missing_zattrs_element(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarrv2
     # .zattrs is missing
@@ -313,7 +313,7 @@ def sdata_with_missing_zattrs_element(session_tmp_path: Path) -> PartialReadTest
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_missing_image_chunks_zarrv3(
     session_tmp_path: Path,
 ) -> PartialReadTestCase:
@@ -335,7 +335,7 @@ def sdata_with_missing_image_chunks_zarrv3(
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_missing_image_chunks_zarrv2(
     session_tmp_path: Path,
 ) -> PartialReadTestCase:
@@ -360,7 +360,7 @@ def sdata_with_missing_image_chunks_zarrv2(
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_invalid_zattrs_element_violating_spec(session_tmp_path: Path) -> PartialReadTestCase:
     # Zarr v2
     # .zattrs contains readable JSON which is not valid for SpatialData/NGFF specs
@@ -384,7 +384,7 @@ def sdata_with_invalid_zattrs_element_violating_spec(session_tmp_path: Path) -> 
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_invalid_zarr_json_element_violating_spec(session_tmp_path: Path) -> PartialReadTestCase:
     # zarr.json contains readable JSON which is not valid for SpatialData/NGFF specs
     # for example due to a missing/misspelled/renamed key
@@ -437,12 +437,12 @@ def _create_sdata_with_table_region_not_found(session_tmp_path: Path, zarr_versi
     )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_table_region_not_found_zarrv3(session_tmp_path: Path) -> PartialReadTestCase:
     return _create_sdata_with_table_region_not_found(session_tmp_path, zarr_version=3)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def sdata_with_table_region_not_found_zarrv2(session_tmp_path: Path) -> PartialReadTestCase:
     return _create_sdata_with_table_region_not_found(session_tmp_path, zarr_version=2)
 

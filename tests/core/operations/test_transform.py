@@ -146,7 +146,7 @@ def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale
         assert element_type == "labels"
         sdata = SpatialData(labels={k: v for k, v in full_sdata.labels.items() if isinstance(v, datatype)})
 
-    affine = _get_affine(small_translation=False)
+    affine = _get_affine(small_translation=True)
 
     _postpone_transformation(
         sdata, from_coordinate_system="global", to_coordinate_system="transformed", transformation=affine

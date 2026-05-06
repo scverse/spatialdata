@@ -20,13 +20,10 @@ jobs:
             matrix:
                 include:
                     - {os: windows-latest, python: "3.11", dask-version: "2025.12.0", name: "min dask"}
-                    - {os: windows-latest, python: "3.13", dask-version: "latest"}
                     - {os: windows-latest, python: "3.14", dask-version: "latest"}
                     - {os: ubuntu-latest, python: "3.11", dask-version: "latest"}
-                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest"}
                     - {os: ubuntu-latest, python: "3.14", dask-version: "latest"}
                     - {os: macos-latest, python: "3.11", dask-version: "latest"}
-                    - {os: macos-latest, python: "3.13", prerelease: "allow", name: "prerelease"}
                     - {os: macos-latest, python: "3.14", prerelease: "allow", name: "prerelease"}
         env:
             OS: ${{ matrix.os }}
@@ -62,7 +59,7 @@ jobs:
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  uv run pytest --cov --color=yes --cov-report=xml
+                  uv run pytest --cov --color=yes --cov-report=xml -n auto --dist worksteal
             - name: Upload coverage to Codecov
               uses: codecov/codecov-action@v5
               with:

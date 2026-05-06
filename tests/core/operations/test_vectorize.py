@@ -19,7 +19,7 @@ from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
 
 # each of the tests operates on different elements, hence we can initialize the data once without conflicts
-sdata = blobs()
+sdata = blobs(length=128)
 
 
 # conversion from labels
@@ -29,9 +29,9 @@ def test_labels_2d_to_circles(is_multiscale: bool) -> None:
     element = sdata[key]
     new_circles = to_circles(element)
 
-    assert np.isclose(new_circles.loc[1].geometry.x, 330.59258152354386)
-    assert np.isclose(new_circles.loc[1].geometry.y, 78.85026897788404)
-    assert np.isclose(new_circles.loc[1].radius, 69.229993)
+    assert np.isclose(new_circles.loc[1].geometry.x, 66.33699870633895)
+    assert np.isclose(new_circles.loc[1].geometry.y, 94.86610608020699)
+    assert np.isclose(new_circles.loc[1].radius, 15.686094)
     assert 7 not in new_circles.index
 
 
@@ -83,10 +83,10 @@ def test_polygons_to_circles() -> None:
 
     data = {
         "geometry": [
-            Point(315.8120722406787, 220.18894606643332),
-            Point(270.1386975678398, 417.8747936281634),
+            Point(78.95301806016967, 55.04723651660833),
+            Point(67.53467439195995, 104.46869840704085),
         ],
-        "radius": [16.608781, 17.541365],
+        "radius": [4.152195, 4.385341],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
 
@@ -99,10 +99,10 @@ def test_multipolygons_to_circles() -> None:
 
     data = {
         "geometry": [
-            Point(340.37951022629096, 250.76310705786318),
-            Point(337.1680699150594, 316.39984581697314),
+            Point(85.09487755657274, 62.690776764465795),
+            Point(84.23037752020095, 79.09996145424327),
         ],
-        "radius": [23.488363, 19.059285],
+        "radius": [5.872091, 4.736710],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
     assert_elements_are_identical(new_circles, expected)

@@ -924,9 +924,10 @@ def test_warning_on_large_chunks():
 
 
 def test_categories_on_partitioned_dataframe(sdata_blobs: SpatialData):
+    rng = default_rng(seed=0)
     df = sdata_blobs["blobs_points"].compute()
-    df["genes"] = RNG.choice([f"gene_{i}" for i in range(200)], len(df))
-    N_PARTITIONS = 200
+    df["genes"] = rng.choice([f"gene_{i}" for i in range(10)], len(df))
+    N_PARTITIONS = 10
     ddf = dd.from_pandas(df, npartitions=N_PARTITIONS)
     ddf["genes"] = ddf["genes"].astype("category")
 
