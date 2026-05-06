@@ -57,11 +57,9 @@ def get_centroids(
 
 def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     """
-    Vectorized centroid computation for all axes of a labels DataArray.
+    Compute centroids for all labels in a DataArray in a single O(n_voxels) pass.
 
-    Materializes the array once and uses np.bincount for an O(n_pixels) single-pass
-    computation, replacing the previous per-slice approach that made O(H + W) compute()
-    calls on the Dask graph.
+    Works for any number of spatial dimensions (2D and 3D labels).
     """
     arr = xdata.data.compute()
     axes = list(xdata.dims)
@@ -70,7 +68,8 @@ def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     label_ids, inverse = np.unique(arr, return_inverse=True)
     flat_inverse = inverse.ravel()
 
-    # Build coordinate grids for all axes at once, then compute weighted sums.
+    # indexing="ij" (matrix convention) ensures the i-th grid varies along the i-th
+    # dimension of the output, correctly aligning with xdata.dims for any number of axes.
     coord_grids = np.meshgrid(*[xdata[ax].values for ax in axes], indexing="ij")
     data: dict[str, np.ndarray] = {}
     counts = np.bincount(flat_inverse)  # per-label pixel counts
