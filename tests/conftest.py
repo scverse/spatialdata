@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy as _copy
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -366,6 +366,16 @@ def _sdata_blobs_session() -> SpatialData:
 def sdata_blobs(_sdata_blobs_session: SpatialData) -> SpatialData:
     """Create a 2D labels."""
     return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+
+@pytest.fixture()
+def blobs_factory(_sdata_blobs_session: SpatialData) -> Callable[[], SpatialData]:
+    """Return a factory that creates cheap fresh copies of the session-scoped blobs dataset."""
+
+    def _make() -> SpatialData:
+        return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+    return _make
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
