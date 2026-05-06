@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import os
+import sys
 
 # Disable numba JIT for the test suite (the test data is small so initializing the JIT is slower than using plain
-# Python)
-os.environ.setdefault("NUMBA_DISABLE_JIT", "1")
+# Python). Force-set (not setdefault) so the runner environment cannot accidentally override with "0".
+os.environ["NUMBA_DISABLE_JIT"] = "1"
+# If a pytest plugin already imported numba before this conftest ran, patch the cached config value too.
+if "numba.core.config" in sys.modules:
+    sys.modules["numba.core.config"].NUMBA_DISABLE_JIT = 1
 
 import copy as _copy
 from collections.abc import Callable, Sequence

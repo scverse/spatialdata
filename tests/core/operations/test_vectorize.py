@@ -18,13 +18,16 @@ from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
 
+
 # each of the tests operates on different elements, hence we can initialize the data once without conflicts
-sdata = blobs(length=128)
+@pytest.fixture(scope="module")
+def sdata():
+    return blobs(length=128)
 
 
 # conversion from labels
 @pytest.mark.parametrize("is_multiscale", [False, True])
-def test_labels_2d_to_circles(is_multiscale: bool) -> None:
+def test_labels_2d_to_circles(sdata, is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
     element = sdata[key]
     new_circles = to_circles(element)
@@ -36,7 +39,7 @@ def test_labels_2d_to_circles(is_multiscale: bool) -> None:
 
 
 @pytest.mark.parametrize("is_multiscale", [False, True])
-def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
+def test_labels_2d_to_polygons(sdata, is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
     element = sdata[key]
     new_polygons = to_polygons(element)
@@ -49,7 +52,7 @@ def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
     assert ((new_polygons.area - new_polygons.pixel_count) / new_polygons.pixel_count < 0.01).all()
 
 
-def test_chunked_labels_2d_to_polygons() -> None:
+def test_chunked_labels_2d_to_polygons(sdata) -> None:
     no_chunks_polygons = to_polygons(sdata["blobs_labels"])
 
     sdata["blobs_labels_chunked"] = sdata["blobs_labels"].copy()
@@ -63,13 +66,13 @@ def test_chunked_labels_2d_to_polygons() -> None:
 
 
 # conversion from circles
-def test_circles_to_circles() -> None:
+def test_circles_to_circles(sdata) -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
     assert_elements_are_identical(element, new_circles)
 
 
-def test_circles_to_polygons() -> None:
+def test_circles_to_polygons(sdata) -> None:
     element = sdata["blobs_circles"]
     polygons = to_polygons(element, buffer_resolution=1000)
     areas = element.radius**2 * math.pi
@@ -77,7 +80,7 @@ def test_circles_to_polygons() -> None:
 
 
 # conversion from polygons/multipolygons
-def test_polygons_to_circles() -> None:
+def test_polygons_to_circles(sdata) -> None:
     element = sdata["blobs_polygons"].iloc[:2]
     new_circles = to_circles(element)
 
@@ -93,7 +96,7 @@ def test_polygons_to_circles() -> None:
     assert_elements_are_identical(new_circles, expected)
 
 
-def test_multipolygons_to_circles() -> None:
+def test_multipolygons_to_circles(sdata) -> None:
     element = sdata["blobs_multipolygons"]
     new_circles = to_circles(element)
 
@@ -108,13 +111,13 @@ def test_multipolygons_to_circles() -> None:
     assert_elements_are_identical(new_circles, expected)
 
 
-def test_polygons_multipolygons_to_polygons() -> None:
+def test_polygons_multipolygons_to_polygons(sdata) -> None:
     polygons = sdata["blobs_multipolygons"]
     assert polygons is to_polygons(polygons)
 
 
 # conversion from points
-def test_points_to_circles() -> None:
+def test_points_to_circles(sdata) -> None:
     element = sdata["blobs_points"]
     with pytest.raises(RuntimeError, match="`radius` must either be provided, either be a column"):
         to_circles(element)
@@ -126,18 +129,18 @@ def test_points_to_circles() -> None:
     assert np.array_equal(np.ones_like(x), circles["radius"])
 
 
-def test_points_to_polygons() -> None:
+def test_points_to_polygons(sdata) -> None:
     with pytest.raises(RuntimeError, match="Cannot convert points to polygons"):
         to_polygons(sdata["blobs_points"])
 
 
 # conversion from images (invalid)
-def test_images_to_circles() -> None:
+def test_images_to_circles(sdata) -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images"):
         to_circles(sdata["blobs_image"])
 
 
-def test_images_to_polygons() -> None:
+def test_images_to_polygons(sdata) -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_polygons\(\) to images"):
         to_polygons(sdata["blobs_image"])
 
