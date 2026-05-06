@@ -522,7 +522,7 @@ class TestReadWrite:
         # addressing https://github.com/scverse/spatialdata/issues/137
         with tempfile.TemporaryDirectory() as tmpdir:
             f = os.path.join(tmpdir, "data.zarr")
-            # An empty store is enough to trigger both exceptions; no need to write all elements.
+            # An empty store is enough to trigger both exceptions.
             sdata = SpatialData()
             sdata.write(f, sdata_formats=sdata_container_format)
 
