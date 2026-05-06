@@ -694,16 +694,9 @@ def test_transform_elements_and_entire_spatial_data_object_multi_hop(
                 assert np.allclose(affine, np.array([[1, 0], [0, 1]]))
 
 
-def test_transformations_between_coordinate_systems():
+def test_transformations_between_coordinate_systems(images):
     # just a test that all the code is executed without errors and a quick test that the affine matrix is correct.
     # For a full test the notebooks are more exhaustive
-    # Use a minimal sdata with only the two images needed — avoids writing 6 unused elements to disk.
-    images = SpatialData(
-        images={
-            "image2d": Image2DModel.parse(np.zeros((3, 8, 8)), dims=("c", "y", "x")),
-            "image2d_multiscale": Image2DModel.parse(np.zeros((3, 8, 8)), dims=("c", "y", "x"), scale_factors=[2]),
-        }
-    )
     with tempfile.TemporaryDirectory() as tmpdir:
         images.write(Path(tmpdir) / "sdata.zarr")
         el0 = images.images["image2d"]

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import contextlib
 from collections import UserDict
-from collections.abc import Iterable, Iterator, KeysView, ValuesView
-from contextvars import ContextVar
+from collections.abc import Iterable, KeysView, ValuesView
 from typing import TypeVar
 
 from anndata import AnnData
@@ -25,25 +23,6 @@ from spatialdata.models import (
     TableModel,
     get_model,
 )
-
-_skip_element_validation: ContextVar[bool] = ContextVar("_skip_element_validation", default=False)
-
-
-@contextlib.contextmanager
-def skip_element_validation() -> Iterator[None]:
-    """
-    Context manager to skip schema validation when inserting elements into SpatialData containers.
-
-    Use this only when inserting elements that are already known to be valid (e.g. elements
-    taken directly from an existing SpatialData object).  Skipping validation is unsafe for
-    externally-sourced data.
-    """
-    token = _skip_element_validation.set(True)
-    try:
-        yield
-    finally:
-        _skip_element_validation.reset(token)
-
 
 T = TypeVar("T")
 
@@ -90,7 +69,7 @@ class Elements(UserDict[str, T]):
 class Images(Elements[DataArray | DataTree]):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        schema = get_model(value, validate=not _skip_element_validation.get())
+        schema = get_model(value)
         if schema not in (Image2DModel, Image3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         super().__setitem__(key, value)
@@ -99,7 +78,7 @@ class Images(Elements[DataArray | DataTree]):
 class Labels(Elements[DataArray | DataTree]):
     def __setitem__(self, key: str, value: Raster_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        schema = get_model(value, validate=not _skip_element_validation.get())
+        schema = get_model(value)
         if schema not in (Labels2DModel, Labels3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         super().__setitem__(key, value)
@@ -108,7 +87,7 @@ class Labels(Elements[DataArray | DataTree]):
 class Shapes(Elements[GeoDataFrame]):
     def __setitem__(self, key: str, value: GeoDataFrame) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        schema = get_model(value, validate=not _skip_element_validation.get())
+        schema = get_model(value)
         if schema != ShapesModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         super().__setitem__(key, value)
@@ -117,7 +96,7 @@ class Shapes(Elements[GeoDataFrame]):
 class Points(Elements[DaskDataFrame]):
     def __setitem__(self, key: str, value: DaskDataFrame) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        schema = get_model(value, validate=not _skip_element_validation.get())
+        schema = get_model(value)
         if schema != PointsModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         super().__setitem__(key, value)
@@ -126,7 +105,7 @@ class Points(Elements[DaskDataFrame]):
 class Tables(Elements[AnnData]):
     def __setitem__(self, key: str, value: AnnData) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
-        schema = get_model(value, validate=not _skip_element_validation.get())
+        schema = get_model(value)
         if schema != TableModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
         super().__setitem__(key, value)
