@@ -100,8 +100,7 @@ def write_shapes(
 
     axes = get_axes_names(shapes)
     transformations = _get_transformations(shapes)
-    if transformations is None:
-        raise ValueError(f"{group.basename} does not have any transformations and can therefore not be written.")
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
     if isinstance(element_format, ShapesFormatV01):
         attrs = _write_shapes_v01(shapes, group, element_format)
     elif isinstance(element_format, ShapesFormatV02 | ShapesFormatV03):
