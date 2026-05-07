@@ -342,7 +342,7 @@ class RasterSchema:
     @classmethod
     def _check_transforms_present(cls, data: DataArray | DataTree) -> None:
         parsed_transform = _get_transformations(data)
-        if parsed_transform is None:
+        if not parsed_transform:
             raise ValueError(
                 f"No transformation found for `{data}`. At least one transformation is required for "
                 f"raster elements, e.g. images, labels."
@@ -477,7 +477,7 @@ class ShapesModel:
                     "please see https://github.com/scverse/spatialdata/discussions/657 for a solution. Otherwise, "
                     "please correct the radii of the circles before calling the parser function.",
                 )
-        if cls.TRANSFORM_KEY not in data.attrs:
+        if not data.attrs.get(cls.TRANSFORM_KEY):
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
         if len(data) > 0:
             n = data.geometry.iloc[0]._ndim
@@ -668,7 +668,7 @@ class PointsModel:
                 np.int64,
             ]:
                 raise ValueError(f"Column `{ax}` must be of type `int` or `float`.")
-        if cls.TRANSFORM_KEY not in data.attrs:
+        if not data.attrs.get(cls.TRANSFORM_KEY):
             raise ValueError(
                 f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
             )

@@ -67,6 +67,7 @@ def write_points(
     """
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
+    assert transformations is not None
 
     store_root = group.store_path.store.root
     path = store_root / group.path / "points.parquet"
@@ -95,6 +96,4 @@ def write_points(
         axes=list(axes),
         attrs=attrs,
     )
-    if not transformations:
-        raise ValueError(f"{group.basename} does not have any transformations and can therefore not be written.")
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)

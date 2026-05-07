@@ -1225,6 +1225,11 @@ class SpatialData:
         if parsed_formats is None:
             parsed_formats = _parse_formats(formats=parsed_formats)
 
+        if element_type != "tables":
+            from spatialdata.models.models import get_model
+
+            get_model(element)
+
         if element_type == "images":
             write_image(
                 image=element,

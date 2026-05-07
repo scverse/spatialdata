@@ -812,14 +812,13 @@ def test_transform_until_0_0_15(points):
 def test_write_fails_after_removing_all_transformations(
     full_sdata: SpatialData, tmp_path: Path, element_fixture: str, kwargs: dict
 ) -> None:
-    """Writing an element whose transformations have all been removed should raise a ValueError."""
-    element = full_sdata[element_fixture]
-    remove_transformation(element, remove_all=True)
-
-    # Build a minimal SpatialData with only this element and write it to a fresh location
+    """Writing should fail when all transformations are removed from an element already in a SpatialData."""
+    # Build a valid SpatialData first (passes __setitem__ validation)
     container_key = next(iter(kwargs))
-    sdata = SpatialData(**{container_key: {element_fixture: element}})
-    tmpdir = tmp_path / "sdata.zarr"
+    sdata = SpatialData(**{container_key: {element_fixture: full_sdata[element_fixture]}})
 
-    with pytest.raises(ValueError, match="does not have any transformations"):
-        sdata.write(tmpdir)
+    # Mutate in-place after construction, bypassing __setitem__ validation
+    remove_transformation(sdata[element_fixture], remove_all=True)
+
+    with pytest.raises(ValueError, match="transform"):
+        sdata.write(tmp_path / "sdata.zarr")
