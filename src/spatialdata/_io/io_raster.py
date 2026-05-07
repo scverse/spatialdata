@@ -369,7 +369,7 @@ def _write_raster_dataarray(
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
-    if transformations is None:
+    if not transformations:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
@@ -439,7 +439,7 @@ def _write_raster_datatree(
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
     transformations = _get_transformations_xarray(xdata)
-    if transformations is None:
+    if not transformations:
         raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)

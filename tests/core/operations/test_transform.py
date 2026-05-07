@@ -796,3 +796,30 @@ def test_transform_until_0_0_15(points):
 
     transform(points, transformation=t0, maintain_positioning=True)
     transform(points, to_coordinate_system="global", maintain_positioning=True)
+
+
+@pytest.mark.parametrize(
+    "element_fixture,kwargs",
+    [
+        ("image2d", {"images": {}}),
+        ("image2d_multiscale", {"images": {}}),
+        ("labels2d", {"labels": {}}),
+        ("labels2d_multiscale", {"labels": {}}),
+        ("circles", {"shapes": {}}),
+        ("points_0", {"points": {}}),
+    ],
+)
+def test_write_fails_after_removing_all_transformations(
+    full_sdata: SpatialData, tmp_path: Path, element_fixture: str, kwargs: dict
+) -> None:
+    """Writing an element whose transformations have all been removed should raise a ValueError."""
+    element = full_sdata[element_fixture]
+    remove_transformation(element, remove_all=True)
+
+    # Build a minimal SpatialData with only this element and write it to a fresh location
+    container_key = next(iter(kwargs))
+    sdata = SpatialData(**{container_key: {element_fixture: element}})
+    tmpdir = tmp_path / "sdata.zarr"
+
+    with pytest.raises(ValueError, match="does not have any transformations"):
+        sdata.write(tmpdir)

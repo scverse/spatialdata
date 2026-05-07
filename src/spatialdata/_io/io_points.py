@@ -95,6 +95,6 @@ def write_points(
         axes=list(axes),
         attrs=attrs,
     )
-    if transformations is None:
-        raise ValueError(f"No transformations specified for element '{group.basename}'. Cannot write.")
+    if not transformations:
+        raise ValueError(f"{group.basename} does not have any transformations and can therefore not be written.")
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
