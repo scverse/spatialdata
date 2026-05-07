@@ -67,7 +67,7 @@ def write_points(
     """
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
-    assert transformations is not None
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
     store_root = group.store_path.store.root
     path = store_root / group.path / "points.parquet"

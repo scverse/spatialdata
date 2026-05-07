@@ -369,7 +369,7 @@ def _write_raster_dataarray(
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
-    assert transformations is not None
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
@@ -438,7 +438,7 @@ def _write_raster_datatree(
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
     transformations = _get_transformations_xarray(xdata)
-    assert transformations is not None
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
