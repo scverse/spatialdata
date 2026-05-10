@@ -54,3 +54,7 @@ node_modules/
 .mypy_cache
 .ruff_cache
 uv.lock
+
+# Claude Code local files
+.claude/
+spatialdata_pr_context.md
