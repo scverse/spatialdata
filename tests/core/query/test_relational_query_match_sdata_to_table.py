@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import contextlib
+
+import annsel as an
+import numpy as np
 import pytest
+from xarray import DataArray
 
 from spatialdata import SpatialData, concatenate, match_sdata_to_table
+from spatialdata._core.query.relational_query import filter_by_table_query
 from spatialdata.datasets import blobs_annotating_element
 
 
@@ -105,35 +111,48 @@ def test_match_sdata_to_table_shapes_and_points():
     assert "blobs_polygons-sdata1" not in matched
 
 
-def test_match_sdata_to_table_match_labels_error():
+@pytest.mark.parametrize("subset_func_name", ["match_sdata_to_table", "filter_by_table_query"])
+@pytest.mark.parametrize("element_name", ["blobs_labels", "blobs_multiscale_labels"])
+def test_filter_out_instances(subset_func_name: str, element_name: str) -> None:
     """
-    match_sdata_to_table() uses the join operations; so when trying to match labels, the error will be raised by the
-    join.
+    By default a warning is issued when labels are encountered in a right join and pixels are not filtered.
+    Passing filter_label_pixels=True filters the label pixels to match the table.
     """
-    sdata = _make_test_data()
-    sdata["table"].obs["region"] = sdata["table"].obs["region"].apply(lambda x: x.replace("polygons", "labels"))
-    sdata["table"].obs["region"] = sdata["table"].obs["region"].astype("category")
-    sdata.set_table_annotates_spatialelement(
-        table_name="table",
-        region=["blobs_labels-sdata1", "blobs_labels-sdata2"],
-        region_key="region",
-        instance_key="instance_id",
-    )
+    sdata = blobs_annotating_element(element_name)
+    keep_id = 3
+    table = sdata.tables["table"]
+    subset_table = table[table.obs["instance_id"] == keep_id]
 
-    with pytest.warns(
-        UserWarning,
-        match="Element type `labels` not supported for 'right' join. Skipping ",
-    ):
-        matched = match_sdata_to_table(
-            sdata,
-            table=sdata["table"],
-            table_name="table",
+    # None → warning issued; False → silenced, pixels still unfiltered
+    for flp, ctx in [
+        (None, pytest.warns(UserWarning, match="pixels are not filtered")),
+        (False, contextlib.nullcontext()),
+    ]:
+        with ctx:
+            if subset_func_name == "match_sdata_to_table":
+                match_sdata_to_table(sdata, "table", table=subset_table, filter_label_pixels=flp)
+            else:
+                filter_by_table_query(
+                    sdata, "table", obs_expr=an.col("instance_id") == keep_id, filter_label_pixels=flp
+                )
+
+    # filter_label_pixels=True: pixels are zeroed for removed instances
+    if subset_func_name == "match_sdata_to_table":
+        subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table, filter_label_pixels=True)
+    else:
+        subset_sdata = filter_by_table_query(
+            sdata, "table", obs_expr=an.col("instance_id") == keep_id, filter_label_pixels=True
         )
 
-    assert len(matched["table"]) == 10
-    assert "blobs_labels-sdata1" in matched
-    assert "blobs_labels-sdata2" in matched
-    assert "blobs_points-sdata1" not in matched
+    elem = subset_sdata[element_name]
+    if isinstance(elem, DataArray):
+        remaining_ids = set(np.unique(elem.data.compute())) - {0}
+        assert remaining_ids == {keep_id}
+    else:  # DataTree (multiscale)
+        for scale in elem:
+            # at coarser scales an instance may vanish due to downsampling, but no other instance should appear
+            remaining_ids = set(np.unique(elem[scale].image.compute())) - {0}
+            assert remaining_ids <= {keep_id}
 
 
 def test_match_sdata_to_table_no_table_argument(sdata):
@@ -145,3 +164,48 @@ def test_match_sdata_to_table_no_table_argument(sdata):
     assert len(matched["table"]) == 10
     assert "blobs_polygons-sdata1" in matched
     assert "blobs_polygons-sdata2" in matched
+
+
+@pytest.mark.parametrize("subset_func_name", ["match_sdata_to_table", "filter_by_table_query"])
+def test_subset_sdata_by_table_mask(subset_func_name: str) -> None:
+    """
+    Subsetting an sdata with mixed element types (labels, shapes, points) keeps only the requested instances.
+    Labels are pixel-filtered when filter_label_pixels=True.
+    """
+    sdata = concatenate(
+        {
+            "labels": blobs_annotating_element("blobs_labels"),
+            "shapes": blobs_annotating_element("blobs_circles"),
+            "points": blobs_annotating_element("blobs_points"),
+            "multiscale_labels": blobs_annotating_element("blobs_multiscale_labels"),
+        },
+        concatenate_tables=True,
+    )
+    table = sdata.tables["table"]
+    subset_table = table[table.obs["instance_id"] == 3]
+
+    if subset_func_name == "match_sdata_to_table":
+        subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table, filter_label_pixels=True)
+    else:
+        subset_sdata = filter_by_table_query(
+            sdata, "table", obs_expr=an.col("instance_id") == 3, filter_label_pixels=True
+        )
+
+    assert set(subset_sdata.labels.keys()) == {"blobs_labels-labels", "blobs_multiscale_labels-multiscale_labels"}
+    assert set(subset_sdata.points.keys()) == {"blobs_points-points"}
+    assert set(subset_sdata.shapes.keys()) == {"blobs_circles-shapes"}
+
+    labels_remaining_ids = set(np.unique(subset_sdata.labels["blobs_labels-labels"].data.compute())) - {0}
+    assert labels_remaining_ids == {3}
+
+    for scale in subset_sdata.labels["blobs_multiscale_labels-multiscale_labels"]:
+        ms_labels_remaining_ids = set(
+            np.unique(subset_sdata.labels["blobs_multiscale_labels-multiscale_labels"][scale].image.compute())
+        ) - {0}
+        assert ms_labels_remaining_ids == {3}
+
+    points_remaining_ids = set(np.unique(subset_sdata.points["blobs_points-points"].index)) - {0}
+    assert points_remaining_ids == {3}
+
+    shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
+    assert shapes_remaining_ids == {3}
