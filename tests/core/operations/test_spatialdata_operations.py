@@ -8,9 +8,8 @@ import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
 
-from spatialdata._core.concatenate import _concatenate_tables, concatenate
+from spatialdata._core.concatenate import _concatenate_tables, concatenate, deconcatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
-from spatialdata._core.concatenate import deconcatenate
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -706,9 +705,7 @@ def test_deconcatenate():
 
     obs = pd.DataFrame(
         {
-            "region": pd.Categorical(
-                ["region_a", "region_a", "region_b", "region_b", "region_c", "region_c"]
-            ),
+            "region": pd.Categorical(["region_a", "region_a", "region_b", "region_b", "region_c", "region_c"]),
             "instance_id": [0, 1, 0, 1, 0, 1],
             "batch": pd.Categorical(["batch1", "batch2", "batch1", "batch2", "batch1", "batch2"]),
         },
