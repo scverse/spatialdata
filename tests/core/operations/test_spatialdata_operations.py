@@ -10,7 +10,7 @@ from geopandas import GeoDataFrame
 
 from spatialdata._core.concatenate import _concatenate_tables, concatenate
 from spatialdata._core.data_extent import are_extents_equal, get_extent
-from spatialdata._core.deconcatenate import deconcatenate
+from spatialdata._core.concatenate import deconcatenate
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
@@ -697,25 +697,51 @@ def test_validate_table_in_spatialdata(full_sdata):
         full_sdata.validate_table_in_spatialdata(table)
 
 
-def test_deconcatenate(full_sdata):
+def test_deconcatenate():
+    from shapely.geometry import Point
 
-    regions = ["region1", "region2"]
-    table_names = ["table1", "table2"]
-    assert len(regions) == len(table_names)
+    shapes_a = ShapesModel.parse(GeoDataFrame({"geometry": [Point(0, 0), Point(1, 1)], "radius": [1.0, 1.0]}))
+    shapes_b = ShapesModel.parse(GeoDataFrame({"geometry": [Point(2, 2), Point(3, 3)], "radius": [1.0, 1.0]}))
+    shapes_c = ShapesModel.parse(GeoDataFrame({"geometry": [Point(4, 4), Point(5, 5)], "radius": [1.0, 1.0]}))
 
-    # MULTIPLE REGIONS ===
-    sdatas = deconcatenate(full_sdata, by=regions, target_coordinate_system="global", sdatas_table_names=table_names)
+    obs = pd.DataFrame(
+        {
+            "region": pd.Categorical(
+                ["region_a", "region_a", "region_b", "region_b", "region_c", "region_c"]
+            ),
+            "instance_id": [0, 1, 0, 1, 0, 1],
+            "batch": pd.Categorical(["batch1", "batch2", "batch1", "batch2", "batch1", "batch2"]),
+        },
+        index=["obs0", "obs1", "obs2", "obs3", "obs4", "obs5"],
+    )
+    table = AnnData(obs=obs)
+    table = TableModel.parse(
+        table,
+        region=["region_a", "region_b", "region_c"],
+        region_key="region",
+        instance_key="instance_id",
+    )
+    sdata = SpatialData(
+        shapes={"region_a": shapes_a, "region_b": shapes_b, "region_c": shapes_c},
+        tables={"table": table},
+    )
 
+    # split by region_key (default)
+    sdatas = deconcatenate(sdata)
     assert isinstance(sdatas, list)
-    assert len(sdatas) == len(regions)
+    assert len(sdatas) == 3
+    seen_regions = set()
+    for sub in sdatas:
+        assert "table" in sub.tables
+        sub_table = sub.tables["table"]
+        unique_regions = sub_table.obs["region"].unique().tolist()
+        assert len(unique_regions) == 1
+        seen_regions.add(unique_regions[0])
+    assert seen_regions == {"region_a", "region_b", "region_c"}
 
-    for sdata, region, table_name in zip(sdatas, regions, table_names):
-        assert table_name in sdata.tables
-        table = sdata.tables[table_name]
-        assert (table.obs["region"] == region).all()
-
-    # SINGLE REGION ===
-    single = deconcatenate(full_sdata, by=regions[0], target_coordinate_system="global")
-
-    assert not isinstance(single, list)
-    assert "table" in single.tables
+    # split by a non-default column
+    sdatas2 = deconcatenate(sdata, split_by="batch")
+    assert isinstance(sdatas2, list)
+    assert len(sdatas2) == 2
+    seen_batches = {sub.tables["table"].obs["batch"].unique()[0] for sub in sdatas2}
+    assert seen_batches == {"batch1", "batch2"}

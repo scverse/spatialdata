@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top
 from itertools import chain
-from typing import Any
+from typing import Any, Literal
 from warnings import warn
 
 import numpy as np
@@ -12,6 +12,7 @@ from anndata import AnnData
 from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
 
 from spatialdata._core._utils import _find_common_table_keys
+from spatialdata._core.query.relational_query import join_spatialelement_table
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import TableModel, get_table_keys
 from spatialdata.transformations import (
@@ -22,6 +23,7 @@ from spatialdata.transformations import (
 
 __all__ = [
     "concatenate",
+    "deconcatenate",
 ]
 
 
@@ -281,3 +283,74 @@ def _fix_ensure_unique_element_names(
         sdata_fixed = SpatialData.init_from_elements(elements | tables)
         sdatas_fixed.append(sdata_fixed)
     return sdatas_fixed
+
+
+def deconcatenate(
+    sdata: SpatialData,
+    table_name: str | None = None,
+    split_by: str | None = None,
+    join: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+) -> list[SpatialData]:
+    """
+    Split a SpatialData object into multiple objects by unique values of a column.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to split.
+    table_name
+        Name of the table to split on. If ``None`` and the object contains exactly one table, that
+        table is used; otherwise the name must be provided explicitly.
+    split_by
+        Column in the table to split by. Defaults to the region_key inferred from the table attributes.
+    join
+        Join type for matching spatial elements to each sub-table.
+
+    Returns
+    -------
+    list[SpatialData]
+        One SpatialData object per unique value in the ``split_by`` column.
+    """
+    if table_name is None:
+        if len(sdata.tables) == 1:
+            table_name = next(iter(sdata.tables))
+        else:
+            raise ValueError(
+                f"sdata contains {len(sdata.tables)} tables; please specify `table_name` explicitly. "
+                f"Available tables: {list(sdata.tables)}"
+            )
+    if table_name not in sdata.tables:
+        raise KeyError(f"Table '{table_name}' not found in sdata")
+
+    table = sdata[table_name]
+    _, region_key, instance_key = get_table_keys(table)
+
+    if split_by is None:
+        split_by = region_key
+
+    # groupby partitions obs_names by split_by in one pass (O(n_obs)); slicing AnnData by the
+    # resulting index groups is then O(group_size) per group rather than O(n_obs) per group.
+    groups = table.obs.groupby(split_by, observed=True).groups
+    sub_tables = {val: table[idx] for val, idx in groups.items()}
+    annotated_regions = {val: sub.obs[region_key].unique().tolist() for val, sub in sub_tables.items()}
+
+    # join_spatialelement_table is called once per split value; future work could perform all
+    # element joins in a single pass and then partition the result.
+    sdatas = []
+    for val in groups:
+        regions = annotated_regions[val]
+        elements, filtered_table = join_spatialelement_table(
+            sdata,
+            spatial_element_names=regions,
+            table=sub_tables[val],
+            how=join,
+        )
+        parsed_table = TableModel.parse(
+            filtered_table,
+            region=regions,
+            region_key=region_key,
+            instance_key=instance_key,
+            overwrite_metadata=True,
+        )
+        sdatas.append(SpatialData.init_from_elements(elements | {table_name: parsed_table}))
+    return sdatas
