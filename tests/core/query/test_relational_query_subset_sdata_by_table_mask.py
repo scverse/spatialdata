@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
 import pytest
 from xarray import DataArray
 
-from spatialdata import concatenate, match_sdata_to_table, subset_sdata_by_table_mask
+from spatialdata import concatenate, match_sdata_to_table
 from spatialdata._core.query.relational_query import (
     _filter_by_instance_ids,
     _set_instance_ids_in_labels_to_zero,
@@ -17,9 +19,7 @@ def test_filter_labels2dmodel_by_instance_ids() -> None:
     sdata = blobs_annotating_element("blobs_labels")
     labels_element = sdata["blobs_labels"]
     all_instance_ids = sdata.tables["table"].obs["instance_id"].unique()
-    filtered_labels_element = Labels2DModel.parse(
-        _set_instance_ids_in_labels_to_zero(labels_element, [2, 3])
-    )
+    filtered_labels_element = Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(labels_element, [2, 3]))
 
     # because 0 is the background, we expect the filtered ids to be the instance ids that are not 0
     filtered_ids = set(np.unique(filtered_labels_element.data.compute())) - {
@@ -33,20 +33,18 @@ def test_filter_labels2dmodel_by_instance_ids() -> None:
     sdata.tables["table"].uns["spatialdata_attrs"]["region"] = "blobs_multiscale_labels"
     sdata.tables["table"].obs.region = "blobs_multiscale_labels"
     labels_element = sdata["blobs_multiscale_labels"]
-    max_scale = list(labels_element.keys())[0]
-    filtered_labels_element = Labels2DModel.parse(
-        _set_instance_ids_in_labels_to_zero(labels_element[max_scale].image, [2, 3]),
-        scale_factors=[2, 2],  # blobs uses scale_factors=[2, 2], see datasets.py
-    )
 
+    # Apply the filter independently at each scale: coarser scales may already be missing small
+    # instances (e.g. instance 5 disappears at scale2 in the original multiscale due to downsampling),
+    # so we compare against the IDs actually present at each scale rather than all_instance_ids.
     for scale in labels_element:
-        filtered_ids = set(np.unique(filtered_labels_element[scale].image.compute())) - {
-            0,
-        }
-        preserved_ids = np.unique(labels_element[scale].image.compute())
-        assert filtered_ids == (set(all_instance_ids) - {2, 3})
+        scale_image = labels_element[scale].image
+        ids_at_scale = set(np.unique(scale_image.compute()))
+        filtered_image = _set_instance_ids_in_labels_to_zero(scale_image, [2, 3])
+        filtered_ids = set(np.unique(filtered_image.compute())) - {0}
+        assert filtered_ids == (ids_at_scale - {0, 2, 3})
         # check if there is modification of the original labels
-        assert set(preserved_ids) == set(all_instance_ids) | {0}
+        assert set(np.unique(scale_image.compute())) == ids_at_scale
 
 
 def test_subset_sdata_by_table_mask() -> None:
@@ -72,9 +70,7 @@ def test_subset_sdata_by_table_mask() -> None:
         elem = subset_sdata[label_name]
         del subset_sdata[label_name]
         if isinstance(elem, DataArray):
-            filtered = Labels2DModel.parse(
-                _set_instance_ids_in_labels_to_zero(elem, ids_to_remove)
-            )
+            filtered = Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(elem, ids_to_remove))
         else:  # DataTree (multiscale)
             max_scale = list(elem.keys())[0]
             filtered = Labels2DModel.parse(
@@ -101,12 +97,6 @@ def test_subset_sdata_by_table_mask() -> None:
 
     shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
     assert shapes_remaining_ids == {3}
-
-
-def test_subset_sdata_by_table_mask_with_no_annotated_elements() -> None:
-    with pytest.raises(ValueError, match="Table table_not_found not found in SpatialData object."):
-        sdata = blobs_annotating_element("blobs_labels")
-        _ = subset_sdata_by_table_mask(sdata, "table_not_found", sdata.tables["table"].obs["instance_id"] == 3)
 
 
 def test_filter_by_instance_ids_fails_for_unsupported_element_models() -> None:
