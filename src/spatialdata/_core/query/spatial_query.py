@@ -322,7 +322,7 @@ def _get_case_of_bounding_box_query(
 
 
 def _is_scaling_transform(m_linear: np.ndarray) -> bool:
-    """True when the linear part is a diagonal (pure scaling) matrix."""
+    """Check if the linear part is a diagonal (pure scaling) matrix."""
     return np.allclose(m_linear, np.diag(np.diagonal(m_linear)))
 
 
@@ -411,8 +411,8 @@ def _bounding_box_mask_points(
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     {max_coordinate_docs}
     points_df
-        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the methods simply
-        calls .compute() on the dask data frame
+        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the
+        methods simply calls .compute() on the dask data frame
 
     Returns
     -------
