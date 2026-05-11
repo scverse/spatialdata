@@ -4,12 +4,15 @@ import contextlib
 
 import annsel as an
 import numpy as np
+import pandas as pd
 import pytest
+from anndata import AnnData
 from xarray import DataArray
 
 from spatialdata import SpatialData, concatenate, match_sdata_to_table
 from spatialdata._core.query.relational_query import filter_by_table_query
 from spatialdata.datasets import blobs_annotating_element
+from spatialdata.models import Labels3DModel, TableModel
 
 
 def _make_test_data() -> SpatialData:
@@ -209,3 +212,24 @@ def test_subset_sdata_by_table_mask(subset_func_name: str) -> None:
 
     shapes_remaining_ids = set(np.unique(subset_sdata.shapes["blobs_circles-shapes"].index)) - {0}
     assert shapes_remaining_ids == {3}
+
+
+@pytest.mark.parametrize("subset_func_name", ["match_sdata_to_table", "filter_by_table_query"])
+def test_filter_out_instances_3d_labels_not_supported(subset_func_name: str) -> None:
+    """Pixel-level filtering of 3D labels raises NotImplementedError."""
+    data = np.zeros((5, 5, 5), dtype=np.int32)
+    data[1:3, 1:3, 1:3] = 1
+    data[3:5, 3:5, 3:5] = 2
+    labels_3d = Labels3DModel.parse(data, dims=["z", "y", "x"])
+
+    obs_df = pd.DataFrame({"region": pd.Categorical(["labels_3d"]), "instance_id": [1]}, index=["0"])
+    table = TableModel.parse(
+        AnnData(shape=(1, 0), obs=obs_df), region="labels_3d", region_key="region", instance_key="instance_id"
+    )
+    sdata = SpatialData(labels={"labels_3d": labels_3d}, tables={"table": table})
+
+    with pytest.raises(NotImplementedError, match="3D labels"):
+        if subset_func_name == "match_sdata_to_table":
+            match_sdata_to_table(sdata, "table", filter_label_pixels=True)
+        else:
+            filter_by_table_query(sdata, "table", obs_expr=an.col("instance_id") == 1, filter_label_pixels=True)

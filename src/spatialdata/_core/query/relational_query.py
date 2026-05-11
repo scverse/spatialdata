@@ -1188,6 +1188,8 @@ def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list
 
 
 def _filter_labels_element(element: DataArray | DataTree, ids_to_keep: list[int]) -> DataArray | DataTree:
+    if get_model(element) is Labels3DModel:
+        raise NotImplementedError("Pixel-level filtering of 3D labels is not supported.")
     element_instances = get_element_instances(element)
     ids_to_remove = [i for i in element_instances if i not in set(ids_to_keep)]
     if isinstance(element, DataArray):
