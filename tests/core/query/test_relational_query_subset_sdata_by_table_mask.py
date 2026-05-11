@@ -1,16 +1,25 @@
+import warnings
+
 import numpy as np
 import pytest
+from xarray import DataArray
 
-from spatialdata import concatenate, subset_sdata_by_table_mask
-from spatialdata._core.query.relational_query import _filter_by_instance_ids
+from spatialdata import concatenate, match_sdata_to_table, subset_sdata_by_table_mask
+from spatialdata._core.query.relational_query import (
+    _filter_by_instance_ids,
+    _set_instance_ids_in_labels_to_zero,
+)
 from spatialdata.datasets import blobs_annotating_element
+from spatialdata.models import Labels2DModel
 
 
 def test_filter_labels2dmodel_by_instance_ids() -> None:
     sdata = blobs_annotating_element("blobs_labels")
     labels_element = sdata["blobs_labels"]
     all_instance_ids = sdata.tables["table"].obs["instance_id"].unique()
-    filtered_labels_element = _filter_by_instance_ids(labels_element, [2, 3], "instance_id")
+    filtered_labels_element = Labels2DModel.parse(
+        _set_instance_ids_in_labels_to_zero(labels_element, [2, 3])
+    )
 
     # because 0 is the background, we expect the filtered ids to be the instance ids that are not 0
     filtered_ids = set(np.unique(filtered_labels_element.data.compute())) - {
@@ -24,7 +33,11 @@ def test_filter_labels2dmodel_by_instance_ids() -> None:
     sdata.tables["table"].uns["spatialdata_attrs"]["region"] = "blobs_multiscale_labels"
     sdata.tables["table"].obs.region = "blobs_multiscale_labels"
     labels_element = sdata["blobs_multiscale_labels"]
-    filtered_labels_element = _filter_by_instance_ids(labels_element, [2, 3], "instance_id")
+    max_scale = list(labels_element.keys())[0]
+    filtered_labels_element = Labels2DModel.parse(
+        _set_instance_ids_in_labels_to_zero(labels_element[max_scale].image, [2, 3]),
+        scale_factors=[2, 2],  # blobs uses scale_factors=[2, 2], see datasets.py
+    )
 
     for scale in labels_element:
         filtered_ids = set(np.unique(filtered_labels_element[scale].image.compute())) - {
@@ -46,8 +59,29 @@ def test_subset_sdata_by_table_mask() -> None:
         },
         concatenate_tables=True,
     )
-    third_elems = sdata.tables["table"].obs["instance_id"] == 3
-    subset_sdata = subset_sdata_by_table_mask(sdata, "table", third_elems)
+    table = sdata.tables["table"]
+    third_elems = table.obs["instance_id"] == 3
+    ids_to_remove = list(np.unique(table.obs["instance_id"][~third_elems]))
+    subset_table = table[third_elems]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # labels not supported for right join
+        subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table)
+
+    for label_name in list(subset_sdata.labels.keys()):
+        elem = subset_sdata[label_name]
+        del subset_sdata[label_name]
+        if isinstance(elem, DataArray):
+            filtered = Labels2DModel.parse(
+                _set_instance_ids_in_labels_to_zero(elem, ids_to_remove)
+            )
+        else:  # DataTree (multiscale)
+            max_scale = list(elem.keys())[0]
+            filtered = Labels2DModel.parse(
+                _set_instance_ids_in_labels_to_zero(elem[max_scale].image, ids_to_remove),
+                scale_factors=[2, 2],
+            )
+        subset_sdata[label_name] = filtered
 
     assert set(subset_sdata.labels.keys()) == {"blobs_labels-labels", "blobs_multiscale_labels-multiscale_labels"}
     assert set(subset_sdata.points.keys()) == {"blobs_points-points"}
