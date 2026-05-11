@@ -316,7 +316,7 @@ def _write_raster(
             **metadata,
         )
     elif isinstance(raster_data, DataTree):
-        _write_raster_datatree(
+        group = _write_raster_datatree(
             raster_type,
             group,
             name,
@@ -369,8 +369,7 @@ def _write_raster_dataarray(
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
-    if transformations is None:
-        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
@@ -409,7 +408,7 @@ def _write_raster_datatree(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
-) -> None:
+) -> zarr.Group:
     """Write raster data of type DataTree to disk.
 
     Parameters
@@ -439,8 +438,7 @@ def _write_raster_datatree(
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
     transformations = _get_transformations_xarray(xdata)
-    if transformations is None:
-        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
@@ -460,6 +458,15 @@ def _write_raster_datatree(
     # os.replace is called. These can also be alleviated by using 'single-threaded' scheduler.
     da.compute(*dask_delayed, optimize_graph=False)
 
+    # Workaround for https://github.com/scverse/spatialdata/issues/1024.
+    # ome-zarr-py bundles write_multiscales_metadata() as a dask.delayed task in the compute=False
+    # code path (see https://github.com/ome/ome-zarr-py/issues/580). When da.compute() runs with
+    # the 'processes' scheduler that task executes in a subprocess: the on-disk zarr.json is written
+    # correctly, but the zarr.Group held in this process keeps its original in-memory GroupMetadata
+    # and never sees the update. Re-opening the group forces a fresh read from the store.
+    # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
+    group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
+
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(
         group=trans_group,
@@ -467,6 +474,7 @@ def _write_raster_datatree(
         axes=tuple(input_axes),
         raster_format=raster_format,
     )
+    return group
 
 
 def write_image(

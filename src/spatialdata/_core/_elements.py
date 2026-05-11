@@ -21,7 +21,6 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     TableModel,
-    get_axes_names,
     get_model,
 )
 
@@ -50,6 +49,7 @@ class Elements(UserDict[str, T]):
                 raise KeyError(*e.args) from e
 
     def __setitem__(self, key: str, value: T) -> None:
+        # note that each __setitem__ in the subclasses calls get_model(), which performs data validation
         self._add_shared_key(key)
         super().__setitem__(key, value)
 
@@ -72,15 +72,7 @@ class Images(Elements[DataArray | DataTree]):
         schema = get_model(value)
         if schema not in (Image2DModel, Image3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        ndim = len(get_axes_names(value))
-        if ndim == 3:
-            Image2DModel.validate(value)
-            super().__setitem__(key, value)
-        elif ndim == 4:
-            Image3DModel.validate(value)
-            super().__setitem__(key, value)
-        else:
-            NotImplementedError("TODO: implement for ndim > 4.")
+        super().__setitem__(key, value)
 
 
 class Labels(Elements[DataArray | DataTree]):
@@ -89,15 +81,7 @@ class Labels(Elements[DataArray | DataTree]):
         schema = get_model(value)
         if schema not in (Labels2DModel, Labels3DModel):
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        ndim = len(get_axes_names(value))
-        if ndim == 2:
-            Labels2DModel.validate(value)
-            super().__setitem__(key, value)
-        elif ndim == 3:
-            Labels3DModel.validate(value)
-            super().__setitem__(key, value)
-        else:
-            NotImplementedError("TODO: implement for ndim > 3.")
+        super().__setitem__(key, value)
 
 
 class Shapes(Elements[GeoDataFrame]):
@@ -106,7 +90,6 @@ class Shapes(Elements[GeoDataFrame]):
         schema = get_model(value)
         if schema != ShapesModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        ShapesModel.validate(value)
         super().__setitem__(key, value)
 
 
@@ -116,7 +99,6 @@ class Points(Elements[DaskDataFrame]):
         schema = get_model(value)
         if schema != PointsModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        PointsModel.validate(value)
         super().__setitem__(key, value)
 
 
@@ -126,5 +108,4 @@ class Tables(Elements[AnnData]):
         schema = get_model(value)
         if schema != TableModel:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
-        TableModel.validate(value)
         super().__setitem__(key, value)
