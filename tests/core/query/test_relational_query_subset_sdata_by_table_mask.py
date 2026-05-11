@@ -2,52 +2,22 @@ from __future__ import annotations
 
 import warnings
 
+import annsel as an
 import numpy as np
 import pytest
 from xarray import DataArray
 
 from spatialdata import concatenate, match_sdata_to_table
 from spatialdata._core.query.relational_query import (
-    _filter_by_instance_ids,
     _set_instance_ids_in_labels_to_zero,
+    filter_by_table_query,
 )
 from spatialdata.datasets import blobs_annotating_element
 from spatialdata.models import Labels2DModel
 
 
-def test_filter_labels2dmodel_by_instance_ids() -> None:
-    sdata = blobs_annotating_element("blobs_labels")
-    labels_element = sdata["blobs_labels"]
-    all_instance_ids = sdata.tables["table"].obs["instance_id"].unique()
-    filtered_labels_element = Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(labels_element, [2, 3]))
-
-    # because 0 is the background, we expect the filtered ids to be the instance ids that are not 0
-    filtered_ids = set(np.unique(filtered_labels_element.data.compute())) - {
-        0,
-    }
-    preserved_ids = np.unique(labels_element.data.compute())
-    assert filtered_ids == (set(all_instance_ids) - {2, 3})
-    # check if there is modification of the original labels
-    assert set(preserved_ids) == set(all_instance_ids) | {0}
-
-    sdata.tables["table"].uns["spatialdata_attrs"]["region"] = "blobs_multiscale_labels"
-    sdata.tables["table"].obs.region = "blobs_multiscale_labels"
-    labels_element = sdata["blobs_multiscale_labels"]
-
-    # Apply the filter independently at each scale: coarser scales may already be missing small
-    # instances (e.g. instance 5 disappears at scale2 in the original multiscale due to downsampling),
-    # so we compare against the IDs actually present at each scale rather than all_instance_ids.
-    for scale in labels_element:
-        scale_image = labels_element[scale].image
-        ids_at_scale = set(np.unique(scale_image.compute()))
-        filtered_image = _set_instance_ids_in_labels_to_zero(scale_image, [2, 3])
-        filtered_ids = set(np.unique(filtered_image.compute())) - {0}
-        assert filtered_ids == (ids_at_scale - {0, 2, 3})
-        # check if there is modification of the original labels
-        assert set(np.unique(scale_image.compute())) == ids_at_scale
-
-
-def test_subset_sdata_by_table_mask() -> None:
+@pytest.mark.parametrize("subset_func_name", ["match_sdata_to_table", "filter_by_table_query"])
+def test_subset_sdata_by_table_mask(subset_func_name: str) -> None:
     sdata = concatenate(
         {
             "labels": blobs_annotating_element("blobs_labels"),
@@ -63,8 +33,11 @@ def test_subset_sdata_by_table_mask() -> None:
     subset_table = table[third_elems]
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)  # labels not supported for right join
-        subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table)
+        warnings.filterwarnings("ignore", message="labels not supported for right join", category=UserWarning)
+        if subset_func_name == "match_sdata_to_table":
+            subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table)
+        else:
+            subset_sdata = filter_by_table_query(sdata, "table", obs_expr=an.col("instance_id") == 3)
 
     for label_name in list(subset_sdata.labels.keys()):
         elem = subset_sdata[label_name]
@@ -72,10 +45,14 @@ def test_subset_sdata_by_table_mask() -> None:
         if isinstance(elem, DataArray):
             filtered = Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(elem, ids_to_remove))
         else:  # DataTree (multiscale)
-            max_scale = list(elem.keys())[0]
+            scales = list(elem.keys())
+            scale_factors = [
+                round(elem[scales[i]].image.shape[0] / elem[scales[i + 1]].image.shape[0])
+                for i in range(len(scales) - 1)
+            ]
             filtered = Labels2DModel.parse(
-                _set_instance_ids_in_labels_to_zero(elem[max_scale].image, ids_to_remove),
-                scale_factors=[2, 2],
+                _set_instance_ids_in_labels_to_zero(elem[scales[0]].image, ids_to_remove),
+                scale_factors=scale_factors,
             )
         subset_sdata[label_name] = filtered
 
@@ -99,6 +76,37 @@ def test_subset_sdata_by_table_mask() -> None:
     assert shapes_remaining_ids == {3}
 
 
-def test_filter_by_instance_ids_fails_for_unsupported_element_models() -> None:
-    with pytest.raises(NotImplementedError, match="Filtering by instance ids is not implemented for"):
-        _filter_by_instance_ids([1, 1, 1, 2], [1], "instance_id")
+@pytest.mark.parametrize("subset_func_name", ["match_sdata_to_table", "filter_by_table_query"])
+@pytest.mark.parametrize("element_name", ["blobs_labels", "blobs_multiscale_labels"])
+def test_filter_out_instances(subset_func_name: str, element_name: str) -> None:
+    sdata = blobs_annotating_element(element_name)
+    table = sdata.tables["table"]
+    keep_id = 3
+    ids_to_remove = [i for i in table.obs["instance_id"].unique() if i != keep_id]
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="labels not supported for right join", category=UserWarning)
+        if subset_func_name == "match_sdata_to_table":
+            subset_table = table[table.obs["instance_id"] == keep_id]
+            subset_sdata = match_sdata_to_table(sdata, "table", table=subset_table)
+        else:
+            subset_sdata = filter_by_table_query(sdata, "table", obs_expr=an.col("instance_id") == keep_id)
+
+    elem = subset_sdata[element_name]
+    if isinstance(elem, DataArray):
+        filtered = Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(elem, ids_to_remove))
+        remaining_ids = set(np.unique(filtered.data.compute())) - {0}
+        assert remaining_ids == {keep_id}
+    else:  # DataTree (multiscale)
+        scales = list(elem.keys())
+        scale_factors = [
+            round(elem[scales[i]].image.shape[0] / elem[scales[i + 1]].image.shape[0]) for i in range(len(scales) - 1)
+        ]
+        filtered = Labels2DModel.parse(
+            _set_instance_ids_in_labels_to_zero(elem[scales[0]].image, ids_to_remove),
+            scale_factors=scale_factors,
+        )
+        for scale in filtered:
+            # at coarser scales an instance may vanish due to downsampling, but no other instance should appear
+            remaining_ids = set(np.unique(filtered[scale].image.compute())) - {0}
+            assert remaining_ids <= {keep_id}
