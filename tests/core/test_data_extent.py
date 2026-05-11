@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 
 import numpy as np
@@ -13,9 +15,13 @@ from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, PointsModel, ShapesModel
 from spatialdata.transformations import Affine, Translation, remove_transformation, set_transformation
 
-# for faster tests; we will pay attention not to modify the original data
-sdata = blobs()
 RNG = default_rng(seed=0)
+
+
+# for faster tests; we will pay attention not to modify the original data
+@pytest.fixture(scope="module")
+def sdata():
+    return blobs()
 
 
 def check_test_results0(extent, min_coordinates, max_coordinates, axes):
@@ -34,7 +40,7 @@ def check_test_results1(extent0, extent1):
 
 
 @pytest.mark.parametrize("shape_type", ["circles", "polygons", "multipolygons"])
-def test_get_extent_shapes(shape_type):
+def test_get_extent_shapes(sdata, shape_type):
     extent = get_extent(sdata[f"blobs_{shape_type}"])
     if shape_type == "circles":
         min_coordinates = np.array([98.92618679, 137.62348969])
@@ -56,7 +62,7 @@ def test_get_extent_shapes(shape_type):
 
 
 @pytest.mark.parametrize("exact", [True, False])
-def test_get_extent_points(exact: bool):
+def test_get_extent_points(sdata, exact: bool):
     # 2d case
     extent = get_extent(sdata["blobs_points"], exact=exact)
     check_test_results0(
@@ -81,7 +87,7 @@ def test_get_extent_points(exact: bool):
 
 @pytest.mark.parametrize("raster_type", ["image", "labels"])
 @pytest.mark.parametrize("multiscale", [False, True])
-def test_get_extent_raster(raster_type, multiscale):
+def test_get_extent_raster(sdata, raster_type, multiscale):
     raster = sdata[f"blobs_multiscale_{raster_type}"] if multiscale else sdata[f"blobs_{raster_type}"]
 
     extent = get_extent(raster)
@@ -93,7 +99,7 @@ def test_get_extent_raster(raster_type, multiscale):
     )
 
 
-def test_get_extent_spatialdata():
+def test_get_extent_spatialdata(sdata):
     sdata2 = SpatialData(shapes={"circles": sdata["blobs_circles"], "polygons": sdata["blobs_polygons"]})
     extent = get_extent(sdata2)
     check_test_results0(
@@ -104,7 +110,7 @@ def test_get_extent_spatialdata():
     )
 
 
-def test_get_extent_invalid_coordinate_system():
+def test_get_extent_invalid_coordinate_system(sdata):
     # element without the coordinate system
     with pytest.raises(ValueError):
         _ = get_extent(sdata["blobs_circles"], coordinate_system="invalid")
@@ -229,7 +235,7 @@ def test_rotate_vector_data(exact):
     check_test_results1(extent, expected)
 
 
-def test_get_extent_affine_circles():
+def test_get_extent_affine_circles(sdata):
     """
     Verify that the extent of the transformed circles, computed with exact = False, gives the same result as
     transforming the bounding box of the original circles
@@ -302,7 +308,7 @@ def test_get_extent_affine_points3d():
     assert np.allclose(transformed_extent_3d["z"], extent_3d["z"])
 
 
-def test_get_extent_affine_sdata():
+def test_get_extent_affine_sdata(sdata):
     # let's make a copy since we don't want to modify the original data
     sdata2 = SpatialData(
         shapes={

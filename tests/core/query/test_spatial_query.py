@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import FrozenInstanceError
 
 import dask.dataframe as dd
@@ -648,7 +650,10 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name:
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     p0 = points["points_0"]
-    p1 = PointsModel.parse(dd.from_pandas(p0.compute(), npartitions=10))
+    attrs = p0.attrs.copy()
+    ddf = dd.from_pandas(p0.compute(), npartitions=10)
+    ddf.attrs.update(attrs)
+    p1 = PointsModel.parse(ddf)
 
     def _query(p: DaskDataFrame) -> DaskDataFrame:
         if with_polygon_query:
@@ -669,7 +674,6 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     q0 = _query(p0)
     q1 = _query(p1)
     assert np.array_equal(q0.index.compute(), q1.index.compute())
-    pass
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])

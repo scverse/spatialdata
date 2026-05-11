@@ -1,16 +1,19 @@
+from __future__ import annotations
+
 from functools import singledispatch
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dask
 import numpy as np
 import pandas as pd
 import shapely
-import skimage.measure
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
-from skimage.measure._regionprops import RegionProperties
 from xarray import DataArray, DataTree
+
+if TYPE_CHECKING:
+    from skimage.measure._regionprops import RegionProperties
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.operations.aggregate import aggregate
@@ -226,6 +229,8 @@ def _(
 
 
 def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon | Polygon:
+    import skimage.measure
+
     mask = np.pad(region_props.image, 1)
     contours = skimage.measure.find_contours(mask, 0.5)
 
@@ -244,6 +249,8 @@ def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon | P
 def _vectorize_mask(
     mask: np.ndarray,  # type: ignore[type-arg]
 ) -> GeoDataFrame:
+    import skimage.measure
+
     if mask.max() == 0:
         return GeoDataFrame({"label": []}, geometry=[])
 

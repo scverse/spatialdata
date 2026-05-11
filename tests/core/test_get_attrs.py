@@ -1,14 +1,13 @@
+from __future__ import annotations
+
 import pandas as pd
 import pytest
 
-from spatialdata.datasets import blobs
-
 
 @pytest.fixture
-def sdata_attrs():
-    sdata = blobs()
-    sdata.attrs["test"] = {"a": {"b": 12}, "c": 8}
-    return sdata
+def sdata_attrs(sdata_blobs):
+    sdata_blobs.attrs["test"] = {"a": {"b": 12}, "c": 8}
+    return sdata_blobs
 
 
 def test_get_attrs_as_is(sdata_attrs):
@@ -68,7 +67,6 @@ def test_non_string_sep(sdata_attrs):
         sdata_attrs.get_attrs(key="test", sep=123)
 
 
-def test_empty_attrs():
-    sdata = blobs()
+def test_empty_attrs(sdata_blobs):
     with pytest.raises(KeyError, match="was not found in sdata.attrs."):
-        sdata.get_attrs(key="test")
+        sdata_blobs.get_attrs(key="test")

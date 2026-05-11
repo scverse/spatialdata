@@ -1,4 +1,6 @@
 # Functions to compute the bounding box describing the extent of a SpatialElement or SpatialData object
+from __future__ import annotations
+
 from collections import defaultdict
 from functools import singledispatch
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pandas.testing import assert_frame_equal
 
 from spatialdata import SpatialData

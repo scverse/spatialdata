@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from spatialdata import SpatialData, concatenate, match_sdata_to_table
@@ -12,12 +14,13 @@ def _make_test_data() -> SpatialData:
     return sdata
 
 
-# constructing the example data; let's use a global variable as we can reuse the same object on most tests
-# without having to recreate it
-sdata = _make_test_data()
+# constructing the example data; reuse the same object on most tests without having to recreate it
+@pytest.fixture(scope="module")
+def sdata():
+    return _make_test_data()
 
 
-def test_match_sdata_to_table_filter_specific_instances():
+def test_match_sdata_to_table_filter_specific_instances(sdata):
     """
     Filter to keep only specific instances. Note that it works even when the table annotates multiple elements.
     """
@@ -31,7 +34,7 @@ def test_match_sdata_to_table_filter_specific_instances():
     assert "blobs_polygons-sdata2" in matched
 
 
-def test_match_sdata_to_table_filter_specific_instances_element():
+def test_match_sdata_to_table_filter_specific_instances_element(sdata):
     """
     Filter to keep only specific instances, in a specific element.
     """
@@ -47,7 +50,7 @@ def test_match_sdata_to_table_filter_specific_instances_element():
     assert "blobs_polygons-sdata2" not in matched
 
 
-def test_match_sdata_to_table_filter_by_threshold():
+def test_match_sdata_to_table_filter_by_threshold(sdata):
     """
     Filter by a threshold on a value column, in a specific element.
     """
@@ -61,7 +64,7 @@ def test_match_sdata_to_table_filter_by_threshold():
     assert "blobs_polygons-sdata2" not in matched
 
 
-def test_match_sdata_to_table_subset_certain_obs():
+def test_match_sdata_to_table_subset_certain_obs(sdata):
     """
     Subset to certain obs (we could also subset to certain var or layer).
     """
@@ -133,7 +136,7 @@ def test_match_sdata_to_table_match_labels_error():
     assert "blobs_points-sdata1" not in matched
 
 
-def test_match_sdata_to_table_no_table_argument():
+def test_match_sdata_to_table_no_table_argument(sdata):
     """
     If no table argument is passed, the table_name argument will be used to match the table.
     """

@@ -1,11 +1,16 @@
-import dask_image.ndinterp
-import datashader as ds
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import Point
 from xarray import DataArray, DataTree
+
+if TYPE_CHECKING:
+    import datashader as ds
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
@@ -505,6 +510,8 @@ def rasterize_images_labels(
     target_height: float | None = None,
     target_depth: float | None = None,
 ) -> DataArray:
+    import dask_image.ndinterp
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     # get dimensions of the target image
@@ -602,7 +609,7 @@ def rasterize_images_labels(
     set_transformation(transformed_data, sequence, target_coordinate_system)
 
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -624,6 +631,8 @@ def rasterize_shapes_points(
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
 ) -> DataArray:
+    import datashader as ds
+
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     target_width, target_height, target_depth = _compute_target_dimensions(
@@ -653,12 +662,14 @@ def rasterize_shapes_points(
 
     table_name = table_name if table_name is not None else "table"
 
+    index = False
     if value_key is not None:
         kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
         data[VALUES_COLUMN] = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
     elif isinstance(data, GeoDataFrame) or isinstance(data, DaskDataFrame) and return_regions_as_labels is True:
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = data.index.astype("category")
+        index = True
     else:
         value_key = VALUES_COLUMN
         data[VALUES_COLUMN] = 1
@@ -666,7 +677,13 @@ def rasterize_shapes_points(
     label_index_to_category = None
     if VALUES_COLUMN in data and data[VALUES_COLUMN].dtype == "category":
         if isinstance(data, DaskDataFrame):
-            data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
+            # We have to do this because as_known() does not preserve the order anymore in latest dask versions
+            # TODO discuss whether we can always expect the index from before to be monotonically increasing, because
+            # then we don't have to check order.
+            if index:
+                data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.set_categories(data.index, ordered=True)
+            else:
+                data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.as_known()
         label_index_to_category = dict(enumerate(data[VALUES_COLUMN].cat.categories, start=1))
 
     if return_single_channel is None:
@@ -729,6 +746,8 @@ def rasterize_shapes_points(
 def _default_agg_func(
     data: DaskDataFrame | GeoDataFrame, value_key: str | None, return_single_channel: bool
 ) -> ds.reductions.Reduction:
+    import datashader as ds
+
     if value_key is None:
         return ds.count()
 

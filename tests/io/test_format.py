@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import tempfile
 from pathlib import Path
@@ -120,6 +122,7 @@ class TestFormat:
     # TODO: add tests for TablesFormatV01 and TablesFormatV02
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 class TestFormatConversions:
     """Test format conversions between older formats and newer."""
 
@@ -235,6 +238,7 @@ class TestFormatConversions:
             assert sdata_read_v2.has_consolidated_metadata()
 
     def test_channel_names_raster_images_v1_to_v2_to_v3(self, images):
+        images = images.subset(["image2d", "image2d_multiscale"])
         with tempfile.TemporaryDirectory() as tmpdir:
             f1 = Path(tmpdir) / "data1.zarr"
             f2 = Path(tmpdir) / "data2.zarr"

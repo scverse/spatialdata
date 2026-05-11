@@ -1,17 +1,21 @@
+from __future__ import annotations
+
+import contextlib
 import math
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
+from dask import config
 from geopandas.testing import geom_almost_equals
 from xarray import DataArray, DataTree
 
 from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._utils import unpad_raster
-from spatialdata.models import PointsModel, ShapesModel, get_axes_names
+from spatialdata._utils import disable_dask_tune_optimization, unpad_raster
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
@@ -142,7 +146,7 @@ def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale
         assert element_type == "labels"
         sdata = SpatialData(labels={k: v for k, v in full_sdata.labels.items() if isinstance(v, datatype)})
 
-    affine = _get_affine(small_translation=False)
+    affine = _get_affine(small_translation=True)
 
     _postpone_transformation(
         sdata, from_coordinate_system="global", to_coordinate_system="transformed", transformation=affine
@@ -227,6 +231,37 @@ def test_transform_shapes(shapes: SpatialData):
         p0 = shapes.shapes[k]
         p1 = new_shapes.shapes[k]
         assert geom_almost_equals(p0["geometry"], p1["geometry"])
+
+
+def test_transform_datatree_scale_handling():
+    """
+    Test the cases in which the lowest and highest scale of the result of a
+    transformed multi-scale image would be zero shape.
+    """
+
+    test_image = Image2DModel.parse(
+        np.ones((1, 10, 10)),
+        dims=("c", "y", "x"),
+        scale_factors=[2, 4],
+        transformations={
+            "cs1": Scale([0.5] * 2, axes=["y", "x"]),
+            "cs2": Scale([0.01] * 2, axes=["y", "x"]),
+        },
+    )
+
+    # check that the transform doesn't raise an error and that it
+    # discards the lowest resolution level
+    test_image_t = transform(test_image, to_coordinate_system="cs1")
+    assert list(test_image.keys()) == ["scale0", "scale1", "scale2"]
+    assert list(test_image_t.keys()) == ["scale0", "scale1"]
+
+    # check that a ValueError is raised when no resolution level
+    # is left after the transformation
+    with pytest.raises(
+        ValueError,
+        match="The transformation leads to zero shaped data even at the highest resolution level",
+    ):
+        transform(test_image, to_coordinate_system="cs2")
 
 
 def test_map_coordinate_systems_single_path(full_sdata: SpatialData):
@@ -555,6 +590,44 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     _ = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
 
 
+def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_path: str):
+    tmpdir = Path(tmp_path) / "tmp.zarr"
+    points_memory = full_sdata["points_0"].compute()
+    full_sdata["points_0"] = PointsModel.parse(
+        full_sdata["points_0"].repartition(npartitions=4),
+        transformations={"global": get_transformation(full_sdata["points_0"])},
+    )
+    assert points_memory.equals(full_sdata["points_0"].compute())
+
+    full_sdata.write(tmpdir)
+
+    full_sdata = SpatialData.read(tmpdir)
+
+    # This just needs to run without error
+    data = transform(full_sdata["points_0"], to_coordinate_system="global")
+
+    # test that data still can be computed
+    data.compute()
+
+
+@pytest.mark.parametrize(
+    "tune,partition",
+    [
+        (True, None),
+        (False, 4),
+    ],
+)
+def test_dask_tune_contextmanager(full_sdata: SpatialData, partition: int | None, tune: bool):
+    if partition:
+        full_sdata["points_0"] = PointsModel.parse(
+            full_sdata["points_0"].repartition(npartitions=4),
+            transformations={"global": get_transformation(full_sdata["points_0"])},
+        )
+
+    with disable_dask_tune_optimization() if full_sdata["points_0"].npartitions > 1 else contextlib.nullcontext():
+        assert config.config["optimization"]["tune"]["active"] is tune
+
+
 @pytest.mark.parametrize("maintain_positioning", [True, False])
 def test_transform_elements_and_entire_spatial_data_object_multi_hop(
     full_sdata: SpatialData, maintain_positioning: bool
@@ -723,3 +796,29 @@ def test_transform_until_0_0_15(points):
 
     transform(points, transformation=t0, maintain_positioning=True)
     transform(points, to_coordinate_system="global", maintain_positioning=True)
+
+
+@pytest.mark.parametrize(
+    "element_fixture,kwargs",
+    [
+        ("image2d", {"images": {}}),
+        ("image2d_multiscale", {"images": {}}),
+        ("labels2d", {"labels": {}}),
+        ("labels2d_multiscale", {"labels": {}}),
+        ("circles", {"shapes": {}}),
+        ("points_0", {"points": {}}),
+    ],
+)
+def test_write_fails_after_removing_all_transformations(
+    full_sdata: SpatialData, tmp_path: Path, element_fixture: str, kwargs: dict
+) -> None:
+    """Writing should fail when all transformations are removed from an element already in a SpatialData."""
+    # Build a valid SpatialData first (passes __setitem__ validation)
+    container_key = next(iter(kwargs))
+    sdata = SpatialData(**{container_key: {element_fixture: full_sdata[element_fixture]}})
+
+    # Mutate in-place after construction, bypassing __setitem__ validation
+    remove_transformation(sdata[element_fixture], remove_all=True)
+
+    with pytest.raises(ValueError, match="transform"):
+        sdata.write(tmp_path / "sdata.zarr")

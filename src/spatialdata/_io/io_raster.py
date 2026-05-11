@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard
 
 import dask.array as da
 import numpy as np
@@ -13,7 +16,7 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from xarray import DataArray, Dataset, DataTree
+from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -27,12 +30,133 @@ from spatialdata._io.format import (
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
+from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
     _set_transformations,
     compute_coordinates,
 )
+
+
+def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
+    # e.g. "", "auto" or b"auto"
+    if isinstance(value, str | bytes):
+        return False
+    if not isinstance(value, Sequence):
+        return False
+    return all(isinstance(v, int) for v in value)
+
+
+def _is_dask_chunk_grid(value: object) -> TypeGuard[Sequence[Sequence[int]]]:
+    if isinstance(value, str | bytes):
+        return False
+    if not isinstance(value, Sequence):
+        return False
+    return len(value) > 0 and all(_is_flat_int_sequence(axis_chunks) for axis_chunks in value)
+
+
+def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
+    """Check whether a Dask chunk grid is regular (zarr-compatible).
+
+    A grid is regular when every axis has at most one unique chunk size among all but the last
+    chunk, and the last chunk is not larger than the first.
+
+    Parameters
+    ----------
+    chunk_grid
+        Per-axis tuple of chunk sizes, for instance as returned by ``dask_array.chunks``.
+
+    Examples
+    --------
+    Triggers ``continue`` on the first ``if`` (single or empty axis):
+
+    >>> _is_regular_dask_chunk_grid([(4,)])   # single chunk → True
+    True
+    >>> _is_regular_dask_chunk_grid([()])     # empty axis → True
+    True
+
+    Triggers the first ``return False`` (non-uniform interior chunks):
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])   # interior sizes differ → False
+    False
+
+    Triggers the second ``return False`` (last chunk larger than the first):
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])   # last > first → False
+    False
+
+    Exits with ``return True``:
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])   # all equal → True
+    True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])   # last < first → True
+    True
+
+    Empty grid (loop never executes) → True:
+
+    >>> _is_regular_dask_chunk_grid([])
+    True
+
+    Multi-axis: all axes regular → True; one axis irregular → False:
+
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1), (3, 3, 2)])
+    True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1), (4, 4, 3, 4)])
+    False
+    """
+    # Match Dask's private _check_regular_chunks() logic without depending on its internal API.
+    for axis_chunks in chunk_grid:
+        if len(axis_chunks) <= 1:
+            continue
+        if len(set(axis_chunks[:-1])) > 1:
+            return False
+        if axis_chunks[-1] > axis_chunks[0]:
+            return False
+    return True
+
+
+def _chunks_to_zarr_chunks(chunks: object) -> tuple[int, ...] | int | None:
+    if isinstance(chunks, int):
+        return chunks
+    if _is_flat_int_sequence(chunks):
+        return tuple(chunks)
+    if _is_dask_chunk_grid(chunks):
+        chunk_grid = tuple(tuple(axis_chunks) for axis_chunks in chunks)
+        if _is_regular_dask_chunk_grid(chunk_grid):
+            return tuple(axis_chunks[0] for axis_chunks in chunk_grid)
+        return None
+    return None
+
+
+def _normalize_explicit_chunks(chunks: object) -> tuple[int, ...] | int:
+    normalized = _chunks_to_zarr_chunks(chunks)
+    if normalized is None:
+        raise ValueError(
+            'storage_options["chunks"] must resolve to a Zarr chunk shape or a regular Dask chunk grid. '
+            "The current raster has irregular Dask chunks, which cannot be written to Zarr. "
+            "To fix this, rechunk before writing, for example by passing regular chunks=... "
+            "to Image2DModel.parse(...) / Labels2DModel.parse(...)."
+        )
+    return normalized
+
+
+def _prepare_storage_options(
+    storage_options: JSONDict | list[JSONDict] | None,
+) -> JSONDict | list[JSONDict] | None:
+    if storage_options is None:
+        return None
+    if isinstance(storage_options, dict):
+        prepared = dict(storage_options)
+        if "chunks" in prepared:
+            prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
+        return prepared
+
+    prepared_options = [dict(options) for options in storage_options]
+    for options in prepared_options:
+        if "chunks" in options:
+            options["chunks"] = _normalize_explicit_chunks(options["chunks"])
+    return prepared_options
 
 
 def _read_multiscale(
@@ -91,20 +215,8 @@ def _read_multiscale(
             channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
-        multiscale_image = {}
-        for i, d in enumerate(datasets):
-            data = node.load(Multiscales).array(resolution=d)
-            multiscale_image[f"scale{i}"] = Dataset(
-                {
-                    "image": DataArray(
-                        data,
-                        name="image",
-                        dims=axes,
-                        coords={"c": channels} if channels is not None else {},
-                    )
-                }
-            )
-        msi = DataTree.from_dict(multiscale_image)
+        arrays = [node.load(Multiscales).array(resolution=d) for d in datasets]
+        msi = dask_arrays_to_datatree(arrays, dims=axes, channels=channels)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
 
@@ -204,7 +316,7 @@ def _write_raster(
             **metadata,
         )
     elif isinstance(raster_data, DataTree):
-        _write_raster_datatree(
+        group = _write_raster_datatree(
             raster_type,
             group,
             name,
@@ -257,23 +369,20 @@ def _write_raster_dataarray(
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
-    if transformations is None:
-        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
     input_axes: tuple[str, ...] = tuple(raster_data.dims)
-    chunks = raster_data.chunks
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    if storage_options is not None:
-        if "chunks" not in storage_options and isinstance(storage_options, dict):
-            storage_options["chunks"] = chunks
-    else:
-        storage_options = {"chunks": chunks}
-    # Scaler needs to be None since we are passing the data already downscaled for the multiscale case.
-    # We need  this because the argument of write_image_ngff is called image while the argument of
+    storage_options = _prepare_storage_options(storage_options)
+    # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
+    # write_image()/write_labels() to scale_factors=(2, 4, 8, 16), which would otherwise write s0, s1, ...
+    # even when the input is a plain DataArray.
+    # We need this because the argument of write_image_ngff is called image while the argument of
     # write_labels_ngff is called label.
     metadata[raster_type] = data
     ome_zarr_format = get_ome_zarr_format(raster_format)
     write_single_scale_ngff(
         group=group,
+        scale_factors=[],
         scaler=None,
         fmt=ome_zarr_format,
         axes=parsed_axes,
@@ -299,7 +408,7 @@ def _write_raster_datatree(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
-) -> None:
+) -> zarr.Group:
     """Write raster data of type DataTree to disk.
 
     Parameters
@@ -329,12 +438,10 @@ def _write_raster_datatree(
     assert len(d) == 1
     xdata = d.values().__iter__().__next__()
     transformations = _get_transformations_xarray(xdata)
-    if transformations is None:
-        raise ValueError(f"{element_name} does not have any transformations and can therefore not be written.")
-    chunks = get_pyramid_levels(raster_data, "chunks")
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
-    storage_options = [{"chunks": chunk} for chunk in chunks]
+    storage_options = _prepare_storage_options(storage_options)
     ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
         pyramid=data,
@@ -347,7 +454,18 @@ def _write_raster_datatree(
         compute=False,
     )
     # Compute all pyramid levels at once to allow Dask to optimize the computational graph.
-    da.compute(*dask_delayed)
+    # Optimize_graph is set to False for now as this causes permission denied errors when during atomic writes
+    # os.replace is called. These can also be alleviated by using 'single-threaded' scheduler.
+    da.compute(*dask_delayed, optimize_graph=False)
+
+    # Workaround for https://github.com/scverse/spatialdata/issues/1024.
+    # ome-zarr-py bundles write_multiscales_metadata() as a dask.delayed task in the compute=False
+    # code path (see https://github.com/ome/ome-zarr-py/issues/580). When da.compute() runs with
+    # the 'processes' scheduler that task executes in a subprocess: the on-disk zarr.json is written
+    # correctly, but the zarr.Group held in this process keeps its original in-memory GroupMetadata
+    # and never sees the update. Re-opening the group forces a fresh read from the store.
+    # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
+    group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
 
     trans_group = group["labels"][element_name] if raster_type == "labels" else group
     overwrite_coordinate_transformations_raster(
@@ -356,6 +474,7 @@ def _write_raster_datatree(
         axes=tuple(input_axes),
         raster_format=raster_format,
     )
+    return group
 
 
 def write_image(
