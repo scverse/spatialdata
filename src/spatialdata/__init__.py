@@ -4,6 +4,8 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any
 
+import spatialdata.models._accessor  # noqa: F401
+
 __version__ = version("spatialdata")
 
 _submodules = {
@@ -129,15 +131,8 @@ __all__ = [
     "settings",
 ]
 
-_accessor_loaded = False
-
 
 def __getattr__(name: str) -> Any:
-    global _accessor_loaded
-    if not _accessor_loaded:
-        _accessor_loaded = True
-        import spatialdata.models._accessor  # noqa: F401
-
     if name in _submodules:
         return importlib.import_module(f"spatialdata.{name}")
     if name in _LAZY_IMPORTS:

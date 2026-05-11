@@ -27,6 +27,7 @@ from spatialdata.models.models import (
     TableModel,
     get_model,
     get_table_keys,
+    validate_element,
 )
 
 __all__ = [
@@ -51,6 +52,7 @@ __all__ = [
     "points_dask_dataframe_to_geopandas",
     "check_target_region_column_symmetry",
     "get_table_keys",
+    "validate_element",
     "get_channel_names",
     "set_channel_names",
     "force_2d",

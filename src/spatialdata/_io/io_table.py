@@ -22,7 +22,7 @@ from spatialdata.models import TableModel, get_table_keys
 def _read_table(store: str | Path) -> AnnData:
     table = read_anndata_zarr(str(store))
 
-    f = zarr.open(store, mode="r")
+    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
