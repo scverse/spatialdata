@@ -743,6 +743,39 @@ def test_query_points_bounding_box_in_transformed_coordinate_system():
     np.testing.assert_allclose(result["y"].compute(), [3])
 
 
+def test_query_points_bounding_box_negative_scale_transform():
+    """Regression test: negative-scale (axis-flip) transforms must not raise ValueError.
+
+    Before the fix the scaling path raised ValueError instead of swapping the
+    inverted interval back to min < max after inverting through the negative scale.
+    """
+    from spatialdata.transformations import Affine
+
+    # Points (1, 0) and (5, 0). Under x-flip: (1,0)→(−1,0), (5,0)→(−5,0).
+    points_element = _make_points(np.array([[1, 0], [5, 0]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query aligned x ∈ (−2, 0), y ∈ (−1, 1) → only (1, 0) maps to (−1, 0) which is inside.
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-2.0, -1.0]),
+        max_coordinate=np.array([0.0, 1.0]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [1])
+    np.testing.assert_allclose(result["y"].compute(), [0])
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",

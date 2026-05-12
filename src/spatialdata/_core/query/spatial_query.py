@@ -674,9 +674,9 @@ def _(
     if is_identity_transform:
         bounding_box_masks = _bounding_box_mask_points(
             points_df=points_pd,
-            axes=axes,
-            min_coordinate=min_coordinate,
-            max_coordinate=max_coordinate,
+            axes=axes_adjusted,
+            min_coordinate=min_coordinate_adjusted,
+            max_coordinate=max_coordinate_adjusted,
         )
     elif is_scaling_transform:
         # Pull scale factors from the diagonal and the translation from the last column
@@ -687,10 +687,11 @@ def _(
         min_intrinsic = (min_coordinate_adjusted - translation) / scales
         max_intrinsic = (max_coordinate_adjusted - translation) / scales
 
-        if (min_intrinsic > max_intrinsic).any():
-            raise ValueError(
-                "The minimum coordinate must be less than the maximum coordinate. Maybe the scale is negative?"
-            )
+        # Negative scale components flip the interval; restore min < max.
+        min_intrinsic, max_intrinsic = (
+            np.minimum(min_intrinsic, max_intrinsic),
+            np.maximum(min_intrinsic, max_intrinsic),
+        )
 
         bounding_box_masks = _bounding_box_mask_points(
             points_df=points_pd,
@@ -730,7 +731,7 @@ def _(
         queried_points = points_pd.iloc[bounding_box_indices]
         output.append(
             PointsModel.parse(
-                dd.from_pandas(queried_points, npartitions=1),
+                dd.from_pandas(queried_points, npartitions=points.npartitions),
                 transformations=old_transformations.copy(),
                 feature_key=feature_key,
             )
@@ -956,7 +957,6 @@ def _(
 
     if clip:
         if isinstance(element.geometry.iloc[0], Point):
-            # circles need the buffered polygons to clip against; to_polygons() already copied
             queried_shapes = buffered.iloc[candidate_idx]
             queried_shapes.index = buffered.iloc[candidate_idx][OLD_INDEX]
             queried_shapes.index.name = None
