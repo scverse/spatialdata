@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import warnings
 from functools import singledispatch
@@ -17,6 +18,7 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
+from spatialdata._utils import disable_dask_tune_optimization
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
@@ -333,7 +335,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -381,6 +383,18 @@ def _(
         transformed_dask, raster_translation_single_scale = _transform_raster(
             data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
         )
+
+        # if a scale in the transformed data has zero shape, we skip it
+        if 0 in transformed_dask.shape:
+            if k == "scale0":
+                raise ValueError(
+                    "The transformation leads to zero shaped data even at the highest resolution level. "
+                    "Check the scaling component of the transformation."
+                )
+            # no risk of skipping a scale (e.g. scale1) but not the next ones (e.g. scale2), because once a scale
+            # is skipped, all the lower scales are also skipped
+            continue
+
         if raster_translation is None:
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
@@ -407,7 +421,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -427,8 +441,15 @@ def _(
     )
     axes = get_axes_names(data)
     arrays = []
-    for ax in axes:
-        arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
+
+    # Workaround to prevent partition collaps and missing dependency problem for now.
+    with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
+        for ax in axes:
+            # TODO We have to pass on the lengths explicitly as automatic determination with dask graph optimization
+            #  leads to collaps of the partitions. However this causes a missing dependency problem, which for now is
+            #  prevented by setting the optimization to False when performing this operation.
+            arrays.append(data[ax].to_dask_array(lengths=[len(part) for part in data.partitions]).reshape(-1, 1))
+
     xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
     xtransformed = transformation._transform_coordinates(xdata)
     transformed = data.drop(columns=list(axes)).copy()

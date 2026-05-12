@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
@@ -45,7 +47,7 @@ class TestMultiTable:
         n_obs = full_sdata["table"].n_obs
         full_sdata["table"].obs["instance_id"] = range(n_obs)
         # introduce null values
-        full_sdata["table"].obs.loc[0, "instance_id"] = None
+        full_sdata["table"].obs.at[full_sdata["table"].obs_names[0], "instance_id"] = None
         with pytest.raises(ValueError, match="must not contain null values, but it does."):
             full_sdata.validate_table_in_spatialdata(table=full_sdata["table"])
 
@@ -192,7 +194,7 @@ class TestMultiTable:
         table = _get_table(region=["poly", "multipoly"])
         subset = table[table.obs.region == "multipoly"]
         with pytest.raises(ValueError, match="Regions in"):
-            TableModel().validate(subset)
+            TableModel.validate(subset)
 
         test_sdata = SpatialData(
             shapes={

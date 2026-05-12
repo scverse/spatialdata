@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from spatialdata._core.validation import ValidationError, raise_validation_errors

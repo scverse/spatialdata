@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +22,7 @@ from spatialdata.models import TableModel, get_table_keys
 def _read_table(store: str | Path) -> AnnData:
     table = read_anndata_zarr(str(store))
 
-    f = zarr.open(store, mode="r")
+    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
@@ -56,7 +58,7 @@ def write_table(
 ) -> None:
     if TableModel.ATTRS_KEY in table.uns:
         region, region_key, instance_key = get_table_keys(table)
-        TableModel().validate(table)
+        TableModel.validate(table)
     else:
         region, region_key, instance_key = (None, None, None)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top

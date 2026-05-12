@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from collections.abc import Collection
 from types import TracebackType
-from typing import NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
-import pandas as pd
-from anndata import AnnData
+if TYPE_CHECKING:
+    import pandas as pd
+    from anndata import AnnData
 
 
 class ErrorDetails(NamedTuple):
@@ -147,6 +150,8 @@ def check_all_keys_case_insensitively_unique(keys: Collection[str], location: tu
         exc_type=ValueError,
     ) as collect_error:
         for key in keys:
+            if key is None:
+                continue
             normalized_key = key.lower()
             with collect_error(location=location + (key,)):
                 check_key_is_case_insensitively_unique(key, seen)
@@ -244,6 +249,8 @@ def validate_table_attr_keys(data: AnnData, location: tuple[str, ...] = ()) -> N
             with collect_error(location=attr_path):
                 check_all_keys_case_insensitively_unique(getattr(data, attr).keys(), location=attr_path)
             for key in getattr(data, attr):
+                if key is None:
+                    continue
                 key_path = attr_path + (key,)
                 with collect_error(location=key_path):
                     if attr in ("obs", "var"):
@@ -278,7 +285,7 @@ class _ErrorDetailsCollector:
         self,
         location: str | tuple[str, ...] = (),
         expected_exception: type[BaseException] | tuple[type[BaseException], ...] | None = None,
-    ) -> "_ErrorDetailsCollector":
+    ) -> _ErrorDetailsCollector:
         """
         Set or override error details in advance before an exception is raised.
 
