@@ -342,6 +342,21 @@ def _write_raster(
     group.attrs[ATTRS_KEY] = attrs
 
 
+def _build_v3_codec(
+    compression: Literal["lz4", "zstd"],
+    compression_level: int,
+) -> Any:
+    """Return the appropriate zarr v3 codec for the given compression type and level."""
+    if compression == "zstd":
+        from zarr.codecs import ZstdCodec
+
+        return ZstdCodec(level=compression_level)
+    # lz4: use the native zarr v3 BloscCodec
+    from zarr.codecs import BloscCodec
+
+    return BloscCodec(cname="lz4", clevel=compression_level)
+
+
 def _apply_compression(
     storage_options: JSONDict | list[JSONDict],
     compressor: dict[Literal["lz4", "zstd"], int] | None,
@@ -362,32 +377,47 @@ def _apply_compression(
     -------
     Updated storage options with compression settings
     """
-    # For zarr disk format v2, use numcodecs.Blosc
-    # For zarr disk format v3, use zarr.codecs.Blosc
-    from numcodecs import Blosc as BloscV2
-    from zarr.codecs import Blosc as BloscV3
-
     if not compressor:
         return storage_options
 
     ((compression, compression_level),) = compressor.items()
 
-    assert BloscV2.SHUFFLE == 1
-    blosc_v2 = BloscV2(cname=compression, clevel=compression_level, shuffle=1)
-    blosc_v3 = BloscV3(cname=compression, clevel=compression_level, shuffle=1)
+    if zarr_format == 2:
+        from numcodecs import Blosc as BloscV2
 
-    def _update_dict(d: dict[str, Any]) -> None:
-        if zarr_format == 2:
-            d["compressor"] = blosc_v2
-        elif zarr_format == 3:
-            d["zarr_array_kwargs"] = {"compressors": [blosc_v3]}
+        assert BloscV2.SHUFFLE == 1
+        codec_v2 = BloscV2(cname=compression, clevel=compression_level, shuffle=1)
 
-    if isinstance(storage_options, dict):
-        _update_dict(d=storage_options)
+        def _update_dict(d: dict[str, Any]) -> None:
+            d["compressor"] = codec_v2
+
+        if isinstance(storage_options, dict):
+            _update_dict(d=storage_options)
+        elif isinstance(storage_options, list):
+            for option in storage_options:
+                _update_dict(d=option)
+        elif storage_options is None:
+            return {"compressor": codec_v2}
+        else:
+            raise ValueError(f"storage_options must be a dict or list, not {type(storage_options)}")
     else:
-        assert isinstance(storage_options, list)
-        for option in storage_options:
-            _update_dict(d=option)
+        # zarr v3: use native codec objects via the "compressors" (plural) key.
+        # see  https://github.com/ome/ome-zarr-py/blob/v0.16.0/ome_zarr/writer.py#L754
+        # ome-zarr-py ≥ 0.16.0 with dask ≥ 2026.3.0 forwards this key to zarr_array_kwargs.
+        codec_v3 = _build_v3_codec(compression, compression_level)
+
+        def _update_dict_v3(d: dict[str, Any]) -> None:
+            d["compressors"] = [codec_v3]
+
+        if isinstance(storage_options, dict):
+            _update_dict_v3(d=storage_options)
+        elif isinstance(storage_options, list):
+            for option in storage_options:
+                _update_dict_v3(d=option)
+        elif storage_options is None:
+            return {"compressors": [codec_v3]}
+        else:
+            raise ValueError(f"storage_options must be a dict or list, not {type(storage_options)}")
 
     return storage_options
 

@@ -265,10 +265,9 @@ class TestReadWrite:
         # sourcery skip: no-loop-in-tests
         for element in ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale"]:
             element_type = "images" if element.startswith("image") else "labels"
-            arr = zarr.open_group(tmpdir / element_type, mode="r")[element]["0"]
+            arr = zarr.open_group(tmpdir / element_type, mode="r")[element]["s0"]
             compressor = arr.compressors[0]
 
-            # TODO: all these tests fail because the compression arguments are not passed to Dask
             if sdata_container_format.zarr_format == 2:
                 assert compressor.cname == "zstd"
                 assert compressor.clevel == 8
@@ -295,23 +294,23 @@ class TestReadWrite:
         sdata["element"] = full_sdata[element[1]]
         sdata.write_element("element", compressor=compressor, sdata_formats=sdata_container_format)
 
-        arr = zarr.open_group(tmpdir / element[0], mode="r")["element"]["0"]
+        arr = zarr.open_group(tmpdir / element[0], mode="r")["element"]["s0"]
         compression = arr.compressors[0]
 
-        # TODO: all these tests fail because the compression arguments are not passed to Dask
         if sdata_container_format.zarr_format == 2:
             assert compression.cname == list(compressor.keys())[0]
             assert compression.clevel == list(compressor.values())[0]
         elif sdata_container_format.zarr_format == 3:
-            from zarr.codecs import ZstdCodec
+            from zarr.codecs import BloscCodec, ZstdCodec
 
             compressor_name = list(compressor.keys())[0]
+            compressor_level = list(compressor.values())[0]
             if compressor_name == "zstd":
                 assert isinstance(compression, ZstdCodec)
-            # TODO: fix
-            # elif compressor_name == 'lz4':
-            #     assert isinstance(compression, ???)
-            assert compression.level == list(compressor.values())[0]
+                assert compression.level == compressor_level
+            elif compressor_name == "lz4":
+                assert isinstance(compression, BloscCodec)
+                assert compression.clevel == compressor_level
 
     def test_incremental_io_list_of_elements(
         self,
