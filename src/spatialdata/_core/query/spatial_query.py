@@ -387,18 +387,17 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
 @docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _bounding_box_mask_points(
-    points: DaskDataFrame,
+    points_df: pd.DataFrame,
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
-    points_df: pd.DataFrame | None = None,
 ) -> list[ArrayLike]:
     """Compute a mask that is true for the points inside axis-aligned bounding boxes.
 
     Parameters
     ----------
-    points
-        The points element to perform the query on.
+    points_df
+        A pre-computed pandas dataframe representing the points element to perform the query on.
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
@@ -410,23 +409,17 @@ def _bounding_box_mask_points(
         The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     {max_coordinate_docs}
-    points_df
-        A pre-computed pandas dataframe. Useful if the points_df has already been materialized, otherwise the
-        methods simply calls .compute() on the dask data frame
+
 
     Returns
     -------
     The masks for the points inside the bounding boxes.
     """
-    element_axes = get_axes_names(points)
+    element_axes = get_axes_names(points_df)
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
     max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
-
-    # Compute once here only if the caller hasn't already done so
-    if points_df is None:
-        points_df = points.compute()
 
     n_boxes = min_coordinate.shape[0]
     in_bounding_box_masks = []
@@ -639,6 +632,7 @@ def _(
     min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
     max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
 
+    # the code below is taken from _get_bounding_box_corners_in_intrinsic_coordinates()
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -662,8 +656,8 @@ def _(
         max_coordinate,
         output_axes_without_c,
     )
-    if axes_adjusted != output_axes_without_c:
-        raise RuntimeError("This should not happen")
+    if set(axes_adjusted) != set(output_axes_without_c):
+        raise ValueError("The axes of the bounding box must match the axes of the transformation.")
 
     # materialize the points in the intrinsic coordinate system once
     points_pd = points.compute()
@@ -679,11 +673,10 @@ def _(
     # if the transform is identity, we can save extra for the affine transformation
     if is_identity_transform:
         bounding_box_masks = _bounding_box_mask_points(
-            points=points,
+            points_df=points_pd,
             axes=axes,
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
-            points_df=points_pd,
         )
     elif is_scaling_transform:
         # Pull scale factors from the diagonal and the translation from the last column
@@ -694,18 +687,16 @@ def _(
         min_intrinsic = (min_coordinate_adjusted - translation) / scales
         max_intrinsic = (max_coordinate_adjusted - translation) / scales
 
-        # Ensure min < max after inversion (negative scale flips the interval)
-        min_intrinsic, max_intrinsic = (
-            np.minimum(min_intrinsic, max_intrinsic),
-            np.maximum(min_intrinsic, max_intrinsic),
-        )
+        if (min_intrinsic > max_intrinsic).any():
+            raise ValueError(
+                "The minimum coordinate must be less than the maximum coordinate. Maybe the scale is negative?"
+            )
 
         bounding_box_masks = _bounding_box_mask_points(
-            points=points,
+            points_df=points_pd,
             axes=tuple(input_axes_without_c),
             min_coordinate=min_intrinsic,
             max_coordinate=max_intrinsic,
-            points_df=points_pd,
         )
     else:
         query_coordinates = points_pd.loc[:, list(input_axes_without_c)].to_numpy(copy=False)
@@ -965,7 +956,8 @@ def _(
 
     if clip:
         if isinstance(element.geometry.iloc[0], Point):
-            queried_shapes = buffered.iloc[candidate_idx].copy()
+            # circles need the buffered polygons to clip against; to_polygons() already copied
+            queried_shapes = buffered.iloc[candidate_idx]
             queried_shapes.index = buffered.iloc[candidate_idx][OLD_INDEX]
             queried_shapes.index.name = None
         queried_shapes = queried_shapes.clip(polygon_gdf, keep_geom_type=True)

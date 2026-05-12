@@ -705,6 +705,44 @@ def test_query_points_multiple_boxes_in_transformed_coordinate_system():
     assert points_result[2] is None
 
 
+def test_query_points_bounding_box_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    # Points: A(3,3), B(9,3), C(8,3)
+    points_element = _make_points(np.array([[3, 3], [9, 3], [8, 3]]))
+
+    # Transformation: rotate 45°, then translate (-3√2, -3√2)
+    # Combined affine matrix T @ R:
+    #   A(3,3) → (-3√2,  0  )
+    #   B(9,3) → ( 0,    3√2)
+    #   C(8,3) → (-√2/2, 5√2/2)
+    s = np.sqrt(2) / 2
+    t = -3 * np.sqrt(2)
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[s, -s, t], [s, s, t], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query box in aligned space: x ∈ [-10, 10], y ∈ [5√2/2 ± 0.5]
+    # Only C maps into this box (y ≈ 3.54 vs B y ≈ 4.24 which is just above).
+    y_center = 5 * np.sqrt(2) / 2
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-10.0, y_center - 0.5]),
+        max_coordinate=np.array([10.0, y_center + 0.5]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [8])
+    np.testing.assert_allclose(result["y"].compute(), [3])
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",
