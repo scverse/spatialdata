@@ -164,6 +164,22 @@ def test_sanitize_table_uns_and_layers():
     assert list(sanitized.layers.keys()) == ["bad_layer"]
 
 
+def test_sanitize_table_layers_preserves_x():
+    # anndata >= 0.13 stores X as layers[None]; sanitize_table must not corrupt it
+    X = np.array([[0, 1], [1, 0]])
+    ad = AnnData(X=X, obs=pd.DataFrame({"x": [1, 2]}, index=["0", "1"]), var=pd.DataFrame(index=["v1", "v2"]))
+    ad.layers["bad#layer"] = np.array([[1, 0], [0, 1]])
+    none_in_layers_before = None in ad.layers
+    sanitized = sanitize_table(ad, inplace=False)
+    assert sanitized.X is not None
+    np.testing.assert_array_equal(sanitized.X, X)
+    string_keys = [k for k in sanitized.layers if k is not None]
+    assert string_keys == ["bad_layer"]
+    # If anndata stores X as layers[None], the None key must survive sanitization
+    if none_in_layers_before:
+        assert None in sanitized.layers
+
+
 def test_sanitize_table_empty_returns_empty():
     ad = AnnData()
     sanitized = sanitize_table(ad, inplace=False)

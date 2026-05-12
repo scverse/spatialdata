@@ -159,9 +159,9 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     # Handle other attributes
     for attr in ("obsm", "obsp", "varm", "varp", "uns", "layers"):
         d = getattr(sanitized, attr)
-        new_keys = {old: get_unique_name(old, attr) for old in d}
-        # Create new dictionary with sanitized keys
-        new_dict = {new_keys[old]: value for old, value in d.items()}
+        # None is a valid key in layers (anndata >= 0.13: represents X); skip sanitizing it
+        new_keys = {old: get_unique_name(old, attr) for old in d if old is not None}
+        new_dict = {(new_keys[old] if old is not None else old): value for old, value in d.items()}
         setattr(sanitized, attr, new_dict)
 
     return None if inplace else sanitized
