@@ -14,7 +14,7 @@ import zarr
 from anndata import AnnData
 from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
-from dask.dataframe import Scalar, read_parquet
+from dask.dataframe import Scalar
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Polygon
 from upath import UPath
@@ -1979,21 +1979,14 @@ class SpatialData:
                 if attr == "shapes":
                     descr += f"{h(attr + 'level1.1')}{k!r}: {descr_class} shape: {v.shape} (2D shapes)"
                 elif attr == "points":
+                    import pyarrow.parquet as pq
+
+                    from spatialdata._io._utils import get_dask_backing_files
+
                     length: int | None = None
-                    if len(v.dask) == 1:
-                        name, layer = v.dask.items().__iter__().__next__()
-                        if "read-parquet" in name:
-                            t = layer.creation_info["args"]
-                            assert isinstance(t, tuple)
-                            assert len(t) == 1
-                            parquet_file = t[0]
-                            table = read_parquet(parquet_file)
-                            length = len(table)
-                        else:
-                            # length = len(v)
-                            length = None
-                    else:
-                        length = None
+                    backing_files = get_dask_backing_files(v)
+                    if backing_files:
+                        length = sum(pq.read_metadata(f).num_rows for f in backing_files)
 
                     n = len(get_axes_names(v))
                     dim_string = f"({n}D points)"
@@ -2084,8 +2077,8 @@ class SpatialData:
             description = self.elements_are_self_contained()
             for _, element_name, element in self.gen_elements():
                 if not description[element_name]:
-                    backing_files = ", ".join(get_dask_backing_files(element))
-                    descr += f"\n    ▸ {element_name}: {backing_files}"
+                    backing_files_str = ", ".join(get_dask_backing_files(element))
+                    descr += f"\n    ▸ {element_name}: {backing_files_str}"
 
         if self.path is not None:
             elements_only_in_sdata, elements_only_in_zarr = self._symmetric_difference_with_zarr_store()
