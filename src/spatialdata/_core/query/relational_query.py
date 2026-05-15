@@ -113,7 +113,8 @@ def _(
     return_background: bool = False,
 ) -> pd.Index:
     model = get_model(element)
-    assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
+    if model in [Labels2DModel, Labels3DModel]:
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     if isinstance(element, DataArray):
         # get unique labels value (including 0 if present)
         instances = da.unique(element.data).compute()
