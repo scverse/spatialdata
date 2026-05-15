@@ -128,6 +128,7 @@ class ImageTilesDataset(Dataset):
         from spatialdata._core.operations.rasterize import rasterize as rasterize_fn
 
         self.sdata = sdata
+        self._rasterize = rasterize
         self._validate(regions_to_images, regions_to_coordinate_systems, return_annotations, table_name)
         self._preprocess(tile_scale, tile_dim_in_units, rasterize, table_name)
 
@@ -145,7 +146,7 @@ class ImageTilesDataset(Dataset):
                 **dict(rasterize_kwargs),
             )
             if rasterize
-            else partial(bounding_box_query, return_request_only=True)  # type: ignore[assignment]
+            else bounding_box_query
         )
         self._return = self._get_return(return_annotations, table_name)
         self.transform = transform
@@ -250,25 +251,18 @@ class ImageTilesDataset(Dataset):
                 tile_scale=tile_scale,
                 tile_dim_in_units=tile_dim_in_units,
             )
-            tile_coords["selection"] = bounding_box_query(
-                self.sdata[image_name],
-                ("x", "y"),
-                min_coordinate=tile_coords[["minx", "miny"]].values,
-                max_coordinate=tile_coords[["maxx", "maxy"]].values,
-                target_coordinate_system=cs,
-                return_request_only=True,
-            )
-            # tile_coords["selection"] = tile_coords.apply(
-            #     lambda row, cs=cs, image_name=image_name: bounding_box_query(
-            #         self.sdata[image_name],
-            #         ("x", "y"),
-            #         min_coordinate=row[["minx", "miny"]].values,
-            #         max_coordinate=row[["maxx", "maxy"]].values,
-            #         target_coordinate_system=cs,
-            #         return_request_only=True,
-            #     ),
-            #     axis=1,
-            # )
+            if not rasterize:
+                # Pre-compute all per-tile slice selections in a single vectorized call.
+                # Passing 2-D min/max arrays triggers the multi-box path in bounding_box_query,
+                # which returns a list of {axis: slice} dicts — one per tile.
+                tile_coords["selection"] = bounding_box_query(
+                    self.sdata[image_name],
+                    ("x", "y"),
+                    min_coordinate=tile_coords[["minx", "miny"]].values,
+                    max_coordinate=tile_coords[["maxx", "maxy"]].values,
+                    target_coordinate_system=cs,
+                    return_request_only=True,
+                )
             tile_coords_df.append(tile_coords)
 
             inst = circles.index.values
@@ -296,7 +290,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = ad.concat(*tables_l)
+            self.dataset_table = ad.concat(tables_l)
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))
@@ -376,14 +370,17 @@ class ImageTilesDataset(Dataset):
         t_coords = self.tiles_coords.iloc[idx]
 
         image = self.sdata[row["image"]]
-        # tile = self._crop_image(
-        #     image,
-        #     axes=tuple(self.dims),
-        #     min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
-        #     max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
-        #     target_coordinate_system=row["cs"],
-        # )
-        tile = image.sel(t_coords["selection"])
+        if self._rasterize:
+            tile = self._crop_image(
+                image,
+                axes=tuple(self.dims),
+                min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
+                max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
+                target_coordinate_system=row["cs"],
+            )
+        else:
+            # Use pre-computed slice selection (vectorized at init time).
+            tile = image.sel(t_coords["selection"])
         if self.transform is not None:
             out = self._return(idx, tile)
             return self.transform(out)
