@@ -480,6 +480,11 @@ def _(
     offsets = np.cumsum([0] + lengths)
     delayed_parts = [dask.delayed(transformed_pd.iloc[offsets[i] : offsets[i + 1]]) for i in range(len(lengths))]
     transformed = dd.from_delayed(delayed_parts, meta=transformed_pd.iloc[:0])
+    # Preserve spatialdata_attrs (feature_key, instance_key, …) from the original element;
+    # dd.from_delayed starts with empty attrs so we must copy them explicitly.
+    for k, v in data.attrs.items():
+        if k != TRANSFORM_KEY:
+            transformed.attrs[k] = v
     # dummy transformation that will be replaced by _adjust_transformation()
     default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
     transformed.attrs[TRANSFORM_KEY] = default_cs
