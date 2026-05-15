@@ -6,10 +6,11 @@ import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, cast
 
+import dask
 import dask.array as da
+import dask.dataframe as dd
 import dask_image.ndinterp
 import numpy as np
-import pandas as pd
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -442,20 +443,26 @@ def _(
     axes = get_axes_names(data)
     arrays = []
 
-    # Workaround to prevent partition collaps and missing dependency problem for now.
+    # Dask's expression optimizer can collapse partitions at compute time, making the partition
+    # structure inside vs. outside a disable_dask_tune_optimization() context inconsistent. To avoid
+    # index-alignment failures (e.g. "cannot reindex on an axis with duplicate labels" from parquet
+    # files that each start their index at 0) and length-mismatch errors, we materialise the non-axis
+    # columns and compute the axis arrays inside a single context where the partition structure is
+    # stable, then do plain pandas operations and re-wrap with dd.from_delayed (not dd.from_pandas,
+    # which sorts by index and would scramble rows for non-monotonic or duplicate indices).
     with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
+        lengths = [len(part) for part in data.partitions]
         for ax in axes:
             # TODO We have to pass on the lengths explicitly as automatic determination with dask graph optimization
-            #  leads to collaps of the partitions. However this causes a missing dependency problem, which for now is
+            #  leads to collapse of the partitions. However this causes a missing dependency problem, which for now is
             #  prevented by setting the optimization to False when performing this operation.
-            arrays.append(data[ax].to_dask_array(lengths=[len(part) for part in data.partitions]).reshape(-1, 1))
+            arrays.append(data[ax].to_dask_array(lengths=lengths).reshape(-1, 1))
 
-    xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
-    xtransformed = transformation._transform_coordinates(xdata)
-    transformed = data.drop(columns=list(axes)).copy()
-    # dummy transformation that will be replaced by _adjust_transformation()
-    default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
-    transformed.attrs[TRANSFORM_KEY] = default_cs
+        xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(sum(lengths)), "dim": list(axes)})
+        xtransformed = transformation._transform_coordinates(xdata)
+
+        # Compute non-axis columns while the partition structure is still stable; preserves original index.
+        transformed_pd = data.drop(columns=list(axes)).compute()
 
     for ax in axes:
         indices = xtransformed["dim"] == ax
@@ -463,8 +470,19 @@ def _(
         # TODO: discuss with dask team
         # This is not nice, but otherwise there is a problem with the joint graph of new_ax and transformed, causing
         # a getattr missing dependency of dependent from_dask_array.
-        new_col = pd.Series(new_ax.data.flatten().compute(), index=transformed.index)
-        transformed[ax] = new_col
+        # Assigning a numpy array is positional (no index alignment), so the original index is preserved.
+        transformed_pd[ax] = new_ax.data.flatten().compute()
+
+    # Reconstruct as a dask DataFrame via delayed partitions so that:
+    # (a) row order matches the original (dd.from_pandas sorts by index, which scrambles rows for
+    #     non-monotonic or duplicate indices such as those produced by multi-file parquet reads), and
+    # (b) the original index is preserved exactly.
+    offsets = np.cumsum([0] + lengths)
+    delayed_parts = [dask.delayed(transformed_pd.iloc[offsets[i] : offsets[i + 1]]) for i in range(len(lengths))]
+    transformed = dd.from_delayed(delayed_parts, meta=transformed_pd.iloc[:0])
+    # dummy transformation that will be replaced by _adjust_transformation()
+    default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    transformed.attrs[TRANSFORM_KEY] = default_cs
 
     old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
 
