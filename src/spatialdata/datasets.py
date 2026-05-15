@@ -2,29 +2,29 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal
 
 import dask.dataframe.core
 import numpy as np
 import pandas as pd
-import scipy
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
 from shapely.affinity import translate
 from shapely.geometry import MultiPolygon, Point, Polygon
-from skimage.segmentation import slic
 from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models import (
     Image2DModel,
+    Image3DModel,
     Labels2DModel,
+    Labels3DModel,
     PointsModel,
     ShapesModel,
     TableModel,
@@ -89,6 +89,9 @@ class RaccoonDataset:
         self,
     ) -> SpatialData:
         """Raccoon dataset."""
+        import scipy.datasets
+        from skimage.segmentation import slic
+
         im_data = scipy.datasets.face()
         im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
@@ -134,9 +137,11 @@ class BlobsDataset:
         self.c_coords = c_coords
         if c_coords is not None:
             if n_channels != len(c_coords):
-                logger.info(
+                warnings.warn(
                     f"Number of channels ({n_channels}) and c_coords ({len(c_coords)}) do not match; ignoring "
-                    f"n_channels value"
+                    f"n_channels value",
+                    UserWarning,
+                    stacklevel=2,
                 )
             n_channels = len(c_coords)
         self.n_channels = n_channels
@@ -149,10 +154,10 @@ class BlobsDataset:
         """Blobs dataset."""
         image = self._image_blobs(self.transformations, self.length, self.n_channels, self.c_coords)
         multiscale_image = self._image_blobs(
-            self.transformations, self.length, self.n_channels, self.c_coords, multiscale=True
+            self.transformations, self.length, self.n_channels, self.c_coords, scale_factors=[2, 2]
         )
         labels = self._labels_blobs(self.transformations, self.length)
-        multiscale_labels = self._labels_blobs(self.transformations, self.length, multiscale=True)
+        multiscale_labels = self._labels_blobs(self.transformations, self.length, scale_factors=[2, 2])
         points = self._points_blobs(self.transformations, self.length, self.n_points)
         circles = self._circles_blobs(self.transformations, self.length, self.n_shapes)
         polygons = self._polygons_blobs(self.transformations, self.length, self.n_shapes)
@@ -168,7 +173,7 @@ class BlobsDataset:
             labels={"blobs_labels": labels, "blobs_multiscale_labels": multiscale_labels},
             points={"blobs_points": points},
             shapes={"blobs_circles": circles, "blobs_polygons": polygons, "blobs_multipolygons": multipolygons},
-            tables=table,
+            tables={"table": table},
         )
 
     def _image_blobs(
@@ -177,38 +182,51 @@ class BlobsDataset:
         length: int = 512,
         n_channels: int = 3,
         c_coords: str | list[str] | None = None,
-        multiscale: bool = False,
+        scale_factors: list[int] | None = None,
+        ndim: int = 2,
     ) -> DataArray | DataTree:
         masks = []
         for i in range(n_channels):
-            mask = self._generate_blobs(length=length, seed=i)
+            mask = self._generate_blobs(length=length, seed=i, ndim=ndim)
             mask = (mask - mask.min()) / np.ptp(mask)
             masks.append(mask)
 
         x = np.stack(masks, axis=0)
-        dims = ["c", "y", "x"]
-        if not multiscale:
-            return Image2DModel.parse(x, transformations=transformations, dims=dims, c_coords=c_coords)
-        return Image2DModel.parse(
-            x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=[2, 2]
+        model: type[Image2DModel] | type[Image3DModel]
+        if ndim == 2:
+            dims = ["c", "y", "x"]
+            model = Image2DModel
+        else:
+            dims = ["c", "z", "y", "x"]
+            model = Image3DModel
+        if scale_factors is None:
+            return model.parse(x, transformations=transformations, dims=dims, c_coords=c_coords)
+        return model.parse(
+            x, transformations=transformations, dims=dims, c_coords=c_coords, scale_factors=scale_factors
         )
 
     def _labels_blobs(
-        self, transformations: dict[str, Any] | None = None, length: int = 512, multiscale: bool = False
+        self,
+        transformations: dict[str, Any] | None = None,
+        length: int = 512,
+        scale_factors: list[int] | None = None,
+        ndim: int = 2,
     ) -> DataArray | DataTree:
-        """Create a 2D labels."""
+        """Create labels in 2D or 3D."""
         from scipy.ndimage import watershed_ift
 
         # from skimage
-        mask = self._generate_blobs(length=length)
+        mask = self._generate_blobs(length=length, ndim=ndim)
         threshold = np.percentile(mask, 100 * (1 - 0.3))
         inputs = np.logical_not(mask < threshold).astype(np.uint8)
         # use watershed from scipy
-        xm, ym = np.ogrid[0:length:10, 0:length:10]
+        grid = np.ogrid[tuple(slice(0, length, 10) for _ in range(ndim))]
         markers = np.zeros_like(inputs).astype(np.int16)
-        markers[xm, ym] = np.arange(xm.size * ym.size).reshape((xm.size, ym.size))
+        grid_shape = tuple(g.size for g in grid)
+        markers[tuple(grid)] = np.arange(np.prod(grid_shape)).reshape(grid_shape)
         out = watershed_ift(inputs, markers)
-        out[xm, ym] = out[xm - 1, ym - 1]  # remove the isolate seeds
+        shifted = tuple(g - 1 for g in grid)
+        out[tuple(grid)] = out[tuple(shifted)]  # remove the isolated seeds
         # reindex by frequency
         val, counts = np.unique(out, return_counts=True)
         sorted_idx = np.argsort(counts)
@@ -217,20 +235,26 @@ class BlobsDataset:
                 out[out == val[idx]] = 0
             else:
                 out[out == val[idx]] = i
-        dims = ["y", "x"]
-        if not multiscale:
-            return Labels2DModel.parse(out, transformations=transformations, dims=dims)
-        return Labels2DModel.parse(out, transformations=transformations, dims=dims, scale_factors=[2, 2])
+        model: type[Labels2DModel] | type[Labels3DModel]
+        if ndim == 2:
+            dims = ["y", "x"]
+            model = Labels2DModel
+        else:
+            dims = ["z", "y", "x"]
+            model = Labels3DModel
+        if scale_factors is None:
+            return model.parse(out, transformations=transformations, dims=dims)
+        return model.parse(out, transformations=transformations, dims=dims, scale_factors=scale_factors)
 
-    def _generate_blobs(self, length: int = 512, seed: int | None = None) -> ArrayLike:
+    def _generate_blobs(self, length: int = 512, seed: int | None = None, ndim: int = 2) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
 
         rng = default_rng(42) if seed is None else default_rng(seed)
         # from skimage
-        shape = tuple([length] * 2)
+        shape = (length,) * ndim
         mask = np.zeros(shape)
-        n_pts = max(int(1.0 / 0.1) ** 2, 1)
-        points = (length * rng.random((2, n_pts))).astype(int)
+        n_pts = max(int(1.0 / 0.1) ** ndim, 1)
+        points = (length * rng.random((ndim, n_pts))).astype(int)
         mask[tuple(indices for indices in points)] = 1
         mask = gaussian_filter(mask, sigma=0.25 * length * 0.1)
         assert isinstance(mask, np.ndarray)
@@ -371,9 +395,12 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
         instance_id = get_element_instances(sdata[name]).tolist()
     else:
         index = sdata[name].index
-        instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.core.Index) else index.tolist()
+        instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.Index) else index.tolist()
     n = len(instance_id)
-    new_table = AnnData(shape=(n, 0), obs={"region": [name for _ in range(n)], "instance_id": instance_id})
+    obs_df = pd.DataFrame(
+        {"region": pd.Categorical([name] * n), "instance_id": instance_id}, index=[str(i) for i in range(n)]
+    )
+    new_table = AnnData(shape=(n, 0), obs=obs_df)
     new_table = TableModel.parse(new_table, region=name, region_key="region", instance_key="instance_id")
     del sdata.tables["table"]
     sdata["table"] = new_table

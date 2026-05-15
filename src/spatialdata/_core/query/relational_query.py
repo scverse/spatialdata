@@ -4,14 +4,16 @@ import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, member
 from functools import partial, singledispatch
 from typing import Any, Literal
 
 import dask.array as da
 import numpy as np
 import pandas as pd
+import xarray as xr
 from anndata import AnnData
+from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
@@ -310,7 +312,10 @@ def _get_masked_element(
 
 
 def _right_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
@@ -348,7 +353,10 @@ def _right_exclusive_join_spatialelement_table(
 
 
 def _right_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "left":
         warnings.warn("Matching rows 'left' is not supported for 'right' join.", UserWarning, stacklevel=2)
@@ -364,11 +372,18 @@ def _right_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    warnings.warn(
-                        f"Element type `labels` not supported for 'right' join. Skipping `{name}`",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                    if filter_label_pixels is True:
+                        element_dict[element_type][name] = _filter_labels_element(
+                            element, table_instance_key_column.tolist()
+                        )
+                    elif filter_label_pixels is None:
+                        warnings.warn(
+                            f"Element type `labels` not supported for 'right' join, pixels are not filtered;"
+                            f" pass `filter_label_pixels=True` to filter or `filter_label_pixels=False` to silence"
+                            f" this warning. Skipping `{name}`",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                     continue
 
                 masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
@@ -382,7 +397,10 @@ def _right_join_spatialelement_table(
 
 
 def _inner_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
@@ -398,11 +416,18 @@ def _inner_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    warnings.warn(
-                        f"Element type `labels` not supported for 'inner' join. Skipping `{name}`",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                    if filter_label_pixels is True:
+                        element_dict[element_type][name] = _filter_labels_element(
+                            element, table_instance_key_column.tolist()
+                        )
+                    elif filter_label_pixels is None:
+                        warnings.warn(
+                            f"Element type `labels` not supported for 'inner' join, pixels are not filtered;"
+                            f" pass `filter_label_pixels=True` to filter or `filter_label_pixels=False` to silence"
+                            f" this warning. Skipping `{name}`",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                     continue
 
                 masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
@@ -428,7 +453,10 @@ def _inner_join_spatialelement_table(
 
 
 def _left_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
@@ -461,7 +489,10 @@ def _left_exclusive_join_spatialelement_table(
 
 
 def _left_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "right":
         warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
@@ -529,11 +560,11 @@ def _match_rows(
 class JoinTypes(Enum):
     """Available join types for matching elements to tables and vice versa."""
 
-    left = partial(_left_join_spatialelement_table)
-    left_exclusive = partial(_left_exclusive_join_spatialelement_table)
-    inner = partial(_inner_join_spatialelement_table)
-    right = partial(_right_join_spatialelement_table)
-    right_exclusive = partial(_right_exclusive_join_spatialelement_table)
+    left = member(partial(_left_join_spatialelement_table))
+    left_exclusive = member(partial(_left_exclusive_join_spatialelement_table))
+    inner = member(partial(_inner_join_spatialelement_table))
+    right = member(partial(_right_join_spatialelement_table))
+    right_exclusive = member(partial(_right_exclusive_join_spatialelement_table))
 
     def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
         return self.value(*args)
@@ -585,6 +616,7 @@ def join_spatialelement_table(
     table: AnnData | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     """
     Join SpatialElement(s) and table together in SQL like manner.
@@ -628,6 +660,11 @@ def join_spatialelement_table(
     match_rows
         Whether to match the indices of the element and table and if so how. If ``'left'``, element_indices take
         priority and if ``'right'`` table instance ids take priority.
+    filter_label_pixels
+        Controls pixel-level filtering of label elements for ``'right'`` and ``'inner'`` joins.
+        If ``True``, pixels whose instance id is not present in the table are set to zero.
+        If ``None`` (default), label elements are returned unfiltered and a warning is issued.
+        If ``False``, label elements are returned unfiltered silently (no warning).
 
     Returns
     -------
@@ -651,6 +688,11 @@ def join_spatialelement_table(
         If the provided join type is not supported.
     ValueError
         If an incorrect value is given for `match_rows`.
+
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
 
     See Also
     --------
@@ -681,19 +723,23 @@ def join_spatialelement_table(
     if sdata is not None:
         elements_dict = _create_sdata_elements_dict_for_join(sdata, spatial_element_names)
     else:
-        derived_sdata = SpatialData.from_elements_dict(dict(zip(spatial_element_names, spatial_elements, strict=True)))
+        derived_sdata = SpatialData.init_from_elements(dict(zip(spatial_element_names, spatial_elements, strict=True)))
         element_types = ["labels", "shapes", "points"]
         elements_dict = defaultdict(lambda: defaultdict(dict))
         for element_type in element_types:
             for name, element in getattr(derived_sdata, element_type).items():
                 elements_dict[element_type][name] = element
 
-    elements_dict_joined, table = _call_join(elements_dict, table, how, match_rows)
+    elements_dict_joined, table = _call_join(elements_dict, table, how, match_rows, filter_label_pixels)
     return elements_dict_joined, table
 
 
 def _call_join(
-    elements_dict: dict[str, dict[str, Any]], table: AnnData, how: str, match_rows: Literal["no", "left", "right"]
+    elements_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    how: str,
+    match_rows: Literal["no", "left", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
@@ -708,7 +754,7 @@ def _call_join(
     # if how in JoinTypes.__dict__["_member_names_"]:
     # hotfix for bug with Python 3.13:
     if how in JoinTypes.__dict__:
-        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows)
+        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows, filter_label_pixels)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
 
@@ -735,19 +781,16 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     -------
     Table with the rows matching the instances of the element
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_element_to_table : Function to match a spatial element to a table.
     join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
-    if table_name is None:
-        warnings.warn(
-            "Assumption of table with name `table` being present is being deprecated in SpatialData v0.1. "
-            "Please provide the name of the table as argument to table_name.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        table_name = "table"
     _, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
     )
@@ -773,6 +816,11 @@ def match_element_to_table(
     -------
     A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
     See Also
     --------
     match_table_to_element : Function to match a table to a spatial element.
@@ -789,6 +837,7 @@ def match_sdata_to_table(
     table_name: str,
     table: AnnData | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    filter_label_pixels: bool | None = None,
 ) -> SpatialData:
     """
     Filter the elements of a SpatialData object to match only the rows present in the table.
@@ -804,14 +853,22 @@ def match_sdata_to_table(
         `table_name` is used to name the table in the returned `SpatialData` object.
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+    filter_label_pixels
+        Controls pixel-level filtering of label elements. ``True`` filters pixels, ``None`` (default) leaves them
+        unfiltered and warns, ``False`` leaves them unfiltered silently. See
+        :func:`spatialdata.join_spatialelement_table` for details.
 
+    Notes
+    -----
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
     """
     if table is None:
         table = sdata[table_name]
     _, region_key, instance_key = get_table_keys(table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     filtered_elements, filtered_table = join_spatialelement_table(
-        sdata, spatial_element_names=annotated_regions, table=table, how=how
+        sdata, spatial_element_names=annotated_regions, table=table, how=how, filter_label_pixels=filter_label_pixels
     )
     filtered_table = TableModel.parse(
         filtered_table,
@@ -821,6 +878,84 @@ def match_sdata_to_table(
         overwrite_metadata=True,
     )
     return SpatialData.init_from_elements(filtered_elements | {table_name: filtered_table})
+
+
+def filter_by_table_query(
+    sdata: SpatialData,
+    table_name: str,
+    filter_tables: bool = True,
+    element_names: list[str] | None = None,
+    obs_expr: Predicates | None = None,
+    var_expr: Predicates | None = None,
+    x_expr: Predicates | None = None,
+    obs_names_expr: Predicates | None = None,
+    var_names_expr: Predicates | None = None,
+    layer: str | None = None,
+    how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    filter_label_pixels: bool | None = None,
+) -> SpatialData:
+    """Filter the SpatialData object based on a set of table queries.
+
+    Parameters
+    ----------
+    sdata
+        The SpatialData object to filter.
+    table_name
+        The name of the table to filter the SpatialData object by.
+    filter_tables
+        If True (default), the table is filtered to only contain rows that are annotating regions
+        contained within the element_names.
+    element_names
+        The names of the elements to filter the SpatialData object by.
+    obs_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs` by.
+    var_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var` by.
+    x_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.X` by.
+    obs_names_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs_names` by.
+    var_names_expr
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var_names` by.
+    layer
+        The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
+    how
+        The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+    filter_label_pixels
+        Controls pixel-level filtering of label elements. ``True`` filters pixels, ``None`` (default) leaves them
+        unfiltered and warns, ``False`` leaves them unfiltered silently. See
+        :func:`spatialdata.join_spatialelement_table` for details.
+
+    Returns
+    -------
+        The filtered SpatialData object.
+
+    Notes
+    -----
+    You can also use :func:`spatialdata.SpatialData.filter_by_table_query` with the convenience that `sdata` is the
+    current `SpatialData` object.
+
+    For a graphical representation of the join operations, see the
+    `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
+
+    For more examples on table queries, see the
+    `Table queries tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/table_queries.html>`_.
+    """
+    sdata_subset: SpatialData = (
+        sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
+    )
+
+    filtered_table: AnnData = sdata_subset.tables[table_name].an.filter(
+        obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
+    )
+
+    return match_sdata_to_table(
+        sdata=sdata_subset,
+        table_name=table_name,
+        table=filtered_table,
+        how=how,
+        filter_label_pixels=filter_label_pixels,
+    )
 
 
 @dataclass
@@ -978,6 +1113,7 @@ def get_values(
             assert obs[region_key].nunique() == 1
             assert obs[instance_key].nunique() == len(matched_table)
         else:
+            assert isinstance(element, AnnData)
             matched_table = element
             instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
             region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -1019,3 +1155,50 @@ def get_values(
         return df
 
     raise ValueError(f"Unknown origin {origin}")
+
+
+def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    # Use apply_ufunc for efficient processing
+    # Create a copy to avoid modifying read-only array
+    result = block.copy()
+    result[np.isin(result, ids_to_remove)] = 0
+    return result
+
+
+def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    processed = xr.apply_ufunc(
+        partial(_mask_block, ids_to_remove=ids_to_remove),
+        image,
+        input_core_dims=[["y", "x"]],
+        output_core_dims=[["y", "x"]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[image.dtype],
+        dataset_fill_value=0,
+        dask_gufunc_kwargs={"allow_rechunk": True},
+    )
+
+    # Create a new DataArray to ensure persistence
+    return xr.DataArray(
+        data=processed.data,
+        coords=image.coords,
+        dims=image.dims,
+        attrs=image.attrs.copy(),  # Preserve all attributes
+    )
+
+
+def _filter_labels_element(element: DataArray | DataTree, ids_to_keep: list[int]) -> DataArray | DataTree:
+    if get_model(element) is Labels3DModel:
+        raise NotImplementedError("Pixel-level filtering of 3D labels is not supported.")
+    element_instances = get_element_instances(element)
+    ids_to_remove = [i for i in element_instances if i not in set(ids_to_keep)]
+    if isinstance(element, DataArray):
+        return Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(element, ids_to_remove))
+    scales = list(element.keys())
+    scale_factors = [
+        round(element[scales[i]].image.shape[0] / element[scales[i + 1]].image.shape[0]) for i in range(len(scales) - 1)
+    ]
+    return Labels2DModel.parse(
+        _set_instance_ids_in_labels_to_zero(element[scales[0]].image, ids_to_remove),
+        scale_factors=scale_factors,
+    )

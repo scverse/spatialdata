@@ -9,7 +9,7 @@ assignees: ""
 **Recommendation: attach a minimal working example**
 Generally, the easier it is for us to reproduce the issue, the faster we can work on it. It is not required, but if you can, please:
 
-1. Reproduce using the [`blobs` dataset](https://spatialdata.scverse.org/en/latest/generated/spatialdata.datasets.blobs.html)
+1. Reproduce using the [`blobs` dataset](https://spatialdata.scverse.org/en/stable/api/datasets.html#spatialdata.datasets.blobs)
 
     ```python
     from spatialdata.datasets import blobs
@@ -17,7 +17,8 @@ Generally, the easier it is for us to reproduce the issue, the faster we can wor
     sdata = blobs()
     ```
 
-    You can also use [`blobs_annotating_element`](https://spatialdata.scverse.org/en/latest/generated/spatialdata.datasets.blobs_annotating_element.html) for more control:
+    You can also use [`blobs_annotating_element`](https://spatialdata.scverse.org/en/stable/api/datasets.html#spatialdata.datasets.blobs_annotating_element) for more
+    control:
 
     ```
     from spatialdata.datasets import blobs_annotating_element

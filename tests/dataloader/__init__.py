@@ -1,4 +1,4 @@
-from typing import Union
+from __future__ import annotations
 
 try:
     from spatialdata.dataloader.datasets import ImageTilesDataset

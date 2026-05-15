@@ -4,7 +4,7 @@ on:
     push:
         branches: [main]
         tags:
-            - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
+            - "v*"
     pull_request:
         branches: "*"
 
@@ -13,43 +13,55 @@ jobs:
         runs-on: ${{ matrix.os }}
         defaults:
             run:
-                shell: bash -e {0} # -e to fail on error
+                shell: bash  # bash also on windows
 
         strategy:
             fail-fast: false
             matrix:
-                python: ["3.10", "3.12"]
-                os: [ubuntu-latest]
                 include:
-                    - os: macos-latest
-                      python: "3.10"
-                    - os: macos-latest
-                      python: "3.12"
-                      pip-flags: "--pre"
-                      name: "Python 3.12 (pre-release)"
-
+                    - {os: windows-latest, python: "3.11", dask-version: "2025.12.0", name: "min dask"}
+                    - {os: windows-latest, python: "3.14", dask-version: "latest"}
+                    - {os: ubuntu-latest, python: "3.11", dask-version: "latest"}
+                    - {os: ubuntu-latest, python: "3.14", dask-version: "latest"}
+                    - {os: macos-latest, python: "3.11", dask-version: "latest"}
+                    - {os: macos-latest, python: "3.14", prerelease: "allow", name: "prerelease"}
         env:
             OS: ${{ matrix.os }}
             PYTHON: ${{ matrix.python }}
+            DASK_VERSION: ${{ matrix.dask-version }}
+            PRERELEASE: ${{ matrix.prerelease }}
 
         steps:
-            - uses: actions/checkout@v2
-            - uses: astral-sh/setup-uv@v5
+            - uses: actions/checkout@v6
+            - uses: astral-sh/setup-uv@v7
               id: setup-uv
               with:
                   version: "latest"
                   python-version: ${{ matrix.python }}
             - name: Install dependencies
-              run: "uv sync --extra test"
+              run: |
+                  if [[ "${PRERELEASE}" == "allow" ]]; then
+                    sed -i '' 's/requires-python.*//' pyproject.toml # otherwise uv complains that anndata requires python>=3.12 and we only do >=3.11 😱
+                    uv add git+https://github.com/scverse/anndata.git
+                    uv add pandas>=3.dev0
+                  fi
+                  if [[ -n "${DASK_VERSION}" ]]; then
+                    if [[ "${DASK_VERSION}" == "latest" ]]; then
+                      uv add dask
+                    else
+                      uv add dask==${DASK_VERSION}
+                    fi
+                  fi
+                  uv sync --group=test
             - name: Test
               env:
                   MPLBACKEND: agg
                   PLATFORM: ${{ matrix.os }}
                   DISPLAY: :42
               run: |
-                  uv run pytest --cov --color=yes --cov-report=xml
+                  uv run pytest --cov --color=yes --cov-report=xml -n auto --dist worksteal
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v4
+              uses: codecov/codecov-action@v5
               with:
                   name: coverage
                   verbose: true

@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import os
 import tempfile
 from contextlib import nullcontext
 
 import dask.dataframe as dd
+import numpy as np
+import pandas as pd
 import pytest
+from upath import UPath
 
-from spatialdata import read_zarr
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
+from spatialdata.models import PointsModel
 
 
 def test_backing_files_points(points):
@@ -37,8 +43,8 @@ def test_backing_files_images(images):
     computational graph
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        f0 = os.path.join(tmp_dir, "images0.zarr")
-        f1 = os.path.join(tmp_dir, "images1.zarr")
+        f0 = UPath(tmp_dir) / "images0.zarr"
+        f1 = UPath(tmp_dir) / "images1.zarr"
         images.write(f0)
         images.write(f1)
         images0 = read_zarr(f0)
@@ -49,7 +55,7 @@ def test_backing_files_images(images):
         im1 = images1.images["image2d"]
         im2 = im0 + im1
         files = get_dask_backing_files(im2)
-        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d")) for f in [f0, f1]]
+        expected_zarr_locations = [str((f / "images" / "image2d").resolve()) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
         # multiscale
@@ -57,7 +63,7 @@ def test_backing_files_images(images):
         im4 = images1.images["image2d_multiscale"]
         im5 = im3 + im4
         files = get_dask_backing_files(im5)
-        expected_zarr_locations = [os.path.realpath(os.path.join(f, "images/image2d_multiscale")) for f in [f0, f1]]
+        expected_zarr_locations = [str((f / "images" / "image2d_multiscale").resolve()) for f in [f0, f1]]
         assert set(files) == set(expected_zarr_locations)
 
 
@@ -98,26 +104,27 @@ def test_backing_files_combining_points_and_images(points, images):
     from examining its computational graph
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        f0 = os.path.join(tmp_dir, "points0.zarr")
-        f1 = os.path.join(tmp_dir, "images1.zarr")
+        f0 = UPath(tmp_dir) / "points0.zarr"
+        f1 = UPath(tmp_dir) / "images1.zarr"
         points.write(f0)
         images.write(f1)
         points0 = read_zarr(f0)
         images1 = read_zarr(f1)
 
         p0 = points0.points["points_0"]
+
         im1 = images1.images["image2d"]
         v = p0["x"].loc[0].values
         v.compute_chunk_sizes()
         im2 = v + im1
         files = get_dask_backing_files(im2)
         expected_zarr_locations_old = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str((f0 / "points" / "points_0" / "points.parquet").resolve()),
+            str((f1 / "images" / "image2d").resolve()),
         ]
         expected_zarr_locations_new = [
-            os.path.realpath(os.path.join(f0, "points/points_0/points.parquet/part.0.parquet")),
-            os.path.realpath(os.path.join(f1, "images/image2d")),
+            str((f0 / "points" / "points_0" / "points.parquet" / "part.0.parquet").resolve()),
+            str((f1 / "images" / "image2d").resolve()),
         ]
         assert set(files) == set(expected_zarr_locations_old) or set(files) == set(expected_zarr_locations_new)
 
@@ -137,3 +144,23 @@ def test_handle_read_errors(on_bad_files: str, actual_error: Exception, expectat
         with handle_read_errors(on_bad_files=on_bad_files, location="location", exc_types=KeyError):
             if actual_error is not None:
                 raise actual_error
+
+
+def test_repr_points_shows_row_count():
+    """repr() must show the concrete row count, not <Delayed>, for backed points."""
+    with tempfile.TemporaryDirectory() as tmp:
+        parquet_path = os.path.join(tmp, "points.parquet")
+        n_rows = 400
+        rng = np.random.default_rng(0)
+        df = pd.DataFrame({"x": rng.random(n_rows), "y": rng.random(n_rows)})
+        # aggregate_files=True produces a list-of-piece-dicts graph, the case reported in #1084
+        dd.from_pandas(df, npartitions=4).to_parquet(parquet_path, write_index=False)
+        ddf = dd.read_parquet(parquet_path, aggregate_files=True)
+
+        points = PointsModel.parse(ddf)
+        sdata = SpatialData(points={"pts": points})
+        sdata.write(os.path.join(tmp, "example.zarr"))
+
+        r = repr(sdata)
+        assert f"({n_rows}," in r, f"expected row count {n_rows} in repr, got: {r}"
+        assert "<Delayed>" not in r, f"repr still contains <Delayed>: {r}"

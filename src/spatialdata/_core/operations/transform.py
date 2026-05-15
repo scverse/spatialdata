@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import itertools
 import warnings
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+import dask
 import dask.array as da
+import dask.dataframe as dd
 import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
@@ -16,15 +19,13 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
+from spatialdata._utils import disable_dask_tune_optimization
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
-    from spatialdata.transformations.transformations import (
-        BaseTransformation,
-        Translation,
-    )
+    from spatialdata.transformations.transformations import BaseTransformation, Translation
 
 DEBUG_WITH_PLOTS = False
 ERROR_MSG_AFTER_0_0_15 = """\
@@ -335,7 +336,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -350,12 +351,7 @@ def _(
         data, transformation, maintain_positioning, to_coordinate_system
     )
     schema = get_model(data)
-    from spatialdata.models import (
-        Image2DModel,
-        Image3DModel,
-        Labels2DModel,
-        Labels3DModel,
-    )
+    from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
@@ -388,6 +384,18 @@ def _(
         transformed_dask, raster_translation_single_scale = _transform_raster(
             data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
         )
+
+        # if a scale in the transformed data has zero shape, we skip it
+        if 0 in transformed_dask.shape:
+            if k == "scale0":
+                raise ValueError(
+                    "The transformation leads to zero shaped data even at the highest resolution level. "
+                    "Check the scaling component of the transformation."
+                )
+            # no risk of skipping a scale (e.g. scale1) but not the next ones (e.g. scale2), because once a scale
+            # is skipped, all the lower scales are also skipped
+            continue
+
         if raster_translation is None:
             raster_translation = raster_translation_single_scale
         # we set a dummy empty dict for the transformation that will be replaced with the correct transformation for
@@ -414,7 +422,7 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     transformed_data = compute_coordinates(transformed_data)
-    schema().validate(transformed_data)
+    schema.validate(transformed_data)
     return transformed_data
 
 
@@ -434,24 +442,55 @@ def _(
     )
     axes = get_axes_names(data)
     arrays = []
-    for ax in axes:
-        arrays.append(data[ax].to_dask_array(lengths=True).reshape(-1, 1))
-    xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(len(data)), "dim": list(axes)})
-    xtransformed = transformation._transform_coordinates(xdata)
-    transformed = data.drop(columns=list(axes)).copy()
-    # dummy transformation that will be replaced by _adjust_transformation()
-    transformed.attrs[TRANSFORM_KEY] = {DEFAULT_COORDINATE_SYSTEM: Identity()}
-    # TODO: the following line, used in place of the line before, leads to an incorrect aggregation result. Look into
-    #  this! Reported here: ...
-    # transformed.attrs = {TRANSFORM_KEY: {DEFAULT_COORDINATE_SYSTEM: Identity()}}
-    assert isinstance(transformed, DaskDataFrame)
+
+    # Dask's expression optimizer can collapse partitions at compute time, making the partition
+    # structure inside vs. outside a disable_dask_tune_optimization() context inconsistent. To avoid
+    # index-alignment failures (e.g. "cannot reindex on an axis with duplicate labels" from parquet
+    # files that each start their index at 0) and length-mismatch errors, we materialise the non-axis
+    # columns and compute the axis arrays inside a single context where the partition structure is
+    # stable, then do plain pandas operations and re-wrap with dd.from_delayed (not dd.from_pandas,
+    # which sorts by index and would scramble rows for non-monotonic or duplicate indices).
+    with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
+        lengths = [len(part) for part in data.partitions]
+        for ax in axes:
+            # TODO We have to pass on the lengths explicitly as automatic determination with dask graph optimization
+            #  leads to collapse of the partitions. However this causes a missing dependency problem, which for now is
+            #  prevented by setting the optimization to False when performing this operation.
+            arrays.append(data[ax].to_dask_array(lengths=lengths).reshape(-1, 1))
+
+        xdata = DataArray(da.concatenate(arrays, axis=1), coords={"points": range(sum(lengths)), "dim": list(axes)})
+        xtransformed = transformation._transform_coordinates(xdata)
+
+        # Compute non-axis columns while the partition structure is still stable; preserves original index.
+        transformed_pd = data.drop(columns=list(axes)).compute()
+
     for ax in axes:
         indices = xtransformed["dim"] == ax
         new_ax = xtransformed[:, indices]
-        transformed[ax] = new_ax.data.flatten()
+        # TODO: discuss with dask team
+        # This is not nice, but otherwise there is a problem with the joint graph of new_ax and transformed, causing
+        # a getattr missing dependency of dependent from_dask_array.
+        # Assigning a numpy array is positional (no index alignment), so the original index is preserved.
+        transformed_pd[ax] = new_ax.data.flatten().compute()
 
-    old_transformations = get_transformation(data, get_all=True)
-    assert isinstance(old_transformations, dict)
+    # Reconstruct as a dask DataFrame via delayed partitions so that:
+    # (a) row order matches the original (dd.from_pandas sorts by index, which scrambles rows for
+    #     non-monotonic or duplicate indices such as those produced by multi-file parquet reads), and
+    # (b) the original index is preserved exactly.
+    offsets = np.cumsum([0] + lengths)
+    delayed_parts = [dask.delayed(transformed_pd.iloc[offsets[i] : offsets[i + 1]]) for i in range(len(lengths))]
+    transformed = dd.from_delayed(delayed_parts, meta=transformed_pd.iloc[:0])
+    # Preserve spatialdata_attrs (feature_key, instance_key, …) from the original element;
+    # dd.from_delayed starts with empty attrs so we must copy them explicitly.
+    for k, v in data.attrs.items():
+        if k != TRANSFORM_KEY:
+            transformed.attrs[k] = v
+    # dummy transformation that will be replaced by _adjust_transformation()
+    default_cs = {DEFAULT_COORDINATE_SYSTEM: Identity()}
+    transformed.attrs[TRANSFORM_KEY] = default_cs
+
+    old_transformations = cast(dict[str, Any], get_transformation(data, get_all=True))
+
     _set_transformation_for_transformed_elements(
         transformed,
         old_transformations,

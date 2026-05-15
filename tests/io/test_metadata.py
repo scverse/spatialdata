@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import tempfile
@@ -31,6 +33,7 @@ def test_save_transformations(full_sdata):
 
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles"])
 def test_validate_can_write_metadata_on_element(full_sdata, element_name):
+    full_sdata = full_sdata.subset([element_name])
     with tempfile.TemporaryDirectory() as tmp_dir:
         # element not present in the SpatialData object
         with pytest.raises(
@@ -58,6 +61,9 @@ def test_validate_can_write_metadata_on_element(full_sdata, element_name):
 @pytest.mark.parametrize("element_name", ["image2d", "labels2d", "points_0", "circles"])
 def test_save_transformations_incremental(element_name, full_sdata, caplog):
     """test io for transformations"""
+    # image2d is the dask-backed anchor for `assert not sdata2.is_self_contained()`: circles
+    # has no dask backing files and would make that assertion pass trivially.
+    full_sdata = full_sdata.subset([element_name, "image2d"])
     with tempfile.TemporaryDirectory() as tmp_dir:
         f0 = os.path.join(tmp_dir, f"{element_name}0.zarr")
         full_sdata.write(f0)
@@ -146,6 +152,7 @@ def test_save_channel_names_incremental(images: SpatialData, write: str) -> None
 
 # test io for consolidated metadata
 def test_consolidated_metadata(full_sdata: SpatialData) -> None:
+    full_sdata = full_sdata.subset(["labels3d_multiscale_numpy", "image2d", "circles", "points_0", "table"])
     with tempfile.TemporaryDirectory() as tmp_dir:
         f0 = os.path.join(tmp_dir, "data0.zarr")
         full_sdata.write(f0)

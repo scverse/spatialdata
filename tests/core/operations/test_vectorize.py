@@ -1,34 +1,45 @@
+from __future__ import annotations
+
 import math
 
 import numpy as np
 import pytest
 from geopandas import GeoDataFrame
-from shapely import MultiPoint, Point
+from shapely import MultiPoint, Point, Polygon
+from shapely.ops import unary_union
+from skimage.draw import polygon
 
-from spatialdata._core.operations.vectorize import to_circles, to_polygons
+from spatialdata._core.operations.vectorize import (
+    _vectorize_mask,
+    to_circles,
+    to_polygons,
+)
 from spatialdata.datasets import blobs
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
 
+
 # each of the tests operates on different elements, hence we can initialize the data once without conflicts
-sdata = blobs()
+@pytest.fixture(scope="module")
+def sdata():
+    return blobs(length=128)
 
 
 # conversion from labels
 @pytest.mark.parametrize("is_multiscale", [False, True])
-def test_labels_2d_to_circles(is_multiscale: bool) -> None:
+def test_labels_2d_to_circles(sdata, is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
     element = sdata[key]
     new_circles = to_circles(element)
 
-    assert np.isclose(new_circles.loc[1].geometry.x, 330.59258152354386)
-    assert np.isclose(new_circles.loc[1].geometry.y, 78.85026897788404)
-    assert np.isclose(new_circles.loc[1].radius, 69.229993)
+    assert np.isclose(new_circles.loc[1].geometry.x, 66.33699870633895)
+    assert np.isclose(new_circles.loc[1].geometry.y, 94.86610608020699)
+    assert np.isclose(new_circles.loc[1].radius, 15.686094)
     assert 7 not in new_circles.index
 
 
 @pytest.mark.parametrize("is_multiscale", [False, True])
-def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
+def test_labels_2d_to_polygons(sdata, is_multiscale: bool) -> None:
     key = "blobs" + ("_multiscale" if is_multiscale else "") + "_labels"
     element = sdata[key]
     new_polygons = to_polygons(element)
@@ -41,7 +52,7 @@ def test_labels_2d_to_polygons(is_multiscale: bool) -> None:
     assert ((new_polygons.area - new_polygons.pixel_count) / new_polygons.pixel_count < 0.01).all()
 
 
-def test_chunked_labels_2d_to_polygons() -> None:
+def test_chunked_labels_2d_to_polygons(sdata) -> None:
     no_chunks_polygons = to_polygons(sdata["blobs_labels"])
 
     sdata["blobs_labels_chunked"] = sdata["blobs_labels"].copy()
@@ -55,13 +66,13 @@ def test_chunked_labels_2d_to_polygons() -> None:
 
 
 # conversion from circles
-def test_circles_to_circles() -> None:
+def test_circles_to_circles(sdata) -> None:
     element = sdata["blobs_circles"]
     new_circles = to_circles(element)
     assert_elements_are_identical(element, new_circles)
 
 
-def test_circles_to_polygons() -> None:
+def test_circles_to_polygons(sdata) -> None:
     element = sdata["blobs_circles"]
     polygons = to_polygons(element, buffer_resolution=1000)
     areas = element.radius**2 * math.pi
@@ -69,38 +80,44 @@ def test_circles_to_polygons() -> None:
 
 
 # conversion from polygons/multipolygons
-def test_polygons_to_circles() -> None:
+def test_polygons_to_circles(sdata) -> None:
     element = sdata["blobs_polygons"].iloc[:2]
     new_circles = to_circles(element)
 
     data = {
-        "geometry": [Point(315.8120722406787, 220.18894606643332), Point(270.1386975678398, 417.8747936281634)],
-        "radius": [16.608781, 17.541365],
+        "geometry": [
+            Point(78.95301806016967, 55.04723651660833),
+            Point(67.53467439195995, 104.46869840704085),
+        ],
+        "radius": [4.152195, 4.385341],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
 
     assert_elements_are_identical(new_circles, expected)
 
 
-def test_multipolygons_to_circles() -> None:
+def test_multipolygons_to_circles(sdata) -> None:
     element = sdata["blobs_multipolygons"]
     new_circles = to_circles(element)
 
     data = {
-        "geometry": [Point(340.37951022629096, 250.76310705786318), Point(337.1680699150594, 316.39984581697314)],
-        "radius": [23.488363, 19.059285],
+        "geometry": [
+            Point(85.09487755657274, 62.690776764465795),
+            Point(84.23037752020095, 79.09996145424327),
+        ],
+        "radius": [5.872091, 4.736710],
     }
     expected = ShapesModel.parse(GeoDataFrame(data, geometry="geometry"))
     assert_elements_are_identical(new_circles, expected)
 
 
-def test_polygons_multipolygons_to_polygons() -> None:
+def test_polygons_multipolygons_to_polygons(sdata) -> None:
     polygons = sdata["blobs_multipolygons"]
     assert polygons is to_polygons(polygons)
 
 
 # conversion from points
-def test_points_to_circles() -> None:
+def test_points_to_circles(sdata) -> None:
     element = sdata["blobs_points"]
     with pytest.raises(RuntimeError, match="`radius` must either be provided, either be a column"):
         to_circles(element)
@@ -112,18 +129,18 @@ def test_points_to_circles() -> None:
     assert np.array_equal(np.ones_like(x), circles["radius"])
 
 
-def test_points_to_polygons() -> None:
+def test_points_to_polygons(sdata) -> None:
     with pytest.raises(RuntimeError, match="Cannot convert points to polygons"):
         to_polygons(sdata["blobs_points"])
 
 
 # conversion from images (invalid)
-def test_images_to_circles() -> None:
+def test_images_to_circles(sdata) -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_circles\(\) to images"):
         to_circles(sdata["blobs_image"])
 
 
-def test_images_to_polygons() -> None:
+def test_images_to_polygons(sdata) -> None:
     with pytest.raises(RuntimeError, match=r"Cannot apply to_polygons\(\) to images"):
         to_polygons(sdata["blobs_image"])
 
@@ -139,3 +156,23 @@ def test_invalid_geodataframe_to_polygons() -> None:
     gdf = GeoDataFrame(geometry=[MultiPoint([[0, 0], [1, 1]])])
     with pytest.raises(RuntimeError, match="Unsupported geometry type"):
         to_polygons(gdf)
+
+
+def test_vectorize_mask_almost_invertible() -> None:
+    cell = Polygon([[10, 10], [30, 40], [90, 50], [100, 20]])
+    image_shape = (70, 120)
+
+    rasterized_image = np.zeros(image_shape, dtype=np.int8)
+    x, y = cell.exterior.coords.xy
+    rr, cc = polygon(y, x, image_shape)
+    rasterized_image[rr, cc] = 1
+
+    new_cell = _vectorize_mask(rasterized_image)
+    new_cell = unary_union(new_cell.geometry)
+
+    assert new_cell.intersection(cell).area / new_cell.union(cell).area > 0.97
+
+
+def test_label_column_vectorize_mask() -> None:
+    assert "label" in _vectorize_mask(np.array([0]))
+    assert "label" in _vectorize_mask(np.array([[0, 1], [1, 1]]))

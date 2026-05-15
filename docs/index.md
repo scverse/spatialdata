@@ -14,6 +14,37 @@ SpatialData is a data framework that comprises a FAIR storage format and a colle
 
 Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for citation and to learn more.
 
+:::{note}
+With dask >= 2025.2.0, users can get an error as described in [#1077](https://github.com/scverse/spatialdata/issues/1064). While we tried implementing fixes in SpatialData, it can be that
+users perform operations on the `Points` data themselves and get this error. In order to prevent it, users can use a context manager we created.
+
+```python
+from spatialdata import disable_dask_tune_optimization
+import contextlib
+...
+
+with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
+    <your operation on points dask dataframe>
+```
+
+This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled. This solves
+the problem discussed in this [dask issue](https://github.com/dask/dask/issues/12193). We are looking into an upstream fix.
+:::
+
+[//]: # "numfocus-fiscal-sponsor-attribution"
+
+spatialdata is part of the scverse® project ([website](https://scverse.org), [governance](https://scverse.org/about/roles)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
+If you like scverse® and want to support our mission, please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+<div align="center">
+<a href="https://numfocus.org/project/scverse">
+  <img
+    src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
+    width="200"
+  >
+</a>
+</div>
+
 ```{eval-rst}
 .. note::
    This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
@@ -25,6 +56,12 @@ Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for cit
     :link-type: doc
 
     Learn how to install ``spatialdata``.
+
+.. card:: User Guide
+    :link: user_guide
+    :link-type: doc
+
+    Navigate your way through ``spatialdata`` tutorials.
 
 .. card:: Tutorials
     :link: tutorials/notebooks/notebooks
@@ -63,6 +100,7 @@ Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for cit
 :maxdepth: 1
 
 installation.md
+user_guide.md
 api.md
 tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
@@ -78,6 +116,6 @@ references.md
 [napari-spatialdata-repo]: https://github.com/scverse/napari-spatialdata
 [spatialdata-io-repo]: https://github.com/scverse/spatialdata-io
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
-[napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html
-[spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/latest/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/latest/api.html
+[napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
+[spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from types import TracebackType
-from typing import NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
-import pandas as pd
-from anndata import AnnData
+if TYPE_CHECKING:
+    import pandas as pd
+    from anndata import AnnData
 
 
 class ErrorDetails(NamedTuple):
@@ -149,6 +150,8 @@ def check_all_keys_case_insensitively_unique(keys: Collection[str], location: tu
         exc_type=ValueError,
     ) as collect_error:
         for key in keys:
+            if key is None:
+                continue
             normalized_key = key.lower()
             with collect_error(location=location + (key,)):
                 check_key_is_case_insensitively_unique(key, seen)
@@ -187,7 +190,10 @@ def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]
     """
     normalized_key = key.lower()
     if normalized_key in other_keys:
-        raise ValueError(f"Key `{key}` is not unique, or another case-variant of it exists.")
+        raise ValueError(
+            f"Key `{key}` is not unique as it exists with a different element type, or another "
+            f"case-variant of it exists."
+        )
 
 
 def check_valid_dataframe_column_name(name: str) -> None:
@@ -243,6 +249,8 @@ def validate_table_attr_keys(data: AnnData, location: tuple[str, ...] = ()) -> N
             with collect_error(location=attr_path):
                 check_all_keys_case_insensitively_unique(getattr(data, attr).keys(), location=attr_path)
             for key in getattr(data, attr):
+                if key is None:
+                    continue
                 key_path = attr_path + (key,)
                 with collect_error(location=key_path):
                     if attr in ("obs", "var"):
@@ -379,5 +387,8 @@ class raise_validation_errors:
             return False
         # Exceptions were collected that we want to raise as a combined validation error.
         if self._collector.errors:
-            raise ValidationError(title=self._message, errors=self._collector.errors)
+            raise ValidationError(
+                title=self._message + "\nTo fix, run `spatialdata.utils.sanitize_table(adata)`.",
+                errors=self._collector.errors,
+            )
         return True

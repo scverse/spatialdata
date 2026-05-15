@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import FrozenInstanceError
 
 import dask.dataframe as dd
@@ -502,7 +504,7 @@ def test_query_filter_table(with_polygon_query: bool):
     circles0 = ShapesModel.parse(coords0, geometry=0, radius=1)
     circles1 = ShapesModel.parse(coords1, geometry=0, radius=1)
     table = AnnData(shape=(3, 0))
-    table.obs["region"] = ["circles0", "circles0", "circles1"]
+    table.obs["region"] = pd.Categorical(["circles0", "circles0", "circles1"])
     table.obs["instance"] = [0, 1, 0]
     table = TableModel.parse(table, region=["circles0", "circles1"], region_key="region", instance_key="instance")
     sdata = SpatialData(shapes={"circles0": circles0, "circles1": circles1}, tables={"table": table})
@@ -545,7 +547,7 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
     sdata = sdata_query_aggregation
     values_sdata = SpatialData(
         shapes={"values_polygons": sdata["values_polygons"], "values_circles": sdata["values_circles"]},
-        tables=sdata["table"],
+        tables={"table": sdata["table"]},
     )
     polygon = sdata["by_polygons"].geometry.iloc[0]
     circle = sdata["by_circles"].geometry.iloc[0]
@@ -555,20 +557,18 @@ def test_polygon_query_with_multipolygon(sdata_query_aggregation):
         values_sdata,
         polygon=polygon,
         target_coordinate_system="global",
-        shapes=True,
-        points=False,
     )
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
     assert len(queried["table"]) == 8
 
-    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, circle_pol]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 8
     assert len(queried["values_circles"]) == 8
     assert len(queried["table"]) == 16
 
-    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).unary_union
+    multipolygon = GeoDataFrame(geometry=[polygon, polygon]).union_all()
     queried = polygon_query(values_sdata, polygon=multipolygon, target_coordinate_system="global")
     assert len(queried["values_polygons"]) == 4
     assert len(queried["values_circles"]) == 4
@@ -650,7 +650,10 @@ def test_query_affine_transformation(full_sdata, with_polygon_query: bool, name:
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     p0 = points["points_0"]
-    p1 = PointsModel.parse(dd.from_pandas(p0.compute(), npartitions=10))
+    attrs = p0.attrs.copy()
+    ddf = dd.from_pandas(p0.compute(), npartitions=10)
+    ddf.attrs.update(attrs)
+    p1 = PointsModel.parse(ddf)
 
     def _query(p: DaskDataFrame) -> DaskDataFrame:
         if with_polygon_query:
@@ -671,7 +674,106 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     q0 = _query(p0)
     q1 = _query(p1)
     assert np.array_equal(q0.index.compute(), q1.index.compute())
-    pass
+
+
+def test_query_points_multiple_boxes_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    points_element = _make_points(np.array([[10, 10], [20, 30], [20, 30], [40, 50]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[1, 0, 100], [0, 1, -50], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    points_result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([[118, -22], [138, -2], [200, 200]]),
+        max_coordinate=np.array([[122, -18], [142, 2], [210, 210]]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+    np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+    np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+    np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+    assert points_result[2] is None
+
+
+def test_query_points_bounding_box_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    # Points: A(3,3), B(9,3), C(8,3)
+    points_element = _make_points(np.array([[3, 3], [9, 3], [8, 3]]))
+
+    # Transformation: rotate 45°, then translate (-3√2, -3√2)
+    # Combined affine matrix T @ R:
+    #   A(3,3) → (-3√2,  0  )
+    #   B(9,3) → ( 0,    3√2)
+    #   C(8,3) → (-√2/2, 5√2/2)
+    s = np.sqrt(2) / 2
+    t = -3 * np.sqrt(2)
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[s, -s, t], [s, s, t], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query box in aligned space: x ∈ [-10, 10], y ∈ [5√2/2 ± 0.5]
+    # Only C maps into this box (y ≈ 3.54 vs B y ≈ 4.24 which is just above).
+    y_center = 5 * np.sqrt(2) / 2
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-10.0, y_center - 0.5]),
+        max_coordinate=np.array([10.0, y_center + 0.5]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [8])
+    np.testing.assert_allclose(result["y"].compute(), [3])
+
+
+def test_query_points_bounding_box_negative_scale_transform():
+    """Regression test: negative-scale (axis-flip) transforms must not raise ValueError.
+
+    Before the fix the scaling path raised ValueError instead of swapping the
+    inverted interval back to min < max after inverting through the negative scale.
+    """
+    from spatialdata.transformations import Affine
+
+    # Points (1, 0) and (5, 0). Under x-flip: (1,0)→(−1,0), (5,0)→(−5,0).
+    points_element = _make_points(np.array([[1, 0], [5, 0]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query aligned x ∈ (−2, 0), y ∈ (−1, 1) → only (1, 0) maps to (−1, 0) which is inside.
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-2.0, -1.0]),
+        max_coordinate=np.array([0.0, 1.0]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [1])
+    np.testing.assert_allclose(result["y"].compute(), [0])
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])

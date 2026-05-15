@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 from warnings import warn
 
 import numpy as np
@@ -10,10 +10,7 @@ import xarray as xr
 from xarray import DataArray
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations.ngff.ngff_coordinate_system import (
-    NgffCoordinateSystem,
-    _get_spatial_axes,
-)
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
     NgffBaseTransformation,
@@ -96,9 +93,7 @@ class BaseTransformation(ABC):
         name: str | None = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
-        from spatialdata.transformations.ngff._utils import (
-            get_default_coordinate_system,
-        )
+        from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 
         cs = get_default_coordinate_system(axes)
         if unit is not None:
@@ -130,7 +125,7 @@ class BaseTransformation(ABC):
         return Affine(affine_matrix, input_axes, output_axes)
 
     # order of the composition: self is applied first, then the transformation passed as argument
-    def compose_with(self, transformations: Union[BaseTransformation, list[BaseTransformation]]) -> BaseTransformation:
+    def compose_with(self, transformations: BaseTransformation | list[BaseTransformation]) -> BaseTransformation:
         if isinstance(transformations, BaseTransformation):
             return Sequence([self, transformations])
         else:
@@ -169,7 +164,7 @@ class BaseTransformation(ABC):
             raise ValueError(f"Invalid axes: {axes}")
 
     @staticmethod
-    def _xarray_coords_filter_axes(data: DataArray, axes: Optional[tuple[ValidAxis_t, ...]] = None) -> DataArray:
+    def _xarray_coords_filter_axes(data: DataArray, axes: tuple[ValidAxis_t, ...] | None = None) -> DataArray:
         if axes is None:
             axes = ("x", "y", "z")
         return data[:, data["dim"].isin(axes)]
@@ -346,7 +341,7 @@ class MapAxis(BaseTransformation):
 
 
 class Translation(BaseTransformation):
-    def __init__(self, translation: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
+    def __init__(self, translation: list[Number] | ArrayLike, axes: tuple[ValidAxis_t, ...]) -> None:
         from spatialdata._utils import _parse_list_into_array
 
         self.translation = _parse_list_into_array(translation)
@@ -433,7 +428,7 @@ class Translation(BaseTransformation):
 
 
 class Scale(BaseTransformation):
-    def __init__(self, scale: Union[list[Number], ArrayLike], axes: tuple[ValidAxis_t, ...]) -> None:
+    def __init__(self, scale: list[Number] | ArrayLike, axes: tuple[ValidAxis_t, ...]) -> None:
         from spatialdata._utils import _parse_list_into_array
 
         self.scale = _parse_list_into_array(scale)
@@ -514,7 +509,7 @@ class Scale(BaseTransformation):
 class Affine(BaseTransformation):
     def __init__(
         self,
-        matrix: Union[list[Number], ArrayLike],
+        matrix: list[Number] | ArrayLike,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:

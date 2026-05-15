@@ -9,9 +9,7 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
-from scipy.sparse import csc_matrix
 from shapely import MultiPolygon, Point, Polygon
-from skimage.transform import estimate_transform
 from xarray import DataArray
 
 from spatialdata._core.query.relational_query import get_values
@@ -126,13 +124,16 @@ def rasterize_bins(
         transformations = get_transformation(element, get_all=True)
         assert isinstance(transformations, dict)
     else:
+        from skimage.transform import estimate_transform
+
         # get the transformation
         if table.n_obs < 6:
             raise ValueError("At least 6 bins are needed to estimate the transformation.")
 
         random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
         location_ids = table.obs[instance_key].iloc[random_indices].values
-        sub_df, sub_table = element.loc[location_ids], table[random_indices]
+        sub_df = element.loc[location_ids]
+        sub_table = table[random_indices]
 
         src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
         if isinstance(sub_df, GeoDataFrame):
@@ -175,6 +176,8 @@ def rasterize_bins(
         return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
 
     keys = ([value_key] if isinstance(value_key, str) else value_key) if value_key is not None else table.var_names
+
+    from scipy.sparse import csc_matrix
 
     if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
         table.X, csc_matrix | np.ndarray
@@ -245,7 +248,7 @@ def _get_relabeled_column_name(column_name: str) -> str:
 def _relabel_labels(table: AnnData, instance_key: str) -> pd.Series:
     labels_values_count = len(table.obs[instance_key].unique())
 
-    is_not_numeric = not np.issubdtype(table.obs[instance_key].dtype, np.number)
+    is_not_numeric = not pd.api.types.is_numeric_dtype(table.obs[instance_key].dtype)
     zero_in_instance_key = 0 in table.obs[instance_key].values
     has_gaps = not is_not_numeric and labels_values_count != table.obs[instance_key].max() + int(zero_in_instance_key)
 
@@ -281,7 +284,7 @@ def rasterize_bins_link_table_to_labels(sdata: SpatialData, table_name: str, ras
         The name of the rasterized labels in the spatial data object.
     """
     _, region_key, instance_key = get_table_keys(sdata[table_name])
-    sdata[table_name].obs[region_key] = rasterized_labels_name
+    sdata[table_name].obs[region_key] = pd.Categorical([rasterized_labels_name] * sdata[table_name].n_obs)
     relabled_instance_key = _get_relabeled_column_name(instance_key)
     sdata.set_table_annotates_spatialelement(
         table_name=table_name, region=rasterized_labels_name, region_key=region_key, instance_key=relabled_instance_key

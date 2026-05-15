@@ -24,7 +24,7 @@ import os
 from collections.abc import Sequence
 from functools import lru_cache
 from types import ModuleType
-from typing import Callable, Literal, Optional, Union, overload
+from typing import Callable, Literal, overload
 
 import anndata as ad
 import numpy as np
@@ -98,7 +98,7 @@ def _structure_at_coordinates(
     *,
     multipliers: Sequence = itertools.repeat(1),
     dtype=None,
-    reduce_fn: Callable[[np.ndarray, np.ndarray, Optional[np.ndarray]], np.ndarray],
+    reduce_fn: Callable[[np.ndarray, np.ndarray, np.ndarray | None], np.ndarray],
 ):
     """Update data with structure at given coordinates.
 
@@ -165,9 +165,9 @@ def _smallest_dtype(n: int) -> np.dtype:
 @overload
 def labeled_particles(
     shape: Sequence[int],
-    dtype: Optional[np.dtype] = None,
+    dtype: np.dtype | None = None,
     n: int = 144,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     return_density: Literal[False] = False,
 ) -> np.ndarray: ...
 
@@ -175,9 +175,9 @@ def labeled_particles(
 @overload
 def labeled_particles(
     shape: Sequence[int],
-    dtype: Optional[np.dtype] = None,
+    dtype: np.dtype | None = None,
     n: int = 144,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     return_density: Literal[True] = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 
@@ -185,22 +185,22 @@ def labeled_particles(
 @lru_cache
 def labeled_particles(
     shape: Sequence[int],
-    dtype: Optional[np.dtype] = None,
+    dtype: np.dtype | None = None,
     n: int = 144,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     return_density: bool = False,
-) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate labeled blobs of given shape and dtype.
 
     Parameters
     ----------
     shape : Sequence[int]
         Shape of the resulting array.
-    dtype : Optional[np.dtype]
+    dtype : np.dtype | None
         Dtype of the resulting array.
     n : int
         Number of blobs to generate.
-    seed : Optional[int]
+    seed : int | None
         Seed for the random number generator.
     return_density : bool
         Whether to return the density array and center coordinates.

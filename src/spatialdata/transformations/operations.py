@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
-import networkx as nx
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-from skimage.transform import estimate_transform
 
 from spatialdata._logging import logger
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 if TYPE_CHECKING:
+    import networkx as nx
+
     from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models._utils import SpatialElement
     from spatialdata.transformations.transformations import Affine, BaseTransformation
@@ -20,10 +20,10 @@ if TYPE_CHECKING:
 
 def set_transformation(
     element: SpatialElement,
-    transformation: Union[BaseTransformation, dict[str, BaseTransformation]],
+    transformation: BaseTransformation | dict[str, BaseTransformation],
     to_coordinate_system: str | None = None,
     set_all: bool = False,
-    write_to_sdata: Optional[SpatialData] = None,
+    write_to_sdata: SpatialData | None = None,
 ) -> None:
     """
     Set a transformation/s to an element, in-memory or to disk.
@@ -90,7 +90,7 @@ def set_transformation(
 
 def get_transformation(
     element: SpatialElement, to_coordinate_system: str | None = None, get_all: bool = False
-) -> Union[BaseTransformation, dict[str, BaseTransformation]]:
+) -> BaseTransformation | dict[str, BaseTransformation]:
     """
     Get the transformation/s of an element.
 
@@ -194,6 +194,8 @@ def remove_transformation(
 
 
 def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
+    import networkx as nx
+
     g = nx.DiGraph()
     gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
@@ -211,9 +213,9 @@ def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
 
 def get_transformation_between_coordinate_systems(
     sdata: SpatialData,
-    source_coordinate_system: Union[SpatialElement, str],
-    target_coordinate_system: Union[SpatialElement, str],
-    intermediate_coordinate_systems: Optional[Union[SpatialElement, str]] = None,
+    source_coordinate_system: SpatialElement | str,
+    target_coordinate_system: SpatialElement | str,
+    intermediate_coordinate_systems: SpatialElement | str | None = None,
     shortest_path: bool = True,
 ) -> BaseTransformation:
     """
@@ -236,6 +238,8 @@ def get_transformation_between_coordinate_systems(
     -------
     The transformation to map the source coordinate system to the target coordinate system.
     """
+    import networkx as nx
+
     from spatialdata.models._utils import has_type_spatial_element
     from spatialdata.transformations import Identity, Sequence
 
@@ -247,7 +251,7 @@ def get_transformation_between_coordinate_systems(
     ):
         return Identity()
 
-    def _describe_paths(paths: list[list[Union[int, str]]]) -> str:
+    def _describe_paths(paths: list[list[int | str]]) -> str:
         paths_str = ""
         for p in paths:
             components = []
@@ -266,13 +270,13 @@ def get_transformation_between_coordinate_systems(
         return paths_str
 
     g = _build_transformations_graph(sdata)
-    src_node: Union[int, str]
+    src_node: int | str
     if has_type_spatial_element(source_coordinate_system):
         src_node = id(source_coordinate_system)
     else:
         assert isinstance(source_coordinate_system, str)
         src_node = source_coordinate_system
-    tgt_node: Union[int, str]
+    tgt_node: int | str
     if has_type_spatial_element(target_coordinate_system):
         tgt_node = id(target_coordinate_system)
     else:
@@ -341,8 +345,8 @@ def get_transformation_between_coordinate_systems(
 
 
 def get_transformation_between_landmarks(
-    references_coords: Union[GeoDataFrame, DaskDataFrame],
-    moving_coords: Union[GeoDataFrame, DaskDataFrame],
+    references_coords: GeoDataFrame | DaskDataFrame,
+    moving_coords: GeoDataFrame | DaskDataFrame,
 ) -> Affine:
     """
     Get a similarity transformation between two lists of (n >= 3) landmarks.
@@ -373,6 +377,8 @@ def get_transformation_between_landmarks(
     >>> references_coords = PointsModel(points_reference)
     >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
     """
+    from skimage.transform import estimate_transform
+
     from spatialdata import transform
     from spatialdata.models import get_axes_names
     from spatialdata.transformations.transformations import Affine, Sequence
@@ -438,14 +444,14 @@ def get_transformation_between_landmarks(
 
 
 def align_elements_using_landmarks(
-    references_coords: Union[GeoDataFrame | DaskDataFrame],
-    moving_coords: Union[GeoDataFrame | DaskDataFrame],
+    references_coords: GeoDataFrame | DaskDataFrame,
+    moving_coords: GeoDataFrame | DaskDataFrame,
     reference_element: SpatialElement,
     moving_element: SpatialElement,
     reference_coordinate_system: str = "global",
     moving_coordinate_system: str = "global",
     new_coordinate_system: str | None = None,
-    write_to_sdata: Optional[SpatialData] = None,
+    write_to_sdata: SpatialData | None = None,
 ) -> BaseTransformation:
     """
     Maps a moving object into a reference object using two lists of (n >= 3) landmarks.

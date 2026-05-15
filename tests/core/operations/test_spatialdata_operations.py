@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from geopandas import GeoDataFrame
@@ -12,23 +13,9 @@ from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
-from spatialdata.datasets import blobs
-from spatialdata.models import (
-    Image2DModel,
-    Labels2DModel,
-    PointsModel,
-    ShapesModel,
-    TableModel,
-    get_table_keys,
-)
-from spatialdata.testing import (
-    assert_elements_dict_are_identical,
-    assert_spatial_data_objects_are_identical,
-)
-from spatialdata.transformations.operations import (
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
+from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
+from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import (
     Affine,
     BaseTransformation,
@@ -63,19 +50,6 @@ def test_element_names_unique() -> None:
         labels={"labels": labels},
         tables={"table": table},
     )
-
-    # add elements with the same name
-    # of element of same type
-    with pytest.warns(UserWarning):
-        sdata.images["image"] = image
-    with pytest.warns(UserWarning):
-        sdata.points["points"] = points
-    with pytest.warns(UserWarning):
-        sdata.shapes["shapes"] = shapes
-    with pytest.warns(UserWarning):
-        sdata.labels["labels"] = labels
-    with pytest.warns(UserWarning):
-        sdata.tables["table"] = table
 
     # add elements with the same name
     # of element of different type
@@ -114,8 +88,6 @@ def test_element_names_unique() -> None:
     # add elements with the same name, test only couples of elements
     with pytest.raises(KeyError):
         sdata["labels"] = image
-    with pytest.warns(UserWarning):
-        sdata["points"] = points
 
     # this should not raise warnings because it's a different (new) name
     sdata["image2"] = image
@@ -163,7 +135,7 @@ def test_element_type_from_element_name(points: SpatialData) -> None:
 
 
 def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
-    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_table=False)
+    sdata = full_sdata.filter_by_coordinate_system(coordinate_system="global", filter_tables=False)
     assert_spatial_data_objects_are_identical(sdata, full_sdata)
 
     scale = Scale([2.0], axes=("x",))
@@ -171,12 +143,12 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
 
-    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    sdata_my_space = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
     assert len(list(sdata_my_space.gen_elements())) == 3
     assert_elements_dict_are_identical(sdata_my_space.tables, full_sdata.tables)
 
     sdata_my_space1 = full_sdata.filter_by_coordinate_system(
-        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_table=False
+        coordinate_system=["my_space0", "my_space1", "my_space2"], filter_tables=False
     )
     assert len(list(sdata_my_space1.gen_elements())) == 4
 
@@ -185,11 +157,12 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
     from spatialdata.models import TableModel
 
     rng = np.random.default_rng(seed=0)
-    full_sdata["table"].obs["annotated_shapes"] = rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
+    full_sdata["table"].obs["annotated_shapes"] = pd.Categorical(
+        rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
+    )
     adata = full_sdata["table"]
     del adata.uns[TableModel.ATTRS_KEY]
-    del full_sdata.tables["table"]
-    full_sdata.table = TableModel.parse(
+    full_sdata["table"] = TableModel.parse(
         adata,
         region=["circles", "poly"],
         region_key="annotated_shapes",
@@ -202,7 +175,7 @@ def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None
 
     filtered_sdata0 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0")
     filtered_sdata1 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space1")
-    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
+    filtered_sdata2 = full_sdata.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
 
     assert len(filtered_sdata0["table"]) + len(filtered_sdata1["table"]) == len(full_sdata["table"])
     assert len(filtered_sdata2["table"]) == len(full_sdata["table"])
@@ -337,13 +310,13 @@ def test_concatenate_custom_table_metadata() -> None:
     shapes1 = _get_shapes()
     n = len(shapes0["poly"])
     table0 = TableModel.parse(
-        AnnData(obs={"my_region": ["poly0"] * n, "my_instance_id": list(range(n))}),
+        AnnData(obs={"my_region": pd.Categorical(["poly0"] * n), "my_instance_id": list(range(n))}),
         region="poly0",
         region_key="my_region",
         instance_key="my_instance_id",
     )
     table1 = TableModel.parse(
-        AnnData(obs={"my_region": ["poly1"] * n, "my_instance_id": list(range(n))}),
+        AnnData(obs={"my_region": pd.Categorical(["poly1"] * n), "my_instance_id": list(range(n))}),
         region="poly1",
         region_key="my_region",
         instance_key="my_instance_id",
@@ -378,15 +351,14 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
     set_transformation(full_sdata.shapes["circles"], Identity(), "my_space0")
     set_transformation(full_sdata.shapes["poly"], Identity(), "my_space1")
-    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_table=False)
+    filtered = full_sdata.filter_by_coordinate_system(coordinate_system=["my_space0", "my_space1"], filter_tables=False)
     assert len(list(filtered.gen_elements())) == 3
-    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_table=False)
-    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_table=False)
+    filtered0 = filtered.filter_by_coordinate_system(coordinate_system="my_space0", filter_tables=False)
+    filtered1 = filtered.filter_by_coordinate_system(coordinate_system="my_space1", filter_tables=False)
     # this is needed cause we can't handle regions with same name.
     # TODO: fix this
     new_region = "sample2"
     table_new = filtered1["table"].copy()
-    del filtered1.tables["table"]
     filtered1["table"] = table_new
     filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = new_region
     filtered1["table"].obs[filtered1["table"].uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]] = new_region
@@ -396,9 +368,9 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
 @pytest.mark.parametrize("concatenate_tables", [True, False])
 @pytest.mark.parametrize("obs_names_make_unique", [True, False])
-def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_make_unique: bool) -> None:
-    sdata0 = blobs()
-    sdata1 = blobs()
+def test_concatenate_sdatas_from_iterable(blobs_factory, concatenate_tables: bool, obs_names_make_unique: bool) -> None:
+    sdata0 = blobs_factory()
+    sdata1 = blobs_factory()
 
     sdatas = {"sample0": sdata0, "sample1": sdata1}
     with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
@@ -434,7 +406,12 @@ def test_concatenate_two_tables_each_annotating_two_elements() -> None:
         n = len(poly)
         region = f"poly{i}"
         table = TableModel.parse(
-            AnnData(obs={"region": [region] * n, "instance_id": list(range(n))}),
+            AnnData(
+                obs=pd.DataFrame(
+                    {"region": pd.Categorical([region] * n), "instance_id": list(range(n))},
+                    index=[f"{i}" for i in range(n)],
+                )
+            ),
             region=region,
             region_key="region",
             instance_key="instance_id",
@@ -457,8 +434,8 @@ def test_concatenate_two_tables_each_annotating_two_elements() -> None:
     assert len(sdata["table"]) == 4 * len(poly0_a)
 
 
-def test_concatenate_sdatas_single_item() -> None:
-    sdata = blobs()
+def test_concatenate_sdatas_single_item(sdata_blobs) -> None:
+    sdata = sdata_blobs
 
     def _n_elements(sdata: SpatialData) -> int:
         return len([0 for _, _, _ in sdata.gen_elements()])
@@ -469,6 +446,47 @@ def test_concatenate_sdatas_single_item() -> None:
     c = concatenate({"sample": sdata})
     assert n == _n_elements(c)
     assert "blobs_image-sample" in c.images
+
+
+@pytest.mark.parametrize("merge_coordinate_systems_on_name", [True, False])
+def test_concatenate_merge_coordinate_systems_on_name(blobs_factory, merge_coordinate_systems_on_name):
+    blob1 = blobs_factory()
+    blob2 = blobs_factory()
+
+    if merge_coordinate_systems_on_name:
+        with pytest.raises(
+            ValueError,
+            match="`merge_coordinate_systems_on_name` can only be used if `sdatas` is a dictionary",
+        ):
+            concatenate((blob1, blob2), merge_coordinate_systems_on_name=merge_coordinate_systems_on_name)
+
+    sdata_keys = ["blob1", "blob2"]
+    sdata = concatenate(
+        dict(zip(sdata_keys, [blob1, blob2], strict=True)),
+        merge_coordinate_systems_on_name=merge_coordinate_systems_on_name,
+    )
+
+    if merge_coordinate_systems_on_name:
+        assert set(sdata.coordinate_systems) == {"global"}
+    else:
+        assert set(sdata.coordinate_systems) == {"global-blob1", "global-blob2"}
+
+    # extra checks not specific to this test, we could remove them or leave them just
+    # in case
+    expected_images = ["blobs_image", "blobs_multiscale_image"]
+    expected_labels = ["blobs_labels", "blobs_multiscale_labels"]
+    expected_points = ["blobs_points"]
+    expected_shapes = ["blobs_circles", "blobs_polygons", "blobs_multipolygons"]
+
+    expected_suffixed_images = [f"{name}-{key}" for key in sdata_keys for name in expected_images]
+    expected_suffixed_labels = [f"{name}-{key}" for key in sdata_keys for name in expected_labels]
+    expected_suffixed_points = [f"{name}-{key}" for key in sdata_keys for name in expected_points]
+    expected_suffixed_shapes = [f"{name}-{key}" for key in sdata_keys for name in expected_shapes]
+
+    assert set(sdata.images.keys()) == set(expected_suffixed_images)
+    assert set(sdata.labels.keys()) == set(expected_suffixed_labels)
+    assert set(sdata.points.keys()) == set(expected_suffixed_points)
+    assert set(sdata.shapes.keys()) == set(expected_suffixed_shapes)
 
 
 def test_locate_spatial_element(full_sdata: SpatialData) -> None:
@@ -499,8 +517,6 @@ def test_get_item(points: SpatialData) -> None:
 def test_set_item(full_sdata: SpatialData) -> None:
     for name in ["image2d", "labels2d", "points_0", "circles", "poly"]:
         full_sdata[name + "_again"] = full_sdata[name]
-        with pytest.warns(UserWarning):
-            full_sdata[name] = full_sdata[name]
 
 
 def test_del_item(full_sdata: SpatialData) -> None:
@@ -512,9 +528,9 @@ def test_del_item(full_sdata: SpatialData) -> None:
         _ = full_sdata["not_present"]
 
 
-def test_no_shared_transformations() -> None:
+def test_no_shared_transformations(sdata_blobs) -> None:
     """Test transformation dictionary copy for transformations not to be shared."""
-    sdata = blobs()
+    sdata = sdata_blobs
     element_name = "blobs_image"
     test_space = "test"
     set_transformation(sdata.images[element_name], Identity(), to_coordinate_system=test_space)
@@ -531,11 +547,11 @@ def test_no_shared_transformations() -> None:
 def test_init_from_elements(full_sdata: SpatialData) -> None:
     # this first code block needs to be removed when the tables argument is removed from init_from_elements()
     all_elements = {name: el for _, name, el in full_sdata._gen_elements()}
-    sdata = SpatialData.init_from_elements(all_elements, tables=full_sdata["table"])
+    sdata = SpatialData.init_from_elements(all_elements | {"table": full_sdata["table"]})
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
 
-    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_table=True)}
+    all_elements = {name: el for _, name, el in full_sdata._gen_elements(include_tables=True)}
     sdata = SpatialData.init_from_elements(all_elements)
     for element_type in ["images", "labels", "points", "shapes", "tables"]:
         assert set(getattr(sdata, element_type).keys()) == set(getattr(full_sdata, element_type).keys())
@@ -555,11 +571,10 @@ def test_subset(full_sdata: SpatialData) -> None:
     adata = AnnData(
         shape=(10, 0),
         obs={
-            "region": ["circles"] * 5 + ["poly"] * 5,
+            "region": pd.Categorical(["circles"] * 5 + ["poly"] * 5),
             "instance_id": [0, 1, 2, 3, 4, 0, 1, 2, 3, 4],
         },
     )
-    del full_sdata.tables["table"]
     sdata_table = TableModel.parse(
         adata,
         region=["circles", "poly"],
@@ -603,14 +618,16 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         "poly",
     ]
     full_sdata = full_sdata.subset(elements)
-    points = full_sdata["points_0"].compute()
+    points = (
+        full_sdata["points_0"].compute().copy()
+    )  # .copy() avoids SettingWithCopyWarning when adding column below (pandas CoW)
     points["z"] = points["x"]
     points = PointsModel.parse(points)
     full_sdata["points_0_3d"] = points
     sdata = transform_to_data_extent(
         full_sdata,
         "global",
-        target_width=1000,
+        target_width=100,
         maintain_positioning=maintain_positioning,
     )
 
@@ -668,7 +685,7 @@ def test_validate_table_in_spatialdata(full_sdata):
     with pytest.warns(UserWarning, match="in the SpatialData object"):
         full_sdata.validate_table_in_spatialdata(table)
 
-    table.obs[region_key] = "points_0"
+    table.obs[region_key] = pd.Categorical(["points_0"] * table.n_obs)
     full_sdata.set_table_annotates_spatialelement("table", region="points_0")
 
     full_sdata.validate_table_in_spatialdata(table)

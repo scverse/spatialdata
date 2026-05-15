@@ -4,6 +4,7 @@ import functools
 import re
 import warnings
 from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from itertools import islice
 from typing import Any, TypeVar
 
@@ -11,20 +12,27 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from dask import array as da
+from dask import config
 from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations import (
-    Sequence,
-    Translation,
-    get_transformation,
-    set_transformation,
-)
+from spatialdata.transformations import Sequence, Translation, get_transformation, set_transformation
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
 Number = int | float
 RT = TypeVar("RT")
+
+
+@contextmanager
+def disable_dask_tune_optimization() -> Generator[None, None, None]:
+    """Prevent dask graph optimization when performing operations on dask dataframes with npartition > 1."""
+    old_setting = config.config["optimization"]["tune"]["active"]
+    config.set({"optimization.tune.active": False})
+    try:
+        yield
+    finally:
+        config.set({"optimization.tune.active": old_setting})
 
 
 def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
@@ -315,7 +323,7 @@ def _error_message_add_element() -> None:
 
 
 def _check_match_length_channels_c_dim(
-    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str]
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str, ...]
 ) -> list[str]:
     """
     Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.

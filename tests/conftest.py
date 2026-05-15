@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-import dask
+import os
+import sys
 
-dask.config.set({"dataframe.query-planning": False})
-from collections.abc import Sequence
+# Disable numba JIT for the test suite (the test data is small so initializing the JIT is slower than using plain
+# Python). Force-set (not setdefault) so the runner environment cannot accidentally override with "0".
+os.environ["NUMBA_DISABLE_JIT"] = "1"
+# If a pytest plugin already imported numba before this conftest ran, patch the cached config value too.
+if "numba.core.config" in sys.modules:
+    sys.modules["numba.core.config"].NUMBA_DISABLE_JIT = 1
+
+import copy as _copy
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +44,25 @@ from spatialdata.models import (
     TableModel,
 )
 
+
+def _fast_deepcopy_sdata(sd: SpatialData) -> SpatialData:
+    """
+    Fast deepcopy for SpatialData objects in tests.
+
+    Uses copy.deepcopy (which skips model re-validation) and manually restores
+    the attrs that copy.deepcopy loses for DaskDataFrame (issue #503) and
+    GeoDataFrame (issue #286).
+    """
+    points_attrs = {k: _copy.deepcopy(v._attrs) for k, v in sd.points.items()}
+    shapes_attrs = {k: _copy.deepcopy(v.attrs) for k, v in sd.shapes.items()}
+    sd_copy = _copy.deepcopy(sd)
+    for k, attrs in points_attrs.items():
+        sd_copy.points[k]._attrs = attrs
+    for k, attrs in shapes_attrs.items():
+        sd_copy.shapes[k].attrs = attrs
+    return sd_copy
+
+
 SEED = 0
 RNG = default_rng(seed=SEED)
 
@@ -44,14 +71,24 @@ MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 POINT_PATH = Path(__file__).parent / "data/points.json"
 
 
-@pytest.fixture()
-def images() -> SpatialData:
+@pytest.fixture(scope="session")
+def _images_session() -> SpatialData:
     return SpatialData(images=_get_images())
 
 
 @pytest.fixture()
-def labels() -> SpatialData:
+def images(_images_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_images_session)
+
+
+@pytest.fixture(scope="session")
+def _labels_session() -> SpatialData:
     return SpatialData(labels=_get_labels())
+
+
+@pytest.fixture()
+def labels(_labels_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_labels_session)
 
 
 @pytest.fixture()
@@ -66,12 +103,16 @@ def points() -> SpatialData:
 
 @pytest.fixture()
 def table_single_annotation() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region="labels2d")})
+    return SpatialData(tables={"table": _get_table(region="labels2d")}, labels=_get_labels())
 
 
 @pytest.fixture()
 def table_multiple_annotations() -> SpatialData:
-    return SpatialData(tables={"table": _get_table(region=["labels2d", "poly"])})
+    return SpatialData(
+        tables={"table": _get_table(region=["labels2d", "poly"])},
+        labels=_get_labels(),
+        shapes=_get_shapes(),
+    )
 
 
 @pytest.fixture()
@@ -86,8 +127,24 @@ def tables() -> list[AnnData]:
     return _tables
 
 
+@pytest.fixture(scope="session")
+def _full_sdata_session() -> SpatialData:
+    return SpatialData(
+        images=_get_images(),
+        labels=_get_labels(),
+        shapes=_get_shapes(),
+        points=_get_points(),
+        tables=_get_tables(region="labels2d", region_key="region", instance_key="instance_id"),
+    )
+
+
 @pytest.fixture()
-def full_sdata() -> SpatialData:
+def full_sdata(_full_sdata_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_full_sdata_session)
+
+
+@pytest.fixture(scope="session")
+def _sdata_full_session() -> SpatialData:
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
@@ -97,38 +154,21 @@ def full_sdata() -> SpatialData:
     )
 
 
-# @pytest.fixture()
-# def empty_points() -> SpatialData:
-#     geo_df = GeoDataFrame(
-#         geometry=[],
-#     )
-#     from spatialdata import NgffIdentity
-#     _set_transformations(geo_df, NgffIdentity())
-#
-#     return SpatialData(points={"empty": geo_df})
-
-
-# @pytest.fixture()
-# def empty_table() -> SpatialData:
-#     adata = AnnData(shape=(0, 0), obs=pd.DataFrame(columns="region"), var=pd.DataFrame())
-#     adata = TableModel.parse(adata=adata)
-#     return SpatialData(table=adata)
-
-
 @pytest.fixture(
     # params=["labels"]
-    params=["full", "empty"] + ["images", "labels", "points", "table_single_annotation", "table_multiple_annotations"]
+    params=["full", "empty"]
+    + [
+        "images",
+        "labels",
+        "points",
+        "table_single_annotation",
+        "table_multiple_annotations",
+    ]
     # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
-def sdata(request) -> SpatialData:
+def sdata(request, _sdata_full_session: SpatialData) -> SpatialData:
     if request.param == "full":
-        return SpatialData(
-            images=_get_images(),
-            labels=_get_labels(),
-            shapes=_get_shapes(),
-            points=_get_points(),
-            tables=_get_tables(region="labels2d"),
-        )
+        return _fast_deepcopy_sdata(_sdata_full_session)
     if request.param == "empty":
         return SpatialData()
     return request.getfixturevalue(request.param)
@@ -278,7 +318,7 @@ def _get_points() -> dict[str, DaskDataFrame]:
 
 
 def _get_tables(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> dict[str, AnnData]:
@@ -286,11 +326,18 @@ def _get_tables(
 
 
 def _get_table(
-    region: None | str | list[str] = "sample1",
+    region: None | str | list[str],
     region_key: None | str = "region",
     instance_key: None | str = "instance_id",
 ) -> AnnData:
-    adata = AnnData(RNG.normal(size=(100, 10)), obs=pd.DataFrame(RNG.normal(size=(100, 3)), columns=["a", "b", "c"]))
+    adata = AnnData(
+        RNG.normal(size=(100, 10)),
+        obs=pd.DataFrame(
+            RNG.normal(size=(100, 3)),
+            columns=["a", "b", "c"],
+            index=[f"{i}" for i in range(100)],
+        ),
+    )
     if not all(var for var in (region, region_key, instance_key)):
         return TableModel.parse(adata=adata)
     adata.obs[instance_key] = np.arange(adata.n_obs)
@@ -298,6 +345,7 @@ def _get_table(
         adata.obs[region_key] = region
     elif isinstance(region, list):
         adata.obs[region_key] = RNG.choice(region, size=adata.n_obs)
+    adata.obs[region_key] = adata.obs[region_key].astype("category")
     return TableModel.parse(adata=adata, region=region, region_key=region_key, instance_key=instance_key)
 
 
@@ -306,18 +354,38 @@ def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: Non
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
-@pytest.fixture()
-def labels_blobs() -> ArrayLike:
-    """Create a 2D labels."""
+@pytest.fixture(scope="session")
+def _labels_blobs_session() -> ArrayLike:
     return BlobsDataset()._labels_blobs()
 
 
 @pytest.fixture()
-def sdata_blobs() -> SpatialData:
+def labels_blobs(_labels_blobs_session: ArrayLike) -> ArrayLike:
     """Create a 2D labels."""
+    return deepcopy(_labels_blobs_session)
+
+
+@pytest.fixture(scope="session")
+def _sdata_blobs_session() -> SpatialData:
     from spatialdata.datasets import blobs
 
-    return deepcopy(blobs(256, 300, 3))
+    return blobs(256, 300, 3)
+
+
+@pytest.fixture()
+def sdata_blobs(_sdata_blobs_session: SpatialData) -> SpatialData:
+    """Create a 2D labels."""
+    return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+
+@pytest.fixture()
+def blobs_factory(_sdata_blobs_session: SpatialData) -> Callable[[], SpatialData]:
+    """Return a factory that creates cheap fresh copies of the session-scoped blobs dataset."""
+
+    def _make() -> SpatialData:
+        return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+    return _make
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
@@ -408,7 +476,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
     s_num = pd.Series(RNG.random(20))
     # workaround for https://github.com/dask/dask/issues/11147, let's recompute the dataframe (it's a small one)
     values_points = PointsModel.parse(
-        dd.from_pandas(values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num), npartitions=1)
+        dd.from_pandas(
+            values_points.compute().assign(categorical_in_ddf=s_cat, numerical_in_ddf=s_num),
+            npartitions=1,
+        )
     )
 
     sdata = SpatialData(
@@ -423,10 +494,10 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
 
     # generate table
     x = RNG.random((21, 1))
-    region = np.array(["values_circles"] * 9 + ["values_polygons"] * 12)
+    region = pd.Categorical(np.array(["values_circles"] * 9 + ["values_polygons"] * 12))
     instance_id = np.array(list(range(9)) + list(range(12)))
-    categorical_obs = pd.Series(pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3))
-    numerical_obs = pd.Series(RNG.random(21))
+    categorical_obs = pd.Categorical(["a"] * 9 + ["b"] * 9 + ["c"] * 3)
+    numerical_obs = RNG.random(21)
     table = AnnData(
         x,
         obs=pd.DataFrame(
@@ -435,14 +506,18 @@ def _make_sdata_for_testing_querying_and_aggretation() -> SpatialData:
                 "instance_id": instance_id,
                 "categorical_in_obs": categorical_obs,
                 "numerical_in_obs": numerical_obs,
-            }
+            },
+            index=list(map(str, range(21))),
         ),
         var=pd.DataFrame(index=["numerical_in_var"]),
     )
     table = TableModel.parse(
-        table, region=["values_circles", "values_polygons"], region_key="region", instance_key="instance_id"
+        table,
+        region=["values_circles", "values_polygons"],
+        region_key="region",
+        instance_key="instance_id",
     )
-    sdata.table = table
+    sdata["table"] = table
     return sdata
 
 
@@ -453,13 +528,13 @@ def sdata_query_aggregation() -> SpatialData:
 
 def generate_adata(n_var: int, obs: pd.DataFrame, obsm: dict[Any, Any], uns: dict[Any, Any]) -> AnnData:
     rng = np.random.default_rng(SEED)
-    return AnnData(
-        rng.normal(size=(obs.shape[0], n_var)),
+    adata = AnnData(
+        rng.normal(size=(obs.shape[0], n_var)).astype(np.float64),
         obs=obs,
         obsm=obsm,
         uns=uns,
-        dtype=np.float64,
     )
+    return TableModel().parse(adata)
 
 
 def _get_blobs_galaxy() -> tuple[ArrayLike, ArrayLike]:
@@ -483,15 +558,160 @@ def adata_labels() -> AnnData:
             "categorical": pd.Categorical(rng.integers(0, 2, size=(n_obs_labels,))),
             "cell_id": pd.Categorical(seg),
             "instance_id": range(n_obs_labels),
-            "region": ["test"] * n_obs_labels,
+            "region": pd.Categorical(["test"] * n_obs_labels),
         },
-        index=np.arange(n_obs_labels),
+        index=np.arange(n_obs_labels).astype(str),
     )
     uns_labels = {
-        "spatialdata_attrs": {"region": "test", "region_key": "region", "instance_key": "instance_id"},
+        "spatialdata_attrs": {
+            "region": "test",
+            "region_key": "region",
+            "instance_key": "instance_id",
+        },
     }
     obsm_labels = {
         "tensor": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
         "tensor_copy": rng.integers(0, blobs.shape[0], size=(n_obs_labels, 2)),
     }
     return generate_adata(n_var, obs_labels, obsm_labels, uns_labels)
+
+
+@pytest.fixture()
+def complex_sdata() -> SpatialData:
+    """
+    Create a complex SpatialData object with multiple data types for comprehensive testing.
+
+    Contains:
+    - Images (2D and 3D)
+    - Labels (2D and 3D)
+    - Shapes (polygons and circles)
+    - Points
+    - Multiple tables with different annotations
+    - Categorical and numerical values in both obs and var
+
+    Returns
+    -------
+    SpatialData
+        A complex SpatialData object for testing.
+    """
+    RNG = np.random.default_rng(seed=SEED)
+
+    # Get basic components using existing functions
+    images = _get_images()
+    labels = _get_labels()
+    shapes = _get_shapes()
+    points = _get_points()
+
+    # Create tables with enhanced var data
+    n_var = 10
+
+    # Table 1: Basic table annotating labels2d
+    obs1 = pd.DataFrame(
+        {
+            "region": pd.Categorical(["labels2d"] * 50),
+            "instance_id": range(1, 51),  # Skip background (0)
+            "cell_type": pd.Categorical(RNG.choice(["T cell", "B cell", "Macrophage"], size=50)),
+            "size": RNG.uniform(10, 100, size=50),
+        },
+        index=[str(i) for i in range(50)],
+    )
+
+    var1 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(["gene", "protein", "gene", "protein", "gene"] * 2),
+            "importance": RNG.uniform(0, 10, size=n_var),
+            "is_marker": RNG.choice([True, False], size=n_var),
+        },
+        index=[f"feature_{i}" for i in range(n_var)],
+    )
+
+    X1 = RNG.normal(size=(50, n_var))
+    uns1 = {
+        "spatialdata_attrs": {
+            "region": "labels2d",
+            "region_key": "region",
+            "instance_key": "instance_id",
+        }
+    }
+
+    table1 = AnnData(X=X1, obs=obs1, var=var1, uns=uns1)
+
+    # Table 2: Annotating both polygons and circles from shapes
+    n_polygons = len(shapes["poly"])
+    n_circles = len(shapes["circles"])
+    total_items = n_polygons + n_circles
+
+    obs2 = pd.DataFrame(
+        {
+            "region": pd.Categorical(["poly"] * n_polygons + ["circles"] * n_circles),
+            "instance_id": np.concatenate([range(n_polygons), range(n_circles)]),
+            "category": pd.Categorical(RNG.choice(["A", "B", "C"], size=total_items)),
+            "value": RNG.normal(size=total_items),
+            "count": RNG.poisson(10, size=total_items),
+        },
+        index=[str(i) for i in range(total_items)],
+    )
+
+    var2 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(
+                ["feature_type1", "feature_type2", "feature_type1", "feature_type2", "feature_type1"] * 2
+            ),
+            "score": RNG.exponential(2, size=n_var),
+            "detected": RNG.choice([True, False], p=[0.7, 0.3], size=n_var),
+        },
+        index=[f"metric_{i}" for i in range(n_var)],
+    )
+
+    X2 = RNG.normal(size=(total_items, n_var))
+    uns2 = {
+        "spatialdata_attrs": {
+            "region": ["poly", "circles"],
+            "region_key": "region",
+            "instance_key": "instance_id",
+        }
+    }
+
+    table2 = AnnData(X=X2, obs=obs2, var=var2, uns=uns2)
+
+    # Table 3: Orphan table not annotating any elements
+    obs3 = pd.DataFrame(
+        {
+            "cluster": pd.Categorical(RNG.choice(["cluster_1", "cluster_2", "cluster_3"], size=40)),
+            "sample": pd.Categorical(["sample_A"] * 20 + ["sample_B"] * 20),
+            "qc_pass": RNG.choice([True, False], p=[0.8, 0.2], size=40),
+        },
+        index=[str(i) for i in range(40)],
+    )
+
+    var3 = pd.DataFrame(
+        {
+            "feature_type": pd.Categorical(["gene", "protein", "gene", "protein", "gene"] * 2),
+            "mean_expression": RNG.uniform(0, 20, size=n_var),
+            "variance": RNG.gamma(2, 2, size=n_var),
+        },
+        index=[f"feature_{i}" for i in range(n_var)],
+    )
+
+    X3 = RNG.normal(size=(40, n_var))
+    table3 = AnnData(X=X3, obs=obs3, var=var3)
+
+    # Create additional coordinate system in one of the shapes for testing
+    # Modified copy of circles with an additional coordinate system
+    circles_alt_coords = shapes["circles"].copy()
+    circles_alt_coords["coordinate_system"] = "alt_system"
+
+    # Add everything to a SpatialData object
+    sdata = SpatialData(
+        images=images,
+        labels=labels,
+        shapes={**shapes, "circles_alt_coords": circles_alt_coords},
+        points=points,
+        tables={"labels_table": table1, "shapes_table": table2, "orphan_table": table3},
+    )
+
+    # Add layers to tables for testing layer-specific operations
+    sdata.tables["labels_table"].layers["scaled"] = sdata.tables["labels_table"].X * 2
+    sdata.tables["labels_table"].layers["log"] = np.log1p(np.abs(sdata.tables["labels_table"].X))
+
+    return sdata

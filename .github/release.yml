@@ -4,6 +4,7 @@ changelog:
             - release-ignore
         authors:
             - pre-commit-ci
+            - pre-commit-ci[bot]
     categories:
         - title: Added
           labels:
