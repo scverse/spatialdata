@@ -226,7 +226,6 @@ def _get_filtered_or_unfiltered_tables(
         return {
             name: filtered_table
             for name, table in sdata.tables.items()
-            if (filtered_table := _filter_table_by_elements(table, elements)) and len(filtered_table) != 0
+            if (filtered_table := _filter_table_by_elements(table, elements)) is not None
         }
-
     return sdata.tables
