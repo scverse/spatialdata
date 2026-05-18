@@ -148,13 +148,13 @@ def _prepare_storage_options(
         return None
     if isinstance(storage_options, dict):
         prepared = dict(storage_options)
-        if "chunks" in prepared:
+        if "chunks" in prepared and prepared["chunks"] is not None:
             prepared["chunks"] = _normalize_explicit_chunks(prepared["chunks"])
         return prepared
 
     prepared_options = [dict(options) for options in storage_options]
     for options in prepared_options:
-        if "chunks" in options:
+        if "chunks" in options and options["chunks"] is not None:
             options["chunks"] = _normalize_explicit_chunks(options["chunks"])
     return prepared_options
 
@@ -283,12 +283,27 @@ def _write_raster(
     raster_format
         The format used to write the raster data.
     storage_options
-        Additional options for writing the raster data, like chunks and compression.
+        Storage options for raster elements.These options are passed to the zarr storage backend for writing and
+        can be provided in several formats:
+
+            1. Single dictionary
+                A dictionary containing all storage options applied to the raster, either single or multiscale.
+            2. List of dictionaries (multiscale only)
+                A list where each dictionary defines the storage options for one scale of the multiscale raster element.
+
+            Important Notes
+            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+            - For a full list of supported storage options, refer to:
+                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
     label_metadata
         Label metadata which can only be defined when writing 'labels'.
     metadata
         Additional metadata for the raster element
     """
+    from dataclasses import asdict
+
+    from spatialdata import settings
+
     if raster_type not in ["image", "labels"]:
         raise ValueError(f"{raster_type} is not a valid raster type. Must be 'image' or 'labels'.")
     # "name" and "label_metadata" are only used for labels. "name" is written in write_multiscale_ngff() but ignored in
@@ -304,6 +319,24 @@ def _write_raster(
         channels = get_channel_names(raster_data)
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
+
+    if isinstance(storage_options, dict):
+        storage_options = {
+            **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
+            **storage_options,
+        }
+    elif isinstance(storage_options, list):
+        storage_options = [
+            {
+                **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
+                **x,
+            }
+            for x in storage_options
+        ]
+    elif not storage_options:
+        storage_options = {
+            k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")
+        }
 
     if isinstance(raster_data, DataArray):
         _write_raster_dataarray(

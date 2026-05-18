@@ -131,6 +131,10 @@ __all__ = [
     "settings",
 ]
 
+import zarr
+
+zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
+
 
 def __getattr__(name: str) -> Any:
     if name in _submodules:
