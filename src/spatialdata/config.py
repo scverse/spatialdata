@@ -149,10 +149,12 @@ class Settings:
         Supported variables
         -------------------
         SPATIALDATA_CUSTOM_CONFIG_PATH -> custom_config_path
-        SPATIALDATA_SHAPES_GEOMETRY_ENCODING   → shapes_geometry_encoding
-        SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES → large_chunk_threshold_bytes
-        SPATIALDATA_RASTER_CHUNKS                     → chunks
-        SPATIALDATA_RASTER_SHARDS                     → shards (integer or "none")
+        SPATIALDATA_SHAPES_GEOMETRY_ENCODING -> shapes_geometry_encoding
+        SPATIALDATA_LARGE_CHUNK_THRESHOLD_BYTES -> large_chunk_threshold_bytes
+        SPATIALDATA_RASTER_CHUNKS -> chunks
+        SPATIALDATA_RASTER_SHARDS -> shards (integer or "none")
+
+        Renaming of shards and chunks occurs to allow for table shards and chunks in the future.
         """
         _ENV: dict[str, tuple[str, type]] = {
             "SPATIALDATA_CUSTOM_CONFIG_PATH": ("custom_config_path", Path),
