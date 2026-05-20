@@ -159,9 +159,9 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     # Handle other attributes
     for attr in ("obsm", "obsp", "varm", "varp", "uns", "layers"):
         d = getattr(sanitized, attr)
-        new_keys = {old: get_unique_name(old, attr) for old in d}
-        # Create new dictionary with sanitized keys
-        new_dict = {new_keys[old]: value for old, value in d.items()}
+        # None is a valid key in layers (anndata >= 0.13: represents X); skip sanitizing it
+        new_keys = {old: get_unique_name(old, attr) for old in d if old is not None}
+        new_dict = {(new_keys[old] if old is not None else old): value for old, value in d.items()}
         setattr(sanitized, attr, new_dict)
 
     return None if inplace else sanitized
@@ -170,21 +170,31 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
 def create_raster_element_kwargs(
     raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | list[dict[str, Any]],
     element_name: str,
+    element_names: set[str],
 ) -> dict[str, Any] | list[dict[str, Any]]:
-
+    element_raster_write_kwargs = None
     if isinstance(raster_write_kwargs, dict) and (kwargs := raster_write_kwargs.get(element_name)):
         element_raster_write_kwargs = kwargs
-    elif isinstance(raster_write_kwargs, dict) and not all(
-        isinstance(x, (dict, list)) for x in raster_write_kwargs.values()
-    ):
-        element_raster_write_kwargs = raster_write_kwargs
-    elif isinstance(raster_write_kwargs, list):
-        if not all(isinstance(x, dict) for x in raster_write_kwargs):
+
+    if not element_raster_write_kwargs:
+        if isinstance(raster_write_kwargs, dict):
+            for name in element_names:
+                raster_write_kwargs.pop(name, None)
+        if not raster_write_kwargs:
+            element_raster_write_kwargs = {}
+        elif isinstance(raster_write_kwargs, dict) and not all(
+            isinstance(x, (dict, list)) for x in raster_write_kwargs.values()
+        ):
+            element_raster_write_kwargs = raster_write_kwargs
+        elif isinstance(raster_write_kwargs, list):
+            if not all(isinstance(x, dict) for x in raster_write_kwargs):
+                raise ValueError(
+                    "If passing raster_write_kwargs as list, it is assumed to be the storage "
+                    "options for each scale of a multiscale raster as a dictionary."
+                )
+            element_raster_write_kwargs = raster_write_kwargs
+        else:
             raise ValueError(
-                "If passing raster_write_kwargs as list, it is assumed to be the storage "
-                "options for each scale of a multiscale raster as a dictionary."
+                f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}."
             )
-        element_raster_write_kwargs = raster_write_kwargs
-    else:
-        raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}.")
     return element_raster_write_kwargs

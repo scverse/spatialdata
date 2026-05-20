@@ -1197,7 +1197,10 @@ class SpatialData:
         for element_type, element_name, element in self.gen_elements():
             element_raster_write_kwargs = None
             if element_type in ("images", "labels") and raster_write_kwargs:
-                element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name)
+                element_names = set(self.images.keys()).union(self.labels.keys())
+                element_raster_write_kwargs = create_raster_element_kwargs(
+                    raster_write_kwargs, element_name, element_names
+                )
 
             self._write_element(
                 element=element,
@@ -1252,6 +1255,11 @@ class SpatialData:
 
         if parsed_formats is None:
             parsed_formats = _parse_formats(formats=parsed_formats)
+
+        if element_type != "tables":
+            from spatialdata.models import validate_element
+
+            validate_element(element)
 
         if element_type == "images":
             write_image(
@@ -1355,6 +1363,7 @@ class SpatialData:
                     overwrite=overwrite,
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
+                    raster_write_kwargs=raster_write_kwargs,
                 )
             return
 
@@ -1384,7 +1393,8 @@ class SpatialData:
 
         element_raster_write_kwargs = None
         if element_type in ("images", "labels") and raster_write_kwargs:
-            element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name)
+            element_names = set(self.images.keys()).union(self.labels.keys())
+            element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name, element_names)
 
         self._write_element(
             element=element,
