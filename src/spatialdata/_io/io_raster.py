@@ -283,8 +283,9 @@ def _write_raster(
     raster_format
         The format used to write the raster data.
     storage_options
-        Storage options for raster elements. These options are passed to the zarr storage backend for writing and
-        can be provided in several formats:
+        Storage options for raster elements, which have been extracted from potentially mixed kwargs dict by
+        `create_raster_element_kwargs`. These options are passed to the zarr storage backend for writing and can be
+        provided in several formats:
 
             1. Single dictionary
                 A dictionary containing all storage options applied to the raster, either single or multiscale.
