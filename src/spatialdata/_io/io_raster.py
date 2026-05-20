@@ -321,23 +321,12 @@ def _write_raster(
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
-    if isinstance(storage_options, dict):
-        storage_options = {
-            **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
-            **storage_options,
-        }
-    elif isinstance(storage_options, list):
-        storage_options = [
-            {
-                **{k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")},
-                **x,
-            }
-            for x in storage_options
-        ]
-    elif not storage_options:
-        storage_options = {
-            k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")
-        }
+    base_options = {k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")}
+
+    if isinstance(storage_options, list):
+        storage_options = [{**base_options, **x} for x in storage_options]
+    else:
+        storage_options = {**base_options, **(storage_options or {})}
 
     if isinstance(raster_data, DataArray):
         _write_raster_dataarray(
