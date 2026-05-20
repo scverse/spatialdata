@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from anndata import AnnData
+from ome_zarr.types import JSONDict
 
 from spatialdata._core.spatialdata import SpatialData
 
@@ -168,7 +169,7 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
 
 
 def create_raster_element_kwargs(
-    raster_write_kwargs: dict[str, dict[str, Any] | list[dict[str, Any]]] | list[dict[str, Any]],
+    raster_write_kwargs: dict[str, JSONDict | list[JSONDict]] | list[JSONDict],
     element_name: str,
     element_names: set[str],
 ) -> dict[str, Any] | list[dict[str, Any]]:
