@@ -91,11 +91,11 @@ def get_bounding_box_corners(
     return output.squeeze().drop_vars("box")
 
 
-@nb.jit(parallel=False, nopython=True)
+@nb.njit(parallel=False)
 def _create_slices_and_translation(
-    min_values: nb.types.Array,
-    max_values: nb.types.Array,
-) -> tuple[nb.types.Array, nb.types.Array]:
+    min_values: np.ndarray,
+    max_values: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
     n_boxes, n_dims = min_values.shape
     slices = np.empty((n_boxes, n_dims, 2), dtype=np.float64)  # (n_boxes, n_dims, [min, max])
     translation_vectors = np.empty((n_boxes, n_dims), dtype=np.float64)  # (n_boxes, n_dims)
@@ -226,7 +226,6 @@ def _get_filtered_or_unfiltered_tables(
         return {
             name: filtered_table
             for name, table in sdata.tables.items()
-            if (filtered_table := _filter_table_by_elements(table, elements)) and len(filtered_table) != 0
+            if (filtered_table := _filter_table_by_elements(table, elements)) is not None
         }
-
     return sdata.tables

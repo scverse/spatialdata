@@ -556,7 +556,7 @@ def _(
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
-    # for triggering validation
+    # for triggering validation (handles both 1-D single-box and 2-D multi-box arrays)
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
         axes=axes,
