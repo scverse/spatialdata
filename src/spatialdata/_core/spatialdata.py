@@ -1115,6 +1115,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_write_kwargs: dict[str, JSONDict | list[JSONDict]] | list[JSONDict] | None = None,
+        raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1181,12 +1182,18 @@ class SpatialData:
             - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
             - For a full list of supported storage options, refer to:
                 https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+        raster_compressor
+            A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
+            compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
+            supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
+            ordered for more efficient compression.
         """
         from spatialdata._core._utils import create_raster_element_kwargs
-        from spatialdata._io._utils import _resolve_zarr_store
+        from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
 
         parsed = _parse_formats(sdata_formats)
+        _validate_compressor_args(raster_compressor)
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1216,6 +1223,7 @@ class SpatialData:
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
                 element_raster_write_kwargs=element_raster_write_kwargs,
+                raster_compressor=raster_compressor,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1234,6 +1242,7 @@ class SpatialData:
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         element_raster_write_kwargs: JSONDict | list[JSONDict] | None = None,
+        raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1273,6 +1282,7 @@ class SpatialData:
                 name=element_name,
                 element_format=parsed_formats["raster"],
                 storage_options=element_raster_write_kwargs,
+                raster_compressor=raster_compressor,
             )
         elif element_type == "labels":
             write_labels(
@@ -1281,6 +1291,7 @@ class SpatialData:
                 name=element_name,
                 element_format=parsed_formats["raster"],
                 storage_options=element_raster_write_kwargs,
+                raster_compressor=raster_compressor,
             )
         elif element_type == "points":
             write_points(
@@ -1312,6 +1323,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_write_kwargs: dict[str, JSONDict | list[JSONDict] | Any] | list[JSONDict] | None = None,
+        raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1349,6 +1361,11 @@ class SpatialData:
             - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
             - For a full list of supported storage options, refer to:
                 https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+         raster_compressor
+            A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
+            compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
+            supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
+            ordered for more efficient compression.
 
         Notes
         -----
@@ -1369,6 +1386,7 @@ class SpatialData:
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
                     raster_write_kwargs=raster_write_kwargs,
+                    raster_compressor=raster_compressor,
                 )
             return
 
@@ -1410,6 +1428,7 @@ class SpatialData:
             parsed_formats=parsed_formats,
             shapes_geometry_encoding=shapes_geometry_encoding,
             element_raster_write_kwargs=element_raster_write_kwargs,
+            raster_compressor=raster_compressor,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():
