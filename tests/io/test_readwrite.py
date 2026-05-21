@@ -244,6 +244,78 @@ class TestReadWrite:
         sdata2.write(tmpdir2, sdata_formats=sdata_container_format)
         _are_directories_identical(tmpdir, tmpdir2, exclude_regexp="[1-9][0-9]*.*")
 
+    def test_compression_roundtrip(
+        self,
+        tmp_path: str,
+        full_sdata: SpatialData,
+        sdata_container_format: SpatialDataContainerFormatType,
+    ):
+        tmpdir = Path(tmp_path) / "tmp.zarr"
+        with pytest.raises(TypeError, match="Expected a dictionary with as"):
+            full_sdata.write(tmpdir, raster_compressor="faulty", sdata_formats=sdata_container_format)
+        with pytest.raises(ValueError, match="Expected a dictionary with a single"):
+            full_sdata.write(
+                tmpdir, raster_compressor={"zstd": 8, "other_item": 4}, sdata_formats=sdata_container_format
+            )
+        with pytest.raises(ValueError, match="Compression must either"):
+            full_sdata.write(tmpdir, raster_compressor={"faulty": 8}, sdata_formats=sdata_container_format)
+        with pytest.raises(ValueError, match="Compression must either"):
+            full_sdata.write(
+                tmpdir, raster_compressor={"The compression level": 10}, sdata_formats=sdata_container_format
+            )
+
+        full_sdata.write(tmpdir, raster_compressor={"zstd": 8}, sdata_formats=sdata_container_format)
+
+        # sourcery skip: no-loop-in-tests
+        for element in ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale"]:
+            element_type = "images" if element.startswith("image") else "labels"
+            arr = zarr.open_group(tmpdir / element_type, mode="r")[element]["s0"]
+            compressor = arr.compressors[0]
+
+            if sdata_container_format.zarr_format == 2:
+                assert compressor.cname == "zstd"
+                assert compressor.clevel == 8
+            elif sdata_container_format.zarr_format == 3:
+                from zarr.codecs.zstd import ZstdCodec
+
+                assert isinstance(compressor, ZstdCodec)
+                assert compressor.level == 8
+
+    @pytest.mark.parametrize("raster_compressor", [{"lz4": 3}, {"zstd": 7}])
+    @pytest.mark.parametrize("element", [("images", "image2d"), ("labels", "labels2d")])
+    def test_write_element_compression(
+        self,
+        tmp_path: str,
+        full_sdata: SpatialData,
+        raster_compressor: dict[Literal["lz4", "zstd"], int],
+        element: str,
+        sdata_container_format: SpatialDataContainerFormatType,
+    ):
+        tmpdir = Path(tmp_path) / "compression.zarr"
+        sdata = SpatialData()
+        sdata.write(tmpdir, sdata_formats=sdata_container_format)
+
+        sdata["element"] = full_sdata[element[1]]
+        sdata.write_element("element", raster_compressor=raster_compressor, sdata_formats=sdata_container_format)
+
+        arr = zarr.open_group(tmpdir / element[0], mode="r")["element"]["s0"]
+        compression = arr.compressors[0]
+
+        if sdata_container_format.zarr_format == 2:
+            assert compression.cname == list(raster_compressor.keys())[0]
+            assert compression.clevel == list(raster_compressor.values())[0]
+        elif sdata_container_format.zarr_format == 3:
+            from zarr.codecs import BloscCodec, ZstdCodec
+
+            compressor_name = list(raster_compressor.keys())[0]
+            compressor_level = list(raster_compressor.values())[0]
+            if compressor_name == "zstd":
+                assert isinstance(compression, ZstdCodec)
+                assert compression.level == compressor_level
+            elif compressor_name == "lz4":
+                assert isinstance(compression, BloscCodec)
+                assert compression.clevel == compressor_level
+
     def test_incremental_io_list_of_elements(
         self,
         shapes: SpatialData,
