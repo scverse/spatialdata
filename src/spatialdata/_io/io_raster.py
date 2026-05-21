@@ -385,7 +385,6 @@ def _apply_compression(
     if zarr_format == 2:
         from numcodecs import Blosc as BloscV2
 
-        assert BloscV2.SHUFFLE == 1
         codec_v2 = BloscV2(cname=compression, clevel=compression_level, shuffle=1)
 
         def _update_dict(d: dict[str, Any]) -> None:
