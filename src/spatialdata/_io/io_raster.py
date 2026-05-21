@@ -265,7 +265,7 @@ def _write_raster(
     name: str,
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None = None,
-    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     label_metadata: JSONDict | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
@@ -285,7 +285,7 @@ def _write_raster(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
-    compressor
+    raster_compressor
         Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     label_metadata
         Label metadata which can only be defined when writing 'labels'.
@@ -316,7 +316,7 @@ def _write_raster(
             raster_data,
             raster_format,
             storage_options,
-            compressor=compressor,
+            raster_compressor=raster_compressor,
             **metadata,
         )
     elif isinstance(raster_data, DataTree):
@@ -327,7 +327,7 @@ def _write_raster(
             raster_data,
             raster_format,
             storage_options,
-            compressor=compressor,
+            raster_compressor=raster_compressor,
             **metadata,
         )
     else:
@@ -359,7 +359,7 @@ def _build_v3_codec(
 
 def _apply_compression(
     storage_options: JSONDict | list[JSONDict],
-    compressor: dict[Literal["lz4", "zstd"], int] | None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
     zarr_format: Literal[2, 3] = 3,
 ) -> JSONDict | list[JSONDict]:
     """Apply compression settings to storage options.
@@ -368,7 +368,7 @@ def _apply_compression(
     ----------
     storage_options
         Storage options for zarr arrays
-    compressor
+    raster_compressor
         Compression settings as a dictionary with a single key-value pair
     zarr_format
         The zarr format version (2 or 3)
@@ -377,10 +377,10 @@ def _apply_compression(
     -------
     Updated storage options with compression settings
     """
-    if not compressor:
+    if not raster_compressor:
         return storage_options
 
-    ((compression, compression_level),) = compressor.items()
+    ((compression, compression_level),) = raster_compressor.items()
 
     if zarr_format == 2:
         from numcodecs import Blosc as BloscV2
@@ -428,7 +428,7 @@ def _write_raster_dataarray(
     raster_data: DataArray,
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
-    compressor: dict[Literal["lz4", "zstd"], int] | None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     """Write raster data of type DataArray to disk.
@@ -447,7 +447,7 @@ def _write_raster_dataarray(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
-    compressor
+    raster_compressor
         Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     metadata
         Additional metadata for the raster element
@@ -462,7 +462,7 @@ def _write_raster_dataarray(
     storage_options = _prepare_storage_options(storage_options)
     # Apply compression if specified
     storage_options = _apply_compression(
-        storage_options, compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
+        storage_options, raster_compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
     )
 
     # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
@@ -499,7 +499,7 @@ def _write_raster_datatree(
     raster_data: DataTree,
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
-    compressor: dict[Literal["lz4", "zstd"], int] | None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> zarr.Group:
     """Write raster data of type DataTree to disk.
@@ -518,7 +518,7 @@ def _write_raster_datatree(
         The format used to write the raster data.
     storage_options
         Additional options for writing the raster data, like chunks and compression.
-    compressor
+    raster_compressor
         Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     metadata
         Additional metadata for the raster element
@@ -539,7 +539,7 @@ def _write_raster_datatree(
     storage_options = _prepare_storage_options(storage_options)
 
     # Apply compression if specified
-    storage_options = _apply_compression(storage_options, compressor, zarr_format=raster_format.zarr_format)
+    storage_options = _apply_compression(storage_options, raster_compressor, zarr_format=raster_format.zarr_format)
 
     ome_zarr_format = get_ome_zarr_format(raster_format)
     dask_delayed = write_multi_scale_ngff(
@@ -582,7 +582,7 @@ def write_image(
     name: str,
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
-    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
     _write_raster(
@@ -592,7 +592,7 @@ def write_image(
         name=name,
         raster_format=element_format,
         storage_options=storage_options,
-        compressor=compressor,
+        raster_compressor=raster_compressor,
         **metadata,
     )
 
@@ -604,7 +604,7 @@ def write_labels(
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     label_metadata: JSONDict | None = None,
-    compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+    raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: JSONDict,
 ) -> None:
     _write_raster(
@@ -614,7 +614,7 @@ def write_labels(
         name=name,
         raster_format=element_format,
         storage_options=storage_options,
-        compressor=compressor,
+        raster_compressor=raster_compressor,
         label_metadata=label_metadata,
         **metadata,
     )
