@@ -561,6 +561,10 @@ def _validate_compressor_args(compressor_dict: dict[Literal["lz4", "zstd"], int]
                 "'zstd' and an `int` inclusive between 1 and 9 as value representing the compression level."
             )
         if (compression := list(compressor_dict.keys())[0]) not in ["lz4", "zstd"]:
-            raise ValueError(f"Compression must either be `lz4` or `zstd`, got: {compression}.")
+            raise ValueError(
+                f"Compression must either be `lz4` or `zstd`, got: {compression}. If you would like "
+                "another compression enabled, please open a Github issue at "
+                "https://github.com/scverse/spatialdata/issues"
+            )
         if not isinstance(value := list(compressor_dict.values())[0], int) or not (0 <= value <= 9):
             raise ValueError(f"The compression level must be an integer inclusive between 0 and 9. Got: {value}")
