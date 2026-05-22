@@ -32,7 +32,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _deprecation_alias
+from spatialdata._utils import _deprecation_alias, zarrs_context
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -1275,46 +1275,47 @@ class SpatialData:
 
             validate_element(element)
 
-        if element_type == "images":
-            write_image(
-                image=element,
-                group=element_group,
-                name=element_name,
-                element_format=parsed_formats["raster"],
-                storage_options=element_raster_write_kwargs,
-                raster_compressor=raster_compressor,
-            )
-        elif element_type == "labels":
-            write_labels(
-                labels=element,
-                group=root_group,
-                name=element_name,
-                element_format=parsed_formats["raster"],
-                storage_options=element_raster_write_kwargs,
-                raster_compressor=raster_compressor,
-            )
-        elif element_type == "points":
-            write_points(
-                points=element,
-                group=element_group,
-                element_format=parsed_formats["points"],
-            )
-        elif element_type == "shapes":
-            write_shapes(
-                shapes=element,
-                group=element_group,
-                element_format=parsed_formats["shapes"],
-                geometry_encoding=shapes_geometry_encoding,
-            )
-        elif element_type == "tables":
-            write_table(
-                table=element,
-                group=element_type_group,
-                name=element_name,
-                element_format=parsed_formats["tables"],
-            )
-        else:
-            raise ValueError(f"Unknown element type: {element_type}")
+        with zarrs_context():
+            if element_type == "images":
+                write_image(
+                    image=element,
+                    group=element_group,
+                    name=element_name,
+                    element_format=parsed_formats["raster"],
+                    storage_options=element_raster_write_kwargs,
+                    raster_compressor=raster_compressor,
+                )
+            elif element_type == "labels":
+                write_labels(
+                    labels=element,
+                    group=root_group,
+                    name=element_name,
+                    element_format=parsed_formats["raster"],
+                    storage_options=element_raster_write_kwargs,
+                    raster_compressor=raster_compressor,
+                )
+            elif element_type == "points":
+                write_points(
+                    points=element,
+                    group=element_group,
+                    element_format=parsed_formats["points"],
+                )
+            elif element_type == "shapes":
+                write_shapes(
+                    shapes=element,
+                    group=element_group,
+                    element_format=parsed_formats["shapes"],
+                    geometry_encoding=shapes_geometry_encoding,
+                )
+            elif element_type == "tables":
+                write_table(
+                    table=element,
+                    group=element_type_group,
+                    name=element_name,
+                    element_format=parsed_formats["tables"],
+                )
+            else:
+                raise ValueError(f"Unknown element type: {element_type}")
 
     def write_element(
         self,
