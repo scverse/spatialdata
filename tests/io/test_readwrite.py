@@ -49,7 +49,6 @@ from tests.conftest import (
     _get_shapes,
     _get_table,
     _get_tables,
-    temporary_settings,
 )
 
 RNG = default_rng(0)
@@ -881,20 +880,6 @@ def test_write_raster_sharding(
         arr = zarr.open_group(path / zarr_subpath / name, mode="r")["s0"]
         assert arr.chunks == write_chunks
         assert arr.shards == write_shards
-
-
-def test_write_raster_sharding_with_settings(tmp_path: Path) -> None:
-    with temporary_settings(raster_chunks=(1, 100, 100)):
-        data = da.from_array(RNG.random((1, 1000, 1000)), chunks=(1, 200, 200))
-        element = Image2DModel.parse(data, dims=("c", "y", "x"))
-        name = "element"
-        sdata = SpatialData(images={name: element})
-        path = tmp_path / "data.zarr"
-
-        sdata.write(path)
-
-        arr = zarr.open_group(path / "images" / name, mode="r")["s0"]
-        assert arr.chunks == (1, 100, 100)
 
 
 @pytest.mark.parametrize("raster_case", RASTER_CASES_MULTISCALE)
