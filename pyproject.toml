@@ -50,7 +50,6 @@ dependencies = [
     "xarray>=2024.10.0",
     "xarray-spatial>=0.3.5",
     "zarr>=3.0.0",
-    "zarrs",
 ]
 [project.optional-dependencies]
 torch = [
@@ -60,6 +59,9 @@ extra  = [
     "napari-spatialdata[all]",
     "spatialdata-plot",
     "spatialdata-io",
+]
+zarrs = [
+    "zarrs"
 ]
 
 [dependency-groups]
@@ -72,6 +74,7 @@ test = [
     "pytest-mock",
     "pytest-xdist",
     "torch",
+    "zarrs",
 ]
 docs = [
     "sphinx>=4.5",
