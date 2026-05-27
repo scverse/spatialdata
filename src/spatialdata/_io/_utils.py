@@ -28,7 +28,6 @@ from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
-from spatialdata._logging import logger
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
